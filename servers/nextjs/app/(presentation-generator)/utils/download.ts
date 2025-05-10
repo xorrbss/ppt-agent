@@ -4,7 +4,6 @@
  * @returns Promise<string> - The text content
  */
 export async function fetchTextFromURL(url: string): Promise<string> {
-  console.log('url from here', url);
   if (!url) return "";
 
   try {

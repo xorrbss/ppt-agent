@@ -30,12 +30,10 @@ import {
   XAxis,
 } from "recharts";
 import { ResponsiveContainer } from "recharts";
-import Type10Layout from "./slide_layouts/Type10Layout";
-import Type10Mini from "./mini-slides/Type10Mini";
+
 import { ThemeColors } from "../store/themeSlice";
 import { isDarkColor } from "../utils/others";
-import Type12Layout from "./slide_layouts/Type12Layout";
-import Type12Mini from "./mini-slides/Type12Mini";
+
 import {
   formatTooltipValue,
   formatYAxisTick,
@@ -149,29 +147,7 @@ export const renderSlideContent = (slide: Slide, language: string) => {
           graphData={slide.content.graph}
         />
       );
-    case 10:
-    case 11:
-      return (
-        <Type10Layout
-          design_index={slide.design_index || 1}
-          description={slide.content.description || ""}
-          slideIndex={slide.index}
-          slideId={slide.id || ""}
-          title={slide.content.title}
-          infographics={slide.content.infographics}
-        />
-      );
-    case 12:
-      return (
-        <Type12Layout
-          slideIndex={slide.index}
-          slideId={slide.id || ""}
-          title={slide.content.title}
-          mermaidCode={slide.content.diagram}
-          description={slide.content.description || ""}
-          isFullSizeGraph={false}
-        />
-      );
+
 
     default:
       return null;
@@ -258,27 +234,7 @@ export const renderMiniSlideContent = (slide: Slide) => {
           slideIndex={slide.index}
         />
       );
-    case 10:
-    case 11:
-      return (
-        <Type10Mini
-          design_index={slide.design_index || 1}
-          slideIndex={slide.index}
-          description={slide.content.description || ""}
-          title={slide.content.title}
-          infographics={slide.content.infographics}
-        />
-      );
-    case 12:
-      return (
-        <Type12Mini
-          title={slide.content.title}
-          description={slide.content.description || ""}
-          isFullSizeGraph={false}
-          mermaidCode={slide.content.diagram || ""}
-          slideIndex={slide.index}
-        />
-      );
+
     default:
       return null;
   }
@@ -433,14 +389,14 @@ export const renderChart = (
                 dataKey={serie.name || `Series ${index + 1}`}
                 stroke={chartColors[index % chartColors.length]}
                 style={{ cursor: "pointer" }}
-                // label={(chartSettings?.showDataLabel && localChartData.data.series.length === 1) ? {
-                //     position: chartSettings?.dataLabel.dataLabelPosition === "Outside" ? "top" : "center",
-                //     formatter: (value: number) => formatYAxisTick(value),
-                //     fill: chartSettings?.dataLabel.dataLabelPosition === "Outside" ? theme.slideTitle : '#ffffff',
-                //     fontWeight: 'bold',
-                //     fontSize: '12px',
-                //     fontFamily: theme.fontFamily
-                // } : undefined}
+              // label={(chartSettings?.showDataLabel && localChartData.data.series.length === 1) ? {
+              //     position: chartSettings?.dataLabel.dataLabelPosition === "Outside" ? "top" : "center",
+              //     formatter: (value: number) => formatYAxisTick(value),
+              //     fill: chartSettings?.dataLabel.dataLabelPosition === "Outside" ? theme.slideTitle : '#ffffff',
+              //     fontWeight: 'bold',
+              //     fontSize: '12px',
+              //     fontFamily: theme.fontFamily
+              // } : undefined}
               />
             ))}
           </LineChart>
@@ -602,27 +558,27 @@ export const renderChart = (
                   label={
                     chartSettings?.showDataLabel
                       ? {
-                          position:
-                            chartSettings?.dataLabel.dataLabelPosition ===
+                        position:
+                          chartSettings?.dataLabel.dataLabelPosition ===
                             "Outside"
-                              ? "top"
-                              : chartSettings?.dataLabel.dataLabelAlignment ===
-                                "Base"
+                            ? "top"
+                            : chartSettings?.dataLabel.dataLabelAlignment ===
+                              "Base"
                               ? "insideBottom"
                               : chartSettings?.dataLabel.dataLabelAlignment ===
                                 "Center"
-                              ? "center"
-                              : "insideTop",
-                          formatter: (value: number) => formatYAxisTick(value),
-                          fill:
-                            chartSettings?.dataLabel.dataLabelPosition ===
+                                ? "center"
+                                : "insideTop",
+                        formatter: (value: number) => formatYAxisTick(value),
+                        fill:
+                          chartSettings?.dataLabel.dataLabelPosition ===
                             "Outside"
-                              ? theme.slideTitle
-                              : "#ffffff",
-                          fontWeight: "bold",
-                          fontSize: "14px",
-                          fontFamily: theme.fontFamily,
-                        }
+                            ? theme.slideTitle
+                            : "#ffffff",
+                        fontWeight: "bold",
+                        fontSize: "14px",
+                        fontFamily: theme.fontFamily,
+                      }
                       : undefined
                   }
                 />

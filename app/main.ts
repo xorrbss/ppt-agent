@@ -39,6 +39,7 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         GOOGLE_API_KEY: process.env.GOOGLE_API_KEY || "",
         APP_DATA_DIRECTORY: process.env.APP_DATA_DIRECTORY || "",
         TEMP_DIRECTORY: process.env.TEMP_DIRECTORY || "",
+
       },
       isDev
     );
@@ -46,8 +47,9 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
       nextjsDir,
       nextjsPort,
       {
-        NEXT_PUBLIC_API: `${localhost}:${fastApiPort}`,
+        NEXT_PUBLIC_FAST_API: `${localhost}:${fastApiPort}`,
         TEMP_DIRECTORY: process.env.TEMP_DIRECTORY || "",
+        NEXT_PUBLIC_URL: `${localhost}:${nextjsPort}`,
       },
       isDev
     );
@@ -74,7 +76,7 @@ app.whenReady().then(async () => {
   console.log(`FastAPI port: ${fastApiPort}, NextJS port: ${nextjsPort}`);
 
   await startServers(fastApiPort, nextjsPort);
-  win?.loadURL(`${localhost}:${nextjsPort}/upload`);
+  win?.loadURL(`${localhost}:${nextjsPort}`);
 });
 
 app.on("window-all-closed", async () => {

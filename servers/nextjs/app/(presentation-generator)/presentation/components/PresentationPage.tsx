@@ -27,6 +27,7 @@ import { jsonrepair } from "jsonrepair";
 import { Button } from "@/components/ui/button";
 import { AlertCircle } from "lucide-react";
 import Help from "./Help";
+import { BASE_URL } from "@/utils/constant";
 
 // Custom debounce function
 function useDebounce<T extends (...args: any[]) => void>(
@@ -120,7 +121,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
 
   // Function to fetch the slides
   useEffect(() => {
-    console.log("called again");
+
     let evtSource: EventSource;
     let accumulatedChunks = "";
 
@@ -128,7 +129,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
       dispatch(setStreaming(true));
 
       evtSource = new EventSource(
-        `${PresentationGenerationApi.BASE_URL}/ppt/generate/stream?presentation_id=${presentation_id}&session=${session}`
+        `${BASE_URL}/ppt/generate/stream?presentation_id=${presentation_id}&session=${session}`
       );
 
       evtSource.onopen = () => {

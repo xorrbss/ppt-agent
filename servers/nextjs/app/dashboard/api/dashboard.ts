@@ -2,6 +2,7 @@ import {
   getHeader,
   getHeaderForFormData,
 } from "@/app/(presentation-generator)/services/api/header";
+import { BASE_URL } from "@/utils/constant";
 
 export interface PresentationResponse {
   id: string;
@@ -22,11 +23,11 @@ export interface PresentationResponse {
 
 export class DashboardApi {
   // static BASE_URL = "http://localhost:48388";
-  static BASE_URL = process.env.NEXT_PUBLIC_API || 'http://localhost:8000';
+ 
   static async getPresentations(): Promise<PresentationResponse[]> {
     try {
       const response = await fetch(
-        `${DashboardApi.BASE_URL}/ppt/user_presentations`,
+        `${BASE_URL}/ppt/user_presentations`,
         {
           method: "GET",
           headers: getHeader(),
@@ -48,7 +49,7 @@ export class DashboardApi {
   static async getPresentation(id: string) {
     try {
       const response = await fetch(
-        `${DashboardApi.BASE_URL}/ppt/presentation?presentation_id=${id}`,
+        `${BASE_URL}/ppt/presentation?presentation_id=${id}`,
         {
           method: "GET",
           headers: getHeader(),
@@ -67,7 +68,7 @@ export class DashboardApi {
   static async deletePresentation(presentation_id: string) {
     try {
       const response = await fetch(
-        `${DashboardApi.BASE_URL}/ppt/delete?presentation_id=${presentation_id}`,
+        `${BASE_URL}/ppt/delete?presentation_id=${presentation_id}`,
         {
           method: "DELETE",
           headers: getHeader(),
@@ -90,7 +91,7 @@ export class DashboardApi {
     formData.append("thumbnail", file);
     try {
       const response = await fetch(
-        `${DashboardApi.BASE_URL}/ppt/presentation/thumbnail`,
+        `${BASE_URL}/ppt/presentation/thumbnail`,
         {
           method: "POST",
           headers: getHeaderForFormData(),

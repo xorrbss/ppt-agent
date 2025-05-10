@@ -37,6 +37,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import ToolTip from "@/components/ToolTip";
+import { BASE_URL } from "@/utils/constant";
 
 interface ImageEditorProps {
   initialImage: string | null;
@@ -90,7 +91,7 @@ const ImageEditor = ({
     (properties &&
       properties[imageIdx] &&
       properties[imageIdx].initialObjectFit) ||
-      "cover"
+    "cover"
   );
   const imageRef = useRef<HTMLImageElement>(null);
   const imageContainerRef = useRef<HTMLDivElement>(null);
@@ -569,30 +570,30 @@ const ImageEditor = ({
                   <div className="grid grid-cols-2 gap-4">
                     {isGenerating || previewImages.length === 0
                       ? Array.from({ length: 4 }).map((_, index) => (
-                          <Skeleton
-                            key={index}
-                            className="aspect-[4/3] w-full rounded-lg"
-                          />
-                        ))
+                        <Skeleton
+                          key={index}
+                          className="aspect-[4/3] w-full rounded-lg"
+                        />
+                      ))
                       : previewImages.map((image, index) => (
-                          <div
-                            key={index}
-                            onClick={() => handleImageChange(image as string)}
-                            className="aspect-[4/3] w-full overflow-hidden rounded-lg border cursor-pointer"
-                          >
-                            <img
-                              src={
-                                image
-                                  ? image.startsWith("user")
-                                    ? `${PresentationGenerationApi.BASE_URL}${image}`
-                                    : image
-                                  : ""
-                              }
-                              alt={`Preview ${index + 1}`}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                        ))}
+                        <div
+                          key={index}
+                          onClick={() => handleImageChange(image as string)}
+                          className="aspect-[4/3] w-full overflow-hidden rounded-lg border cursor-pointer"
+                        >
+                          <img
+                            src={
+                              image
+                                ? image.startsWith("user")
+                                  ? `${BASE_URL}${image}`
+                                  : image
+                                : ""
+                            }
+                            alt={`Preview ${index + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ))}
                   </div>
                 </div>
               </TabsContent>
@@ -626,25 +627,25 @@ const ImageEditor = ({
                 <div className="grid grid-cols-2 gap-4 max-h-[80vh] hide-scrollbar overflow-y-auto">
                   {isSearching
                     ? Array.from({ length: 6 }).map((_, index) => (
-                        <Skeleton
-                          key={index}
-                          className="aspect-[4/3] w-full rounded-lg"
-                        />
-                      ))
+                      <Skeleton
+                        key={index}
+                        className="aspect-[4/3] w-full rounded-lg"
+                      />
+                    ))
                     : searchedImages.map((imgSrc, index) => (
-                        <div
-                          key={index}
-                          onClick={() => handleImageChange(imgSrc)}
-                          className="aspect-[4/3] cursor-pointer group relative rounded-lg overflow-hidden"
-                        >
-                          <img
-                            src={imgSrc}
-                            alt={`Search result ${index + 1}`}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                          />
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-200" />
-                        </div>
-                      ))}
+                      <div
+                        key={index}
+                        onClick={() => handleImageChange(imgSrc)}
+                        className="aspect-[4/3] cursor-pointer group relative rounded-lg overflow-hidden"
+                      >
+                        <img
+                          src={imgSrc}
+                          alt={`Search result ${index + 1}`}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                        />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-200" />
+                      </div>
+                    ))}
                 </div>
               </TabsContent>
 
