@@ -78,6 +78,7 @@ def generate_presentation_stream(
     language: str,
     summary: str,
 ) -> AsyncIterator[AIMessageChunk]:
+
     schema = LLMPresentationModel.model_json_schema()
 
     system_prompt = f"{CREATE_PRESENTATION_PROMPT} -|0|--|0|- Follow this schema while giving out response: {schema}. Make description short and obey the character limits. Output should be in JSON format. Give out only JSON, nothing else."

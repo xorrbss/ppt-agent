@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import traceback
 from typing import List, Optional
@@ -7,7 +8,7 @@ import aiohttp
 from fastapi import HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
-from api.models import LogMetadata
+from api.models import LogMetadata, UserConfig
 from api.services.logging import LoggingService
 
 
@@ -15,6 +16,35 @@ def get_presentation_dir(presentation_id: str) -> str:
     presentation_dir = os.path.join(os.getenv("APP_DATA_DIRECTORY"), presentation_id)
     os.makedirs(presentation_dir, exist_ok=True)
     return presentation_dir
+
+
+def get_user_config():
+    user_config_path = os.getenv("USER_CONFIG_PATH")
+
+    existing_config = UserConfig()
+    try:
+        if os.path.exists(user_config_path):
+            with open(user_config_path, "r") as f:
+                existing_config = UserConfig(**json.load(f))
+    except Exception as e:
+        print("Error while loading user config")
+        pass
+
+    return UserConfig(
+        LLM=os.getenv("LLM") or existing_config.LLM,
+        OPENAI_API_KEY=os.getenv("OPENAI_API_KEY") or existing_config.OPENAI_API_KEY,
+        GOOGLE_API_KEY=os.getenv("GOOGLE_API_KEY") or existing_config.GOOGLE_API_KEY,
+    )
+
+
+def update_env_with_user_config():
+    user_config = get_user_config()
+    if user_config.LLM:
+        os.environ["LLM"] = user_config.LLM
+    if user_config.OPENAI_API_KEY:
+        os.environ["OPENAI_API_KEY"] = user_config.OPENAI_API_KEY
+    if user_config.GOOGLE_API_KEY:
+        os.environ["GOOGLE_API_KEY"] = user_config.GOOGLE_API_KEY
 
 
 def replace_file_name(old_name: str, new_name: str) -> str:
