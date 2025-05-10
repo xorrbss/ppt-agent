@@ -29,15 +29,15 @@ export function PromptInput({
         </h4>
         <div className="flex justify-end">
           <div
-            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-[#5146E5] text-sm font-semibold ${
-              researchMode ? "bg-[#5146E5] text-white" : "text-[#5146E5]"
-            }`}
+            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-[#5146E5] text-sm font-semibold ${researchMode ? "bg-[#5146E5] text-white" : "text-[#5146E5]"
+              }`}
           >
             <span>Research Mode</span>
             <Switch.Root
               defaultChecked={researchMode}
               onCheckedChange={(val) => setResearchMode(val)}
               className={`${styles.SwitchRoot}`}
+              data-testid="research-mode-switch"
             >
               <Switch.Thumb className={styles.SwitchThumb} />
             </Switch.Root>
@@ -57,16 +57,15 @@ export function PromptInput({
           rows={5}
           onChange={(e) => handleChange(e.target.value)}
           placeholder="Tell us about your presentation"
-          className={`py-4 px-5 border-2 font-medium text-base min-h-[150px] max-h-[300px] border-[#5146E5] focus-visible:ring-offset-0 font-satoshi focus-visible:ring-[#5146E5] overflow-y-auto  custom_scrollbar  ${
-            researchMode ? "border-dashed" : ""
-          }`}
+          data-testid="prompt-input"
+          className={`py-4 px-5 border-2 font-medium text-base min-h-[150px] max-h-[300px] border-[#5146E5] focus-visible:ring-offset-0 font-satoshi focus-visible:ring-[#5146E5] overflow-y-auto  custom_scrollbar  ${researchMode ? "border-dashed" : ""
+            }`}
         />
       </div>
 
       <p
-        className={`text-sm text-gray-500 font-satoshi font-medium ${
-          showHint ? "opacity-100" : "opacity-0"
-        }`}
+        className={`text-sm text-gray-500 font-satoshi font-medium ${showHint ? "opacity-100" : "opacity-0"
+          }`}
       >
         Provide specific details about your presentation needs (e.g., topic,
         style, key points) for more accurate results

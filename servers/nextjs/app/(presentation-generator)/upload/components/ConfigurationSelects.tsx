@@ -1,4 +1,3 @@
-
 import {
   Select,
   SelectContent,
@@ -43,8 +42,11 @@ const SlideCountSelect: React.FC<{
   value: string | null;
   onValueChange: (value: string) => void;
 }> = ({ value, onValueChange }) => (
-  <Select value={value || ""} onValueChange={onValueChange}>
-    <SelectTrigger className="w-[180px] font-satoshi font-medium bg-blue-100 border-blue-200 focus-visible:ring-blue-300">
+  <Select value={value || ""} onValueChange={onValueChange} name="slides">
+    <SelectTrigger
+      className="w-[180px] font-satoshi font-medium bg-blue-100 border-blue-200 focus-visible:ring-blue-300"
+      data-testid="slides-select"
+    >
       <SelectValue placeholder="Select Slides" />
     </SelectTrigger>
     <SelectContent className="font-satoshi">
@@ -53,8 +55,9 @@ const SlideCountSelect: React.FC<{
           key={option}
           value={option}
           className="font-satoshi text-sm font-medium"
+          role="option"
         >
-          {option} Slides
+          {option} slides
         </SelectItem>
       ))}
     </SelectContent>
@@ -75,6 +78,8 @@ const LanguageSelect: React.FC<{
       <Button
         variant="outline"
         role="combobox"
+        name="language"
+        data-testid="language-select"
         aria-expanded={open}
         className="w-[200px] justify-between font-satoshi font-semibold overflow-hidden bg-blue-100 hover:bg-blue-100 border-blue-200 focus-visible:ring-blue-300 border-none"
       >
@@ -97,6 +102,7 @@ const LanguageSelect: React.FC<{
               <CommandItem
                 key={language}
                 value={language}
+                role="option"
                 onSelect={(currentValue) => {
                   onValueChange(currentValue);
                   onOpenChange(false);
