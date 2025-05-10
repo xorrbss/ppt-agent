@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import puppeteer from "puppeteer";
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 
 interface Position {
   left: number;
@@ -363,34 +366,27 @@ export async function POST(request: NextRequest) {
         omitBackground: true,
       });
 
-      const formData = new FormData();
-      formData.append(
-        "file",
-        new Blob([Buffer.from(screenshot, "base64")], { type: "image/jpeg" })
-      );
+      try {
+        const tempDir = process.env.TEMP_DIRECTORY || os.tmpdir();
+        
+        // Generate a unique filename
+        const filename = `chart-${graphId}-${Date.now()}.jpg`;
+        const filePath = path.join(tempDir, filename);
 
-      const uploadResponse = await fetch(
-        `https://presenton.ai/api/user-upload`,
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
+        // Save the file
+        fs.writeFileSync(filePath, Buffer.from(screenshot, 'base64'));
 
-      if (!uploadResponse.ok) {
-        console.error("Failed to upload graph screenshot");
+        metadata.forEach((slide) => {
+          slide.elements.forEach((element) => {
+            if ('picture' in element && element.picture.path === `__GRAPH_PLACEHOLDER__${graphId}`) {
+              element.picture.path = filePath;
+            }
+          });
+        });
+      } catch (error) {
+        console.error('Error saving screenshot:', error);
         continue;
       }
-
-      const { url: imageUrl } = await uploadResponse.json();
-
-      metadata.forEach((slide) => {
-        slide.elements.forEach((element) => {
-          if ('picture' in element && element.picture.path === `__GRAPH_PLACEHOLDER__${graphId}`) {
-            element.picture.path = imageUrl;
-          }
-        });
-      });
     }
 
     await browser.close();

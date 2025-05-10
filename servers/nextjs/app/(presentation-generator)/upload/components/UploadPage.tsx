@@ -220,7 +220,7 @@ const UploadPage = () => {
         tables: decomposedResponse.tables || {},
       });
     }
-    console.log('store data in upload page', result);
+
 
     return result;
   };

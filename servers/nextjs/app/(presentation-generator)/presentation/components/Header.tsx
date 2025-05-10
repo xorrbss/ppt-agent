@@ -46,6 +46,7 @@ import ThemeSelector from "./ThemeSelector";
 import Modal from "./Modal";
 
 import Announcement from "@/components/Announcement";
+import { getHeader } from "../../services/api/header";
 
 const Header = ({
   presentation_id,
@@ -127,12 +128,10 @@ const Header = ({
   const getSlideMetadata = async () => {
     try {
       const response = await fetch(
-        "http://localhost:40001/api/slide-metadata",
+        `${process.env.NEXT_PUBLIC_URL}/api/slide-metadata`,
         {
           method: "POST",
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: getHeader(),
           body: JSON.stringify({
             url: window.location.href,
             theme: currentTheme,

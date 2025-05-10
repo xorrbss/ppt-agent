@@ -120,7 +120,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
 
   // Function to fetch the slides
   useEffect(() => {
-    console.log("called again");
+
     let evtSource: EventSource;
     let accumulatedChunks = "";
 

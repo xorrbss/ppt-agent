@@ -4,7 +4,7 @@ import { IconSearch, ImageGenerate, ImageSearch } from "./params";
 export class PresentationGenerationApi {
   // static BASE_URL="https://api.presenton.ai";
   // static BASE_URL="https://presentation-generator-fragrant-mountain-1643.fly.dev";
-  static BASE_URL = process.env.NEXT_PUBLIC_API || 'http://localhost:8000';
+  static BASE_URL = process.env.NEXT_PUBLIC_FAST_API || 'http://localhost:8000';
   // static BASE_URL = "http://localhost:48388";
 
   static async getChapterDetails() {

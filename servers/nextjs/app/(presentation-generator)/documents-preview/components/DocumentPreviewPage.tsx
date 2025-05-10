@@ -61,7 +61,6 @@ const DocumentsPreviewPage: React.FC = () => {
   const [selectedDocument, setSelectedDocument] = useState<string | null>(null);
   const [downloadingDocuments, setDownloadingDocuments] = useState<string[]>([]);
   const [isOpen, setIsOpen] = useState(true);
-  const [changedDocuments, setChangedDocuments] = useState<string[]>([]);
   const [showLoading, setShowLoading] = useState<LoadingState>({
     message: "",
     show: false,

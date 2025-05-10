@@ -9,6 +9,7 @@ interface FastApiEnv {
 }
 
 interface NextJsEnv {
-  NEXT_PUBLIC_API: string,
+  NEXT_PUBLIC_FAST_API: string,
   TEMP_DIRECTORY: string,
+  NEXT_PUBLIC_URL: string,
 }

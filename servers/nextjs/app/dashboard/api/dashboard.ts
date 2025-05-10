@@ -22,7 +22,7 @@ export interface PresentationResponse {
 
 export class DashboardApi {
   // static BASE_URL = "http://localhost:48388";
-  static BASE_URL = process.env.NEXT_PUBLIC_API || 'http://localhost:8000';
+  static BASE_URL = process.env.NEXT_PUBLIC_FAST_API || 'http://localhost:8000';
   static async getPresentations(): Promise<PresentationResponse[]> {
     try {
       const response = await fetch(
