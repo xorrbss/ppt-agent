@@ -12,8 +12,8 @@ load_dotenv()
 async def run_test():
     # await test_generate_document_summary()
     # await test_research_report_generator()
-    # await test_get_icon()
-    await test_image_generation()
+    await test_get_icon()
+    # await test_image_generation()
 
 
 asyncio.run(run_test())

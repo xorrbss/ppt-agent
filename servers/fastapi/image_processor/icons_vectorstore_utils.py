@@ -20,8 +20,12 @@ def get_icons_vectorstore():
     with open("assets/icons.json", "r") as f:
         icons = json.load(f)
 
-    texts = [icon["name"] for icon in icons["icons"]]
-    documents = [Document(id=text, page_content=text) for text in texts]
+    icon_names = [icon["name"] for icon in icons["icons"]]
+    documents = []
+    for each in icon_names:
+        if each.split("-")[-1] == "bold":
+            documents.append(Document(id=each, page_content=each))
+
     vector_store.add_documents(documents)
     vector_store.dump(vector_store_path)
     return vector_store

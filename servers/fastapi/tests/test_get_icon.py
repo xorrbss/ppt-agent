@@ -27,3 +27,4 @@ async def test_get_icon():
                 os.getenv("APP_DATA_DIRECTORY"), f"generated_icons/{query}.png"
             ),
         )
+        break
