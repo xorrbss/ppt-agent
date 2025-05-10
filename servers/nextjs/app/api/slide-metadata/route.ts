@@ -111,12 +111,12 @@ export async function POST(request: NextRequest) {
     });
 
     const page = await browser.newPage();
-    await page.setViewport({ width: 1920, height: 1024, deviceScaleFactor: 3 });
+    await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
 
     try {
       await page.goto(url, {
         waitUntil: "networkidle0",
-        timeout: 90000,
+        timeout: 60000,
       });
     } catch (error) {
       await browser.close();

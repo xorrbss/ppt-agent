@@ -20,8 +20,13 @@ async def get_icon(
     icon_name = results[0].page_content
 
     with open(output_path, "wb") as f_a:
-        with open(f"assets/icons/bold/{icon_name}-bold.png", "rb") as f_b:
-            f_a.write(f_b.read())
+        try:
+            with open(f"assets/icons/bold/{icon_name}.png", "rb") as f_b:
+                f_a.write(f_b.read())
+        except Exception as e:
+            print("Error finding icon: ", e)
+            with open(f"assets/icons/placeholder.png", "rb") as f_b:
+                f_a.write(f_b.read())
 
 
 async def get_icons(

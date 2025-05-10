@@ -452,7 +452,7 @@ export class PresentationGenerationApi {
     images,
     research_reports,
     language,
-    sources,
+  
   }: {
     prompt: string;
     n_slides: number | null;
@@ -460,7 +460,7 @@ export class PresentationGenerationApi {
     images?: string[];
     research_reports?: string[];
     language: string | null;
-    sources?: string[];
+    
   }) {
     try {
       const response = await fetch(
@@ -475,7 +475,7 @@ export class PresentationGenerationApi {
             documents,
             research_reports,
             images,
-            sources,
+           
           }),
           cache: "no-cache",
         }

@@ -74,7 +74,7 @@ app.whenReady().then(async () => {
   console.log(`FastAPI port: ${fastApiPort}, NextJS port: ${nextjsPort}`);
 
   await startServers(fastApiPort, nextjsPort);
-  win?.loadURL(`${localhost}:${nextjsPort}/upload`);
+  win?.loadURL(`${localhost}:${nextjsPort}`);
 });
 
 app.on("window-all-closed", async () => {
