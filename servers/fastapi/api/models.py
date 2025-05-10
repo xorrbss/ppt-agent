@@ -35,3 +35,9 @@ class SSEResponse(BaseModel):
 
     def to_string(self):
         return f"event: {self.event}\ndata: {self.data}\n\n"
+
+
+class UserConfig(BaseModel):
+    LLM: Optional[str] = None
+    OPENAI_API_KEY: Optional[str] = None
+    GOOGLE_API_KEY: Optional[str] = None

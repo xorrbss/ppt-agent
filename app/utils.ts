@@ -1,5 +1,34 @@
 import net from 'net'
 import treeKill from 'tree-kill'
+import { exec } from 'child_process'
+import { promisify } from 'util'
+import { platform } from 'os'
+import type { App } from "electron"
+import fs from 'fs'
+import path from 'path'
+
+const execAsync = promisify(exec)
+
+export function createUserConfig(app: App, userConfig: UserConfig) {
+  const dataDir = app.getPath("userData")
+  const configPath = path.join(dataDir, "userConfig.json")
+
+  let existingConfig: UserConfig = {}
+
+  if (fs.existsSync(configPath)) {
+    const configData = fs.readFileSync(configPath, 'utf-8')
+    existingConfig = JSON.parse(configData)
+  }
+
+  const mergedConfig: UserConfig = {
+    LLM: userConfig.LLM || existingConfig.LLM,
+    OPENAI_API_KEY: userConfig.OPENAI_API_KEY || existingConfig.OPENAI_API_KEY,
+    GOOGLE_API_KEY: userConfig.GOOGLE_API_KEY || existingConfig.GOOGLE_API_KEY,
+  }
+
+  fs.writeFileSync(configPath, JSON.stringify(mergedConfig))
+}
+
 
 export function killProcess(pid: number) {
   return new Promise((resolve, reject) => {
@@ -42,3 +71,4 @@ export async function findTwoUnusedPorts(startPort: number = 40000): Promise<[nu
 
   return [ports[0], ports[1]];
 }
+
