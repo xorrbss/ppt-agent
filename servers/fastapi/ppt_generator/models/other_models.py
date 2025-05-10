@@ -1,5 +1,5 @@
 from enum import Enum
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 # """
@@ -25,9 +25,7 @@ class SlideType(Enum):
     type7 = 7
     type8 = 8
     type9 = 9
-    type10 = 10
-    type11 = 11
 
 
 class SlideTypeModel(BaseModel):
-    slide_type: SlideType
+    slide_type: int = Field(default=1, gte=1, lte=9, description="Slide type from 1 to 9")

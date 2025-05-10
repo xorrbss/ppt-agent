@@ -62,8 +62,6 @@ async def get_validated_response(
             if response and type(response) is list:
                 response = response[0]["args"]
 
-            print(response)
-
             validated_response = response_model(**response)
             return validated_response
         except ValidationError as e:

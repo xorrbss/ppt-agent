@@ -21,6 +21,7 @@ from ppt_generator.slide_generator import (
 from ppt_generator.slide_model_utils import SlideModelUtils
 from api.sql_models import PresentationSqlModel, SlideSqlModel
 from api.services.database import get_sql_session
+from ppt_generator.models.other_models import SlideType
 
 
 class PresentationEditHandler:
@@ -47,19 +48,20 @@ class PresentationEditHandler:
 
         with get_sql_session() as sql_session:
             presentation = sql_session.get(PresentationSqlModel, self.presentation_id)
-            slide_to_edit = sql_session.exec(
+            slide_to_edit_sql = sql_session.exec(
                 select(SlideSqlModel).where(SlideSqlModel.index == self.slide_index)
             ).first()
 
-            slide_to_edit = SlideModel.from_dict(slide_to_edit.model_dump(mode="json"))
+            slide_to_edit = SlideModel.from_dict(slide_to_edit_sql.model_dump(mode="json"))
 
             new_slide_type = await get_slide_type_from_prompt(
                 self.prompt, slide_to_edit
             )
 
+
             edited_content = await get_edited_slide_content_model(
                 self.prompt,
-                new_slide_type.slide_type,
+                SlideType(new_slide_type.slide_type),
                 slide_to_edit,
                 presentation.theme,
                 presentation.language,
@@ -68,7 +70,7 @@ class PresentationEditHandler:
             new_slide_model = SlideModel(
                 id=slide_to_edit.id,
                 index=slide_to_edit.index,
-                type=new_slide_type.slide_type,
+                type=SlideType(new_slide_type.slide_type),
                 design_index=slide_to_edit.design_index,
                 images=None,
                 icons=None,
@@ -141,9 +143,18 @@ class PresentationEditHandler:
             slide_to_edit.images = new_slide_model.images
             slide_to_edit.icons = new_slide_model.icons
             slide_to_edit.content = new_slide_model.content
-            slide_to_edit.type = new_slide_type.slide_type
+            slide_to_edit.type = SlideType(new_slide_type.slide_type)
+            
+            slide_to_edit_sql.index = slide_to_edit.index
+            slide_to_edit_sql.type = slide_to_edit.type.value
+            slide_to_edit_sql.design_index = slide_to_edit.design_index
+            slide_to_edit_sql.images = slide_to_edit.images
+            slide_to_edit_sql.icons = slide_to_edit.icons
+            slide_to_edit_sql.content = slide_to_edit.content.model_dump(mode="json")
+            slide_to_edit_sql.properties = slide_to_edit.properties
+            slide_to_edit_sql.presentation = slide_to_edit.presentation
             sql_session.commit()
-            sql_session.refresh(slide_to_edit)
+            sql_session.refresh(slide_to_edit_sql)
 
         logging_service.logger.info(
             logging_service.message(slide_to_edit.model_dump(mode="json")),
