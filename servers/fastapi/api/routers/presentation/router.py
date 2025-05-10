@@ -288,7 +288,7 @@ async def search_icon(data: SearchIconRequest):
 
 
 @presentation_router.post(
-    "/presentation/export_as_pptx", response_model=PresentationAndUrl
+    "/presentation/export_as_pptx", response_model=PresentationAndPath
 )
 async def export_as_pptx(data: ExportAsRequest):
     request_utils = RequestUtils("/ppt/presentation/export_as_pptx")
@@ -301,7 +301,7 @@ async def export_as_pptx(data: ExportAsRequest):
 
 
 @presentation_router.post(
-    "/presentation/export_as_pdf", response_model=PresentationAndUrl
+    "/presentation/export_as_pdf", response_model=PresentationAndPath
 )
 async def export_as_pdf(data: ExportAsRequest):
     request_utils = RequestUtils("/ppt/presentation/export_as_pdf")

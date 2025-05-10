@@ -21,8 +21,10 @@ class FetchPresentationAssetsMixin:
                         image_name = replace_file_name(
                             os.path.basename(parsed_url), str(uuid.uuid4())
                         )
-                    image_path = os.path.join(self.temp_dir, image_name)
-                    image_local_paths.append(image_path)
+                        image_path = os.path.join(self.temp_dir, image_name)
+                        image_local_paths.append(image_path)
+                    elif image_path.startswith("file://"):
+                        image_path = image_path.replace("file://", "")
 
                     each_shape.picture.path = image_path
                     each_shape.picture.is_network = False

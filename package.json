@@ -8,7 +8,7 @@
     "start": "tsc && electron-forge start",
     "package": "tsc && electron-forge package",
     "make": "tsc && electron-forge make",
-    "setup:env": "cd servers/fastapi && poetry env remove --all && poetry install",
+    "setup:env": "npm install && cd servers/fastapi && poetry install && cd ../../servers/nextjs && npm install",
     "build:ts": "tsc",
     "build:css": "tailwindcss -i ./resources/ui/assets/tailwind.import.css -o ./resources/ui/assets/tailwind.css",
     "build:nextjs": "rm -rf resources/nextjs && mkdir -p resources/nextjs && cd servers/nextjs && npm run build && cp -r .next ../../resources/nextjs",

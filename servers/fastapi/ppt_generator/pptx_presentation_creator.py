@@ -268,7 +268,12 @@ class PptxPresentationCreator:
             or picture_model.object_fit
             or picture_model.shape
         ):
-            image = Image.open(image_path)
+            try:
+                image = Image.open(image_path)
+            except:
+                print(f"Could not open image: {image_path}")
+                return
+
             image = image.convert("RGBA")
             # ? Applying border radius twice to support both clip and object fit
             if picture_model.border_radius:
