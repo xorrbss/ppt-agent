@@ -243,7 +243,7 @@ const UploadPage = () => {
       images: [],
       research_reports: [],
       language: config?.language ?? "",
-      sources: [],
+
     });
 
     try {

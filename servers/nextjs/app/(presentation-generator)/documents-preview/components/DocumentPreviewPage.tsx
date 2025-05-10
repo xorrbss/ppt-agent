@@ -139,15 +139,15 @@ const DocumentsPreviewPage: React.FC = () => {
       });
 
       const documentPaths = documentKeys.map(key => documents[key]);
-
+      const researchReportPath = reports['research_report_content'];
       const createResponse = await PresentationGenerationApi.getQuestions({
         prompt: config?.prompt ?? "",
         n_slides: config?.slides ? parseInt(config.slides) : null,
         documents: documentPaths,
         images: imageKeys,
-        research_reports: [reports['research_report_content']],
+        research_reports: researchReportPath ? [researchReportPath] : [],
         language: config?.language ?? "",
-        sources: allSources,
+
       });
 
       try {
@@ -298,7 +298,7 @@ const DocumentsPreviewPage: React.FC = () => {
                     alt="Document icon"
                   />
                   <span className="text-sm h-6 text-[#2E2E2E] overflow-hidden">
-                    {removeUUID(key.split("/").pop() ?? "file.txt")}
+                    {key.split("/").pop() ?? "file.txt"}
                   </span>
                 </div>
               ))}

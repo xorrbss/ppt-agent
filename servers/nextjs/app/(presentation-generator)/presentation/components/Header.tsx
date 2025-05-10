@@ -6,10 +6,8 @@ import {
   SquareArrowOutUpRight,
   Play,
   Loader2,
-  Copy,
-  Zap,
 } from "lucide-react";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import Image from "next/image";
 import Wrapper from "@/components/Wrapper";
 import { usePathname, useRouter } from "next/navigation";
@@ -129,7 +127,7 @@ const Header = ({
   const getSlideMetadata = async () => {
     try {
       const response = await fetch(
-        "http://localhost:3000/api/slide-metadata",
+        "http://localhost:40001/api/slide-metadata",
         {
           method: "POST",
           headers: {
