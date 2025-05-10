@@ -109,7 +109,7 @@ async def get_edited_slide_content_model(
             "language": language or "English",
             "theme": theme,
             "slide_data": slide_data,
-            "notes": content_type_model_type.get_notes(),
+            "notes": "",
         },
         content_type_model_type,
     )
