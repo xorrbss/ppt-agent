@@ -151,6 +151,7 @@ const SupportingDoc = ({ files, onFilesChange }: SupportingDocProps) => {
                         id="file-upload"
                         ref={fileInputRef}
                         multiple
+                        data-testid="file-upload-input"
                     />
 
                     <button
@@ -174,7 +175,7 @@ const SupportingDoc = ({ files, onFilesChange }: SupportingDocProps) => {
                                     Selected Files ({files.length})
                                 </h3>
                             </div>
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                            <div data-testid="file-list" className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                                 {filesWithIds.map((file) => (
                                     <div key={file.id}
                                         className="bg-white rounded-lg border border-gray-200 overflow-hidden

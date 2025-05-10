@@ -304,17 +304,20 @@ const UploadPage = () => {
           onChange={(value) => handleConfigChange("prompt", value)}
           researchMode={researchMode}
           setResearchMode={setResearchModel}
+          data-testid="prompt-input"
         />
       </div>
       <SupportingDoc
         files={[...documents, ...images]}
         onFilesChange={handleFilesChange}
+        data-testid="file-upload-input"
       />
       <Button
         onClick={handleGeneratePresentation}
         className="w-full rounded-[32px] flex items-center justify-center py-6 bg-[#5141e5] text-white font-satoshi font-semibold text-xl hover:bg-[#5141e5]/80 transition-colors duration-300"
+        data-testid="next-button"
       >
-        <span> Next</span>
+        <span>Next</span>
         <ChevronRight className="!w-6 !h-6" />
       </Button>
     </Wrapper>
