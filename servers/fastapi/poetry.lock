@@ -2133,20 +2133,6 @@ files = [
 ]
 
 [[package]]
-name = "pdf2image"
-version = "1.17.0"
-description = "A wrapper around the pdftoppm and pdftocairo command line tools to convert PDF to a PIL Image list."
-optional = false
-python-versions = "*"
-files = [
-    {file = "pdf2image-1.17.0-py3-none-any.whl", hash = "sha256:ecdd58d7afb810dffe21ef2b1bbc057ef434dabbac6c33778a38a3f7744a27e2"},
-    {file = "pdf2image-1.17.0.tar.gz", hash = "sha256:eaa959bc116b420dd7ec415fcae49b98100dda3dd18cd2fdfa86d09f112f6d57"},
-]
-
-[package.dependencies]
-pillow = "*"
-
-[[package]]
 name = "pdfminer-six"
 version = "20250327"
 description = "PDF parser and analyzer"
@@ -4143,4 +4129,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "233cf6c5d7a077c578d0218a26b626f40cf0b8557c773aa19b544938756b0d33"
+content-hash = "8fdb0f3b57c3821005dd2fec21a5c41b67d415b64790f5ddd7ea13b1df77b593"
