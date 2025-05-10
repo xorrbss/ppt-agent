@@ -1,0 +1,1 @@
+export const BASE_URL = process.env.NEXT_PUBLIC_FAST_API || 'http://localhost:8000';
