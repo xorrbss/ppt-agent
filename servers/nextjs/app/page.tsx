@@ -1,10 +1,16 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/hooks/use-toast";
-import { Info, ExternalLink, PlayCircle } from "lucide-react";
+import { Info, ExternalLink, PlayCircle, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { getEnv } from "@/utils/constant";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 interface ModelOption {
   value: string;
@@ -89,16 +95,60 @@ interface ConfigState {
   imageModel: string;
 }
 
-
 export default function Home() {
-  const urls = getEnv();
   const router = useRouter();
+  const [isLoading, setIsLoading] = useState(true);
   const [config, setConfig] = useState<ConfigState>({
     provider: "openai",
     apiKey: "",
     textModel: PROVIDER_CONFIGS.openai.textModels[0].value,
     imageModel: PROVIDER_CONFIGS.openai.imageModels[0].value,
   });
+
+  useEffect(() => {
+    const checkExistingConfig = async () => {
+      try {
+        const urls = getEnv();
+        const userConfigPath = urls.USER_CONFIG_PATH;
+
+        if (!userConfigPath) {
+          console.error("User config path not found");
+          setIsLoading(false);
+          return;
+        }
+
+        const response = await fetch(`/api/read-config?path=${encodeURIComponent(userConfigPath)}`);
+        if (!response.ok) {
+          throw new Error('Failed to load configuration');
+        }
+
+        const { config: savedConfig } = await response.json();
+
+        // If either API key exists, redirect to upload
+        if (savedConfig?.OPENAI_API_KEY || savedConfig?.GOOGLE_API_KEY) {
+          router.push('/upload');
+        } else {
+          setIsLoading(false);
+        }
+      } catch (error) {
+        console.error("Error checking config:", error);
+        setIsLoading(false);
+      }
+    };
+
+    checkExistingConfig();
+  }, [router]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600">Loading configuration...</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleProviderChange = (provider: string) => {
     setConfig((prev) => ({
@@ -130,7 +180,7 @@ export default function Home() {
     }
 
     try {
-      const userConfigPath = urls.USER_CONFIG_PATH;
+      const userConfigPath = getEnv().USER_CONFIG_PATH;
 
       if (!userConfigPath) {
         toast({
@@ -172,7 +222,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+    <div className="min-h-screen bg-gradient-to-b font-satoshi from-gray-50 to-white">
       <main className="container mx-auto px-4 py-12 max-w-3xl">
         {/* Branding Header */}
         <div className="text-center mb-12">
@@ -259,46 +309,51 @@ export default function Home() {
             </div>
           </div>
           {/* API Guide Section */}
-          <div className="mb-8 bg-gray-50 rounded-lg p-6 border border-gray-200">
-            <div className="flex items-start gap-3 mb-4">
-              <Info className="w-5 h-5 text-blue-600 mt-1" />
-              <h3 className="text-lg font-medium text-gray-900">
-                {currentProvider.apiGuide.title}
-              </h3>
-            </div>
+          <Accordion type="single" collapsible className="mb-8 bg-gray-50 rounded-lg border border-gray-200">
+            <AccordionItem value="guide" className="border-none">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline">
+                <div className="flex items-start gap-3">
+                  <Info className="w-5 h-5 text-blue-600 mt-1" />
+                  <h3 className="text-lg font-medium text-gray-900">
+                    {currentProvider.apiGuide.title}
+                  </h3>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-6 pb-6">
+                <div className="space-y-4">
+                  <ol className="list-decimal list-inside space-y-2 text-gray-600">
+                    {currentProvider.apiGuide.steps.map((step, index) => (
+                      <li key={index} className="text-sm">
+                        {step}
+                      </li>
+                    ))}
+                  </ol>
 
-            <div className="space-y-4">
-              <ol className="list-decimal list-inside space-y-2 text-gray-600">
-                {currentProvider.apiGuide.steps.map((step, index) => (
-                  <li key={index} className="text-sm">
-                    {step}
-                  </li>
-                ))}
-              </ol>
-
-              <div className="flex flex-col sm:flex-row gap-4 mt-6">
-                {currentProvider.apiGuide.videoUrl && (
-                  <Link
-                    href={currentProvider.apiGuide.videoUrl}
-                    target="_blank"
-                    className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 transition-colors"
-                  >
-                    <PlayCircle className="w-4 h-4" />
-                    Watch Video Tutorial
-                    <ExternalLink className="w-3 h-3" />
-                  </Link>
-                )}
-                <Link
-                  href={currentProvider.apiGuide.docsUrl}
-                  target="_blank"
-                  className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 transition-colors"
-                >
-                  <span>Official Documentation</span>
-                  <ExternalLink className="w-3 h-3" />
-                </Link>
-              </div>
-            </div>
-          </div>
+                  <div className="flex flex-col sm:flex-row gap-4 mt-6">
+                    {currentProvider.apiGuide.videoUrl && (
+                      <Link
+                        href={currentProvider.apiGuide.videoUrl}
+                        target="_blank"
+                        className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 transition-colors"
+                      >
+                        <PlayCircle className="w-4 h-4" />
+                        Watch Video Tutorial
+                        <ExternalLink className="w-3 h-3" />
+                      </Link>
+                    )}
+                    <Link
+                      href={currentProvider.apiGuide.docsUrl}
+                      target="_blank"
+                      className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 transition-colors"
+                    >
+                      <span>Official Documentation</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </Link>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
 
           {/* Save Button */}
           <button

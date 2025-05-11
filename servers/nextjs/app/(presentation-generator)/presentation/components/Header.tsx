@@ -231,7 +231,7 @@ const Header = ({
   };
   const downloadLink = (url: string) => {
     const link = document.createElement("a");
-    link.href = url;
+    link.href = `file://${url}`;
     // Append to document, trigger click and remove
     document.body.appendChild(link);
     link.click();
@@ -248,6 +248,11 @@ const Header = ({
       const data = await PresentationGenerationApi.exportAsPDF(apiBody);
 
       if (data.url) {
+        toast({
+          title: "Presentation exported successfully",
+          description: `Please check this path ${data.url}`,
+          variant: "default",
+        });
         downloadLink(data.url);
       }
       setShowLoader(false);
@@ -329,7 +334,7 @@ const Header = ({
       />
       <Announcement />
       <Wrapper className="flex items-center justify-between py-2">
-        <Link href="/" className="min-w-[162px]">
+        <Link href="/dashboard" className="min-w-[162px]">
           <Image
             src="/logo-white.png"
             alt="Presentation logo"
