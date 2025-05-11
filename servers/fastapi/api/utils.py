@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import sys
 import traceback
 from typing import List, Optional
 
@@ -45,6 +46,11 @@ def update_env_with_user_config():
         os.environ["OPENAI_API_KEY"] = user_config.OPENAI_API_KEY
     if user_config.GOOGLE_API_KEY:
         os.environ["GOOGLE_API_KEY"] = user_config.GOOGLE_API_KEY
+
+
+def get_resource(relative_path):
+    base_path = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_path, relative_path)
 
 
 def replace_file_name(old_name: str, new_name: str) -> str:
