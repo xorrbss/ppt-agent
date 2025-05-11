@@ -15,7 +15,7 @@ const Header = () => {
         <div className="flex items-center justify-between py-2">
           <div className="flex items-center gap-3">
             {pathname !== '/upload' && <BackBtn />}
-            <Link href="/">
+            <Link href="/dashboard">
               <Image
                 src="/logo-white.png"
                 alt="Presentation logo"
@@ -26,10 +26,6 @@ const Header = () => {
             </Link>
           </div>
           <div className="flex items-center gap-3 sm:gap-5 md:gap-10">
-            {/* {pathname !== '/dashboard' && <a href="/dashboard" className='flex cursor-pointer hover:text-gray-200 duration-300 items-center gap-1 font-neue-montreal font-medium text-white'>
-                            <LayoutDashboard className='w-4 h-4 mr-2 text-white' /> Dashboard
-                        </a>} */}
-
             <UserAccount />
           </div>
         </div>
