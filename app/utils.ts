@@ -6,6 +6,7 @@ import { platform } from 'os'
 import type { App } from "electron"
 import fs from 'fs'
 import path from 'path'
+import { localhost } from './constants'
 
 const execAsync = promisify(exec)
 
@@ -27,6 +28,13 @@ export function createUserConfig(app: App, userConfig: UserConfig) {
   }
 
   fs.writeFileSync(configPath, JSON.stringify(mergedConfig))
+}
+
+export function setupEnv(app: App, fastApiPort: number, nextjsPort: number) {
+  process.env.NEXT_PUBLIC_FAST_API = `${localhost}:${fastApiPort}`;
+  process.env.NEXT_PUBLIC_URL = `${localhost}:${nextjsPort}`;
+  process.env.TEMP_DIRECTORY = app.getPath("temp");
+  process.env.NEXT_PUBLIC_USER_CONFIG_PATH = app.getPath("userData") + "/userConfig.json";
 }
 
 
