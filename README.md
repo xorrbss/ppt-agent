@@ -20,23 +20,23 @@
 
 ## Features
 
-### Add prompt, select number of slides and language
+### 1. Add prompt, select number of slides and language
 ![Demo](resources/readme/images/prompting.png)
 
-### Select theme
+### 2. Select theme
 ![Demo](resources/readme/images/select-theme.png)
 
-### Review and edit outline
+### 3. Review and edit outline
 ![Demo](resources/readme/images/outline.png)
 
-### Generate presentation
+### 4. Generate presentation
 ![Demo](resources/readme/images/select-theme.png)
 
-### Present on app
+### 5. Present on app
 ![Demo](resources/readme/images/present.png)
 
-### Change theme
+### 6. Change theme
 ![Demo](resources/readme/images/change-theme.png)
 
-### Export presentation
+### 7. Export presentation
 ![Demo](resources/readme/images/export-presentation.png)
