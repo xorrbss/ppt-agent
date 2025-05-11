@@ -14,7 +14,7 @@
     "build:ts": "tsc",
     "build:css": "tailwindcss -i ./resources/ui/assets/css/tailwind.import.css -o ./resources/ui/assets/css/tailwind.css --watch",
     "build:nextjs": "rm -rf resources/nextjs && cp -r servers/nextjs resources/nextjs && cd resources/nextjs && npm install --omit=dev && npm run build",
-    "build:fastapi": "rm -rf resources/fastapi && cd servers/fastapi && .venv/bin/pyinstaller --name fastapi --distpath ../../resources server.py",
+    "build:fastapi": "rm -rf resources/fastapi && cd servers/fastapi && .venv/bin/pyinstaller server.spec",
     "build:electron": "tsc && node build.js",
     "clean:build": "rm -rf resources/nextjs && rm -rf resources/fastapi"
   },
