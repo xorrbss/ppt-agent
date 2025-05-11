@@ -13,11 +13,7 @@ const config = {
   ],
   linux: {
     target: ["AppImage"],
-    desktop: {
-      Name: "Presenton",
-      Icon: "resources/ui/assets/images/presenton_short_filled.png",
-      Categories: ["Utility"],
-    },
+    icon: "resources/ui/assets/images/presenton_short_filled.png",
   },
 }
 

@@ -13,12 +13,13 @@ var nextjsProcess: ChildProcessByStdio<any, any, any> | undefined;
 
 const createWindow = () => {
   win = new BrowserWindow({
+    width: 1280,
+    height: 720,
+    icon: path.join(baseDir, "resources/ui/assets/images/presenton_short_filled.png"),
     webPreferences: {
       webSecurity: false,
       preload: path.join(__dirname, 'preload.js'),
     },
-    width: 1280,
-    height: 720,
   });
 };
 

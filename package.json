@@ -1,7 +1,7 @@
 {
   "name": "presenton",
   "main": "app_dist/main.js",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Presenton Open Source",
   "homepage": "https://presenton.ai",
   "author": {
