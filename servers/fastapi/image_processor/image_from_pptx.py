@@ -8,6 +8,7 @@ from image_processor.utils import get_page_images_from_pdf
 
 def get_pdf_from_pptx(pptx_path: str, temp_dir: str) -> str:
     base_name = os.path.splitext(os.path.basename(pptx_path))[0]
+    print(base_name)
 
     subprocess.run(
         f"{os.getenv('LIBREOFFICE')} --headless --invisible --convert-to pdf {pptx_path} --outdir {temp_dir}",
@@ -17,6 +18,7 @@ def get_pdf_from_pptx(pptx_path: str, temp_dir: str) -> str:
 
     pdf_filename = f"{base_name}.pdf"
     pdf_path = os.path.join(temp_dir, pdf_filename)
+    print(pdf_path)
 
     return pdf_path
 
