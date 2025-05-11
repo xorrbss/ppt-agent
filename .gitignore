@@ -107,7 +107,6 @@ web_modules/
 .env.local
 servers/fastapi/.env
 
-
 # parcel-bundler cache (https://parceljs.org/)
 
 .parcel-cache
@@ -188,3 +187,5 @@ resources/nextjs
 resources/fastapi
 
 servers/nextjs/data
+
+dependencies
