@@ -1,4 +1,4 @@
-# Presenton: Open-Source, Locally-Run AI Presentation Generator - Gamma Alternative
+# Presenton: Open-Source, Locally-Run AI Presentation Generator (Gamma Alternative)
 
 ---
 
@@ -29,7 +29,7 @@
 ### 3. Review and edit outline
 ![Demo](resources/readme/images/outline.png)
 
-### 4. Generate presentation
+### 4. Select theme
 ![Demo](resources/readme/images/select-theme.png)
 
 ### 5. Present on app
@@ -38,5 +38,11 @@
 ### 6. Change theme
 ![Demo](resources/readme/images/change-theme.png)
 
-### 7. Export presentation
+### 7. Export presentation as PDF and PPTX
 ![Demo](resources/readme/images/export-presentation.png)
+
+
+## Licence
+
+Apache 2.0
+
