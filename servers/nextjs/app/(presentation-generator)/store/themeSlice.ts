@@ -20,8 +20,8 @@ export const defaultColors = {
     slideHeading: "#f5f5f5",
     slideDescription: "#e0e0e0",
     slideBox: "#2d2d2d",
-    iconBg: "#ff00ff",
-    chartColors: ["#ff00ff", "#8800ff", "#b200ff", "#d700ff", "#ef00ff"],
+    iconBg: "#5E8CF0",
+    chartColors: ["#5E8CF0", "#8800ff", "#b200ff", "#d700ff", "#ef00ff"],
     fontFamily: "var(--font-inter)",
   },
   faint_yellow: {
@@ -64,8 +64,8 @@ export const defaultColors = {
     slideHeading: "#ffffff",
     slideDescription: "#E6E6E6",
     slideBox: "#29136C",
-    iconBg: "#E100FF",
-    chartColors: ["#E100FF", "#496CEB", "#f051b5", "#F7A8FF", "#FCD8FF"],
+    iconBg: "#5E8CF0",
+    chartColors: ["#5E8CF0", "#496CEB", "#f051b5", "#F7A8FF", "#FCD8FF"],
     fontFamily: "var(--font-satoshi)",
   },
   light_red: {

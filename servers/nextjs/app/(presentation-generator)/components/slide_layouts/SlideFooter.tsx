@@ -118,6 +118,7 @@ const SlideFooter: React.FC = () => {
     return {
       opacity: opacity,
       fontSize: `${fontSize}px`,
+      fontFamily: currentColors.fontFamily || "Inter, sans-serif",
     };
   };
 
@@ -270,7 +271,11 @@ const SlideFooter: React.FC = () => {
                   <div className="w-8 h-8 bg-gray-100 rounded-lg flex justify-center items-center">
                     <Plus className="text-gray-500" />
                   </div>
-                  <p className="text-sm text-gray-400">Insert Your Logo</p>
+                  <p className="text-sm text-gray-400"
+                    style={{
+                      fontFamily: currentColors.fontFamily || "Inter, sans-serif",
+                    }}
+                  >Insert Your Logo</p>
                 </div>
               )
             ) : (
@@ -321,7 +326,11 @@ const SlideFooter: React.FC = () => {
                 <div className="w-8 h-8 bg-gray-100 rounded-lg flex justify-center items-center">
                   <Plus className="text-gray-500" />
                 </div>
-                <p className="text-sm text-gray-400">Insert Your Logo</p>
+                <p className="text-sm text-gray-400"
+                  style={{
+                    fontFamily: currentColors.fontFamily || "Inter, sans-serif",
+                  }}
+                >Insert Your Logo</p>
               </div>
             )
           ) : (
@@ -335,18 +344,18 @@ const SlideFooter: React.FC = () => {
           onOpenAutoFocus={(e) => e.preventDefault()}
           className="sm:max-w-[500px] overflow-y-auto"
         >
-          <SheetHeader className="mb-6">
+          <SheetHeader className="mb-6 font-satoshi">
             <SheetTitle>Configure Footer</SheetTitle>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-gray-500 font-satoshi  ">
               These changes will apply to all slides.
             </p>
           </SheetHeader>
 
-          <div className="space-y-6 h-[calc(100vh-200px)] overflow-y-auto custom_scrollbar p-4">
+          <div className="space-y-6 h-[calc(100vh-200px)] font-satoshi overflow-y-auto custom_scrollbar p-4">
             <div className=" pb-8">
               <h3 className="text-lg font-medium mb-4">Logo Settings</h3>
 
-              <div className="space-y-6 ">
+              <div className="space-y-6 font-satoshi">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="showLogo" className="flex-1">
                     Show Logo
