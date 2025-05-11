@@ -42,7 +42,7 @@
 ![Demo](resources/readme/images/export-presentation.png)
 
 
-## Licence
+## License
 
 Apache 2.0
 
