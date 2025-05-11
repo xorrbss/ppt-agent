@@ -54,6 +54,8 @@ function useDebounce<T extends (...args: any[]) => void>(
 }
 
 const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
+  const urls = getEnv();
+  const BASE_URL = urls.BASE_URL;
   const dispatch = useDispatch();
   const [loading, setLoading] = useState(true);
   const [selectedSlide, setSelectedSlide] = useState(0);

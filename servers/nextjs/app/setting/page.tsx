@@ -1,58 +1,116 @@
 'use client';
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Header from "../dashboard/components/Header";
 import Wrapper from "@/components/Wrapper";
-import { Settings, Key, Palette, Bell } from 'lucide-react';
+import { Settings, Key } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { getEnv } from "@/utils/constant";
 
-interface APIConfig {
-  provider: string;
-  apiKey: string;
+interface UserConfig {
+  LLM?: string;
+  OPENAI_API_KEY?: string;
+  GOOGLE_API_KEY?: string;
 }
 
 const SettingsPage = () => {
-  const [apiConfigs, setApiConfigs] = useState<Record<string, APIConfig>>({
-    openai: {
-      provider: 'OpenAI',
-      apiKey: '',
-    },
-    google: {
-      provider: 'Google',
-      apiKey: '',
-    }
-  });
+  const [config, setConfig] = useState<UserConfig>({});
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleApiKeyChange = (provider: string, value: string) => {
-    setApiConfigs(prev => ({
-      ...prev,
-      [provider]: {
-        ...prev[provider],
-        apiKey: value
+  useEffect(() => {
+    const loadConfig = async () => {
+      try {
+        const urls = getEnv();
+        const userConfigPath = urls.USER_CONFIG_PATH;
+
+        if (!userConfigPath) {
+          console.error("User config path not found");
+          return;
+        }
+
+        // Use the Node.js fs API through an API route
+        const response = await fetch(`/api/read-config?path=${encodeURIComponent(userConfigPath)}`);
+        if (!response.ok) {
+          throw new Error('Failed to load configuration');
+        }
+
+        const { config } = await response.json();
+        setConfig(config);
+      } catch (error) {
+        console.error("Error loading config:", error);
+        toast({
+          title: 'Error',
+          description: 'Failed to load configuration',
+        });
+      } finally {
+        setIsLoading(false);
       }
-    }));
-  };
+    };
 
-  const saveApiKey = (provider: string) => {
-    const config = apiConfigs[provider];
-    if (!config.apiKey) {
+    loadConfig();
+  }, []);
+
+  const handleSaveConfig = async (provider: string, apiKey: string) => {
+    try {
+      const urls = getEnv();
+      const userConfigPath = urls.USER_CONFIG_PATH;
+
+      if (!userConfigPath) {
+        toast({
+          title: 'Error',
+          description: 'Configuration path not found',
+        });
+        return;
+      }
+
+      const response = await fetch('/api/save-user-config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          provider,
+          apiKey,
+          userConfigPath,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save configuration');
+      }
+
+      const { config: newConfig } = await response.json();
+      setConfig(newConfig);
+
+      toast({
+        title: 'Success',
+        description: 'Configuration saved successfully',
+      });
+    } catch (error) {
+      console.error('Error:', error);
       toast({
         title: 'Error',
-        description: `Please enter a valid ${config.provider} API key`,
+        description: 'Failed to save configuration',
       });
-      return;
     }
-    localStorage.setItem(`${provider}_api_key`, config.apiKey);
-    toast({
-      title: 'Success',
-      description: `${config.provider} API key saved successfully`,
-    });
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#E9E8F8]">
+        <Header />
+        <Wrapper className="lg:w-[60%]">
+          <div className="py-8">
+            <div className="text-center">Loading configuration...</div>
+          </div>
+        </Wrapper>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#E9E8F8]">
       <Header />
-
       <Wrapper className="lg:w-[60%]">
         <div className="py-8 space-y-6">
           {/* Settings Header */}
@@ -69,31 +127,51 @@ const SettingsPage = () => {
             </div>
 
             <div className="space-y-6">
-              {Object.entries(apiConfigs).map(([key, config]) => (
-                <div key={key} className="border-b border-gray-100 last:border-0 pb-6 last:pb-0">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {config.provider} API Key
-                  </label>
-                  <div className="flex gap-3">
-                    <input
-                      type="text"
-                      value={config.apiKey}
-                      onChange={(e) => handleApiKeyChange(key, e.target.value)}
-                      className="flex-1 px-4 py-2.5 border border-gray-300 outline-none rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                      placeholder={`Enter your ${config.provider} API key`}
-                    />
-                    <button
-                      onClick={() => saveApiKey(key)}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      Save
-                    </button>
-                  </div>
-                  <p className="mt-2 text-sm text-gray-500">
-                    Required for using {config.provider} services
-                  </p>
+              {/* OpenAI Configuration */}
+              <div className="border-b border-gray-100 pb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  OpenAI API Key
+                </label>
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    value={config.OPENAI_API_KEY || ''}
+                    onChange={(e) => setConfig(prev => ({ ...prev, OPENAI_API_KEY: e.target.value }))}
+                    className="flex-1 px-4 py-2.5 border border-gray-300 outline-none rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                    placeholder="Enter your OpenAI API key"
+                  />
+                  <button
+                    onClick={() => handleSaveConfig('openai', config.OPENAI_API_KEY || '')}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Save
+                  </button>
                 </div>
-              ))}
+                <p className="mt-2 text-sm text-gray-500">Required for using OpenAI services</p>
+              </div>
+
+              {/* Google Configuration */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Google API Key
+                </label>
+                <div className="flex gap-3">
+                  <input
+                    type="password"
+                    value={config.GOOGLE_API_KEY || ''}
+                    onChange={(e) => setConfig(prev => ({ ...prev, GOOGLE_API_KEY: e.target.value }))}
+                    className="flex-1 px-4 py-2.5 border border-gray-300 outline-none rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                    placeholder="Enter your Google API key"
+                  />
+                  <button
+                    onClick={() => handleSaveConfig('google', config.GOOGLE_API_KEY || '')}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Save
+                  </button>
+                </div>
+                <p className="mt-2 text-sm text-gray-500">Required for using Google services</p>
+              </div>
             </div>
           </div>
         </div>

@@ -37,7 +37,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import ToolTip from "@/components/ToolTip";
-import { BASE_URL } from "@/utils/constant";
+import { getEnv } from "@/utils/constant";
 
 interface ImageEditorProps {
   initialImage: string | null;
@@ -310,6 +310,8 @@ const ImageEditor = ({
     if (!src) return "";
     return src.startsWith("user") ? `file://${src}` : `file://${src}`;
   };
+  const urls = getEnv();
+  const BASE_URL = urls.BASE_URL;
 
   return (
     <>

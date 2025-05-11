@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
   let browser;
   try {
     const body = await request.json();
-    const { url, theme, customColors,tempDirectory } = body;
+    const { url, theme, customColors, tempDirectory, baseUrl } = body;
 
     if (!url) {
       return NextResponse.json({ error: "Missing URL" }, { status: 400 });
@@ -116,21 +116,31 @@ export async function POST(request: NextRequest) {
     const page = await browser.newPage();
     await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
 
+    // Inject the environment variables before loading the page
+    await page.evaluateOnNewDocument(`
+      window.env = {
+        NEXT_PUBLIC_FAST_API: "${baseUrl || 'http://localhost:8000'}",
+        NEXT_PUBLIC_URL: "${url}",
+      };
+    `);
+
     try {
       await page.goto(url, {
         waitUntil: "networkidle0",
         timeout: 60000,
       });
     } catch (error) {
+      console.error("Navigation error:", error);
       await browser.close();
       return NextResponse.json({ error: "Failed to Navigate to provided URL" }, { status: 500 });
     }
 
+   
+
     try {
       await page.waitForSelector('[data-element-type="slide-container"]', {
-        timeout: 60000,
+        timeout: 80000,
       });
-
       await page.evaluate(
         async (params: ThemeParams) => {
           const { theme, customColors } = params;

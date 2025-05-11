@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "@/hooks/use-toast";
 import { Info, ExternalLink, PlayCircle } from "lucide-react";
 import Link from "next/link";
+import { getEnv } from "@/utils/constant";
 
 interface ModelOption {
   value: string;
@@ -88,7 +89,9 @@ interface ConfigState {
   imageModel: string;
 }
 
+
 export default function Home() {
+  const urls = getEnv();
   const router = useRouter();
   const [config, setConfig] = useState<ConfigState>({
     provider: "openai",
@@ -117,8 +120,7 @@ export default function Home() {
   };
 
   const currentProvider = PROVIDER_CONFIGS[config.provider];
-  const handleSaveConfig = () => {
-    console.log("cllee");
+  const handleSaveConfig = async () => {
     if (!config.apiKey) {
       toast({
         title: "Error",
@@ -126,11 +128,47 @@ export default function Home() {
       });
       return;
     }
-    toast({
-      title: "Configuration saved",
-      description: "You can now upload your presentation",
-    });
-    router.push("/upload");
+
+    try {
+      const userConfigPath = urls.USER_CONFIG_PATH;
+
+      if (!userConfigPath) {
+        toast({
+          title: "Error",
+          description: "Configuration path not found",
+        });
+        return;
+      }
+
+      const response = await fetch('/api/save-user-config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          provider: config.provider,
+          apiKey: config.apiKey,
+          userConfigPath,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save configuration');
+      }
+
+      toast({
+        title: "Configuration saved",
+        description: "You can now upload your presentation",
+      });
+
+      router.push("/upload");
+    } catch (error) {
+      console.error('Error saving configuration:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save configuration",
+      });
+    }
   };
 
   return (
@@ -158,19 +196,17 @@ export default function Home() {
                 <button
                   key={provider}
                   onClick={() => handleProviderChange(provider)}
-                  className={`relative p-4 rounded-lg border-2 transition-all duration-200 ${
-                    config.provider === provider
-                      ? "border-blue-500 bg-blue-50"
-                      : "border-gray-200 hover:border-blue-200 hover:bg-gray-50"
-                  }`}
+                  className={`relative p-4 rounded-lg border-2 transition-all duration-200 ${config.provider === provider
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-gray-200 hover:border-blue-200 hover:bg-gray-50"
+                    }`}
                 >
                   <div className="flex items-center justify-center gap-3">
                     <span
-                      className={`font-medium text-center ${
-                        config.provider === provider
-                          ? "text-blue-700"
-                          : "text-gray-700"
-                      }`}
+                      className={`font-medium text-center ${config.provider === provider
+                        ? "text-blue-700"
+                        : "text-gray-700"
+                        }`}
                     >
                       {provider.charAt(0).toUpperCase() + provider.slice(1)}
                     </span>
