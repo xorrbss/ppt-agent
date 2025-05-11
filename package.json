@@ -1,22 +1,26 @@
 {
   "name": "presenton_open_source",
-  "main": "dist/main.js",
+  "main": "app_dist/main.js",
   "version": "0.0.0",
   "description": "Presenton Open Source",
+  "homepage": "https://presenton.ai",
+  "author": {
+    "name": "Presenton",
+    "email": "contact@presenton.ai"
+  },
   "scripts": {
     "dev": "tsc && electron --gtk-version=3 .",
-    "start": "tsc && electron-forge start",
-    "package": "tsc && electron-forge package",
-    "make": "tsc && electron-forge make",
     "setup:env": "npm install && cd servers/fastapi && poetry install && cd ../../servers/nextjs && npm install",
     "build:ts": "tsc",
     "build:css": "tailwindcss -i ./resources/ui/assets/tailwind.import.css -o ./resources/ui/assets/tailwind.css",
-    "build:nextjs": "rm -rf resources/nextjs && mkdir -p resources/nextjs && cd servers/nextjs && npm run build && cp -r .next ../../resources/nextjs",
+    "build:nextjs": "rm -rf resources/nextjs && cp -r servers/nextjs resources/nextjs && cd resources/nextjs && npm install && npm run build",
     "build:fastapi": "rm -rf resources/fastapi && cd servers/fastapi && .venv/bin/pyinstaller --name fastapi --distpath ../../resources server.py",
+    "build:electron": "tsc && node build.js",
     "clean:build": "rm -rf resources/nextjs && rm -rf resources/fastapi"
   },
   "devDependencies": {
     "electron": "^36.1.0",
+    "electron-builder": "^26.0.12",
     "typescript": "^5.8.3"
   },
   "peerDependencies": {
