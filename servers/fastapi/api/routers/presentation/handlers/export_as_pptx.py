@@ -37,7 +37,15 @@ class ExportAsPptxHandler(FetchPresentationAssetsMixin):
 
         await self.fetch_presentation_assets()
 
-        ppt_path = os.path.join(self.presentation_dir, "presentation.pptx")
+        with get_sql_session() as sql_session:
+            presentation = sql_session.get(
+                PresentationSqlModel, self.data.presentation_id
+            )
+
+        ppt_path = os.path.join(
+            self.presentation_dir,
+            f"{presentation.title.replace('/', '_').replace(' ', '_')}.pptx",
+        )
         ppt_creator = PptxPresentationCreator(self.data.pptx_model, self.temp_dir)
         ppt_creator.create_ppt()
         ppt_creator.save(ppt_path)

@@ -3,13 +3,30 @@
 
 <head>
   <title>Presenton Open Source</title>
-  <link rel="stylesheet" href="../assets/tailwind.css">
+  <link rel="stylesheet" href="../assets/css/tailwind.css">
   <script src="./script.js"></script>
+  <style>
+    .loading-circle {
+      width: 40px;
+      height: 40px;
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 1s ease-in-out infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
 </head>
 
 <body class="bg-gray-900 text-white flex flex-col items-center justify-center h-screen">
-  <h1 class="text-4xl font-bold">Presenton Open Source</h1>
-  <p class="mt-4">Waiting for server to start...</p>
+  <img src="../assets/images/presenton_logo.png" alt="Presenton Logo" class="h-20">
+  <p class="mt-20 text-lg">Waiting for server to start...</p>
+  <div class="loading-circle mt-10"></div>
 </body>
 
 </html>

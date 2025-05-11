@@ -12,7 +12,7 @@
     "dev": "tsc && electron --gtk-version=3 .",
     "setup:env": "npm install && cd servers/fastapi && poetry install && cd ../../servers/nextjs && npm install",
     "build:ts": "tsc",
-    "build:css": "tailwindcss -i ./resources/ui/assets/tailwind.import.css -o ./resources/ui/assets/tailwind.css",
+    "build:css": "tailwindcss -i ./resources/ui/assets/css/tailwind.import.css -o ./resources/ui/assets/css/tailwind.css --watch",
     "build:nextjs": "rm -rf resources/nextjs && cp -r servers/nextjs resources/nextjs && cd resources/nextjs && npm install --omit=dev && npm run build",
     "build:fastapi": "rm -rf resources/fastapi && cd servers/fastapi && .venv/bin/pyinstaller --name fastapi --distpath ../../resources server.py",
     "build:electron": "tsc && node build.js",
