@@ -7,6 +7,7 @@ class TempFileService:
     base_dir = os.getenv("TEMP_DIRECTORY")
 
     def __init__(self):
+        self.cleanup_base_dir()
         os.makedirs(self.base_dir, exist_ok=True)
 
     def create_dir_in_dir(self, base_dir: str, dir_name: Optional[str] = None) -> str:
