@@ -32,6 +32,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    distpath='../../resources/fastapi',
 )
 coll = COLLECT(
     exe,
@@ -41,4 +42,5 @@ coll = COLLECT(
     upx=True,
     upx_exclude=[],
     name='fastapi',
+    distpath='../../resources/fastapi',
 )
