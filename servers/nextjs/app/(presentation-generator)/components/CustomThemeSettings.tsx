@@ -8,7 +8,6 @@ import {
   setThemeColors,
   setTheme,
   setLoadingState,
-  loadSavedTheme,
 } from "../store/themeSlice";
 import { ThemeType } from "../upload/type";
 
@@ -166,7 +165,7 @@ const CustomThemeSettings = ({
 
   return (
     <div className="">
-      <div className="h-[60vh]  overflow-y-auto custom_scrollbar pr-2 pb-2">
+      <div className="h-[60vh] font-satoshi overflow-y-auto custom_scrollbar pr-2 pb-2">
         {/* Live Preview */}
         <div className=" w-full space-y-2">
           <h3 className="text-xs font-medium text-gray-500">Live Preview</h3>
@@ -256,7 +255,7 @@ const CustomThemeSettings = ({
           ))}
         </div>
       </div>
-      <div className="mt-6 pt-4 border-t flex justify-end gap-2">
+      <div className="mt-6 pt-4 font-switzer  border-t flex justify-end gap-2">
         <Button
           variant="outline"
           onClick={onClose}
