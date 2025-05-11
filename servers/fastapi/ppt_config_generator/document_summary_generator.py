@@ -40,9 +40,10 @@ async def generate_document_summary(documents: List[Document]):
         if os.getenv("LLM") == "openai"
         else ChatGoogleGenerativeAI(model="gemini-2.0-flash", max_output_tokens=8000)
     )
-    text_splitter = CharacterTextSplitter.from_tiktoken_encoder(
-        encoding_name="cl100k_base", chunk_size=200000, chunk_overlap=0
-    )
+    # text_splitter = CharacterTextSplitter.from_tiktoken_encoder(
+    #     encoding_name="cl100k_base", chunk_size=200000, chunk_overlap=0
+    # )
+    text_splitter = CharacterTextSplitter(chunk_size=200000, chunk_overlap=0)
     chain = prompt_template | model
 
     coroutines = []

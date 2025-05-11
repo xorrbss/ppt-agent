@@ -1,16 +1,18 @@
 require("dotenv").config();
 import { app, BrowserWindow } from "electron";
 import path from "path";
-import { createUserConfig, findTwoUnusedPorts, killProcess } from "./utils";
+import { createUserConfig, findTwoUnusedPorts, killProcess, setupEnv } from "./utils";
 import { startFastApiServer, startNextJsServer } from "./servers";
 import { ChildProcessByStdio } from "child_process";
 import { localhost } from "./constants";
 
-var isDev = false;
-// var isDev = !app.isPackaged;
+var isDev = !app.isPackaged;
+// var isDev = false;
 var baseDir = app.getAppPath();
 var fastapiDir = isDev ? path.join(baseDir, "servers/fastapi") : path.join(baseDir, "resources/fastapi");
 var nextjsDir = isDev ? path.join(baseDir, "servers/nextjs") : path.join(baseDir, "resources/nextjs");
+
+var libreofficePath = path.join(baseDir, "dependencies/libreoffice/linux_build/libreoffice.appimage");
 
 var tempDir = app.getPath("temp");
 var dataDir = app.getPath("userData");
@@ -19,8 +21,6 @@ var userConfigPath = path.join(dataDir, "userConfig.json");
 var win: BrowserWindow | undefined;
 var fastApiProcess: ChildProcessByStdio<any, any, any> | undefined;
 var nextjsProcess: ChildProcessByStdio<any, any, any> | undefined;
-
-
 
 const createWindow = () => {
   win = new BrowserWindow({
@@ -35,37 +35,31 @@ const createWindow = () => {
 
 async function startServers(fastApiPort: number, nextjsPort: number) {
   try {
-
-  process.env.NEXT_PUBLIC_FAST_API = `${localhost}:${fastApiPort}`;
-    process.env.NEXT_PUBLIC_URL = `${localhost}:${nextjsPort}`;
-    process.env.TEMP_DIRECTORY = tempDir;
-    process.env.NEXT_PUBLIC_USER_CONFIG_PATH = userConfigPath;
-
     fastApiProcess = await startFastApiServer(
       fastapiDir,
       fastApiPort,
       {
         DEBUG: isDev ? "True" : "False",
         LLM: process.env.LLM,
-        LIBREOFFICE: process.env.LIBREOFFICE,
+        LIBREOFFICE: libreofficePath,
         OPENAI_API_KEY: process.env.OPENAI_API_KEY,
         GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,
         APP_DATA_DIRECTORY: dataDir,
         TEMP_DIRECTORY: tempDir,
         USER_CONFIG_PATH: userConfigPath,
       },
-      isDev
+      isDev,
     );
     nextjsProcess = await startNextJsServer(
       nextjsDir,
       nextjsPort,
       {
-        NEXT_PUBLIC_FAST_API: `${localhost}:${fastApiPort}`,
-        TEMP_DIRECTORY: tempDir,
-        NEXT_PUBLIC_URL: `${localhost}:${nextjsPort}`,
-        NEXT_PUBLIC_USER_CONFIG_PATH: userConfigPath,
+        NEXT_PUBLIC_FAST_API: process.env.NEXT_PUBLIC_FAST_API,
+        TEMP_DIRECTORY: process.env.TEMP_DIRECTORY,
+        NEXT_PUBLIC_URL: process.env.NEXT_PUBLIC_URL,
+        NEXT_PUBLIC_USER_CONFIG_PATH: process.env.NEXT_PUBLIC_USER_CONFIG_PATH,
       },
-      isDev
+      isDev,
     );
   } catch (error) {
     console.error("Server startup error:", error);
@@ -94,6 +88,9 @@ app.whenReady().then(async () => {
 
   const [fastApiPort, nextjsPort] = await findTwoUnusedPorts();
   console.log(`FastAPI port: ${fastApiPort}, NextJS port: ${nextjsPort}`);
+
+  //? Setup environment variables to be used in the preload.ts file
+  setupEnv(app, fastApiPort, nextjsPort);
 
   await startServers(fastApiPort, nextjsPort);
   win?.loadURL(`${localhost}:${nextjsPort}`);
