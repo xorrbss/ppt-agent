@@ -13,7 +13,7 @@ interface NextJsEnv {
   NEXT_PUBLIC_FAST_API?: string,
   TEMP_DIRECTORY?: string,
   NEXT_PUBLIC_URL?: string,
-  USER_CONFIG_PATH?: string,
+  NEXT_PUBLIC_USER_CONFIG_PATH?: string,
 }
 
 interface UserConfig {

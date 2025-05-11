@@ -47,6 +47,7 @@ import Modal from "./Modal";
 
 import Announcement from "@/components/Announcement";
 import { getHeader } from "../../services/api/header";
+import { getEnv } from "@/utils/constant";
 
 const Header = ({
   presentation_id,
@@ -68,6 +69,7 @@ const Header = ({
     (state: RootState) => state.presentationGeneration
   );
   const dispatch = useDispatch();
+  const urls = getEnv();
   const handleThemeSelect = async (value: string) => {
     if (isStreaming) return;
     if (value === "custom") {
@@ -128,7 +130,7 @@ const Header = ({
   const getSlideMetadata = async () => {
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_URL}/api/slide-metadata`,
+        `${urls.NEXT_PUBLIC_URL}/api/slide-metadata`,
         {
           method: "POST",
           headers: getHeader(),
@@ -136,6 +138,7 @@ const Header = ({
             url: window.location.href,
             theme: currentTheme,
             customColors: currentColors,
+            tempDirectory: urls.TEMP_DIRECTORY,
           }),
         }
       );
