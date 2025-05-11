@@ -129,23 +129,28 @@ const Header = ({
 
   const getSlideMetadata = async () => {
     try {
+      // Get the current URL without any query parameters
+      const baseUrl = window.location.origin + window.location.pathname;
+      const urls = getEnv();
+
       const response = await fetch(
         `${urls.NEXT_PUBLIC_URL}/api/slide-metadata`,
         {
           method: "POST",
           headers: getHeader(),
           body: JSON.stringify({
-            url: window.location.href,
+            url: baseUrl,
             theme: currentTheme,
             customColors: currentColors,
             tempDirectory: urls.TEMP_DIRECTORY,
+            baseUrl: urls.BASE_URL,
           }),
         }
       );
 
-
       if (!response.ok) {
-        throw new Error("Failed to fetch metadata");
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to fetch metadata");
       }
       const metadata = await response.json();
       console.log("metadata", metadata);
@@ -153,7 +158,11 @@ const Header = ({
     } catch (error) {
       setShowLoader(false);
       console.error("Error fetching metadata:", error);
-      // You might want to show an error toast/notification here
+      toast({
+        title: "Error fetching slide metadata",
+        description: error instanceof Error ? error.message : "Failed to fetch metadata",
+        variant: "destructive",
+      });
       throw error;
     }
   };

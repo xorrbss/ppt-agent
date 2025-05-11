@@ -24,7 +24,6 @@ export interface PresentationResponse {
 }
 
 export class DashboardApi {
-  // static BASE_URL = "http://localhost:48388";
  
   static async getPresentations(): Promise<PresentationResponse[]> {
     try {
@@ -32,7 +31,6 @@ export class DashboardApi {
         `${BASE_URL}/ppt/user_presentations`,
         {
           method: "GET",
-          headers: getHeader(),
         }
       );
       if (response.status === 200) {
@@ -54,7 +52,7 @@ export class DashboardApi {
         `${BASE_URL}/ppt/presentation?presentation_id=${id}`,
         {
           method: "GET",
-          headers: getHeader(),
+         
         }
       );
       if (response.status === 200) {

@@ -27,7 +27,7 @@ import { jsonrepair } from "jsonrepair";
 import { Button } from "@/components/ui/button";
 import { AlertCircle } from "lucide-react";
 import Help from "./Help";
-import { BASE_URL } from "@/utils/constant";
+import { getEnv } from "@/utils/constant";
 
 // Custom debounce function
 function useDebounce<T extends (...args: any[]) => void>(
@@ -51,6 +51,8 @@ function useDebounce<T extends (...args: any[]) => void>(
 }
 
 const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
+  const urls = getEnv();
+  const BASE_URL = urls.BASE_URL;
   const dispatch = useDispatch();
   const [loading, setLoading] = useState(true);
   const [selectedSlide, setSelectedSlide] = useState(0);
