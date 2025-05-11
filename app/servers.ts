@@ -51,7 +51,7 @@ export async function startNextJsServer(
     ["run", "dev", "--", "-p", port.toString()],
   ] : [
     "npx",
-    ["next", "start", "--", "-p", port.toString()],
+    ["next", "start", "-p", port.toString()],
   ];
 
 

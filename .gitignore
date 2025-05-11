@@ -176,6 +176,8 @@ dist
 # Finder (MacOS) folder config
 .DS_Store
 
+app_dist
+
 env
 .venv
 __pycache__
