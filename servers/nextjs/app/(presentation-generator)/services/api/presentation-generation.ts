@@ -1,7 +1,9 @@
-import { BASE_URL } from "@/utils/constant";
+import {  getEnv } from "@/utils/constant";
 import { getHeader, getHeaderForFormData } from "./header";
 import { IconSearch, ImageGenerate, ImageSearch } from "./params";
 
+const urls = getEnv();
+const BASE_URL = urls.BASE_URL;
 export class PresentationGenerationApi {
   // static BASE_URL="https://api.presenton.ai";
   // static BASE_URL="https://presentation-generator-fragrant-mountain-1643.fly.dev";

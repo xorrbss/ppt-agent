@@ -6,7 +6,8 @@ import { startFastApiServer, startNextJsServer } from "./servers";
 import { ChildProcessByStdio } from "child_process";
 import { localhost } from "./constants";
 
-var isDev = !app.isPackaged;
+var isDev = false;
+// var isDev = !app.isPackaged;
 var baseDir = app.getAppPath();
 var fastapiDir = isDev ? path.join(baseDir, "servers/fastapi") : path.join(baseDir, "resources/fastapi");
 var nextjsDir = isDev ? path.join(baseDir, "servers/nextjs") : path.join(baseDir, "resources/nextjs");
@@ -19,10 +20,13 @@ var win: BrowserWindow | undefined;
 var fastApiProcess: ChildProcessByStdio<any, any, any> | undefined;
 var nextjsProcess: ChildProcessByStdio<any, any, any> | undefined;
 
+
+
 const createWindow = () => {
   win = new BrowserWindow({
     webPreferences: {
       webSecurity: false,
+      preload: path.join(__dirname, 'preload.js'),
     },
     width: 1280,
     height: 720,
@@ -31,6 +35,12 @@ const createWindow = () => {
 
 async function startServers(fastApiPort: number, nextjsPort: number) {
   try {
+
+  process.env.NEXT_PUBLIC_FAST_API = `${localhost}:${fastApiPort}`;
+    process.env.NEXT_PUBLIC_URL = `${localhost}:${nextjsPort}`;
+    process.env.TEMP_DIRECTORY = tempDir;
+    process.env.NEXT_PUBLIC_USER_CONFIG_PATH = userConfigPath;
+
     fastApiProcess = await startFastApiServer(
       fastapiDir,
       fastApiPort,
@@ -53,7 +63,7 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         NEXT_PUBLIC_FAST_API: `${localhost}:${fastApiPort}`,
         TEMP_DIRECTORY: tempDir,
         NEXT_PUBLIC_URL: `${localhost}:${nextjsPort}`,
-        USER_CONFIG_PATH: userConfigPath,
+        NEXT_PUBLIC_USER_CONFIG_PATH: userConfigPath,
       },
       isDev
     );

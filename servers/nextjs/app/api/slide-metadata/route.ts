@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
   let browser;
   try {
     const body = await request.json();
-    const { url, theme, customColors } = body;
+    const { url, theme, customColors,tempDirectory } = body;
 
     if (!url) {
       return NextResponse.json({ error: "Missing URL" }, { status: 400 });
@@ -367,7 +367,7 @@ export async function POST(request: NextRequest) {
       });
 
       try {
-        const tempDir = process.env.TEMP_DIRECTORY || os.tmpdir();
+        const tempDir = tempDirectory || os.tmpdir();
         
         // Generate a unique filename
         const filename = `chart-${graphId}-${Date.now()}.jpg`;

@@ -15,11 +15,11 @@ const SettingsPage = () => {
   const [apiConfigs, setApiConfigs] = useState<Record<string, APIConfig>>({
     openai: {
       provider: 'OpenAI',
-      apiKey: localStorage.getItem('openai_api_key') || '',
+      apiKey: '',
     },
     google: {
       provider: 'Google',
-      apiKey: localStorage.getItem('google_api_key') || '',
+      apiKey: '',
     }
   });
 

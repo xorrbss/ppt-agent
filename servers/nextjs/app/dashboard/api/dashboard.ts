@@ -2,8 +2,10 @@ import {
   getHeader,
   getHeaderForFormData,
 } from "@/app/(presentation-generator)/services/api/header";
-import { BASE_URL } from "@/utils/constant";
+import { getEnv } from "@/utils/constant";
 
+const urls = getEnv();
+const BASE_URL = urls.BASE_URL;
 export interface PresentationResponse {
   id: string;
   title: string;
