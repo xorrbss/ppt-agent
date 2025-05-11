@@ -12,8 +12,6 @@ var baseDir = app.getAppPath();
 var fastapiDir = isDev ? path.join(baseDir, "servers/fastapi") : path.join(baseDir, "resources/fastapi");
 var nextjsDir = isDev ? path.join(baseDir, "servers/nextjs") : path.join(baseDir, "resources/nextjs");
 
-var libreofficePath = path.join(baseDir, "dependencies/libreoffice/linux_build/libreoffice.appimage");
-
 var tempDir = app.getPath("temp");
 var dataDir = app.getPath("userData");
 var userConfigPath = path.join(dataDir, "userConfig.json");
@@ -41,7 +39,7 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
       {
         DEBUG: isDev ? "True" : "False",
         LLM: process.env.LLM,
-        LIBREOFFICE: libreofficePath,
+        LIBREOFFICE: process.env.LIBREOFFICE,
         OPENAI_API_KEY: process.env.OPENAI_API_KEY,
         GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,
         APP_DATA_DIRECTORY: dataDir,
