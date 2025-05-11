@@ -1,20 +1,11 @@
 require("dotenv").config();
 import { app, BrowserWindow } from "electron";
 import path from "path";
-import { createUserConfig, findTwoUnusedPorts, killProcess, setupEnv } from "./utils";
+import { findTwoUnusedPorts, killProcess, setupEnv, setUserConfig } from "./utils";
 import { startFastApiServer, startNextJsServer } from "./servers";
 import { ChildProcessByStdio } from "child_process";
-import { localhost } from "./constants";
-
-var isDev = !app.isPackaged;
-// var isDev = false;
-var baseDir = app.getAppPath();
-var fastapiDir = isDev ? path.join(baseDir, "servers/fastapi") : path.join(baseDir, "resources/fastapi");
-var nextjsDir = isDev ? path.join(baseDir, "servers/nextjs") : path.join(baseDir, "resources/nextjs");
-
-var tempDir = app.getPath("temp");
-var dataDir = app.getPath("userData");
-var userConfigPath = path.join(dataDir, "userConfig.json");
+import { baseDir, fastapiDir, isDev, localhost, nextjsDir, tempDir, userConfigPath, userDataDir } from "./constants";
+import { setupIpcHandlers } from "./ipc";
 
 var win: BrowserWindow | undefined;
 var fastApiProcess: ChildProcessByStdio<any, any, any> | undefined;
@@ -42,7 +33,7 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         LIBREOFFICE: process.env.LIBREOFFICE,
         OPENAI_API_KEY: process.env.OPENAI_API_KEY,
         GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,
-        APP_DATA_DIRECTORY: dataDir,
+        APP_DATA_DIRECTORY: userDataDir,
         TEMP_DIRECTORY: tempDir,
         USER_CONFIG_PATH: userConfigPath,
       },
@@ -78,7 +69,7 @@ app.whenReady().then(async () => {
   win?.loadFile(path.join(baseDir, "resources/ui/homepage/index.html"));
   win?.webContents.openDevTools();
 
-  createUserConfig(app, {
+  setUserConfig({
     LLM: process.env.LLM,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,
@@ -88,7 +79,8 @@ app.whenReady().then(async () => {
   console.log(`FastAPI port: ${fastApiPort}, NextJS port: ${nextjsPort}`);
 
   //? Setup environment variables to be used in the preload.ts file
-  setupEnv(app, fastApiPort, nextjsPort);
+  setupEnv(fastApiPort, nextjsPort);
+  setupIpcHandlers();
 
   await startServers(fastApiPort, nextjsPort);
   win?.loadURL(`${localhost}:${nextjsPort}`);

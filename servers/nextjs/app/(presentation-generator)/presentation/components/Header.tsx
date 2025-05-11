@@ -206,8 +206,13 @@ const Header = ({
       const apiBody = await metaData();
 
       const response = await PresentationGenerationApi.exportAsPPTX(apiBody);
-      if (response.url) {
-        downloadLink(response.url);
+      if (response.path) {
+        setShowLoader(false);
+        // @ts-ignore
+        const ipcResponse = await window.electron.fileDownloaded(response.path);
+        if (!ipcResponse.success) {
+          throw new Error("Failed to download file");
+        }
       } else {
         throw new Error("No URL returned from export");
       }

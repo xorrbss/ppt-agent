@@ -1,23 +1,13 @@
 import net from 'net'
 import treeKill from 'tree-kill'
-import { exec } from 'child_process'
-import { promisify } from 'util'
-import { platform } from 'os'
-import type { App } from "electron"
 import fs from 'fs'
-import path from 'path'
-import { localhost } from './constants'
+import { localhost, tempDir, userConfigPath } from './constants'
 
-const execAsync = promisify(exec)
-
-export function createUserConfig(app: App, userConfig: UserConfig) {
-  const dataDir = app.getPath("userData")
-  const configPath = path.join(dataDir, "userConfig.json")
-
+export function setUserConfig(userConfig: UserConfig) {
   let existingConfig: UserConfig = {}
 
-  if (fs.existsSync(configPath)) {
-    const configData = fs.readFileSync(configPath, 'utf-8')
+  if (fs.existsSync(userConfigPath)) {
+    const configData = fs.readFileSync(userConfigPath, 'utf-8')
     existingConfig = JSON.parse(configData)
   }
 
@@ -26,15 +16,22 @@ export function createUserConfig(app: App, userConfig: UserConfig) {
     OPENAI_API_KEY: userConfig.OPENAI_API_KEY || existingConfig.OPENAI_API_KEY,
     GOOGLE_API_KEY: userConfig.GOOGLE_API_KEY || existingConfig.GOOGLE_API_KEY,
   }
-
-  fs.writeFileSync(configPath, JSON.stringify(mergedConfig))
+  fs.writeFileSync(userConfigPath, JSON.stringify(mergedConfig))
 }
 
-export function setupEnv(app: App, fastApiPort: number, nextjsPort: number) {
+export function getUserConfig(): UserConfig {
+  if (!fs.existsSync(userConfigPath)) {
+    return {}
+  }
+  const configData = fs.readFileSync(userConfigPath, 'utf-8')
+  return JSON.parse(configData)
+}
+
+export function setupEnv(fastApiPort: number, nextjsPort: number) {
   process.env.NEXT_PUBLIC_FAST_API = `${localhost}:${fastApiPort}`;
   process.env.NEXT_PUBLIC_URL = `${localhost}:${nextjsPort}`;
-  process.env.TEMP_DIRECTORY = app.getPath("temp");
-  process.env.NEXT_PUBLIC_USER_CONFIG_PATH = app.getPath("userData") + "/userConfig.json";
+  process.env.TEMP_DIRECTORY = tempDir;
+  process.env.NEXT_PUBLIC_USER_CONFIG_PATH = userConfigPath;
 }
 
 
