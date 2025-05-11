@@ -229,14 +229,7 @@ const Header = ({
       setShowLoader(false);
     }
   };
-  const downloadLink = (url: string) => {
-    const link = document.createElement("a");
-    link.href = `file://${url}`;
-    // Append to document, trigger click and remove
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+
   const handleExportPdf = async () => {
     if (isStreaming) return;
 
@@ -247,13 +240,14 @@ const Header = ({
 
       const data = await PresentationGenerationApi.exportAsPDF(apiBody);
 
-      if (data.url) {
-        toast({
-          title: "Presentation exported successfully",
-          description: `Please check this path ${data.url}`,
-          variant: "default",
-        });
-        downloadLink(data.url);
+      if (data.path) {
+        setShowLoader(false);
+        // @ts-ignore
+        const ipcResponse = await window.electron.fileDownloaded(data.path);
+
+        if (!ipcResponse.success) {
+          throw new Error("Failed to download file");
+        }
       }
       setShowLoader(false);
     } catch (err) {
