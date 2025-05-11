@@ -1,4 +1,4 @@
-# Presenton: An Open-Source, Locally-Run AI Presentation Tool (Gamma Alternative)
+# Presenton: Open-Source, Locally-Run AI Presentation Generator - Gamma Alternative
 
 ---
 
@@ -16,4 +16,3 @@
 * ✅ **Flexible** — Generate presentations from prompts or outlines
 * ✅ **Export Ready** — Save as PowerPoint (PPTX) and PDF
 * ✅ **Fully Open-Source** — Apache 2.0 licensed
-
