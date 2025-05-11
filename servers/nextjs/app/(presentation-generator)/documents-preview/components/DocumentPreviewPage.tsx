@@ -27,7 +27,6 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import Header from "@/app/dashboard/components/Header";
 import MarkdownRenderer from "./MarkdownRenderer";
-import { fetchTextFromURL } from "../../utils/download";
 import { getIconFromFile, removeUUID } from "../../utils/others";
 import { ChevronRight, PanelRightOpen, X } from "lucide-react";
 import ToolTip from "@/components/ToolTip";
@@ -83,8 +82,8 @@ const DocumentsPreviewPage: React.FC = () => {
     }
   };
 
-  const maintainDocumentTexts = async () => {
 
+  const maintainDocumentTexts = async () => {
     const newDocuments: string[] = [];
     const promises: Promise<string>[] = [];
 
@@ -92,7 +91,8 @@ const DocumentsPreviewPage: React.FC = () => {
     documentKeys.forEach(key => {
       if (!(key in textContents)) {
         newDocuments.push(key);
-        promises.push(fetchTextFromURL(documents[key]));
+        // @ts-ignore
+        promises.push(window.electron.readFile(documents[key]));
       }
     });
 
@@ -100,20 +100,30 @@ const DocumentsPreviewPage: React.FC = () => {
     reportKeys.forEach(key => {
       if (!(key in textContents)) {
         newDocuments.push(key);
-        promises.push(fetchTextFromURL(reports[key]));
+        // @ts-ignore
+        promises.push(window.electron.readFile(reports[key]));
       }
     });
 
     if (promises.length > 0) {
       setDownloadingDocuments(newDocuments);
-      const results = await Promise.all(promises);
-      setTextContents(prev => {
-        const newContents = { ...prev };
-        newDocuments.forEach((key, index) => {
-          newContents[key] = results[index];
+      try {
+        const results = await Promise.all(promises);
+        setTextContents(prev => {
+          const newContents = { ...prev };
+          newDocuments.forEach((key, index) => {
+            newContents[key] = results[index];
+          });
+          return newContents;
         });
-        return newContents;
-      });
+      } catch (error) {
+        console.error('Error reading files:', error);
+        toast({
+          title: "Error",
+          description: "Failed to read document content",
+          variant: "destructive",
+        });
+      }
       setDownloadingDocuments([]);
     }
   };

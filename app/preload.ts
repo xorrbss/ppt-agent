@@ -12,4 +12,6 @@ contextBridge.exposeInMainWorld('electron', {
   fileDownloaded: (filePath: string) => ipcRenderer.invoke("file-downloaded", filePath),
   getUserConfig: () => ipcRenderer.invoke("get-user-config"),
   setUserConfig: (userConfig: UserConfig) => ipcRenderer.invoke("set-user-config", userConfig),
+  readFile: (filePath: string) => ipcRenderer.invoke("read-file", filePath),
+  getSlideMetadata: (url: string, theme: string, customColors?: any) => ipcRenderer.invoke("get-slide-metadata", url, theme, customColors),
 });
