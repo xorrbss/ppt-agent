@@ -6,7 +6,7 @@
 
 ---
 
-![Demo](resources/ui/readme/demo.gif)
+![Demo](resources/readme/demo.gif)
 
 ## ✨ Features
 
