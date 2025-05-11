@@ -13,7 +13,7 @@
     "setup:env": "npm install && cd servers/fastapi && poetry install && cd ../../servers/nextjs && npm install",
     "build:ts": "tsc",
     "build:css": "tailwindcss -i ./resources/ui/assets/tailwind.import.css -o ./resources/ui/assets/tailwind.css",
-    "build:nextjs": "rm -rf resources/nextjs && cp -r servers/nextjs resources/nextjs && cd resources/nextjs && npm install && npm run build",
+    "build:nextjs": "rm -rf resources/nextjs && cp -r servers/nextjs resources/nextjs && cd resources/nextjs && npm install --omit=dev && npm run build",
     "build:fastapi": "rm -rf resources/fastapi && cd servers/fastapi && .venv/bin/pyinstaller --name fastapi --distpath ../../resources server.py",
     "build:electron": "tsc && node build.js",
     "clean:build": "rm -rf resources/nextjs && rm -rf resources/fastapi"
