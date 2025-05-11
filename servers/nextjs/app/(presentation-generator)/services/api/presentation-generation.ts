@@ -354,7 +354,7 @@ export class PresentationGenerationApi {
   static async exportAsPPTX(presentationData: any) {
     try {
       const response = await fetch(
-        `${BASE_URL}/ppt/presentation/export_as_pptx/`,
+        `${BASE_URL}/ppt/presentation/export_as_pptx`,
         {
           method: "POST",
           headers: getHeader(),
@@ -380,7 +380,7 @@ export class PresentationGenerationApi {
   static async exportAsPDF(presentationData: any) {
     try {
       const response = await fetch(
-        `${BASE_URL}/ppt/presentation/export_as_pdf/`,
+        `${BASE_URL}/ppt/presentation/export_as_pdf`,
         {
           method: "POST",
           headers: getHeader(),
