@@ -1,6 +1,7 @@
 import os
 from typing import List, Optional
 
+from api.utils import get_resource
 from ppt_generator.models.query_and_prompt_models import (
     IconCategoryEnum,
     IconQueryCollectionWithData,
@@ -21,11 +22,11 @@ async def get_icon(
 
     with open(output_path, "wb") as f_a:
         try:
-            with open(f"assets/icons/bold/{icon_name}.png", "rb") as f_b:
+            with open(get_resource(f"assets/icons/bold/{icon_name}.png"), "rb") as f_b:
                 f_a.write(f_b.read())
         except Exception as e:
             print("Error finding icon: ", e)
-            with open(f"assets/icons/placeholder.png", "rb") as f_b:
+            with open(get_resource("assets/icons/placeholder.png"), "rb") as f_b:
                 f_a.write(f_b.read())
 
 
@@ -42,7 +43,9 @@ async def get_icons(
 
     icon_names = [result.page_content for result in results]
 
-    icon_paths = [f"assets/icons/bold/{each}-bold.png" for each in icon_names]
+    icon_paths = [
+        get_resource(f"assets/icons/bold/{each}-bold.png") for each in icon_names
+    ]
 
     icon_temp_paths = []
 

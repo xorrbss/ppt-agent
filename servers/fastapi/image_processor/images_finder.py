@@ -6,6 +6,7 @@ from openai import OpenAI
 from ppt_generator.models.query_and_prompt_models import (
     ImagePromptWithThemeAndAspectRatio,
 )
+from api.utils import get_resource
 
 
 async def generate_image(
@@ -25,7 +26,7 @@ async def generate_image(
         await image_gen_func(image_prompt, output_path)
     except Exception as e:
         print(f"Error generating image: {e}")
-        with open("assets/images/placeholder.jpg", "rb") as f_a:
+        with open(get_resource("assets/images/placeholder.jpg"), "rb") as f_a:
             with open(output_path, "wb") as f_b:
                 f_b.write(f_a.read())
 

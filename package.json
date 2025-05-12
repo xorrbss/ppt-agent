@@ -1,7 +1,7 @@
 {
-  "name": "presenton_open_source",
+  "name": "presenton",
   "main": "app_dist/main.js",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Presenton Open Source",
   "homepage": "https://presenton.ai",
   "author": {
@@ -14,7 +14,7 @@
     "build:ts": "tsc",
     "build:css": "tailwindcss -i ./resources/ui/assets/css/tailwind.import.css -o ./resources/ui/assets/css/tailwind.css --watch",
     "build:nextjs": "rm -rf resources/nextjs && cp -r servers/nextjs resources/nextjs && cd resources/nextjs && npm install  && npm run build",
-    "build:fastapi": "rm -rf resources/fastapi && cd servers/fastapi && .venv/bin/pyinstaller --name fastapi --distpath ../../resources server.py",
+    "build:fastapi": "rm -rf resources/fastapi && cd servers/fastapi && .venv/bin/pyinstaller --distpath ../../resources server.spec",
     "build:electron": "tsc && node build.js",
     "clean:build": "rm -rf resources/nextjs && rm -rf resources/fastapi"
   },

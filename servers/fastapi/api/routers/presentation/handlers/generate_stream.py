@@ -104,6 +104,10 @@ class PresentationGenerateStreamHandler:
                 data=json.dumps({"type": "chunk", "chunk": chunk.content}),
             ).to_string()
 
+        print("-" * 40)
+        print(presentation_text)
+        print("-" * 40)
+
         presentation_json = output_parser.parse(presentation_text)
 
         print("-" * 40)

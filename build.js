@@ -10,9 +10,11 @@ const config = {
     "resources",
     "app_dist",
     "node_modules",
+    "dependencies/libreoffice/linux_build/libreoffice.appimage"
   ],
   linux: {
     target: ["AppImage"],
+    icon: "resources/ui/assets/images/presenton_short_filled.png",
   },
 }
 
