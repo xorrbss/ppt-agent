@@ -1,6 +1,10 @@
 import { spawn, exec } from "child_process";
 import util from "util";
 import { localhost } from "./constants";
+import http from "http";
+
+// @ts-ignore
+import handler from "serve-handler";
 
 const execAsync = util.promisify(exec);
 
@@ -45,31 +49,43 @@ export async function startNextJsServer(
   env: NextJsEnv,
   isDev: boolean,
 ) {
-  // Start NextJS development server
-  const startCommand = isDev ? [
-    "npm",
-    ["run", "dev", "--", "-p", port.toString()],
-  ] : [
-    "npx",
-    ["-y", "serve", "-p", port.toString()],
-  ];
+  let nextjsProcess;
 
-  const nextjsProcess = spawn(
-    startCommand[0] as string,
-    startCommand[1] as string[],
-    {
-      cwd: directory,
-      stdio: ["inherit", "pipe", "pipe"],
-      env: { ...process.env, ...env },
-    }
-  );
-  nextjsProcess.stdout.on("data", (data: any) => {
-    console.log(`NextJS: ${data}`);
-  });
-  nextjsProcess.stderr.on("data", (data: any) => {
-    console.error(`NextJS Error: ${data}`);
-  });
+  if (isDev) {
+    // Start NextJS development server
+    nextjsProcess = spawn(
+      "npm",
+      ["run", "dev", "--", "-p", port.toString()],
+      {
+        cwd: directory,
+        stdio: ["inherit", "pipe", "pipe"],
+        env: { ...process.env, ...env },
+      }
+    );
+    nextjsProcess.stdout.on("data", (data: any) => {
+      console.log(`NextJS: ${data}`);
+    });
+    nextjsProcess.stderr.on("data", (data: any) => {
+      console.error(`NextJS Error: ${data}`);
+    });
+  } else {
+    // Start NextJS build server
+    nextjsProcess = startNextjsBuildServer(directory, port);
+  }
+
   // Wait for NextJS server to start
   await execAsync(`npx wait-on ${localhost}:${port}`);
   return nextjsProcess;
+}
+
+async function startNextjsBuildServer(directory: string, port: number) {
+  const server = http.createServer((req, res) => {
+    return handler(req, res, {
+      public: directory,
+      cleanUrls: true,
+    });
+  });
+
+  server.listen(port);
+  return server;
 }
