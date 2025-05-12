@@ -32,9 +32,9 @@ def get_user_config():
         pass
 
     return UserConfig(
-        LLM=os.getenv("LLM") or existing_config.LLM,
-        OPENAI_API_KEY=os.getenv("OPENAI_API_KEY") or existing_config.OPENAI_API_KEY,
-        GOOGLE_API_KEY=os.getenv("GOOGLE_API_KEY") or existing_config.GOOGLE_API_KEY,
+        LLM=existing_config.LLM or os.getenv("LLM"),
+        OPENAI_API_KEY=existing_config.OPENAI_API_KEY or os.getenv("OPENAI_API_KEY"),
+        GOOGLE_API_KEY=existing_config.GOOGLE_API_KEY or os.getenv("GOOGLE_API_KEY"),
     )
 
 

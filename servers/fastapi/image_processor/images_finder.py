@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import os
 import aiohttp
@@ -35,12 +36,14 @@ async def generate_image(
 
 async def generate_image_openai(prompt: str, output_path: str):
     client = OpenAI()
-    result = client.images.generate(
-        model="dall-e-3",
-        prompt=prompt,
-        n=1,
-        quality="standard",
-        size="1024x1024",
+    result = await asyncio.to_thread(
+        client.images.generate(
+            model="dall-e-3",
+            prompt=prompt,
+            n=1,
+            quality="standard",
+            size="1024x1024",
+        )
     )
     image_url = result.data[0].url
     async with aiohttp.ClientSession() as session:
