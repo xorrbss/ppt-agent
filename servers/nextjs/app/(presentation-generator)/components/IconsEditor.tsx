@@ -76,7 +76,7 @@ const IconsEditor = ({
         page: 1,
         limit: 40,
       });
-      setIcons(data.urls);
+      setIcons(data.paths);
     } catch (error) {
       console.error("Error fetching icons:", error);
       setIcons([]);
@@ -195,7 +195,7 @@ const IconsEditor = ({
                       className="w-12 h-12 cursor-pointer group relative rounded-lg overflow-hidden hover:bg-gray-100 p-2"
                     >
                       <img
-                        src={iconSrc}
+                        src={`file://${iconSrc}`}
                         alt={`Icon ${idx + 1}`}
                         className="w-full h-full object-contain "
                       />

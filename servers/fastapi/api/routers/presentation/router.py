@@ -57,6 +57,7 @@ from api.routers.presentation.models import (
     GeneratePresentationRequirementsRequest,
     GenerateResearchReportRequest,
     PresentationAndPath,
+    PresentationAndPaths,
     PresentationAndSlides,
     GenerateTitleRequest,
     PresentationAndUrl,
@@ -254,7 +255,7 @@ async def update_slide_models(data: PresentationUpdateRequest):
     )
 
 
-@presentation_router.post("/image/generate", response_model=PresentationAndUrls)
+@presentation_router.post("/image/generate", response_model=PresentationAndPaths)
 async def generate_image(data: GenerateImageRequest):
     request_utils = RequestUtils("/ppt/image/generate")
     logging_service, log_metadata = await request_utils.initialize_logger(
@@ -276,7 +277,7 @@ async def search_image(data: SearchImageRequest):
     )
 
 
-@presentation_router.post("/icon/search", response_model=PresentationAndUrls)
+@presentation_router.post("/icon/search", response_model=PresentationAndPaths)
 async def search_icon(data: SearchIconRequest):
     request_utils = RequestUtils("/ppt/icon/search")
     logging_service, log_metadata = await request_utils.initialize_logger(

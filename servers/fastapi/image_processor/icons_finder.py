@@ -43,9 +43,7 @@ async def get_icons(
 
     icon_names = [result.page_content for result in results]
 
-    icon_paths = [
-        get_resource(f"assets/icons/bold/{each}-bold.png") for each in icon_names
-    ]
+    icon_paths = [get_resource(f"assets/icons/bold/{each}.png") for each in icon_names]
 
     icon_temp_paths = []
 

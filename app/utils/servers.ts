@@ -13,7 +13,7 @@ export async function startFastApiServer(
   // Start FastAPI server
   const startCommand = isDev ? [
     ".venv/bin/python",
-    ["server.py", "--port", port.toString()],
+    ["server_autoreload.py", "--port", port.toString()],
   ] : [
     "./fastapi", ["--port", port.toString()],
   ];

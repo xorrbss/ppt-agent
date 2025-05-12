@@ -221,7 +221,7 @@ const ImageEditor = ({
         },
       });
 
-      setPreviewImages(response.urls);
+      setPreviewImages(response.paths);
     } catch (err) {
       setError("Failed to generate image. Please try again.");
     } finally {

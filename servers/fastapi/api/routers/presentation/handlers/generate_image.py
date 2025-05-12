@@ -1,3 +1,4 @@
+import os
 import uuid
 from api.models import LogMetadata
 from api.routers.presentation.models import (
@@ -27,7 +28,7 @@ class GenerateImageHandler:
             extra=log_metadata.model_dump(),
         )
 
-        image_path = temp_file_service.create_temp_file_path(
+        image_path = os.path.join(
             self.presentation_dir, "generated_images", str(uuid.uuid4()) + ".jpg"
         )
         await generate_image(self.data.prompt, image_path)
