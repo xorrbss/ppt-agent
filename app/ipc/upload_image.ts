@@ -2,13 +2,13 @@ import { ipcMain } from "electron";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { baseDir } from "../utils/constants";
+import { userDataDir } from "../utils/constants";
 
 export function setupUploadImage() {
   ipcMain.handle("upload-image", async (_, file: Buffer) => {
     try {
       // Create uploads directory if it doesn't exist
-      const uploadsDir = path.join(baseDir, "uploads");
+      const uploadsDir = path.join(userDataDir, "uploads");
       fs.mkdirSync(uploadsDir, { recursive: true });
 
       // Generate unique filename
@@ -19,7 +19,7 @@ export function setupUploadImage() {
       await fs.writeFileSync(filePath, file);
 
       // Return the relative path that can be used in the frontend
-      return `/uploads/${filename}`;
+      return filePath;
     } catch (error) {
       console.error("Error saving image:", error);
       throw error;

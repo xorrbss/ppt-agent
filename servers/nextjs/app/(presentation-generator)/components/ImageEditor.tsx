@@ -496,7 +496,7 @@ const ImageEditor = ({
 
           <div className="mt-6">
             <Tabs defaultValue="generate" className="w-full">
-              <TabsList className="grid bg-blue-100 border border-blue-300 w-full grid-cols-3">
+              <TabsList className="grid bg-blue-100 border border-blue-300 w-full grid-cols-2 mx-auto ">
                 <TabsTrigger className="font-medium" value="generate">
                   AI Generate
                 </TabsTrigger>
@@ -553,9 +553,7 @@ const ImageEditor = ({
                           <img
                             src={
                               image
-                                ? image.startsWith("user")
-                                  ? `${BASE_URL}${image}`
-                                  : image
+                                ? `file://${image}`
                                 : ""
                             }
                             alt={`Preview ${index + 1}`}
@@ -636,7 +634,7 @@ const ImageEditor = ({
                               className="cursor-pointer group w-full h-full"
                             >
                               <img
-                                src={uploadedImageUrl}
+                                src={`file://${uploadedImageUrl}`}
                                 alt="Uploaded preview"
                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                               />
