@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { useDispatch, useSelector } from "react-redux";
 import { PresentationGenerationApi } from "../services/api/presentation-generation";
 import { RootState } from "@/store/store";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { updateSlideIcon } from "@/store/slices/presentationGeneration";
@@ -48,7 +48,7 @@ const IconsEditor = ({
     icon_prompt?.[0] || ""
   );
   const [loading, setLoading] = useState(true);
-  const path = usePathname();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     setIcon(initialIcon);
@@ -66,12 +66,12 @@ const IconsEditor = ({
 
   const handleIconSearch = async () => {
     setLoading(true);
-    const presentation_id = path.split("/")[2];
+    const presentation_id = searchParams.get("id");
     const query = searchQuery.length > 0 ? searchQuery : icon_prompt?.[0] || "";
 
     try {
       const data = await PresentationGenerationApi.searchIcons({
-        presentation_id,
+        presentation_id: presentation_id!,
         query,
         page: 1,
         limit: 40,

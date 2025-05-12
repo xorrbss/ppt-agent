@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 import { useDispatch, useSelector } from "react-redux";
 import { PresentationGenerationApi } from "../services/api/presentation-generation";
 import { RootState } from "@/store/store";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   updateSlideImage,
@@ -35,7 +35,6 @@ import {
 } from "@/components/ui/popover";
 import ToolTip from "@/components/ToolTip";
 import { getEnv } from "@/utils/constant";
-import { ipcRenderer } from "electron";
 
 interface ImageEditorProps {
   initialImage: string | null;
@@ -62,16 +61,14 @@ const ImageEditor = ({
 
   const { currentTheme } = useSelector((state: RootState) => state.theme);
 
-  const path = usePathname();
+  const searchParams = useSearchParams();
   const [image, setImage] = useState(initialImage);
   const [previewImages, setPreviewImages] = useState([initialImage]);
-  const [searchedImages, setSearchedImages] = useState<string[]>([]);
+
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isToolbarOpen, setIsToolbarOpen] = useState(false);
   const [prompt, setPrompt] = useState<string>("");
-  const [searchQuery, setSearchQuery] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -213,10 +210,10 @@ const ImageEditor = ({
       setIsGenerating(true);
       setError(null);
 
-      const presentation_id = path.split("/")[2];
+      const presentation_id = searchParams.get("id");
 
       const response = await PresentationGenerationApi.generateImage({
-        presentation_id,
+        presentation_id: presentation_id!,
         prompt: {
           theme_prompt: ThemeImagePrompt[currentTheme],
           image_prompt: prompt,
@@ -235,7 +232,7 @@ const ImageEditor = ({
   const handleFileUpload = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
-    const presentation_id = path.split("/")[2];
+    const presentation_id = searchParams.get("id");
     const file = event.target.files?.[0];
     if (!file) return;
 
