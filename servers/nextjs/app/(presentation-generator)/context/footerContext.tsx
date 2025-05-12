@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import {
   FooterProperties,
   useFooterService,
-} from "../services/footerSqliteService";
+} from "../services/footerService";
 
 // Default footer properties
 export const defaultFooterProperties: FooterProperties = {
@@ -52,13 +52,12 @@ export const FooterProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [footerProperties, setFooterProperties] = useState<FooterProperties>(defaultFooterProperties);
   const footerService = useFooterService();
-  const userId = "local-user"; // Since this is a desktop app, we can use a fixed ID
 
   // Load footer properties only once when the provider mounts
   useEffect(() => {
     const loadFooterProperties = async () => {
       try {
-        const properties = await footerService.getFooterProperties(userId);
+        const properties = await footerService.getFooterProperties();
         if (properties) {
           setFooterProperties(properties);
         }
@@ -70,20 +69,9 @@ export const FooterProvider: React.FC<{ children: React.ReactNode }> = ({
     loadFooterProperties();
   }, []); // Empty dependency array ensures this runs only once
 
-  // const updateFooterProperties = async (newProperties: FooterProperties) => {
-  //   try {
-  //     const success = await footerService.saveFooterProperties(userId, newProperties);
-  //     if (success) {
-  //       setFooterProperties(newProperties);
-  //     }
-  //   } catch (error) {
-  //     console.error("Failed to update footer properties:", error);
-  //   }
-  // };
-
   const resetFooterProperties = async () => {
     try {
-      const success = await footerService.resetFooterProperties(userId, defaultFooterProperties);
+      const success = await footerService.resetFooterProperties(defaultFooterProperties);
       if (success) {
         setFooterProperties(defaultFooterProperties);
       }
@@ -91,9 +79,10 @@ export const FooterProvider: React.FC<{ children: React.ReactNode }> = ({
       console.error("Failed to reset footer properties:", error);
     }
   };
+
   const saveFooterProperties = async (newProperties: FooterProperties) => {
     try {
-      const success = await footerService.saveFooterProperties(userId, newProperties);
+      const success = await footerService.saveFooterProperties(newProperties);
       if (success) {
         setFooterProperties(newProperties);
       }
@@ -106,7 +95,6 @@ export const FooterProvider: React.FC<{ children: React.ReactNode }> = ({
     <FooterContext.Provider
       value={{
         footerProperties,
-        // updateFooterProperties,
         setFooterProperties,
         resetFooterProperties,
         saveFooterProperties,

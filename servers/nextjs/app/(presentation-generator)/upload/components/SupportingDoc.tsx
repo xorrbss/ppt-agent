@@ -185,7 +185,7 @@ const SupportingDoc = ({ files, onFilesChange }: SupportingDocProps) => {
                                             transition-colors flex items-center justify-center relative"
                                         >
                                             {isImageFile(file) ? (
-                                                <Image className="w-8 h-8 text-purple-600" />
+                                                <img src={URL.createObjectURL(file)} className="w-10 h-10 text-purple-600" />
                                             ) : (
                                                 <File className="w-8 h-8 text-purple-600" />
                                             )}

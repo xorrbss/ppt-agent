@@ -11,7 +11,7 @@ import {
 } from "../store/themeSlice";
 import { ThemeType } from "../upload/type";
 
-import { useThemeService, ThemeColors } from "../services/themeSqliteService";
+import { useThemeService, ThemeColors } from "../services/themeService";
 
 interface CustomThemeSettingsProps {
   onClose?: () => void;
@@ -23,12 +23,16 @@ const CustomThemeSettings = ({
   presentationId,
 }: CustomThemeSettingsProps) => {
   const dispatch = useDispatch();
-  const { currentColors } = useSelector((state: RootState) => state.theme);
   const [draftColors, setDraftColors] = useState<ThemeColors>({
-    ...currentColors,
-    iconBg: currentColors.iconBg || "#1F1F2D",
-    chartColors: currentColors.chartColors || ["#1F1F2D"],
-    fontFamily: currentColors.fontFamily || "var(--font-inter)",
+    background: "#63ceff",
+    slideBg: "#F4F4F4",
+    slideTitle: "#1A1A1A",
+    slideHeading: "#2D2D2D",
+    slideDescription: "#4A4A4A",
+    slideBox: "#d8c6c6",
+    iconBg: "#281810",
+    chartColors: ["#281810", "#4A3728", "#665E57", "#665E57", "#665E57"],
+    fontFamily: "var(--font-inter)",
   });
 
   const themeService = useThemeService();
@@ -132,7 +136,6 @@ const CustomThemeSettings = ({
         dispatch(setLoadingState(true));
         const savedTheme = await themeService.getTheme();
         if (savedTheme) {
-          // dispatch(loadSavedTheme(savedTheme));
           setDraftColors(savedTheme.colors);
         }
       } catch (error) {

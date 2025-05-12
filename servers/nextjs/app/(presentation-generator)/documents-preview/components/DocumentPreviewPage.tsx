@@ -25,11 +25,11 @@ import { useRouter } from "next/navigation";
 import { RootState } from "@/store/store";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
-import Header from "@/app/dashboard/components/Header";
 import MarkdownRenderer from "./MarkdownRenderer";
 import { getIconFromFile, removeUUID } from "../../utils/others";
 import { ChevronRight, PanelRightOpen, X } from "lucide-react";
 import ToolTip from "@/components/ToolTip";
+import Header from "@/app/dashboard/components/Header";
 
 // Types
 interface LoadingState {
@@ -350,7 +350,6 @@ const DocumentsPreviewPage: React.FC = () => {
         showProgress={showLoading.progress}
         duration={showLoading.duration}
       />
-
       <Header />
       <div className="flex mt-6 gap-4">
         {!isOpen && (

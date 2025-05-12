@@ -86,19 +86,10 @@ interface SlideMetadata {
   elements: SlideElement[];
 }
 
-interface ThemeParams {
-  theme: string;
-  customColors?: {
-    slideBg: string;
-    slideTitle: string;
-    slideHeading: string;
-    slideDescription: string;
-    slideBox: string;
-  };
-}
+
 
 export function setupSlideMetadataHandlers() {
-  ipcMain.handle("get-slide-metadata", async (_, url: string, theme: string, customColors?: ThemeParams["customColors"]) => {
+  ipcMain.handle("get-slide-metadata", async (_, url: string, theme: string, customColors?: any) => {
     let browser;
     try {
       browser = await puppeteer.launch({
@@ -108,12 +99,18 @@ export function setupSlideMetadataHandlers() {
 
       const page = await browser.newPage();
       await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
+       // Inject the environment variables before loading the page
+    await page.evaluateOnNewDocument(`
+      window.env = {
+        NEXT_PUBLIC_FAST_API: "${process.env.NEXT_PUBLIC_FAST_API}",
+      };
+    `);
 
       await page.goto(url, { waitUntil: "networkidle0", timeout: 60000 });
       await page.waitForSelector('[data-element-type="slide-container"]', { timeout: 80000 });
       
       // Apply theme
-      await page.evaluate((params: ThemeParams) => {
+      await page.evaluate((params: any) => {
         const { theme, customColors } = params;
         document.querySelectorAll(".slide-theme").forEach((container) => {
           container.setAttribute("data-theme", theme);
@@ -245,7 +242,6 @@ export function setupSlideMetadataHandlers() {
        
         const filename = `chart-${graphId}-${Date.now()}.jpg`;
         const filePath = path.join(tempDir, filename);
-
         fs.writeFileSync(filePath, Buffer.from(screenshot, 'base64'));
 
         metadata.forEach(slide => {

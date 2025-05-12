@@ -1,2 +1,9 @@
+import React from 'react'
 import SettingPage from './SettingPage'
-export default SettingPage
+const page = () => {
+  return (
+    <SettingPage />
+  )
+}
+
+export default page
