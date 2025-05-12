@@ -35,7 +35,7 @@ const CreatePage = () => {
     (state: RootState) => state.presentationGeneration
   );
   const {
-    reports,
+
     documents,
     images: imagesUploaded,
   } = useSelector((state: RootState) => state.pptGenUpload);
@@ -94,16 +94,7 @@ const CreatePage = () => {
       duration: 10,
     });
     try {
-      let sources = [];
-      if (Object.keys(reports).length > 0) {
-        sources.push(Object.keys(reports));
-      }
-      if (Object.keys(documents).length > 0) {
-        sources.push(Object.keys(documents));
-      }
-      if (Object.keys(imagesUploaded).length > 0) {
-        sources.push(Object.keys(imagesUploaded));
-      }
+
 
       const response = await PresentationGenerationApi.generateData({
         presentation_id: presentation_id,
@@ -114,7 +105,7 @@ const CreatePage = () => {
         watermark: false,
         images: images,
         titles: titles,
-        sources: sources.flat(),
+
       });
 
       if (response) {
