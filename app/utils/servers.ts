@@ -1,12 +1,9 @@
-import { spawn, exec } from "child_process";
-import util from "util";
+import { spawn } from "child_process";
 import { localhost } from "./constants";
 import http from "http";
 
 // @ts-ignore
 import handler from "serve-handler";
-
-const execAsync = util.promisify(exec);
 
 export async function startFastApiServer(
   directory: string,
@@ -39,7 +36,7 @@ export async function startFastApiServer(
     console.error(`FastAPI Error: ${data}`);
   });
   // Wait for FastAPI server to start
-  await execAsync(`npx wait-on ${localhost}:${port}/docs`);
+  await waitForServer(`${localhost}:${port}/docs`);
   return fastApiProcess;
 }
 
@@ -74,7 +71,7 @@ export async function startNextJsServer(
   }
 
   // Wait for NextJS server to start
-  await execAsync(`npx wait-on ${localhost}:${port}`);
+  await waitForServer(`${localhost}:${port}`);
   return nextjsProcess;
 }
 
@@ -88,4 +85,27 @@ async function startNextjsBuildServer(directory: string, port: number) {
 
   server.listen(port);
   return server;
+}
+
+
+async function waitForServer(url: string, timeout = 30000): Promise<void> {
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < timeout) {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        http.get(url, (res) => {
+          if (res.statusCode === 200 || res.statusCode === 304) {
+            resolve();
+          } else {
+            reject(new Error(`Unexpected status code: ${res.statusCode}`));
+          }
+        }).on('error', reject);
+      });
+      return;
+    } catch (error) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+  throw new Error(`Server did not start within ${timeout}ms`);
 }
