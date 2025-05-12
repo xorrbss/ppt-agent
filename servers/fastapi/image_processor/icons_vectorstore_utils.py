@@ -6,6 +6,8 @@ from langchain_core.documents import Document
 from api.utils import get_resource
 from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 
+# Pyinstaller
+import fastembed
 
 
 def get_icons_vectorstore():
