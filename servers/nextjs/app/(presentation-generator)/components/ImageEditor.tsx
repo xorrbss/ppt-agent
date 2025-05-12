@@ -7,15 +7,12 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Search,
   Wand2,
   Upload,
   Edit,
-  Crop,
   Move,
   Maximize,
 } from "lucide-react";
@@ -38,6 +35,7 @@ import {
 } from "@/components/ui/popover";
 import ToolTip from "@/components/ToolTip";
 import { getEnv } from "@/utils/constant";
+import { ipcRenderer } from "electron";
 
 interface ImageEditorProps {
   initialImage: string | null;
@@ -234,8 +232,6 @@ const ImageEditor = ({
     }
   };
 
-
-
   const handleFileUpload = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -263,23 +259,20 @@ const ImageEditor = ({
       setIsUploading(true);
       setUploadError(null);
 
-      const formData = new FormData();
-      formData.append("file", file);
-      const response = await fetch("/api/user-upload", {
-        method: "POST",
-        body: formData,
-      });
+      // Convert file to buffer
+      const buffer = await file.arrayBuffer();
 
-      if (!response.ok) {
-        throw new Error("Upload failed");
-      }
+      // Send to electron main process
+      // @ts-ignore
+      const relativePath = await window.electron.uploadImage(Buffer.from(buffer));
 
-      const data = await response.json();
-      setUploadedImageUrl(data.url);
+      // Update state with the returned path
+      setUploadedImageUrl(relativePath);
     } catch (err) {
       const error_message = "Failed to upload image. Please try again.";
 
       setUploadError(error_message);
+      console.error("Upload error:", err);
     } finally {
       setIsUploading(false);
     }
