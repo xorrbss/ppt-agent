@@ -68,7 +68,6 @@ async function stopServers() {
 app.whenReady().then(async () => {
   createWindow();
   win?.loadFile(path.join(baseDir, "resources/ui/homepage/index.html"));
-  win?.webContents.openDevTools();
 
   setUserConfig({
     LLM: process.env.LLM,

@@ -59,11 +59,19 @@ const SettingsPage = () => {
     }, []);
 
     const handleSaveConfig = async (provider: string, apiKey: string) => {
+        if (apiKey === '') {
+            toast({
+                title: 'Error',
+                description: 'API key cannot be empty',
+            });
+            return;
+        }
+
         try {
             const newConfig = {
                 LLM: provider,
-                OPENAI_API_KEY: provider === 'openai' ? apiKey : '',
-                GOOGLE_API_KEY: provider === 'google' ? apiKey : ''
+                OPENAI_API_KEY: provider === 'openai' ? apiKey : config.OPENAI_API_KEY,
+                GOOGLE_API_KEY: provider === 'google' ? apiKey : config.GOOGLE_API_KEY
             };
 
             // @ts-ignore

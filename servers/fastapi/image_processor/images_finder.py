@@ -1,5 +1,6 @@
 import base64
 import os
+import aiohttp
 from langchain_google_genai import ChatGoogleGenerativeAI
 from openai import OpenAI
 
@@ -10,7 +11,8 @@ from api.utils import get_resource
 
 
 async def generate_image(
-    input: ImagePromptWithThemeAndAspectRatio, output_path: str
+    input: ImagePromptWithThemeAndAspectRatio,
+    output_path: str,
 ) -> str:
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
@@ -34,16 +36,18 @@ async def generate_image(
 async def generate_image_openai(prompt: str, output_path: str):
     client = OpenAI()
     result = client.images.generate(
-        model="gpt-image-1",
+        model="dall-e-3",
         prompt=prompt,
         n=1,
-        quality="low",
+        quality="standard",
         size="1024x1024",
     )
-    image_base64 = result.data[0].b64_json
-    image_bytes = base64.b64decode(image_base64)
-    with open(output_path, "wb") as f:
-        f.write(image_bytes)
+    image_url = result.data[0].url
+    async with aiohttp.ClientSession() as session:
+        async with session.get(image_url) as response:
+            image_bytes = await response.read()
+            with open(output_path, "wb") as f:
+                f.write(image_bytes)
 
 
 async def generate_image_google(prompt: str, output_path: str):

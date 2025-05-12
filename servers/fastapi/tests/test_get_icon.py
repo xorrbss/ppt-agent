@@ -1,3 +1,4 @@
+import asyncio
 import os
 
 from image_processor.icons_finder import get_icon
@@ -6,7 +7,7 @@ from ppt_generator.models.content_type_models import IconQueryCollectionModel
 from ppt_generator.models.query_and_prompt_models import IconQueryCollectionWithData
 
 
-async def test_get_icon():
+def test_get_icon():
     vector_store = get_icons_vectorstore()
 
     for query in [
@@ -17,14 +18,16 @@ async def test_get_icon():
         "efficient light bulb",
         "sustainable leaf",
     ]:
-        await get_icon(
-            vector_store,
-            IconQueryCollectionWithData(
-                icon_query=IconQueryCollectionModel(queries=[query]),
-                index=0,
-            ),
-            os.path.join(
-                os.getenv("APP_DATA_DIRECTORY"), f"generated_icons/{query}.png"
-            ),
+        asyncio.run(
+            get_icon(
+                vector_store,
+                IconQueryCollectionWithData(
+                    icon_query=IconQueryCollectionModel(queries=[query]),
+                    index=0,
+                ),
+                os.path.join(
+                    os.getenv("APP_DATA_DIRECTORY"), f"generated_icons/{query}.png"
+                ),
+            )
         )
         break

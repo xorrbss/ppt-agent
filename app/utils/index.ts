@@ -10,11 +10,10 @@ export function setUserConfig(userConfig: UserConfig) {
     const configData = fs.readFileSync(userConfigPath, 'utf-8')
     existingConfig = JSON.parse(configData)
   }
-
   const mergedConfig: UserConfig = {
-    LLM: userConfig.LLM,
-    OPENAI_API_KEY: userConfig.OPENAI_API_KEY,
-    GOOGLE_API_KEY: userConfig.GOOGLE_API_KEY
+    LLM: userConfig.LLM || existingConfig.LLM,
+    OPENAI_API_KEY: userConfig.OPENAI_API_KEY || existingConfig.OPENAI_API_KEY,
+    GOOGLE_API_KEY: userConfig.GOOGLE_API_KEY || existingConfig.GOOGLE_API_KEY
   }
   fs.writeFileSync(userConfigPath, JSON.stringify(mergedConfig))
 }
