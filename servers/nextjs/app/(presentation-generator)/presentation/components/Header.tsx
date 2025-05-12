@@ -59,7 +59,6 @@ const Header = ({
   const [open, setOpen] = useState(false);
   const [showLoader, setShowLoader] = useState(false);
   const router = useRouter();
-  const pathname = usePathname();
 
   const [showCustomThemeModal, setShowCustomThemeModal] = useState(false);
   const { currentTheme, currentColors } = useSelector(
@@ -69,7 +68,6 @@ const Header = ({
     (state: RootState) => state.presentationGeneration
   );
   const dispatch = useDispatch();
-  const urls = getEnv();
   const handleThemeSelect = async (value: string) => {
     if (isStreaming) return;
     if (value === "custom") {
@@ -130,29 +128,16 @@ const Header = ({
   const getSlideMetadata = async () => {
     try {
       // Get the current URL without any query parameters
-      const baseUrl = window.location.origin + window.location.pathname;
-      const urls = getEnv();
+      const baseUrl = window.location.href;
 
-      const response = await fetch(
-        `${urls.NEXT_PUBLIC_URL}/api/slide-metadata`,
-        {
-          method: "POST",
-          headers: getHeader(),
-          body: JSON.stringify({
-            url: baseUrl,
-            theme: currentTheme,
-            customColors: currentColors,
-            tempDirectory: urls.TEMP_DIRECTORY,
-            baseUrl: urls.BASE_URL,
-          }),
-        }
+
+      // @ts-ignore
+      const metadata = await window.electron.getSlideMetadata(
+        baseUrl,
+        currentTheme,
+        currentColors,
       );
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to fetch metadata");
-      }
-      const metadata = await response.json();
       console.log("metadata", metadata);
       return metadata;
     } catch (error) {
@@ -269,7 +254,7 @@ const Header = ({
         variant="ghost"
         className="pb-4 border-b rounded-none border-gray-300 w-full flex justify-start text-[#5146E5]"
       >
-        <Image src="/pdf.svg" alt="pdf export" width={30} height={30} />
+        <img src="/pdf.svg" alt="pdf export" width={30} height={30} />
         Export as PDF
       </Button>
       <Button
@@ -277,7 +262,7 @@ const Header = ({
         variant="ghost"
         className="w-full flex justify-start text-[#5146E5]"
       >
-        <Image src="/pptx.svg" alt="pptx export" width={30} height={30} />
+        <img src="/pptx.svg" alt="pptx export" width={30} height={30} />
         Export as PPTX
       </Button>
     </div>
@@ -329,12 +314,11 @@ const Header = ({
       <Announcement />
       <Wrapper className="flex items-center justify-between py-2">
         <Link href="/dashboard" className="min-w-[162px]">
-          <Image
+          <img
             src="/logo-white.png"
             alt="Presentation logo"
             width={162}
             height={32}
-            priority
           />
         </Link>
 

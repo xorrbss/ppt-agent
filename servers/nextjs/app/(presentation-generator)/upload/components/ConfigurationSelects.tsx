@@ -44,17 +44,17 @@ const SlideCountSelect: React.FC<{
 }> = ({ value, onValueChange }) => (
   <Select value={value || ""} onValueChange={onValueChange} name="slides">
     <SelectTrigger
-      className="w-[180px] font-satoshi font-medium bg-blue-100 border-blue-200 focus-visible:ring-blue-300"
+      className="w-[180px] font-instrument_sans font-medium bg-blue-100 border-blue-200 focus-visible:ring-blue-300"
       data-testid="slides-select"
     >
       <SelectValue placeholder="Select Slides" />
     </SelectTrigger>
-    <SelectContent className="font-satoshi">
+    <SelectContent className="font-instrument_sans">
       {SLIDE_OPTIONS.map((option) => (
         <SelectItem
           key={option}
           value={option}
-          className="font-satoshi text-sm font-medium"
+          className="font-instrument_sans text-sm font-medium"
           role="option"
         >
           {option} slides
@@ -81,7 +81,7 @@ const LanguageSelect: React.FC<{
         name="language"
         data-testid="language-select"
         aria-expanded={open}
-        className="w-[200px] justify-between font-satoshi font-semibold overflow-hidden bg-blue-100 hover:bg-blue-100 border-blue-200 focus-visible:ring-blue-300 border-none"
+        className="w-[200px] justify-between font-instrument_sans font-semibold overflow-hidden bg-blue-100 hover:bg-blue-100 border-blue-200 focus-visible:ring-blue-300 border-none"
       >
         <p className="text-sm font-medium truncate">
           {value || "Select language"}
@@ -93,7 +93,7 @@ const LanguageSelect: React.FC<{
       <Command>
         <CommandInput
           placeholder="Search language..."
-          className="font-satoshi"
+          className="font-instrument_sans"
         />
         <CommandList>
           <CommandEmpty>No language found.</CommandEmpty>
@@ -107,7 +107,7 @@ const LanguageSelect: React.FC<{
                   onValueChange(currentValue);
                   onOpenChange(false);
                 }}
-                className="font-satoshi"
+                className="font-instrument_sans"
               >
                 <Check
                   className={cn(

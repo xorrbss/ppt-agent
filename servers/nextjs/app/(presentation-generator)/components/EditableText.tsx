@@ -10,20 +10,19 @@ import { useDispatch, useSelector } from "react-redux";
 import TipTapEditor from "./Tiptap";
 import { RootState } from "@/store/store";
 import Typewriter from "./TypeWriter";
-import MarkdownRenderer from "../documents-preview/components/MarkdownRenderer";
 
 interface EditableTextProps {
   slideIndex: number;
   bodyIdx?: number;
   elementId: string; // Format: 'title' | 'body.0.heading' | 'body.0.description'
   type:
-    | "title"
-    | "heading"
-    | "description-body"
-    | "description"
-    | "heading-description"
-    | "info-heading"
-    | "info-description";
+  | "title"
+  | "heading"
+  | "description-body"
+  | "description"
+  | "heading-description"
+  | "info-heading"
+  | "info-description";
   content: string;
   isAlingCenter?: boolean;
 }
@@ -36,7 +35,6 @@ const EditableText = ({
   bodyIdx = 0,
   isAlingCenter = false,
 }: EditableTextProps) => {
-  const dispatch = useDispatch();
   const { isStreaming } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
@@ -77,70 +75,6 @@ const EditableText = ({
     }
   };
 
-  const handleInput = useCallback((event: React.FormEvent<HTMLDivElement>) => {
-    const element = event.currentTarget;
-    const newContent = element.textContent || "";
-
-    // Handle placeholder text
-    if (newContent === getPlaceholder()) {
-      element.classList.add("text-gray-400");
-    } else {
-      element.classList.remove("text-gray-400");
-    }
-  }, []);
-
-  const handleFocus = (event: React.FocusEvent<HTMLDivElement>) => {
-    const element = event.currentTarget;
-    if (element.textContent === getPlaceholder()) {
-      element.textContent = "";
-      element.classList.remove("text-gray-400");
-    }
-  };
-
-  const handleBlur = (event: React.FocusEvent<HTMLDivElement>) => {
-    const element = event.currentTarget;
-    const newContent = element.textContent?.trim() || "";
-
-    if (!newContent) {
-      element.textContent = getPlaceholder();
-      element.classList.add("text-gray-400");
-    }
-    updateSlide(type, newContent);
-  };
-  const updateSlide = (type: string, value: string) => {
-    switch (type) {
-      case "title":
-        dispatch(updateSlideTitle({ index: slideIndex, title: value }));
-        break;
-      case "heading":
-        dispatch(
-          updateSlideBodyHeading({
-            index: slideIndex,
-            bodyIdx: bodyIdx,
-            heading: value,
-          })
-        );
-        break;
-      case "description":
-        dispatch(
-          updateSlideDescription({ index: slideIndex, description: value })
-        );
-        break;
-      case "heading-description":
-        dispatch(
-          updateSlideBodyDescription({
-            index: slideIndex,
-            bodyIdx: bodyIdx,
-            description: value,
-          })
-        );
-        break;
-      case "description-body":
-        dispatch(updateSlideBodyString({ index: slideIndex, body: value }));
-        break;
-    }
-  };
-
   const getTextStyle = () => {
     const baseStyle = "outline-none  transition-all duration-200";
     switch (type) {
@@ -161,11 +95,10 @@ const EditableText = ({
     <>
       {isStreaming ? (
         <div
-          className={`w-full  min-w-[60px]  font-inter ${getTextStyle()}  ${
-            isAlingCenter ? "text-center " : ""
-          }`}
+          className={`w-full  min-w-[60px]  font-inter ${getTextStyle()}  ${isAlingCenter ? "text-center " : ""
+            }`}
         >
-          <Typewriter text={content.replace(/\*\*/g, "")} speed={20} />
+          <Typewriter text={content ? content.replace(/\*\*/g, "") : ""} speed={20} />
         </div>
       ) : (
         <TipTapEditor

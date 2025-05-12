@@ -11,7 +11,8 @@ import {
 } from "../store/themeSlice";
 import { ThemeType } from "../upload/type";
 
-import { useThemeService, ThemeColors } from "../services/themeSqliteService";
+import { useThemeService, ThemeColors } from "../services/themeService";
+import { PresentationGenerationApi } from "../services/api/presentation-generation";
 
 interface CustomThemeSettingsProps {
   onClose?: () => void;
@@ -23,12 +24,16 @@ const CustomThemeSettings = ({
   presentationId,
 }: CustomThemeSettingsProps) => {
   const dispatch = useDispatch();
-  const { currentColors } = useSelector((state: RootState) => state.theme);
   const [draftColors, setDraftColors] = useState<ThemeColors>({
-    ...currentColors,
-    iconBg: currentColors.iconBg || "#1F1F2D",
-    chartColors: currentColors.chartColors || ["#1F1F2D"],
-    fontFamily: currentColors.fontFamily || "var(--font-inter)",
+    background: "#63ceff",
+    slideBg: "#F4F4F4",
+    slideTitle: "#1A1A1A",
+    slideHeading: "#2D2D2D",
+    slideDescription: "#4A4A4A",
+    slideBox: "#d8c6c6",
+    iconBg: "#281810",
+    chartColors: ["#281810", "#4A3728", "#665E57", "#665E57", "#665E57"],
+    fontFamily: "var(--font-inter)",
   });
 
   const themeService = useThemeService();
@@ -110,14 +115,22 @@ const CustomThemeSettings = ({
       );
       root.style.setProperty("--custom-slide-box", draftColors.slideBox);
 
-      // Save to SQLite
-      await themeService.saveTheme({
-        name: "custom",
-        colors: {
-          ...draftColors,
-          theme: themeType,
-        },
-      });
+      // Save to file and API
+      await Promise.all([
+        PresentationGenerationApi.setThemeColors(presentationId, {
+          name: themeType,
+          colors: {
+            ...draftColors,
+          },
+        }),
+        themeService.saveTheme({
+          name: "custom",
+          colors: {
+            ...draftColors,
+            theme: themeType,
+          },
+        }),
+      ]);
 
       onClose?.();
     } catch (error) {
@@ -132,7 +145,6 @@ const CustomThemeSettings = ({
         dispatch(setLoadingState(true));
         const savedTheme = await themeService.getTheme();
         if (savedTheme) {
-          // dispatch(loadSavedTheme(savedTheme));
           setDraftColors(savedTheme.colors);
         }
       } catch (error) {
@@ -165,7 +177,7 @@ const CustomThemeSettings = ({
 
   return (
     <div className="">
-      <div className="h-[60vh] font-satoshi overflow-y-auto custom_scrollbar pr-2 pb-2">
+      <div className="h-[60vh] font-inter overflow-y-auto custom_scrollbar pr-2 pb-2">
         {/* Live Preview */}
         <div className=" w-full space-y-2">
           <h3 className="text-xs font-medium text-gray-500">Live Preview</h3>
@@ -255,7 +267,7 @@ const CustomThemeSettings = ({
           ))}
         </div>
       </div>
-      <div className="mt-6 pt-4 font-switzer  border-t flex justify-end gap-2">
+      <div className="mt-6 pt-4 font-roboto  border-t flex justify-end gap-2">
         <Button
           variant="outline"
           onClick={onClose}

@@ -14,10 +14,9 @@ export const PresentationListItem: React.FC<Presentation> = ({
         <Card>
             <CardContent className="flex items-center gap-4 p-4">
                 <div className="relative w-[120px] aspect-video rounded-md overflow-hidden">
-                    <Image
+                    <img
                         src={thumbnail}
                         alt={title}
-                        fill
                         className="object-cover"
                     />
                 </div>

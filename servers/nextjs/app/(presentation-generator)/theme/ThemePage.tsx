@@ -33,9 +33,8 @@ const ThemeCard = ({
       onClick={onClick}
     >
       <Card
-        className={` p-3 md:p-6 h-[120px] md:h-[210px] transition-all duration-200 border-2 ${
-          selected ? " border-4 border-blue-400" : "hover:border-primary"
-        }`}
+        className={` p-3 md:p-6 h-[120px] md:h-[210px] transition-all duration-200 border-2 ${selected ? " border-4 border-blue-400" : "hover:border-primary"
+          }`}
         style={{ background: colors.slideBg }}
       >
         <div
@@ -77,7 +76,7 @@ const ThemePage = () => {
       name: "Royal Blue Theme",
       colors: defaultColors.royal_blue,
       type: "royal_blue",
-      font: "var(--font-satoshi)",
+      font: "var(--font-instrument-sans)",
     },
     {
       name: "Creme Theme",

@@ -127,7 +127,7 @@ export default function Home() {
 
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex items-center justify-center">
+            <div className="min-h-screen bg-gradient-to-b font-instrument_sans from-gray-50 to-white flex items-center justify-center">
                 <div className="text-center">
                     <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
                     <p className="text-gray-600">Loading configuration...</p>
@@ -188,7 +188,7 @@ export default function Home() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-b font-satoshi from-gray-50 to-white">
+        <div className="min-h-screen bg-gradient-to-b font-instrument_sans from-gray-50 to-white">
             <main className="container mx-auto px-4 py-12 max-w-3xl">
                 {/* Branding Header */}
                 <div className="text-center mb-12">

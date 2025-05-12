@@ -234,27 +234,7 @@ const ImageEditor = ({
     }
   };
 
-  const handleSearchImage = async () => {
-    const presentation_id = path.split("/")[2];
 
-    try {
-      setIsSearching(true);
-      setError(null);
-
-      const response = await PresentationGenerationApi.imageSearch({
-        presentation_id: presentation_id,
-        query: searchQuery,
-        page: 1,
-        limit: 20,
-      });
-
-      setSearchedImages(response.urls);
-    } catch (err) {
-      setError("Failed to fetch images. Please try again.");
-    } finally {
-      setIsSearching(false);
-    }
-  };
 
   const handleFileUpload = async (
     event: React.ChangeEvent<HTMLInputElement>
@@ -527,13 +507,7 @@ const ImageEditor = ({
                 <TabsTrigger className="font-medium" value="generate">
                   AI Generate
                 </TabsTrigger>
-                <TabsTrigger
-                  className="font-medium"
-                  onClick={handleSearchImage}
-                  value="search"
-                >
-                  Web Images
-                </TabsTrigger>
+
                 <TabsTrigger className="font-medium" value="upload">
                   Upload
                 </TabsTrigger>
@@ -599,58 +573,6 @@ const ImageEditor = ({
                   </div>
                 </div>
               </TabsContent>
-
-              <TabsContent value="search" className="mt-4 space-y-4">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleSearchImage();
-                  }}
-                >
-                  <div className="relative mb-3">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
-                    <Input
-                      placeholder="Search images..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-                  <Button
-                    type="submit"
-                    variant="outline"
-                    className="w-full text-semibold text-[#51459e]"
-                  >
-                    Search
-                  </Button>
-                </form>
-                {error && <p className="text-red-500 text-sm">{error}</p>}
-
-                <div className="grid grid-cols-2 gap-4 max-h-[80vh] hide-scrollbar overflow-y-auto">
-                  {isSearching
-                    ? Array.from({ length: 6 }).map((_, index) => (
-                      <Skeleton
-                        key={index}
-                        className="aspect-[4/3] w-full rounded-lg"
-                      />
-                    ))
-                    : searchedImages.map((imgSrc, index) => (
-                      <div
-                        key={index}
-                        onClick={() => handleImageChange(imgSrc)}
-                        className="aspect-[4/3] cursor-pointer group relative rounded-lg overflow-hidden"
-                      >
-                        <img
-                          src={imgSrc}
-                          alt={`Search result ${index + 1}`}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                        />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-200" />
-                      </div>
-                    ))}
-                </div>
-              </TabsContent>
-
               <TabsContent value="upload" className="mt-4 space-y-4">
                 <div className="space-y-4">
                   <div

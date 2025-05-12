@@ -25,11 +25,11 @@ import { useRouter } from "next/navigation";
 import { RootState } from "@/store/store";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
-import Header from "@/app/dashboard/components/Header";
 import MarkdownRenderer from "./MarkdownRenderer";
 import { getIconFromFile, removeUUID } from "../../utils/others";
 import { ChevronRight, PanelRightOpen, X } from "lucide-react";
 import ToolTip from "@/components/ToolTip";
+import Header from "@/app/dashboard/components/Header";
 
 // Types
 interface LoadingState {
@@ -51,7 +51,7 @@ const DocumentsPreviewPage: React.FC = () => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Redux state
-  const { config, reports, documents, images, charts, tables } = useSelector(
+  const { config, documents, images, charts, tables } = useSelector(
     (state: RootState) => state.pptGenUpload
   );
 
@@ -68,10 +68,9 @@ const DocumentsPreviewPage: React.FC = () => {
   });
 
   // Memoized values
-  const reportKeys = useMemo(() => Object.keys(reports), [reports]);
   const documentKeys = useMemo(() => Object.keys(documents), [documents]);
   const imageKeys = useMemo(() => Object.keys(images), [images]);
-  const allSources = useMemo(() => [...reportKeys, ...documentKeys, ...imageKeys], [reportKeys, documentKeys, imageKeys]);
+  const allSources = useMemo(() => [...documentKeys, ...imageKeys], [documentKeys, imageKeys]);
 
 
 
@@ -96,14 +95,7 @@ const DocumentsPreviewPage: React.FC = () => {
       }
     });
 
-    // Process reports
-    reportKeys.forEach(key => {
-      if (!(key in textContents)) {
-        newDocuments.push(key);
-        // @ts-ignore
-        promises.push(window.electron.readFile(reports[key]));
-      }
-    });
+
 
     if (promises.length > 0) {
       setDownloadingDocuments(newDocuments);
@@ -148,13 +140,11 @@ const DocumentsPreviewPage: React.FC = () => {
       });
 
       const documentPaths = documentKeys.map(key => documents[key]);
-      const researchReportPath = reports['research_report_content'];
       const createResponse = await PresentationGenerationApi.getQuestions({
         prompt: config?.prompt ?? "",
         n_slides: config?.slides ? parseInt(config.slides) : null,
         documents: documentPaths,
         images: imageKeys,
-        research_reports: researchReportPath ? [researchReportPath] : [],
         language: config?.language ?? "",
 
       });
@@ -219,10 +209,9 @@ const DocumentsPreviewPage: React.FC = () => {
     if (!selectedDocument) return null;
 
     const isDocument = documentKeys.includes(selectedDocument);
-    const isReport = reportKeys.includes(selectedDocument);
     const hasTablesAndCharts = documentTablesAndCharts().length > 0;
 
-    if (!isDocument && !isReport) return null;
+    if (!isDocument) return null;
 
     return (
       <div className="h-full mr-4">
@@ -271,24 +260,7 @@ const DocumentsPreviewPage: React.FC = () => {
           size={20}
         />
 
-        {reportKeys.length > 0 && (
-          <div
-            onClick={() => updateSelectedDocument(reportKeys[0])}
-            className={`${selectedDocument === reportKeys[0]
-              ? styles.selected_border
-              : styles.unselected_border
-              } ${styles.report_icon_box} flex justify-center items-center rounded-lg w-full h-32 cursor-pointer`}
-          >
-            <div>
-              <img
-                className="mx-auto h-20"
-                src="/report.png"
-                alt="Research Report"
-              />
-              <p className="text-sm mt-2 text-[#2E2E2E]">Research Report</p>
-            </div>
-          </div>
-        )}
+
 
         {documentKeys.length > 0 && (
           <div className="mt-8">
@@ -350,9 +322,8 @@ const DocumentsPreviewPage: React.FC = () => {
         showProgress={showLoading.progress}
         duration={showLoading.duration}
       />
-
       <Header />
-      <div className="flex mt-6 gap-4">
+      <div className="flex mt-6 gap-4 font-instrument_sans">
         {!isOpen && (
           <div className="fixed left-4 top-1/2 -translate-y-1/2 z-50">
             <ToolTip content="Open Panel">

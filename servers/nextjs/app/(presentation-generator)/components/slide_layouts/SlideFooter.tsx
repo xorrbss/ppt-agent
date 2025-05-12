@@ -23,7 +23,7 @@ import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import { isDarkColor } from "../../utils/others";
 import { defaultFooterProperties, useFooterContext } from "../../context/footerContext";
-import { FooterProperties } from "../../services/footerSqliteService";
+import { FooterProperties } from "../../services/footerService";
 
 const SlideFooter: React.FC = () => {
   const [showEditor, setShowEditor] = useState<boolean>(false);
@@ -248,95 +248,103 @@ const SlideFooter: React.FC = () => {
         id="footer"
         className="absolute hidden lg:grid z-10 cursor-pointer px-6  grid-cols-3 items-end left-1/2 -translate-x-1/2 justify-between bottom-5 w-full"
       >
-        <div
-          className={`h-8 flex-1 flex ${footerProperties.logoProperties.logoPosition === "left"
-            ? getLogoPositionClass()
-            : "justify-start"
-            }`}
-        >
-          {footerProperties.logoProperties.showLogo &&
-            (footerProperties.logoProperties.logoPosition === "left" ? (
-              getLogoImageSrc() !== "" ? (
-                <img
-                  data-slide-element
-                  data-element-type="picture"
-                  id="footer-user-logo"
-                  className="w-auto h-full object-contain"
-                  src={getLocalImageUrl(getLogoImageSrc())}
-                  alt="logo"
-                  style={getLogoStyle()}
-                />
-              ) : (
-                <div className="flex gap-2 items-center">
-                  <div className="w-8 h-8 bg-gray-100 rounded-lg flex justify-center items-center">
-                    <Plus className="text-gray-500" />
+        {(!footerProperties.logoProperties.showLogo && !footerProperties.footerMessage.showMessage) ? (
+          <div onClick={handleEditor} className="col-span-3 cursor-pointer flex justify-center items-center text-gray-400 text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+            Click to add footer
+          </div>
+        ) : (
+          <>
+            <div
+              className={`h-8 flex-1 flex ${footerProperties.logoProperties.logoPosition === "left"
+                ? getLogoPositionClass()
+                : "justify-start"
+                }`}
+            >
+              {footerProperties.logoProperties.showLogo &&
+                (footerProperties.logoProperties.logoPosition === "left" ? (
+                  getLogoImageSrc() !== "" ? (
+                    <img
+                      data-slide-element
+                      data-element-type="picture"
+                      id="footer-user-logo"
+                      className="w-auto h-full object-contain"
+                      src={getLocalImageUrl(getLogoImageSrc())}
+                      alt="logo"
+                      style={getLogoStyle()}
+                    />
+                  ) : (
+                    <div className="flex gap-2 items-center">
+                      <div className="w-8 h-8 bg-gray-100 rounded-lg flex justify-center items-center">
+                        <Plus className="text-gray-500" />
+                      </div>
+                      <p className="text-sm text-gray-400"
+                        style={{
+                          fontFamily: currentColors.fontFamily || "Inter, sans-serif",
+                        }}
+                      >Insert Your Logo</p>
+                    </div>
+                  )
+                ) : (
+                  <div></div>
+                ))}
+            </div>
+
+            <div
+              className={`flex-1 flex items-center font-instrument_sans slide-title justify-center`}
+            >
+              <p
+                id="footer-user-message"
+                className="text-sm"
+                data-slide-element
+                data-element-type="text"
+                data-text-content={footerProperties.footerMessage.message}
+                style={getMessageStyle()}
+              >
+                {footerProperties.footerMessage.showMessage &&
+                  (footerProperties.footerMessage.message
+                    ? footerProperties.footerMessage.message
+                    : "Your text")}
+              </p>
+            </div>
+
+            <div
+              className={`h-8 flex-1 flex ${footerProperties.logoProperties.logoPosition === "right"
+                ? getLogoPositionClass()
+                : "justify-start"
+                }`}
+            >
+              {footerProperties.logoProperties.showLogo &&
+                footerProperties.logoProperties.logoPosition === "right" ? (
+                getLogoImageSrc() !== "" ? (
+                  <div data-element-type="picture" data-slide-element>
+                    <img
+                      data-slide-element
+                      data-element-type="picture"
+                      id="footer-user-logo"
+                      className="w-auto h-full object-contain"
+                      src={getLocalImageUrl(getLogoImageSrc())}
+                      alt="logo"
+                      style={getLogoStyle()}
+                    />
                   </div>
-                  <p className="text-sm text-gray-400"
-                    style={{
-                      fontFamily: currentColors.fontFamily || "Inter, sans-serif",
-                    }}
-                  >Insert Your Logo</p>
-                </div>
-              )
-            ) : (
-              <div></div>
-            ))}
-        </div>
-
-        <div
-          className={`flex-1 flex items-center font-satoshi slide-title justify-center`}
-        >
-          <p
-            id="footer-user-message"
-            className="text-sm"
-            data-slide-element
-            data-element-type="text"
-            data-text-content={footerProperties.footerMessage.message}
-            style={getMessageStyle()}
-          >
-            {footerProperties.footerMessage.showMessage &&
-              (footerProperties.footerMessage.message
-                ? footerProperties.footerMessage.message
-                : "Your text")}
-          </p>
-        </div>
-
-        <div
-          className={`h-8 flex-1 flex ${footerProperties.logoProperties.logoPosition === "right"
-            ? getLogoPositionClass()
-            : "justify-start"
-            }`}
-        >
-          {footerProperties.logoProperties.showLogo &&
-            footerProperties.logoProperties.logoPosition === "right" ? (
-            getLogoImageSrc() !== "" ? (
-              <div data-element-type="picture" data-slide-element>
-                <img
-                  data-slide-element
-                  data-element-type="picture"
-                  id="footer-user-logo"
-                  className="w-auto h-full object-contain"
-                  src={getLocalImageUrl(getLogoImageSrc())}
-                  alt="logo"
-                  style={getLogoStyle()}
-                />
-              </div>
-            ) : (
-              <div className="flex gap-2 items-center">
-                <div className="w-8 h-8 bg-gray-100 rounded-lg flex justify-center items-center">
-                  <Plus className="text-gray-500" />
-                </div>
-                <p className="text-sm text-gray-400"
-                  style={{
-                    fontFamily: currentColors.fontFamily || "Inter, sans-serif",
-                  }}
-                >Insert Your Logo</p>
-              </div>
-            )
-          ) : (
-            <div className="w-full flex justify-end"></div>
-          )}
-        </div>
+                ) : (
+                  <div className="flex gap-2 items-center">
+                    <div className="w-8 h-8 bg-gray-100 rounded-lg flex justify-center items-center">
+                      <Plus className="text-gray-500" />
+                    </div>
+                    <p className="text-sm text-gray-400"
+                      style={{
+                        fontFamily: currentColors.fontFamily || "Inter, sans-serif",
+                      }}
+                    >Insert Your Logo</p>
+                  </div>
+                )
+              ) : (
+                <div className="w-full flex justify-end"></div>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       <Sheet open={showEditor} onOpenChange={handleSheetClose}>
@@ -344,18 +352,18 @@ const SlideFooter: React.FC = () => {
           onOpenAutoFocus={(e) => e.preventDefault()}
           className="sm:max-w-[500px] overflow-y-auto"
         >
-          <SheetHeader className="mb-6 font-satoshi">
+          <SheetHeader className="mb-6 font-inter">
             <SheetTitle>Configure Footer</SheetTitle>
-            <p className="text-sm text-gray-500 font-satoshi  ">
+            <p className="text-sm text-gray-500 font-inter  ">
               These changes will apply to all slides.
             </p>
           </SheetHeader>
 
-          <div className="space-y-6 h-[calc(100vh-200px)] font-satoshi overflow-y-auto custom_scrollbar p-4">
+          <div className="space-y-6 h-[calc(100vh-200px)] font-inter overflow-y-auto custom_scrollbar p-4">
             <div className=" pb-8">
               <h3 className="text-lg font-medium mb-4">Logo Settings</h3>
 
-              <div className="space-y-6 font-satoshi">
+              <div className="space-y-6 font-inter">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="showLogo" className="flex-1">
                     Show Logo

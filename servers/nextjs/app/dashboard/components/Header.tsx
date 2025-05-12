@@ -16,12 +16,12 @@ const Header = () => {
           <div className="flex items-center gap-3">
             {pathname !== '/upload' && <BackBtn />}
             <Link href="/dashboard">
-              <Image
+              <img
                 src="/logo-white.png"
                 alt="Presentation logo"
                 width={162}
                 height={32}
-                priority
+
               />
             </Link>
           </div>

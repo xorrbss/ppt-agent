@@ -20,16 +20,9 @@ export const useThemeService = () => {
     colors: ThemeColors;
   } | null> => {
     try {
-      // Since this is a desktop app, we can use a fixed user ID
-      const userId = "local-user";
-      const response = await fetch(`/api/theme?userId=${userId}`);
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch theme: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data.theme;
+      // @ts-ignore
+      const result = await window.electron.getTheme();
+      return result.theme;
     } catch (error) {
       console.error("Error retrieving theme:", error);
       return null;
@@ -42,21 +35,9 @@ export const useThemeService = () => {
       colors: ThemeColors;
     }): Promise<boolean> => {
       try {
-        const userId = "local-user";
-        const response = await fetch("/api/theme", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ userId, themeData }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to save theme: ${response.status}`);
-        }
-
-        const data = await response.json();
-        return data.success;
+        // @ts-ignore
+        const result = await window.electron.setTheme(themeData);
+        return result.success;
       } catch (error) {
         console.error("Error saving theme:", error);
         return false;
@@ -69,4 +50,4 @@ export const useThemeService = () => {
     getTheme,
     saveTheme,
   };
-};
+}; 

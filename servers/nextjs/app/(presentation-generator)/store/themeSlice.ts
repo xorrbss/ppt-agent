@@ -66,7 +66,7 @@ export const defaultColors = {
     slideBox: "#29136C",
     iconBg: "#5E8CF0",
     chartColors: ["#5E8CF0", "#496CEB", "#f051b5", "#F7A8FF", "#FCD8FF"],
-    fontFamily: "var(--font-satoshi)",
+    fontFamily: "var(--font-instrument_sans)",
   },
   light_red: {
     background: "#F8E9E8",

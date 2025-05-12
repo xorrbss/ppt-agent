@@ -19,7 +19,7 @@ const NotFound = () => {
                 </p>
 
                 <div className="flex justify-center space-x-4 mb-8">
-                    <Link href="/">
+                    <Link href="/dashboard">
                         <Button className="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700">
                             Go to Homepage
                         </Button>

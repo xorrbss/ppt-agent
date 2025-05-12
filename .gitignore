@@ -188,5 +188,6 @@ resources/fastapi
 
 servers/nextjs/data
 servers/fastapi/build
+servers/nextjs/out
 
 dependencies

@@ -114,7 +114,7 @@ const SupportingDoc = ({ files, onFilesChange }: SupportingDocProps) => {
 
     return (
         <div className="w-full">
-            <h2 className="text-[#444] font-satoshi pt-4 text-lg mb-4">Supporting Documents</h2>
+            <h2 className="text-[#444] font-instrument_sans pt-4 text-lg mb-4">Supporting Documents</h2>
             <div
                 onClick={() => fileInputRef.current?.click()}
                 className={cn(
@@ -185,7 +185,7 @@ const SupportingDoc = ({ files, onFilesChange }: SupportingDocProps) => {
                                             transition-colors flex items-center justify-center relative"
                                         >
                                             {isImageFile(file) ? (
-                                                <Image className="w-8 h-8 text-purple-600" />
+                                                <img src={URL.createObjectURL(file)} className="w-10 h-10 text-purple-600" />
                                             ) : (
                                                 <File className="w-8 h-8 text-purple-600" />
                                             )}
@@ -220,7 +220,7 @@ const SupportingDoc = ({ files, onFilesChange }: SupportingDocProps) => {
                     </div>
                 )}
                 {files.filter(file => file.type === 'text/csv').length > 0 && (
-                    <p className="text-sm text-gray-500 font-switzer text-center pb-1">Analyzing CSV file may take some time... Be Patient!</p>
+                    <p className="text-sm text-gray-500 font-roboto text-center pb-1">Analyzing CSV file may take some time... Be Patient!</p>
                 )}
             </div>
         </div>

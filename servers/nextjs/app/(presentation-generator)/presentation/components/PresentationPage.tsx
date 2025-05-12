@@ -229,12 +229,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
         setLoading(false);
         dispatch(setStreaming(false));
         setError(true);
-        evtSource.close();
 
-        // Remove session parameter from URL
-        const newUrl = new URL(window.location.href);
-        newUrl.searchParams.delete("session");
-        window.history.replaceState({}, "", newUrl.toString());
         evtSource.close();
       };
     };
