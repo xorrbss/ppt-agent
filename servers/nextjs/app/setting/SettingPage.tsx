@@ -97,7 +97,7 @@ const SettingsPage = () => {
     }
 
     return (
-        <div className="min-h-screen bg-[#E9E8F8]">
+        <div className="min-h-screen bg-[#E9E8F8] font-instrument_sans">
             <Header />
             <Wrapper className="lg:w-[60%]">
                 <div className="py-8 space-y-6">
