@@ -10,7 +10,8 @@ const config = {
     "resources",
     "app_dist",
     "node_modules",
-    "dependencies/libreoffice/linux_build/libreoffice.appimage"
+    "dependencies/libreoffice/linux_build/libreoffice.appimage",
+    "NOTICE",
   ],
   linux: {
     target: ["AppImage"],
