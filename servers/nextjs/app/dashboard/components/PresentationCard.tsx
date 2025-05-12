@@ -24,7 +24,7 @@ export const PresentationCard = ({
   const handlePreview = (e: React.MouseEvent) => {
     e.preventDefault();
 
-    router.push(`/presentation/${id}`);
+    router.push(`/presentation?id=${id}`);
   };
 
   const handleDelete = async (e: React.MouseEvent) => {
@@ -62,7 +62,7 @@ export const PresentationCard = ({
       <div className="space-y-4">
         {/* Date */}
         <div className="flex items-center justify-between">
-          <p className="text-[#667085] text-sm font-switzer pt-2">
+          <p className="text-[#667085] text-sm font-roboto pt-2">
             {new Date(created_at).toLocaleDateString()}
           </p>
           <Popover>
@@ -91,10 +91,10 @@ export const PresentationCard = ({
             />
           ) : (
             <div className="flex flex-col items-center justify-center h-full w-full">
-              <p className="text-gray-500 text-sm font-switzer">
+              <p className="text-gray-500 text-sm font-roboto">
                 No thumbnail yet
               </p>
-              <p className="text-gray-500 text-sm font-switzer">
+              <p className="text-gray-500 text-sm font-roboto">
                 Will be added shortly
               </p>
             </div>
@@ -162,7 +162,7 @@ export const PresentationCard = ({
             </svg>
           )}
 
-          <p className="text-[#667085] text-sm ml-1 line-clamp-2 font-switzer">
+          <p className="text-[#667085] text-sm ml-1 line-clamp-2 font-roboto">
             {title}
           </p>
         </div>

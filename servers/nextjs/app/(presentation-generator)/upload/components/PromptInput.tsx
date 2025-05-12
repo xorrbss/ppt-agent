@@ -24,7 +24,7 @@ export function PromptInput({
   return (
     <div className="space-y-2">
       <div className="flex justify-between">
-        <h4 className=" font-satoshi text-lg text-[#444] font-medium ">
+        <h4 className=" font-inter text-lg text-[#444] font-medium ">
           Prompt
         </h4>
         <div className="flex justify-end">
@@ -45,7 +45,7 @@ export function PromptInput({
         </div>
       </div>
       {researchMode && (
-        <p className="bg-blue-100 border font-satoshi text-sm md:text-base transition-all duration-300 border-blue-200 p-2 text-center rounded-md ">
+        <p className="bg-blue-100 border font-inter text-sm md:text-base transition-all duration-300 border-blue-200 p-2 text-center rounded-md ">
           Research mode searches the web to gather the latest information based
           on your prompt and documents.
         </p>
@@ -58,13 +58,13 @@ export function PromptInput({
           onChange={(e) => handleChange(e.target.value)}
           placeholder="Tell us about your presentation"
           data-testid="prompt-input"
-          className={`py-4 px-5 border-2 font-medium text-base min-h-[150px] max-h-[300px] border-[#5146E5] focus-visible:ring-offset-0 font-satoshi focus-visible:ring-[#5146E5] overflow-y-auto  custom_scrollbar  ${researchMode ? "border-dashed" : ""
+          className={`py-4 px-5 border-2 font-medium text-base min-h-[150px] max-h-[300px] border-[#5146E5] focus-visible:ring-offset-0 font-inter focus-visible:ring-[#5146E5] overflow-y-auto  custom_scrollbar  ${researchMode ? "border-dashed" : ""
             }`}
         />
       </div>
 
       <p
-        className={`text-sm text-gray-500 font-satoshi font-medium ${showHint ? "opacity-100" : "opacity-0"
+        className={`text-sm text-gray-500 font-inter font-medium ${showHint ? "opacity-100" : "opacity-0"
           }`}
       >
         Provide specific details about your presentation needs (e.g., topic,

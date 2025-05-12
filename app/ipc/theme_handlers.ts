@@ -7,7 +7,7 @@ export function setupThemeHandlers() {
   ipcMain.handle('get-theme', async () => {
     try {
       const theme = settingsStore.get(THEME_KEY);
-      console.log('Getting theme:', theme);
+    
       return { theme };
     } catch (error) {
       console.error('Error retrieving theme:', error);
@@ -21,7 +21,7 @@ export function setupThemeHandlers() {
         throw new Error('Theme data is required');
       }
 
-      console.log('Setting theme:', themeData);
+    
       settingsStore.set(THEME_KEY, themeData);
       return { success: true };
     } catch (error) {

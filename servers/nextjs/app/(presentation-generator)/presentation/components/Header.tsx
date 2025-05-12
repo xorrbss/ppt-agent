@@ -69,7 +69,6 @@ const Header = ({
     (state: RootState) => state.presentationGeneration
   );
   const dispatch = useDispatch();
-  const urls = getEnv();
   const handleThemeSelect = async (value: string) => {
     if (isStreaming) return;
     if (value === "custom") {

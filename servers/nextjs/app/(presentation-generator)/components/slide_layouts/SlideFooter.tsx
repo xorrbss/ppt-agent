@@ -23,7 +23,7 @@ import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import { isDarkColor } from "../../utils/others";
 import { defaultFooterProperties, useFooterContext } from "../../context/footerContext";
-import { FooterProperties } from "../../services/footerSqliteService";
+import { FooterProperties } from "../../services/footerService";
 
 const SlideFooter: React.FC = () => {
   const [showEditor, setShowEditor] = useState<boolean>(false);
@@ -284,7 +284,7 @@ const SlideFooter: React.FC = () => {
         </div>
 
         <div
-          className={`flex-1 flex items-center font-satoshi slide-title justify-center`}
+          className={`flex-1 flex items-center font-inter slide-title justify-center`}
         >
           <p
             id="footer-user-message"
@@ -344,18 +344,18 @@ const SlideFooter: React.FC = () => {
           onOpenAutoFocus={(e) => e.preventDefault()}
           className="sm:max-w-[500px] overflow-y-auto"
         >
-          <SheetHeader className="mb-6 font-satoshi">
+          <SheetHeader className="mb-6 font-inter">
             <SheetTitle>Configure Footer</SheetTitle>
-            <p className="text-sm text-gray-500 font-satoshi  ">
+            <p className="text-sm text-gray-500 font-inter  ">
               These changes will apply to all slides.
             </p>
           </SheetHeader>
 
-          <div className="space-y-6 h-[calc(100vh-200px)] font-satoshi overflow-y-auto custom_scrollbar p-4">
+          <div className="space-y-6 h-[calc(100vh-200px)] font-inter overflow-y-auto custom_scrollbar p-4">
             <div className=" pb-8">
               <h3 className="text-lg font-medium mb-4">Logo Settings</h3>
 
-              <div className="space-y-6 font-satoshi">
+              <div className="space-y-6 font-inter">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="showLogo" className="flex-1">
                     Show Logo

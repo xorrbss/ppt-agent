@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
-import { Fraunces, Montserrat, Inria_Serif } from "next/font/google";
+import { Fraunces, Montserrat, Inria_Serif, Roboto } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import { Toaster } from "@/components/ui/toaster";
@@ -32,101 +32,14 @@ const inter = localFont({
   variable: "--font-inter",
 });
 
-// Neue Montreal fonts
-const neueMontreal = localFont({
-  src: [
-    {
-      path: "./fonts/NeueMontreal/NeueMontreal-Regular.otf",
-      weight: "400",
-      style: "normal",
-    },
-    {
-      path: "./fonts/NeueMontreal/NeueMontreal-Bold.otf",
-      weight: "700",
-      style: "normal",
-    },
-    {
-      path: "./fonts/NeueMontreal/NeueMontreal-Light.otf",
-      weight: "300",
-      style: "normal",
-    },
-    {
-      path: "./fonts/NeueMontreal/NeueMontreal-Medium.otf",
-      weight: "500",
-      style: "normal",
-    },
-    {
-      path: "./fonts/NeueMontreal/NeueMontreal-Italic.otf",
-      weight: "400",
-      style: "italic",
-    },
-  ],
-  variable: "--font-neue-montreal",
+const roboto = Roboto({
+  subsets: ["latin"],
+  weight: ["400"],
+  variable: "--font-roboto",
 });
 
-// Satoshi fonts
-const satoshi = localFont({
-  src: [
-    {
-      path: "./fonts/Satoshi/Satoshi-Regular.otf",
-      weight: "400",
-      style: "normal",
-    },
-    {
-      path: "./fonts/Satoshi/Satoshi-Bold.otf",
-      weight: "700",
-      style: "normal",
-    },
-    {
-      path: "./fonts/Satoshi/Satoshi-Light.otf",
-      weight: "300",
-      style: "normal",
-    },
-    {
-      path: "./fonts/Satoshi/Satoshi-Medium.otf",
-      weight: "500",
-      style: "normal",
-    },
-    {
-      path: "./fonts/Satoshi/Satoshi-Black.otf",
-      weight: "900",
-      style: "normal",
-    },
-  ],
-  variable: "--font-satoshi",
-});
 
-// Switzer fonts
-const switzer = localFont({
-  src: [
-    {
-      path: "./fonts/Switzer/Switzer-Regular.otf",
-      weight: "400",
-      style: "normal",
-    },
-    {
-      path: "./fonts/Switzer/Switzer-Bold.otf",
-      weight: "700",
-      style: "normal",
-    },
-    {
-      path: "./fonts/Switzer/Switzer-Light.otf",
-      weight: "300",
-      style: "normal",
-    },
-    {
-      path: "./fonts/Switzer/Switzer-Medium.otf",
-      weight: "500",
-      style: "normal",
-    },
-    {
-      path: "./fonts/Switzer/Switzer-Black.otf",
-      weight: "900",
-      style: "normal",
-    },
-  ],
-  variable: "--font-switzer",
-});
+
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://presenton.ai"),
@@ -180,7 +93,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`$ ${neueMontreal.variable} ${satoshi.variable} ${switzer.variable} ${inter.variable} ${fraunces.variable} ${montserrat.variable} ${inria_serif.variable} antialiased`}
+        className={`$ ${inter.variable} ${fraunces.variable} ${montserrat.variable} ${inria_serif.variable} ${roboto.variable} antialiased`}
       >
         <Providers>{children}</Providers>
         <Toaster />

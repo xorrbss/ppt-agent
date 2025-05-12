@@ -12,6 +12,7 @@ import {
 import { ThemeType } from "../upload/type";
 
 import { useThemeService, ThemeColors } from "../services/themeService";
+import { PresentationGenerationApi } from "../services/api/presentation-generation";
 
 interface CustomThemeSettingsProps {
   onClose?: () => void;
@@ -114,14 +115,22 @@ const CustomThemeSettings = ({
       );
       root.style.setProperty("--custom-slide-box", draftColors.slideBox);
 
-      // Save to SQLite
-      await themeService.saveTheme({
-        name: "custom",
-        colors: {
-          ...draftColors,
-          theme: themeType,
-        },
-      });
+      // Save to file and API
+      await Promise.all([
+        PresentationGenerationApi.setThemeColors(presentationId, {
+          name: themeType,
+          colors: {
+            ...draftColors,
+          },
+        }),
+        themeService.saveTheme({
+          name: "custom",
+          colors: {
+            ...draftColors,
+            theme: themeType,
+          },
+        }),
+      ]);
 
       onClose?.();
     } catch (error) {
@@ -168,7 +177,7 @@ const CustomThemeSettings = ({
 
   return (
     <div className="">
-      <div className="h-[60vh] font-satoshi overflow-y-auto custom_scrollbar pr-2 pb-2">
+      <div className="h-[60vh] font-inter overflow-y-auto custom_scrollbar pr-2 pb-2">
         {/* Live Preview */}
         <div className=" w-full space-y-2">
           <h3 className="text-xs font-medium text-gray-500">Live Preview</h3>
@@ -258,7 +267,7 @@ const CustomThemeSettings = ({
           ))}
         </div>
       </div>
-      <div className="mt-6 pt-4 font-switzer  border-t flex justify-end gap-2">
+      <div className="mt-6 pt-4 font-roboto  border-t flex justify-end gap-2">
         <Button
           variant="outline"
           onClick={onClose}

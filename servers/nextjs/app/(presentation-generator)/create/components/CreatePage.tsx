@@ -121,7 +121,7 @@ const CreatePage = () => {
         dispatch(setPresentationData(response));
 
         router.push(
-          `/presentation/${presentation_id}?session=${response.session}`
+          `/presentation?id=${presentation_id}&session=${response.session}`
         );
       }
     } catch (error) {
@@ -180,8 +180,8 @@ const CreatePage = () => {
       />
 
       <div className="max-w-[1000px] mx-auto  sm:px-6 pb-6">
-        <div className="mt-4 sm:mt-8 font-satoshi relative">
-          <h4 className="text-lg sm:text-xl font-satoshi font-medium mb-4">
+        <div className="mt-4 sm:mt-8 font-inter relative">
+          <h4 className="text-lg sm:text-xl font-inter font-medium mb-4">
             Outline
           </h4>
           <div className="border p-2 sm:p-4 md:p-6 rounded-lg">
@@ -203,11 +203,10 @@ const CreatePage = () => {
               variant="outline"
               onClick={handleAddSlide}
               disabled={!titles || titles.length >= initialSlideCount}
-              className={`w-full mt-4 text-[#9034EA] border-[#9034EA] rounded-[32px] ${
-                !titles || titles.length >= initialSlideCount
-                  ? "opacity-50 cursor-not-allowed"
-                  : ""
-              }`}
+              className={`w-full mt-4 text-[#9034EA] border-[#9034EA] rounded-[32px] ${!titles || titles.length >= initialSlideCount
+                ? "opacity-50 cursor-not-allowed"
+                : ""
+                }`}
             >
               + Add Slide
             </Button>
@@ -216,7 +215,7 @@ const CreatePage = () => {
         <Button
           disabled={loadingState.isLoading}
           onClick={handleSubmit}
-          className="bg-[#5146E5] w-full rounded-[32px] text-base sm:text-lg py-4 sm:py-6 transition-all duration-300 font-switzer font-semibold hover:bg-[#5146E5]/80 text-white mt-4"
+          className="bg-[#5146E5] w-full rounded-[32px] text-base sm:text-lg py-4 sm:py-6 transition-all duration-300 font-roboto font-semibold hover:bg-[#5146E5]/80 text-white mt-4"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"

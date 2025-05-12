@@ -38,7 +38,7 @@ const UserAccount = () => {
             role="menuitem"
           >
             <LayoutDashboard className="w-5 h-5 text-gray-500" />
-            <span className="text-gray-700 text-sm font-medium font-satoshi">
+            <span className="text-gray-700 text-sm font-medium font-inter">
               Dashboard
             </span>
           </Link>
@@ -49,7 +49,7 @@ const UserAccount = () => {
             role="menuitem"
           >
             <Settings className="w-5 h-5 text-gray-500" />
-            <span className="text-gray-700 text-sm font-medium font-satoshi">
+            <span className="text-gray-700 text-sm font-medium font-inter">
               Settings
             </span>
           </Link>

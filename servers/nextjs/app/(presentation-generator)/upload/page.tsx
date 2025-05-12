@@ -45,7 +45,7 @@ const page = () => {
 
             <Header />
             <div className='flex flex-col items-center justify-center  py-4'>
-                <h1 className='text-3xl font-semibold font-satoshi'>Create  Presentation </h1>
+                <h1 className='text-3xl font-semibold font-inter'>Create  Presentation </h1>
                 {/* <p className='text-sm text-gray-500'>We will generate a presentation for you</p> */}
             </div>
             <UploadPage />

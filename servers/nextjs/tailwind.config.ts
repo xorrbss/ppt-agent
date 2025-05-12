@@ -82,9 +82,7 @@ const config: Config = {
   			'accordion-up': 'accordion-up 0.2s ease-out'
   		},
   		fontFamily: {
-  			'neue-montreal': ['var(--font-neue-montreal)'],
-  			'satoshi': ['var(--font-satoshi)'],
-  			'switzer': ['var(--font-switzer)'],
+  			
 			'inter':['var(--font-inter)'],
 			'roboto':['var(--font-roboto)'],
 			'fraunces':['var(--font-fraunces)'],

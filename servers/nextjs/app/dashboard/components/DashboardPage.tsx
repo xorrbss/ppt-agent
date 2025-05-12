@@ -41,7 +41,7 @@ const DashboardPage: React.FC = () => {
       <Wrapper>
         <main className="container mx-auto px-4 py-8">
           <section>
-            <h2 className="text-2xl font-switzer font-medium mb-6">
+            <h2 className="text-2xl font-roboto font-medium mb-6">
               Slide Presentation
             </h2>
             <PresentationGrid

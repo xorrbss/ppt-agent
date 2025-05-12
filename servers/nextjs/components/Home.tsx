@@ -188,7 +188,7 @@ export default function Home() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-b font-satoshi from-gray-50 to-white">
+        <div className="min-h-screen bg-gradient-to-b font-inter from-gray-50 to-white">
             <main className="container mx-auto px-4 py-12 max-w-3xl">
                 {/* Branding Header */}
                 <div className="text-center mb-12">
