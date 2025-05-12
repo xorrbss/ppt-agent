@@ -46,7 +46,7 @@ class ExportAsPDFHandler(FetchPresentationAssetsMixin):
 
         ppt_path = os.path.join(
             self.presentation_dir,
-            f"{presentation.title.replace('/', '_').replace(' ', '_')}.pptx",
+            f"""{presentation.title.replace('/', '_').replace(' ', '_').replace('"', "'")}.pptx""",
         )
 
         ppt_creator = PptxPresentationCreator(self.data.pptx_model, self.temp_dir)
