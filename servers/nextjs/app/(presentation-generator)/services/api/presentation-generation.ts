@@ -64,34 +64,7 @@ export class PresentationGenerationApi {
     }
   }
 
-  static async generateResearchReport(prompt: string, language: string | null) {
-    const apiBody = {
-      query: prompt,
-      language: language,
-    };
-    try {
-      const response = await fetch(
-        `${BASE_URL}/ppt/report/generate`,
-        {
-          method: "POST",
-          headers: getHeader(),
-          body: JSON.stringify(apiBody),
-          cache: "no-cache",
-        }
-      );
-
-      if (response.status === 200) {
-        const data = await response.json();
-
-        return data;
-      } else {
-        throw new Error(`Failed to generate report: ${response.statusText}`);
-      }
-    } catch (error) {
-      console.error("Error in Generate Research Report", error);
-      throw error;
-    }
-  }
+ 
 
   static async decomposeDocuments(documentKeys: string[], imageKeys: string[]) {
     try {
@@ -452,7 +425,6 @@ export class PresentationGenerationApi {
     n_slides,
     documents,
     images,
-    research_reports,
     language,
   
   }: {
@@ -460,7 +432,6 @@ export class PresentationGenerationApi {
     n_slides: number | null;
     documents?: string[];
     images?: string[];
-    research_reports?: string[];
     language: string | null;
     
   }) {
@@ -475,7 +446,6 @@ export class PresentationGenerationApi {
             n_slides,
             language,
             documents,
-            research_reports,
             images,
            
           }),

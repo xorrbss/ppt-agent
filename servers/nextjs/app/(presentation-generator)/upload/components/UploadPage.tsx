@@ -5,7 +5,7 @@
  * - Configure presentation settings (slides, language)
  * - Input prompts
  * - Upload supporting documents and images
- * - Generate presentations with or without research mode
+ 
  * 
  * @component
  */
@@ -51,7 +51,6 @@ interface DecomposedResponse {
 
 interface ProcessedData {
   config: PresentationConfig;
-  reports: Record<string, string>;
   documents: Record<string, any>;
   images: Record<string, any>;
   charts: Record<string, any>;
@@ -65,7 +64,6 @@ const UploadPage = () => {
   const { toast } = useToast();
 
   // State management
-  const [researchMode, setResearchModel] = useState<boolean>(false);
   const [documents, setDocuments] = useState<File[]>([]);
   const [images, setImages] = useState<File[]>([]);
   const [config, setConfig] = useState<PresentationConfig>({
@@ -142,8 +140,8 @@ const UploadPage = () => {
     try {
       const hasUploadedAssets = documents.length > 0 || images.length > 0;
 
-      if (researchMode || hasUploadedAssets) {
-        await handleResearchAndDocumentProcessing();
+      if (hasUploadedAssets) {
+        await handleDocumentProcessing();
       } else {
         await handleDirectPresentationGeneration();
       }
@@ -153,14 +151,14 @@ const UploadPage = () => {
   };
 
   /**
-   * Handles research mode and document processing
+   * Handles  document processing
    */
-  const handleResearchAndDocumentProcessing = async () => {
+  const handleDocumentProcessing = async () => {
     setLoadingState({
       isLoading: true,
-      message: researchMode ? "Creating research report..." : "Processing documents...",
+      message: "Processing documents...",
       showProgress: true,
-      duration: researchMode ? 80 : 90,
+      duration: 90,
       extra_info: documents.length > 0 ? "It might take a few minutes for large documents." : "",
     });
 
@@ -174,11 +172,7 @@ const UploadPage = () => {
     }
 
     const promises: Promise<any>[] = [];
-    if (researchMode) {
-      promises.push(
-        PresentationGenerationApi.generateResearchReport(config.prompt, config.language)
-      );
-    }
+
     if (documents.length > 0 || images.length > 0) {
       promises.push(
         PresentationGenerationApi.decomposeDocuments(documentKeys, imageKeys)
@@ -187,7 +181,7 @@ const UploadPage = () => {
 
     const responses = await Promise.all(promises);
 
-    const processedData = processApiResponses(responses, researchMode);
+    const processedData = processApiResponses(responses);
 
     dispatch(setPptGenUploadState(processedData));
     router.push("/documents-preview");
@@ -196,20 +190,14 @@ const UploadPage = () => {
   /**
    * Processes API responses and formats data for state update
    */
-  const processApiResponses = (responses: (any | DecomposedResponse)[], isResearchMode: boolean): ProcessedData => {
+  const processApiResponses = (responses: (any | DecomposedResponse)[],): ProcessedData => {
     const result: ProcessedData = {
       config,
-      reports: {},
       documents: {},
       images: {},
       charts: {},
       tables: {},
     };
-
-    if (isResearchMode) {
-      const researchResponse = responses.shift();
-      result.reports['research_report_content'] = researchResponse;
-    }
 
     if (responses.length > 0) {
       const decomposedResponse = responses.shift() as DecomposedResponse;
@@ -226,7 +214,7 @@ const UploadPage = () => {
   };
 
   /**
-   * Handles direct presentation generation without research or documents
+   * Handles direct presentation generation without documents
    */
   const handleDirectPresentationGeneration = async () => {
     setLoadingState({
@@ -241,7 +229,7 @@ const UploadPage = () => {
       n_slides: config?.slides ? parseInt(config.slides) : null,
       documents: [],
       images: [],
-      research_reports: [],
+
       language: config?.language ?? "",
 
     });
@@ -302,8 +290,7 @@ const UploadPage = () => {
         <PromptInput
           value={config.prompt}
           onChange={(value) => handleConfigChange("prompt", value)}
-          researchMode={researchMode}
-          setResearchMode={setResearchModel}
+
           data-testid="prompt-input"
         />
       </div>

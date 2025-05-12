@@ -3,7 +3,7 @@ import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 interface PresentationGenUploadState {
   config: PresentationConfig | null;
-  reports: any;
+  
   documents: any;
   images: any;
   charts: any;
@@ -14,7 +14,7 @@ interface PresentationGenUploadState {
 
 const initialState: PresentationGenUploadState = {
   config: null,
-  reports: {},
+ 
   documents: {},
   images: {},
   charts: {},
@@ -38,7 +38,6 @@ export const presentationGenUploadSlice = createSlice({
     ) => {
       const payload = action.payload;
       state.config = payload.config!;
-      state.reports = payload.reports;
       state.documents = payload.documents;
       state.images = payload.images;
       state.charts = payload.charts;
