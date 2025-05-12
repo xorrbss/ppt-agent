@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron';
-import { settingsStore } from '../settings-store';
+import { settingsStore } from '../services/settings-store';
 
 const FOOTER_KEY = 'footer';
 

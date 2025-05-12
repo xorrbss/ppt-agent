@@ -4,7 +4,7 @@ import path from "path";
 import { findTwoUnusedPorts, killProcess, setupEnv, setUserConfig } from "./utils";
 import { startFastApiServer, startNextJsServer } from "./servers";
 import { ChildProcessByStdio } from "child_process";
-import { baseDir, fastapiDir, isDev, localhost, nextjsDir, tempDir, userConfigPath, userDataDir } from "./constants";
+import { baseDir, fastapiDir, isDev, localhost, nextjsDir, tempDir, userConfigPath, userDataDir } from "./utils/constants";
 import { setupIpcHandlers } from "./ipc";
 
 var win: BrowserWindow | undefined;

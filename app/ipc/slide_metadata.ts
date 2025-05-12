@@ -2,7 +2,7 @@ import { ipcMain } from "electron";
 import puppeteer from "puppeteer";
 import fs from 'fs';
 import path from 'path';
-import { tempDir } from "../constants";
+import { tempDir } from "../utils/constants";
 interface Position {
   left: number;
   top: number;

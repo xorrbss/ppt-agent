@@ -1,5 +1,5 @@
 import { ipcMain, shell, dialog } from "electron";
-import { downloadsDir } from "../constants";
+import { downloadsDir } from "../utils/constants";
 import fs from "fs";
 import path from "path";
 
