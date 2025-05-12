@@ -1,6 +1,6 @@
-import { app } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import { userDataDir } from '../utils/constants';
 
 
 class SettingsStore {
@@ -8,7 +8,7 @@ class SettingsStore {
   private settings: { [key: string]: any };
 
   constructor() {
-    this.settingsPath = path.join(app.getPath('userData'), 'settings.json');
+    this.settingsPath = path.join(userDataDir, 'settings.json');
     this.settings = {};
     this.loadSettings();
   }
@@ -18,11 +18,11 @@ class SettingsStore {
       if (fs.existsSync(this.settingsPath)) {
         const data = fs.readFileSync(this.settingsPath, 'utf-8');
         this.settings = JSON.parse(data);
-        
+
       } else {
         this.settings = {};
         this.saveSettings();
-        
+
       }
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -33,7 +33,7 @@ class SettingsStore {
   private saveSettings() {
     try {
       fs.writeFileSync(this.settingsPath, JSON.stringify(this.settings, null, 2));
-     
+
     } catch (error) {
       console.error('Error saving settings:', error);
       throw error;
@@ -42,12 +42,12 @@ class SettingsStore {
 
   get(key: string, defaultValue: any = null): any {
     const value = this.settings[key];
-    
+
     return value || defaultValue;
   }
 
   set(key: string, value: any): void {
-   
+
     this.settings[key] = value;
     this.saveSettings();
   }

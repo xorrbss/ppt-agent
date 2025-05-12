@@ -1,10 +1,10 @@
 require("dotenv").config();
 import { app, BrowserWindow } from "electron";
 import path from "path";
-import { findTwoUnusedPorts, killProcess, setupEnv, setUserConfig } from "./utils";
-import { startFastApiServer, startNextJsServer } from "./servers";
+import { findUnusedPorts, killProcess, setupEnv, setUserConfig } from "./utils";
+import { startFastApiServer } from "./utils/servers";
 import { ChildProcessByStdio } from "child_process";
-import { baseDir, fastapiDir, isDev, localhost, nextjsDir, tempDir, userConfigPath, userDataDir } from "./utils/constants";
+import { baseDir, fastapiDir, isDev, tempDir, userConfigPath, userDataDir } from "./utils/constants";
 import { setupIpcHandlers } from "./ipc";
 
 var win: BrowserWindow | undefined;
@@ -18,12 +18,12 @@ const createWindow = () => {
     icon: path.join(baseDir, "resources/ui/assets/images/presenton_short_filled.png"),
     webPreferences: {
       webSecurity: false,
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preloads/index.js'),
     },
   });
 };
 
-async function startServers(fastApiPort: number, nextjsPort: number) {
+async function startServers(fastApiPort: number) {
   try {
     fastApiProcess = await startFastApiServer(
       fastapiDir,
@@ -37,17 +37,6 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         APP_DATA_DIRECTORY: userDataDir,
         TEMP_DIRECTORY: tempDir,
         USER_CONFIG_PATH: userConfigPath,
-      },
-      isDev,
-    );
-    nextjsProcess = await startNextJsServer(
-      nextjsDir,
-      nextjsPort,
-      {
-        NEXT_PUBLIC_FAST_API: process.env.NEXT_PUBLIC_FAST_API,
-        TEMP_DIRECTORY: process.env.TEMP_DIRECTORY,
-        NEXT_PUBLIC_URL: process.env.NEXT_PUBLIC_URL,
-        NEXT_PUBLIC_USER_CONFIG_PATH: process.env.NEXT_PUBLIC_USER_CONFIG_PATH,
       },
       isDev,
     );
@@ -76,15 +65,17 @@ app.whenReady().then(async () => {
     GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,
   })
 
-  const [fastApiPort, nextjsPort] = await findTwoUnusedPorts();
-  console.log(`FastAPI port: ${fastApiPort}, NextJS port: ${nextjsPort}`);
+  const [fastApiPort] = await findUnusedPorts();
+  console.log(`FastAPI port: ${fastApiPort}`);
 
   //? Setup environment variables to be used in the preload.ts file
-  setupEnv(fastApiPort, nextjsPort);
+  setupEnv(fastApiPort);
   setupIpcHandlers();
 
-  await startServers(fastApiPort, nextjsPort);
-  win?.loadURL(`${localhost}:${nextjsPort}`);
+  await startServers(fastApiPort);
+
+  //? Load the NextJS UI
+  win?.loadFile(path.join(baseDir, "resources/nextjs/index.html"));
 });
 
 app.on("window-all-closed", async () => {

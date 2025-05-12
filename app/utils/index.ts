@@ -27,9 +27,8 @@ export function getUserConfig(): UserConfig {
   return JSON.parse(configData)
 }
 
-export function setupEnv(fastApiPort: number, nextjsPort: number) {
+export function setupEnv(fastApiPort: number) {
   process.env.NEXT_PUBLIC_FAST_API = `${localhost}:${fastApiPort}`;
-  process.env.NEXT_PUBLIC_URL = `${localhost}:${nextjsPort}`;
   process.env.TEMP_DIRECTORY = tempDir;
   process.env.NEXT_PUBLIC_USER_CONFIG_PATH = userConfigPath;
 }
@@ -49,7 +48,7 @@ export function killProcess(pid: number) {
   })
 }
 
-export async function findTwoUnusedPorts(startPort: number = 40000): Promise<[number, number]> {
+export async function findUnusedPorts(startPort: number = 40000, count: number = 1): Promise<number[]> {
   const ports: number[] = [];
 
   const isPortAvailable = (port: number): Promise<boolean> => {
@@ -67,13 +66,13 @@ export async function findTwoUnusedPorts(startPort: number = 40000): Promise<[nu
   };
 
   let currentPort = startPort;
-  while (ports.length < 2) {
+  while (ports.length < count) {
     if (await isPortAvailable(currentPort)) {
       ports.push(currentPort);
     }
     currentPort++;
   }
 
-  return [ports[0], ports[1]];
+  return ports;
 }
 
