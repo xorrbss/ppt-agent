@@ -1,14 +1,12 @@
 import os
 from typing import Optional
-from langchain_community.tools import DuckDuckGoSearchRun
-from langchain_community.utilities import DuckDuckGoSearchAPIWrapper
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 
-search_tool = DuckDuckGoSearchRun(
-    api_wrapper=DuckDuckGoSearchAPIWrapper(max_results=50)
-)
+# search_tool = DuckDuckGoSearchRun(
+#     api_wrapper=DuckDuckGoSearchAPIWrapper(max_results=50)
+# )
 
 prompt_template = ChatPromptTemplate.from_messages(
     [
@@ -48,12 +46,13 @@ async def get_report(query: str, language: Optional[str]):
     )
     chain = prompt_template | model
 
-    search_results = await search_tool.ainvoke(query)
-    response = await chain.ainvoke(
-        {
-            "prompt": query,
-            "language": language,
-            "search_results": search_results,
-        }
-    )
-    return response.content
+    # search_results = await search_tool.ainvoke(query)
+    # response = await chain.ainvoke(
+    #     {
+    #         "prompt": query,
+    #         "language": language,
+    #         "search_results": search_results,
+    #     }
+    # )
+    # return response.content
+    return "Research Report coming soon"
