@@ -10,11 +10,15 @@ def get_pdf_from_pptx(pptx_path: str, temp_dir: str) -> str:
     base_name = os.path.splitext(os.path.basename(pptx_path))[0]
     print(base_name)
 
-    subprocess.run(
-        f"{os.getenv('LIBREOFFICE')} --headless --invisible --convert-to pdf {pptx_path} --outdir {temp_dir}",
+    result = subprocess.run(
+        f'{os.getenv("LIBREOFFICE")} --convert-to pdf "{pptx_path}" --outdir "{temp_dir}"',
         shell=True,
         capture_output=True,
+        text=True,
     )
+
+    print("LibreOffice stdout:", result.stdout)
+    print("LibreOffice stderr:", result.stderr)
 
     pdf_filename = f"{base_name}.pdf"
     pdf_path = os.path.join(temp_dir, pdf_filename)
