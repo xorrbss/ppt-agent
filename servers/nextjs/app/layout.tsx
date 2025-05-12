@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
-import { Fraunces, Montserrat, Inria_Serif, Roboto } from "next/font/google";
+import { Fraunces, Montserrat, Inria_Serif, Roboto, Instrument_Sans } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import { Toaster } from "@/components/ui/toaster";
@@ -38,7 +38,11 @@ const roboto = Roboto({
   variable: "--font-roboto",
 });
 
-
+const instrument_sans = Instrument_Sans({
+  subsets: ["latin"],
+  weight: ["400"],
+  variable: "--font-instrument-sans",
+});
 
 
 export const metadata: Metadata = {
@@ -93,7 +97,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`$ ${inter.variable} ${fraunces.variable} ${montserrat.variable} ${inria_serif.variable} ${roboto.variable} antialiased`}
+        className={`$ ${inter.variable} ${fraunces.variable} ${montserrat.variable} ${inria_serif.variable} ${roboto.variable} ${instrument_sans.variable} antialiased`}
       >
         <Providers>{children}</Providers>
         <Toaster />

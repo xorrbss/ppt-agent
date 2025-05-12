@@ -76,7 +76,7 @@ const ThemePage = () => {
       name: "Royal Blue Theme",
       colors: defaultColors.royal_blue,
       type: "royal_blue",
-      font: "var(--font-inter)",
+      font: "var(--font-instrument-sans)",
     },
     {
       name: "Creme Theme",
@@ -148,7 +148,7 @@ const ThemePage = () => {
         </div>
         <Button
           onClick={handleSubmit}
-          className="bg-[#5146E5] fixed bottom-4 left-0 right-0 max-w-[1100px] mx-auto w-full rounded-[32px] text-base sm:text-lg py-4 sm:py-6 transition-all duration-300 font-roboto font-semibold hover:bg-[#5146E5]/80 text-white mt-4"
+          className="bg-[#5146E5] fixed bottom-4 left-0 right-0 max-w-[1100px] mx-auto w-full rounded-[32px] text-base sm:text-lg py-4 sm:py-6 transition-all duration-300 font-switzer font-semibold hover:bg-[#5146E5]/80 text-white mt-4"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"

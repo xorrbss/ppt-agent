@@ -7,7 +7,7 @@ export function setupFooterHandlers() {
   ipcMain.handle('get-footer', async () => {
     try {
       const properties = settingsStore.get(FOOTER_KEY);
-      console.log('Getting footer properties:', properties);
+    
       return { properties };
     } catch (error) {
       console.error('Error retrieving footer properties:', error);
@@ -21,7 +21,7 @@ export function setupFooterHandlers() {
         throw new Error('Properties are required');
       }
 
-      console.log('Setting footer properties:', properties);
+      
       settingsStore.set(FOOTER_KEY, properties);
       return { success: true };
     } catch (error) {

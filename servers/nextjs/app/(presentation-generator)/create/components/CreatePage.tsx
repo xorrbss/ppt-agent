@@ -180,8 +180,8 @@ const CreatePage = () => {
       />
 
       <div className="max-w-[1000px] mx-auto  sm:px-6 pb-6">
-        <div className="mt-4 sm:mt-8 font-inter relative">
-          <h4 className="text-lg sm:text-xl font-inter font-medium mb-4">
+        <div className="mt-4 sm:mt-8 font-instrument_sans relative">
+          <h4 className="text-lg sm:text-xl font-instrument_sans font-medium mb-4">
             Outline
           </h4>
           <div className="border p-2 sm:p-4 md:p-6 rounded-lg">

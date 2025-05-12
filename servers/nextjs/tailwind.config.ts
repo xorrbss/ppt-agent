@@ -82,7 +82,7 @@ const config: Config = {
   			'accordion-up': 'accordion-up 0.2s ease-out'
   		},
   		fontFamily: {
-  			
+			'instrument_sans':['var(--font-instrument-sans)'],	
 			'inter':['var(--font-inter)'],
 			'roboto':['var(--font-roboto)'],
 			'fraunces':['var(--font-fraunces)'],

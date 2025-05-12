@@ -9,7 +9,7 @@ import {
 // Default footer properties
 export const defaultFooterProperties: FooterProperties = {
   logoProperties: {
-    showLogo: true,
+    showLogo: false,
     logoPosition: "left",
     opacity: 0.8,
     logoImage: {
@@ -23,10 +23,10 @@ export const defaultFooterProperties: FooterProperties = {
     y: 0,
   },
   footerMessage: {
-    showMessage: true,
+    showMessage: false,
     opacity: 1.0,
     fontSize: 12,
-    message: "Copyright © 2025",
+    message: "",
   },
 };
 

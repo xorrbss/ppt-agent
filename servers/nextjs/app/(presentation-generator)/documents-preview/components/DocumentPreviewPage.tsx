@@ -351,7 +351,7 @@ const DocumentsPreviewPage: React.FC = () => {
         duration={showLoading.duration}
       />
       <Header />
-      <div className="flex mt-6 gap-4">
+      <div className="flex mt-6 gap-4 font-instrument_sans">
         {!isOpen && (
           <div className="fixed left-4 top-1/2 -translate-y-1/2 z-50">
             <ToolTip content="Open Panel">

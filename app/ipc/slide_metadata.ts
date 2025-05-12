@@ -89,7 +89,8 @@ interface SlideMetadata {
 
 
 export function setupSlideMetadataHandlers() {
-  ipcMain.handle("get-slide-metadata", async (_, url: string, theme: string, customColors?: any) => {
+    ipcMain.handle("get-slide-metadata", async (_, url: string, theme: string, customColors?: any) => {
+      console.log("get-slide-metadata", process.env.NEXT_PUBLIC_FAST_API, url);
     let browser;
     try {
       browser = await puppeteer.launch({
@@ -107,6 +108,7 @@ export function setupSlideMetadataHandlers() {
     `);
 
       await page.goto(url, { waitUntil: "networkidle0", timeout: 60000 });
+     
       await page.waitForSelector('[data-element-type="slide-container"]', { timeout: 80000 });
       
       // Apply theme

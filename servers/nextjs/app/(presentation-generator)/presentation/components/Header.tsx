@@ -59,7 +59,6 @@ const Header = ({
   const [open, setOpen] = useState(false);
   const [showLoader, setShowLoader] = useState(false);
   const router = useRouter();
-  const pathname = usePathname();
 
   const [showCustomThemeModal, setShowCustomThemeModal] = useState(false);
   const { currentTheme, currentColors } = useSelector(
@@ -129,7 +128,7 @@ const Header = ({
   const getSlideMetadata = async () => {
     try {
       // Get the current URL without any query parameters
-      const baseUrl = window.location.origin + window.location.pathname;
+      const baseUrl = window.location.href;
 
 
       // @ts-ignore
