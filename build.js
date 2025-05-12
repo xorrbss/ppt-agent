@@ -11,6 +11,7 @@ const config = {
     "app_dist",
     "node_modules",
     "dependencies/libreoffice/linux_build/libreoffice.appimage",
+    "dependencies/chrome-headless-shell/linux_build",
     "NOTICE",
   ],
   linux: {

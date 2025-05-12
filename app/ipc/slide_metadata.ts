@@ -95,7 +95,7 @@ export function setupSlideMetadataHandlers() {
     try {
       browser = await puppeteer.launch({
         headless: true,
-        executablePath: isDev ? undefined : path.join(baseDir, "dependencies/chrome-headless-shell/chrome-headless-shell"),
+        executablePath: isDev ? undefined : path.join(baseDir, "dependencies/chrome-headless-shell/linux_build/chrome-headless-shell"),
         args: ['--no-sandbox', '--disable-setuid-sandbox']
       });
 
