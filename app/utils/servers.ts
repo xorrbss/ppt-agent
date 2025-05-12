@@ -38,3 +38,38 @@ export async function startFastApiServer(
   await execAsync(`npx wait-on ${localhost}:${port}/docs`);
   return fastApiProcess;
 }
+
+export async function startNextJsServer(
+  directory: string,
+  port: number,
+  env: NextJsEnv,
+  isDev: boolean,
+) {
+  // Start NextJS development server
+  const startCommand = isDev ? [
+    "npm",
+    ["run", "dev", "--", "-p", port.toString()],
+  ] : [
+    "npx",
+    ["-y", "serve", "-p", port.toString()],
+  ];
+
+  const nextjsProcess = spawn(
+    startCommand[0] as string,
+    startCommand[1] as string[],
+    {
+      cwd: directory,
+      stdio: ["inherit", "pipe", "pipe"],
+      env: { ...process.env, ...env },
+    }
+  );
+  nextjsProcess.stdout.on("data", (data: any) => {
+    console.log(`NextJS: ${data}`);
+  });
+  nextjsProcess.stderr.on("data", (data: any) => {
+    console.error(`NextJS Error: ${data}`);
+  });
+  // Wait for NextJS server to start
+  await execAsync(`npx wait-on ${localhost}:${port}`);
+  return nextjsProcess;
+}

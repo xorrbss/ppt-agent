@@ -48,8 +48,9 @@ export function killProcess(pid: number) {
   })
 }
 
-export async function findUnusedPorts(startPort: number = 40000, count: number = 1): Promise<number[]> {
+export async function findUnusedPorts(startPort: number = 40000, count: number = 2): Promise<number[]> {
   const ports: number[] = [];
+  console.log(`Finding ${count} unused ports starting from ${startPort}`);
 
   const isPortAvailable = (port: number): Promise<boolean> => {
     return new Promise((resolve) => {

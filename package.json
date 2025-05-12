@@ -9,14 +9,14 @@
     "email": "contact@presenton.ai"
   },
   "scripts": {
-    "dev": "tsc && electron --gtk-version=3 .",
+    "dev": "rm -rf app_dist && tsc && electron --gtk-version=3 .",
     "setup:env": "npm install && cd servers/fastapi && poetry install && cd ../../servers/nextjs && npm install",
-    "build:ts": "tsc",
+    "build:ts": "rm -rf app_dist && tsc",
     "build:css": "tailwindcss -i ./resources/ui/assets/css/tailwind.import.css -o ./resources/ui/assets/css/tailwind.css --watch",
-    "build:nextjs": "rm -rf resources/nextjs && cd servers/nextjs && npm run build && cp -r out ../../.resources/nextjs",
+    "build:nextjs": "rm -rf resources/nextjs && cd servers/nextjs && npm run build && mv out ../../resources/nextjs",
     "build:fastapi": "rm -rf resources/fastapi && cd servers/fastapi && .venv/bin/pyinstaller --distpath ../../resources server.spec",
-    "build:electron": "tsc && node build.js",
-    "clean:build": "rm -rf resources/nextjs && rm -rf resources/fastapi"
+    "build:electron": "rm -rf app_dist && tsc && node build.js",
+    "clean:build": "rm -rf resources/nextjs && rm -rf resources/fastapi && rm -rf app_dist"
   },
   "devDependencies": {
     "electron": "^36.1.0",

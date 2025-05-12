@@ -6,7 +6,7 @@
 
 ---
 
-![Demo](resources/readme/demo.gif)
+![Demo](readme_assets/demo.gif)
 
 ## ✨ More Freedom with AI Presentations
 
@@ -21,25 +21,25 @@
 ## Features
 
 ### 1. Add prompt, select number of slides and language
-![Demo](resources/readme/images/prompting.png)
+![Demo](readme_assets/images/prompting.png)
 
 ### 2. Select theme
-![Demo](resources/readme/images/select-theme.png)
+![Demo](readme_assets/images/select-theme.png)
 
 ### 3. Review and edit outline
-![Demo](resources/readme/images/outline.png)
+![Demo](readme_assets/images/outline.png)
 
 ### 4. Select theme
-![Demo](resources/readme/images/select-theme.png)
+![Demo](readme_assets/images/select-theme.png)
 
 ### 5. Present on app
-![Demo](resources/readme/images/present.png)
+![Demo](readme_assets/images/present.png)
 
 ### 6. Change theme
-![Demo](resources/readme/images/change-theme.png)
+![Demo](readme_assets/images/change-theme.png)
 
 ### 7. Export presentation as PDF and PPTX
-![Demo](resources/readme/images/export-presentation.png)
+![Demo](readme_assets/images/export-presentation.png)
 
 
 ## License

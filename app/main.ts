@@ -2,9 +2,9 @@ require("dotenv").config();
 import { app, BrowserWindow } from "electron";
 import path from "path";
 import { findUnusedPorts, killProcess, setupEnv, setUserConfig } from "./utils";
-import { startFastApiServer } from "./utils/servers";
+import { startFastApiServer, startNextJsServer } from "./utils/servers";
 import { ChildProcessByStdio } from "child_process";
-import { baseDir, fastapiDir, isDev, tempDir, userConfigPath, userDataDir } from "./utils/constants";
+import { baseDir, fastapiDir, isDev, localhost, nextjsDir, tempDir, userConfigPath, userDataDir } from "./utils/constants";
 import { setupIpcHandlers } from "./ipc";
 
 var win: BrowserWindow | undefined;
@@ -23,7 +23,7 @@ const createWindow = () => {
   });
 };
 
-async function startServers(fastApiPort: number) {
+async function startServers(fastApiPort: number, nextjsPort: number) {
   try {
     fastApiProcess = await startFastApiServer(
       fastapiDir,
@@ -40,6 +40,17 @@ async function startServers(fastApiPort: number) {
       },
       isDev,
     );
+    nextjsProcess = await startNextJsServer(
+      nextjsDir,
+      nextjsPort,
+      {
+        NEXT_PUBLIC_FAST_API: process.env.NEXT_PUBLIC_FAST_API,
+        TEMP_DIRECTORY: process.env.TEMP_DIRECTORY,
+        NEXT_PUBLIC_URL: process.env.NEXT_PUBLIC_URL,
+        NEXT_PUBLIC_USER_CONFIG_PATH: process.env.NEXT_PUBLIC_USER_CONFIG_PATH,
+      },
+      isDev,
+    )
   } catch (error) {
     console.error("Server startup error:", error);
   }
@@ -65,17 +76,15 @@ app.whenReady().then(async () => {
     GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,
   })
 
-  const [fastApiPort] = await findUnusedPorts();
-  console.log(`FastAPI port: ${fastApiPort}`);
+  const [fastApiPort, nextjsPort] = await findUnusedPorts();
+  console.log(`FastAPI port: ${fastApiPort}, NextJS port: ${nextjsPort}`);
 
-  //? Setup environment variables to be used in the preload.ts file
+  //? Setup environment variables to be used in the preloads
   setupEnv(fastApiPort);
   setupIpcHandlers();
 
-  await startServers(fastApiPort);
-
-  //? Load the NextJS UI
-  win?.loadFile(path.join(baseDir, "resources/nextjs/index.html"));
+  await startServers(fastApiPort, nextjsPort);
+  win?.loadURL(`${localhost}:${nextjsPort}`);
 });
 
 app.on("window-all-closed", async () => {
