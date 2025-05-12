@@ -9,7 +9,7 @@
     "email": "contact@presenton.ai"
   },
   "scripts": {
-    "dev": "rm -rf app_dist && tsc && electron --gtk-version=3 .",
+    "dev": "rm -rf app_dist && tsc && electron .",
     "setup:env": "npm install && cd servers/fastapi && poetry install && cd ../../servers/nextjs && npm install",
     "build:ts": "rm -rf app_dist && tsc",
     "build:css": "tailwindcss -i ./resources/ui/assets/css/tailwind.import.css -o ./resources/ui/assets/css/tailwind.css --watch",

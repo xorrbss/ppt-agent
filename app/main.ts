@@ -11,6 +11,8 @@ var win: BrowserWindow | undefined;
 var fastApiProcess: ChildProcessByStdio<any, any, any> | undefined;
 var nextjsProcess: ChildProcessByStdio<any, any, any> | undefined;
 
+app.commandLine.appendSwitch('gtk-version', '3');
+
 const createWindow = () => {
   win = new BrowserWindow({
     width: 1280,
