@@ -4,7 +4,7 @@ import { setupSlideMetadataHandlers } from "./slide_metadata";
 import { setupReadFile } from "./read_file";
 import { setupFooterHandlers } from "./footer_handlers";
 import { setupThemeHandlers } from "./theme_handlers";
-
+import { setupUploadImage } from "./upload_image";
 export function setupIpcHandlers() {
   setupExportHandlers();
   setupUserConfigHandlers();
@@ -12,4 +12,5 @@ export function setupIpcHandlers() {
   setupReadFile();
   setupFooterHandlers();
   setupThemeHandlers();
+  setupUploadImage();
 }

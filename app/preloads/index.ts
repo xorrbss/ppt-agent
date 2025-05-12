@@ -19,4 +19,5 @@ contextBridge.exposeInMainWorld('electron', {
   setFooter: (userId: string, properties: any) => ipcRenderer.invoke("set-footer", userId, properties),
   getTheme: (userId: string) => ipcRenderer.invoke("get-theme", userId),
   setTheme: (userId: string, themeData: any) => ipcRenderer.invoke("set-theme", userId, themeData),
+  uploadImage: (file: Buffer) => ipcRenderer.invoke("upload-image", file),
 });
