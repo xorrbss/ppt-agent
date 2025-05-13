@@ -1,8 +1,7 @@
 import { BrowserWindow, ipcMain, } from "electron";
-import { baseDir, downloadsDir, isDev } from "../utils/constants";
+import { baseDir, downloadsDir } from "../utils/constants";
 import fs from "fs";
 import path from "path";
-import puppeteer from "puppeteer";
 import { showFileDownloadedDialog } from "../utils/dialog";
 
 export function setupExportHandlers() {
@@ -23,14 +22,13 @@ export function setupExportHandlers() {
     icon: path.join(baseDir, "resources/ui/assets/images/presenton_short_filled.png"),
     webPreferences: {
       webSecurity: false,
-
       preload: path.join(__dirname, '../preloads/index.js'),
     },
     show: false,
   });
     browser.loadURL(ppt_url);
     browser.webContents.on('did-finish-load', async () => {
-   await new Promise(async (resolve, reject) => {
+   await new Promise(async (resolve, _) => {
       setTimeout(async () => {
         resolve(true);
       }, 5000);
