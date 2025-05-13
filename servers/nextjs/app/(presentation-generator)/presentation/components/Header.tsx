@@ -215,26 +215,22 @@ const Header = ({
   const handleExportPdf = async () => {
     if (isStreaming) return;
 
+    setOpen(false);
     try {
-      setOpen(false);
-      setShowLoader(true);
-      const apiBody = await metaData();
+      toast({
+        title: "Exporting presentation...",
+        description: "Please wait while we export your presentation.",
+        variant: "default",
+      });
 
-      const data = await PresentationGenerationApi.exportAsPDF(apiBody);
-
-      if (data.path) {
-        setShowLoader(false);
-        // @ts-ignore
-        const ipcResponse = await window.electron.fileDownloaded(data.path);
-
-        if (!ipcResponse.success) {
-          throw new Error("Failed to download file");
-        }
+      // @ts-ignore
+      const ipcResponse = await window.electron.exportAsPDF(presentation_id, presentationData!.presentation!.title);
+      if (!ipcResponse.success) {
+        throw new Error("Failed to export as PDF");
       }
-      setShowLoader(false);
+
     } catch (err) {
       console.error(err);
-      setShowLoader(false);
       toast({
         title: "Having trouble exporting!",
         description:
