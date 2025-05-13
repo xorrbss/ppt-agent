@@ -10,10 +10,11 @@ contextBridge.exposeInMainWorld('env', {
 
 contextBridge.exposeInMainWorld('electron', {
   fileDownloaded: (filePath: string) => ipcRenderer.invoke("file-downloaded", filePath),
+  exportAsPDF: (id: string, title: string) => ipcRenderer.invoke("export-as-pdf", id, title),
   getUserConfig: () => ipcRenderer.invoke("get-user-config"),
   setUserConfig: (userConfig: UserConfig) => ipcRenderer.invoke("set-user-config", userConfig),
   readFile: (filePath: string) => ipcRenderer.invoke("read-file", filePath),
-  getSlideMetadata: (url: string, theme: string, customColors?: any, tempDirectory?: string) => 
+  getSlideMetadata: (url: string, theme: string, customColors?: any, tempDirectory?: string) =>
     ipcRenderer.invoke("get-slide-metadata", url, theme, customColors, tempDirectory),
   getFooter: (userId: string) => ipcRenderer.invoke("get-footer", userId),
   setFooter: (userId: string, properties: any) => ipcRenderer.invoke("set-footer", userId, properties),
