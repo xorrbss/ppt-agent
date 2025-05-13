@@ -12,7 +12,6 @@ from api.routers.presentation.handlers.delete_presentation import (
 )
 from api.routers.presentation.handlers.delete_slide import DeleteSlideHandler
 from api.routers.presentation.handlers.edit import PresentationEditHandler
-from api.routers.presentation.handlers.export_as_pdf import ExportAsPDFHandler
 from api.routers.presentation.handlers.export_as_pptx import ExportAsPptxHandler
 from api.routers.presentation.handlers.generate_data import (
     PresentationGenerateDataHandler,
@@ -60,7 +59,6 @@ from api.routers.presentation.models import (
     PresentationAndPaths,
     PresentationAndSlides,
     GenerateTitleRequest,
-    PresentationAndUrl,
     PresentationAndUrls,
     PresentationGenerateRequest,
     SearchIconRequest,
@@ -298,19 +296,6 @@ async def export_as_pptx(data: ExportAsRequest):
     )
     return await handle_errors(
         ExportAsPptxHandler(data).post, logging_service, log_metadata
-    )
-
-
-@presentation_router.post(
-    "/presentation/export_as_pdf", response_model=PresentationAndPath
-)
-async def export_as_pdf(data: ExportAsRequest):
-    request_utils = RequestUtils("/ppt/presentation/export_as_pdf")
-    logging_service, log_metadata = await request_utils.initialize_logger(
-        presentation_id=data.presentation_id,
-    )
-    return await handle_errors(
-        ExportAsPDFHandler(data).post, logging_service, log_metadata
     )
 
 
