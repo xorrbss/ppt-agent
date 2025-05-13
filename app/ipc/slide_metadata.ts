@@ -2,7 +2,7 @@ import { ipcMain } from "electron";
 import puppeteer from "puppeteer";
 import fs from 'fs';
 import path from 'path';
-import { tempDir } from "../utils/constants";
+import { baseDir, isDev, tempDir } from "../utils/constants";
 interface Position {
   left: number;
   top: number;
@@ -89,28 +89,29 @@ interface SlideMetadata {
 
 
 export function setupSlideMetadataHandlers() {
-    ipcMain.handle("get-slide-metadata", async (_, url: string, theme: string, customColors?: any) => {
-      console.log("get-slide-metadata", process.env.NEXT_PUBLIC_FAST_API, url);
+  ipcMain.handle("get-slide-metadata", async (_, url: string, theme: string, customColors?: any) => {
+    console.log("get-slide-metadata", process.env.NEXT_PUBLIC_FAST_API, url);
     let browser;
     try {
       browser = await puppeteer.launch({
         headless: true,
+        executablePath: isDev ? undefined : path.join(baseDir, "dependencies/chrome-headless-shell/linux_build/chrome-headless-shell"),
         args: ['--no-sandbox', '--disable-setuid-sandbox']
       });
 
       const page = await browser.newPage();
       await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
-       // Inject the environment variables before loading the page
-    await page.evaluateOnNewDocument(`
+      // Inject the environment variables before loading the page
+      await page.evaluateOnNewDocument(`
       window.env = {
         NEXT_PUBLIC_FAST_API: "${process.env.NEXT_PUBLIC_FAST_API}",
       };
     `);
 
       await page.goto(url, { waitUntil: "networkidle0", timeout: 60000 });
-     
+
       await page.waitForSelector('[data-element-type="slide-container"]', { timeout: 80000 });
-      
+
       // Apply theme
       await page.evaluate((params: any) => {
         const { theme, customColors } = params;
@@ -308,7 +309,7 @@ export function setupSlideMetadataHandlers() {
           omitBackground: true,
         });
 
-       
+
         const filename = `chart-${graphId}-${Date.now()}.jpg`;
         const filePath = path.join(tempDir, filename);
         fs.writeFileSync(filePath, Buffer.from(screenshot, 'base64'));

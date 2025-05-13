@@ -2,21 +2,26 @@ import json
 import os
 from langchain_core.vectorstores import InMemoryVectorStore
 
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.documents import Document
 from api.utils import get_resource
+from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
+
+# Pyinstaller
+import fastembed
 
 
 def get_icons_vectorstore():
     vector_store_path = get_resource("assets/icons_vectorstore.json")
 
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    embeddings = FastEmbedEmbeddings()
 
     if os.path.exists(vector_store_path):
         vector_store = InMemoryVectorStore.load(vector_store_path, embeddings)
         return vector_store
 
     vector_store = InMemoryVectorStore(embeddings)
+
+    vector_store.dump(vector_store_path)
 
     with open(get_resource("assets/icons.json"), "r") as f:
         icons = json.load(f)

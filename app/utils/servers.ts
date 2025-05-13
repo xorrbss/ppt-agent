@@ -1,8 +1,9 @@
-import { spawn, exec } from "child_process";
-import util from "util";
+import { spawn } from "child_process";
 import { localhost } from "./constants";
+import http from "http";
 
-const execAsync = util.promisify(exec);
+// @ts-ignore
+import handler from "serve-handler";
 
 export async function startFastApiServer(
   directory: string,
@@ -35,7 +36,7 @@ export async function startFastApiServer(
     console.error(`FastAPI Error: ${data}`);
   });
   // Wait for FastAPI server to start
-  await execAsync(`npx wait-on ${localhost}:${port}/docs`);
+  await waitForServer(`${localhost}:${port}/docs`);
   return fastApiProcess;
 }
 
@@ -45,31 +46,66 @@ export async function startNextJsServer(
   env: NextJsEnv,
   isDev: boolean,
 ) {
-  // Start NextJS development server
-  const startCommand = isDev ? [
-    "npm",
-    ["run", "dev", "--", "-p", port.toString()],
-  ] : [
-    "npx",
-    ["-y", "serve", "-p", port.toString()],
-  ];
+  let nextjsProcess;
 
-  const nextjsProcess = spawn(
-    startCommand[0] as string,
-    startCommand[1] as string[],
-    {
-      cwd: directory,
-      stdio: ["inherit", "pipe", "pipe"],
-      env: { ...process.env, ...env },
-    }
-  );
-  nextjsProcess.stdout.on("data", (data: any) => {
-    console.log(`NextJS: ${data}`);
-  });
-  nextjsProcess.stderr.on("data", (data: any) => {
-    console.error(`NextJS Error: ${data}`);
-  });
+  if (isDev) {
+    // Start NextJS development server
+    nextjsProcess = spawn(
+      "npm",
+      ["run", "dev", "--", "-p", port.toString()],
+      {
+        cwd: directory,
+        stdio: ["inherit", "pipe", "pipe"],
+        env: { ...process.env, ...env },
+      }
+    );
+    nextjsProcess.stdout.on("data", (data: any) => {
+      console.log(`NextJS: ${data}`);
+    });
+    nextjsProcess.stderr.on("data", (data: any) => {
+      console.error(`NextJS Error: ${data}`);
+    });
+  } else {
+    // Start NextJS build server
+    nextjsProcess = startNextjsBuildServer(directory, port);
+  }
+
   // Wait for NextJS server to start
-  await execAsync(`npx wait-on ${localhost}:${port}`);
+  await waitForServer(`${localhost}:${port}`);
   return nextjsProcess;
+}
+
+async function startNextjsBuildServer(directory: string, port: number) {
+  const server = http.createServer((req, res) => {
+    return handler(req, res, {
+      public: directory,
+      cleanUrls: true,
+    });
+  });
+
+  server.listen(port);
+  return server;
+}
+
+
+async function waitForServer(url: string, timeout = 30000): Promise<void> {
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < timeout) {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        http.get(url, (res) => {
+          if (res.statusCode === 200 || res.statusCode === 304) {
+            resolve();
+          } else {
+            reject(new Error(`Unexpected status code: ${res.statusCode}`));
+          }
+        }).on('error', reject);
+      });
+      return;
+    } catch (error) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+  throw new Error(`Server did not start within ${timeout}ms`);
 }

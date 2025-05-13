@@ -6,10 +6,11 @@ import { startFastApiServer, startNextJsServer } from "./utils/servers";
 import { ChildProcessByStdio } from "child_process";
 import { baseDir, fastapiDir, isDev, localhost, nextjsDir, tempDir, userConfigPath, userDataDir } from "./utils/constants";
 import { setupIpcHandlers } from "./ipc";
+import url from "url";
 
 var win: BrowserWindow | undefined;
 var fastApiProcess: ChildProcessByStdio<any, any, any> | undefined;
-var nextjsProcess: ChildProcessByStdio<any, any, any> | undefined;
+var nextjsProcess: any;
 
 app.commandLine.appendSwitch('gtk-version', '3');
 
@@ -62,8 +63,12 @@ async function stopServers() {
   if (fastApiProcess?.pid) {
     await killProcess(fastApiProcess.pid);
   }
-  if (nextjsProcess?.pid) {
-    await killProcess(nextjsProcess.pid);
+  if (nextjsProcess) {
+    if (isDev) {
+      await killProcess(nextjsProcess.pid);
+    } else {
+      nextjsProcess.close();
+    }
   }
 }
 
