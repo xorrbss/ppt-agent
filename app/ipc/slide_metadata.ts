@@ -221,6 +221,73 @@ export function setupSlideMetadataHandlers() {
                   border_radius: [0, 0, 0, 0],
                 } as GraphElement);
                 break;
+
+              case "slide-box":
+              case "filledbox":
+                const boxShadow = computedStyle.boxShadow;
+                let shadowRadius = 0;
+                let shadowColor = "000000";
+                let shadowOffsetX = 0;
+                let shadowOffsetY = 0;
+                let shadowOpacity = 0;
+
+                if (boxShadow && boxShadow !== "none") {
+                  const boxShadowRegex =
+                    /rgba?\((\d+),\s*(\d+),\s*(\d+),?\s*([\d.]+)?\)?\s+(-?\d+)px\s+(-?\d+)px\s+(-?\d+)px/;
+                  const match = boxShadow.match(boxShadowRegex);
+
+                  if (match) {
+                    const r = match[1];
+                    const g = match[2];
+                    const b = match[3];
+                    const rgbStr = "rgb(" + r + ", " + g + ", " + b + ")";
+                    shadowColor = rgbToHex(rgbStr);
+                    shadowOpacity = match[4] ? parseFloat(match[4]) : 1;
+                    shadowOffsetX = parseInt(match[5]);
+                    shadowOffsetY = parseInt(match[6]);
+                    shadowRadius = parseInt(match[7]);
+                  }
+                }
+
+               elements.push({
+                  position,
+                  type:
+                    computedStyle.borderRadius === "9999px" ||
+                    computedStyle.borderRadius === "50%"
+                      ? 9
+                      : 5,
+                  fill: {
+                    color: rgbToHex(computedStyle.backgroundColor),
+                  },
+                  border_radius: parseInt(computedStyle.borderRadius) || 0,
+                  stroke: {
+                    color: rgbToHex(computedStyle.borderColor),
+                    thickness: parseInt(computedStyle.borderWidth) || 0,
+                  },
+                  shadow: {
+                    radius: shadowRadius,
+                    color: shadowColor,
+                    offset: Math.sqrt(
+                      shadowOffsetX * shadowOffsetX +
+                        shadowOffsetY * shadowOffsetY
+                    ),
+                    opacity: shadowOpacity,
+                    angle: Math.round(
+                      (Math.atan2(shadowOffsetY, shadowOffsetX) * 180) / Math.PI
+                    ),
+                  },
+                });
+                break;
+                case "line":
+                elements.push({
+                  position,
+                  lineType: 1,
+                  thickness: computedStyle.borderWidth || computedStyle.height,
+                  color: rgbToHex(
+                    computedStyle.borderColor || computedStyle.backgroundColor
+                  ),
+                });
+                break;
             }
           });
 

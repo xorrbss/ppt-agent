@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import EditableText from "../EditableText";
 import {
   DropdownMenu,
@@ -8,8 +8,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MoreVertical, Plus } from "lucide-react";
 import ElementMenu from "../ElementMenu";
-import { useDispatch, useSelector } from "react-redux";
-import { deleteSlideBodyItem } from "@/store/slices/presentationGeneration";
+import { useSelector } from "react-redux";
 import { numberTranslations } from "../../utils/others";
 import { RootState } from "@/store/store";
 import { useSlideOperations } from "../../hooks/use-slide-operations";
@@ -36,8 +35,7 @@ const Type2Layout = ({
   design_index,
   language,
 }: Type2LayoutProps) => {
-  const dispatch = useDispatch();
-  const { currentColors, currentTheme } = useSelector(
+  const { currentColors } = useSelector(
     (state: RootState) => state.theme
   );
   const { handleAddItem, handleDeleteItem, handleVariantChange } =
@@ -65,25 +63,22 @@ const Type2Layout = ({
       <DropdownMenuContent align="start" className="w-[180px] p-2">
         <DropdownMenuItem
           onClick={() => handleVariantChange({ variant: 1 })}
-          className={`px-3 py-2 cursor-pointer ${
-            design_index === 1 ? "bg-blue-50" : ""
-          }`}
+          className={`px-3 py-2 cursor-pointer ${design_index === 1 ? "bg-blue-50" : ""
+            }`}
         >
           Default Layout
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={() => handleVariantChange({ variant: 2 })}
-          className={`px-3 py-2 cursor-pointer ${
-            design_index === 2 ? "bg-blue-50" : ""
-          }`}
+          className={`px-3 py-2 cursor-pointer ${design_index === 2 ? "bg-blue-50" : ""
+            }`}
         >
           Numbered Layout
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={() => handleVariantChange({ variant: 3 })}
-          className={`px-3 py-2 cursor-pointer ${
-            design_index === 3 ? "bg-blue-50" : ""
-          }`}
+          className={`px-3 py-2 cursor-pointer ${design_index === 3 ? "bg-blue-50" : ""
+            }`}
         >
           Timeline Layout
         </DropdownMenuItem>
@@ -179,9 +174,8 @@ const Type2Layout = ({
     if (isGridLayout) {
       return (
         <div
-          className={`grid grid-cols-1 lg:grid-cols-2 relative group ${
-            design_index === 2 ? "gap-4 lg:gap-8" : "gap-6 md:gap-12"
-          } mt-4 lg:mt-12`}
+          className={`grid grid-cols-1 lg:grid-cols-2 relative group ${design_index === 2 ? "gap-4 lg:gap-8" : "gap-6 md:gap-12"
+            } mt-4 lg:mt-12`}
         >
           {/* Hover Border and Icons for entire layout */}
           <div className="absolute -inset-[2px] border-2 border-blue-500 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
@@ -202,11 +196,10 @@ const Type2Layout = ({
                     ? "0 2px 10px 0 rgba(43, 43, 43, 0.2)"
                     : "",
               }}
-              className={`w-full relative group ${
-                design_index === 2
+              className={`w-full relative group ${design_index === 2
                   ? "slide-box shadow-lg  rounded-lg p-3 lg:p-6"
                   : ""
-              }`}
+                }`}
             >
               <div className="flex gap-3 ">
                 {design_index === 2 && (
@@ -222,7 +215,7 @@ const Type2Layout = ({
                   >
                     {
                       numberTranslations[
-                        language as keyof typeof numberTranslations
+                      language as keyof typeof numberTranslations
                       ][index]
                     }
                   </div>
@@ -255,9 +248,8 @@ const Type2Layout = ({
     // Horizontal layout for 2-3 items
     return (
       <div
-        className={`flex flex-col lg:flex-row mt-4 lg:mt-12 w-full relative group ${
-          design_index === 2 ? "gap-4 lg:gap-8" : "gap-12"
-        }`}
+        className={`flex flex-col lg:flex-row mt-4 lg:mt-12 w-full relative group ${design_index === 2 ? "gap-4 lg:gap-8" : "gap-12"
+          }`}
       >
         {/* Hover Border and Icons for entire layout */}
         <div className="absolute -inset-[2px] hidden lg:block border-2 border-transparent group-hover:border-blue-500 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
@@ -285,11 +277,10 @@ const Type2Layout = ({
               boxShadow:
                 design_index === 2 ? "0 2px 10px 0 rgba(43, 43, 43, 0.2)" : "",
             }}
-            className={`w-full  relative ${
-              design_index === 2
+            className={`w-full  relative ${design_index === 2
                 ? "slide-box shadow-lg rounded-lg p-3 lg:p-6"
                 : ""
-            }`}
+              }`}
           >
             <ElementMenu index={index} handleDeleteItem={onDeleteItem} />
 
@@ -306,7 +297,7 @@ const Type2Layout = ({
               >
                 {
                   numberTranslations[
-                    language as keyof typeof numberTranslations
+                  language as keyof typeof numberTranslations
                   ][index]
                 }
               </div>

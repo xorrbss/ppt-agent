@@ -8,9 +8,8 @@ import {
   Loader2,
 } from "lucide-react";
 import React, { useState } from "react";
-import Image from "next/image";
 import Wrapper from "@/components/Wrapper";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   Popover,
   PopoverContent,
@@ -46,8 +45,6 @@ import ThemeSelector from "./ThemeSelector";
 import Modal from "./Modal";
 
 import Announcement from "@/components/Announcement";
-import { getHeader } from "../../services/api/header";
-import { getEnv } from "@/utils/constant";
 
 const Header = ({
   presentation_id,
