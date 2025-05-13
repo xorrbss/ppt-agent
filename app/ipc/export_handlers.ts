@@ -17,37 +17,34 @@ export function setupExportHandlers() {
 
   ipcMain.handle("export-as-pdf", async (_, id: string, title: string) => {
     const ppt_url = `${process.env.NEXT_PUBLIC_URL}/pdf-maker?id=${id}`;
-  const browser = new BrowserWindow({
-    width: 1280,
-    height: 720,
-    icon: path.join(baseDir, "resources/ui/assets/images/presenton_short_filled.png"),
-    webPreferences: {
-      webSecurity: false,
+    const browser = new BrowserWindow({
+      width: 1280,
+      height: 720,
+      icon: path.join(baseDir, "resources/ui/assets/images/presenton_short_filled.png"),
+      webPreferences: {
+        webSecurity: false,
 
-      preload: path.join(__dirname, '../preloads/index.js'),
-    },
-    show: false,
-  });
+        preload: path.join(__dirname, '../preloads/index.js'),
+      },
+      show: false,
+    });
     browser.loadURL(ppt_url);
-    browser.webContents.on('did-finish-load', async () => {
-   await new Promise(async (resolve, reject) => {
-      setTimeout(async () => {
-        resolve(true);
-      }, 5000);
-    });
-      const pdfBuffer = await browser.webContents.printToPDF({
-        printBackground: true,
-        pageSize:{width:1280/96,height:720/96},
-        margins:{top:0,right:0,bottom:0,left:0}
+    const success = await new Promise((resolve, _) => {
+      browser.webContents.on('did-frame-finish-load', async () => {
+        const pdfBuffer = await browser.webContents.printToPDF({
+          printBackground: true,
+          pageSize: { width: 1280 / 96, height: 720 / 96 },
+          margins: { top: 0, right: 0, bottom: 0, left: 0 }
+        });
+        browser.close();
+        const destinationPath = path.join(downloadsDir, `${title}.pdf`);
+        await fs.promises.writeFile(destinationPath, pdfBuffer);
+
+        const success = await showFileDownloadedDialog(destinationPath);
+        resolve(success);
       });
-      browser.close();
-      const destinationPath = path.join(downloadsDir, `${title}.pdf`);
-      await fs.promises.writeFile(destinationPath, pdfBuffer);
-  
-      const success = await showFileDownloadedDialog(destinationPath);
-      return { success };
     });
-        return { success: false };
+    return { success };
   })
 
 }
