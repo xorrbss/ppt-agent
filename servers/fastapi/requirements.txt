@@ -1,0 +1,13 @@
+fastapi==0.115.12
+uvicorn==0.34.2
+fastembed==0.7.0
+langchain==0.3.25
+langchain-community==0.3.24
+langchain-google-genai==2.1.4
+langchain-openai==0.3.16
+pydantic==2.11.4
+python-docx==1.1.2
+python-pptx==1.0.2
+sqlmodel==0.0.24
+pdfplumber==0.11.6
+python_multipart==0.0.20

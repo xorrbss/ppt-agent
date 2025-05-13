@@ -10,14 +10,24 @@ const config = {
     "resources",
     "app_dist",
     "node_modules",
-    "dependencies/chrome-headless-shell/linux_build",
+    "dependencies/chrome-headless-shell/win_build",
     "NOTICE",
   ],
-  linux: {
-    target: ["AppImage"],
-    icon: "resources/ui/assets/images/presenton_short_filled.png",
+  // linux: {
+  //   target: ["AppImage"],
+  //   icon: "resources/ui/assets/images/presenton_short_filled.png",
+  // },
+  win: {
+    target: ["nsis"],
+    icon: "resources/ui/assets/images/presenton_short_filled.png"
   },
+  nsis: {
+    oneClick: false,
+    allowToChangeInstallationDirectory: true,
+    createDesktopShortcut: true,
+    createStartMenuShortcut: true,
+    shortcutName: "Presenton"
+  }
 }
-
 
 builder.build({ config })

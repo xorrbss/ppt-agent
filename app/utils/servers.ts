@@ -13,7 +13,7 @@ export async function startFastApiServer(
 ) {
   // Start FastAPI server
   const startCommand = isDev ? [
-    ".venv/bin/python",
+    ".venv/Scripts/python.exe",
     ["server_autoreload.py", "--port", port.toString()],
   ] : [
     "./fastapi", ["--port", port.toString()],
@@ -51,12 +51,14 @@ export async function startNextJsServer(
   if (isDev) {
     // Start NextJS development server
     nextjsProcess = spawn(
-      "npm",
+      "npm.cmd",
       ["run", "dev", "--", "-p", port.toString()],
       {
         cwd: directory,
         stdio: ["inherit", "pipe", "pipe"],
         env: { ...process.env, ...env },
+        shell: true,
+        windowsHide: true
       }
     );
     nextjsProcess.stdout.on("data", (data: any) => {
@@ -91,11 +93,14 @@ async function startNextjsBuildServer(directory: string, port: number) {
 async function waitForServer(url: string, timeout = 30000): Promise<void> {
   const startTime = Date.now();
 
+  console.log("Waiting for server at: ", url);
+
   while (Date.now() - startTime < timeout) {
     try {
       await new Promise<void>((resolve, reject) => {
         http.get(url, (res) => {
           if (res.statusCode === 200 || res.statusCode === 304) {
+            console.log("Server started at: ", url);
             resolve();
           } else {
             reject(new Error(`Unexpected status code: ${res.statusCode}`));
