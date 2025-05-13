@@ -15,6 +15,11 @@ class GetPresentationsHandler:
         for each in presentations:
             each.data = None
             each.summary = None
+            if not each.thumbnail:
+                presentations.remove(each)
+
+        presentations.sort(key=lambda x: x.created_at, reverse=True)
+        
 
         logging_service.logger.info(
             logging_service.message(
