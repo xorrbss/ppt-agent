@@ -1,8 +1,7 @@
 import { BrowserWindow, ipcMain, } from "electron";
-import { baseDir, downloadsDir, isDev } from "../utils/constants";
+import { baseDir, downloadsDir } from "../utils/constants";
 import fs from "fs";
 import path from "path";
-import puppeteer from "puppeteer";
 import { showFileDownloadedDialog } from "../utils/dialog";
 
 export function setupExportHandlers() {
@@ -29,8 +28,14 @@ export function setupExportHandlers() {
       show: false,
     });
     browser.loadURL(ppt_url);
+
     const success = await new Promise((resolve, _) => {
-      browser.webContents.on('did-frame-finish-load', async () => {
+      browser.webContents.on('did-finish-load', async () => {
+        // Wait for 1 second to make sure the page is loaded
+        await new Promise((resolve, _) => {
+          setTimeout(resolve, 1000);
+        });
+
         const pdfBuffer = await browser.webContents.printToPDF({
           printBackground: true,
           pageSize: { width: 1280 / 96, height: 720 / 96 },
