@@ -46,7 +46,7 @@ const Type8Layout = ({
 
   return (
     <div
-      className="slide-container  shadow-lg w-full  rounded-sm font-inter px-3 sm:px-12 lg:px-20 py-[10px] sm:py-[40px] lg:py-[86px] flex  items-center justify-center max-h-[720px] aspect-video bg-white relative z-20"
+      className="slide-container  shadow-lg w-full max-w-[1280px]  rounded-sm font-inter px-3 sm:px-12 lg:px-20 py-[10px] sm:py-[40px] lg:py-[86px] flex  items-center justify-center max-h-[720px] aspect-video bg-white relative z-20"
       data-slide-element
       data-slide-index={slideIndex}
       data-slide-id={slideId}
@@ -89,29 +89,73 @@ const Type8Layout = ({
           <div className="space-y-4 lg:space-y-8">
             {body && body.length > 0 && body.length === 2
               ? body.map((item, index) => (
-                  <div
-                    data-slide-element
-                    data-slide-index={slideIndex}
-                    data-element-type="slide-box"
-                    data-element-id={`slide-${slideIndex}-item-${index}-box`}
-                    style={{
-                      boxShadow: "0 2px 10px 0 rgba(43, 43, 43, 0.2)",
-                    }}
-                    key={`${body.length}-${index}`}
-                    className="slide-box  rounded-lg p-3 lg:p-6 relative group"
-                  >
-                    <ElementMenu index={index} handleDeleteItem={DeleteItem} />
-                    <IconsEditor
-                      icon={icons[index]}
-                      index={index}
-                      backgroundColor={currentColors.iconBg}
-                      hasBg={true}
-                      slideIndex={slideIndex}
-                      elementId={`slide-${slideIndex}-icon-${index}`}
-                      icon_prompt={icon_queries?.[index]?.queries || []}
-                    />
+                <div
+                  data-slide-element
+                  data-slide-index={slideIndex}
+                  data-element-type="slide-box"
+                  data-element-id={`slide-${slideIndex}-item-${index}-box`}
+                  style={{
+                    boxShadow: "0 2px 10px 0 rgba(43, 43, 43, 0.2)",
+                  }}
+                  key={`${body.length}-${index}`}
+                  className="slide-box  rounded-lg p-3 lg:p-6 relative group"
+                >
+                  <ElementMenu index={index} handleDeleteItem={DeleteItem} />
+                  <IconsEditor
+                    icon={icons[index]}
+                    index={index}
+                    backgroundColor={currentColors.iconBg}
+                    hasBg={true}
+                    slideIndex={slideIndex}
+                    elementId={`slide-${slideIndex}-icon-${index}`}
+                    icon_prompt={icon_queries?.[index]?.queries || []}
+                  />
 
-                    <div className="space-y-1 lg:space-y-3  lg:mt-3">
+                  <div className="space-y-1 lg:space-y-3  lg:mt-3">
+                    <EditableText
+                      slideIndex={slideIndex}
+                      elementId={`slide-${slideIndex}-item-${index}-heading`}
+                      type="heading"
+                      bodyIdx={index}
+                      content={item.heading}
+                    />
+                    <EditableText
+                      slideIndex={slideIndex}
+                      elementId={`slide-${slideIndex}-item-${index}-description`}
+                      type="heading-description"
+                      bodyIdx={index}
+                      content={item.description}
+                    />
+                  </div>
+                </div>
+              ))
+              : body.map((item, index) => (
+                <div
+                  data-slide-element
+                  data-slide-index={slideIndex}
+                  data-element-type="slide-box"
+                  data-element-id={`slide-${slideIndex}-item-${index}-box`}
+                  style={{
+                    boxShadow: "0 2px 10px 0 rgba(43, 43, 43, 0.2)",
+                  }}
+                  key={`${body.length}-${index}`}
+                  className="slide-box  rounded-lg p-3 lg:p-6 relative group"
+                >
+                  <ElementMenu index={index} handleDeleteItem={DeleteItem} />
+                  <div className="flex items-start gap-4">
+                    <div className="w-[32px] md:w-[64px]  h-[32px] md:h-[64px]">
+                      <IconsEditor
+                        className="rounded-lg"
+                        icon={icons[index]}
+                        index={index}
+                        backgroundColor={currentColors.iconBg}
+                        hasBg={true}
+                        slideIndex={slideIndex}
+                        elementId={`slide-${slideIndex}-icon-${index}`}
+                        icon_prompt={icon_queries?.[index]?.queries || []}
+                      />
+                    </div>
+                    <div className="lg:space-y-3 ">
                       <EditableText
                         slideIndex={slideIndex}
                         elementId={`slide-${slideIndex}-item-${index}-heading`}
@@ -128,52 +172,8 @@ const Type8Layout = ({
                       />
                     </div>
                   </div>
-                ))
-              : body.map((item, index) => (
-                  <div
-                    data-slide-element
-                    data-slide-index={slideIndex}
-                    data-element-type="slide-box"
-                    data-element-id={`slide-${slideIndex}-item-${index}-box`}
-                    style={{
-                      boxShadow: "0 2px 10px 0 rgba(43, 43, 43, 0.2)",
-                    }}
-                    key={`${body.length}-${index}`}
-                    className="slide-box  rounded-lg p-3 lg:p-6 relative group"
-                  >
-                    <ElementMenu index={index} handleDeleteItem={DeleteItem} />
-                    <div className="flex items-start gap-4">
-                      <div className="w-[32px] md:w-[64px]  h-[32px] md:h-[64px]">
-                        <IconsEditor
-                          className="rounded-lg"
-                          icon={icons[index]}
-                          index={index}
-                          backgroundColor={currentColors.iconBg}
-                          hasBg={true}
-                          slideIndex={slideIndex}
-                          elementId={`slide-${slideIndex}-icon-${index}`}
-                          icon_prompt={icon_queries?.[index]?.queries || []}
-                        />
-                      </div>
-                      <div className="lg:space-y-3 ">
-                        <EditableText
-                          slideIndex={slideIndex}
-                          elementId={`slide-${slideIndex}-item-${index}-heading`}
-                          type="heading"
-                          bodyIdx={index}
-                          content={item.heading}
-                        />
-                        <EditableText
-                          slideIndex={slideIndex}
-                          elementId={`slide-${slideIndex}-item-${index}-description`}
-                          type="heading-description"
-                          bodyIdx={index}
-                          content={item.description}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                </div>
+              ))}
           </div>
         </div>
       </div>

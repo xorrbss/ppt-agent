@@ -5,7 +5,7 @@ import PresentationPage from "./components/PresentationPage";
 import { Button } from "@/components/ui/button";
 import { useRouter, useSearchParams } from "next/navigation";
 const page = () => {
-  console.log("presentation page", window.location.href);
+
   const router = useRouter();
   const params = useSearchParams();
   const queryId = params.get("id");
