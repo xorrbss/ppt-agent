@@ -1,4 +1,4 @@
-import { ipcMain, } from "electron";
+import { BrowserWindow, ipcMain, } from "electron";
 import { baseDir, downloadsDir, isDev } from "../utils/constants";
 import fs from "fs";
 import path from "path";
@@ -16,29 +16,38 @@ export function setupExportHandlers() {
   });
 
   ipcMain.handle("export-as-pdf", async (_, id: string, title: string) => {
-    const ppt_url = `${process.env.NEXT_PUBLIC_FAST_API}/presentation/${id}`;
+    const ppt_url = `${process.env.NEXT_PUBLIC_URL}/pdf-maker?id=${id}`;
+  const browser = new BrowserWindow({
+    width: 1280,
+    height: 720,
+    icon: path.join(baseDir, "resources/ui/assets/images/presenton_short_filled.png"),
+    webPreferences: {
+      webSecurity: false,
 
-    const browser = await puppeteer.launch({
-      headless: true,
-      executablePath: isDev ? undefined : path.join(baseDir, "dependencies/chrome-headless-shell/linux_build/chrome-headless-shell"),
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      preload: path.join(__dirname, '../preloads/index.js'),
+    },
+    show: false,
+  });
+    browser.loadURL(ppt_url);
+    browser.webContents.on('did-finish-load', async () => {
+   await new Promise(async (resolve, reject) => {
+      setTimeout(async () => {
+        resolve(true);
+      }, 5000);
     });
-
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1280, height: 720 });
-
-    await page.goto(ppt_url, { waitUntil: "networkidle0", timeout: 30000 });
-
-    const pdfBuffer = await page.pdf({
-      height: 720,
+      const pdfBuffer = await browser.webContents.printToPDF({
+        printBackground: true,
+        pageSize:{width:1280/96,height:720/96},
+        margins:{top:0,right:0,bottom:0,left:0}
+      });
+      browser.close();
+      const destinationPath = path.join(downloadsDir, `${title}.pdf`);
+      await fs.promises.writeFile(destinationPath, pdfBuffer);
+  
+      const success = await showFileDownloadedDialog(destinationPath);
+      return { success };
     });
-
-    const destinationPath = path.join(downloadsDir, `${title}.pdf`);
-    await fs.promises.writeFile(destinationPath, pdfBuffer);
-
-    const success = await showFileDownloadedDialog(destinationPath);
-
-    return { success };
+        return { success: false };
   })
 
 }

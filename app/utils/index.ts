@@ -26,10 +26,11 @@ export function getUserConfig(): UserConfig {
   return JSON.parse(configData)
 }
 
-export function setupEnv(fastApiPort: number) {
+export function setupEnv(fastApiPort: number, nextjsPort: number) {
   process.env.NEXT_PUBLIC_FAST_API = `${localhost}:${fastApiPort}`;
   process.env.TEMP_DIRECTORY = tempDir;
   process.env.NEXT_PUBLIC_USER_CONFIG_PATH = userConfigPath;
+  process.env.NEXT_PUBLIC_URL = `${localhost}:${nextjsPort}`;
 }
 
 

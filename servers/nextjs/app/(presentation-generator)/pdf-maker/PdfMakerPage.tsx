@@ -7,46 +7,22 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 import { DashboardApi } from "@/app/dashboard/api/dashboard";
 
-import SlideContent from "../presentation/components/SlideContent";
 
 import {
-    deletePresentationSlide,
     setPresentationData,
 } from "@/store/slices/presentationGeneration";
 import { toast } from "@/hooks/use-toast";
 
 
-import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { AlertCircle } from "lucide-react";
 import { setThemeColors, ThemeColors } from "../store/themeSlice";
 import { ThemeType } from "../upload/type";
-import { PresentationGenerationApi } from "../services/api/presentation-generation";
 import { renderSlideContent } from "../components/slide_config";
 
 
 
-// Custom debounce function
-function useDebounce<T extends (...args: any[]) => void>(
-    callback: T,
-    delay: number
-) {
-    const timeoutRef = useRef<NodeJS.Timeout>();
-
-    return useCallback(
-        (...args: Parameters<T>) => {
-            if (timeoutRef.current) {
-                clearTimeout(timeoutRef.current);
-            }
-
-            timeoutRef.current = setTimeout(() => {
-                callback(...args);
-            }, delay);
-        },
-        [callback, delay]
-    );
-}
 
 const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
 
@@ -107,7 +83,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
     const language = presentationData?.presentation?.language || "English";
     // Regular view
     return (
-        <div className="h-screen flex overflow-hidden flex-col">
+        <div className="flex overflow-hidden flex-col">
             {error ? (
                 <div className="flex flex-col items-center justify-center h-screen bg-gray-100">
                     <div
@@ -135,7 +111,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
 
                 <div style={{
                     background: currentColors.background,
-                }} className="flex-1 h-[calc(100vh-100px)]  overflow-y-auto">
+                }} className="">
                     <div
                         className="mx-auto flex flex-col items-center  overflow-hidden  justify-center   slide-theme"
                         data-theme={currentTheme}
@@ -161,7 +137,10 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
                                     presentationData.slides &&
                                     presentationData.slides.length > 0 &&
                                     presentationData.slides.map((slide, index) => (
-                                        renderSlideContent(slide, language)
+                                        <div key={index}>
+
+                                            {renderSlideContent(slide, language)}
+                                        </div>
                                     ))}
                             </>
                         )}

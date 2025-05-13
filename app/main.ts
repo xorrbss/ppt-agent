@@ -86,7 +86,7 @@ app.whenReady().then(async () => {
   console.log(`FastAPI port: ${fastApiPort}, NextJS port: ${nextjsPort}`);
 
   //? Setup environment variables to be used in the preloads
-  setupEnv(fastApiPort);
+  setupEnv(fastApiPort, nextjsPort);
   setupIpcHandlers();
 
   await startServers(fastApiPort, nextjsPort);
