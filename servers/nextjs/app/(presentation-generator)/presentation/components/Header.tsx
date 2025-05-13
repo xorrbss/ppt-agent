@@ -269,7 +269,7 @@ const Header = ({
     <div className="flex flex-col lg:flex-row items-center gap-4">
       {/* Present Button */}
       <Button
-        onClick={() => router.push(`?mode=present&slide=${currentSlide || 0}`)}
+        onClick={() => router.push(`?id=${presentation_id}&mode=present&slide=${currentSlide || 0}`)}
         variant="ghost"
         className="border border-white font-bold text-white rounded-[32px] transition-all duration-300 group"
       >

@@ -309,14 +309,14 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
   // Function to handle present exit
   const handlePresentExit = () => {
     setIsFullscreen(false);
-    router.push(`/presentation/${presentation_id}`);
+    router.push(`/presentation?id=${presentation_id}`);
   };
   // Function to handle slide change  for presentation mode
   const handleSlideChange = (newSlide: number) => {
     if (newSlide >= 0 && newSlide < presentationData?.slides.length!) {
       setSelectedSlide(newSlide);
       router.push(
-        `/presentation/${presentation_id}?mode=present&slide=${newSlide}`,
+        `/presentation?id=${presentation_id}&mode=present&slide=${newSlide}`,
         { scroll: false }
       );
     }
@@ -333,7 +333,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
   if (isPresentMode) {
     return (
       <PresentationMode
-        presentationId={presentation_id}
+
         slides={presentationData?.slides!}
         currentSlide={currentSlide}
         currentTheme={currentTheme}

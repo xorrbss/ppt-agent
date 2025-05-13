@@ -11,16 +11,8 @@ import { Button } from "@/components/ui/button";
 import { renderSlideContent } from "./slide_config";
 import { Slide } from "../types/slide";
 
-interface SlideContent {
-  title: string;
-  body: string | Array<{ heading: string; description: string }>;
-  description?: string;
-  image_prompts?: string[];
-  icon_queries?: Array<{ queries: string[] }>;
-}
 
 interface PresentationModeProps {
-  presentationId: string;
   slides: Slide[];
   currentSlide: number;
   currentTheme: string;
@@ -32,7 +24,7 @@ interface PresentationModeProps {
 }
 
 const PresentationMode: React.FC<PresentationModeProps> = ({
-  presentationId,
+
   slides,
   currentSlide,
   currentTheme,
