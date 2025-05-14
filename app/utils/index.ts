@@ -77,3 +77,7 @@ export async function findUnusedPorts(startPort: number = 40000, count: number =
   return ports;
 }
 
+export function sanitizeFilename(filename: string): string {
+  // Replace invalid characters with underscores
+  return filename.replace(/[<>:"/\\|?*]/g, '_');
+}

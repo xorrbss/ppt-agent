@@ -4,6 +4,7 @@ import http from "http";
 
 // @ts-ignore
 import handler from "serve-handler";
+import path from "path";
 
 export async function startFastApiServer(
   directory: string,
@@ -13,10 +14,10 @@ export async function startFastApiServer(
 ) {
   // Start FastAPI server
   const startCommand = isDev ? [
-    ".venv/Scripts/python.exe",
+    path.join(directory, ".venv/Scripts/python.exe"),
     ["server_autoreload.py", "--port", port.toString()],
   ] : [
-    "./fastapi", ["--port", port.toString()],
+    path.join(directory, "fastapi"), ["--port", port.toString()],
   ];
 
 
@@ -27,6 +28,8 @@ export async function startFastApiServer(
       cwd: directory,
       stdio: ["inherit", "pipe", "pipe"],
       env: { ...process.env, ...env },
+      shell: true,
+      windowsHide: true,
     }
   );
   fastApiProcess.stdout.on("data", (data: any) => {
@@ -58,7 +61,7 @@ export async function startNextJsServer(
         stdio: ["inherit", "pipe", "pipe"],
         env: { ...process.env, ...env },
         shell: true,
-        windowsHide: true
+        windowsHide: true,
       }
     );
     nextjsProcess.stdout.on("data", (data: any) => {

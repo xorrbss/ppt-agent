@@ -10,15 +10,11 @@ const config = {
     "resources",
     "app_dist",
     "node_modules",
-    "dependencies/chrome-headless-shell/win_build",
     "NOTICE",
   ],
-  // linux: {
-  //   target: ["AppImage"],
-  //   icon: "resources/ui/assets/images/presenton_short_filled.png",
-  // },
   win: {
     target: ["nsis"],
+    files: "dependencies/chrome-headless-shell/win_build",
     icon: "resources/ui/assets/images/presenton_short_filled.png"
   },
   nsis: {
