@@ -1,7 +1,7 @@
 import { app } from "electron"
 import path from "path"
 
-export const localhost = "http://0.0.0.0"
+export const localhost = "http://127.0.0.1"
 
 
 export const isDev = !app.isPackaged;

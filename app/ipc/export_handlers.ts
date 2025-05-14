@@ -3,6 +3,8 @@ import { baseDir, downloadsDir } from "../utils/constants";
 import fs from "fs";
 import path from "path";
 import { showFileDownloadedDialog } from "../utils/dialog";
+import { sanitizeFilename } from "../utils";
+
 
 export function setupExportHandlers() {
   ipcMain.handle("file-downloaded", async (_, filePath: string): Promise<IPCStatus> => {
@@ -42,7 +44,8 @@ export function setupExportHandlers() {
           margins: { top: 0, right: 0, bottom: 0, left: 0 }
         });
         browser.close();
-        const destinationPath = path.join(downloadsDir, `${title}.pdf`);
+        const sanitizedTitle = sanitizeFilename(title);
+        const destinationPath = path.join(downloadsDir, `${sanitizedTitle}.pdf`);
         await fs.promises.writeFile(destinationPath, pdfBuffer);
 
         const success = await showFileDownloadedDialog(destinationPath);

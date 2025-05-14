@@ -3,6 +3,7 @@ import json
 import os
 import sys
 import traceback
+import re
 from typing import List, Optional
 
 import aiohttp
@@ -139,3 +140,18 @@ async def handle_errors(
             extra=log_metadata.model_dump(),
         )
         raise HTTPException(400, "Something went wrong while processing your request.")
+
+
+def sanitize_filename(filename: str) -> str:
+    name, ext = os.path.splitext(filename)
+    sanitized = re.sub(r'[\\/:*?"<>|]', '_', name)
+    sanitized = re.sub(r'[\s_]+', '_', sanitized)
+    sanitized = sanitized.strip(' .')
+
+    if not sanitized:
+        sanitized = 'untitled'
+    
+    if len(sanitized) > 200:
+        sanitized = sanitized[:200]
+    
+    return sanitized + ext
