@@ -11,7 +11,7 @@ from api.routers.presentation.models import (
 from api.services.logging import LoggingService
 from api.services.instances import temp_file_service
 from api.sql_models import PresentationSqlModel
-from api.utils import get_presentation_dir
+from api.utils import get_presentation_dir, sanitize_filename
 from ppt_generator.pptx_presentation_creator import PptxPresentationCreator
 from api.services.database import get_sql_session
 
@@ -44,7 +44,7 @@ class ExportAsPptxHandler(FetchPresentationAssetsMixin):
 
         ppt_path = os.path.join(
             self.presentation_dir,
-            f"""{presentation.title.replace('/', '_').replace(' ', '_').replace('"', "'")}.pptx""",
+            sanitize_filename(f"{presentation.title}.pptx")
         )
         ppt_creator = PptxPresentationCreator(self.data.pptx_model, self.temp_dir)
         ppt_creator.create_ppt()

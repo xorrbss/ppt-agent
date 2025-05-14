@@ -10,7 +10,7 @@
   },
   "scripts": {
     "dev": "rm -rf app_dist && tsc && electron .",
-    "setup:env": "npm install && cd servers/fastapi && poetry env remove --all && poetry install && cd ../../servers/nextjs && npm install",
+    "setup:env": "npm install && cd servers/fastapi && poetry env remove --all && poetry install && .venv/bin/pip uninstall -y hf_xet && cd ../../servers/nextjs && npm install",
     "install:pyinstaller": "cd servers/fastapi && .venv/bin/pip install pyinstaller",
     "build:ts": "rm -rf app_dist && tsc",
     "build:css": "tailwindcss -i ./resources/ui/assets/css/tailwind.import.css -o ./resources/ui/assets/css/tailwind.css --watch",

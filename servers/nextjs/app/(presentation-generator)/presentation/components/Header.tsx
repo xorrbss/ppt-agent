@@ -242,7 +242,7 @@ const Header = ({
   };
 
   const ExportOptions = () => (
-    <div className="space-y-2 max-md:mt-4 bg-white rounded-lg p-2">
+    <div className="space-y-2 max-md:mt-4 bg-white rounded-lg">
       <Button
         onClick={handleExportPdf}
         variant="ghost"
@@ -327,7 +327,6 @@ const Header = ({
           {isStreaming && (
             <Loader2 className="animate-spin text-white font-bold w-6 h-6" />
           )}
-
           <Select value={currentTheme} onValueChange={handleThemeSelect}>
             <SelectTrigger className="w-[160px] bg-[#6358fd] text-white border-none hover:bg-[#5146E5] transition-colors">
               <div className="flex items-center gap-2">

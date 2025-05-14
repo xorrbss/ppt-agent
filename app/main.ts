@@ -6,7 +6,7 @@ import { startFastApiServer, startNextJsServer } from "./utils/servers";
 import { ChildProcessByStdio } from "child_process";
 import { baseDir, fastapiDir, isDev, localhost, nextjsDir, tempDir, userConfigPath, userDataDir } from "./utils/constants";
 import { setupIpcHandlers } from "./ipc";
-import url from "url";
+
 
 var win: BrowserWindow | undefined;
 var fastApiProcess: ChildProcessByStdio<any, any, any> | undefined;
@@ -34,7 +34,6 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
       {
         DEBUG: isDev ? "True" : "False",
         LLM: process.env.LLM,
-        LIBREOFFICE: process.env.LIBREOFFICE,
         OPENAI_API_KEY: process.env.OPENAI_API_KEY,
         GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,
         APP_DATA_DIRECTORY: userDataDir,
