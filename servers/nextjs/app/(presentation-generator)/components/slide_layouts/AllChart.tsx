@@ -30,24 +30,25 @@ const AllChart = ({
     const slide =
       state.presentationGeneration?.presentationData?.slides[slideIndex];
 
-    const style = slide?.content.graph.style;
+
+    const style = slide?.content.graph.style || {};
     return Object.keys(
       style === null || style === undefined ? {} : (style as ChartSettings)
     ).length > 0
       ? (style as ChartSettings)
       : {
-          showLegend: false,
-          showGrid: false,
-          showAxisLabel: true,
-          showDataLabel: true,
-          dataLabel: {
-            dataLabelPosition:
-              slide?.content.graph.type === "pie"
-                ? ("Outside" as const)
-                : ("Inside" as const),
-            dataLabelAlignment: "Center" as const,
-          },
-        };
+        showLegend: false,
+        showGrid: false,
+        showAxisLabel: true,
+        showDataLabel: true,
+        dataLabel: {
+          dataLabelPosition:
+            slide?.content.graph.type === "pie"
+              ? ("Outside" as const)
+              : ("Inside" as const),
+          dataLabelAlignment: "Center" as const,
+        },
+      };
   });
 
   useEffect(() => {

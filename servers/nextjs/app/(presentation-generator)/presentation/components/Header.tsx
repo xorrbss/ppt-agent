@@ -6,6 +6,7 @@ import {
   SquareArrowOutUpRight,
   Play,
   Loader2,
+  ExternalLink,
 } from "lucide-react";
 import React, { useState } from "react";
 import Wrapper from "@/components/Wrapper";
@@ -45,6 +46,7 @@ import ThemeSelector from "./ThemeSelector";
 import Modal from "./Modal";
 
 import Announcement from "@/components/Announcement";
+import { getFontLink } from "../../utils/others";
 
 const Header = ({
   presentation_id,
@@ -125,9 +127,8 @@ const Header = ({
   const getSlideMetadata = async () => {
     try {
       // Get the current URL without any query parameters
+      // const baseUrl = `${window.location.origin}/pdf-maker?id=${presentation_id}`;
       const baseUrl = window.location.href;
-
-
       // @ts-ignore
       const metadata = await window.electron.getSlideMetadata(
         baseUrl,
@@ -258,6 +259,12 @@ const Header = ({
         <img src="/pptx.svg" alt="pptx export" width={30} height={30} />
         Export as PPTX
       </Button>
+      <p className="text-sm pt-3 border-t border-gray-300">
+        Font Used:
+        <a className="text-blue-500  flex items-center gap-1" href={getFontLink(currentColors.fontFamily).link || ''} target="_blank" rel="noopener noreferrer">
+          {getFontLink(currentColors.fontFamily).name || ''} <ExternalLink className="w-4 h-4" />
+        </a>
+      </p>
     </div>
   );
 
@@ -320,9 +327,7 @@ const Header = ({
           {isStreaming && (
             <Loader2 className="animate-spin text-white font-bold w-6 h-6" />
           )}
-          <button onClick={() => router.push(`/pdf-maker?id=${presentation_id}`)}>
-            go there
-          </button>
+
           <Select value={currentTheme} onValueChange={handleThemeSelect}>
             <SelectTrigger className="w-[160px] bg-[#6358fd] text-white border-none hover:bg-[#5146E5] transition-colors">
               <div className="flex items-center gap-2">

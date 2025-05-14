@@ -49,6 +49,44 @@ export function removeUUID(fileName: string) {
   return fileName; // In case there's no extension
 }
 
+
+export function generateRandomId(): string {
+  const length = 36; 
+  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_';
+  let id = '';
+  for (let i = 0; i < length; i++) {
+    const randomIndex = Math.floor(Math.random() * chars.length);
+    id += chars[randomIndex];
+  }
+  return id;
+}
+
+export const getFontLink = (fontName: string) => {
+  if (!fontName) {
+    return {link: '', name: ''};
+  }
+ 
+  if (  fontName.includes('instrument')) {
+    return{link: 'https://fonts.google.com/specimen/Instrument+Sans', name: 'Instrument Sans'}
+  }
+  if (fontName.includes('fraunces')) {
+    return{link: 'https://fonts.google.com/specimen/Fraunces', name: 'Fraunces'}
+  }
+  if (fontName.includes('montserrat')) {
+    return{link: 'https://fonts.google.com/specimen/Montserrat', name: 'Montserrat'}
+  }
+  if (fontName.includes('inria-serif')) {
+    return{link: 'https://fonts.google.com/specimen/Inria+Serif', name: 'Inria Serif'}
+  }
+  if(fontName.includes('inter')) {
+    return{link: 'https://fonts.google.com/specimen/Inter', name: 'Inter'}
+  }
+  else {
+    return {link: '', name: ''};
+  }
+
+}
+
 export const numberTranslations: any = {
   // Key languages
   "English (English)": ["01", "02", "03", "04", "05"],

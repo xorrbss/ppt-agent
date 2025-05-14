@@ -94,6 +94,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
           console.error("Error AAYO", error);
         })
         .finally(() => {
+          console.log("Auto finished");
           setAutoSaveLoading(false);
         });
     },
@@ -114,6 +115,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
         (slide) => slide.images && slide.images.length > 0
       )
     ) {
+
       debouncedSave({
         presentation_id: presentation_id,
         slides: presentationData.slides,

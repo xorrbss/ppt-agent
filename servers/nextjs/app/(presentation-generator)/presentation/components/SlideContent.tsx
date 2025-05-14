@@ -64,6 +64,7 @@ const SlideContent = ({
       );
 
       if (response) {
+        console.log("response", response);
         dispatch(updateSlide({ index: slide.index, slide: response }));
         toast({
           title: "Success",
@@ -196,9 +197,8 @@ const SlideContent = ({
                       <button
                         disabled={isUpdating}
                         type="submit"
-                        className={`bg-gradient-to-r from-[#9034EA] to-[#5146E5] rounded-[32px] px-4 py-2 text-white flex items-center justify-end gap-2 ml-auto ${
-                          isUpdating ? "opacity-70 cursor-not-allowed" : ""
-                        }`}
+                        className={`bg-gradient-to-r from-[#9034EA] to-[#5146E5] rounded-[32px] px-4 py-2 text-white flex items-center justify-end gap-2 ml-auto ${isUpdating ? "opacity-70 cursor-not-allowed" : ""
+                          }`}
                       >
                         {isUpdating ? "Updating..." : "Update"}
                         <SendHorizontal className="w-4 sm:w-5 h-4 sm:h-5" />

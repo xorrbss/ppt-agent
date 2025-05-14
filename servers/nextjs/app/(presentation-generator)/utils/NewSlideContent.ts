@@ -1,11 +1,12 @@
 import { randomChartGenerator } from "@/lib/utils";
 import { Slide } from "../types/slide";
+import { generateRandomId } from "./others";
 
 const randomGraph = (presentation_id: string) => {
   const randomData = randomChartGenerator();
 
   return {
-    id: crypto.randomUUID(),
+    id: generateRandomId(),
     name: "Sales Performance",
     type: "bar",
     presentation: presentation_id,
@@ -20,7 +21,7 @@ export const getEmptySlideContent = (
   presentation_id: string
 ): Slide => {
   const baseSlide: Slide = {
-    id: crypto.randomUUID(),
+    id: generateRandomId(),
     type,
     index,
     design_index: 1,
