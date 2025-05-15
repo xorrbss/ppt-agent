@@ -5,11 +5,8 @@
 
 # Open-Source, Locally-Run AI Presentation Generator (Gamma Alternative)
 
----
 
 **Presenton** is an open-source desktop application for generating presentations with AI — all running locally on your device. Stay in control of your data and privacy while using models like OpenAI, Gemini, and others. Just plug in your own API keys and only pay for what you use.
-
----
 
 ![Demo](readme_assets/demo.gif)
 
