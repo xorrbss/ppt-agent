@@ -1,6 +1,6 @@
 
 <p align="center">
-  <img src="readme_assets/images/logo.png" width="480" height="200" alt="Alt text" />
+  <img src="readme_assets/images/logo.jpg" width="480" height="200" alt="Alt text" />
 </p>
 
 # Open-Source, Locally-Run AI Presentation Generator (Gamma Alternative)
