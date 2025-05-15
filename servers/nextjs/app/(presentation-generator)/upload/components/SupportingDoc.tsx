@@ -52,10 +52,10 @@ const SupportingDoc = ({ files, onFilesChange }: SupportingDocProps) => {
         const validFiles = droppedFiles.filter(file => {
             const validTypes = [
                 'application/pdf',
-                'image/webp',
-                'image/png',
-                'image/x-raw',
-                'image/jpeg',
+                // 'image/webp',
+                // 'image/png',
+                // 'image/x-raw',
+                // 'image/jpeg',
                 'text/plain',
                 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
                 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -140,7 +140,7 @@ const SupportingDoc = ({ files, onFilesChange }: SupportingDocProps) => {
                         }
                     </p>
                     <p className="text-gray-400 text-sm text-center mb-4">
-                        Supports PDFs, Images (.webp, .png, .raw, .jpeg), Text files, PPTX, DOCX
+                        Supports PDFs, Text files, PPTX, DOCX
                     </p>
 
                     <input
