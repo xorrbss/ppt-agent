@@ -1,15 +1,12 @@
 
 <p align="center">
-  <img src="readme_assets/images/logo.jpg" width="480" height="200" alt="Alt text" />
+  <img src="readme_assets/images/logo.png" width="240" height="100" alt="Alt text" />
 </p>
 
 # Open-Source, Locally-Run AI Presentation Generator (Gamma Alternative)
 
----
 
-**Presenton** is an open-source app for generating presentations with AI — all running locally on your device. Stay in control of your data and privacy while using models like OpenAI, Gemini, and others. Just plug in your own API keys and only pay for what you use.
-
----
+**Presenton** is an open-source desktop application for generating presentations with AI — all running locally on your device. Stay in control of your data and privacy while using models like OpenAI, Gemini, and others. Just plug in your own API keys and only pay for what you use.
 
 ![Demo](readme_assets/demo.gif)
 
