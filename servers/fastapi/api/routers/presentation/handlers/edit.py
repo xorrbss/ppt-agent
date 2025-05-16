@@ -52,12 +52,13 @@ class PresentationEditHandler:
                 select(SlideSqlModel).where(SlideSqlModel.index == self.slide_index)
             ).first()
 
-            slide_to_edit = SlideModel.from_dict(slide_to_edit_sql.model_dump(mode="json"))
+            slide_to_edit = SlideModel.from_dict(
+                slide_to_edit_sql.model_dump(mode="json")
+            )
 
             new_slide_type = await get_slide_type_from_prompt(
                 self.prompt, slide_to_edit
             )
-
 
             edited_content = await get_edited_slide_content_model(
                 self.prompt,
@@ -78,8 +79,6 @@ class PresentationEditHandler:
                 content=edited_content,
             )
 
-            # Images to delete - is list of cloud paths
-            # Images to generate - is list of index of images to generate
             images_to_delete, images_to_generate, icons_to_delete, icons_to_generate = (
                 self.get_all_assets_to_generate_and_delete(
                     slide_to_edit,
@@ -110,11 +109,11 @@ class PresentationEditHandler:
             if new_icon_paths:
                 new_slide_model.icons = new_icon_paths
 
-            # Generate and Delete Images and Icons
-            objects_to_delete = [*images_to_delete, *icons_to_delete]
-            if objects_to_delete:
-                for each in objects_to_delete:
-                    os.remove(each)
+            # ? Images and Icons are related to this presentation will be deleted while deleting presentation.
+            # objects_to_delete = [*images_to_delete, *icons_to_delete]
+            # if objects_to_delete:
+            #     for each in objects_to_delete:
+            #         os.remove(each)
 
             new_image_prompts = {}
             new_icon_queries = {}
@@ -144,7 +143,7 @@ class PresentationEditHandler:
             slide_to_edit.icons = new_slide_model.icons
             slide_to_edit.content = new_slide_model.content
             slide_to_edit.type = SlideType(new_slide_type.slide_type)
-            
+
             slide_to_edit_sql.index = slide_to_edit.index
             slide_to_edit_sql.type = slide_to_edit.type.value
             slide_to_edit_sql.design_index = slide_to_edit.design_index

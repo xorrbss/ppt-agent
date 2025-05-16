@@ -40,19 +40,6 @@ async def get_icons(
 ) -> List[str]:
 
     results = await vector_store.asimilarity_search(query=query, k=limit)
-
     icon_names = [result.page_content for result in results]
 
-    icon_paths = [get_resource(f"assets/icons/bold/{each}.png") for each in icon_names]
-
-    icon_temp_paths = []
-
-    for each in icon_paths:
-        icon_temp_path = os.path.join(temp_dir, os.path.basename(each))
-        icon_temp_paths.append(icon_temp_path)
-
-        with open(icon_temp_path, "wb") as f_a:
-            with open(each, "rb") as f_b:
-                f_a.write(f_b.read())
-
-    return icon_temp_paths
+    return [get_resource(f"assets/icons/bold/{each}.png") for each in icon_names]
