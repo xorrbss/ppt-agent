@@ -13,6 +13,7 @@ const config = {
     "NOTICE",
   ],
   linux: {
+    artifactName: "Presenton-${version}.${ext}",
     target: ["AppImage"],
     icon: "resources/ui/assets/images/presenton_short_filled.png",
   },
