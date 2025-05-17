@@ -35,16 +35,13 @@
 ### 3. Review and edit outline
 ![Demo](readme_assets/images/outline.png)
 
-### 4. Select theme
-![Demo](readme_assets/images/select-theme.png)
-
-### 5. Present on app
+### 4. Present on app
 ![Demo](readme_assets/images/present.png)
 
-### 6. Change theme
+### 5. Change theme
 ![Demo](readme_assets/images/change-theme.png)
 
-### 7. Export presentation as PDF and PPTX
+### 6. Export presentation as PDF and PPTX
 ![Demo](readme_assets/images/export-presentation.png)
 
 ## Community
