@@ -30,7 +30,7 @@ Before following these steps make sure [Poetry](https://python-poetry.org/docs/)
 ```git clone https://github.com/presenton/presenton.git```
 
 #### 2. Setup Electron, Python and NextJS Environments.
-```npm run setup:env```
+```cd presenton && npm run setup:env```
 
 #### 3. Run Presenton
 ```npm run dev```
