@@ -22,21 +22,24 @@
 * ✅ **Export Ready** — Save as PowerPoint (PPTX) and PDF
 * ✅ **Fully Open-Source** — Apache 2.0 licensed
 
-## Running Presenton on Docker
+## Running Presenton Docker
 
 #### 1. Start Presenton
 
 ##### Linux/MacOS (Bash/Zsh Shell):
-
-Run ```docker run -it --name presenton -p 3000:3000 -p 8000:8000 -v "./user_data:/app/user_data" ghcr.io/presenton/presenton:latest```
+```bash
+docker run -it --name presenton -p 5000:80 -v "./user_data:/app/user_data" ghcr.io/presenton/presenton:latest
+```
 
 ##### Windows (PowerShell):
-
-Run ```docker run -it --name presenton -p 3000:3000 -p 8000:8000 -v "${PWD}\user_data:/app/user_data" ghcr.io/presenton/presenton:latest```
+```bash
+docker run -it --name presenton -p 5000:80 -v "${PWD}\user_data:/app/user_data" ghcr.io/presenton/presenton:latest
+```
 
 #### 2. Open Presenton
-Open http://localhost:3000 on browser of your choice to use Presenton.
+Open http://localhost:5000 on browser of your choice to use Presenton.
 
+> **Note: You can replace 5000 with any other port number of your choice to run Presenton on a different port number.**
 
 ## Running electron app using source code
 
