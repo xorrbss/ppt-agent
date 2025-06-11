@@ -48,6 +48,8 @@ Before following these steps make sure [Poetry](https://python-poetry.org/docs/)
 #### 1. Clone this repository
 ```git clone https://github.com/presenton/presenton.git```
 
+> Note: Switch to **windows_build** branch to run Presenton on Windows
+
 #### 2. Setup Electron, Python and NextJS Environments.
 ```cd presenton && npm run setup:env```
 
