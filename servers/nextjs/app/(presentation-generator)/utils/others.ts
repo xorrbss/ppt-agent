@@ -1,3 +1,5 @@
+import path from "path";
+
 export const getIconFromFile = (file: string): string => {
   const file_ext = file.split(".").pop()?.toLowerCase() ?? "";
   if (file_ext == "pdf") {
@@ -51,7 +53,7 @@ export function removeUUID(fileName: string) {
 
 
 export function generateRandomId(): string {
-  const length = 36; 
+  const length = 36;
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_';
   let id = '';
   for (let i = 0; i < length; i++) {
@@ -63,26 +65,26 @@ export function generateRandomId(): string {
 
 export const getFontLink = (fontName: string) => {
   if (!fontName) {
-    return {link: '', name: ''};
+    return { link: '', name: '' };
   }
- 
-  if (  fontName.includes('instrument')) {
-    return{link: 'https://fonts.google.com/specimen/Instrument+Sans', name: 'Instrument Sans'}
+
+  if (fontName.includes('instrument')) {
+    return { link: 'https://fonts.google.com/specimen/Instrument+Sans', name: 'Instrument Sans' }
   }
   if (fontName.includes('fraunces')) {
-    return{link: 'https://fonts.google.com/specimen/Fraunces', name: 'Fraunces'}
+    return { link: 'https://fonts.google.com/specimen/Fraunces', name: 'Fraunces' }
   }
   if (fontName.includes('montserrat')) {
-    return{link: 'https://fonts.google.com/specimen/Montserrat', name: 'Montserrat'}
+    return { link: 'https://fonts.google.com/specimen/Montserrat', name: 'Montserrat' }
   }
   if (fontName.includes('inria-serif')) {
-    return{link: 'https://fonts.google.com/specimen/Inria+Serif', name: 'Inria Serif'}
+    return { link: 'https://fonts.google.com/specimen/Inria+Serif', name: 'Inria Serif' }
   }
-  if(fontName.includes('inter')) {
-    return{link: 'https://fonts.google.com/specimen/Inter', name: 'Inter'}
+  if (fontName.includes('inter')) {
+    return { link: 'https://fonts.google.com/specimen/Inter', name: 'Inter' }
   }
   else {
-    return {link: '', name: ''};
+    return { link: '', name: '' };
   }
 
 }
@@ -214,3 +216,18 @@ export const ThemeImagePrompt = {
     " Inspirational and creative with a youthful and playful tone, featuring light, pastel colors including blue, pink, and purple, all blending in a vibrant gradient.",
   custom: "",
 };
+
+
+export function sanitizeFilename(filename: string): string {
+  // Remove emojis and invalid filename characters
+  return filename
+    .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '') // Remove surrogate pairs (emojis)
+    .replace(/[^\x00-\x7F]/g, '') // Remove non-ASCII characters (including remaining emojis)
+    .replace(/[\\/:*?"<>|]/g, '_'); // Replace invalid filename characters
+}
+
+export function getStaticFileUrl(filepath: string): string {
+  const pathParts = filepath.split('/');
+  const relevantPath = pathParts.slice(2).join('/');
+  return path.join("/static", relevantPath);
+}

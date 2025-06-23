@@ -20,13 +20,13 @@ import { cn } from "@/lib/utils";
 import { useDispatch, useSelector } from "react-redux";
 import { PresentationGenerationApi } from "../services/api/presentation-generation";
 import { RootState } from "@/store/store";
-import { usePathname, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   updateSlideImage,
   updateSlideProperties,
 } from "@/store/slices/presentationGeneration";
-import { ThemeImagePrompt } from "../utils/others";
+import { getStaticFileUrl, ThemeImagePrompt } from "../utils/others";
 
 import {
   Popover,
@@ -34,8 +34,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import ToolTip from "@/components/ToolTip";
-import { getEnv } from "@/utils/constant";
-import { clearLogs, logOperation } from "../utils/log";
+
 
 interface ImageEditorProps {
   initialImage: string | null;
@@ -97,7 +96,6 @@ const ImageEditor = ({
   useEffect(() => {
     setImage(initialImage);
     setPreviewImages([initialImage]);
-
   }, [initialImage]);
 
   // Close toolbar when clicking outside
@@ -112,7 +110,7 @@ const ImageEditor = ({
       ) {
         setIsToolbarOpen(false);
         if (isFocusPointMode) {
-          logOperation(`Saving focus point for slide ${slideIndex}, element ${elementId}: x=${focusPoint.x}, y=${focusPoint.y}`);
+          // saveFocusPoint(); // Save focus point before closing
           saveImageProperties(objectFit, focusPoint);
         }
         setIsFocusPointMode(false);
@@ -127,19 +125,16 @@ const ImageEditor = ({
 
   const handleImageClick = () => {
     if (!isFocusPointMode) {
-      logOperation(`Opening toolbar for slide ${slideIndex}, element ${elementId}`);
       setIsToolbarOpen(true);
     }
   };
 
   const handleOpenEditor = () => {
-    logOperation(`Opening image editor for slide ${slideIndex}, element ${elementId}`);
     setIsToolbarOpen(false);
     setIsEditorOpen(true);
   };
 
   const handleImageChange = (newImage: string) => {
-    logOperation(`Changing image for slide ${slideIndex}, element ${elementId}`);
     setImage(newImage);
     dispatch(
       updateSlideImage({
@@ -164,28 +159,31 @@ const ImageEditor = ({
       Math.min(100, ((e.clientY - rect.top) / rect.height) * 100)
     );
 
-    logOperation(`Setting focus point for slide ${slideIndex}, element ${elementId}: x=${x}, y=${y}`);
     setFocusPoint({ x, y });
     saveImageProperties(objectFit, { x, y });
 
+    // Apply the focus point in real-time
     if (imageRef.current) {
       imageRef.current.style.objectPosition = `${x}% ${y}%`;
     }
   };
 
   const toggleFocusPointMode = () => {
-    logOperation(`Toggling focus point mode for slide ${slideIndex}, element ${elementId}: ${!isFocusPointMode}`);
+    if (isFocusPointMode) {
+      // If turning off focus point mode, save the current focus point
+      // saveFocusPoint();
+    }
     setIsFocusPointMode(!isFocusPointMode);
   };
 
   const handleFitChange = (fit: "cover" | "contain" | "fill") => {
-    logOperation(`Changing image fit for slide ${slideIndex}, element ${elementId}: ${fit}`);
     setObjectFit(fit);
 
     if (imageRef.current) {
       imageRef.current.style.objectFit = fit;
     }
 
+    // Save the fit change to your state
     saveImageProperties(fit, focusPoint);
   };
 
@@ -193,7 +191,6 @@ const ImageEditor = ({
     fit: "cover" | "contain" | "fill",
     focusPoint: { x: number; y: number }
   ) => {
-    logOperation(`Saving image properties for slide ${slideIndex}, element ${elementId}: fit=${fit}, focusPoint=(${focusPoint.x},${focusPoint.y})`);
     const propertiesData = {
       initialObjectFit: fit,
       initialFocusPoint: focusPoint,
@@ -210,7 +207,6 @@ const ImageEditor = ({
 
   const handleGenerateImage = async () => {
     try {
-      logOperation(`Generating image for slide ${slideIndex}, element ${elementId} with prompt: ${prompt}`);
       setIsGenerating(true);
       setError(null);
 
@@ -225,34 +221,33 @@ const ImageEditor = ({
         },
       });
 
-      logOperation(`Image generation successful for slide ${slideIndex}, element ${elementId}`);
       setPreviewImages(response.paths);
     } catch (err) {
-      const errorMessage = "Failed to generate image. Please try again.";
-      logOperation(`Image generation failed for slide ${slideIndex}, element ${elementId}: ${err}`);
-      setError(errorMessage);
+      setError("Failed to generate image. Please try again.");
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const presentation_id = searchParams.get("id");
     const file = event.target.files?.[0];
     if (!file) return;
 
-    logOperation(`Attempting to upload file for slide ${slideIndex}, element ${elementId}: ${file.name}`);
-
+    // Check file size (e.g., 5MB limit)
     if (file.size > 5 * 1024 * 1024) {
       const error_message = "File size should be less than 5MB";
-      logOperation(`File upload failed for slide ${slideIndex}, element ${elementId}: File too large`);
+
       setUploadError(error_message);
       return;
     }
 
+    // Check file type
     if (!file.type.startsWith("image/")) {
       const error_message = "Please upload an image file";
-      logOperation(`File upload failed for slide ${slideIndex}, element ${elementId}: Invalid file type`);
+
       setUploadError(error_message);
       return;
     }
@@ -261,15 +256,25 @@ const ImageEditor = ({
       setIsUploading(true);
       setUploadError(null);
 
-      const buffer = await file.arrayBuffer();
-      // @ts-ignore
-      const relativePath = await window.electron.uploadImage(Buffer.from(buffer));
+      const formData = new FormData();
+      formData.append('file', file);
 
-      logOperation(`File upload successful for slide ${slideIndex}, element ${elementId}: ${relativePath}`);
-      setUploadedImageUrl(relativePath);
+      const response = await fetch('/api/upload-image', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Upload failed');
+      }
+
+      // Update state with the returned path
+      setUploadedImageUrl(result.filePath);
     } catch (err) {
       const error_message = "Failed to upload image. Please try again.";
-      logOperation(`File upload failed for slide ${slideIndex}, element ${elementId}: ${err}`);
+
       setUploadError(error_message);
       console.error("Upload error:", err);
     } finally {
@@ -280,10 +285,8 @@ const ImageEditor = ({
   // Helper function to determine image URL
   const getImageUrl = (src: string | null) => {
     if (!src) return "";
-    return src.startsWith("user") ? `file://${src}` : `file://${src}`;
+    return getStaticFileUrl(src) || "";
   };
-  const urls = getEnv();
-  const BASE_URL = urls.BASE_URL;
 
   return (
     <>
@@ -552,7 +555,7 @@ const ImageEditor = ({
                           <img
                             src={
                               image
-                                ? `file://${image}`
+                                ? getStaticFileUrl(image)
                                 : ""
                             }
                             alt={`Preview ${index + 1}`}
@@ -633,7 +636,7 @@ const ImageEditor = ({
                               className="cursor-pointer group w-full h-full"
                             >
                               <img
-                                src={`file://${uploadedImageUrl}`}
+                                src={getStaticFileUrl(uploadedImageUrl)}
                                 alt="Uploaded preview"
                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                               />

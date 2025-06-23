@@ -62,3 +62,14 @@ class UserConfig(BaseModel):
     LLM: Optional[str] = None
     OPENAI_API_KEY: Optional[str] = None
     GOOGLE_API_KEY: Optional[str] = None
+    OLLAMA_MODEL: Optional[str] = None
+    PEXELS_API_KEY: Optional[str] = None
+
+
+class OllamaModelMetadata(BaseModel):
+    label: str
+    value: str
+    description: str
+    icon: str
+    size: str
+    supports_graph: bool

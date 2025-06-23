@@ -1,3 +1,6 @@
-from tests.test_generate_image import test_generate_image
+import os
+from tests.test_ollama import test_ollama
 
-test_generate_image()
+os.environ["LLM"] = "llama3.1:8b"
+
+test_ollama()

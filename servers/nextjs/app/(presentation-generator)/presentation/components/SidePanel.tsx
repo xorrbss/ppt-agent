@@ -218,7 +218,7 @@ const SidePanel = ({
           style={{
             backgroundColor: currentColors.slideBg,
           }}
-          className="min-w-[300px] max-w-[300px] h-[calc(100vh-150px)]  rounded-[20px] hide-scrollbar overflow-hidden slide-theme shadow-xl"
+          className="min-w-[300px] max-w-[300px] h-[calc(100vh-120px)]  rounded-[20px] hide-scrollbar overflow-hidden slide-theme shadow-xl"
         >
           <div
             style={{

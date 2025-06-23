@@ -4,7 +4,7 @@ from api.models import LogMetadata
 from api.services.logging import LoggingService
 from api.sql_models import PresentationSqlModel
 from api.services.database import get_sql_session
-from api.utils import get_presentation_dir
+from api.utils.utils import get_presentation_dir
 
 
 class DeletePresentationHandler:
