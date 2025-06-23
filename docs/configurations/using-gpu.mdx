@@ -1,0 +1,37 @@
+---
+title: "Using GPU"
+description: "Runing Ollama models on GPU"
+---
+
+Presenton supports GPU acceleration when using Ollama models, significantly improving performance — especially for larger models.
+
+To enable GPU support, you need to install and configure the **NVIDIA Container Toolkit**.
+
+### 🛠️ Step 1: Install NVIDIA Container Toolkit
+
+Follow the official guide to install the toolkit:\
+👉 https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+
+### 🚀 Step 2: Run Presenton with GPU
+
+Once installed, use the `--gpus=all` flag when running the container:
+
+- **Running without environment variables**
+
+```bash
+docker run -it --name presenton --gpus=all -p 5000:80 \
+  -v "./user_data:/app/user_data" \
+  ghcr.io/presenton/presenton:v0.3.0-beta
+```
+
+- **Running with environment variables**
+
+```bash
+docker run -it --name presenton --gpus=all -p 5000:80 \
+  -e LLM="ollama" \
+  -e OLLAMA_MODEL="llama3.2:3b" \
+  -e PEXELS_API_KEY="your_pexels_api_key" \
+  -e CAN_CHANGE_KEYS="false" \
+  -v "./user_data:/app/user_data" \
+  ghcr.io/presenton/presenton:v0.3.0-beta
+```
