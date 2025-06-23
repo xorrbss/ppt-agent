@@ -24,7 +24,7 @@
           {
             "group": "Configurations",
             "pages": [
-              "configurations/environment-variables",
+              "configurations/environment-variables"
             ]
           },
           {
