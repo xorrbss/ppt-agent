@@ -22,6 +22,12 @@
             ]
           },
           {
+            "group": "Configurations",
+            "pages": [
+              "configurations/environment-variables",
+            ]
+          }
+          {
             "group": "Essentials",
             "pages": [
               "essentials/markdown",
