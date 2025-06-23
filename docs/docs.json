@@ -26,7 +26,7 @@
             "pages": [
               "configurations/environment-variables",
             ]
-          }
+          },
           {
             "group": "Essentials",
             "pages": [
