@@ -9,22 +9,27 @@ Presenton can be customized and secured using environment variables. Below are t
   Controls whether users can modify API keys through the app interface.\
   Set to `"false"` to keep keys hidden and unchangeable, or `"true"` to allow changes.\
   _Example:_ `CAN_CHANGE_KEYS="false"`
+
 - **`LLM`**\
   Select which Large Language Model provider Presenton should use.\
   Supported values: `"openai"`, `"google"`, `"ollama"`.\
   _Example:_ `LLM="openai"`
+
 - **`OPENAI_API_KEY`**\
   Your OpenAI API key. Required if `LLM` is set to `"openai"`.\
   _Example:_ `OPENAI_API_KEY="sk-xxxxxxxxxxxxxxxx"`
+
 - **`GOOGLE_API_KEY`**\
   Your Google API key. Required if `LLM` is set to `"google"`.\
   _Example:_ `GOOGLE_API_KEY="AIzaSyXXXXXXXXXXXX"`
+
 - **`OLLAMA_MODEL`**\
   The Ollama model name to use. Required if `LLM` is set to `"ollama"`.\
   _Example:_ `OLLAMA_MODEL="llama3.2:3b"`
+  
 - **`PEXELS_API_KEY`**\
   API key for the Pexels image service. Optional but recommended when using Ollama models to enhance image search.\
-  _Example:_ `PEXELS_API_KEY="abcdef123456"`
+  _Example:_ `PEXELS_API_KEY="vzXXXXXXXXXXXXXX"`
 
 ### Example: Running Presenton with Environment Variables
 
