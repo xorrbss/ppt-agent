@@ -19,7 +19,7 @@ import { useEffect, useState, useRef, useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OverlayLoader } from "@/components/ui/overlay-loader";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
-import { setTitles, setPresentationId } from "@/store/slices/presentationGeneration";
+import { setOutlines, setPresentationId } from "@/store/slices/presentationGeneration";
 import { useDispatch, useSelector } from "react-redux";
 import { useRouter } from "next/navigation";
 import { RootState } from "@/store/store";
@@ -30,7 +30,6 @@ import { getIconFromFile, removeUUID } from "../../utils/others";
 import { ChevronRight, PanelRightOpen, X } from "lucide-react";
 import ToolTip from "@/components/ToolTip";
 import Header from "@/app/dashboard/components/Header";
-import { clearLogs, logOperation } from "../../utils/log";
 
 // Types
 interface LoadingState {
@@ -83,16 +82,24 @@ const DocumentsPreviewPage: React.FC = () => {
   };
 
 
+  const readFile = async (filePath: string) => {
+    const res = await fetch(`/api/read-file`, {
+      method: "POST",
+      body: JSON.stringify({ filePath }),
+    });
+    return res.json();
+  }
+
   const maintainDocumentTexts = async () => {
     const newDocuments: string[] = [];
-    const promises: Promise<string>[] = [];
+    const promises: Promise<{ content: string }>[] = [];
 
     // Process documents
     documentKeys.forEach(key => {
       if (!(key in textContents)) {
         newDocuments.push(key);
         // @ts-ignore
-        promises.push(window.electron.readFile(documents[key]));
+        promises.push(readFile(documents[key]));
       }
     });
 
@@ -105,7 +112,7 @@ const DocumentsPreviewPage: React.FC = () => {
         setTextContents(prev => {
           const newContents = { ...prev };
           newDocuments.forEach((key, index) => {
-            newContents[key] = results[index];
+            newContents[key] = results[index].content || "";
           });
           return newContents;
         });
@@ -133,7 +140,6 @@ const DocumentsPreviewPage: React.FC = () => {
 
   const handleCreatePresentation = async () => {
     try {
-      logOperation('Starting document preview presentation generation');
       setShowLoading({
         message: "Generating presentation outline...",
         show: true,
@@ -148,17 +154,16 @@ const DocumentsPreviewPage: React.FC = () => {
         documents: documentPaths,
         images: imageKeys,
         language: config?.language ?? "",
+
       });
 
       try {
-        logOperation('Generating presentation titles');
-        const titlePromise = await PresentationGenerationApi.titleGeneration({
+        const presentationWithOutlines = await PresentationGenerationApi.titleGeneration({
           presentation_id: createResponse.id,
         });
 
-        dispatch(setPresentationId(titlePromise.id));
-        dispatch(setTitles(titlePromise.titles));
-        logOperation('Presentation titles generated successfully');
+        dispatch(setPresentationId(presentationWithOutlines.id));
+        dispatch(setOutlines(presentationWithOutlines.outlines));
 
         setShowLoading({
           message: "",
@@ -169,7 +174,6 @@ const DocumentsPreviewPage: React.FC = () => {
 
         router.push("/theme");
       } catch (error) {
-        logOperation(`Error in title generation: ${error}`);
         console.error("Error in title generation:", error);
         toast({
           title: "Error in title generation.",
@@ -178,7 +182,6 @@ const DocumentsPreviewPage: React.FC = () => {
         });
       }
     } catch (error) {
-      logOperation(`Error in presentation creation: ${error}`);
       console.error("Error in presentation creation:", error);
       toast({
         title: "Error in presentation creation.",

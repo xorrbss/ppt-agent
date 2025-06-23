@@ -1,9 +1,12 @@
 import os
+from typing import Optional
 from fastapi import HTTPException
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, ValidationError
+
+from api.utils.utils import get_large_model
 
 
 def get_prompt_template():
@@ -38,11 +41,7 @@ def get_prompt_template():
 
 
 async def fix_validation_errors(response_model: BaseModel, response, errors):
-    model = (
-        ChatOpenAI(model="o3-mini", reasoning_effort="high")
-        if os.getenv("LLM") == "openai"
-        else ChatGoogleGenerativeAI(model="gemini-2.5-flash-preview-04-17")
-    )
+    model = get_large_model()
 
     chain = get_prompt_template() | model.with_structured_output(
         response_model.model_json_schema()
@@ -51,18 +50,25 @@ async def fix_validation_errors(response_model: BaseModel, response, errors):
 
 
 async def get_validated_response(
-    chain, input_dict, response_model: BaseModel, retries: int = 1
+    chain,
+    input_dict,
+    response_model: BaseModel,
+    validation_model: Optional[BaseModel] = None,
+    retries: int = 1,
 ):
     response = await chain.ainvoke(input_dict)
+    validation_model = validation_model or response_model
 
     attempt = 0
     while retries >= attempt:
         attempt += 1
+        print("-" * 50)
+        print(f"Validation Retry attempt - {attempt}")
         try:
             if response and type(response) is list:
                 response = response[0]["args"]
 
-            validated_response = response_model(**response)
+            validated_response = validation_model(**response)
             return validated_response
         except ValidationError as e:
             if retries < attempt:
@@ -78,7 +84,6 @@ async def get_validated_response(
                     }
                 )
 
-            print(f"Validation Retry attempt - {attempt}")
             response = await fix_validation_errors(
                 response_model, response, error_details
             )

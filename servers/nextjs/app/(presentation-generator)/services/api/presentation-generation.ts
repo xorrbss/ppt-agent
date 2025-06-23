@@ -1,20 +1,12 @@
-import {  getEnv } from "@/utils/constant";
 import { getHeader, getHeaderForFormData } from "./header";
 import { IconSearch, ImageGenerate, ImageSearch } from "./params";
-import { clearLogs, logOperation } from "../../utils/log";
 
-const urls = getEnv();
-const BASE_URL = urls.BASE_URL;
 export class PresentationGenerationApi {
-  // static BASE_URL="https://api.presenton.ai";
-  // static BASE_URL="https://presentation-generator-fragrant-mountain-1643.fly.dev";
-  // static BASE_URL = "http://localhost:48388";
 
   static async getChapterDetails() {
     try {
-      logOperation('Fetching chapter details');
       const response = await fetch(
-        `${BASE_URL}/ppt/chapter-details`,
+        `/api/v1/ppt/chapter-details`,
         {
           method: "GET",
           headers: getHeader(),
@@ -23,18 +15,15 @@ export class PresentationGenerationApi {
       );
       if (response.status === 200) {
         const data = await response.json();
-        logOperation('Successfully fetched chapter details');
         return data;
       }
     } catch (error) {
-      logOperation(`Error fetching chapter details: ${error}`);
       console.error("Error getting chapter details:", error);
       throw error;
     }
   }
 
   static async uploadDoc(documents: File[], images: File[]) {
-    logOperation(`Uploading documents: ${documents.length} files, images: ${images.length} files`);
     const formData = new FormData();
 
     documents.forEach((document) => {
@@ -47,7 +36,7 @@ export class PresentationGenerationApi {
 
     try {
       const response = await fetch(
-        `${BASE_URL}/ppt/files/upload`,
+        `/api/v1/ppt/files/upload`,
         {
           method: "POST",
           headers: getHeaderForFormData(),
@@ -58,27 +47,23 @@ export class PresentationGenerationApi {
       );
 
       if (!response.ok) {
-        logOperation(`Upload failed with status: ${response.status}`);
         throw new Error(`Upload failed: ${response.statusText}`);
       }
 
       const data = await response.json();
-      logOperation('Successfully uploaded documents and images');
       return data;
     } catch (error) {
-      logOperation(`Upload error: ${error}`);
       console.error("Upload error:", error);
       throw error;
     }
   }
 
- 
+
 
   static async decomposeDocuments(documentKeys: string[], imageKeys: string[]) {
-    logOperation(`Decomposing documents: ${documentKeys.length} files, images: ${imageKeys.length} files`);
     try {
       const response = await fetch(
-        `${BASE_URL}/ppt/files/decompose`,
+        `/api/v1/ppt/files/decompose`,
         {
           method: "POST",
           headers: getHeader(),
@@ -91,14 +76,12 @@ export class PresentationGenerationApi {
       );
       if (response.status === 200) {
         const data = await response.json();
-        logOperation('Successfully decomposed documents');
+
         return data;
       } else {
-        logOperation(`Failed to decompose files: ${response.statusText}`);
         throw new Error(`Failed to decompose files: ${response.statusText}`);
       }
     } catch (error) {
-      logOperation(`Error in Decompose Files: ${error}`);
       console.error("Error in Decompose Files", error);
       throw error;
     }
@@ -110,7 +93,7 @@ export class PresentationGenerationApi {
   }) {
     try {
       const response = await fetch(
-        `${BASE_URL}/ppt/titles/generate`,
+        `/api/v1/ppt/outlines/generate`,
         {
           method: "POST",
           headers: getHeader(),
@@ -135,10 +118,9 @@ export class PresentationGenerationApi {
   }
 
   static async generatePresentation(presentationData: any) {
-    logOperation('Generating presentation');
     try {
       const response = await fetch(
-        `${BASE_URL}/ppt/generate`,
+        `/api/v1/ppt/generate`,
         {
           method: "POST",
           headers: getHeader(),
@@ -148,14 +130,14 @@ export class PresentationGenerationApi {
       );
       if (response.status === 200) {
         const data = await response.json();
-        logOperation('Successfully generated presentation');
+
         return data;
       } else {
-        logOperation(`Failed to generate presentation: ${response.statusText}`);
-        throw new Error(`Failed to generate presentation: ${response.statusText}`);
+        throw new Error(
+          `Failed to generate presentation: ${response.statusText}`
+        );
       }
     } catch (error) {
-      logOperation(`Error in presentation generation: ${error}`);
       console.error("error in presentation generation", error);
       throw error;
     }
@@ -165,10 +147,9 @@ export class PresentationGenerationApi {
     index: number,
     prompt: string
   ) {
-    logOperation(`Editing slide ${index} in presentation ${presentation_id}`);
     try {
       const response = await fetch(
-        `${BASE_URL}/ppt/edit`,
+        `/api/v1/ppt/edit`,
         {
           method: "POST",
           headers: getHeader(),
@@ -183,15 +164,12 @@ export class PresentationGenerationApi {
       );
 
       if (!response.ok) {
-        logOperation(`Failed to update slide ${index}: ${response.statusText}`);
         throw new Error("Failed to update slides");
       }
 
       const data = await response.json();
-      logOperation(`Successfully updated slide ${index}`);
       return data;
     } catch (error) {
-      logOperation(`Error in slide update: ${error}`);
       console.error("error in slide update", error);
       throw error;
     }
@@ -200,7 +178,7 @@ export class PresentationGenerationApi {
   static async updatePresentationContent(body: any) {
     try {
       const response = await fetch(
-        `${BASE_URL}/ppt/slides/update`,
+        `/api/v1/ppt/slides/update`,
         {
           method: "POST",
           headers: getHeader(),
@@ -226,7 +204,7 @@ export class PresentationGenerationApi {
   static async generateData(presentationData: any) {
     try {
       const response = await fetch(
-        `${BASE_URL}/ppt/generate/data`,
+        `/api/v1/ppt/generate/data`,
         {
           method: "POST",
           headers: getHeader(),
@@ -250,7 +228,7 @@ export class PresentationGenerationApi {
   static async imageSearch(imageSearch: ImageSearch) {
     try {
       const response = await fetch(
-        `${BASE_URL}/ppt/image/search`,
+        `/api/v1/ppt/image/search`,
         {
           method: "POST",
           headers: getHeader(),
@@ -270,10 +248,9 @@ export class PresentationGenerationApi {
     }
   }
   static async generateImage(imageGenerate: ImageGenerate) {
-    logOperation(`Generating image with prompt: ${imageGenerate.prompt.image_prompt}`);
     try {
       const response = await fetch(
-        `${BASE_URL}/ppt/image/generate`,
+        `/api/v1/ppt/image/generate`,
         {
           method: "POST",
           headers: getHeader(),
@@ -283,14 +260,12 @@ export class PresentationGenerationApi {
       );
       if (response.ok) {
         const data = await response.json();
-        logOperation('Successfully generated image');
+
         return data;
       } else {
-        logOperation(`Failed to generate images: ${response.statusText}`);
         throw new Error(`Failed to generate images: ${response.statusText}`);
       }
     } catch (error) {
-      logOperation(`Error in image generation: ${error}`);
       console.error("error in image generation", error);
       throw error;
     }
@@ -298,7 +273,7 @@ export class PresentationGenerationApi {
   static async searchIcons(iconSearch: IconSearch) {
     try {
       const response = await fetch(
-        `${BASE_URL}/ppt/icon/search`,
+        `/api/v1/ppt/icon/search`,
         {
           method: "POST",
           headers: getHeader(),
@@ -322,7 +297,7 @@ export class PresentationGenerationApi {
   static async updateDocuments(body: any) {
     try {
       const response = await fetch(
-        `${BASE_URL}/ppt/document/update`,
+        `/api/v1/ppt/document/update`,
         {
           method: "POST",
           headers: getHeaderForFormData(),
@@ -344,10 +319,9 @@ export class PresentationGenerationApi {
 
   // EXPORT PRESENTATION
   static async exportAsPPTX(presentationData: any) {
-    logOperation('Exporting presentation as PPTX');
     try {
       const response = await fetch(
-        `${BASE_URL}/ppt/presentation/export_as_pptx`,
+        `/api/v1/ppt/presentation/export_as_pptx`,
         {
           method: "POST",
           headers: getHeader(),
@@ -356,27 +330,19 @@ export class PresentationGenerationApi {
         }
       );
       if (response.ok) {
-        const data = await response.json();
-        logOperation('Successfully exported presentation as PPTX');
-        return {
-          ...data,
-          url: `${BASE_URL}${data.url}`,
-        };
+        return await response.json();
       } else {
-        logOperation(`Failed to export as pptx: ${response.statusText}`);
         throw new Error(`Failed to export as pptx: ${response.statusText}`);
       }
     } catch (error) {
-      logOperation(`Error in pptx export: ${error}`);
       console.error("error in pptx export", error);
       throw error;
     }
   }
   static async exportAsPDF(presentationData: any) {
-    logOperation('Exporting presentation as PDF');
     try {
       const response = await fetch(
-        `${BASE_URL}/ppt/presentation/export_as_pdf`,
+        `/api/v1/ppt/presentation/export_as_pdf`,
         {
           method: "POST",
           headers: getHeader(),
@@ -385,23 +351,20 @@ export class PresentationGenerationApi {
       );
       if (response.ok) {
         const data = await response.json();
-        logOperation('Successfully exported presentation as PDF');
+
         return data;
       } else {
-        logOperation(`Failed to export as pdf: ${response.statusText}`);
         throw new Error(`Failed to export as pdf: ${response.statusText}`);
       }
     } catch (error) {
-      logOperation(`Error in pdf export: ${error}`);
       console.error("error in pdf export", error);
       throw error;
     }
   }
   static async deleteSlide(presentation_id: string, slide_id: string) {
-    logOperation(`Deleting slide ${slide_id} from presentation ${presentation_id}`);
     try {
       const response = await fetch(
-        `${BASE_URL}/ppt/slide/delete?presentation_id=${presentation_id}&slide_id=${slide_id}`,
+        `/api/v1/ppt/slide/delete?presentation_id=${presentation_id}&slide_id=${slide_id}`,
         {
           method: "DELETE",
           headers: getHeader(),
@@ -409,24 +372,20 @@ export class PresentationGenerationApi {
         }
       );
       if (response.status === 204) {
-        logOperation(`Successfully deleted slide ${slide_id}`);
         return true;
       } else {
-        logOperation(`Failed to delete slide: ${response.statusText}`);
         throw new Error(`Failed to delete slide: ${response.statusText}`);
       }
     } catch (error) {
-      logOperation(`Error in slide deletion: ${error}`);
       console.error("error in slide deletion", error);
       throw error;
     }
   }
   // SET THEME COLORS
   static async setThemeColors(presentation_id: string, theme: any) {
-    logOperation(`Setting theme colors for presentation ${presentation_id}`);
     try {
       const response = await fetch(
-        `${BASE_URL}/ppt/presentation/theme`,
+        `/api/v1/ppt/presentation/theme`,
         {
           method: "POST",
           headers: getHeader(),
@@ -434,7 +393,7 @@ export class PresentationGenerationApi {
             presentation_id,
             theme,
           }),
-         
+
         }
       );
       if (response.ok) {
@@ -456,18 +415,18 @@ export class PresentationGenerationApi {
     documents,
     images,
     language,
-  
+
   }: {
     prompt: string;
     n_slides: number | null;
     documents?: string[];
     images?: string[];
     language: string | null;
-    
+
   }) {
     try {
       const response = await fetch(
-        `${BASE_URL}/ppt/create`,
+        `/api/v1/ppt/create`,
         {
           method: "POST",
           headers: getHeader(),
@@ -477,7 +436,7 @@ export class PresentationGenerationApi {
             language,
             documents,
             images,
-           
+
           }),
           cache: "no-cache",
         }

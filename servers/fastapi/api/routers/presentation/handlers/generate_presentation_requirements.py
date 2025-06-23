@@ -3,7 +3,7 @@ from api.models import LogMetadata
 from api.routers.presentation.models import GeneratePresentationRequirementsRequest
 from api.services.logging import LoggingService
 from api.services.database import get_sql_session
-from api.services.instances import temp_file_service
+from api.services.instances import TEMP_FILE_SERVICE
 from api.sql_models import PresentationSqlModel
 from document_processor.loader import DocumentsLoader
 from ppt_config_generator.document_summary_generator import generate_document_summary
@@ -21,11 +21,9 @@ class GeneratePresentationRequirementsHandler:
         self.n_slides = data.n_slides
         self.documents = data.documents or []
         self.language = data.language
-        self.research_reports = data.research_reports or []
-        self.images = data.images or []
 
         self.session = str(uuid.uuid4())
-        self.temp_dir = temp_file_service.create_temp_dir(self.session)
+        self.temp_dir = TEMP_FILE_SERVICE.create_temp_dir(self.session)
 
     async def post(self, logging_service: LoggingService, log_metadata: LogMetadata):
         logging_service.logger.info(
@@ -33,7 +31,7 @@ class GeneratePresentationRequirementsHandler:
             extra=log_metadata.model_dump(),
         )
 
-        all_document_paths = [*self.documents, *self.research_reports]
+        all_document_paths = [*self.documents]
 
         documents_loader = DocumentsLoader(all_document_paths)
         await documents_loader.load_documents(self.temp_dir)

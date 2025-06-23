@@ -27,11 +27,7 @@ import { jsonrepair } from "jsonrepair";
 import { Button } from "@/components/ui/button";
 import { AlertCircle } from "lucide-react";
 import Help from "./Help";
-import { getEnv } from "@/utils/constant";
-import { clearLogs, logOperation } from "../../utils/log";
 
-const urls = getEnv();
-const BASE_URL = urls.BASE_URL;
 
 // Custom debounce function
 function useDebounce<T extends (...args: any[]) => void>(
@@ -55,8 +51,6 @@ function useDebounce<T extends (...args: any[]) => void>(
 }
 
 const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
-  const urls = getEnv();
-  const BASE_URL = urls.BASE_URL;
   const dispatch = useDispatch();
   const [loading, setLoading] = useState(true);
   const [selectedSlide, setSelectedSlide] = useState(0);
@@ -88,17 +82,14 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
   const autoSave = useCallback(
     (data: { presentation_id: string; slides: any[] }) => {
       setAutoSaveLoading(true);
-      logOperation('Auto-saving presentation changes');
       // Fire and forget - no await
       PresentationGenerationApi.updatePresentationContent(data)
-        .then(() => {
-          logOperation('Auto-save completed successfully');
-        })
+        .then(() => { })
         .catch((error) => {
-          logOperation(`Auto-save error: ${error}`);
           console.error("Error AAYO", error);
         })
         .finally(() => {
+
           setAutoSaveLoading(false);
         });
     },
@@ -132,19 +123,18 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
 
   // Function to fetch the slides
   useEffect(() => {
+
     let evtSource: EventSource;
     let accumulatedChunks = "";
 
     const fetchSlides = async () => {
-      logOperation('Starting slide streaming');
       dispatch(setStreaming(true));
 
       evtSource = new EventSource(
-        `${BASE_URL}/ppt/generate/stream?presentation_id=${presentation_id}&session=${session}`
+        `/api/v1/ppt/generate/stream?presentation_id=${presentation_id}&session=${session}`
       );
 
       evtSource.onopen = () => {
-        logOperation('Stream connection opened');
         setColorsVariables(currentColors, currentTheme);
       };
 
@@ -158,6 +148,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
             const repairedJson = jsonrepair(accumulatedChunks);
             const partialData = JSON.parse(repairedJson);
             if (partialData.slides) {
+              // Check if the length of slides has changed
               if (
                 partialData.slides.length !== previousSlidesLength.current &&
                 partialData.slides.length > 1
@@ -169,16 +160,17 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
                     slides: partialData.slides,
                   })
                 );
-                previousSlidesLength.current = partialData.slides.length + 1;
+                previousSlidesLength.current = partialData.slides.length + 1; // Update the previous length
                 setLoading(false);
               }
             }
           } catch (error) {
+            // console.error('error while repairing json', error)
             // It's okay if this fails, it just means the JSON isn't complete yet
           }
         } else if (data.type === "complete") {
           try {
-            logOperation('Stream completed successfully');
+
             dispatch(setPresentationData(data.presentation));
             dispatch(setStreaming(false));
             if (data.presentation.theme) {
@@ -201,13 +193,11 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
             newUrl.searchParams.delete("session");
             window.history.replaceState({}, "", newUrl.toString());
           } catch (error) {
-            logOperation(`Error processing stream completion: ${error}`);
             evtSource.close();
             console.error("Error parsing accumulated chunks:", error);
           }
           accumulatedChunks = "";
         } else if (data.type === "closing") {
-          logOperation('Stream closing normally');
           dispatch(setPresentationData(data.presentation));
           if (data.presentation.theme) {
             dispatch(
@@ -231,7 +221,6 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
         }
       });
       evtSource.onerror = (error) => {
-        logOperation(`Stream error: ${error}`);
         console.error("EventSource failed:", error);
 
         setLoading(false);
@@ -268,10 +257,8 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
   // Function to fetch the user slides
   const fetchUserSlides = async () => {
     try {
-      logOperation('Fetching user slides');
       const data = await DashboardApi.getPresentation(presentation_id);
       if (data) {
-        logOperation('User slides fetched successfully');
         if (data.presentation.theme) {
           dispatch(
             setThemeColors({
@@ -288,7 +275,6 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
         setLoading(false);
       }
     } catch (error) {
-      logOperation(`Error fetching user slides: ${error}`);
       setError(true);
       toast({
         title: "Error",
@@ -325,7 +311,6 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
   // Function to handle slide change  for presentation mode
   const handleSlideChange = (newSlide: number) => {
     if (newSlide >= 0 && newSlide < presentationData?.slides.length!) {
-      logOperation(`Changing to slide ${newSlide}`);
       setSelectedSlide(newSlide);
       router.push(
         `/presentation?id=${presentation_id}&mode=present&slide=${newSlide}`,
@@ -335,7 +320,6 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
   };
 
   const handleDeleteSlide = async (index: number) => {
-    logOperation(`Deleting slide at index ${index}`);
     dispatch(deletePresentationSlide(index));
     const response = PresentationGenerationApi.deleteSlide(
       presentation_id,

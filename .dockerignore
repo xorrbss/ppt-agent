@@ -1,0 +1,9 @@
+.venv
+.env
+.next
+node_modules
+out
+build
+.git
+.gitignore
+tmp
