@@ -1,0 +1,73 @@
+---
+title: "Using Ollama Models"
+description: "Follow these steps to generate presentations using Ollama"
+---
+
+Presenton supports running fully offline using open-source models via [Ollama](https://ollama.com/). This allows you to generate presentations without relying on cloud APIs — keeping your data private and costs low.
+
+### 🚀 Run Presenton with an Ollama Model
+
+Make sure you have [Ollama installed](https://ollama.com/download) and models downloaded if running them outside Docker.
+
+To run Presenton with an Ollama model:
+
+```bash
+docker run -it --name presenton -p 5000:80 \
+  -e LLM="ollama" \
+  -e OLLAMA_MODEL="llama3.2:3b" \
+  -e PEXELS_API_KEY="your_pexels_api_key" \
+  -e CAN_CHANGE_KEYS="false" \
+  -v "./user_data:/app/user_data" \
+  ghcr.io/presenton/presenton:v0.3.0-beta
+```
+
+> 💡 **Note:** A valid **Pexels API key is required** for image generation when using Ollama models.
+> You can get a free API key at https://www.pexels.com/api/
+
+> ✅ Add `--gpus=all` to enable GPU acceleration (see [Using GPU](/docs/configurations/using-gpu)).
+
+### 🧠 Supported Ollama Models
+
+| Model               | Size   | Graph Support |
+| ------------------- | ------ | ------------- |
+| **Llama Models**    |        |               |
+| `llama3:8b`         | 4.7 GB | ❌ No          |
+| `llama3:70b`        | 40 GB  | ✅ Yes         |
+| `llama3.1:8b`       | 4.9 GB | ❌ No          |
+| `llama3.1:70b`      | 43 GB  | ✅ Yes         |
+| `llama3.1:405b`     | 243 GB | ✅ Yes         |
+| `llama3.2:1b`       | 1.3 GB | ❌ No          |
+| `llama3.2:3b`       | 2 GB   | ❌ No          |
+| `llama3.3:70b`      | 43 GB  | ✅ Yes         |
+| `llama4:16x17b`     | 67 GB  | ✅ Yes         |
+| `llama4:128x17b`    | 245 GB | ✅ Yes         |
+| **Gemma Models**    |        |               |
+| `gemma3:1b`         | 815 MB | ❌ No          |
+| `gemma3:4b`         | 3.3 GB | ❌ No          |
+| `gemma3:12b`        | 8.1 GB | ❌ No          |
+| `gemma3:27b`        | 17 GB  | ✅ Yes         |
+| **DeepSeek Models** |        |               |
+| `deepseek-r1:1.5b`  | 1.1 GB | ❌ No          |
+| `deepseek-r1:7b`    | 4.7 GB | ❌ No          |
+| `deepseek-r1:8b`    | 5.2 GB | ❌ No          |
+| `deepseek-r1:14b`   | 9 GB   | ❌ No          |
+| `deepseek-r1:32b`   | 20 GB  | ✅ Yes         |
+| `deepseek-r1:70b`   | 43 GB  | ✅ Yes         |
+| `deepseek-r1:671b`  | 404 GB | ✅ Yes         |
+| **Qwen Models**     |        |               |
+| `qwen3:0.6b`        | 523 MB | ❌ No          |
+| `qwen3:1.7b`        | 1.4 GB | ❌ No          |
+| `qwen3:4b`          | 2.6 GB | ❌ No          |
+| `qwen3:8b`          | 5.2 GB | ❌ No          |
+| `qwen3:14b`         | 9.3 GB | ❌ No          |
+| `qwen3:30b`         | 19 GB  | ✅ Yes         |
+| `qwen3:32b`         | 20 GB  | ✅ Yes         |
+| `qwen3:235b`        | 142 GB | ✅ Yes         |
+
+> ✅ **Graph Support** means the model can generate charts and diagrams in presentations.
+
+### 📌 Additional Notes
+
+- Use the `OLLAMA_MODEL` environment variable to select any supported model.
+- Ensure your system has enough RAM or GPU memory to handle the model.
+- Always include a `PEXELS_API_KEY` for full image generation functionality.
