@@ -9,46 +9,9 @@ from typing import List, Optional
 import aiohttp
 from fastapi import HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_ollama import ChatOllama
-from langchain_openai import ChatOpenAI
 
 from api.models import LogMetadata, UserConfig
 from api.services.logging import LoggingService
-
-
-def is_ollama_selected() -> bool:
-    return os.getenv("LLM") == "ollama"
-
-
-def get_large_model():
-    selected_llm = os.getenv("LLM")
-    if selected_llm == "openai":
-        return ChatOpenAI(model="gpt-4.1")
-    elif selected_llm == "google":
-        return ChatGoogleGenerativeAI(model="gemini-2.0-flash")
-    else:
-        return ChatOllama(model=os.getenv("OLLAMA_MODEL"), temperature=0.8)
-
-
-def get_small_model():
-    selected_llm = os.getenv("LLM")
-    if selected_llm == "openai":
-        return ChatOpenAI(model="gpt-4.1-mini")
-    elif selected_llm == "google":
-        return ChatGoogleGenerativeAI(model="gemini-2.0-flash")
-    else:
-        return ChatOllama(model=os.getenv("OLLAMA_MODEL"), temperature=0.8)
-
-
-def get_nano_model():
-    selected_llm = os.getenv("LLM")
-    if selected_llm == "openai":
-        return ChatOpenAI(model="gpt-4.1-nano")
-    elif selected_llm == "google":
-        return ChatGoogleGenerativeAI(model="gemini-2.0-flash")
-    else:
-        return ChatOllama(model=os.getenv("OLLAMA_MODEL"), temperature=0.8)
 
 
 def get_presentation_dir(presentation_id: str) -> str:

@@ -1,3 +1,4 @@
+from enum import Enum
 import json
 from typing import Optional
 from pydantic import BaseModel
@@ -73,3 +74,9 @@ class OllamaModelMetadata(BaseModel):
     icon: str
     size: str
     supports_graph: bool
+
+
+class SelectedLLMProvider(Enum):
+    OLLAMA = "ollama"
+    OPENAI = "openai"
+    GOOGLE = "google"
