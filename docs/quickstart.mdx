@@ -1,0 +1,31 @@
+---
+title: "Quickstart"
+description: "Follow these steps to get Presenton up and running using Docker"
+---
+
+### 🚀 Run Presenton
+
+#### 🔧 On Linux or macOS (Bash/Zsh):
+
+```bash
+docker run -it --name presenton -p 5000:80 -v "./user_data:/app/user_data" ghcr.io/presenton/presenton:v0.3.0-beta
+````
+
+#### 🪟 On Windows (PowerShell):
+
+```bash
+docker run -it --name presenton -p 5000:80 -v "${PWD}\user_data:/app/user_data" ghcr.io/presenton/presenton:v0.3.0-beta
+```
+
+> ✅ You can replace `5000` with any other available port to avoid conflicts.
+
+
+### 🌐 Open in Your Browser
+
+After running the container, open your browser and navigate to:
+
+```
+http://localhost:5000
+```
+
+You’re now ready to start generating presentations!
