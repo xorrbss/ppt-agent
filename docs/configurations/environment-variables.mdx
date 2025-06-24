@@ -34,5 +34,10 @@ Presenton can be customized and secured using environment variables. Below are t
 ### Example: Running Presenton with Environment Variables
 
 ```bash
-docker run -it --name presenton -p 5000:80 -e LLM="openai" -e OPENAI_API_KEY="your_openai_api_key" -e CAN_CHANGE_KEYS="false" -v "./user_data:/app/user_data" ghcr.io/presenton/presenton:v0.3.0-beta
+docker run -it --name presenton -p 5000:80 \
+-e LLM="openai" \
+-e OPENAI_API_KEY="your_openai_api_key" \
+-e CAN_CHANGE_KEYS="false" \
+-v "./user_data:/app/user_data" \
+ghcr.io/presenton/presenton:v0.3.0-beta
 ```
