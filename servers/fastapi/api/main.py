@@ -8,7 +8,8 @@ from contextlib import asynccontextmanager
 from api.routers.presentation.router import presentation_router
 from api.services.database import sql_engine
 from api.utils.supported_ollama_models import SUPPORTED_OLLAMA_MODELS
-from api.utils.utils import is_ollama_selected, update_env_with_user_config
+from api.utils.utils import update_env_with_user_config
+from api.utils.model_utils import is_ollama_selected
 
 can_change_keys = os.getenv("CAN_CHANGE_KEYS") != "false"
 

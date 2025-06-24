@@ -1,5 +1,8 @@
 from typing import Optional
-from api.utils.utils import get_large_model, get_small_model
+
+from langchain_ollama import ChatOllama
+from openai import OpenAI
+from api.utils.model_utils import get_large_model, get_llm_client, get_small_model
 from ppt_config_generator.models import SlideMarkdownModel
 from ppt_generator.fix_validation_errors import get_validated_response
 
@@ -16,42 +19,43 @@ from ppt_generator.models.other_models import SlideTypeModel
 from ppt_generator.models.slide_model import SlideModel
 
 
-prompt_template_to_generate_slide_content = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            """
-            Generate structured slide based on provided title and outline, follow mentioned steps and notes and provide structured output.
+def get_prompt_to_generate_slide_content(
+    title: str, outline: str, notes: Optional[str] = None
+):
+    return [
+        {
+            "role": "system",
+            "content": f"""
+                Generate structured slide based on provided title and outline, follow mentioned steps and notes and provide structured output.
 
 
-            # Steps
-            1. Analyze the outline and title.
-            2. Generate structured slide based on the outline and title.
-            3. Generate image prompts and icon queries if mentioned in schema.
-            4. Generate graph if mentioned in schema.
+                # Steps
+                1. Analyze the outline and title.
+                2. Generate structured slide based on the outline and title.
+                3. Generate image prompts and icon queries if mentioned in schema.
+                4. Generate graph if mentioned in schema.
 
-            # Notes
-            - Slide body should not use words like "This slide", "This presentation".
-            - Rephrase the slide body to make it flow naturally.
-            - Do not use markdown formatting in slide body.
-            - **Icon query** must be a generic single word noun.
-            - **Image prompt** should be a 2-3 words phrase.
-            - Try to make paragraphs as short as possible.
-            {notes}
+                # Notes
+                - Slide body should not use words like "This slide", "This presentation".
+                - Rephrase the slide body to make it flow naturally.
+                - Do not use markdown formatting in slide body.
+                - **Icon query** must be a generic single word noun.
+                - **Image prompt** should be a 2-3 words phrase.
+                - Try to make paragraphs as short as possible.
+                {notes}
             """,
-        ),
-        (
-            "user",
-            """
-            ## Slide Title
-            {title}
+        },
+        {
+            "role": "user",
+            "content": f"""
+                ## Slide Title
+                {title}
 
-            ## Slide Outline
-            {outline}
-        """,
-        ),
+                ## Slide Outline
+                {outline}
+            """,
+        },
     ]
-)
 
 
 prompt_template_to_edit_slide_content = ChatPromptTemplate.from_messages(
@@ -126,22 +130,26 @@ prompt_template_to_select_slide_type = ChatPromptTemplate.from_messages(
 async def get_slide_content_from_type_and_outline(
     slide_type: int, outline: SlideMarkdownModel
 ) -> LLMSlideContentModel:
-    content_type_model_type = LLM_CONTENT_TYPE_WITH_VALIDATION_MAPPING[slide_type]
-    validation_model = LLM_CONTENT_TYPE_MAPPING[slide_type]
-    model = get_small_model().with_structured_output(
-        content_type_model_type.model_json_schema()
-    )
-    chain = prompt_template_to_generate_slide_content | model
+    response_model = LLM_CONTENT_TYPE_WITH_VALIDATION_MAPPING[slide_type]
 
-    return await get_validated_response(
-        chain,
-        {
-            "title": outline.title,
-            "outline": outline.body,
-            "notes": content_type_model_type.get_notes(),
-        },
-        content_type_model_type,
-        validation_model,
+    client = get_llm_client()
+    model = get_small_model()
+
+    response = await client.beta.chat.completions.parse(
+        model=model,
+        messages=get_prompt_to_generate_slide_content(
+            outline.title,
+            outline.body,
+            response_model.get_notes(),
+        ),
+        response_format=response_model,
+    )
+
+    with open("debug/llm_response.json", "w") as f:
+        f.write(response.choices[0].message.content)
+
+    return LLM_CONTENT_TYPE_MAPPING[slide_type].model_validate_json(
+        response.choices[0].message.content
     )
 
 
@@ -152,7 +160,7 @@ async def get_edited_slide_content_model(
     theme: Optional[dict] = None,
     language: Optional[str] = None,
 ):
-    model = get_large_model()
+    model = ChatOllama(model=get_large_model(), temperature=0.8)
 
     content_type_model_type = LLM_CONTENT_TYPE_WITH_VALIDATION_MAPPING[slide_type]
     validation_model = LLM_CONTENT_TYPE_MAPPING[slide_type]
@@ -181,7 +189,7 @@ async def get_slide_type_from_prompt(
     slide: SlideModel,
 ) -> SlideTypeModel:
 
-    model = get_small_model()
+    model = ChatOllama(model=get_small_model(), temperature=0.8)
 
     chain = prompt_template_to_select_slide_type | model.with_structured_output(
         SlideTypeModel.model_json_schema()

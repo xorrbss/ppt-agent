@@ -14,8 +14,8 @@ from api.utils.supported_ollama_models import SUPPORTED_OLLAMA_MODELS
 from api.utils.utils import (
     get_presentation_dir,
     get_presentation_images_dir,
-    is_ollama_selected,
 )
+from api.utils.model_utils import is_ollama_selected
 from image_processor.icons_vectorstore_utils import get_icons_vectorstore
 from image_processor.images_finder import generate_image
 from image_processor.icons_finder import get_icon

@@ -24,9 +24,8 @@ RUN curl -fsSL https://ollama.com/install.sh | sh
 COPY servers/fastapi/requirements.txt ./
 RUN pip install -r requirements.txt
 
-
 # Install dependencies for Next.js
-WORKDIR /app/servers/nextjs
+WORKDIR /node_dependencies
 COPY servers/nextjs/package.json servers/nextjs/package-lock.json ./
 RUN npm install
 
@@ -40,4 +39,10 @@ COPY nginx.conf /etc/nginx/nginx.conf
 EXPOSE 80 3000 8000
 
 # Start the servers
-CMD ["/bin/bash", "-c", "ollama serve & service nginx start & service redis-server start && node /app/start.js"]
+CMD ["/bin/bash", "-c", "\
+  rm -rf /app/servers/nextjs/node_modules && \
+  ln -s /node_dependencies/node_modules /app/servers/nextjs/node_modules && \
+  ollama serve & \
+  service nginx start & \
+  service redis-server start && \
+  node /app/start.js"]

@@ -1,6 +1,7 @@
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_ollama import ChatOllama
 
-from api.utils.utils import get_small_model
+from api.utils.model_utils import get_small_model
 from api.utils.variable_length_models import (
     get_presentation_structure_model_with_n_slides,
 )
@@ -59,7 +60,7 @@ async def generate_presentation_structure(
     presentation_outline: PresentationMarkdownModel,
 ) -> PresentationStructureModel:
 
-    model = get_small_model()
+    model = ChatOllama(model=get_small_model(), temperature=0.8)
     response_model = get_presentation_structure_model_with_n_slides(
         len(presentation_outline.slides)
     )

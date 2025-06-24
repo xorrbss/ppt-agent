@@ -5,7 +5,8 @@ from langchain_core.messages import (
     AIMessageChunk,
     AIMessage,
 )
-from api.utils.utils import get_large_model
+from langchain_ollama import ChatOllama
+from api.utils.model_utils import get_large_model
 from ppt_config_generator.models import PresentationMarkdownModel
 from ppt_generator.models.llm_models_with_validations import (
     LLMPresentationModelWithValidation,
@@ -91,7 +92,7 @@ def get_model_and_messages(
     presentation_outline: PresentationMarkdownModel,
 ):
     user_message = HumanMessage(presentation_outline.to_string())
-    model = get_large_model()
+    model = ChatOllama(model=get_large_model(), temperature=0.8)
 
     return model, system_prompt, user_message
 

@@ -17,7 +17,8 @@ from api.services.database import get_sql_session
 from api.services.instances import TEMP_FILE_SERVICE
 from api.services.logging import LoggingService
 from api.sql_models import PresentationSqlModel, SlideSqlModel
-from api.utils.utils import get_presentation_dir, is_ollama_selected
+from api.utils.utils import get_presentation_dir
+from api.utils.model_utils import is_ollama_selected
 from document_processor.loader import DocumentsLoader
 from ppt_config_generator.document_summary_generator import generate_document_summary
 from ppt_config_generator.models import PresentationMarkdownModel

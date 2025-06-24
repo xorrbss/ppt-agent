@@ -1,7 +1,8 @@
 from typing import Optional
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_ollama import ChatOllama
 
-from api.utils.utils import get_large_model
+from api.utils.model_utils import get_large_model
 from api.utils.variable_length_models import (
     get_presentation_markdown_model_with_n_slides,
 )
@@ -64,7 +65,7 @@ async def generate_ppt_content(
     language: Optional[str] = None,
     content: Optional[str] = None,
 ) -> PresentationMarkdownModel:
-    model = get_large_model()
+    model = ChatOllama(model=get_large_model(), temperature=0.8)
     response_model = get_presentation_markdown_model_with_n_slides(n_slides)
 
     chain = get_prompt_template() | model.with_structured_output(

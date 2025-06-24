@@ -65,7 +65,7 @@ mypy_extensions==1.1.0
 numpy==2.2.5
 ollama==0.5.1
 onnxruntime==1.22.0
-openai==1.78.1
+openai==1.91.0
 orjson==3.10.18
 packaging==24.2
 pdfminer.six==20250327

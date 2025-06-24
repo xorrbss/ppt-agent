@@ -34,48 +34,34 @@ from ppt_generator.models.llm_models import (
 
 class LLMHeadingModelWithValidation(LLMHeadingModel):
     heading: str = Field(
-        description="List item heading to show in slide body",
-        min_length=10,
-        max_length=30,
+        description="List item heading to show in slide body in less than 5 words.",
     )
     description: str = Field(
         description="Description of list item in less than 20 words.",
-        min_length=80,
-        max_length=150,
     )
 
 
 class LLMHeadingModelWithImagePromptWithValidation(LLMHeadingModelWithImagePrompt):
     image_prompt: str = Field(
-        description="Prompt used to generate image for this item",
-        min_length=10,
-        max_length=50,
+        description="Prompt used to generate image for this item in less than 6 words.",
     )
 
 
 class LLMHeadingModelWithIconQueryWithValidation(LLMHeadingModelWithIconQuery):
     icon_query: str = Field(
-        description="Icon query to generate icon for this item",
-        min_length=10,
-        max_length=50,
+        description="Icon query to generate icon for this item in less than 4 words.",
     )
 
 
 class LLMType1ContentWithValidation(LLMType1Content):
     title: str = Field(
-        description="Title of the slide",
-        min_length=10,
-        max_length=50,
+        description="Title of the slide in less than 6 words.",
     )
     body: str = Field(
         description="Slide content summary in less than 30 words.",
-        min_length=100,
-        max_length=200,
     )
     image_prompt: str = Field(
-        description="Prompt used to generate image for this slide.",
-        min_length=10,
-        max_length=50,
+        description="Prompt used to generate image for this slide in less than 6 words.",
     )
 
     @classmethod
@@ -85,9 +71,7 @@ class LLMType1ContentWithValidation(LLMType1Content):
 
 class LLMType2ContentWithValidation(LLMType2Content):
     title: str = Field(
-        description="Title of the slide",
-        min_length=10,
-        max_length=50,
+        description="Title of the slide in less than 6 words.",
     )
     body: List[LLMHeadingModelWithValidation] = Field(
         description="List items to show in slide's body",
@@ -106,9 +90,7 @@ class LLMType2ContentWithValidation(LLMType2Content):
 
 class LLMType3ContentWithValidation(LLMType3Content):
     title: str = Field(
-        description="Title of the slide",
-        min_length=10,
-        max_length=50,
+        description="Title of the slide in less than 6 words.",
     )
     body: List[LLMHeadingModelWithValidation] = Field(
         description="List items to show in slide's body",
@@ -116,9 +98,7 @@ class LLMType3ContentWithValidation(LLMType3Content):
         max_length=3,
     )
     image_prompt: str = Field(
-        description="Prompt used to generate image for this slide",
-        min_length=10,
-        max_length=50,
+        description="Prompt used to generate image for this slide in less than 6 words.",
     )
 
     @classmethod
@@ -132,9 +112,7 @@ class LLMType3ContentWithValidation(LLMType3Content):
 
 class LLMType4ContentWithValidation(LLMType4Content):
     title: str = Field(
-        description="Title of the slide",
-        min_length=10,
-        max_length=50,
+        description="Title of the slide in less than 6 words.",
     )
     body: List[LLMHeadingModelWithImagePromptWithValidation] = Field(
         description="List items to show in slide's body",
@@ -153,14 +131,10 @@ class LLMType4ContentWithValidation(LLMType4Content):
 
 class LLMType5ContentWithValidation(LLMType5Content):
     title: str = Field(
-        description="Title of the slide",
-        min_length=10,
-        max_length=50,
+        description="Title of the slide in less than 6 words.",
     )
     body: str = Field(
         description="Slide content summary in less than 30 words.",
-        min_length=100,
-        max_length=250,
     )
     graph: GraphModel = Field(description="Graph to show in slide")
 
@@ -171,14 +145,10 @@ class LLMType5ContentWithValidation(LLMType5Content):
 
 class LLMType6ContentWithValidation(LLMType6Content):
     title: str = Field(
-        description="Title of the slide",
-        min_length=10,
-        max_length=50,
+        description="Title of the slide in less than 6 words.",
     )
     description: str = Field(
         description="Slide content summary in less than 20 words.",
-        min_length=80,
-        max_length=150,
     )
     body: List[LLMHeadingModelWithValidation] = Field(
         description="List items to show in slide's body",
@@ -197,9 +167,7 @@ class LLMType6ContentWithValidation(LLMType6Content):
 
 class LLMType7ContentWithValidation(LLMType7Content):
     title: str = Field(
-        description="Title of the slide",
-        min_length=10,
-        max_length=50,
+        description="Title of the slide in less than 6 words.",
     )
     body: List[LLMHeadingModelWithIconQueryWithValidation] = Field(
         description="List items to show in slide's body",
@@ -218,14 +186,10 @@ class LLMType7ContentWithValidation(LLMType7Content):
 
 class LLMType8ContentWithValidation(LLMType8Content):
     title: str = Field(
-        description="Title of the slide",
-        min_length=10,
-        max_length=50,
+        description="Title of the slide in less than 6 words.",
     )
     description: str = Field(
         description="Slide content summary in less than 20 words.",
-        min_length=80,
-        max_length=150,
     )
     body: List[LLMHeadingModelWithImagePromptWithValidation] = Field(
         description="List items to show in slide's body",
@@ -244,9 +208,7 @@ class LLMType8ContentWithValidation(LLMType8Content):
 
 class LLMType9ContentWithValidation(LLMType9Content):
     title: str = Field(
-        description="Title of the slide",
-        min_length=10,
-        max_length=50,
+        description="Title of the slide in less than 6 words.",
     )
     body: List[LLMHeadingModelWithValidation] = Field(
         description="List items to show in slide's body",
