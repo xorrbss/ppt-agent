@@ -50,4 +50,4 @@ COPY nginx.conf /etc/nginx/nginx.conf
 EXPOSE 80
 
 # Start the servers
-CMD ["/bin/bash", "-c", "ollama serve & service nginx start && service redis-server start && node /app/start.js"]
+CMD ["/bin/bash", "/app/docker-start.sh"]
