@@ -1,16 +1,8 @@
 from typing import AsyncIterator
 
-from langchain_core.messages import (
-    HumanMessage,
-    AIMessageChunk,
-    AIMessage,
-)
-from langchain_ollama import ChatOllama
-from api.utils.model_utils import get_large_model
+from api.utils.model_utils import get_large_model, get_llm_client
 from ppt_config_generator.models import PresentationMarkdownModel
-from ppt_generator.models.llm_models_with_validations import (
-    LLMPresentationModelWithValidation,
-)
+from ppt_generator.models.llm_models import LLMPresentationModel
 
 
 CREATE_PRESENTATION_PROMPT = """
@@ -71,42 +63,56 @@ CREATE_PRESENTATION_PROMPT = """
     **Go through notes and steps and make sure they are all followed. Rule breaks are strictly not allowed.**
 """
 
-schema = LLMPresentationModelWithValidation.model_json_schema()
+# schema = LLMPresentationModel.model_json_schema()
 
-system_prompt = f"""
-{CREATE_PRESENTATION_PROMPT}
+# system_prompt = f"""
+# {CREATE_PRESENTATION_PROMPT}
 
-Follow this schema while giving out response: {schema}.
+# Follow this schema while giving out response: {schema}.
 
-Make description short and obey the character limits. Output should be in JSON format. Give out only JSON, nothing else.
-"""
+# Make description short and obey the character limits. Output should be in JSON format. Give out only JSON, nothing else.
+# """
 
-ollama_system_prompt = f"""
-{CREATE_PRESENTATION_PROMPT}
+# ollama_system_prompt = f"""
+# {CREATE_PRESENTATION_PROMPT}
 
-Make description short and obey the character limits. Output should be in JSON format. Give out only JSON, nothing else.
-"""
+# Make description short and obey the character limits. Output should be in JSON format. Give out only JSON, nothing else.
+# """
 
 
-def get_model_and_messages(
+async def generate_presentation_stream(
     presentation_outline: PresentationMarkdownModel,
 ):
-    user_message = HumanMessage(presentation_outline.to_string())
-    model = ChatOllama(model=get_large_model(), temperature=0.8)
+    client = get_llm_client()
+    model = get_large_model()
 
-    return model, system_prompt, user_message
-
-
-def generate_presentation_stream(
-    presentation_outline: PresentationMarkdownModel,
-) -> AsyncIterator[AIMessageChunk]:
-    model, system_prompt, user_message = get_model_and_messages(presentation_outline)
-
-    return model.astream([system_prompt, user_message])
+    response = await client.chat.completions.create(
+        model=model,
+        messages=[
+            {
+                "role": "system",
+                "content": CREATE_PRESENTATION_PROMPT,
+            },
+            {
+                "role": "user",
+                "content": presentation_outline.to_string(),
+            },
+        ],
+        response_format={
+            "type": "json_schema",
+            "json_schema": {
+                "name": "LLMPresentationModel",
+                "schema": LLMPresentationModel.model_json_schema(),
+            },
+        },
+        stream=True,
+    )
+    return response
 
 
 async def generate_presentation(
     presentation_outline: PresentationMarkdownModel,
-) -> AIMessage:
-    model, system_prompt, user_message = get_model_and_messages(presentation_outline)
-    return await model.ainvoke([system_prompt, user_message])
+):
+    # model, system_prompt, user_message = get_model_and_messages(presentation_outline)
+    # return await model.ainvoke([system_prompt, user_message])
+    pass

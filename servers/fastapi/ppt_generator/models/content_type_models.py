@@ -12,7 +12,17 @@ from ppt_generator.models.other_models import (
     TYPE8,
     TYPE9,
 )
-from graph_processor.models import GraphModel
+
+
+class TableDataModel(BaseModel):
+    x_labels: List[str]
+    y_labels: List[str]
+    data: List[List[float]]
+
+
+class TableModel(BaseModel):
+    name: str
+    data: TableDataModel
 
 
 class HeadingModel(BaseModel):
@@ -110,7 +120,7 @@ class Type4Content(SlideContentModel):
 
 class Type5Content(SlideContentModel):
     body: str
-    graph: GraphModel
+    table: TableModel
 
     def to_llm_content(self):
         from ppt_generator.models.llm_models import LLMType5Content
@@ -118,7 +128,7 @@ class Type5Content(SlideContentModel):
         return LLMType5Content(
             title=self.title,
             body=self.body,
-            graph=self.graph,
+            table=self.table,
         )
 
 
@@ -174,7 +184,7 @@ class Type8Content(SlideContentModel):
 
 class Type9Content(SlideContentModel):
     body: List[HeadingModel]
-    graph: GraphModel
+    table: TableModel
 
     def to_llm_content(self):
         from ppt_generator.models.llm_models import LLMType9Content
@@ -182,7 +192,7 @@ class Type9Content(SlideContentModel):
         return LLMType9Content(
             title=self.title,
             body=[item.to_llm_content() for item in self.body],
-            graph=self.graph,
+            table=self.table,
         )
 
 

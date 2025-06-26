@@ -129,35 +129,35 @@ async def download_files(urls: List[str], save_paths: List[str]):
 async def handle_errors(
     func, logging_service: LoggingService, log_metadata: LogMetadata, **kwargs
 ):
-    try:
-        logging_service.logger.info(f"START", extra=log_metadata.model_dump())
-        response = await func(
-            logging_service=logging_service, log_metadata=log_metadata, **kwargs
-        )
-        is_stream = isinstance(response, StreamingResponse)
-        logging_service.logger.info(
-            "STREAMING" if is_stream else "END", extra=log_metadata.model_dump()
-        )
-        return response
+    # try:
+    logging_service.logger.info(f"START", extra=log_metadata.model_dump())
+    response = await func(
+        logging_service=logging_service, log_metadata=log_metadata, **kwargs
+    )
+    is_stream = isinstance(response, StreamingResponse)
+    logging_service.logger.info(
+        "STREAMING" if is_stream else "END", extra=log_metadata.model_dump()
+    )
+    return response
 
-    except HTTPException as e:
-        log_metadata.status_code = e.status_code
-        logging_service.logger.error(
-            f"Raised HTTPException - {e.detail}", extra=log_metadata.model_dump()
-        )
-        raise e
-    except Exception as e:
-        print(traceback.print_stack())
-        print(traceback.print_exc())
+    # except HTTPException as e:
+    #     log_metadata.status_code = e.status_code
+    #     logging_service.logger.error(
+    #         f"Raised HTTPException - {e.detail}", extra=log_metadata.model_dump()
+    #     )
+    #     raise e
+    # except Exception as e:
+    #     print(traceback.print_stack())
+    #     print(traceback.print_exc())
 
-        log_metadata.status_code = 400
-        logging_service.logger.critical(
-            "Unhandled Exception",
-            exc_info=True,
-            stack_info=True,
-            extra=log_metadata.model_dump(),
-        )
-        raise HTTPException(400, "Something went wrong while processing your request.")
+    #     log_metadata.status_code = 400
+    #     logging_service.logger.critical(
+    #         "Unhandled Exception",
+    #         exc_info=True,
+    #         stack_info=True,
+    #         extra=log_metadata.model_dump(),
+    #     )
+    #     raise HTTPException(400, "Something went wrong while processing your request.")
 
 
 def sanitize_filename(filename: str) -> str:

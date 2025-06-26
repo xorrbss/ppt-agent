@@ -1,33 +1,23 @@
 from typing import Optional
 
-from langchain_ollama import ChatOllama
-from openai import OpenAI
+from pydantic import BaseModel
+
 from api.utils.model_utils import get_large_model, get_llm_client, get_small_model
 from ppt_config_generator.models import SlideMarkdownModel
-from ppt_generator.fix_validation_errors import get_validated_response
-
-from langchain_core.prompts import ChatPromptTemplate
 
 from ppt_generator.models.llm_models import (
     LLM_CONTENT_TYPE_MAPPING,
-    LLMSlideContentModel,
-)
-from ppt_generator.models.llm_models_with_validations import (
-    LLM_CONTENT_TYPE_WITH_VALIDATION_MAPPING,
 )
 from ppt_generator.models.other_models import SlideTypeModel
 from ppt_generator.models.slide_model import SlideModel
 
 
-def get_prompt_to_generate_slide_content(
-    title: str, outline: str, notes: Optional[str] = None
-):
+def get_prompt_to_generate_slide_content(title: str, outline: str):
     return [
         {
             "role": "system",
             "content": f"""
                 Generate structured slide based on provided title and outline, follow mentioned steps and notes and provide structured output.
-
 
                 # Steps
                 1. Analyze the outline and title.
@@ -39,10 +29,6 @@ def get_prompt_to_generate_slide_content(
                 - Slide body should not use words like "This slide", "This presentation".
                 - Rephrase the slide body to make it flow naturally.
                 - Do not use markdown formatting in slide body.
-                - **Icon query** must be a generic single word noun.
-                - **Image prompt** should be a 2-3 words phrase.
-                - Try to make paragraphs as short as possible.
-                {notes}
             """,
         },
         {
@@ -58,99 +44,93 @@ def get_prompt_to_generate_slide_content(
     ]
 
 
-prompt_template_to_edit_slide_content = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            """
+def get_prompt_to_edit_slide_content(
+    prompt: str,
+    slide_data: dict,
+    theme: Optional[dict] = None,
+    language: Optional[str] = None,
+):
+    return [
+        {
+            "role": "system",
+            "content": """
                 Edit Slide data based on provided prompt, follow mentioned steps and notes and provide structured output.
 
                 # Notes
                 - Provide output in language mentioned in **Input**.
                 - The goal is to change Slide data based on the provided prompt.
                 - Do not change **Image prompts** and **Icon queries** if not asked for in prompt.
-                - Generate **Image prompts** and **Icon queries** if asked to generate or change image or icons in prompt.
-                - Ensure there are no line breaks in the JSON.
-                - Do not use special characters for highlighting.
-                {notes}
+                - Generate **Image prompts** and **Icon queries** if asked to generate or change in prompt.
 
                 **Go through all notes and steps and make sure they are followed, including mentioned constraints**
             """,
-        ),
-        (
-            "user",
-            """
-            - Prompt: {prompt}
-            - Output Language: {language}
-            - Image Prompts and Icon Queries Language: English
-            - Theme: {theme}
-            - Slide data: {slide_data}
-        """,
-        ),
+        },
+        {
+            "role": "user",
+            "content": f"""
+                - Prompt: {prompt}
+                - Output Language: {language}
+                - Image Prompts and Icon Queries Language: English
+                - Theme: {theme}
+                - Slide data: {slide_data}
+            """,
+        },
     ]
-)
 
 
-prompt_template_to_select_slide_type = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            """
-            Select a Slide Type based on provided user prompt and current slide data.
+def get_prompt_to_select_slide_type(prompt: str, slide_data: dict, slide_type: int):
+    return [
+        {
+            "role": "system",
+            "content": """
+                Select a Slide Type based on provided user prompt and current slide data.
 
-            Select slide based on following slide description and make sure it matches user requirement:
-            # Slide Types (Slide Type : Slide Description)
-                - **1**: contains title, description and image.
-                - **2**: contains title and list of items.
-                - **4**: contains title and list of items with images.
-                - **5**: contains title, description and a graph.
-                - **6**: contains title, description and list of items.
-                - **7**: contains title and list of items with icons.
-                - **8**: contains title, description and list of items with icons.
-                - **9**: contains title, list of items and a graph.
+                Select slide based on following slide description and make sure it matches user requirement:
+                # Slide Types (Slide Type : Slide Description)
+                    - **1**: contains title, description and image.
+                    - **2**: contains title and list of items.
+                    - **4**: contains title and list of items with images.
+                    - **5**: contains title, description and a graph.
+                    - **6**: contains title, description and list of items.
+                    - **7**: contains title and list of items with icons.
+                    - **8**: contains title, description and list of items with icons.
+                    - **9**: contains title, list of items and a graph.
 
-            # Notes
-            - Do not select different slide type than current unless absolutely necessary as per user prompt.
+                # Notes
+                - Do not select different slide type than current unless absolutely necessary as per user prompt.
 
-            **Go through all notes and steps and make sure they are followed, including mentioned constraints**
-        """,
-        ),
-        (
-            "user",
-            """
-            - User Prompt: {prompt}
-            - Current Slide Data: {slide_data}
-            - Current Slide Type: {slide_type}
-        """,
-        ),
+                **Go through all notes and steps and make sure they are followed, including mentioned constraints**
+            """,
+        },
+        {
+            "role": "user",
+            "content": f"""
+                - User Prompt: {prompt}
+                - Current Slide Data: {slide_data}
+                - Current Slide Type: {slide_type}
+            """,
+        },
     ]
-)
 
 
 async def get_slide_content_from_type_and_outline(
     slide_type: int, outline: SlideMarkdownModel
-) -> LLMSlideContentModel:
-    response_model = LLM_CONTENT_TYPE_WITH_VALIDATION_MAPPING[slide_type]
+) -> BaseModel:
+    response_model = LLM_CONTENT_TYPE_MAPPING[slide_type]
 
     client = get_llm_client()
     model = get_small_model()
 
     response = await client.beta.chat.completions.parse(
         model=model,
+        temperature=0.2,
         messages=get_prompt_to_generate_slide_content(
             outline.title,
             outline.body,
-            response_model.get_notes(),
         ),
         response_format=response_model,
     )
-
-    with open("debug/llm_response.json", "w") as f:
-        f.write(response.choices[0].message.content)
-
-    return LLM_CONTENT_TYPE_MAPPING[slide_type].model_validate_json(
-        response.choices[0].message.content
-    )
+    return response.choices[0].message.parsed
 
 
 async def get_edited_slide_content_model(
@@ -160,28 +140,23 @@ async def get_edited_slide_content_model(
     theme: Optional[dict] = None,
     language: Optional[str] = None,
 ):
-    model = ChatOllama(model=get_large_model(), temperature=0.8)
+    client = get_llm_client()
+    model = get_large_model()
 
-    content_type_model_type = LLM_CONTENT_TYPE_WITH_VALIDATION_MAPPING[slide_type]
-    validation_model = LLM_CONTENT_TYPE_MAPPING[slide_type]
-    chain = prompt_template_to_edit_slide_content | model.with_structured_output(
-        content_type_model_type.model_json_schema()
-    )
+    content_type_model_type = LLM_CONTENT_TYPE_MAPPING[slide_type]
     slide_data = slide.content.to_llm_content().model_dump_json()
-    edited_content = await get_validated_response(
-        chain,
-        {
-            "prompt": prompt,
-            "language": language or "English",
-            "theme": theme,
-            "slide_data": slide_data,
-            "notes": "",
-        },
-        content_type_model_type,
-        validation_model,
+    response = await client.beta.chat.completions.parse(
+        model=model,
+        temperature=0.2,
+        messages=get_prompt_to_edit_slide_content(
+            prompt,
+            slide_data,
+            theme,
+            language,
+        ),
+        response_format=content_type_model_type,
     )
-
-    return edited_content.to_content()
+    return response.choices[0].message.parsed
 
 
 async def get_slide_type_from_prompt(
@@ -189,18 +164,15 @@ async def get_slide_type_from_prompt(
     slide: SlideModel,
 ) -> SlideTypeModel:
 
-    model = ChatOllama(model=get_small_model(), temperature=0.8)
+    client = get_llm_client()
+    model = get_small_model()
 
-    chain = prompt_template_to_select_slide_type | model.with_structured_output(
-        SlideTypeModel.model_json_schema()
+    response = await client.beta.chat.completions.parse(
+        model=model,
+        temperature=0.2,
+        messages=get_prompt_to_select_slide_type(
+            prompt, slide.content.to_llm_content().model_dump_json(), slide.type
+        ),
+        response_format=SlideTypeModel,
     )
-    slide_data = slide.content.to_llm_content().model_dump_json()
-    return await get_validated_response(
-        chain,
-        {
-            "prompt": prompt,
-            "slide_data": slide_data,
-            "slide_type": slide.type,
-        },
-        SlideTypeModel,
-    )
+    return response.choices[0].message.parsed

@@ -6,8 +6,6 @@ from pptx.util import Pt
 from pptx.enum.text import PP_ALIGN
 from pptx.enum.shapes import MSO_AUTO_SHAPE_TYPE, MSO_CONNECTOR_TYPE
 
-from graph_processor.models import GraphModel
-
 
 class PptxBoxShapeEnum(Enum):
     RECTANGLE = "rectangle"
@@ -138,14 +136,6 @@ class PptxPictureBoxModel(PptxShapeModel):
     picture: PptxPictureModel
 
 
-class PptxGraphBoxModel(PptxShapeModel):
-    position: PptxPositionModel
-    category_font: Optional[PptxFontModel] = None
-    value_font: Optional[PptxFontModel] = None
-    legend_font: Optional[PptxFontModel] = None
-    graph: GraphModel
-
-
 class PptxConnectorModel(PptxShapeModel):
     type: MSO_CONNECTOR_TYPE = MSO_CONNECTOR_TYPE.STRAIGHT
     position: PptxPositionModel
@@ -159,13 +149,10 @@ class PptxSlideModel(BaseModel):
         | PptxAutoShapeBoxModel
         | PptxConnectorModel
         | PptxPictureBoxModel
-        | PptxGraphBoxModel
     ]
 
 
 class PptxPresentationModel(BaseModel):
-    # theme: PresentationTheme
-    # watermark: bool
     background_color: str
     shapes: Optional[List[PptxShapeModel]] = None
     slides: List[PptxSlideModel]

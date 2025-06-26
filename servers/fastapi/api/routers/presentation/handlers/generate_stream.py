@@ -24,7 +24,6 @@ from ppt_config_generator.models import (
     PresentationStructureModel,
 )
 from ppt_generator.generator import generate_presentation_stream
-from ppt_generator.models.content_type_models import CONTENT_TYPE_MAPPING
 from ppt_generator.models.llm_models import (
     LLM_CONTENT_TYPE_MAPPING,
     LLMPresentationModel,
@@ -145,18 +144,21 @@ class PresentationGenerateStreamHandler(FetchAssetsOnPresentationGenerationMixin
 
     async def generate_presentation_openai_google(self):
         presentation_text = ""
-        async for chunk in generate_presentation_stream(
+        async for event in await generate_presentation_stream(
             PresentationMarkdownModel(
                 title=self.title,
                 slides=self.outlines,
                 notes=self.presentation.notes,
             )
         ):
-            presentation_text += chunk.content
-            yield SSEResponse(
-                event="response",
-                data=json.dumps({"type": "chunk", "chunk": chunk.content}),
-            ).to_string()
+            print(event)
+            print("-" * 100)
+        return
+        # presentation_text += event
+        yield SSEResponse(
+            event="response",
+            data=json.dumps({"type": "chunk", "chunk": chunk}),
+        ).to_string()
 
         self.presentation_json = output_parser.parse(presentation_text)
 
