@@ -1,4 +1,4 @@
-from typing import List, Mapping
+from typing import List, Mapping, Union
 from pydantic import BaseModel
 
 from ppt_generator.models.other_models import (
@@ -196,7 +196,19 @@ class Type9Content(SlideContentModel):
         )
 
 
-CONTENT_TYPE_MAPPING: Mapping[int, SlideContentModel] = {
+ContentUnion = Union[
+    Type1Content,
+    Type2Content,
+    Type3Content,
+    Type4Content,
+    Type5Content,
+    Type6Content,
+    Type7Content,
+    Type8Content,
+    Type9Content,
+]
+
+CONTENT_TYPE_MAPPING: Mapping[int, ContentUnion] = {
     TYPE1: Type1Content,
     TYPE2: Type2Content,
     TYPE3: Type3Content,

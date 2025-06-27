@@ -7,6 +7,7 @@ from ppt_config_generator.models import SlideMarkdownModel
 
 from ppt_generator.models.llm_models import (
     LLM_CONTENT_TYPE_MAPPING,
+    LLMContentUnion,
 )
 from ppt_generator.models.other_models import SlideTypeModel
 from ppt_generator.models.slide_model import SlideModel
@@ -115,7 +116,7 @@ def get_prompt_to_select_slide_type(prompt: str, slide_data: dict, slide_type: i
 
 async def get_slide_content_from_type_and_outline(
     slide_type: int, outline: SlideMarkdownModel
-) -> BaseModel:
+) -> LLMContentUnion:
     response_model = LLM_CONTENT_TYPE_MAPPING[slide_type]
 
     client = get_llm_client()
@@ -139,7 +140,7 @@ async def get_edited_slide_content_model(
     slide: SlideModel,
     theme: Optional[dict] = None,
     language: Optional[str] = None,
-):
+) -> LLMContentUnion:
     client = get_llm_client()
     model = get_large_model()
 
