@@ -1,3 +1,4 @@
+import json
 from typing import List
 import uuid, aiohttp
 from fastapi import HTTPException
@@ -31,8 +32,6 @@ from ppt_generator.models.llm_models import (
 from langchain_core.output_parsers import JsonOutputParser
 
 from ppt_generator.models.slide_model import SlideModel
-
-output_parser = JsonOutputParser(pydantic_object=LLMPresentationModel)
 
 
 class GeneratePresentationHandler(FetchAssetsOnPresentationGenerationMixin):
@@ -80,19 +79,17 @@ class GeneratePresentationHandler(FetchAssetsOnPresentationGenerationMixin):
 
         print("-" * 40)
         print("Generating Presentation")
-        presentation_text = (
-            await generate_presentation(
-                PresentationMarkdownModel(
-                    title=presentation_content.title,
-                    slides=presentation_content.slides,
-                    notes=presentation_content.notes,
-                )
+        presentation_text = await generate_presentation(
+            PresentationMarkdownModel(
+                title=presentation_content.title,
+                slides=presentation_content.slides,
+                notes=presentation_content.notes,
             )
-        ).content
+        )
 
         print("-" * 40)
         print("Parsing Presentation")
-        presentation_json = output_parser.parse(presentation_text)
+        presentation_json = json.loads(presentation_text)
 
         slide_models: List[SlideModel] = []
         for i, slide in enumerate(presentation_json["slides"]):

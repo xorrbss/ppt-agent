@@ -35,8 +35,6 @@ from langchain_core.output_parsers import JsonOutputParser
 
 from ppt_generator.slide_generator import get_slide_content_from_type_and_outline
 
-output_parser = JsonOutputParser(pydantic_object=LLMPresentationModel)
-
 
 class PresentationGenerateStreamHandler(FetchAssetsOnPresentationGenerationMixin):
 
@@ -151,16 +149,14 @@ class PresentationGenerateStreamHandler(FetchAssetsOnPresentationGenerationMixin
                 notes=self.presentation.notes,
             )
         ):
-            print(event)
-            print("-" * 100)
-        return
-        # presentation_text += event
-        yield SSEResponse(
-            event="response",
-            data=json.dumps({"type": "chunk", "chunk": chunk}),
-        ).to_string()
+            chunk = event.choices[0].delta.content
+            presentation_text += chunk
+            yield SSEResponse(
+                event="response",
+                data=json.dumps({"type": "chunk", "chunk": chunk}),
+            ).to_string()
 
-        self.presentation_json = output_parser.parse(presentation_text)
+        self.presentation_json = json.loads(presentation_text)
 
     async def generate_presentation_ollama(self):
         presentation_structure = PresentationStructureModel(

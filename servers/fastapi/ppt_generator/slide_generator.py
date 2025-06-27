@@ -9,6 +9,9 @@ from ppt_generator.models.llm_models import (
     LLM_CONTENT_TYPE_MAPPING,
     LLMContentUnion,
 )
+from ppt_generator.models.llm_models_with_validations import (
+    LLM_CONTENT_TYPE_MAPPING_WITH_VALIDATION,
+)
 from ppt_generator.models.other_models import SlideTypeModel
 from ppt_generator.models.slide_model import SlideModel
 
@@ -117,20 +120,21 @@ def get_prompt_to_select_slide_type(prompt: str, slide_data: dict, slide_type: i
 async def get_slide_content_from_type_and_outline(
     slide_type: int, outline: SlideMarkdownModel
 ) -> LLMContentUnion:
-    response_model = LLM_CONTENT_TYPE_MAPPING[slide_type]
+    response_model = LLM_CONTENT_TYPE_MAPPING_WITH_VALIDATION[slide_type]
 
     client = get_llm_client()
     model = get_small_model()
 
     response = await client.beta.chat.completions.parse(
         model=model,
-        temperature=0.2,
+        temperature=0.5,
         messages=get_prompt_to_generate_slide_content(
             outline.title,
             outline.body,
         ),
         response_format=response_model,
     )
+
     return response.choices[0].message.parsed
 
 
@@ -144,7 +148,7 @@ async def get_edited_slide_content_model(
     client = get_llm_client()
     model = get_large_model()
 
-    content_type_model_type = LLM_CONTENT_TYPE_MAPPING[slide_type]
+    content_type_model_type = LLM_CONTENT_TYPE_MAPPING_WITH_VALIDATION[slide_type]
     slide_data = slide.content.to_llm_content().model_dump_json()
     response = await client.beta.chat.completions.parse(
         model=model,

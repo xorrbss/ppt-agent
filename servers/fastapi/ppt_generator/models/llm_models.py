@@ -1,9 +1,8 @@
-from typing import List, Literal, Mapping, Union
-from pydantic import BaseModel, Field
+from typing import List, Mapping, Union
+from pydantic import BaseModel
 
 from ppt_generator.models.content_type_models import (
     HeadingModel,
-    SlideContentModel,
     TableDataModel,
     TableModel,
     Type1Content,
@@ -30,23 +29,19 @@ from ppt_generator.models.other_models import (
 
 
 class LLMTableDataModel(TableDataModel):
-    x_labels: List[str] = Field(description="X labels of the table")
-    y_labels: List[str] = Field(description="Y labels of the table")
-    data: List[List[float]] = Field(description="Data of the table")
+    x_labels: List[str]
+    y_labels: List[str]
+    data: List[List[float]]
 
 
 class LLMTableModel(TableModel):
-    name: str = Field(description="Name of the table")
+    name: str
     data: LLMTableDataModel
 
 
 class LLMHeadingModel(BaseModel):
-    heading: str = Field(
-        description="Item heading in less than 6 words",
-    )
-    description: str = Field(
-        description="Item description in less than 15 words.",
-    )
+    heading: str
+    description: str
 
     def to_content(self) -> HeadingModel:
         return HeadingModel(
@@ -55,14 +50,8 @@ class LLMHeadingModel(BaseModel):
         )
 
 
-class LLMHeadingModelNew(LLMHeadingModel):
-    pass
-
-
 class LLMHeadingModelWithImagePrompt(LLMHeadingModel):
-    image_prompt: str = Field(
-        description="Item image prompt in less than 5 words",
-    )
+    image_prompt: str
 
     def to_content(self) -> HeadingModel:
         return HeadingModel(
@@ -72,9 +61,7 @@ class LLMHeadingModelWithImagePrompt(LLMHeadingModel):
 
 
 class LLMHeadingModelWithIconQuery(LLMHeadingModel):
-    icon_query: str = Field(
-        description="Item icon query in less than 5 words",
-    )
+    icon_query: str
 
     def to_content(self) -> HeadingModel:
         return HeadingModel(
@@ -84,22 +71,12 @@ class LLMHeadingModelWithIconQuery(LLMHeadingModel):
 
 
 class LLMSlideContentModel(BaseModel):
-    # title: str = Field(
-    #     description="Slide title in less than 8 words",
-    # )
-
-    def to_content(self) -> SlideContentModel:
-        raise NotImplementedError("to_content method not implemented")
+    title: str
 
 
 class LLMType1Content(LLMSlideContentModel):
-    content_type: Literal["1"] = "1"
-    body: str = Field(
-        description="Slide content summary in less than 30 words.",
-    )
-    image_prompt: str = Field(
-        description="Slide image prompt in less than 5 words",
-    )
+    body: str
+    image_prompt: str
 
     def to_content(self) -> Type1Content:
         return Type1Content(
@@ -110,15 +87,7 @@ class LLMType1Content(LLMSlideContentModel):
 
 
 class LLMType2Content(LLMSlideContentModel):
-    content_type: Literal["2"] = Field(
-        "2",
-        description="Content type",
-    )
-    body: List[LLMHeadingModelNew] = Field(
-        description="Items to show in slide",
-        min_length=1,
-        max_length=4,
-    )
+    body: List[LLMHeadingModel]
 
     def to_content(self) -> Type2Content:
         return Type2Content(
@@ -128,15 +97,8 @@ class LLMType2Content(LLMSlideContentModel):
 
 
 class LLMType3Content(LLMSlideContentModel):
-    content_type: Literal["3"] = "3"
-    body: List[LLMHeadingModel] = Field(
-        description="Items to show in slide",
-        min_length=3,
-        max_length=3,
-    )
-    image_prompt: str = Field(
-        description="Slide image prompt in less than 5 words",
-    )
+    body: List[LLMHeadingModel]
+    image_prompt: str
 
     def to_content(self) -> Type3Content:
         return Type3Content(
@@ -147,12 +109,7 @@ class LLMType3Content(LLMSlideContentModel):
 
 
 class LLMType4Content(LLMSlideContentModel):
-    content_type: Literal["4"] = "4"
-    body: List[LLMHeadingModelWithImagePrompt] = Field(
-        description="Items to show in slide",
-        min_length=1,
-        max_length=3,
-    )
+    body: List[LLMHeadingModelWithImagePrompt]
 
     def to_content(self) -> Type4Content:
         return Type4Content(
@@ -163,11 +120,8 @@ class LLMType4Content(LLMSlideContentModel):
 
 
 class LLMType5Content(LLMSlideContentModel):
-    content_type: Literal["5"] = "5"
-    body: str = Field(
-        description="Slide content summary in less than 30 words.",
-    )
-    table: LLMTableModel = Field(description="Table to show in slide")
+    body: str
+    table: LLMTableModel
 
     def to_content(self) -> Type5Content:
         return Type5Content(
@@ -178,18 +132,8 @@ class LLMType5Content(LLMSlideContentModel):
 
 
 class LLMType6Content(LLMSlideContentModel):
-    content_type: Literal["6"] = Field(
-        "6",
-        description="Content type",
-    )
-    description: str = Field(
-        description="Slide content summary in less than 20 words.",
-    )
-    body: List[LLMHeadingModelNew] = Field(
-        description="Items to show in slide",
-        min_length=1,
-        max_length=3,
-    )
+    description: str
+    body: List[LLMHeadingModel]
 
     def to_content(self) -> Type6Content:
         return Type6Content(
@@ -200,12 +144,7 @@ class LLMType6Content(LLMSlideContentModel):
 
 
 class LLMType7Content(LLMSlideContentModel):
-    content_type: Literal["7"] = "7"
-    body: List[LLMHeadingModelWithIconQuery] = Field(
-        description="Items to show in slide",
-        min_length=1,
-        max_length=4,
-    )
+    body: List[LLMHeadingModelWithIconQuery]
 
     def to_content(self) -> Type7Content:
         return Type7Content(
@@ -216,15 +155,8 @@ class LLMType7Content(LLMSlideContentModel):
 
 
 class LLMType8Content(LLMSlideContentModel):
-    content_type: Literal["8"] = "8"
-    description: str = Field(
-        description="Slide content summary in less than 20 words.",
-    )
-    body: List[LLMHeadingModelWithImagePrompt] = Field(
-        description="Items to show in slide",
-        min_length=1,
-        max_length=3,
-    )
+    description: str
+    body: List[LLMHeadingModelWithImagePrompt]
 
     def to_content(self) -> Type8Content:
         return Type8Content(
@@ -236,13 +168,8 @@ class LLMType8Content(LLMSlideContentModel):
 
 
 class LLMType9Content(LLMSlideContentModel):
-    content_type: Literal["9"] = "9"
-    body: List[LLMHeadingModel] = Field(
-        description="Items to show in slide",
-        min_length=1,
-        max_length=3,
-    )
-    table: LLMTableModel = Field(description="Table to show in slide")
+    body: List[LLMHeadingModel]
+    table: LLMTableModel
 
     def to_content(self) -> Type9Content:
         return Type9Content(
@@ -252,7 +179,19 @@ class LLMType9Content(LLMSlideContentModel):
         )
 
 
-LLM_CONTENT_TYPE_MAPPING: Mapping[int, LLMSlideContentModel] = {
+LLMContentUnion = Union[
+    LLMType1Content,
+    LLMType2Content,
+    LLMType3Content,
+    LLMType4Content,
+    LLMType5Content,
+    LLMType6Content,
+    LLMType7Content,
+    LLMType8Content,
+    LLMType9Content,
+]
+
+LLM_CONTENT_TYPE_MAPPING: Mapping[int, LLMContentUnion] = {
     TYPE1: LLMType1Content,
     TYPE2: LLMType2Content,
     TYPE3: LLMType3Content,
@@ -264,25 +203,10 @@ LLM_CONTENT_TYPE_MAPPING: Mapping[int, LLMSlideContentModel] = {
     TYPE9: LLMType9Content,
 }
 
-LLMContentUnion = Union[
-    # LLMType1Content,
-    LLMType2Content,
-    # LLMType3Content,
-    # LLMType4Content,
-    # LLMType5Content,
-    LLMType6Content,
-    # LLMType7Content,
-    # LLMType8Content,
-    # LLMType9Content,
-]
-
 
 class LLMSlideModel(BaseModel):
     type: int
-    content: LLMContentUnion = Field(
-        description="Content of the slide",
-        discriminator="content_type",
-    )
+    content: LLMContentUnion
 
 
 class LLMPresentationModel(BaseModel):

@@ -80,3 +80,4 @@ class SelectedLLMProvider(Enum):
     OLLAMA = "ollama"
     OPENAI = "openai"
     GOOGLE = "google"
+    CUSTOM = "custom"

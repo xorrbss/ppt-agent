@@ -16,12 +16,16 @@ def get_selected_llm_provider() -> SelectedLLMProvider:
 def get_model_base_url():
     selected_llm = get_selected_llm_provider()
 
-    if selected_llm == SelectedLLMProvider.OLLAMA:
-        return "http://localhost:11434/v1"
-    elif selected_llm == SelectedLLMProvider.OPENAI:
+    if selected_llm == SelectedLLMProvider.OPENAI:
         return "https://api.openai.com/v1"
-    else:
+    elif selected_llm == SelectedLLMProvider.GOOGLE:
         return "https://generativelanguage.googleapis.com/v1beta/openai"
+    elif selected_llm == SelectedLLMProvider.OLLAMA:
+        return os.getenv("LLM_PROVIDER_URL", "http://localhost:11434/v1")
+    elif selected_llm == SelectedLLMProvider.CUSTOM:
+        return os.getenv("LLM_PROVIDER_URL")
+    else:
+        raise ValueError(f"Invalid LLM provider: {selected_llm}")
 
 
 def get_llm_api_key():
@@ -30,8 +34,12 @@ def get_llm_api_key():
         return os.getenv("OPENAI_API_KEY")
     elif selected_llm == SelectedLLMProvider.GOOGLE:
         return os.getenv("GOOGLE_API_KEY")
+    elif selected_llm == SelectedLLMProvider.OLLAMA:
+        return os.getenv("LLM_API_KEY", "ollama")
+    elif selected_llm == SelectedLLMProvider.CUSTOM:
+        return os.getenv("LLM_API_KEY")
     else:
-        return "ollama"
+        raise ValueError(f"Invalid LLM provider: {selected_llm}")
 
 
 def get_llm_client():

@@ -57,9 +57,6 @@ class HeadingModel(BaseModel):
 class SlideContentModel(BaseModel):
     title: str
 
-    def to_llm_content(self):
-        raise NotImplementedError("to_llm_content method not implemented")
-
 
 class Type1Content(SlideContentModel):
     body: str
