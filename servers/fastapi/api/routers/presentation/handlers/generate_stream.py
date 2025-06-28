@@ -31,7 +31,6 @@ from ppt_generator.models.llm_models import (
 )
 from ppt_generator.models.slide_model import SlideModel
 from api.services.instances import TEMP_FILE_SERVICE
-from langchain_core.output_parsers import JsonOutputParser
 
 from ppt_generator.slide_generator import get_slide_content_from_type_and_outline
 

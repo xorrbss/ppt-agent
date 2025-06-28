@@ -1,5 +1,3 @@
-import asyncio
-from typing import List
 import uuid
 from api.models import LogMetadata
 from api.routers.presentation.models import (
@@ -37,7 +35,7 @@ class DecomposeDocumentsHandler:
             file_path = TEMP_FILE_SERVICE.create_temp_file_path(
                 f"{str(uuid.uuid4())}.txt", self.temp_dir
             )
-            parsed_doc = parsed_doc.page_content.replace("<br>", "\n")
+            parsed_doc = parsed_doc.replace("<br>", "\n")
             with open(file_path, "w") as text_file:
                 text_file.write(parsed_doc)
             document_paths.append(file_path)

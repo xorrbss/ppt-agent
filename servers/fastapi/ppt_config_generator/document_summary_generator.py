@@ -1,7 +1,5 @@
 import asyncio
 from typing import List
-from langchain_core.documents import Document
-from langchain_text_splitters import CharacterTextSplitter
 from openai.types.chat.chat_completion import ChatCompletion
 
 from api.utils.model_utils import get_llm_client, get_nano_model
@@ -23,16 +21,13 @@ Maintain as much information as possible.
 """
 
 
-async def generate_document_summary(documents: List[Document]):
+async def generate_document_summary(documents: List[str]):
     client = get_llm_client()
     model = get_nano_model()
 
-    text_splitter = CharacterTextSplitter(chunk_size=200000, chunk_overlap=0)
-
     coroutines = []
     for document in documents:
-        text = document.page_content
-        truncated_text = text_splitter.split_text(text)[0]
+        truncated_text = document[:200000]
         coroutine = client.chat.completions.create(
             model=model,
             messages=[

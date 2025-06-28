@@ -27,10 +27,7 @@ from ppt_config_generator.ppt_outlines_generator import generate_ppt_content
 from ppt_generator.generator import generate_presentation
 from ppt_generator.models.llm_models import (
     LLM_CONTENT_TYPE_MAPPING,
-    LLMPresentationModel,
 )
-from langchain_core.output_parsers import JsonOutputParser
-
 from ppt_generator.models.slide_model import SlideModel
 
 

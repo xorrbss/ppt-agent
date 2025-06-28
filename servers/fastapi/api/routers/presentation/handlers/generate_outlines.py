@@ -1,5 +1,4 @@
 import uuid
-import re
 
 from api.models import LogMetadata
 from api.routers.presentation.models import GenerateOutlinesRequest
