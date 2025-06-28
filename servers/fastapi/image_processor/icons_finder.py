@@ -5,17 +5,17 @@ from ppt_generator.models.query_and_prompt_models import (
     IconCategoryEnum,
     IconQueryCollectionWithData,
 )
-from langchain_core.vectorstores import InMemoryVectorStore
+from fastembed_vectorstore import FastembedVectorstore
 
 
 async def get_icon(
-    vector_store: InMemoryVectorStore,
+    vector_store: FastembedVectorstore,
     input: IconQueryCollectionWithData,
 ) -> str:
     try:
         query = input.icon_query
-        results = vector_store.similarity_search(query=query, k=1)
-        icon_name = results[0].page_content
+        results = vector_store.search(query, 1)
+        icon_name = results[0][0].split("||")[0]
         return get_resource(f"assets/icons/bold/{icon_name}.png")
     except Exception as e:
         print("Error finding icon: ", e)
@@ -23,7 +23,7 @@ async def get_icon(
 
 
 async def get_icons(
-    vector_store: InMemoryVectorStore,
+    vector_store: FastembedVectorstore,
     query: str,
     page: int,
     limit: int,
@@ -31,7 +31,7 @@ async def get_icons(
     temp_dir: str,
 ) -> List[str]:
 
-    results = await vector_store.asimilarity_search(query=query, k=limit)
-    icon_names = [result.page_content for result in results]
+    results = vector_store.search(query, limit)
+    icon_names = [result[0].split("||")[0] for result in results]
 
     return [get_resource(f"assets/icons/bold/{each}.png") for each in icon_names]

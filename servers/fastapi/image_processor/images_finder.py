@@ -3,7 +3,6 @@ import base64
 import os
 import uuid
 import aiohttp
-from langchain_google_genai import ChatGoogleGenerativeAI
 from openai import OpenAI
 
 from ppt_generator.models.query_and_prompt_models import (
@@ -67,22 +66,23 @@ async def generate_image_openai(prompt: str, output_directory: str) -> str:
 
 
 async def generate_image_google(prompt: str, output_directory: str) -> str:
-    response = await ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash-preview-image-generation"
-    ).ainvoke([prompt], generation_config={"response_modalities": ["TEXT", "IMAGE"]})
+    # response = await ChatGoogleGenerativeAI(
+    #     model="gemini-2.0-flash-preview-image-generation"
+    # ).ainvoke([prompt], generation_config={"response_modalities": ["TEXT", "IMAGE"]})
 
-    image_block = next(
-        block
-        for block in response.content
-        if isinstance(block, dict) and block.get("image_url")
-    )
+    # image_block = next(
+    #     block
+    #     for block in response.content
+    #     if isinstance(block, dict) and block.get("image_url")
+    # )
 
-    base64_image = image_block["image_url"].get("url").split(",")[-1]
-    image_path = os.path.join(output_directory, f"{str(uuid.uuid4())}.jpg")
-    with open(image_path, "wb") as f:
-        f.write(base64.b64decode(base64_image))
+    # base64_image = image_block["image_url"].get("url").split(",")[-1]
+    # image_path = os.path.join(output_directory, f"{str(uuid.uuid4())}.jpg")
+    # with open(image_path, "wb") as f:
+    #     f.write(base64.b64decode(base64_image))
 
-    return image_path
+    # return image_path
+    return ""
 
 
 async def get_image_from_pexels(prompt: str, output_directory: str) -> str:
