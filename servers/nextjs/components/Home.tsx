@@ -116,36 +116,7 @@ const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
         },
     },
     ollama: {
-        textModels: [
-            {
-                value: "llama3.1:8b",
-                label: "Llama3.1:8b",
-                description: "Balanced model for most tasks",
-                icon: "/icons/ollama.png",
-                size: "8GB",
-            },
-            {
-                value: "llama3.1:70b",
-                label: "Llama3.1:70b",
-                description: "Large model for complex tasks",
-                icon: "/icons/ollama.png",
-                size: "70GB",
-            },
-            {
-                value: "llama3.1:14b",
-                label: "Llama3.1:14b",
-                description: "Large model for complex tasks",
-                icon: "/icons/ollama.png",
-                size: "14GB",
-            },
-            {
-                value: "llama3.1:11b",
-                label: "Llama3.1:11b",
-                description: "Large model for complex tasks",
-                icon: "/icons/ollama.png",
-                size: "11GB",
-            },
-        ],
+        textModels: [],
         imageModels: [
             {
                 value: "pexels",
