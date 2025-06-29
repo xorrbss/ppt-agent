@@ -3,13 +3,14 @@ import base64
 import os
 import uuid
 import aiohttp
-from langchain_google_genai import ChatGoogleGenerativeAI
-from openai import OpenAI
+from google import genai
+from google.genai.types import GenerateContentConfig
 
 from ppt_generator.models.query_and_prompt_models import (
     ImagePromptWithThemeAndAspectRatio,
 )
-from api.utils.utils import download_file, get_resource, is_ollama_selected
+from api.utils.utils import download_file, get_resource
+from api.utils.model_utils import get_llm_client, is_ollama_selected
 
 
 async def generate_image(
@@ -46,7 +47,7 @@ async def generate_image(
 
 
 async def generate_image_openai(prompt: str, output_directory: str) -> str:
-    client = OpenAI()
+    client = get_llm_client()
     result = await asyncio.to_thread(
         client.images.generate,
         model="dall-e-3",
@@ -66,20 +67,20 @@ async def generate_image_openai(prompt: str, output_directory: str) -> str:
 
 
 async def generate_image_google(prompt: str, output_directory: str) -> str:
-    response = await ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash-preview-image-generation"
-    ).ainvoke([prompt], generation_config={"response_modalities": ["TEXT", "IMAGE"]})
-
-    image_block = next(
-        block
-        for block in response.content
-        if isinstance(block, dict) and block.get("image_url")
+    client = genai.Client()
+    response = client.models.generate_content(
+        model="gemini-2.0-flash-preview-image-generation",
+        contents=[prompt],
+        config=GenerateContentConfig(response_modalities=["TEXT", "IMAGE"]),
     )
 
-    base64_image = image_block["image_url"].get("url").split(",")[-1]
-    image_path = os.path.join(output_directory, f"{str(uuid.uuid4())}.jpg")
-    with open(image_path, "wb") as f:
-        f.write(base64.b64decode(base64_image))
+    for part in response.candidates[0].content.parts:
+        if part.text is not None:
+            print(part.text)
+        elif part.inline_data is not None:
+            image_path = os.path.join(output_directory, f"{str(uuid.uuid4())}.jpg")
+            with open(image_path, "wb") as f:
+                f.write(part.inline_data.data)
 
     return image_path
 

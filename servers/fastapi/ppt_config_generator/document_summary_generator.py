@@ -1,14 +1,8 @@
 import asyncio
-import os
 from typing import List
-from langchain_core.documents import Document
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.messages import BaseMessage
-from langchain_text_splitters import CharacterTextSplitter
+from openai.types.chat.chat_completion import ChatCompletion
 
-from api.utils.utils import get_nano_model
+from api.utils.model_utils import get_llm_client, get_nano_model
 
 sysmte_prompt = """
 Generate a blog-style summary of the provided document in **more than 2000 words**.
@@ -26,26 +20,25 @@ Maintain as much information as possible.
 - If **slides structure is mentioned** in document, structure the summary in the same way.
 """
 
-prompt_template = ChatPromptTemplate.from_messages(
-    [
-        ("system", sysmte_prompt),
-        ("user", "{text}"),
-    ]
-)
 
-
-async def generate_document_summary(documents: List[Document]):
+async def generate_document_summary(documents: List[str]):
+    client = get_llm_client()
     model = get_nano_model()
-    text_splitter = CharacterTextSplitter(chunk_size=200000, chunk_overlap=0)
-    chain = prompt_template | model
 
     coroutines = []
     for document in documents:
-        text = document.page_content
-        truncated_text = text_splitter.split_text(text)[0]
-        coroutine = chain.ainvoke({"text": truncated_text})
+        truncated_text = document[:200000]
+        coroutine = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": sysmte_prompt},
+                {"role": "user", "content": truncated_text},
+            ],
+        )
         coroutines.append(coroutine)
 
-    completions: List[BaseMessage] = await asyncio.gather(*coroutines)
-    combined = "\n\n\n\n".join([completion.content for completion in completions])
+    completions: List[ChatCompletion] = await asyncio.gather(*coroutines)
+    combined = "\n\n\n\n".join(
+        [completion.choices[0].message.content for completion in completions]
+    )
     return combined

@@ -6,26 +6,12 @@ from lxml import etree
 from pptx import Presentation
 from pptx.shapes.autoshape import Shape
 from pptx.slide import Slide
-from pptx.chart.data import ChartData, BubbleChartData
-from pptx.chart.chart import Chart
 from pptx.text.text import _Paragraph, TextFrame, Font, _Run
-from pptx.enum.chart import (
-    XL_CHART_TYPE,
-    XL_LEGEND_POSITION,
-    XL_LABEL_POSITION,
-)
 from pptx.opc.constants import RELATIONSHIP_TYPE as RT
 from lxml.etree import fromstring, tostring
 from PIL import Image
 
 from pptx.util import Pt
-from graph_processor.models import (
-    BarGraphDataModel,
-    BubbleChartDataModel,
-    GraphTypeEnum,
-    LineChartDataModel,
-    PieChartDataModel,
-)
 from pptx.dml.color import RGBColor
 from ppt_generator.models.pptx_models import (
     PptxAutoShapeBoxModel,
@@ -33,7 +19,6 @@ from ppt_generator.models.pptx_models import (
     PptxConnectorModel,
     PptxFillModel,
     PptxFontModel,
-    PptxGraphBoxModel,
     PptxParagraphModel,
     PptxPictureBoxModel,
     PptxPositionModel,
@@ -63,8 +48,6 @@ class PptxPresentationCreator:
 
         self._ppt_model = ppt_model
         self._slide_models = ppt_model.slides
-        # self._theme = ppt_model.theme
-        # self._watermark = ppt_model.watermark
 
         self._ppt = Presentation()
         self._ppt.slide_width = Pt(1280)
@@ -73,7 +56,6 @@ class PptxPresentationCreator:
         self._slide_fill = PptxFillModel(color=ppt_model.background_color)
 
     def create_ppt(self):
-        # self.set_presentation_theme()
 
         for slide_model in self._slide_models:
             # Adding global shapes to slide
@@ -120,15 +102,8 @@ class PptxPresentationCreator:
             elif model_type is PptxTextBoxModel:
                 self.add_textbox(slide, shape_model)
 
-            elif model_type is PptxGraphBoxModel:
-                self.add_graph(slide, shape_model)
-
             elif model_type is PptxConnectorModel:
                 self.add_connector(slide, shape_model)
-
-        # if self._watermark:
-        # Adding watermark
-        # self.add_picture(slide, self.get_watermark_box_model())
 
     def add_connector(self, slide: Slide, connector_model: PptxConnectorModel):
         if connector_model.thickness == 0:
@@ -138,126 +113,6 @@ class PptxPresentationCreator:
         )
         connector_shape.line.width = Pt(connector_model.thickness)
         connector_shape.line.color.rgb = RGBColor.from_string(connector_model.color)
-
-    def add_graph(self, slide: Slide, graph_box_model: PptxGraphBoxModel):
-        chart_data = None
-        chart_type = None
-        graph = graph_box_model.graph
-        match (graph.type):
-            case GraphTypeEnum.bar:
-                chart_data = self.get_bar_graph(graph.data)
-                chart_type = XL_CHART_TYPE.COLUMN_CLUSTERED
-
-            case GraphTypeEnum.scatter:
-                chart_data = self.get_scatter_graph(graph.data)
-                chart_type = XL_CHART_TYPE.XY_SCATTER
-
-            case GraphTypeEnum.bubble:
-                chart_data = self.get_bubble_graph(graph.data)
-                chart_type = XL_CHART_TYPE.BUBBLE
-
-            case GraphTypeEnum.line:
-                chart_data = self.get_line_graph(graph.data)
-                chart_type = XL_CHART_TYPE.LINE
-
-            case GraphTypeEnum.pie:
-                chart_data = self.get_pie_graph(graph.data)
-                chart_type = XL_CHART_TYPE.PIE
-
-        if chart_data:
-            chart: Chart = slide.shapes.add_chart(
-                chart_type, *graph_box_model.position.to_pt_list(), chart_data
-            ).chart
-            self.apply_graph_styles(chart, graph_box_model)
-
-    def apply_graph_styles(self, chart, graph_box_model: PptxGraphBoxModel):
-        graph = graph_box_model.graph
-
-        if graph.type in [GraphTypeEnum.pie, GraphTypeEnum.scatter]:
-            chart.has_legend = True
-            chart.legend.position = XL_LEGEND_POSITION.RIGHT
-        else:
-            chart.has_legend = False
-
-        if graph_box_model.legend_font:
-            self.apply_font(chart.font, graph_box_model.legend_font)
-
-        try:
-            category_axis = chart.category_axis
-            if graph_box_model.category_font:
-                font = category_axis.tick_labels.font
-                self.apply_font(font, graph_box_model.category_font)
-        except:
-            print("-" * 20)
-            print("Could not apply category labels style")
-
-        try:
-            value_axis = chart.value_axis
-            tick_labels = value_axis.tick_labels
-            if graph.postfix:
-                tick_labels.number_format = f'0"{graph.postfix}"'
-            if graph_box_model.value_font:
-                self.apply_font(tick_labels.font, graph_box_model.value_font)
-        except:
-            print("-" * 20)
-            print("Could not apply tick labels style")
-
-        if graph_box_model.graph.type is GraphTypeEnum.pie:
-            for plot in chart.plots:
-                try:
-                    plot.has_data_labels = True
-                    plot.data_labels.position = (
-                        XL_LABEL_POSITION.OUTSIDE_END
-                        if graph_box_model.graph.type is GraphTypeEnum.bar
-                        else XL_LABEL_POSITION.CENTER
-                    )
-                    if graph.postfix:
-                        plot.data_labels.number_format = f'0"{graph.postfix}"'
-                    if graph_box_model.value_font:
-                        self.apply_font(
-                            plot.data_labels.font,
-                            (
-                                graph_box_model.value_font
-                                if graph_box_model.graph.type is GraphTypeEnum.bar
-                                else PptxFontModel(
-                                    # size=self._theme.fonts.p2,
-                                    size=16,
-                                    bold=True,
-                                    color="ffffff",
-                                )
-                            ),
-                        )
-                except:
-                    print("-" * 20)
-                    print("Could not apply data labels style")
-
-    def get_bar_graph(self, graph: BarGraphDataModel):
-        chart_data = ChartData()
-        chart_data.categories = graph.get_categories()
-        for series in graph.series:
-            chart_data.add_series(series.get_name(), series.data)
-        return chart_data
-
-    def get_bubble_graph(self, graph: BubbleChartDataModel):
-        chart_data = BubbleChartData()
-        for each in graph.series:
-            series = chart_data.add_series(each.get_name())
-            for point in each.points:
-                series.add_data_point(*point.to_list())
-        return chart_data
-
-    def get_line_graph(self, graph: LineChartDataModel):
-        chart_data = ChartData()
-        chart_data.categories = graph.get_categories()
-        for series in graph.series:
-            chart_data.add_series(series.get_name(), series.data)
-        return chart_data
-
-    def get_pie_graph(self, graph: PieChartDataModel):
-        chart_data = ChartData()
-        chart_data.categories = graph.get_categories()
-        chart_data.add_series("", graph.series[0].data)
-        return chart_data
 
     def add_picture(self, slide: Slide, picture_model: PptxPictureBoxModel):
         image_path = picture_model.picture.path
@@ -561,18 +416,6 @@ class PptxPresentationCreator:
         font.bold = font_model.bold
         font.italic = font_model.italic
         font.size = Pt(font_model.size)
-
-    # def get_watermark_box_model(self):
-    #     watermark_asset_path = f"assets/images/{'watermark_dark.png' if self._theme == PresentationTheme.dark else 'watermark.png'}"
-
-    #     return PptxPictureBoxModel(
-    #         position=PptxPositionModel(left=1120, top=685, width=140),
-    #         clip=False,
-    #         picture=PptxPictureModel(
-    #             is_network=False,
-    #             path=watermark_asset_path,
-    #         ),
-    #     )
 
     def save(self, path: str):
         self._ppt.save(path)

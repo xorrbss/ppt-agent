@@ -8,3 +8,4 @@ build
 .gitignore
 tmp
 debug
+.fastembed_cache

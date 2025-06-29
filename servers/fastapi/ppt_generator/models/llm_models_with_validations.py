@@ -1,7 +1,6 @@
-from typing import List, Mapping
+from typing import List, Mapping, Union
 from pydantic import Field
 
-from graph_processor.models import GraphModel
 from ppt_generator.models.other_models import (
     TYPE1,
     TYPE2,
@@ -14,6 +13,8 @@ from ppt_generator.models.other_models import (
     TYPE9,
 )
 from ppt_generator.models.llm_models import (
+    LLMTableDataModel,
+    LLMTableModel,
     LLMHeadingModel,
     LLMHeadingModelWithImagePrompt,
     LLMHeadingModelWithIconQuery,
@@ -32,239 +33,179 @@ from ppt_generator.models.llm_models import (
 )
 
 
+class LLMTableDataModelWithValidation(LLMTableDataModel):
+    x_labels: List[str] = Field(
+        description="X labels of the table",
+        min_length=1,
+        max_length=5,
+    )
+    y_labels: List[str] = Field(
+        description="Y labels of the table",
+        min_length=1,
+        max_length=3,
+    )
+    data: List[List[float]] = Field(
+        description="Data of the table",
+        min_length=1,
+        max_length=5,
+    )
+
+
+class LLMTableModelWithValidation(LLMTableModel):
+    name: str = Field(
+        description="Name of the table in about 8 words",
+        min_length=10,
+        max_length=50,
+    )
+    data: LLMTableDataModelWithValidation
+
+
 class LLMHeadingModelWithValidation(LLMHeadingModel):
     heading: str = Field(
-        description="List item heading to show in slide body",
+        description="Item heading in about 6 words",
         min_length=10,
-        max_length=30,
+        max_length=40,
     )
     description: str = Field(
-        description="Description of list item in less than 20 words.",
-        min_length=80,
-        max_length=150,
+        description="Item description in about 12 words.",
+        min_length=50,
+        max_length=120,
     )
 
 
 class LLMHeadingModelWithImagePromptWithValidation(LLMHeadingModelWithImagePrompt):
     image_prompt: str = Field(
-        description="Prompt used to generate image for this item",
+        description="Item image prompt in about 10 words",
         min_length=10,
-        max_length=50,
+        max_length=100,
     )
 
 
 class LLMHeadingModelWithIconQueryWithValidation(LLMHeadingModelWithIconQuery):
     icon_query: str = Field(
-        description="Icon query to generate icon for this item",
+        description="Item icon query in about 4 words",
         min_length=10,
-        max_length=50,
+        max_length=40,
+    )
+
+
+class LLMSlideContentModelWithValidation(LLMSlideContentModel):
+    title: str = Field(
+        description="Slide title in about 8 words",
+        min_length=10,
+        max_length=80,
     )
 
 
 class LLMType1ContentWithValidation(LLMType1Content):
-    title: str = Field(
-        description="Title of the slide",
-        min_length=10,
-        max_length=50,
-    )
     body: str = Field(
-        description="Slide content summary in less than 30 words.",
-        min_length=100,
-        max_length=200,
+        description="Slide content summary in about 30 words.",
+        min_length=50,
+        max_length=300,
     )
     image_prompt: str = Field(
-        description="Prompt used to generate image for this slide.",
+        description="Slide image prompt in about 5 words",
         min_length=10,
-        max_length=50,
+        max_length=30,
     )
-
-    @classmethod
-    def get_notes(cls):
-        return ""
 
 
 class LLMType2ContentWithValidation(LLMType2Content):
-    title: str = Field(
-        description="Title of the slide",
-        min_length=10,
-        max_length=50,
-    )
     body: List[LLMHeadingModelWithValidation] = Field(
-        description="List items to show in slide's body",
+        description="Items to show in slide",
         min_length=1,
         max_length=4,
     )
 
-    @classmethod
-    def get_notes(cls):
-        return """
-        - The **Body** should include **1 to 4 HeadingModels**.  
-        - Each **Heading** must consist of **1 to 3 words**.  
-        - Each item **Description** can be upto 10 words.
-        """
-
 
 class LLMType3ContentWithValidation(LLMType3Content):
-    title: str = Field(
-        description="Title of the slide",
-        min_length=10,
-        max_length=50,
-    )
     body: List[LLMHeadingModelWithValidation] = Field(
-        description="List items to show in slide's body",
+        description="Items to show in slide",
         min_length=3,
         max_length=3,
     )
     image_prompt: str = Field(
-        description="Prompt used to generate image for this slide",
+        description="Slide image prompt in about 5 words",
         min_length=10,
-        max_length=50,
+        max_length=30,
     )
-
-    @classmethod
-    def get_notes(cls):
-        return """
-        - The **Body** should include **3 HeadingModels**.  
-        - Each **Heading** must consist of **1 to 3 words**.  
-        - Each item **Description** can be upto 10 words.
-        """
 
 
 class LLMType4ContentWithValidation(LLMType4Content):
-    title: str = Field(
-        description="Title of the slide",
-        min_length=10,
-        max_length=50,
-    )
     body: List[LLMHeadingModelWithImagePromptWithValidation] = Field(
-        description="List items to show in slide's body",
+        description="Items to show in slide",
         min_length=1,
         max_length=3,
     )
-
-    @classmethod
-    def get_notes(cls):
-        return """
-        - The **Body** should include **1 to 3 HeadingModels**.  
-        - Each **Heading** must consist of **1 to 3 words**.  
-        - Each item **Description** can be upto 10 words.
-        """
 
 
 class LLMType5ContentWithValidation(LLMType5Content):
-    title: str = Field(
-        description="Title of the slide",
-        min_length=10,
-        max_length=50,
-    )
     body: str = Field(
-        description="Slide content summary in less than 30 words.",
-        min_length=100,
-        max_length=250,
+        description="Slide content summary in about 30 words.",
+        min_length=50,
+        max_length=300,
     )
-    graph: GraphModel = Field(description="Graph to show in slide")
-
-    @classmethod
-    def get_notes(self):
-        return ""
+    table: LLMTableModelWithValidation = Field(description="Table to show in slide")
 
 
 class LLMType6ContentWithValidation(LLMType6Content):
-    title: str = Field(
-        description="Title of the slide",
-        min_length=10,
-        max_length=50,
-    )
     description: str = Field(
-        description="Slide content summary in less than 20 words.",
-        min_length=80,
-        max_length=150,
+        description="Slide content summary in about 20 words.",
+        min_length=50,
+        max_length=300,
     )
     body: List[LLMHeadingModelWithValidation] = Field(
-        description="List items to show in slide's body",
+        description="Items to show in slide",
         min_length=1,
         max_length=3,
     )
 
-    @classmethod
-    def get_notes(cls):
-        return """
-        - The **Body** should include **1 to 3 HeadingModels**.  
-        - Each **Heading** must consist of **1 to 3 words**.  
-        - Each item **Description** can be upto 10 words.
-        """
-
 
 class LLMType7ContentWithValidation(LLMType7Content):
-    title: str = Field(
-        description="Title of the slide",
-        min_length=10,
-        max_length=50,
-    )
     body: List[LLMHeadingModelWithIconQueryWithValidation] = Field(
-        description="List items to show in slide's body",
+        description="Items to show in slide",
         min_length=1,
         max_length=4,
     )
 
-    @classmethod
-    def get_notes(cls):
-        return """
-        - The **Body** should include **1 to 4 HeadingModels**.  
-        - Each **Heading** must consist of **1 to 3 words**.  
-        - Each item **Description** can be upto 10 words.
-        """
-
 
 class LLMType8ContentWithValidation(LLMType8Content):
-    title: str = Field(
-        description="Title of the slide",
-        min_length=10,
-        max_length=50,
-    )
     description: str = Field(
-        description="Slide content summary in less than 20 words.",
-        min_length=80,
-        max_length=150,
+        description="Slide content summary in about 20 words.",
+        min_length=50,
+        max_length=300,
     )
     body: List[LLMHeadingModelWithImagePromptWithValidation] = Field(
-        description="List items to show in slide's body",
+        description="Items to show in slide",
         min_length=1,
         max_length=3,
     )
-
-    @classmethod
-    def get_notes(cls):
-        return """
-        - The **Body** should include **1 to 3 HeadingModels**.  
-        - Each **Heading** must consist of **1 to 3 words**.  
-        - Each item **Description** can be upto 10 words.
-        """
 
 
 class LLMType9ContentWithValidation(LLMType9Content):
-    title: str = Field(
-        description="Title of the slide",
-        min_length=10,
-        max_length=50,
-    )
     body: List[LLMHeadingModelWithValidation] = Field(
-        description="List items to show in slide's body",
+        description="Items to show in slide",
         min_length=1,
         max_length=3,
     )
-    graph: GraphModel = Field(description="Graph to show in slide")
-
-    @classmethod
-    def get_notes(cls):
-        return """
-        - The **Body** should include **1 to 3 HeadingModels**.  
-        - Each **Heading** must consist of **1 to 3 words**.  
-        - Each item **Description** can be upto 10 words.
-        """
+    table: LLMTableModelWithValidation = Field(description="Table to show in slide")
 
 
-LLM_CONTENT_TYPE_WITH_VALIDATION_MAPPING: Mapping[int, LLMSlideContentModel] = {
+LLMContentUnionWithValidation = Union[
+    LLMType1ContentWithValidation,
+    LLMType2ContentWithValidation,
+    LLMType3ContentWithValidation,
+    LLMType4ContentWithValidation,
+    LLMType5ContentWithValidation,
+    LLMType6ContentWithValidation,
+    LLMType7ContentWithValidation,
+    LLMType8ContentWithValidation,
+    LLMType9ContentWithValidation,
+]
+
+LLM_CONTENT_TYPE_MAPPING_WITH_VALIDATION: Mapping[
+    int, LLMContentUnionWithValidation
+] = {
     TYPE1: LLMType1ContentWithValidation,
     TYPE2: LLMType2ContentWithValidation,
     TYPE3: LLMType3ContentWithValidation,
@@ -279,17 +220,8 @@ LLM_CONTENT_TYPE_WITH_VALIDATION_MAPPING: Mapping[int, LLMSlideContentModel] = {
 
 class LLMSlideModelWithValidation(LLMSlideModel):
     type: int
-    content: (
-        LLMType1ContentWithValidation
-        | LLMType2ContentWithValidation
-        | LLMType4ContentWithValidation
-        | LLMType5ContentWithValidation
-        | LLMType6ContentWithValidation
-        | LLMType7ContentWithValidation
-        | LLMType8ContentWithValidation
-        | LLMType9ContentWithValidation
-    )
+    content: LLMContentUnionWithValidation
 
 
 class LLMPresentationModelWithValidation(LLMPresentationModel):
-    slides: list[LLMSlideModelWithValidation]
+    slides: List[LLMSlideModelWithValidation]

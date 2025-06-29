@@ -1,3 +1,4 @@
+import json
 from typing import List
 import uuid, aiohttp
 from fastapi import HTTPException
@@ -17,7 +18,8 @@ from api.services.database import get_sql_session
 from api.services.instances import TEMP_FILE_SERVICE
 from api.services.logging import LoggingService
 from api.sql_models import PresentationSqlModel, SlideSqlModel
-from api.utils.utils import get_presentation_dir, is_ollama_selected
+from api.utils.utils import get_presentation_dir
+from api.utils.model_utils import is_ollama_selected
 from document_processor.loader import DocumentsLoader
 from ppt_config_generator.document_summary_generator import generate_document_summary
 from ppt_config_generator.models import PresentationMarkdownModel
@@ -25,13 +27,8 @@ from ppt_config_generator.ppt_outlines_generator import generate_ppt_content
 from ppt_generator.generator import generate_presentation
 from ppt_generator.models.llm_models import (
     LLM_CONTENT_TYPE_MAPPING,
-    LLMPresentationModel,
 )
-from langchain_core.output_parsers import JsonOutputParser
-
 from ppt_generator.models.slide_model import SlideModel
-
-output_parser = JsonOutputParser(pydantic_object=LLMPresentationModel)
 
 
 class GeneratePresentationHandler(FetchAssetsOnPresentationGenerationMixin):
@@ -79,19 +76,17 @@ class GeneratePresentationHandler(FetchAssetsOnPresentationGenerationMixin):
 
         print("-" * 40)
         print("Generating Presentation")
-        presentation_text = (
-            await generate_presentation(
-                PresentationMarkdownModel(
-                    title=presentation_content.title,
-                    slides=presentation_content.slides,
-                    notes=presentation_content.notes,
-                )
+        presentation_text = await generate_presentation(
+            PresentationMarkdownModel(
+                title=presentation_content.title,
+                slides=presentation_content.slides,
+                notes=presentation_content.notes,
             )
-        ).content
+        )
 
         print("-" * 40)
         print("Parsing Presentation")
-        presentation_json = output_parser.parse(presentation_text)
+        presentation_json = json.loads(presentation_text)
 
         slide_models: List[SlideModel] = []
         for i, slide in enumerate(presentation_json["slides"]):

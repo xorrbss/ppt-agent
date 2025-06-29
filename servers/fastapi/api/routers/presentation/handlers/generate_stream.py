@@ -17,13 +17,13 @@ from api.routers.presentation.models import (
 from api.services.database import get_sql_session
 from api.services.logging import LoggingService
 from api.sql_models import KeyValueSqlModel, PresentationSqlModel, SlideSqlModel
-from api.utils.utils import get_presentation_dir, is_ollama_selected
+from api.utils.utils import get_presentation_dir
+from api.utils.model_utils import is_ollama_selected
 from ppt_config_generator.models import (
     PresentationMarkdownModel,
     PresentationStructureModel,
 )
 from ppt_generator.generator import generate_presentation_stream
-from ppt_generator.models.content_type_models import CONTENT_TYPE_MAPPING
 from ppt_generator.models.llm_models import (
     LLM_CONTENT_TYPE_MAPPING,
     LLMPresentationModel,
@@ -31,11 +31,8 @@ from ppt_generator.models.llm_models import (
 )
 from ppt_generator.models.slide_model import SlideModel
 from api.services.instances import TEMP_FILE_SERVICE
-from langchain_core.output_parsers import JsonOutputParser
 
 from ppt_generator.slide_generator import get_slide_content_from_type_and_outline
-
-output_parser = JsonOutputParser(pydantic_object=LLMPresentationModel)
 
 
 class PresentationGenerateStreamHandler(FetchAssetsOnPresentationGenerationMixin):
@@ -144,20 +141,21 @@ class PresentationGenerateStreamHandler(FetchAssetsOnPresentationGenerationMixin
 
     async def generate_presentation_openai_google(self):
         presentation_text = ""
-        async for chunk in generate_presentation_stream(
+        async for event in await generate_presentation_stream(
             PresentationMarkdownModel(
                 title=self.title,
                 slides=self.outlines,
                 notes=self.presentation.notes,
             )
         ):
-            presentation_text += chunk.content
+            chunk = event.choices[0].delta.content
+            presentation_text += chunk
             yield SSEResponse(
                 event="response",
-                data=json.dumps({"type": "chunk", "chunk": chunk.content}),
+                data=json.dumps({"type": "chunk", "chunk": chunk}),
             ).to_string()
 
-        self.presentation_json = output_parser.parse(presentation_text)
+        self.presentation_json = json.loads(presentation_text)
 
     async def generate_presentation_ollama(self):
         presentation_structure = PresentationStructureModel(

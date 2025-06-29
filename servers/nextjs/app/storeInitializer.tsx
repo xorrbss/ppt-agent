@@ -41,11 +41,11 @@ export function StoreInitializer({ children }: { children: React.ReactNode }) {
         llmConfig.LLM = 'openai';
       }
       dispatch(setLLMConfig(llmConfig));
-      const isValid = hasValidLLMConfig(llmConfig);
+      const isValid = hasValidLLMConfig(llmConfig, false);
       if (isValid) {
         // Check if the selected Ollama model is pulled
         if (llmConfig.LLM === 'ollama') {
-          const isPulled = await checkIfSelectedOllamaModelIsPulled(llmConfig.OLLAMA_MODEL);
+          const isPulled = await checkIfSelectedOllamaModelIsPulled(llmConfig.MODEL);
           if (!isPulled) {
             router.push('/');
             setLoadingToFalseAfterNavigatingTo('/');

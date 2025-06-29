@@ -1,11 +1,11 @@
-from typing import AsyncIterator
-
-from langchain_core.messages import (
-    HumanMessage,
-    AIMessageChunk,
-    AIMessage,
+from openai import AsyncStream
+from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
+from api.models import SelectedLLMProvider
+from api.utils.model_utils import (
+    get_large_model,
+    get_llm_client,
+    get_selected_llm_provider,
 )
-from api.utils.utils import get_large_model
 from ppt_config_generator.models import PresentationMarkdownModel
 from ppt_generator.models.llm_models_with_validations import (
     LLMPresentationModelWithValidation,
@@ -70,42 +70,87 @@ CREATE_PRESENTATION_PROMPT = """
     **Go through notes and steps and make sure they are all followed. Rule breaks are strictly not allowed.**
 """
 
-schema = LLMPresentationModelWithValidation.model_json_schema()
-
-system_prompt = f"""
+system_prompt_with_schema = f"""
 {CREATE_PRESENTATION_PROMPT}
 
-Follow this schema while giving out response: {schema}.
-
-Make description short and obey the character limits. Output should be in JSON format. Give out only JSON, nothing else.
-"""
-
-ollama_system_prompt = f"""
-{CREATE_PRESENTATION_PROMPT}
+Follow this schema while giving out response: {LLMPresentationModelWithValidation.model_json_schema()}.
 
 Make description short and obey the character limits. Output should be in JSON format. Give out only JSON, nothing else.
 """
 
 
-def get_model_and_messages(
+def get_system_prompt():
+    is_google_selected = get_selected_llm_provider() == SelectedLLMProvider.GOOGLE
+    return (
+        system_prompt_with_schema if is_google_selected else CREATE_PRESENTATION_PROMPT
+    )
+
+
+def get_response_format():
+    is_google_selected = get_selected_llm_provider() == SelectedLLMProvider.GOOGLE
+    return (
+        {
+            "type": "json_object",
+        }
+        if is_google_selected
+        else {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "LLMPresentationModel",
+                "schema": LLMPresentationModelWithValidation.model_json_schema(),
+            },
+        }
+    )
+
+
+async def generate_presentation_stream(
     presentation_outline: PresentationMarkdownModel,
-):
-    user_message = HumanMessage(presentation_outline.to_string())
+) -> AsyncStream[ChatCompletionChunk]:
+    client = get_llm_client()
     model = get_large_model()
 
-    return model, system_prompt, user_message
+    response_format = get_response_format()
 
+    response = await client.chat.completions.create(
+        model=model,
+        messages=[
+            {
+                "role": "system",
+                "content": get_system_prompt(),
+            },
+            {
+                "role": "user",
+                "content": presentation_outline.to_string(),
+            },
+        ],
+        response_format=response_format,
+        stream=True,
+    )
 
-def generate_presentation_stream(
-    presentation_outline: PresentationMarkdownModel,
-) -> AsyncIterator[AIMessageChunk]:
-    model, system_prompt, user_message = get_model_and_messages(presentation_outline)
-
-    return model.astream([system_prompt, user_message])
+    return response
 
 
 async def generate_presentation(
     presentation_outline: PresentationMarkdownModel,
-) -> AIMessage:
-    model, system_prompt, user_message = get_model_and_messages(presentation_outline)
-    return await model.ainvoke([system_prompt, user_message])
+) -> str:
+    client = get_llm_client()
+    model = get_large_model()
+
+    response_format = get_response_format()
+
+    response = await client.chat.completions.create(
+        model=model,
+        messages=[
+            {
+                "role": "system",
+                "content": get_system_prompt(),
+            },
+            {
+                "role": "user",
+                "content": presentation_outline.to_string(),
+            },
+        ],
+        response_format=response_format,
+    )
+
+    return response.choices[0].message.content

@@ -1,32 +1,17 @@
 from typing import Optional
-from langchain_core.prompts import ChatPromptTemplate
 
-from api.utils.utils import get_large_model
+from api.utils.model_utils import get_large_model, get_llm_client
 from api.utils.variable_length_models import (
     get_presentation_markdown_model_with_n_slides,
 )
 from ppt_config_generator.models import PresentationMarkdownModel
-from ppt_generator.fix_validation_errors import get_validated_response
 
 
-user_prompt_text = {
-    "type": "text",
-    "text": """
-                **Input:**
-                - Prompt: {prompt}
-                - Output Language: {language}
-                - Number of Slides: {n_slides}
-                - Additional Information: {content}
-            """,
-}
-
-
-def get_prompt_template():
-    return ChatPromptTemplate.from_messages(
-        [
-            (
-                "system",
-                """
+def get_prompt_template(prompt: str, n_slides: int, language: str, content: str):
+    return [
+        {
+            "role": "system",
+            "content": """
                 Create a presentation based on the provided prompt, number of slides, output language, and additional informational details.
                 Format the output in the specified JSON schema with structured markdown content.
     
@@ -49,13 +34,18 @@ def get_prompt_template():
                 - Slide **title** should not be in markdown format.
                 - There must be exact **Number of Slides** as specified.
                 """,
-            ),
-            (
-                "user",
-                [user_prompt_text],
-            ),
-        ],
-    )
+        },
+        {
+            "role": "user",
+            "content": f"""
+                **Input:**
+                - Prompt: {prompt}
+                - Output Language: {language}
+                - Number of Slides: {n_slides}
+                - Additional Information: {content}
+            """,
+        },
+    ]
 
 
 async def generate_ppt_content(
@@ -64,21 +54,14 @@ async def generate_ppt_content(
     language: Optional[str] = None,
     content: Optional[str] = None,
 ) -> PresentationMarkdownModel:
+    client = get_llm_client()
     model = get_large_model()
     response_model = get_presentation_markdown_model_with_n_slides(n_slides)
 
-    chain = get_prompt_template() | model.with_structured_output(
-        response_model.model_json_schema()
+    response = await client.beta.chat.completions.parse(
+        model=model,
+        temperature=0.2,
+        messages=get_prompt_template(prompt, n_slides, language, content),
+        response_format=response_model,
     )
-
-    return await get_validated_response(
-        chain,
-        {
-            "prompt": prompt,
-            "n_slides": n_slides,
-            "language": language or "English",
-            "content": content,
-        },
-        response_model,
-        PresentationMarkdownModel,
-    )
+    return response.choices[0].message.parsed

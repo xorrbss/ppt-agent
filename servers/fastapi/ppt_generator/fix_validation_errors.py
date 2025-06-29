@@ -1,12 +1,11 @@
 import os
 from typing import Optional
 from fastapi import HTTPException
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_openai import ChatOpenAI
+from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, ValidationError
 
-from api.utils.utils import get_large_model
+from api.utils.model_utils import get_large_model
 
 
 def get_prompt_template():
@@ -41,7 +40,7 @@ def get_prompt_template():
 
 
 async def fix_validation_errors(response_model: BaseModel, response, errors):
-    model = get_large_model()
+    model = ChatOllama(model=get_large_model(), temperature=0.8)
 
     chain = get_prompt_template() | model.with_structured_output(
         response_model.model_json_schema()

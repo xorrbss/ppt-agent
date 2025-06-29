@@ -1,3 +1,4 @@
+from enum import Enum
 import json
 from typing import Optional
 from pydantic import BaseModel
@@ -62,7 +63,9 @@ class UserConfig(BaseModel):
     LLM: Optional[str] = None
     OPENAI_API_KEY: Optional[str] = None
     GOOGLE_API_KEY: Optional[str] = None
-    OLLAMA_MODEL: Optional[str] = None
+    MODEL: Optional[str] = None
+    LLM_PROVIDER_URL: Optional[str] = None
+    LLM_API_KEY: Optional[str] = None
     PEXELS_API_KEY: Optional[str] = None
 
 
@@ -73,3 +76,10 @@ class OllamaModelMetadata(BaseModel):
     icon: str
     size: str
     supports_graph: bool
+
+
+class SelectedLLMProvider(Enum):
+    OLLAMA = "ollama"
+    OPENAI = "openai"
+    GOOGLE = "google"
+    CUSTOM = "custom"

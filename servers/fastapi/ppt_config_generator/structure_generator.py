@@ -1,6 +1,4 @@
-from langchain_core.prompts import ChatPromptTemplate
-
-from api.utils.utils import get_small_model
+from api.utils.model_utils import get_llm_client, get_small_model
 from api.utils.variable_length_models import (
     get_presentation_structure_model_with_n_slides,
 )
@@ -8,13 +6,13 @@ from ppt_config_generator.models import (
     PresentationStructureModel,
     PresentationMarkdownModel,
 )
-from ppt_generator.fix_validation_errors import get_validated_response
 
-prompt = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            """
+
+def get_prompt(n_slides: int, data: str):
+    return [
+        {
+            "role": "system",
+            "content": f"""
                 You're a professional presentation designer with years of experience in designing clear and engaging presentations.
 
                 # Slide Types
@@ -44,33 +42,32 @@ prompt = ChatPromptTemplate.from_messages(
 
                 **Go through notes and steps and make sure they are all followed. Rule breaks are strictly not allowed.**
             """,
-        ),
-        (
-            "human",
-            """
-            {data}
+        },
+        {
+            "role": "user",
+            "content": f"""
+                {data}
             """,
-        ),
+        },
     ]
-)
 
 
 async def generate_presentation_structure(
     presentation_outline: PresentationMarkdownModel,
 ) -> PresentationStructureModel:
 
+    client = get_llm_client()
     model = get_small_model()
     response_model = get_presentation_structure_model_with_n_slides(
         len(presentation_outline.slides)
     )
-    chain = prompt | model.with_structured_output(response_model.model_json_schema())
 
-    return await get_validated_response(
-        chain,
-        {
-            "n_slides": len(presentation_outline.slides),
-            "data": presentation_outline.to_string(),
-        },
-        response_model,
-        PresentationStructureModel,
+    response = await client.beta.chat.completions.parse(
+        model=model,
+        temperature=0.2,
+        messages=get_prompt(
+            len(presentation_outline.slides), presentation_outline.to_string()
+        ),
+        response_format=response_model,
     )
+    return response.choices[0].message.parsed

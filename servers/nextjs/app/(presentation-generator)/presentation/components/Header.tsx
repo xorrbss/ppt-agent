@@ -215,7 +215,7 @@ const Header = ({
       if (response.ok) {
         const { path: pdfPath } = await response.json();
         const staticFileUrl = getStaticFileUrl(pdfPath);
-        window.open(staticFileUrl, '_self');
+        window.open(staticFileUrl, '_blank');
       } else {
         throw new Error("Failed to export PDF");
       }

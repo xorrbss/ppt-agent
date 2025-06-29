@@ -1,10 +1,10 @@
-from typing import List, Mapping
+from typing import List, Mapping, Union
 from pydantic import BaseModel
 
-from graph_processor.models import GraphModel
 from ppt_generator.models.content_type_models import (
     HeadingModel,
-    SlideContentModel,
+    TableDataModel,
+    TableModel,
     Type1Content,
     Type2Content,
     Type3Content,
@@ -28,6 +28,17 @@ from ppt_generator.models.other_models import (
 )
 
 
+class LLMTableDataModel(TableDataModel):
+    x_labels: List[str]
+    y_labels: List[str]
+    data: List[List[float]]
+
+
+class LLMTableModel(TableModel):
+    name: str
+    data: LLMTableDataModel
+
+
 class LLMHeadingModel(BaseModel):
     heading: str
     description: str
@@ -42,16 +53,25 @@ class LLMHeadingModel(BaseModel):
 class LLMHeadingModelWithImagePrompt(LLMHeadingModel):
     image_prompt: str
 
+    def to_content(self) -> HeadingModel:
+        return HeadingModel(
+            heading=self.heading,
+            description=self.description,
+        )
+
 
 class LLMHeadingModelWithIconQuery(LLMHeadingModel):
     icon_query: str
 
+    def to_content(self) -> HeadingModel:
+        return HeadingModel(
+            heading=self.heading,
+            description=self.description,
+        )
+
 
 class LLMSlideContentModel(BaseModel):
     title: str
-
-    def to_content(self) -> SlideContentModel:
-        raise NotImplementedError("to_content method not implemented")
 
 
 class LLMType1Content(LLMSlideContentModel):
@@ -101,13 +121,13 @@ class LLMType4Content(LLMSlideContentModel):
 
 class LLMType5Content(LLMSlideContentModel):
     body: str
-    graph: GraphModel
+    table: LLMTableModel
 
     def to_content(self) -> Type5Content:
         return Type5Content(
             title=self.title,
             body=self.body,
-            graph=self.graph,
+            table=self.table,
         )
 
 
@@ -149,17 +169,29 @@ class LLMType8Content(LLMSlideContentModel):
 
 class LLMType9Content(LLMSlideContentModel):
     body: List[LLMHeadingModel]
-    graph: GraphModel
+    table: LLMTableModel
 
     def to_content(self) -> Type9Content:
         return Type9Content(
             title=self.title,
             body=[each.to_content() for each in self.body],
-            graph=self.graph,
+            table=self.table,
         )
 
 
-LLM_CONTENT_TYPE_MAPPING: Mapping[int, LLMSlideContentModel] = {
+LLMContentUnion = Union[
+    LLMType1Content,
+    LLMType2Content,
+    LLMType3Content,
+    LLMType4Content,
+    LLMType5Content,
+    LLMType6Content,
+    LLMType7Content,
+    LLMType8Content,
+    LLMType9Content,
+]
+
+LLM_CONTENT_TYPE_MAPPING: Mapping[int, LLMContentUnion] = {
     TYPE1: LLMType1Content,
     TYPE2: LLMType2Content,
     TYPE3: LLMType3Content,
@@ -174,17 +206,8 @@ LLM_CONTENT_TYPE_MAPPING: Mapping[int, LLMSlideContentModel] = {
 
 class LLMSlideModel(BaseModel):
     type: int
-    content: (
-        LLMType1Content
-        | LLMType2Content
-        | LLMType4Content
-        | LLMType5Content
-        | LLMType6Content
-        | LLMType7Content
-        | LLMType8Content
-        | LLMType9Content
-    )
+    content: LLMContentUnion
 
 
 class LLMPresentationModel(BaseModel):
-    slides: list[LLMSlideModel]
+    slides: List[LLMSlideModel]
