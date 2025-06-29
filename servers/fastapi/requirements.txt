@@ -28,6 +28,7 @@ fsspec==2025.3.2
 google-ai-generativelanguage==0.6.18
 google-api-core==2.24.2
 google-auth==2.40.1
+google-genai==1.23.0
 googleapis-common-protos==1.70.0
 greenlet==3.2.2
 grpcio==1.72.0rc1

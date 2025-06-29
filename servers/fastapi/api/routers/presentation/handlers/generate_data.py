@@ -54,7 +54,7 @@ class PresentationGenerateDataHandler:
                     )
                 )
                 supports_graph = True
-                model = SUPPORTED_OLLAMA_MODELS[os.getenv("OLLAMA_MODEL")]
+                model = SUPPORTED_OLLAMA_MODELS[os.getenv("MODEL")]
                 supports_graph = model.supports_graph
 
                 for each in presentation_structure.slides:

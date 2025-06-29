@@ -69,7 +69,7 @@ class PresentationEditHandler:
         new_slide_type = new_slide_type.slide_type
 
         if is_ollama_selected():
-            model = SUPPORTED_OLLAMA_MODELS[os.getenv("OLLAMA_MODEL")]
+            model = SUPPORTED_OLLAMA_MODELS[os.getenv("MODEL")]
             if not model.supports_graph:
                 if new_slide_type == 5:
                     new_slide_type = 1

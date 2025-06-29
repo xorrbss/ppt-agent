@@ -36,7 +36,9 @@ export async function POST(request: Request) {
     LLM: userConfig.LLM || existingConfig.LLM,
     OPENAI_API_KEY: userConfig.OPENAI_API_KEY || existingConfig.OPENAI_API_KEY,
     GOOGLE_API_KEY: userConfig.GOOGLE_API_KEY || existingConfig.GOOGLE_API_KEY,
-    OLLAMA_MODEL: userConfig.OLLAMA_MODEL || existingConfig.OLLAMA_MODEL,
+    MODEL: userConfig.MODEL || existingConfig.MODEL,
+    LLM_PROVIDER_URL: userConfig.LLM_PROVIDER_URL || existingConfig.LLM_PROVIDER_URL,
+    LLM_API_KEY: userConfig.LLM_API_KEY || existingConfig.LLM_API_KEY,
     PEXELS_API_KEY: userConfig.PEXELS_API_KEY || existingConfig.PEXELS_API_KEY,
   }
   fs.writeFileSync(userConfigPath, JSON.stringify(mergedConfig))

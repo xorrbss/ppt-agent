@@ -18,5 +18,7 @@ interface LLMConfig {
   OPENAI_API_KEY?: string;
   GOOGLE_API_KEY?: string;
   PEXELS_API_KEY?: string;
-  OLLAMA_MODEL?: string;
+  LLM_PROVIDER_URL?: string;
+  LLM_API_KEY?: string;
+  MODEL?: string;
 }

@@ -9,6 +9,14 @@ def is_ollama_selected() -> bool:
     return get_selected_llm_provider() == SelectedLLMProvider.OLLAMA
 
 
+def get_llm_provider_url_or():
+    return os.getenv("LLM_PROVIDER_URL") or "http://localhost:11434"
+
+
+def get_llm_api_key_or():
+    return os.getenv("LLM_API_KEY") or "ollama"
+
+
 def get_selected_llm_provider() -> SelectedLLMProvider:
     return SelectedLLMProvider(os.getenv("LLM"))
 
@@ -21,11 +29,9 @@ def get_model_base_url():
     elif selected_llm == SelectedLLMProvider.GOOGLE:
         return "https://generativelanguage.googleapis.com/v1beta/openai"
     elif selected_llm == SelectedLLMProvider.OLLAMA:
-        return os.getenv("LLM_PROVIDER_URL", "http://localhost:11434/v1")
-    elif selected_llm == SelectedLLMProvider.CUSTOM:
-        return os.getenv("LLM_PROVIDER_URL")
+        return os.path.join(get_llm_provider_url_or(), "v1")
     else:
-        raise ValueError(f"Invalid LLM provider: {selected_llm}")
+        raise ValueError(f"Invalid LLM provider")
 
 
 def get_llm_api_key():
@@ -35,11 +41,9 @@ def get_llm_api_key():
     elif selected_llm == SelectedLLMProvider.GOOGLE:
         return os.getenv("GOOGLE_API_KEY")
     elif selected_llm == SelectedLLMProvider.OLLAMA:
-        return os.getenv("LLM_API_KEY", "ollama")
-    elif selected_llm == SelectedLLMProvider.CUSTOM:
-        return os.getenv("LLM_API_KEY")
+        return get_llm_api_key_or()
     else:
-        raise ValueError(f"Invalid LLM provider: {selected_llm}")
+        raise ValueError(f"Invalid LLM API key")
 
 
 def get_llm_client():
@@ -57,7 +61,7 @@ def get_large_model():
     elif selected_llm == SelectedLLMProvider.GOOGLE:
         return "gemini-2.0-flash"
     else:
-        return os.getenv("OLLAMA_MODEL")
+        return os.getenv("MODEL")
 
 
 def get_small_model():
@@ -67,7 +71,7 @@ def get_small_model():
     elif selected_llm == SelectedLLMProvider.GOOGLE:
         return "gemini-2.0-flash"
     else:
-        return os.getenv("OLLAMA_MODEL")
+        return os.getenv("MODEL")
 
 
 def get_nano_model():
@@ -77,4 +81,4 @@ def get_nano_model():
     elif selected_llm == SelectedLLMProvider.GOOGLE:
         return "gemini-2.0-flash"
     else:
-        return os.getenv("OLLAMA_MODEL")
+        return os.getenv("MODEL")

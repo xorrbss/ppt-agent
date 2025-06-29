@@ -53,7 +53,7 @@ class LLMTableDataModelWithValidation(LLMTableDataModel):
 
 class LLMTableModelWithValidation(LLMTableModel):
     name: str = Field(
-        description="Name of the table in less than 8 words",
+        description="Name of the table in about 8 words",
         min_length=10,
         max_length=50,
     )
@@ -62,20 +62,20 @@ class LLMTableModelWithValidation(LLMTableModel):
 
 class LLMHeadingModelWithValidation(LLMHeadingModel):
     heading: str = Field(
-        description="Item heading in less than 6 words",
+        description="Item heading in about 6 words",
         min_length=10,
         max_length=40,
     )
     description: str = Field(
-        description="Item description in less than 15 words.",
+        description="Item description in about 12 words.",
         min_length=50,
-        max_length=150,
+        max_length=120,
     )
 
 
 class LLMHeadingModelWithImagePromptWithValidation(LLMHeadingModelWithImagePrompt):
     image_prompt: str = Field(
-        description="Item image prompt in less than 10 words",
+        description="Item image prompt in about 10 words",
         min_length=10,
         max_length=100,
     )
@@ -83,7 +83,7 @@ class LLMHeadingModelWithImagePromptWithValidation(LLMHeadingModelWithImagePromp
 
 class LLMHeadingModelWithIconQueryWithValidation(LLMHeadingModelWithIconQuery):
     icon_query: str = Field(
-        description="Item icon query in less than 4 words",
+        description="Item icon query in about 4 words",
         min_length=10,
         max_length=40,
     )
@@ -91,7 +91,7 @@ class LLMHeadingModelWithIconQueryWithValidation(LLMHeadingModelWithIconQuery):
 
 class LLMSlideContentModelWithValidation(LLMSlideContentModel):
     title: str = Field(
-        description="Slide title in less than 8 words",
+        description="Slide title in about 8 words",
         min_length=10,
         max_length=80,
     )
@@ -99,12 +99,12 @@ class LLMSlideContentModelWithValidation(LLMSlideContentModel):
 
 class LLMType1ContentWithValidation(LLMType1Content):
     body: str = Field(
-        description="Slide content summary in less than 30 words.",
+        description="Slide content summary in about 30 words.",
         min_length=50,
         max_length=300,
     )
     image_prompt: str = Field(
-        description="Slide image prompt in less than 5 words",
+        description="Slide image prompt in about 5 words",
         min_length=10,
         max_length=30,
     )
@@ -125,7 +125,7 @@ class LLMType3ContentWithValidation(LLMType3Content):
         max_length=3,
     )
     image_prompt: str = Field(
-        description="Slide image prompt in less than 5 words",
+        description="Slide image prompt in about 5 words",
         min_length=10,
         max_length=30,
     )
@@ -141,7 +141,7 @@ class LLMType4ContentWithValidation(LLMType4Content):
 
 class LLMType5ContentWithValidation(LLMType5Content):
     body: str = Field(
-        description="Slide content summary in less than 30 words.",
+        description="Slide content summary in about 30 words.",
         min_length=50,
         max_length=300,
     )
@@ -150,7 +150,7 @@ class LLMType5ContentWithValidation(LLMType5Content):
 
 class LLMType6ContentWithValidation(LLMType6Content):
     description: str = Field(
-        description="Slide content summary in less than 20 words.",
+        description="Slide content summary in about 20 words.",
         min_length=50,
         max_length=300,
     )
@@ -171,7 +171,7 @@ class LLMType7ContentWithValidation(LLMType7Content):
 
 class LLMType8ContentWithValidation(LLMType8Content):
     description: str = Field(
-        description="Slide content summary in less than 20 words.",
+        description="Slide content summary in about 20 words.",
         min_length=50,
         max_length=300,
     )

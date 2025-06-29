@@ -15,10 +15,10 @@ can_change_keys = os.getenv("CAN_CHANGE_KEYS") != "false"
 
 # Ollama model download
 if not can_change_keys and is_ollama_selected():
-    ollama_model = os.getenv("OLLAMA_MODEL")
+    ollama_model = os.getenv("MODEL")
     pexels_api_key = os.getenv("PEXELS_API_KEY")
     if not (ollama_model or pexels_api_key):
-        raise Exception("OLLAMA_MODEL and PEXELS_API_KEY must be provided")
+        raise Exception("MODEL and PEXELS_API_KEY must be provided")
 
     if ollama_model not in SUPPORTED_OLLAMA_MODELS:
         raise Exception(f"Model {ollama_model} is not supported")
