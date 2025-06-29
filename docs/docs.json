@@ -1,0 +1,72 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Presenton Documentation",
+  "colors": {
+    "primary": "#4a2ea6",
+    "light": "#5b39cb",
+    "dark": "#3a2481"
+  },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "index",
+              "quickstart",
+              "development"
+            ]
+          },
+          {
+            "group": "Configurations",
+            "pages": [
+              "configurations/environment-variables",
+              "configurations/using-ollama-models",
+              "configurations/using-gpu"
+            ]
+          }
+        ]
+      }
+    ],
+    "global": {
+      "anchors": [
+        {
+          "anchor": "Community",
+          "href": "https://discord.gg/xmJkX8G6",
+          "icon": "discord"
+        },
+        {
+          "anchor": "Blog",
+          "href": "https://presenton.ai/blogs",
+          "icon": "newspaper"
+        }
+      ]
+    }
+  },
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Support",
+        "href": "mailto:suraj@presenton.ai"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Dashboard",
+      "href": "https://presenton.ai/dashboard"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/presenton/presenton"
+    }
+  }
+}
