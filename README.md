@@ -10,6 +10,10 @@
 ![Demo](readme_assets/demo.gif)
 
 
+> [!TIP]
+> For detailed setup guides, API documentation, and advanced configuration options, visit our **[Official Documentation](https://docs.presenton.ai)**
+
+
 ## ✨ More Freedom with AI Presentations
 
 * ✅ **Bring Your Own Key** — Only pay for what you use. OpenAI, Gemini (More coming soon...)
