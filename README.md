@@ -18,6 +18,7 @@
 * ✅ **Privacy-First** — No tracking, no data stored by us
 * ✅ **Flexible** — Generate presentations from prompts or outlines
 * ✅ **Export Ready** — Save as PowerPoint (PPTX) and PDF
+* ✅ **API Presentation Generation** — Host as API to generate presentations over requests
 * ✅ **Fully Open-Source** — Apache 2.0 licensed
 
 ## Running Presenton Docker
