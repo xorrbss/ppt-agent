@@ -19,7 +19,7 @@ dnspython==2.7.0
 email_validator==2.2.0
 fastapi==0.115.12
 fastapi-cli==0.0.7
-fastembed_vectorstore==0.1.5
+fastembed_vectorstore==0.1.6
 filelock==3.18.0
 filetype==1.2.0
 flatbuffers==25.2.10
