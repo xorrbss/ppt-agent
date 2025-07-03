@@ -19,9 +19,13 @@ Presenton can be customized and secured using environment variables. Below are t
   Your OpenAI API key. Required if `LLM` is set to `"openai"`.\
   _Example:_ `OPENAI_API_KEY="sk-xxxxxxxxxxxxxxxx"`
 
+  > For image generation you might need to [Verify Organization](https://help.openai.com/en/articles/10910291-api-organization-ver)
+
 - **`GOOGLE_API_KEY`**\
   Your Google API key. Required if `LLM` is set to `"google"`.\
   _Example:_ `GOOGLE_API_KEY="AIzaSyXXXXXXXXXXXX"`
+
+  > Image generation does not work in `EU Region`. Choose Ollama or OpenAI instead.
 
 - **`OLLAMA_MODEL`**\
   The Ollama model name to use. Required if `LLM` is set to `"ollama"`.\
