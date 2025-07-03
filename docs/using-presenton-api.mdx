@@ -17,12 +17,12 @@ Use this endpoint to generate a presentation from a prompt, outline, or uploaded
 
 | Field       | Type     | Required | Description                                                           |
 | ----------- | -------- | -------- | --------------------------------------------------------------------- |
-| `prompt`    | `string` | ✅ Yes    | The main topic or subject for the presentation                        |
-| `n_slides`  | `int`    | ❌ No     | Number of slides (default: 8, min: 5, max: 15)                        |
-| `language`  | `string` | ❌ No     | Language of the presentation (default: `English`)                     |
-| `theme`     | `string` | ❌ No     | Theme of the presentation (e.g., `light`, `dark`, `royal_blue`, etc.) |
-| `documents` | `file[]` | ❌ No     | Optional files (PDF, PPTX, DOCX, TXT) to include                      |
-| `export_as` | `string` | ❌ No     | Export format: `pptx` or `pdf` (default: `pptx`)                      |
+| `prompt`    | `string` |  Yes    | The main topic or subject for the presentation                        |
+| `n_slides`  | `int`    |  No     | Number of slides (default: 8, min: 5, max: 15)                        |
+| `language`  | `string` |  No     | Language of the presentation (default: `English`)                     |
+| `theme`     | `string` |  No     | Theme of the presentation (e.g., `light`, `dark`, `royal_blue`, etc.) |
+| `documents` | `file[]` |  No     | Optional files (PDF, PPTX, DOCX, TXT) to include                      |
+| `export_as` | `string` |  No     | Export format: `pptx` or `pdf` (default: `pptx`)                      |
 
 ### 📤 Example Request
 
