@@ -9,6 +9,9 @@
 
 ![Demo](readme_assets/demo.gif)
 
+> [!IMPORTANT]
+> You might as well drop a ⭐ on the repo if you find this useful. Your support will motivate us to contribute more.
+
 
 > [!TIP]
 > For detailed setup guides, API documentation, and advanced configuration options, visit our **[Official Documentation](https://docs.presenton.ai)**
