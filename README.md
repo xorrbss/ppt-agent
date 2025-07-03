@@ -169,7 +169,7 @@ For detailed info checkout [API documentation](https://docs.presenton.ai/using-p
 ![Demo](readme_assets/images/export-presentation.png)
 
 ## Community
-[Discord](https://discord.gg/VR89exqQ)
+[Discord](https://discord.gg/9ZsKKxudNE)
 
 ## License
 
