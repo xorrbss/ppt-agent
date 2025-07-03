@@ -2,6 +2,13 @@
   <img src="readme_assets/images/presenton-logo.png" height="90" alt="Presenton Logo" />
 </p>
 
+<p align="center">
+  <a href="[https://discord.gg/YOUR_INVITE_CODE](https://discord.gg/9ZsKKxudNE)">
+    <img src="https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&style=for-the-badge" alt="Join our Discord" />
+  </a>
+</p>
+
+
 # Open-Source AI Presentation Generator and API (Gamma Alternative)
 
 
