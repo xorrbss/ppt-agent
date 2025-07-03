@@ -2,10 +2,10 @@
   <img src="readme_assets/images/presenton-logo.png" height="90" alt="Presenton Logo" />
 </p>
 
-# Open-Source, Locally-Run AI Presentation Generator (Gamma Alternative)
+# Open-Source AI Presentation Generator and API (Gamma Alternative)
 
 
-**Presenton** is an open-source application for generating presentations with AI — all running locally on your device. Stay in control of your data and privacy while using models like OpenAI, Gemini, and others. Just plug in your own API keys and only pay for what you use.
+**Presenton** is an open-source application for generating presentations with AI — all running locally on your device. Stay in control of your data and privacy while using models like OpenAI and Gemini, or use your own hosted models through Ollama. 
 
 ![Demo](readme_assets/demo.gif)
 
@@ -55,7 +55,7 @@ You may want to directly provide your API KEYS as environment variables and keep
 - **OLLAMA_MODEL=[Ollama Model Name]**: Provide this if **LLM** is set to **ollama**
 - **PEXELS_API_KEY=[Your Pexels API Key]**: Provide this if **LLM** is set to **ollama**
 
-### Using Openai
+### Using OpenAI
 ```bash
 docker run -it --name presenton -p 5000:80 -e LLM="openai" -e OPENAI_API_KEY="******" -e CAN_CHANGE_KEYS="false" -v "./user_data:/app/user_data" ghcr.io/presenton/presenton:v0.3.0-beta
 ```
@@ -131,7 +131,7 @@ curl -X POST http://localhost:5000/api/v1/ppt/generate/presentation \
 
 > **Note:** Make sure to prepend your server's root URL to the path and edit_path fields in the response to construct valid links.
 
-## Features
+## UI Features
 
 ### 1. Add prompt, select number of slides and language
 ![Demo](readme_assets/images/prompting.png)
