@@ -33,7 +33,8 @@
           {
             "group": "Tutorials",
             "pages": [
-              "tutorial/generate-presentation-over-api"
+              "tutorial/generate-presentation-over-api",
+              "tutorial/generate-presentation-from-csv"
             ]
           }
         ]

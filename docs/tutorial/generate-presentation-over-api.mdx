@@ -1,5 +1,5 @@
 ---
-title: "Generate PPT via API in 5 minutes"
+title: "Generate Presentations via API in 5 minutes"
 description: "Steps to generate professional AI presentations via self hosted Presenton's API in just 5 minutes. "
 ---
 
@@ -23,7 +23,7 @@ You're now ready to run Presenton's docker image to start generating presentatio
 
 We will go with `GOOGLE` in this guide as it's relatively simpler to configure and free to start with. You will have to grab its API Key from [Google AI Studio](https://aistudio.google.com/apikey).
 
-You can find details to run with other providers in [Environment Variables](./configurations/environment-variables).
+You can find details to run with other providers in [Environment Variables](./environment-variables).
 
 Now, open your command line and execute the relevant command based on your OS:
 
@@ -133,12 +133,12 @@ Here's a quick reference for the key parameters you can set:
 
 | Parameter   | Type   | Required | Description                                                |
 | ----------- | ------ | -------- | ---------------------------------------------------------- |
-| `prompt`    | string |  Yes   | Topic/title of your presentation                           |
-| `n_slides`  | int    |  No     | Number of slides (default: 8; min: 5, max: 15)             |
-| `language`  | string |  No     | Language you'd like the presentation in (default: English) |
-| `theme`     | string |  No     | Optional styling (e.g.: "light", "dark", "royal_blue")     |
-| `documents` | file[] |  No     | Additional supporting documents (PDF/PPTX/DOCX/TXT)        |
-| `export_as` | string |  No     | "pptx" or "pdf" (default: pptx)                            |
+| `prompt`    | string | 👍 Yes   | Topic/title of your presentation                           |
+| `n_slides`  | int    | ❌ No     | Number of slides (default: 8; min: 5, max: 15)             |
+| `language`  | string | ❌ No     | Language you'd like the presentation in (default: English) |
+| `theme`     | string | ❌ No     | Optional styling (e.g.: "light", "dark", "royal_blue")     |
+| `documents` | file[] | ❌ No     | Additional supporting documents (PDF/PPTX/DOCX/TXT)        |
+| `export_as` | string | ❌ No     | "pptx" or "pdf" (default: pptx)                            |
 
 Yes, it can generate presentations directly from most popular file formats. Make sure you understand the context window of model you're using with respect to file size.
 
@@ -164,7 +164,6 @@ Here's what a normal, successful response looks like:
 
 > Note: Make sure to prepend your server's root URL to the path and edit_path fields in the response to construct valid links.
 
-It might take a minutes to generate presentation as per the number of slides and choosen LLM Provider.
 ---
 
 ## Step 8: Built-in Presentation Themes
