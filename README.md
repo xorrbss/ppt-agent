@@ -17,7 +17,7 @@
 ![Demo](readme_assets/demo.gif)
 
 > [!IMPORTANT]
-> You might as well drop a ⭐ on the repo if you find this useful. Your support will motivate us to contribute more.
+> Like Presenton? A ⭐ star shows your support and encourages us to keep building!
 
 
 > [!TIP]
