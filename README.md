@@ -77,7 +77,7 @@ docker run -it --name presenton --gpus=all -p 5000:80 -e LLM="ollama" -e OLLAMA_
 
 > **Note:** GPU acceleration significantly improves the performance of Ollama models, especially for larger models. Make sure you have sufficient GPU memory for your chosen model.
 
-## Generate Presentation with API
+## Generate Presentation over API
 
 ### Generate Presentation
 
@@ -86,6 +86,8 @@ Endpoint: `/api/v1/ppt/generate/presentation`
 Method: `POST`
 
 Content-Type: `multipart/form-data`
+
+> **Note**: Make sure to set `Content-Type` as `multipart/form-data` and not `application/json`.
 
 #### Request Body
 
