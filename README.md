@@ -133,6 +133,8 @@ curl -X POST http://localhost:5000/api/v1/ppt/generate/presentation \
 
 > **Note:** Make sure to prepend your server's root URL to the path and edit_path fields in the response to construct valid links.
 
+For detailed info checkout [API documentation](https://docs.presenton.ai/using-presenton-api).
+
 ## UI Features
 
 ### 1. Add prompt, select number of slides and language
