@@ -5,7 +5,7 @@ description: "Steps to generate professional AI presentations via self hosted Pr
 
 In this guide, I'll walk you through a simple, straightforward way to host and use Presenton’s API for generating presentations. If you're a developer or someone building tools or automation around presentations, this approach will save you some valuable time.
 
-Before we start, I'm assuming you've already set up Presenton. If not, just quickly check out the [Quickstart](./quickstart) or [Development guide](./development).
+Before we start, I'm assuming you've already set up Presenton. If not, just quickly check out the [Quickstart](../quickstart) or [Development guide](../development).
 
 ---
 
@@ -23,7 +23,7 @@ You're now ready to run Presenton's docker image to start generating presentatio
 
 We will go with `GOOGLE` in this guide as it's relatively simpler to configure and free to start with. You will have to grab its API Key from [Google AI Studio](https://aistudio.google.com/apikey).
 
-You can find details to run with other providers in [Environment Variables](./environment-variables).
+You can find details to run with other providers in [Environment Variables](../configurations/environment-variables).
 
 Now, open your command line and execute the relevant command based on your OS:
 
@@ -67,7 +67,7 @@ Generating presentations via Presenton's API is straightforward. It has one prim
 POST /api/v1/ppt/generate/presentation
 ```
 
-For a deeper dive later, check the full [API documentation](./mdx.docs).
+For a deeper dive later, check the full [API documentation](../index).
 
 ---
 
@@ -133,12 +133,12 @@ Here's a quick reference for the key parameters you can set:
 
 | Parameter   | Type   | Required | Description                                                |
 | ----------- | ------ | -------- | ---------------------------------------------------------- |
-| `prompt`    | string | 👍 Yes   | Topic/title of your presentation                           |
-| `n_slides`  | int    | ❌ No     | Number of slides (default: 8; min: 5, max: 15)             |
-| `language`  | string | ❌ No     | Language you'd like the presentation in (default: English) |
-| `theme`     | string | ❌ No     | Optional styling (e.g.: "light", "dark", "royal_blue")     |
-| `documents` | file[] | ❌ No     | Additional supporting documents (PDF/PPTX/DOCX/TXT)        |
-| `export_as` | string | ❌ No     | "pptx" or "pdf" (default: pptx)                            |
+| `prompt`    | string | Yes      | Topic/title of your presentation                           |
+| `n_slides`  | int    | No       | Number of slides (default: 8; min: 5, max: 15)             |
+| `language`  | string | No       | Language you'd like the presentation in (default: English) |
+| `theme`     | string | No       | Optional styling (e.g.: "light", "dark", "royal_blue")     |
+| `documents` | file[] | No       | Additional supporting documents (PDF/PPTX/DOCX/TXT)        |
+| `export_as` | string | No       | "pptx" or "pdf" (default: pptx)                            |
 
 Yes, it can generate presentations directly from most popular file formats. Make sure you understand the context window of model you're using with respect to file size.
 
@@ -184,12 +184,12 @@ Presenton provides easy-to-use themes for quick styling:
 
 Once you're comfortable and ready for more:
 
-- Integrate your preferred LLMS: [Environment Variables](./configurations/environment-variables).
-- Leverage GPU performance: [GPU Guide](./configurations/using-gpu).
-- Run local AI models with Ollama: [Local Models](./configurations/using-ollama-models).
+- Integrate your preferred LLMS: [Environment Variables](../configurations/environment-variables).
+- Leverage GPU performance: [GPU Guide](../configurations/using-gpu).
+- Run local AI models with Ollama: [Local Models](../configurations/using-ollama-models).
 
 ---
 
 **That's it\!** You've successfully generated a professional-looking presentation through an easy-to-use API endpoint.
 
-If you have more questions or want to explore further, the [complete documentation](./index) is always here to help you.
+If you have more questions or want to explore further, the [complete documentation](../index) is always here to help you.
