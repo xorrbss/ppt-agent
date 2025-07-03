@@ -17,12 +17,12 @@
 ## ✨ More Freedom with AI Presentations
 
 * ✅ **Bring Your Own Key** — Only pay for what you use. OpenAI, Gemini (More coming soon...)
+* ✅ **API Presentation Generation** — Host as API to generate presentations over requests
 * ✅ **Ollama Support** — Run open-source models locally with Ollama integration
 * ✅ **Runs Locally** — All code runs on your device
 * ✅ **Privacy-First** — No tracking, no data stored by us
 * ✅ **Flexible** — Generate presentations from prompts or outlines
 * ✅ **Export Ready** — Save as PowerPoint (PPTX) and PDF
-* ✅ **API Presentation Generation** — Host as API to generate presentations over requests
 * ✅ **Fully Open-Source** — Apache 2.0 licensed
 
 ## Running Presenton Docker
@@ -77,58 +77,7 @@ docker run -it --name presenton --gpus=all -p 5000:80 -e LLM="ollama" -e OLLAMA_
 
 > **Note:** GPU acceleration significantly improves the performance of Ollama models, especially for larger models. Make sure you have sufficient GPU memory for your chosen model.
 
-
-#### Supported Ollama Models:
-
-##### Llama Models:
-| Model | Size | Graph Support |
-|-------|------|---------------|
-| `llama3:8b` | 4.7GB | ❌ No |
-| `llama3:70b` | 40GB | ✅ Yes |
-| `llama3.1:8b` | 4.9GB | ❌ No |
-| `llama3.1:70b` | 43GB | ✅ Yes |
-| `llama3.1:405b` | 243GB | ✅ Yes |
-| `llama3.2:1b` | 1.3GB | ❌ No |
-| `llama3.2:3b` | 2GB | ❌ No |
-| `llama3.3:70b` | 43GB | ✅ Yes |
-| `llama4:16x17b` | 67GB | ✅ Yes |
-| `llama4:128x17b` | 245GB | ✅ Yes |
-
-##### Gemma Models:
-| Model | Size | Graph Support |
-|-------|------|---------------|
-| `gemma3:1b` | 815MB | ❌ No |
-| `gemma3:4b` | 3.3GB | ❌ No |
-| `gemma3:12b` | 8.1GB | ❌ No |
-| `gemma3:27b` | 17GB | ✅ Yes |
-
-##### DeepSeek Models:
-| Model | Size | Graph Support |
-|-------|------|---------------|
-| `deepseek-r1:1.5b` | 1.1GB | ❌ No |
-| `deepseek-r1:7b` | 4.7GB | ❌ No |
-| `deepseek-r1:8b` | 5.2GB | ❌ No |
-| `deepseek-r1:14b` | 9GB | ❌ No |
-| `deepseek-r1:32b` | 20GB | ✅ Yes |
-| `deepseek-r1:70b` | 43GB | ✅ Yes |
-| `deepseek-r1:671b` | 404GB | ✅ Yes |
-
-##### Qwen Models:
-| Model | Size | Graph Support |
-|-------|------|---------------|
-| `qwen3:0.6b` | 523MB | ❌ No |
-| `qwen3:1.7b` | 1.4GB | ❌ No |
-| `qwen3:4b` | 2.6GB | ❌ No |
-| `qwen3:8b` | 5.2GB | ❌ No |
-| `qwen3:14b` | 9.3GB | ❌ No |
-| `qwen3:30b` | 19GB | ✅ Yes |
-| `qwen3:32b` | 20GB | ✅ Yes |
-| `qwen3:235b` | 142GB | ✅ Yes |
-
-> **Note:** Models with graph support can generate charts and diagrams in presentations. Larger models provide better quality but require more system resources.
-
-
-## Using Presenton API
+## Generate Presentation with API
 
 ### Generate Presentation
 
@@ -179,6 +128,8 @@ curl -X POST http://localhost:5000/api/v1/ppt/generate/presentation \
   "edit_path": "/presentation?id=d3000f96-096c-4768-b67b-e99aed029b57"
 }
 ```
+
+> **Note:** Make sure to prepend your server's root URL to the path and edit_path fields in the response to construct valid links.
 
 ## Features
 
