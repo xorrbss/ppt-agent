@@ -34,12 +34,13 @@ export async function POST(request: Request) {
   }
   const mergedConfig: LLMConfig = {
     LLM: userConfig.LLM || existingConfig.LLM,
+    LLM_PROVIDER_URL: userConfig.LLM_PROVIDER_URL || existingConfig.LLM_PROVIDER_URL,
+    LLM_API_KEY: userConfig.LLM_API_KEY,
     OPENAI_API_KEY: userConfig.OPENAI_API_KEY || existingConfig.OPENAI_API_KEY,
     GOOGLE_API_KEY: userConfig.GOOGLE_API_KEY || existingConfig.GOOGLE_API_KEY,
     MODEL: userConfig.MODEL || existingConfig.MODEL,
-    LLM_PROVIDER_URL: userConfig.LLM_PROVIDER_URL || existingConfig.LLM_PROVIDER_URL,
-    LLM_API_KEY: userConfig.LLM_API_KEY || existingConfig.LLM_API_KEY,
     PEXELS_API_KEY: userConfig.PEXELS_API_KEY || existingConfig.PEXELS_API_KEY,
+    USE_CUSTOM_URL: userConfig.USE_CUSTOM_URL === undefined ? existingConfig.USE_CUSTOM_URL : userConfig.USE_CUSTOM_URL,
   }
   fs.writeFileSync(userConfigPath, JSON.stringify(mergedConfig))
   return NextResponse.json(mergedConfig)

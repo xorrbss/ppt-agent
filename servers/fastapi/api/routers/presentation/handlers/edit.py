@@ -93,7 +93,7 @@ class PresentationEditHandler:
             icons=None,
             presentation=slide_to_edit.presentation,
             properties=slide_to_edit.properties,
-            content=edited_content,
+            content=edited_content.to_content(),
         )
 
         new_slide_images_count = new_slide_model.images_count

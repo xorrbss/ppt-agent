@@ -1,4 +1,5 @@
 import json
+import traceback
 import aiohttp
 from fastapi import BackgroundTasks, HTTPException
 from api.models import LogMetadata
@@ -8,7 +9,10 @@ from api.routers.presentation.handlers.list_supported_ollama_models import (
 from api.routers.presentation.models import OllamaModelStatusResponse
 from api.services.instances import REDIS_SERVICE
 from api.services.logging import LoggingService
-from api.utils.model_utils import get_llm_api_key_or, get_llm_provider_url_or
+from api.utils.model_utils import (
+    get_llm_provider_url_or,
+    get_ollama_request_headers,
+)
 
 
 class PullOllamaModelHandler:
@@ -38,7 +42,7 @@ class PullOllamaModelHandler:
             async with aiohttp.ClientSession() as session:
                 async with session.get(
                     f"{get_llm_provider_url_or()}/api/tags",
-                    headers={"Authorization": f"Bearer {get_llm_api_key_or()}"},
+                    headers=get_ollama_request_headers(),
                 ) as response:
                     if response.status == 200:
                         pulled_models = await response.json()
@@ -57,17 +61,49 @@ class PullOllamaModelHandler:
                                 downloaded=filtered_models[0]["size"],
                                 done=True,
                             )
+                    elif response.status == 403:
+                        print(response)
+                        raise HTTPException(
+                            status_code=403,
+                            detail="Forbidden: Please check your Ollama Configuration",
+                        )
+                    else:
+                        raise HTTPException(
+                            status_code=response.status,
+                            detail=f"Failed to list Ollama models: {response.status}",
+                        )
+        except HTTPException as e:
+            logging_service.logger.warning(
+                logging_service.message(e.detail),
+                extra=log_metadata.model_dump(),
+            )
+            raise e
         except Exception as e:
+            traceback.print_exc()
             logging_service.logger.warning(
                 f"Failed to check pulled models: {e}",
                 extra=log_metadata.model_dump(),
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to check pulled models: {e}",
             )
 
         saved_model_status = REDIS_SERVICE.get(f"ollama_models/{self.name}")
 
         # If the model is being pulled, return the model
         if saved_model_status:
-            return json.loads(saved_model_status)
+            saved_model_status_json = json.loads(saved_model_status)
+            # If the model is being pulled, return the model
+            # ? If the model status is pulled in redis but was not found while listing pulled models,
+            # ? it means the model was deleted and we need to pull it again
+            if (
+                saved_model_status_json["status"] == "error"
+                or saved_model_status_json["status"] == "pulled"
+            ):
+                REDIS_SERVICE.delete(f"ollama_models/{self.name}")
+            else:
+                return saved_model_status_json
 
         # If the model is not being pulled, pull the model
         background_tasks.add_task(self.pull_model_in_background)
@@ -93,8 +129,8 @@ class PullOllamaModelHandler:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     f"{get_llm_provider_url_or()}/api/pull",
+                    headers=get_ollama_request_headers(),
                     json={"model": self.name},
-                    headers={"Authorization": f"Bearer {get_llm_api_key_or()}"},
                 ) as response:
                     if response.status != 200:
                         raise HTTPException(
@@ -136,7 +172,10 @@ class PullOllamaModelHandler:
                 f"ollama_models/{self.name}",
                 json.dumps(saved_model_status.model_dump(mode="json")),
             )
-            raise e
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to pull model: {e}",
+            )
 
         saved_model_status.done = True
         saved_model_status.status = "pulled"
