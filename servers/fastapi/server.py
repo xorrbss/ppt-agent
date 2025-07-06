@@ -2,11 +2,6 @@ import os
 import uvicorn
 import argparse
 
-from api.main import app
-
-
-# ? Helps pyinstaller for dependencies resolution
-app
 
 if __name__ == "__main__":
     os.makedirs("debug", exist_ok=True)

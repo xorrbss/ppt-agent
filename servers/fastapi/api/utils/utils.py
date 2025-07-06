@@ -42,13 +42,13 @@ def get_user_config():
 
     return UserConfig(
         LLM=existing_config.LLM or os.getenv("LLM"),
+        LLM_PROVIDER_URL=existing_config.LLM_PROVIDER_URL
+        or os.getenv("LLM_PROVIDER_URL"),
+        LLM_API_KEY=existing_config.LLM_API_KEY or os.getenv("LLM_API_KEY"),
         OPENAI_API_KEY=existing_config.OPENAI_API_KEY or os.getenv("OPENAI_API_KEY"),
         GOOGLE_API_KEY=existing_config.GOOGLE_API_KEY or os.getenv("GOOGLE_API_KEY"),
         MODEL=existing_config.MODEL or os.getenv("MODEL"),
         PEXELS_API_KEY=existing_config.PEXELS_API_KEY or os.getenv("PEXELS_API_KEY"),
-        LLM_PROVIDER_URL=existing_config.LLM_PROVIDER_URL
-        or os.getenv("LLM_PROVIDER_URL"),
-        LLM_API_KEY=existing_config.LLM_API_KEY or os.getenv("LLM_API_KEY"),
     )
 
 
@@ -56,6 +56,10 @@ def update_env_with_user_config():
     user_config = get_user_config()
     if user_config.LLM:
         os.environ["LLM"] = user_config.LLM
+    if user_config.LLM_PROVIDER_URL:
+        os.environ["LLM_PROVIDER_URL"] = user_config.LLM_PROVIDER_URL
+    if user_config.LLM_API_KEY:
+        os.environ["LLM_API_KEY"] = user_config.LLM_API_KEY
     if user_config.OPENAI_API_KEY:
         os.environ["OPENAI_API_KEY"] = user_config.OPENAI_API_KEY
     if user_config.GOOGLE_API_KEY:
@@ -64,10 +68,6 @@ def update_env_with_user_config():
         os.environ["MODEL"] = user_config.MODEL
     if user_config.PEXELS_API_KEY:
         os.environ["PEXELS_API_KEY"] = user_config.PEXELS_API_KEY
-    if user_config.LLM_PROVIDER_URL:
-        os.environ["LLM_PROVIDER_URL"] = user_config.LLM_PROVIDER_URL
-    if user_config.LLM_API_KEY:
-        os.environ["LLM_API_KEY"] = user_config.LLM_API_KEY
 
 
 def get_resource(relative_path):

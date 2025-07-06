@@ -35,10 +35,13 @@ const setupUserConfigFromEnv = () => {
 
   const userConfig = {
     LLM: process.env.LLM || existingConfig.LLM,
+    LLM_PROVIDER_URL: process.env.LLM_PROVIDER_URL || existingConfig.LLM_PROVIDER_URL,
+    LLM_API_KEY: process.env.LLM_API_KEY || existingConfig.LLM_API_KEY,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY || existingConfig.OPENAI_API_KEY,
     GOOGLE_API_KEY: process.env.GOOGLE_API_KEY || existingConfig.GOOGLE_API_KEY,
-    OLLAMA_MODEL: process.env.OLLAMA_MODEL || existingConfig.OLLAMA_MODEL,
+    MODEL: process.env.MODEL || existingConfig.MODEL,
     PEXELS_API_KEY: process.env.PEXELS_API_KEY || existingConfig.PEXELS_API_KEY,
+    USE_CUSTOM_URL: process.env.USE_CUSTOM_URL || existingConfig.USE_CUSTOM_URL,
   };
 
   fs.writeFileSync(userConfigPath, JSON.stringify(userConfig));

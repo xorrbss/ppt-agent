@@ -72,7 +72,7 @@ const SettingsPage = () => {
     });
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [openModelSelect, setOpenModelSelect] = useState(false);
-    const [useCustomOllamaUrl, setUseCustomOllamaUrl] = useState<boolean>(false);
+    const [useCustomOllamaUrl, setUseCustomOllamaUrl] = useState<boolean>(userConfigState.llm_config.USE_CUSTOM_URL || false);
 
     const api_key_changed = (apiKey: string, field?: string) => {
         if (llmConfig.LLM === 'openai') {
@@ -91,27 +91,12 @@ const SettingsPage = () => {
     }
 
     const handleSaveConfig = async () => {
-        if (llmConfig.LLM === 'ollama') {
-            try {
+        try {
+            await handleSaveLLMConfig(llmConfig);
+            if (llmConfig.LLM === 'ollama') {
                 setIsLoading(true);
                 await pullOllamaModels();
-                toast({
-                    title: 'Success',
-                    description: 'Model downloaded successfully',
-                });
-            } catch (error) {
-                console.error('Error pulling model:', error);
-                toast({
-                    title: 'Error',
-                    description: 'Failed to download model. Please try again.',
-                    variant: 'destructive',
-                });
-                setIsLoading(false);
-                return;
             }
-        }
-        try {
-            await handleSaveLLMConfig(llmConfig, useCustomOllamaUrl);
             toast({
                 title: 'Success',
                 description: 'Configuration saved successfully',
@@ -122,7 +107,7 @@ const SettingsPage = () => {
             console.error('Error:', error);
             toast({
                 title: 'Error',
-                description: 'Failed to save configuration',
+                description: error instanceof Error ? error.message : 'Failed to save configuration',
                 variant: 'destructive',
             });
             setIsLoading(false);
@@ -136,34 +121,48 @@ const SettingsPage = () => {
         }
     }
 
+    const resetDownloadingModel = () => {
+        setDownloadingModel({
+            name: '',
+            size: null,
+            downloaded: null,
+            status: '',
+            done: false,
+        });
+    }
+
     const pullOllamaModels = async (): Promise<void> => {
         return new Promise((resolve, reject) => {
             const interval = setInterval(async () => {
                 try {
                     const response = await fetch(`/api/v1/ppt/ollama/pull-model?name=${llmConfig.MODEL}`);
                     if (response.status === 200) {
-
                         const data = await response.json();
-
-                        if (data.done) {
+                        if (data.done && data.status !== 'error') {
                             clearInterval(interval);
                             setDownloadingModel(data);
                             resolve();
+                        } else if (data.status === 'error') {
+                            clearInterval(interval);
+                            resetDownloadingModel();
+                            reject(new Error('Error occurred while pulling model'));
                         } else {
                             setDownloadingModel(data);
                         }
                     } else {
                         clearInterval(interval);
-                        reject(new Error('Model pulling failed'));
+                        resetDownloadingModel();
+                        if (response.status === 403) {
+                            reject(new Error('Request to Ollama Not Authorized'));
+                        }
+                        reject(new Error('Error occurred while pulling model'));
                     }
                 } catch (error) {
-
-                    console.log('Error fetching ollama models:', error);
                     clearInterval(interval);
+                    resetDownloadingModel();
                     reject(error);
                 }
             }, 1000);
-
         });
     }
 
@@ -174,6 +173,14 @@ const SettingsPage = () => {
             setOllamaModels(data.models);
         } catch (error) {
             console.error('Error fetching ollama models:', error);
+        }
+    }
+
+    const setOllamaConfig = () => {
+        if (!useCustomOllamaUrl) {
+            setLlmConfig({ ...llmConfig, LLM_PROVIDER_URL: 'http://localhost:11434', LLM_API_KEY: undefined, USE_CUSTOM_URL: false });
+        } else {
+            setLlmConfig({ ...llmConfig, USE_CUSTOM_URL: true });
         }
     }
 
@@ -188,11 +195,7 @@ const SettingsPage = () => {
     }, [userConfigState.llm_config.LLM]);
 
     useEffect(() => {
-        if (!useCustomOllamaUrl) {
-            setLlmConfig({ ...llmConfig, LLM_PROVIDER_URL: undefined, LLM_API_KEY: undefined });
-        } else {
-            setLlmConfig({ ...llmConfig, LLM_PROVIDER_URL: 'http://localhost:11434', LLM_API_KEY: '' });
-        }
+        setOllamaConfig();
     }, [useCustomOllamaUrl]);
 
     if (!canChangeKeys) {

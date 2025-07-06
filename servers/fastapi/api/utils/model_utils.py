@@ -10,11 +10,18 @@ def is_ollama_selected() -> bool:
 
 
 def get_llm_provider_url_or():
-    return os.getenv("LLM_PROVIDER_URL") or "http://localhost:11434"
+    llm_provider_url = os.getenv("LLM_PROVIDER_URL") or "http://localhost:11434"
+    if llm_provider_url.endswith("/"):
+        return llm_provider_url[:-1]
+    return llm_provider_url
 
 
-def get_llm_api_key_or():
-    return os.getenv("LLM_API_KEY") or "ollama"
+def get_ollama_request_headers():
+    if os.getenv("LLM_API_KEY"):
+        return {
+            "Authorization": f"Bearer {os.getenv('LLM_API_KEY')}",
+        }
+    return {}
 
 
 def get_selected_llm_provider() -> SelectedLLMProvider:
@@ -41,7 +48,7 @@ def get_llm_api_key():
     elif selected_llm == SelectedLLMProvider.GOOGLE:
         return os.getenv("GOOGLE_API_KEY")
     elif selected_llm == SelectedLLMProvider.OLLAMA:
-        return get_llm_api_key_or()
+        return os.getenv("LLM_API_KEY") or "ollama"
     else:
         raise ValueError(f"Invalid LLM API key")
 
