@@ -16,14 +16,6 @@ def get_llm_provider_url_or():
     return llm_provider_url
 
 
-def get_ollama_request_headers():
-    if os.getenv("LLM_API_KEY"):
-        return {
-            "Authorization": f"Bearer {os.getenv('LLM_API_KEY')}",
-        }
-    return {}
-
-
 def get_selected_llm_provider() -> SelectedLLMProvider:
     return SelectedLLMProvider(os.getenv("LLM"))
 
@@ -48,7 +40,7 @@ def get_llm_api_key():
     elif selected_llm == SelectedLLMProvider.GOOGLE:
         return os.getenv("GOOGLE_API_KEY")
     elif selected_llm == SelectedLLMProvider.OLLAMA:
-        return os.getenv("LLM_API_KEY") or "ollama"
+        return "ollama"
     else:
         raise ValueError(f"Invalid LLM API key")
 

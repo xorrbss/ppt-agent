@@ -74,19 +74,15 @@ const SettingsPage = () => {
     const [openModelSelect, setOpenModelSelect] = useState(false);
     const [useCustomOllamaUrl, setUseCustomOllamaUrl] = useState<boolean>(userConfigState.llm_config.USE_CUSTOM_URL || false);
 
-    const api_key_changed = (apiKey: string, field?: string) => {
-        if (llmConfig.LLM === 'openai') {
-            setLlmConfig({ ...llmConfig, OPENAI_API_KEY: apiKey });
-        } else if (llmConfig.LLM === 'google') {
-            setLlmConfig({ ...llmConfig, GOOGLE_API_KEY: apiKey });
-        } else if (llmConfig.LLM === 'ollama') {
-            if (field === 'pexels') {
-                setLlmConfig({ ...llmConfig, PEXELS_API_KEY: apiKey });
-            } else if (field === 'ollama_url') {
-                setLlmConfig({ ...llmConfig, LLM_PROVIDER_URL: apiKey });
-            } else if (field === 'ollama_api_key') {
-                setLlmConfig({ ...llmConfig, LLM_API_KEY: apiKey });
-            }
+    const input_field_changed = (new_value: string, field: string) => {
+        if (field === 'openai_api_key') {
+            setLlmConfig({ ...llmConfig, OPENAI_API_KEY: new_value });
+        } else if (field === 'google_api_key') {
+            setLlmConfig({ ...llmConfig, GOOGLE_API_KEY: new_value });
+        } else if (field === 'llm_provider_url') {
+            setLlmConfig({ ...llmConfig, LLM_PROVIDER_URL: new_value });
+        } else if (field === 'pexels_api_key') {
+            setLlmConfig({ ...llmConfig, PEXELS_API_KEY: new_value });
         }
     }
 
@@ -178,7 +174,7 @@ const SettingsPage = () => {
 
     const setOllamaConfig = () => {
         if (!useCustomOllamaUrl) {
-            setLlmConfig({ ...llmConfig, LLM_PROVIDER_URL: 'http://localhost:11434', LLM_API_KEY: undefined, USE_CUSTOM_URL: false });
+            setLlmConfig({ ...llmConfig, LLM_PROVIDER_URL: 'http://localhost:11434', USE_CUSTOM_URL: false });
         } else {
             setLlmConfig({ ...llmConfig, USE_CUSTOM_URL: true });
         }
@@ -261,7 +257,7 @@ const SettingsPage = () => {
                                         <input
                                             type="text"
                                             value={llmConfig.LLM === 'openai' ? llmConfig.OPENAI_API_KEY || '' : llmConfig.GOOGLE_API_KEY || ''}
-                                            onChange={(e) => api_key_changed(e.target.value)}
+                                            onChange={(e) => input_field_changed(e.target.value, llmConfig.LLM === 'openai' ? 'openai_api_key' : 'google_api_key')}
                                             className="flex-1 px-4 py-2.5 border border-gray-300 outline-none rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
                                             placeholder={PROVIDER_CONFIGS[llmConfig.LLM!].placeholder}
                                         />
@@ -424,7 +420,7 @@ const SettingsPage = () => {
                                                         placeholder="Enter your Ollama URL"
                                                         className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
                                                         value={llmConfig.LLM_PROVIDER_URL || ''}
-                                                        onChange={(e) => api_key_changed(e.target.value, 'ollama_url')}
+                                                        onChange={(e) => input_field_changed(e.target.value, 'llm_provider_url')}
                                                     />
                                                 </div>
                                                 <p className="mt-2 text-sm text-gray-500 flex items-center gap-2">
@@ -432,25 +428,7 @@ const SettingsPage = () => {
                                                     Change this if you are using a custom Ollama instance
                                                 </p>
                                             </div>
-                                            <div className="mb-4">
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    Ollama API Key
-                                                </label>
-                                                <div className="relative">
-                                                    <input
-                                                        type="text"
-                                                        required
-                                                        placeholder="Enter your Ollama API key"
-                                                        className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                                                        value={llmConfig.LLM_API_KEY || ''}
-                                                        onChange={(e) => api_key_changed(e.target.value, 'ollama_api_key')}
-                                                    />
-                                                </div>
-                                                <p className="mt-2 text-sm text-gray-500 flex items-center gap-2">
-                                                    <span className="block w-1 h-1 rounded-full bg-gray-400"></span>
-                                                    Provide this if you are using a custom Ollama instance
-                                                </p>
-                                            </div>
+
                                         </>
                                     )}
                                 </div>
@@ -466,7 +444,7 @@ const SettingsPage = () => {
                                             placeholder="Enter your Pexels API key"
                                             className="flex-1 px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
                                             value={llmConfig.PEXELS_API_KEY || ''}
-                                            onChange={(e) => api_key_changed(e.target.value, 'pexels')}
+                                            onChange={(e) => input_field_changed(e.target.value, 'pexels_api_key')}
                                         />
                                         <button
                                             onClick={handleSaveConfig}
