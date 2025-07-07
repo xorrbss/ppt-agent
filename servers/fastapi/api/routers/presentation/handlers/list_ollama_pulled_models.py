@@ -3,10 +3,7 @@ from fastapi import HTTPException
 from api.models import LogMetadata
 from api.routers.presentation.models import OllamaModelStatusResponse
 from api.services.logging import LoggingService
-from api.utils.model_utils import (
-    get_llm_provider_url_or,
-    get_ollama_request_headers,
-)
+from api.utils.model_utils import get_llm_provider_url_or
 
 
 class ListPulledOllamaModelsHandler:
@@ -19,7 +16,6 @@ class ListPulledOllamaModelsHandler:
         async with aiohttp.ClientSession() as session:
             async with session.get(
                 f"{get_llm_provider_url_or()}/api/tags",
-                headers=get_ollama_request_headers(),
             ) as response:
                 if response.status == 200:
                     response_data = await response.json()

@@ -9,10 +9,7 @@ from api.routers.presentation.handlers.list_supported_ollama_models import (
 from api.routers.presentation.models import OllamaModelStatusResponse
 from api.services.instances import REDIS_SERVICE
 from api.services.logging import LoggingService
-from api.utils.model_utils import (
-    get_llm_provider_url_or,
-    get_ollama_request_headers,
-)
+from api.utils.model_utils import get_llm_provider_url_or
 
 
 class PullOllamaModelHandler:
@@ -42,7 +39,6 @@ class PullOllamaModelHandler:
             async with aiohttp.ClientSession() as session:
                 async with session.get(
                     f"{get_llm_provider_url_or()}/api/tags",
-                    headers=get_ollama_request_headers(),
                 ) as response:
                     if response.status == 200:
                         pulled_models = await response.json()
@@ -129,7 +125,6 @@ class PullOllamaModelHandler:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     f"{get_llm_provider_url_or()}/api/pull",
-                    headers=get_ollama_request_headers(),
                     json={"model": self.name},
                 ) as response:
                     if response.status != 200:
