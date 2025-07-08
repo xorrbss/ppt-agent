@@ -1,6 +1,7 @@
 from typing import Annotated, List, Optional
 import uuid
 from fastapi import APIRouter, BackgroundTasks, Body, File, Form, UploadFile
+import openai
 
 from api.models import SessionModel
 from api.request_utils import RequestUtils
@@ -81,6 +82,7 @@ from api.routers.presentation.models import (
     PresentationUpdateRequest,
 )
 from api.sql_models import PresentationSqlModel
+from api.utils.model_utils import get_llm_client, list_available_custom_models
 from api.utils.utils import handle_errors
 from image_processor.images_finder import (
     generate_image_google,
@@ -389,3 +391,11 @@ async def pull_ollama_model(name: str, background_tasks: BackgroundTasks):
         log_metadata,
         background_tasks=background_tasks,
     )
+
+
+@presentation_router.post("/models/list/custom", response_model=List[str])
+async def list_custom_models(
+    url: Annotated[Optional[str], Body()] = None,
+    api_key: Annotated[Optional[str], Body()] = None,
+):
+    return await list_available_custom_models(url, api_key)

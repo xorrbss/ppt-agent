@@ -35,11 +35,13 @@ const setupUserConfigFromEnv = () => {
 
   const userConfig = {
     LLM: process.env.LLM || existingConfig.LLM,
-    LLM_PROVIDER_URL: process.env.LLM_PROVIDER_URL || existingConfig.LLM_PROVIDER_URL,
-    LLM_API_KEY: process.env.LLM_API_KEY || existingConfig.LLM_API_KEY,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY || existingConfig.OPENAI_API_KEY,
     GOOGLE_API_KEY: process.env.GOOGLE_API_KEY || existingConfig.GOOGLE_API_KEY,
-    MODEL: process.env.MODEL || existingConfig.MODEL,
+    OLLAMA_URL: process.env.OLLAMA_URL || existingConfig.OLLAMA_URL,
+    OLLAMA_MODEL: process.env.OLLAMA_MODEL || existingConfig.OLLAMA_MODEL,
+    CUSTOM_LLM_URL: process.env.CUSTOM_LLM_URL || existingConfig.CUSTOM_LLM_URL,
+    CUSTOM_LLM_API_KEY: process.env.CUSTOM_LLM_API_KEY || existingConfig.CUSTOM_LLM_API_KEY,
+    CUSTOM_MODEL: process.env.CUSTOM_MODEL || existingConfig.CUSTOM_MODEL,
     PEXELS_API_KEY: process.env.PEXELS_API_KEY || existingConfig.PEXELS_API_KEY,
     USE_CUSTOM_URL: process.env.USE_CUSTOM_URL || existingConfig.USE_CUSTOM_URL,
   };

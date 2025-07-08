@@ -9,7 +9,11 @@ from api.routers.presentation.handlers.list_supported_ollama_models import (
 from api.routers.presentation.models import OllamaModelStatusResponse
 from api.services.instances import REDIS_SERVICE
 from api.services.logging import LoggingService
-from api.utils.model_utils import get_llm_provider_url_or
+from api.utils.model_utils import (
+    get_llm_provider_url_or,
+    list_pulled_ollama_models,
+    pull_ollama_model,
+)
 
 
 class PullOllamaModelHandler:
@@ -34,40 +38,13 @@ class PullOllamaModelHandler:
                 detail=f"Model {self.name} is not supported",
             )
 
-        # Check if model is already pulled using LLM_PROVIDER_URL/api/tags
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"{get_llm_provider_url_or()}/api/tags",
-                ) as response:
-                    if response.status == 200:
-                        pulled_models = await response.json()
-                        filtered_models = [
-                            model
-                            for model in pulled_models["models"]
-                            if model["model"] == self.name
-                        ]
-
-                        # If the model is already pulled, return the model
-                        if filtered_models:
-                            return OllamaModelStatusResponse(
-                                name=self.name,
-                                size=filtered_models[0]["size"],
-                                status="pulled",
-                                downloaded=filtered_models[0]["size"],
-                                done=True,
-                            )
-                    elif response.status == 403:
-                        print(response)
-                        raise HTTPException(
-                            status_code=403,
-                            detail="Forbidden: Please check your Ollama Configuration",
-                        )
-                    else:
-                        raise HTTPException(
-                            status_code=response.status,
-                            detail=f"Failed to list Ollama models: {response.status}",
-                        )
+            pulled_models = await list_pulled_ollama_models()
+            filtered_models = [
+                model for model in pulled_models if model.name == self.name
+            ]
+            if filtered_models:
+                return filtered_models[0]
         except HTTPException as e:
             logging_service.logger.warning(
                 logging_service.message(e.detail),
@@ -122,43 +99,24 @@ class PullOllamaModelHandler:
         log_event_count = 0
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{get_llm_provider_url_or()}/api/pull",
-                    json={"model": self.name},
-                ) as response:
-                    if response.status != 200:
-                        raise HTTPException(
-                            status_code=response.status,
-                            detail=f"Failed to pull model: {await response.text()}",
-                        )
+            async for event in pull_ollama_model(self.name):
+                log_event_count += 1
+                if log_event_count != 1 and log_event_count % 20 != 0:
+                    continue
 
-                    async for line in response.content:
-                        if not line.strip():
-                            continue
+                if "completed" in event:
+                    saved_model_status.downloaded = event["completed"]
 
-                        try:
-                            event = json.loads(line.decode("utf-8"))
-                        except json.JSONDecodeError:
-                            continue
+                if not saved_model_status.size and "total" in event:
+                    saved_model_status.size = event["total"]
 
-                        log_event_count += 1
-                        if log_event_count != 1 and log_event_count % 20 != 0:
-                            continue
+                if "status" in event:
+                    saved_model_status.status = event["status"]
 
-                        if "completed" in event:
-                            saved_model_status.downloaded = event["completed"]
-
-                        if not saved_model_status.size and "total" in event:
-                            saved_model_status.size = event["total"]
-
-                        if "status" in event:
-                            saved_model_status.status = event["status"]
-
-                        REDIS_SERVICE.set(
-                            f"ollama_models/{self.name}",
-                            json.dumps(saved_model_status.model_dump(mode="json")),
-                        )
+                REDIS_SERVICE.set(
+                    f"ollama_models/{self.name}",
+                    json.dumps(saved_model_status.model_dump(mode="json")),
+                )
 
         except Exception as e:
             saved_model_status.status = "error"

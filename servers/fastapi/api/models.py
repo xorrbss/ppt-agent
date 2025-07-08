@@ -63,9 +63,11 @@ class UserConfig(BaseModel):
     LLM: Optional[str] = None
     OPENAI_API_KEY: Optional[str] = None
     GOOGLE_API_KEY: Optional[str] = None
-    MODEL: Optional[str] = None
-    LLM_PROVIDER_URL: Optional[str] = None
-    LLM_API_KEY: Optional[str] = None
+    OLLAMA_URL: Optional[str] = None
+    OLLAMA_MODEL: Optional[str] = None
+    CUSTOM_LLM_URL: Optional[str] = None
+    CUSTOM_LLM_API_KEY: Optional[str] = None
+    CUSTOM_MODEL: Optional[str] = None
     PEXELS_API_KEY: Optional[str] = None
 
 

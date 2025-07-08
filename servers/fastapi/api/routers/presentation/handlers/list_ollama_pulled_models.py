@@ -1,9 +1,6 @@
-import aiohttp
-from fastapi import HTTPException
 from api.models import LogMetadata
-from api.routers.presentation.models import OllamaModelStatusResponse
 from api.services.logging import LoggingService
-from api.utils.model_utils import get_llm_provider_url_or
+from api.utils.model_utils import list_pulled_ollama_models
 
 
 class ListPulledOllamaModelsHandler:
@@ -13,35 +10,10 @@ class ListPulledOllamaModelsHandler:
             logging_service.message("Listing Ollama models"),
             extra=log_metadata.model_dump(),
         )
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{get_llm_provider_url_or()}/api/tags",
-            ) as response:
-                if response.status == 200:
-                    response_data = await response.json()
-                elif response.status == 403:
-                    raise HTTPException(
-                        status_code=403,
-                        detail="Forbidden: Please check your Ollama Configuration",
-                    )
-                else:
-                    raise HTTPException(
-                        status_code=response.status,
-                        detail=f"Failed to list Ollama models: {response.status}",
-                    )
+        pulled_models = await list_pulled_ollama_models()
 
         logging_service.logger.info(
-            logging_service.message(response_data),
+            logging_service.message(pulled_models),
             extra=log_metadata.model_dump(),
         )
-
-        return [
-            OllamaModelStatusResponse(
-                name=model["model"],
-                size=model["size"],
-                status="pulled",
-                downloaded=model["size"],
-                done=True,
-            )
-            for model in response_data["models"]
-        ]
+        return pulled_models
