@@ -320,7 +320,7 @@ const SettingsPage = () => {
                                                     : "text-gray-700"
                                                     }`}
                                             >
-                                                {provider.charAt(0).toUpperCase() + provider.slice(1)}
+                                                {provider === 'openai' ? 'OpenAI' : provider.charAt(0).toUpperCase() + provider.slice(1)}
                                             </span>
                                         </div>
                                     </button>
