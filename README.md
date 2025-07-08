@@ -29,6 +29,7 @@
 * ✅ **Bring Your Own Key** — Only pay for what you use. OpenAI, Gemini (More coming soon...)
 * ✅ **API Presentation Generation** — Host as API to generate presentations over requests
 * ✅ **Ollama Support** — Run open-source models locally with Ollama integration
+* ✅ **OpenAI API Compatibility** — Use any OpenAI-compatible API endpoint with your own models
 * ✅ **Runs Locally** — All code runs on your device
 * ✅ **Privacy-First** — No tracking, no data stored by us
 * ✅ **Flexible** — Generate presentations from prompts or outlines
@@ -41,12 +42,12 @@
 
 ##### Linux/MacOS (Bash/Zsh Shell):
 ```bash
-docker run -it --name presenton -p 5000:80 -v "./user_data:/app/user_data" ghcr.io/presenton/presenton:v0.3.0-beta
+docker run -it --name presenton -p 5000:80 -v "./user_data:/app/user_data" ghcr.io/presenton/presenton:latest
 ```
 
 ##### Windows (PowerShell):
 ```bash
-docker run -it --name presenton -p 5000:80 -v "${PWD}\user_data:/app/user_data" ghcr.io/presenton/presenton:v0.3.0-beta
+docker run -it --name presenton -p 5000:80 -v "${PWD}\user_data:/app/user_data" ghcr.io/presenton/presenton:latest
 ```
 
 #### 2. Open Presenton
@@ -59,20 +60,29 @@ Open http://localhost:5000 on browser of your choice to use Presenton.
 You may want to directly provide your API KEYS as environment variables and keep them hidden. You can set these environment variables to achieve it.
 
 - **CAN_CHANGE_KEYS=[true/false]**: Set this to **false** if you want to keep API Keys hidden and make them unmodifiable.
-- **LLM=[openai/google/ollama]**: Select **LLM** of your choice.
+- **LLM=[openai/google/ollama/custom]**: Select **LLM** of your choice.
 - **OPENAI_API_KEY=[Your OpenAI API Key]**: Provide this if **LLM** is set to **openai**
 - **GOOGLE_API_KEY=[Your Google API Key]**: Provide this if **LLM** is set to **google**
-- **OLLAMA_MODEL=[Ollama Model Name]**: Provide this if **LLM** is set to **ollama**
-- **PEXELS_API_KEY=[Your Pexels API Key]**: Provide this if **LLM** is set to **ollama**
+- **OLLAMA_URL=[Custom Ollama URL]**: Provide this if you want to custom Ollama URL and **LLM** is set to **ollama**
+- **OLLAMA_MODEL=[Ollama Model ID]**: Provide this if **LLM** is set to **ollama**
+- **CUSTOM_LLM_URL=[Custom OpenAI Compartible URL]**: Provide this if **LLM** is set to **custom**
+- **CUSTOM_LLM_API_KEY=[Custom OpenAI Compartible API KEY]**: Provide this if **LLM** is set to **custom**
+- **CUSTOM_MODEL=[Custom Model ID]**: Provide this if **LLM** is set to **custom**
+- **PEXELS_API_KEY=[Your Pexels API Key]**: Provide this to generate images if **LLM** is set to **ollama** or **custom**
 
 ### Using OpenAI
 ```bash
-docker run -it --name presenton -p 5000:80 -e LLM="openai" -e OPENAI_API_KEY="******" -e CAN_CHANGE_KEYS="false" -v "./user_data:/app/user_data" ghcr.io/presenton/presenton:v0.3.0-beta
+docker run -it --name presenton -p 5000:80 -e LLM="openai" -e OPENAI_API_KEY="******" -e CAN_CHANGE_KEYS="false" -v "./user_data:/app/user_data" ghcr.io/presenton/presenton:latest
 ```
 
 ### Using Ollama
 ```bash
-docker run -it --name presenton -p 5000:80 -e LLM="ollama" -e OLLAMA_MODEL="llama3.2:3b" -e PEXELS_API_KEY="*******" -e CAN_CHANGE_KEYS="false" -v "./user_data:/app/user_data" ghcr.io/presenton/presenton:v0.3.0-beta
+docker run -it --name presenton -p 5000:80 -e LLM="ollama" -e OLLAMA_MODEL="llama3.2:3b" -e PEXELS_API_KEY="*******" -e CAN_CHANGE_KEYS="false" -v "./user_data:/app/user_data" ghcr.io/presenton/presenton:latest
+```
+
+### Using OpenAI Compartible API
+```bash
+docker run -it -p 5000:80 -e CAN_CHANGE_KEYS="false"  -e LLM="custom" -e CUSTOM_LLM_URL="http://*****" -e CUSTOM_LLM_API_KEY="*****" -e CUSTOM_MODEL="llama3.2:3b" -v "./user_data:/app/user_data" ghcr.io/presenton/presenton:latest
 ```
 
 #### Running Presenton with GPU Support
@@ -82,7 +92,7 @@ To use GPU acceleration with Ollama models, you need to install and configure th
 Once the NVIDIA Container Toolkit is installed and configured, you can run Presenton with GPU support by adding the `--gpus=all` flag:
 
 ```bash
-docker run -it --name presenton --gpus=all -p 5000:80 -e LLM="ollama" -e OLLAMA_MODEL="llama3.2:3b" -e PEXELS_API_KEY="*******" -e CAN_CHANGE_KEYS="false" -v "./user_data:/app/user_data" ghcr.io/presenton/presenton:v0.3.0-beta
+docker run -it --name presenton --gpus=all -p 5000:80 -e LLM="ollama" -e OLLAMA_MODEL="llama3.2:3b" -e PEXELS_API_KEY="*******" -e CAN_CHANGE_KEYS="false" -v "./user_data:/app/user_data" ghcr.io/presenton/presenton:latest
 ```
 
 > **Note:** GPU acceleration significantly improves the performance of Ollama models, especially for larger models. Make sure you have sufficient GPU memory for your chosen model.
