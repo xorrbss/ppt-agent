@@ -622,7 +622,7 @@ export default function Home() {
                                 </div>
                                 <div className="mb-4">
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        OpenAI Compatible API Key
+                                        OpenAI Compatible API Key (optional)
                                     </label>
                                     <div className="relative">
                                         <input
@@ -697,8 +697,8 @@ export default function Home() {
                                     <div className="mb-4">
                                         <button
                                             onClick={fetchCustomModels}
-                                            disabled={customModelsLoading || !llmConfig.CUSTOM_LLM_URL || !llmConfig.CUSTOM_LLM_API_KEY}
-                                            className={`w-full py-2.5 px-4 rounded-lg transition-all duration-200 border-2 ${customModelsLoading || !llmConfig.CUSTOM_LLM_URL || !llmConfig.CUSTOM_LLM_API_KEY
+                                            disabled={customModelsLoading || !llmConfig.CUSTOM_LLM_URL}
+                                            className={`w-full py-2.5 px-4 rounded-lg transition-all duration-200 border-2 ${customModelsLoading || !llmConfig.CUSTOM_LLM_URL
                                                 ? 'bg-gray-100 border-gray-300 cursor-not-allowed text-gray-500'
                                                 : 'bg-white border-blue-600 text-blue-600 hover:bg-blue-50 focus:ring-2 focus:ring-blue-500/20'
                                                 }`}

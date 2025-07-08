@@ -20,7 +20,7 @@ export const hasValidLLMConfig = (llmConfig: LLMConfig) => {
   const GOOGLE_API_KEY = llmConfig.GOOGLE_API_KEY;
 
   const isOllamaConfigValid = llmConfig.OLLAMA_MODEL !== '' && llmConfig.OLLAMA_MODEL !== null && llmConfig.OLLAMA_MODEL !== undefined && llmConfig.OLLAMA_URL !== '' && llmConfig.OLLAMA_URL !== null && llmConfig.OLLAMA_URL !== undefined;
-  const isCustomConfigValid = llmConfig.CUSTOM_LLM_URL !== '' && llmConfig.CUSTOM_LLM_URL !== null && llmConfig.CUSTOM_LLM_URL !== undefined && llmConfig.CUSTOM_LLM_API_KEY !== '' && llmConfig.CUSTOM_LLM_API_KEY !== null && llmConfig.CUSTOM_LLM_API_KEY !== undefined && llmConfig.CUSTOM_MODEL !== '' && llmConfig.CUSTOM_MODEL !== null && llmConfig.CUSTOM_MODEL !== undefined;
+  const isCustomConfigValid = llmConfig.CUSTOM_LLM_URL !== '' && llmConfig.CUSTOM_LLM_URL !== null && llmConfig.CUSTOM_LLM_URL !== undefined && llmConfig.CUSTOM_MODEL !== '' && llmConfig.CUSTOM_MODEL !== null && llmConfig.CUSTOM_MODEL !== undefined;
 
   return llmConfig.LLM === 'openai' ?
     OPENAI_API_KEY !== '' && OPENAI_API_KEY !== null && OPENAI_API_KEY !== undefined :

@@ -266,8 +266,7 @@ const SettingsPage = () => {
             fetchOllamaModels();
         } else if (userConfigState.llm_config.LLM === 'custom' &&
             userConfigState.llm_config.CUSTOM_MODEL &&
-            userConfigState.llm_config.CUSTOM_LLM_URL &&
-            userConfigState.llm_config.CUSTOM_LLM_API_KEY) {
+            userConfigState.llm_config.CUSTOM_LLM_URL) {
             fetchCustomModels();
         }
     }, [userConfigState.llm_config.LLM]);
@@ -515,11 +514,6 @@ const SettingsPage = () => {
                                     </div>
                                     <p className="mt-2 text-sm text-gray-500">Provide a Pexels API key to generate presentation images</p>
                                 </div>
-                                {downloadingModel.status && downloadingModel.status !== 'pulled' && (
-                                    <div className="text-sm text-center bg-green-100 rounded-lg p-2 font-semibold capitalize text-gray-600">
-                                        {downloadingModel.status}
-                                    </div>
-                                )}
                             </div>
                         )}
 
@@ -618,8 +612,8 @@ const SettingsPage = () => {
                                     <div>
                                         <button
                                             onClick={fetchCustomModels}
-                                            disabled={customModelsLoading || !llmConfig.CUSTOM_LLM_URL || !llmConfig.CUSTOM_LLM_API_KEY}
-                                            className={`w-full py-2.5 px-4 rounded-lg transition-all duration-200 border-2 font-semibold ${customModelsLoading || !llmConfig.CUSTOM_LLM_URL || !llmConfig.CUSTOM_LLM_API_KEY
+                                            disabled={customModelsLoading || !llmConfig.CUSTOM_LLM_URL}
+                                            className={`w-full py-2.5 px-4 rounded-lg transition-all duration-200 border-2 font-semibold ${customModelsLoading || !llmConfig.CUSTOM_LLM_URL
                                                 ? 'bg-gray-100 border-gray-300 cursor-not-allowed text-gray-500'
                                                 : 'bg-white border-blue-600 text-blue-600 hover:bg-blue-50 focus:ring-2 focus:ring-blue-500/20'
                                                 }`}
@@ -650,8 +644,8 @@ const SettingsPage = () => {
                                     <div>
                                         <button
                                             onClick={fetchCustomModels}
-                                            disabled={customModelsLoading || !llmConfig.CUSTOM_LLM_URL || !llmConfig.CUSTOM_LLM_API_KEY}
-                                            className={`w-full py-2.5 px-4 rounded-lg transition-all duration-200 border-2 font-semibold ${customModelsLoading || !llmConfig.CUSTOM_LLM_URL || !llmConfig.CUSTOM_LLM_API_KEY
+                                            disabled={customModelsLoading || !llmConfig.CUSTOM_LLM_URL}
+                                            className={`w-full py-2.5 px-4 rounded-lg transition-all duration-200 border-2 font-semibold ${customModelsLoading || !llmConfig.CUSTOM_LLM_URL
                                                 ? 'bg-gray-100 border-gray-300 cursor-not-allowed text-gray-500'
                                                 : 'bg-white border-gray-600 text-gray-600 hover:bg-gray-50 focus:ring-2 focus:ring-gray-500/20'
                                                 }`}
