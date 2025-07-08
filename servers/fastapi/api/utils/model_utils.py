@@ -36,10 +36,10 @@ def get_selected_llm_provider() -> SelectedLLMProvider:
 async def list_available_custom_models(
     url: Optional[str] = None, api_key: Optional[str] = None
 ) -> list[str]:
-    if not url or not api_key:
+    if not url:
         client = get_llm_client()
     else:
-        client = openai.AsyncOpenAI(api_key=api_key, base_url=url)
+        client = openai.AsyncOpenAI(api_key=api_key or "null", base_url=url)
     models = []
     async for model in client.models.list():
         models.append(model.id)
@@ -70,7 +70,7 @@ def get_llm_api_key():
     elif selected_llm == SelectedLLMProvider.OLLAMA:
         return "ollama"
     elif selected_llm == SelectedLLMProvider.CUSTOM:
-        return os.getenv("CUSTOM_LLM_API_KEY")
+        return os.getenv("CUSTOM_LLM_API_KEY") or "null"
     else:
         raise ValueError(f"Invalid LLM API key")
 
