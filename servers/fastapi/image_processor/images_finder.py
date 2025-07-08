@@ -1,5 +1,4 @@
 import asyncio
-import base64
 import os
 import uuid
 import aiohttp
@@ -10,7 +9,11 @@ from ppt_generator.models.query_and_prompt_models import (
     ImagePromptWithThemeAndAspectRatio,
 )
 from api.utils.utils import download_file, get_resource
-from api.utils.model_utils import get_llm_client, is_ollama_selected
+from api.utils.model_utils import (
+    get_llm_client,
+    is_custom_llm_selected,
+    is_ollama_selected,
+)
 
 
 async def generate_image(
@@ -18,10 +21,11 @@ async def generate_image(
     output_directory: str,
 ) -> str:
     is_ollama = is_ollama_selected()
+    is_custom_llm = is_custom_llm_selected()
 
     image_prompt = (
         input.image_prompt
-        if is_ollama
+        if is_ollama or is_custom_llm
         else f"{input.image_prompt}, {input.theme_prompt}"
     )
     print(f"Request - Generating Image for {image_prompt}")
@@ -29,7 +33,7 @@ async def generate_image(
     try:
         image_gen_func = (
             get_image_from_pexels
-            if is_ollama
+            if is_ollama or is_custom_llm
             else (
                 generate_image_openai
                 if os.getenv("LLM") == "openai"

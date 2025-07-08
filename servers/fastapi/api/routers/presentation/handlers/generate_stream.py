@@ -18,7 +18,7 @@ from api.services.database import get_sql_session
 from api.services.logging import LoggingService
 from api.sql_models import KeyValueSqlModel, PresentationSqlModel, SlideSqlModel
 from api.utils.utils import get_presentation_dir
-from api.utils.model_utils import is_ollama_selected
+from api.utils.model_utils import is_custom_llm_selected, is_ollama_selected
 from ppt_config_generator.models import (
     PresentationMarkdownModel,
     PresentationStructureModel,
@@ -99,8 +99,8 @@ class PresentationGenerateStreamHandler(FetchAssetsOnPresentationGenerationMixin
         self.presentation_json = None
 
         # self.presentation_json will be mutated by the generator
-        if is_ollama_selected():
-            async for result in self.generate_presentation_ollama():
+        if is_ollama_selected() or is_custom_llm_selected():
+            async for result in self.generate_presentation_ollama_custom():
                 yield result
         else:
             async for result in self.generate_presentation_openai_google():
@@ -157,7 +157,7 @@ class PresentationGenerateStreamHandler(FetchAssetsOnPresentationGenerationMixin
 
         self.presentation_json = json.loads(presentation_text)
 
-    async def generate_presentation_ollama(self):
+    async def generate_presentation_ollama_custom(self):
         presentation_structure = PresentationStructureModel(
             **self.presentation.structure
         )

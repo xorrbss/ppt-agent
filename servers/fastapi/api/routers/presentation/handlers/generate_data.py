@@ -11,7 +11,7 @@ from api.routers.presentation.models import PresentationGenerateRequest
 from api.services.logging import LoggingService
 from api.sql_models import KeyValueSqlModel, PresentationSqlModel
 from api.services.database import get_sql_session
-from api.utils.model_utils import is_ollama_selected
+from api.utils.model_utils import is_custom_llm_selected, is_ollama_selected
 from ppt_config_generator.models import PresentationMarkdownModel, SlideStructureModel
 from ppt_config_generator.structure_generator import generate_presentation_structure
 
@@ -39,7 +39,7 @@ class PresentationGenerateDataHandler:
             value=self.data.model_dump(mode="json"),
         )
 
-        if is_ollama_selected():
+        if is_ollama_selected() or is_custom_llm_selected():
             with get_sql_session() as sql_session:
                 presentation = sql_session.get(
                     PresentationSqlModel, self.data.presentation_id
@@ -53,9 +53,10 @@ class PresentationGenerateDataHandler:
                         }
                     )
                 )
-                supports_graph = True
-                model = SUPPORTED_OLLAMA_MODELS[os.getenv("MODEL")]
-                supports_graph = model.supports_graph
+                supports_graph = not is_custom_llm_selected()
+                if is_ollama_selected():
+                    model = SUPPORTED_OLLAMA_MODELS[os.getenv("OLLAMA_MODEL")]
+                    supports_graph = model.supports_graph
 
                 for each in presentation_structure.slides:
                     if each.type > 9:

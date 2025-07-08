@@ -30,6 +30,7 @@ import {
 } from "./ui/popover";
 import { cn } from "@/lib/utils";
 import { Switch } from "./ui/switch";
+import { setLLMConfig } from "@/store/slices/userConfig";
 
 interface ModelOption {
     value: string;
@@ -137,28 +138,28 @@ const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
             docsUrl: "https://www.pexels.com/api/documentation/",
         },
     },
-    // custom: {
-    //     textModels: [],
-    //     imageModels: [
-    //         {
-    //             value: "pexels",
-    //             label: "Pexels",
-    //             description: "Pexels is a free stock photo and video platform that allows you to download high-quality images and videos for free.",
-    //             icon: "/icons/pexels.png",
-    //             size: "8GB",
-    //         },
-    //     ],
-    //     apiGuide: {
-    //         title: "How to get your Pexels API Key",
-    //         steps: [
-    //             "Visit pexels.com",
-    //             'Click on "Get API key" in the top navigation',
-    //             "Copy your API key - you're ready to go!",
-    //         ],
-    //         videoUrl: "https://www.youtube.com/watch?v=o8iyrtQyrZM&t=66s",
-    //         docsUrl: "https://www.pexels.com/api/documentation/",
-    //     },
-    // },
+    custom: {
+        textModels: [],
+        imageModels: [
+            {
+                value: "pexels",
+                label: "Pexels",
+                description: "Pexels is a free stock photo and video platform that allows you to download high-quality images and videos for free.",
+                icon: "/icons/pexels.png",
+                size: "8GB",
+            },
+        ],
+        apiGuide: {
+            title: "How to get your Pexels API Key",
+            steps: [
+                "Visit pexels.com",
+                'Click on "Get API key" in the top navigation',
+                "Copy your API key - you're ready to go!",
+            ],
+            videoUrl: "https://www.youtube.com/watch?v=o8iyrtQyrZM&t=66s",
+            docsUrl: "https://www.pexels.com/api/documentation/",
+        },
+    },
 };
 
 export default function Home() {
@@ -172,6 +173,7 @@ export default function Home() {
         size: string;
         icon: string;
     }[]>([]);
+    const [customModels, setCustomModels] = useState<string[]>([]);
     const [downloadingModel, setDownloadingModel] = useState({
         name: '',
         size: null,
@@ -182,6 +184,8 @@ export default function Home() {
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [openModelSelect, setOpenModelSelect] = useState(false);
     const [useCustomOllamaUrl, setUseCustomOllamaUrl] = useState<boolean>(llmConfig.USE_CUSTOM_URL || false);
+    const [customModelsLoading, setCustomModelsLoading] = useState<boolean>(false);
+    const [customModelsChecked, setCustomModelsChecked] = useState<boolean>(false);
 
     const canChangeKeys = config.can_change_keys;
 
@@ -190,8 +194,16 @@ export default function Home() {
             setLlmConfig({ ...llmConfig, OPENAI_API_KEY: new_value });
         } else if (field === 'google_api_key') {
             setLlmConfig({ ...llmConfig, GOOGLE_API_KEY: new_value });
-        } else if (field === 'llm_provider_url') {
-            setLlmConfig({ ...llmConfig, LLM_PROVIDER_URL: new_value });
+        } else if (field === 'ollama_url') {
+            setLlmConfig({ ...llmConfig, OLLAMA_URL: new_value });
+        } else if (field === 'ollama_model') {
+            setLlmConfig({ ...llmConfig, OLLAMA_MODEL: new_value });
+        } else if (field === 'custom_llm_url') {
+            setLlmConfig({ ...llmConfig, CUSTOM_LLM_URL: new_value });
+        } else if (field === 'custom_llm_api_key') {
+            setLlmConfig({ ...llmConfig, CUSTOM_LLM_API_KEY: new_value });
+        } else if (field === 'custom_model') {
+            setLlmConfig({ ...llmConfig, CUSTOM_MODEL: new_value });
         } else if (field === 'pexels_api_key') {
             setLlmConfig({ ...llmConfig, PEXELS_API_KEY: new_value });
         }
@@ -221,10 +233,30 @@ export default function Home() {
         }
     };
 
+    const fetchOllamaModelsWithConfig = async (config: any) => {
+        try {
+            const response = await fetch('/api/v1/ppt/ollama/list-supported-models');
+            const data = await response.json();
+            setOllamaModels(data.models);
+
+            // Check if currently selected model is still available
+            if (config.OLLAMA_MODEL && data.models.length > 0) {
+                const isModelAvailable = data.models.some((model: any) => model.value === config.OLLAMA_MODEL);
+                if (!isModelAvailable) {
+                    setLlmConfig({ ...config, OLLAMA_MODEL: '' });
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching ollama models:', error);
+        }
+    }
+
     const changeProvider = (provider: string) => {
-        setLlmConfig({ ...llmConfig, LLM: provider });
+        const newConfig = { ...llmConfig, LLM: provider };
+        setLlmConfig(newConfig);
         if (provider === 'ollama') {
-            fetchOllamaModels();
+            // Use the new config to avoid stale state issues
+            fetchOllamaModelsWithConfig(newConfig);
         }
     }
 
@@ -242,7 +274,7 @@ export default function Home() {
         return new Promise((resolve, reject) => {
             const interval = setInterval(async () => {
                 try {
-                    const response = await fetch(`/api/v1/ppt/ollama/pull-model?name=${llmConfig.MODEL}`);
+                    const response = await fetch(`/api/v1/ppt/ollama/pull-model?name=${llmConfig.OLLAMA_MODEL}`);
                     if (response.status === 200) {
                         const data = await response.json();
                         if (data.done && data.status !== 'error') {
@@ -274,18 +306,40 @@ export default function Home() {
     }
 
     const fetchOllamaModels = async () => {
+        await fetchOllamaModelsWithConfig(llmConfig);
+    }
+
+    const fetchCustomModels = async () => {
         try {
-            const response = await fetch('/api/v1/ppt/ollama/list-supported-models');
+            setCustomModelsLoading(true);
+            const response = await fetch('/api/v1/ppt/models/list/custom', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    url: llmConfig.CUSTOM_LLM_URL || '',
+                    api_key: llmConfig.CUSTOM_LLM_API_KEY || ''
+                })
+            });
             const data = await response.json();
-            setOllamaModels(data.models);
+            setCustomModels(data);
+            setCustomModelsChecked(true);
         } catch (error) {
-            console.error('Error fetching ollama models:', error);
+            console.error('Error fetching custom models:', error);
+            toast({
+                title: 'Error',
+                description: 'Failed to fetch available models. Please check your URL and API key.',
+                variant: 'destructive',
+            });
+        } finally {
+            setCustomModelsLoading(false);
         }
     }
 
     const setOllamaConfig = () => {
         if (!useCustomOllamaUrl) {
-            setLlmConfig({ ...llmConfig, LLM_PROVIDER_URL: 'http://localhost:11434', USE_CUSTOM_URL: false });
+            setLlmConfig({ ...llmConfig, OLLAMA_URL: 'http://localhost:11434', USE_CUSTOM_URL: false });
         } else {
             setLlmConfig({ ...llmConfig, USE_CUSTOM_URL: true });
         }
@@ -304,6 +358,14 @@ export default function Home() {
         setOllamaConfig();
     }, [useCustomOllamaUrl]);
 
+    // Reset custom models when URL or API key changes
+    useEffect(() => {
+        if (llmConfig.LLM === 'custom') {
+            setCustomModels([]);
+            setCustomModelsChecked(false);
+            setLlmConfig({ ...llmConfig, CUSTOM_MODEL: '' });
+        }
+    }, [llmConfig.CUSTOM_LLM_URL, llmConfig.CUSTOM_LLM_API_KEY]);
 
     if (!canChangeKeys) {
         return null;
@@ -355,7 +417,7 @@ export default function Home() {
                     </div>
 
                     {/* API Key Input */}
-                    {llmConfig.LLM !== 'ollama' && <div className="mb-8">
+                    {llmConfig.LLM !== 'ollama' && llmConfig.LLM !== 'custom' && <div className="mb-8">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                             {llmConfig.LLM!.charAt(0).toUpperCase() +
                                 llmConfig.LLM!.slice(1)}{" "}
@@ -392,25 +454,25 @@ export default function Home() {
                                                     className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
                                                 >
                                                     <div className="flex gap-3 items-center">
-                                                        {llmConfig.MODEL && (
+                                                        {llmConfig.OLLAMA_MODEL && (
                                                             <div className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0">
                                                                 <img
-                                                                    src={ollamaModels.find(m => m.value === llmConfig.MODEL)?.icon}
-                                                                    alt={`${llmConfig.MODEL} icon`}
+                                                                    src={ollamaModels.find(m => m.value === llmConfig.OLLAMA_MODEL)?.icon}
+                                                                    alt={`${llmConfig.OLLAMA_MODEL} icon`}
                                                                     className="rounded-sm"
                                                                 />
                                                             </div>
                                                         )}
                                                         <span className="text-sm font-medium text-gray-900">
-                                                            {llmConfig.MODEL ? (
-                                                                ollamaModels.find(m => m.value === llmConfig.MODEL)?.label || llmConfig.MODEL
+                                                            {llmConfig.OLLAMA_MODEL ? (
+                                                                ollamaModels.find(m => m.value === llmConfig.OLLAMA_MODEL)?.label || llmConfig.OLLAMA_MODEL
                                                             ) : (
                                                                 'Select a model'
                                                             )}
                                                         </span>
-                                                        {llmConfig.MODEL && (
+                                                        {llmConfig.OLLAMA_MODEL && (
                                                             <span className="text-xs text-gray-500 bg-gray-100 rounded-full px-2 py-1">
-                                                                {ollamaModels.find(m => m.value === llmConfig.MODEL)?.size}
+                                                                {ollamaModels.find(m => m.value === llmConfig.OLLAMA_MODEL)?.size}
                                                             </span>
                                                         )}
                                                     </div>
@@ -428,14 +490,14 @@ export default function Home() {
                                                                     key={index}
                                                                     value={model.value}
                                                                     onSelect={(value) => {
-                                                                        setLlmConfig({ ...llmConfig, MODEL: value });
+                                                                        input_field_changed(value, 'ollama_model');
                                                                         setOpenModelSelect(false);
                                                                     }}
                                                                 >
                                                                     <Check
                                                                         className={cn(
                                                                             "mr-2 h-4 w-4",
-                                                                            llmConfig.MODEL === model.value ? "opacity-100" : "opacity-0"
+                                                                            llmConfig.OLLAMA_MODEL === model.value ? "opacity-100" : "opacity-0"
                                                                         )}
                                                                     />
                                                                     <div className="flex gap-3 items-center">
@@ -507,8 +569,8 @@ export default function Home() {
                                                     required
                                                     placeholder="Enter your Ollama URL"
                                                     className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                                                    value={llmConfig.LLM_PROVIDER_URL || ''}
-                                                    onChange={(e) => input_field_changed(e.target.value, 'llm_provider_url')}
+                                                    value={llmConfig.OLLAMA_URL || ''}
+                                                    onChange={(e) => input_field_changed(e.target.value, 'ollama_url')}
                                                 />
                                             </div>
                                             <p className="mt-2 text-sm text-gray-500 flex items-center gap-2">
@@ -521,7 +583,7 @@ export default function Home() {
                             </div>
                             <div className="mb-8">
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Pexels API Key (required for images)
+                                    Pexels API Key (optional)
                                 </label>
                                 <div className="relative">
                                     <input
@@ -535,10 +597,154 @@ export default function Home() {
                                 </div>
                                 <p className="mt-2 text-sm text-gray-500 flex items-center gap-2">
                                     <span className="block w-1 h-1 rounded-full bg-gray-400"></span>
-                                    Required for generating presentation images
+                                    Provide a Pexels API key to generate presentation images
                                 </p>
                             </div>
                         </div>)
+                    }
+                    {
+                        llmConfig.LLM === 'custom' && (
+                            <>
+                                <div className="mb-4">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        OpenAI Compatible URL
+                                    </label>
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            required
+                                            placeholder="Enter your URL"
+                                            className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            value={llmConfig.CUSTOM_LLM_URL || ''}
+                                            onChange={(e) => input_field_changed(e.target.value, 'custom_llm_url')}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="mb-4">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        OpenAI Compatible API Key
+                                    </label>
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            required
+                                            placeholder="Enter your API Key"
+                                            className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            value={llmConfig.CUSTOM_LLM_API_KEY || ''}
+                                            onChange={(e) => input_field_changed(e.target.value, 'custom_llm_api_key')}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Model selection dropdown - only show if models are available */}
+                                {customModelsChecked && customModels.length > 0 && (
+                                    <div className="mb-4">
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Select Model
+                                        </label>
+                                        <div className="w-full">
+                                            <Popover open={openModelSelect} onOpenChange={setOpenModelSelect}>
+                                                <PopoverTrigger asChild>
+                                                    <Button
+                                                        variant="outline"
+                                                        role="combobox"
+                                                        aria-expanded={openModelSelect}
+                                                        className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
+                                                    >
+                                                        <span className="text-sm font-medium text-gray-900">
+                                                            {llmConfig.CUSTOM_MODEL || 'Select a model'}
+                                                        </span>
+                                                        <ChevronsUpDown className="w-4 h-4 text-gray-500" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="p-0" align="start" style={{ width: 'var(--radix-popover-trigger-width)' }}>
+                                                    <Command>
+                                                        <CommandInput placeholder="Search model..." />
+                                                        <CommandList>
+                                                            <CommandEmpty>No model found.</CommandEmpty>
+                                                            <CommandGroup>
+                                                                {customModels.map((model, index) => (
+                                                                    <CommandItem
+                                                                        key={index}
+                                                                        value={model}
+                                                                        onSelect={(value) => {
+                                                                            input_field_changed(value, 'custom_model');
+                                                                            setOpenModelSelect(false);
+                                                                        }}
+                                                                    >
+                                                                        <Check
+                                                                            className={cn(
+                                                                                "mr-2 h-4 w-4",
+                                                                                llmConfig.CUSTOM_MODEL === model ? "opacity-100" : "opacity-0"
+                                                                            )}
+                                                                        />
+                                                                        <span className="text-sm font-medium text-gray-900">
+                                                                            {model}
+                                                                        </span>
+                                                                    </CommandItem>
+                                                                ))}
+                                                            </CommandGroup>
+                                                        </CommandList>
+                                                    </Command>
+                                                </PopoverContent>
+                                            </Popover>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Check for available models button - show when no models checked or no models found */}
+                                {(!customModelsChecked || (customModelsChecked && customModels.length === 0)) && (
+                                    <div className="mb-4">
+                                        <button
+                                            onClick={fetchCustomModels}
+                                            disabled={customModelsLoading || !llmConfig.CUSTOM_LLM_URL || !llmConfig.CUSTOM_LLM_API_KEY}
+                                            className={`w-full py-2.5 px-4 rounded-lg transition-all duration-200 border-2 ${customModelsLoading || !llmConfig.CUSTOM_LLM_URL || !llmConfig.CUSTOM_LLM_API_KEY
+                                                ? 'bg-gray-100 border-gray-300 cursor-not-allowed text-gray-500'
+                                                : 'bg-white border-blue-600 text-blue-600 hover:bg-blue-50 focus:ring-2 focus:ring-blue-500/20'
+                                                }`}
+                                        >
+                                            {customModelsLoading ? (
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                    Checking for models...
+                                                </div>
+                                            ) : (
+                                                'Check for available models'
+                                            )}
+                                        </button>
+                                    </div>
+                                )}
+
+                                {/* Show message if no models found */}
+                                {customModelsChecked && customModels.length === 0 && (
+                                    <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                        <p className="text-sm text-yellow-800">
+                                            No models found. Please check your URL and API key, or try again.
+                                        </p>
+                                    </div>
+                                )}
+
+                                <div className="mb-8">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Pexels API Key (optional)
+                                    </label>
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            required
+                                            placeholder="Enter your Pexels API key"
+                                            className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            value={llmConfig.PEXELS_API_KEY || ''}
+                                            onChange={(e) => input_field_changed(e.target.value, 'pexels_api_key')}
+                                        />
+                                    </div>
+                                    <p className="mt-2 text-sm text-gray-500 flex items-center gap-2">
+                                        <span className="block w-1 h-1 rounded-full bg-gray-400"></span>
+                                        Provide a Pexels API key to generate presentation images
+                                    </p>
+                                </div>
+                            </>
+                        )
                     }
 
                     {/* Model Information */}
@@ -550,7 +756,7 @@ export default function Home() {
                                     Selected Models
                                 </h3>
                                 <p className="text-sm text-blue-700">
-                                    Using {llmConfig.LLM === 'ollama' ? llmConfig.MODEL ?? '_____' : PROVIDER_CONFIGS[llmConfig.LLM!].textModels[0].label} for text
+                                    Using {llmConfig.LLM === 'ollama' ? llmConfig.OLLAMA_MODEL ?? '_____' : llmConfig.LLM === 'custom' ? llmConfig.CUSTOM_MODEL ?? '_____' : PROVIDER_CONFIGS[llmConfig.LLM!].textModels[0].label} for text
                                     generation and {PROVIDER_CONFIGS[llmConfig.LLM!].imageModels[0].label} for
                                     images
                                 </p>
@@ -611,8 +817,8 @@ export default function Home() {
                     {/* Save Button */}
                     <button
                         onClick={handleSaveConfig}
-                        disabled={isLoading}
-                        className={`mt-8 w-full font-semibold py-3 px-4 rounded-lg transition-all duration-500 ${isLoading
+                        disabled={isLoading || (llmConfig.LLM === 'ollama' && !llmConfig.OLLAMA_MODEL) || (llmConfig.LLM === 'custom' && !llmConfig.CUSTOM_MODEL)}
+                        className={`mt-8 w-full font-semibold py-3 px-4 rounded-lg transition-all duration-500 ${isLoading || (llmConfig.LLM === 'ollama' && !llmConfig.OLLAMA_MODEL) || (llmConfig.LLM === 'custom' && !llmConfig.CUSTOM_MODEL)
                             ? 'bg-gray-400 cursor-not-allowed'
                             : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:ring-4 focus:ring-blue-200'
                             } text-white`}
@@ -626,7 +832,7 @@ export default function Home() {
                                 }
                             </div>
                         ) : (
-                            llmConfig.LLM === 'ollama' && !llmConfig.MODEL
+                            (llmConfig.LLM === 'ollama' && !llmConfig.OLLAMA_MODEL) || (llmConfig.LLM === 'custom' && !llmConfig.CUSTOM_MODEL)
                                 ? 'Please Select a Model'
                                 : 'Save Configuration'
                         )}

@@ -45,8 +45,16 @@ export function StoreInitializer({ children }: { children: React.ReactNode }) {
       if (isValid) {
         // Check if the selected Ollama model is pulled
         if (llmConfig.LLM === 'ollama') {
-          const isPulled = await checkIfSelectedOllamaModelIsPulled(llmConfig.MODEL);
+          const isPulled = await checkIfSelectedOllamaModelIsPulled(llmConfig.OLLAMA_MODEL);
           if (!isPulled) {
+            router.push('/');
+            setLoadingToFalseAfterNavigatingTo('/');
+            return;
+          }
+        }
+        if (llmConfig.LLM === 'custom') {
+          const isAvailable = await checkIfSelectedCustomModelIsAvailable(llmConfig.CUSTOM_MODEL);
+          if (!isAvailable) {
             router.push('/');
             setLoadingToFalseAfterNavigatingTo('/');
             return;
@@ -82,6 +90,22 @@ export function StoreInitializer({ children }: { children: React.ReactNode }) {
       return pulledModels.includes(ollamaModel);
     } catch (error) {
       console.error('Error checking if selected Ollama model is pulled:', error);
+      return false;
+    }
+  }
+
+  const checkIfSelectedCustomModelIsAvailable = async (customModel: string) => {
+    try {
+      const response = await fetch('/api/v1/ppt/models/list/custom', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      const data = await response.json();
+      return data.includes(customModel);
+    } catch (error) {
+      console.error('Error fetching custom models:', error);
       return false;
     }
   }
