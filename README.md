@@ -65,8 +65,8 @@ You may want to directly provide your API KEYS as environment variables and keep
 - **GOOGLE_API_KEY=[Your Google API Key]**: Provide this if **LLM** is set to **google**
 - **OLLAMA_URL=[Custom Ollama URL]**: Provide this if you want to custom Ollama URL and **LLM** is set to **ollama**
 - **OLLAMA_MODEL=[Ollama Model ID]**: Provide this if **LLM** is set to **ollama**
-- **CUSTOM_LLM_URL=[Custom OpenAI Compartible URL]**: Provide this if **LLM** is set to **custom**
-- **CUSTOM_LLM_API_KEY=[Custom OpenAI Compartible API KEY]**: Provide this if **LLM** is set to **custom**
+- **CUSTOM_LLM_URL=[Custom OpenAI Compatible URL]**: Provide this if **LLM** is set to **custom**
+- **CUSTOM_LLM_API_KEY=[Custom OpenAI Compatible API KEY]**: Provide this if **LLM** is set to **custom**
 - **CUSTOM_MODEL=[Custom Model ID]**: Provide this if **LLM** is set to **custom**
 - **PEXELS_API_KEY=[Your Pexels API Key]**: Provide this to generate images if **LLM** is set to **ollama** or **custom**
 
@@ -80,7 +80,7 @@ docker run -it --name presenton -p 5000:80 -e LLM="openai" -e OPENAI_API_KEY="**
 docker run -it --name presenton -p 5000:80 -e LLM="ollama" -e OLLAMA_MODEL="llama3.2:3b" -e PEXELS_API_KEY="*******" -e CAN_CHANGE_KEYS="false" -v "./user_data:/app/user_data" ghcr.io/presenton/presenton:latest
 ```
 
-### Using OpenAI Compartible API
+### Using OpenAI Compatible API
 ```bash
 docker run -it -p 5000:80 -e CAN_CHANGE_KEYS="false"  -e LLM="custom" -e CUSTOM_LLM_URL="http://*****" -e CUSTOM_LLM_API_KEY="*****" -e CUSTOM_MODEL="llama3.2:3b" -v "./user_data:/app/user_data" ghcr.io/presenton/presenton:latest
 ```
