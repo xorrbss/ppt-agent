@@ -639,6 +639,11 @@ export default function Home() {
                                 {/* Model selection dropdown - only show if models are available */}
                                 {customModelsChecked && customModels.length > 0 && (
                                     <div className="mb-4">
+                                        <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                                            <p className="text-sm text-amber-800">
+                                                <strong>Important:</strong> Only models with function calling capabilities (tool calls) or JSON schema support will work.
+                                            </p>
+                                        </div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
                                             Select Model
                                         </label>

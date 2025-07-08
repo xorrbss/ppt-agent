@@ -554,6 +554,11 @@ const SettingsPage = () => {
                                 {/* Model selection dropdown - show if models are available or if there's a selected model */}
                                 {((customModelsChecked && customModels.length > 0) || llmConfig.CUSTOM_MODEL) && (
                                     <div>
+                                        <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                                            <p className="text-sm text-amber-800">
+                                                <strong>Important:</strong> Only models with function calling capabilities (tool calls) or JSON schema support will work.
+                                            </p>
+                                        </div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
                                             Select Model
                                         </label>
