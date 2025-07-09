@@ -34,7 +34,7 @@
             "group": "Tutorials",
             "pages": [
               "tutorial/generate-presentation-over-api",
-              "tutorial/generate-presentation-from-csv".
+              "tutorial/generate-presentation-from-csv",
               "tutorial/create-data-reports-using-ai"
             ]
           }
