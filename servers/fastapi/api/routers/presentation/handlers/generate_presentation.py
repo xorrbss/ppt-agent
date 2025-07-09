@@ -19,7 +19,7 @@ from api.services.instances import TEMP_FILE_SERVICE
 from api.services.logging import LoggingService
 from api.sql_models import PresentationSqlModel, SlideSqlModel
 from api.utils.utils import get_presentation_dir
-from api.utils.model_utils import is_ollama_selected
+from api.utils.model_utils import is_custom_llm_selected, is_ollama_selected
 from document_processor.loader import DocumentsLoader
 from ppt_config_generator.document_summary_generator import generate_document_summary
 from ppt_config_generator.models import PresentationMarkdownModel
@@ -45,7 +45,7 @@ class GeneratePresentationHandler(FetchAssetsOnPresentationGenerationMixin):
         TEMP_FILE_SERVICE.cleanup_temp_dir(self.temp_dir)
 
     async def post(self, logging_service: LoggingService, log_metadata: LogMetadata):
-        if is_ollama_selected():
+        if is_ollama_selected() or is_custom_llm_selected():
             raise HTTPException(
                 status_code=400,
                 detail="Ollama is not currently supported for this endpoint",

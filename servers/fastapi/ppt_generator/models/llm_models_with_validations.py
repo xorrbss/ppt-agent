@@ -1,6 +1,8 @@
 from typing import List, Mapping, Union
 from pydantic import Field
 
+from graph_processor.models import LLMGraphModel
+from ppt_generator.models.content_type_models import TableType
 from ppt_generator.models.other_models import (
     TYPE1,
     TYPE2,
@@ -57,6 +59,7 @@ class LLMTableModelWithValidation(LLMTableModel):
         min_length=10,
         max_length=50,
     )
+    type: TableType = Field(description="Type of the table")
     data: LLMTableDataModelWithValidation
 
 
@@ -145,7 +148,8 @@ class LLMType5ContentWithValidation(LLMType5Content):
         min_length=50,
         max_length=300,
     )
-    table: LLMTableModelWithValidation = Field(description="Table to show in slide")
+    # table: LLMTableModelWithValidation = Field(description="Table to show in slide")
+    graph: LLMGraphModel = Field(description="Graph to show in slide")
 
 
 class LLMType6ContentWithValidation(LLMType6Content):
@@ -188,7 +192,8 @@ class LLMType9ContentWithValidation(LLMType9Content):
         min_length=1,
         max_length=3,
     )
-    table: LLMTableModelWithValidation = Field(description="Table to show in slide")
+    # table: LLMTableModelWithValidation = Field(description="Table to show in slide")
+    graph: LLMGraphModel = Field(description="Graph to show in slide")
 
 
 LLMContentUnionWithValidation = Union[
