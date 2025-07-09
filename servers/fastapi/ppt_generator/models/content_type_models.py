@@ -1,6 +1,8 @@
+from enum import Enum
 from typing import List, Mapping, Union
 from pydantic import BaseModel
 
+from graph_processor.models import GraphModel, LLMGraphModel
 from ppt_generator.models.other_models import (
     TYPE1,
     TYPE2,
@@ -14,6 +16,13 @@ from ppt_generator.models.other_models import (
 )
 
 
+class TableType(Enum):
+    TABLE = "table"
+    BAR = "bar"
+    LINE = "line"
+    PIE = "pie"
+
+
 class TableDataModel(BaseModel):
     x_labels: List[str]
     y_labels: List[str]
@@ -22,6 +31,7 @@ class TableDataModel(BaseModel):
 
 class TableModel(BaseModel):
     name: str
+    type: TableType
     data: TableDataModel
 
 
@@ -117,7 +127,8 @@ class Type4Content(SlideContentModel):
 
 class Type5Content(SlideContentModel):
     body: str
-    table: TableModel
+    # table: TableModel
+    graph: GraphModel
 
     def to_llm_content(self):
         from ppt_generator.models.llm_models import LLMType5Content
@@ -125,7 +136,8 @@ class Type5Content(SlideContentModel):
         return LLMType5Content(
             title=self.title,
             body=self.body,
-            table=self.table,
+            # table=self.table,
+            graph=self.graph,
         )
 
 
@@ -181,7 +193,8 @@ class Type8Content(SlideContentModel):
 
 class Type9Content(SlideContentModel):
     body: List[HeadingModel]
-    table: TableModel
+    # table: TableModel
+    graph: GraphModel
 
     def to_llm_content(self):
         from ppt_generator.models.llm_models import LLMType9Content
@@ -189,7 +202,8 @@ class Type9Content(SlideContentModel):
         return LLMType9Content(
             title=self.title,
             body=[item.to_llm_content() for item in self.body],
-            table=self.table,
+            # table=self.table,
+            graph=self.graph,
         )
 
 

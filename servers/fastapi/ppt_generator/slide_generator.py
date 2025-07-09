@@ -161,7 +161,8 @@ async def get_edited_slide_content_model(
         ),
         response_format=content_type_model_type,
     )
-    return response.choices[0].message.parsed
+    response_data = response.choices[0].message.parsed
+    return response_data
 
 
 async def get_slide_type_from_prompt(

@@ -15,7 +15,7 @@ from api.utils.utils import (
     get_presentation_dir,
     get_presentation_images_dir,
 )
-from api.utils.model_utils import is_ollama_selected
+from api.utils.model_utils import is_custom_llm_selected, is_ollama_selected
 from image_processor.icons_vectorstore_utils import get_icons_vectorstore
 from image_processor.images_finder import generate_image
 from image_processor.icons_finder import get_icon
@@ -68,13 +68,16 @@ class PresentationEditHandler:
         new_slide_type = await get_slide_type_from_prompt(self.prompt, slide_to_edit)
         new_slide_type = new_slide_type.slide_type
 
+        supports_graph = not is_custom_llm_selected()
         if is_ollama_selected():
-            model = SUPPORTED_OLLAMA_MODELS[os.getenv("MODEL")]
-            if not model.supports_graph:
-                if new_slide_type == 5:
-                    new_slide_type = 1
-                elif new_slide_type == 9:
-                    new_slide_type = 6
+            model = SUPPORTED_OLLAMA_MODELS[os.getenv("OLLAMA_MODEL")]
+            supports_graph = model.supports_graph
+
+        if not supports_graph:
+            if new_slide_type == 5:
+                new_slide_type = 1
+            elif new_slide_type == 9:
+                new_slide_type = 6
 
         edited_content = await get_edited_slide_content_model(
             self.prompt,

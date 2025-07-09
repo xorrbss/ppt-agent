@@ -1,10 +1,12 @@
 from typing import List, Mapping, Union
 from pydantic import BaseModel
 
+from graph_processor.models import GraphModel, LLMGraphModel
 from ppt_generator.models.content_type_models import (
     HeadingModel,
     TableDataModel,
     TableModel,
+    TableType,
     Type1Content,
     Type2Content,
     Type3Content,
@@ -36,6 +38,7 @@ class LLMTableDataModel(TableDataModel):
 
 class LLMTableModel(TableModel):
     name: str
+    type: TableType
     data: LLMTableDataModel
 
 
@@ -121,13 +124,15 @@ class LLMType4Content(LLMSlideContentModel):
 
 class LLMType5Content(LLMSlideContentModel):
     body: str
-    table: LLMTableModel
+    # table: LLMTableModel
+    graph: LLMGraphModel
 
     def to_content(self) -> Type5Content:
         return Type5Content(
             title=self.title,
             body=self.body,
-            table=self.table,
+            # table=self.table,
+            graph=GraphModel.from_llm_graph_model(self.graph),
         )
 
 
@@ -169,13 +174,15 @@ class LLMType8Content(LLMSlideContentModel):
 
 class LLMType9Content(LLMSlideContentModel):
     body: List[LLMHeadingModel]
-    table: LLMTableModel
+    # table: LLMTableModel
+    graph: LLMGraphModel
 
     def to_content(self) -> Type9Content:
         return Type9Content(
             title=self.title,
             body=[each.to_content() for each in self.body],
-            table=self.table,
+            # table=self.table,
+            graph=GraphModel.from_llm_graph_model(self.graph),
         )
 
 
