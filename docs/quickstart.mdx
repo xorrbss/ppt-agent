@@ -8,13 +8,13 @@ description: "Follow these steps to get Presenton up and running using Docker"
 #### 🔧 On Linux or macOS (Bash/Zsh):
 
 ```bash
-docker run -it --name presenton -p 5000:80 -v "./user_data:/app/user_data" ghcr.io/presenton/presenton:v0.3.0-beta
+docker run -it --name presenton -p 5000:80 -v "./user_data:/app/user_data" ghcr.io/presenton/presenton:latest
 ````
 
 #### 🪟 On Windows (PowerShell):
 
 ```bash
-docker run -it --name presenton -p 5000:80 -v "${PWD}\user_data:/app/user_data" ghcr.io/presenton/presenton:v0.3.0-beta
+docker run -it --name presenton -p 5000:80 -v "${PWD}\user_data:/app/user_data" ghcr.io/presenton/presenton:latest
 ```
 
 > ✅ You can replace `5000` with any other available port to avoid conflicts.
