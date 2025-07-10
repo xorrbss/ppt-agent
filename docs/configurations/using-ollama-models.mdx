@@ -3,13 +3,11 @@ title: "Using Ollama Models"
 description: "Follow these steps to generate presentations using Ollama"
 ---
 
-Presenton supports running fully offline using open-source models via [Ollama](https://ollama.com/). This allows you to generate presentations without relying on cloud APIs — keeping your data private and costs low.
+## 🔌 Run Presenton with an Ollama Model (Fully Offline)
 
-### 🚀 Run Presenton with an Ollama Model
+Presenton supports fully offline operation using open-source models via [Ollama](https://ollama.com/). This allows you to generate presentations without relying on cloud APIs — keeping your data private and costs low.
 
-Make sure you have [Ollama installed](https://ollama.com/download) and models downloaded if running them outside Docker.
-
-To run Presenton with an Ollama model:
+### 🚀 Example: Run Presenton with Ollama
 
 ```bash
 docker run -it --name presenton -p 5000:80 \
@@ -21,7 +19,50 @@ docker run -it --name presenton -p 5000:80 \
   ghcr.io/presenton/presenton:v0.3.0-beta
 ```
 
-> 💡 **Note:** A valid **Pexels API key is required** for image generation when using Ollama models.
+### 🚀 Example: Run Presenton with you own Ollama server
+
+```bash
+docker run -it --name presenton -p 5000:80 \
+  -e LLM="ollama" \
+  -e OLLAMA_MODEL="llama3.2:3b" \
+  -e OLLAMA_URL="http://XXXXXXXXXXXXX" \
+  -e PEXELS_API_KEY="your_pexels_api_key" \
+  -e CAN_CHANGE_KEYS="false" \
+  -v "./user_data:/app/user_data" \
+  ghcr.io/presenton/presenton:v0.3.0-beta
+```
+
+
+### 🧾 Ollama Environment Variables
+
+* **`LLM="ollama"`**
+  Select Ollama as the LLM backend.
+
+* **`OLLAMA_MODEL`**
+  Required. The Ollama model to use (e.g., `llama3.2:3b`, `mistral`, `phi3`, etc.).
+  *Example:*
+
+  ```bash
+  OLLAMA_MODEL="llama3.2:3b"
+  ```
+
+* **`OLLAMA_URL`**
+  Optional. Set this if you're running Ollama outside Docker or on a custom host.
+  *Example:*
+
+  ```bash
+  OLLAMA_URL="http://XXXXXXXXXXXX"
+  ```
+
+* **`PEXELS_API_KEY`**
+  Optional but recommended. Used to fetch stock images for enhanced visuals.
+  *Example:*
+
+  ```bash
+  PEXELS_API_KEY="vzXXXXXXXXXXXXXX"
+  ```
+
+> 💡 **Note:** Provide a valid **Pexels API key** for image generation when using Ollama models.
 > You can get a free API key at https://www.pexels.com/api/
 
 > ✅ Add `--gpus=all` to enable GPU acceleration (see [Using GPU](/docs/configurations/using-gpu)).
