@@ -39,6 +39,9 @@
 * ✅ **Export Ready** — Save as PowerPoint (PPTX) and PDF
 * ✅ **Fully Open-Source** — Apache 2.0 licensed
 
+## Deploy on Cloud 
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/presenton-ai-presentations?referralCode=ubp0kk)
+
 ## Running Presenton Docker
 
 #### 1. Start Presenton
