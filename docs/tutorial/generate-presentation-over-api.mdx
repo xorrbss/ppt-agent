@@ -1,0 +1,195 @@
+---
+title: "Generate Presentations via API in 5 minutes"
+description: "Steps to generate professional AI presentations via self hosted Presenton's API in just 5 minutes. "
+---
+
+In this guide, I'll walk you through a simple, straightforward way to host and use Presenton’s API for generating presentations. If you're a developer or someone building tools or automation around presentations, this approach will save you some valuable time.
+
+Before we start, I'm assuming you've already set up Presenton. If not, just quickly check out the [Quickstart](../quickstart) or [Development guide](../development).
+
+---
+
+## Step 1: Ensure Docker is Installed
+
+Presenton runs in Docker, making it easy to set up across different environments.
+
+- Don't have Docker yet? Just grab it from [here](https://www.docker.com/get-started).
+
+---
+
+## Step 2: Run Presenton Locally with Docker
+
+You're now ready to run Presenton's docker image to start generating presentations. First, you will have to decide upon the LLM provider you're going to use to generate presentations. You can go for either `OPENAI`, `GOOGLE`or `OLLAMA` . `GOOGLE` is free to start with but if you want complete control and privacy `OLLAMA` allows you to host your own model, but also requires `PEXELS`(free image library) API key.
+
+We will go with `GOOGLE` in this guide as it's relatively simpler to configure and free to start with. You will have to grab its API Key from [Google AI Studio](https://aistudio.google.com/apikey).
+
+You can find details to run with other providers in [Environment Variables](../configurations/environment-variables).
+
+Now, open your command line and execute the relevant command based on your OS:
+
+### Linux/macOS:
+
+```bash
+docker run -it --name presenton -p 5000:80 -e LLM="google" -e GOOGLE_API_KEY="***" -e CAN_CHANGE_KEYS="false" -v "./user_data:/app/user_data" ghcr.io/presenton/presenton:v0.3.0-beta
+```
+
+### Windows (PowerShell):
+
+```powershell
+docker run -it --name presenton -p 5000:80 -e LLM="google" -e GOOGLE_API_KEY="***" -e CAN_CHANGE_KEYS="false" -v "${PWD}\user_data:/app/user_data" ghcr.io/presenton/presenton:v0.3.0-beta
+```
+
+> If port `5000` is already occupied or you prefer a different port, feel free to change it.
+
+Once this step is done, you can access Presenton locally at http://localhost:5000.
+
+---
+
+## Step 3: (Optional) Configure Environment Variables
+
+Presenton supports several environment variables for customization (such as using OpenAI or local models).
+
+Typical use-cases you might encounter:
+
+- **External APIs**: [Using OpenAI or Gemini](./configurations/environment-variables).
+- **GPU Acceleration**: [Using GPUs with Presenton](./configurations/using-gpu).
+- **Local Models**: [Using Ollama and local models](./configurations/using-ollama-models).
+
+If you don't need to change anything right now, it's safe to skip this step. Return to it when you need more customization.
+
+---
+
+## Step 4: Understanding the API Endpoint
+
+Generating presentations via Presenton's API is straightforward. It has one primary endpoint:
+
+```
+POST /api/v1/ppt/generate/presentation
+```
+
+For a deeper dive later, check the full [API documentation](../index).
+
+---
+
+## Step 5: Making your first API Call
+
+Here's how you'd quickly generate a presentation called "Introduction to Machine Learning":
+
+<CodeGroup>
+
+```bash bash
+curl -X POST http://localhost:5000/api/v1/ppt/generate/presentation \
+  -F "prompt=Introduction to Machine Learning" \
+  -F "n_slides=5" \
+  -F "language=English" \
+  -F "theme=light" \
+  -F "export_as=pptx"
+```
+
+
+```python python
+import requests
+
+response = requests.post(
+    "http://localhost:5000/api/v1/ppt/generate/presentation",
+    data={
+        "prompt": "Introduction to Machine Learning",
+        "n_slides": "5",
+        "language": "English",
+        "theme": "light",
+        "export_as": "pptx"
+    }
+)
+
+print(response.json())
+```
+
+
+```javascript javascript
+const axios = require("axios");
+const FormData = require("form-data");
+
+const form = new FormData();
+form.append("prompt", "Introduction to Machine Learning");
+form.append("n_slides", "5");
+form.append("language", "English");
+form.append("theme", "light");
+form.append("export_as", "pptx");
+
+axios.post("http://localhost:5000/api/v1/ppt/generate/presentation", form, {
+  headers: form.getHeaders()
+})
+.then(res => console.log(res.data))
+.catch(err => console.error("Error:", err.response?.data || err.message));
+```
+
+</CodeGroup>
+
+---
+
+## Step 6: API Request Parameters Explained
+
+Here's a quick reference for the key parameters you can set:
+
+| Parameter   | Type   | Required | Description                                                |
+| ----------- | ------ | -------- | ---------------------------------------------------------- |
+| `prompt`    | string | Yes      | Topic/title of your presentation                           |
+| `n_slides`  | int    | No       | Number of slides (default: 8; min: 5, max: 15)             |
+| `language`  | string | No       | Language you'd like the presentation in (default: English) |
+| `theme`     | string | No       | Optional styling (e.g.: "light", "dark", "royal_blue")     |
+| `documents` | file[] | No       | Additional supporting documents (PDF/PPTX/DOCX/TXT)        |
+| `export_as` | string | No       | "pptx" or "pdf" (default: pptx)                            |
+
+Yes, it can generate presentations directly from most popular file formats. Make sure you understand the context window of model you're using with respect to file size.
+
+For now, these should be enough to get you going. Later, you can reference the [API docs](../index) if needed.
+
+---
+
+## Step 7: API Response in Practice
+
+Here's what a normal, successful response looks like:
+
+```json
+{
+  "presentation_id": "d3000f96-096c-4768-b67b-e99aed029b57",
+  "path": "/static/user_data/d3000f96-096c-4768-b67b-e99aed029b57/Introduction_to_Machine_Learning.pptx",
+  "edit_path": "/presentation?id=d3000f96-096c-4768-b67b-e99aed029b57"
+}
+```
+
+- **`presentation_id`**: Keep this handy if you want to refer back later.
+- **`path`**: This is your generated PPT file. Download from here.
+- `edit_path`: A convenient URL that lets you edit your slides directly from Presenton’s built-in editor.
+
+> Note: Make sure to prepend your server's root URL to the path and edit_path fields in the response to construct valid links.
+
+---
+
+## Step 8: Built-in Presentation Themes
+
+Presenton provides easy-to-use themes for quick styling:
+
+- `light` (default, clean/professional look)
+- `dark` (ideal for coding tutorials or tech seminars)
+- `cream` (suitable for detailed reviews, proposals)
+- `royal_blue` (great for presenting to clients or external stakeholders)
+- `faint_yellow` (easy on eyes, educational slides)
+- `light_red` (highlight warnings or critical presentations)
+- `dark_pink` (marketing, creative slide decks)
+
+---
+
+## Step 9 (Optional): Advanced Customization
+
+Once you're comfortable and ready for more:
+
+- Integrate your preferred LLMS: [Environment Variables](../configurations/environment-variables).
+- Leverage GPU performance: [GPU Guide](../configurations/using-gpu).
+- Run local AI models with Ollama: [Local Models](../configurations/using-ollama-models).
+
+---
+
+**That's it\!** You've successfully generated a professional-looking presentation through an easy-to-use API endpoint.
+
+If you have more questions or want to explore further, the [complete documentation](../index) is always here to help you.

@@ -1,0 +1,150 @@
+---
+title: "Create Presentations from CSV using AI"
+description: "Step-by-step guide to generating presentations from a CSV file"
+---
+
+In this tutorial, we will generate personalized student report presentations using self hosted Presenton's API and a Python script.
+
+This tutorial extends [Generate a PPT via API in 5 Minutes](./generate-presentation-over-api) and shows you how to automate the creation of personalized student report presentations from a CSV file using Python.
+
+So, do check it before continuing with this and make sure you have Presenton running locally or any server and you are able to generate presentations with it.
+
+---
+
+## 1. Prepare Your CSV File
+
+Save your student data as `students.csv`:
+
+```csv
+Name,Final Grade,ECA Participation,Sports Involvement,Quiz Scores,Class Behavior,Comment
+Anaya Sharma,88,High,Moderate,92,Excellent,"Balanced performer with high curiosity"
+Rohan Mehta,73,Low,None,75,Good,"Needs motivation beyond academics"
+Meera Kapoor,94,Moderate,High,96,Excellent,"Academic excellence and team spirit"
+Aarav Patel,62,None,None,58,Average,"Struggling across areas, needs focused help"
+```
+
+---
+
+## 2. Install Python Requirements
+
+You’ll need the `requests` and `pandas` libraries:
+
+```bash
+pip install requests pandas
+```
+
+---
+
+## 3. Write the Python Script
+
+Let’s build the script step by step.
+
+### a. Import Libraries
+
+```python
+import os
+import pandas as pd
+import requests
+```
+
+### b. Creat presentations directory
+
+```python
+os.makedirs('presentations', exist_ok=True)
+```
+
+### c. Load the CSV
+
+```python
+df = pd.read_csv("students.csv")
+```
+
+### d. Define a Function to Build the Prompt
+
+```python
+def build_prompt(row):
+    return (
+        f"Student Name: {row['Name']}\n"
+        f"Final Grade: {row['Final Grade']}\n"
+        f"ECA Participation: {row['ECA Participation']}\n"
+        f"Sports Involvement: {row['Sports Involvement']}\n"
+        f"Quiz Scores: {row['Quiz Scores']}\n"
+        f"Class Behavior: {row['Class Behavior']}\n"
+        f"Teacher's Comment: {row['Comment']}\n\n"
+        "Generate a parent-friendly presentation summarizing this student's academic and extracurricular performance, "
+        "highlighting strengths, areas for improvement, and any special notes from the teacher."
+    )
+```
+
+### e. Loop Over Each Student and Generate a Presentation
+
+```python
+for idx, row in df.iterrows():
+    print(f"Generating presentation for {row['Name']}")
+    prompt = build_prompt(row)
+    data = {
+        "prompt": prompt,
+        "n_slides": "8",
+        "language": "English",
+        "theme": "light",
+        "export_as": "pdf"
+    }
+    response = requests.post(
+        "http://localhost:5000/api/v1/ppt/generate/presentation",
+        data=data
+    )
+    if response.ok:
+        result = response.json()
+        print("Downloading presentation...")
+        # Prepend the host to the path
+        download_url = f"http://localhost:5000{result['path']}"
+        filename = f"presentations/{result['path'].split('/')[-1]}"
+        # Download and save the file
+        file_response = requests.get(download_url)
+        if file_response.ok:
+            with open(filename, 'wb') as f:
+                f.write(file_response.content)
+            print(f"Presentation for {row['Name']} saved as {filename}")
+        else:
+            print(f"Failed to download presentation for {row['Name']}: {file_response.status_code}")
+    else:
+        print(f"Failed to generate presentation for {row['Name']}: {response.text}")
+```
+
+Generated presentations will be saved in `presentations` directory.
+
+You may change the URL `http://localhost:5000` to the URL of your Presenton instance.
+
+---
+
+## 4. Run the Script
+
+Save your script as `generate_reports.py` and run:
+
+```bash
+python generate_reports.py
+```
+
+Each student will get a personalized presentation, and you’ll see the download path for each file in your terminal.
+
+---
+
+## 5. How It Works
+
+- The script reads each row from your CSV.
+- It builds a detailed prompt for Presenton’s API (see [API Reference](./generate-presentation-over-api)).
+- It sends a POST request to generate a presentation for each student.
+- The API returns a download path for each generated PPTX.
+- The presentation file is downloaded and saved in `presentations` folder.
+
+---
+
+## 6. Next Steps
+
+- You can customize the prompt or number of slides as needed.
+- For more on API options, see [Generate a PPT via API in 5 Minutes](./generate-presentation-over-api).
+- For advanced configuration (e.g., using Ollama or GPU), see [Environment Variables](../configurations/environment-variables), [Using GPU](../configurations/using-gpu), and [Using Ollama Models](../configurations/using-ollama-models).
+
+<Info>
+  Need help? See the [full documentation](./index) or open an issue on GitHub.
+</Info>

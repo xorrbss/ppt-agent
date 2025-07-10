@@ -1,0 +1,106 @@
+---
+title: "Using Presenton API"
+description: "You can use Presenton’s API to generate presentations programmatically. This is great for integrating Presenton into your own apps or workflows."
+---
+
+### 🎯 Endpoint
+
+```
+POST /api/v1/ppt/generate/presentation
+```
+
+Use this endpoint to generate a presentation from a prompt, outline, or uploaded documents.
+
+### 🧾 Request Format
+
+**Content-Type:** `multipart/form-data`
+
+| Field       | Type     | Required | Description                                                           |
+| ----------- | -------- | -------- | --------------------------------------------------------------------- |
+| `prompt`    | `string` |  Yes    | The main topic or subject for the presentation                        |
+| `n_slides`  | `int`    |  No     | Number of slides (default: 8, min: 5, max: 15)                        |
+| `language`  | `string` |  No     | Language of the presentation (default: `English`)                     |
+| `theme`     | `string` |  No     | Theme of the presentation (e.g., `light`, `dark`, `royal_blue`, etc.) |
+| `documents` | `file[]` |  No     | Optional files (PDF, PPTX, DOCX, TXT) to include                      |
+| `export_as` | `string` |  No     | Export format: `pptx` or `pdf` (default: `pptx`)                      |
+
+### 📤 Example Request
+
+<CodeGroup>
+
+```bash bash
+curl -X POST http://localhost:5000/api/v1/ppt/generate/presentation \
+  -F "prompt=Introduction to Machine Learning" \
+  -F "n_slides=5" \
+  -F "language=English" \
+  -F "theme=light" \
+  -F "export_as=pptx"
+```
+
+
+```python python
+import requests
+
+url = "http://localhost:5000/api/v1/ppt/generate/presentation"
+data = {
+    "prompt": "Introduction to Machine Learning",
+    "n_slides": "5",
+    "language": "English",
+    "theme": "light",
+    "export_as": "pptx"
+}
+
+response = requests.post(url, data=data)
+print(response.json())
+```
+
+
+```javascript javascript
+const axios = require("axios");
+const FormData = require("form-data");
+
+const form = new FormData();
+form.append("prompt", "Introduction to Machine Learning");
+form.append("n_slides", "5");
+form.append("language", "English");
+form.append("theme", "light");
+form.append("export_as", "pptx");
+
+axios.post("http://localhost:5000/api/v1/ppt/generate/presentation", form, {
+  headers: form.getHeaders()
+})
+.then(response => {
+  console.log(response.data);
+})
+.catch(error => {
+  console.error("Error:", error.response?.data || error.message);
+});
+```
+
+</CodeGroup>
+
+### 📥 Example Response
+
+```json
+{
+  "presentation_id": "d3000f96-096c-4768-b67b-e99aed029b57",
+  "path": "/static/user_data/d3000f96-096c-4768-b67b-e99aed029b57/Introduction_to_Machine_Learning.pptx",
+  "edit_path": "/presentation?id=d3000f96-096c-4768-b67b-e99aed029b57"
+}
+```
+
+- `presentation_id`: Unique ID of the presentation
+- `path`: File path for downloading the presentation
+- `edit_path`: Link to open the presentation in the editor
+
+---
+
+### ✅ Supported Themes
+
+- `light` (default)
+- `dark`
+- `cream`
+- `royal_blue`
+- `faint_yellow`
+- `light_red`
+- `dark_pink`

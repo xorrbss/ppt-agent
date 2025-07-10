@@ -19,8 +19,14 @@ cd presenton
 
 Build and start the development environment using Docker Compose:
 
+- Without GPU
+
 ```bash
 docker compose up development --build
+```
+- With GPU
+```bash
+docker compose up development-gpu --build
 ```
 
 This command will build the development container and start the app. Once running, you can access Presenton at:

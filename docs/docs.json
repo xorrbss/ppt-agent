@@ -18,7 +18,8 @@
             "pages": [
               "index",
               "quickstart",
-              "development"
+              "development",
+              "using-presenton-api"
             ]
           },
           {
@@ -26,7 +27,16 @@
             "pages": [
               "configurations/environment-variables",
               "configurations/using-ollama-models",
+              "configurations/using-custom-llm",
               "configurations/using-gpu"
+            ]
+          },
+          {
+            "group": "Tutorials",
+            "pages": [
+              "tutorial/generate-presentation-over-api",
+              "tutorial/generate-presentation-from-csv",
+              "tutorial/create-data-reports-using-ai"
             ]
           }
         ]
