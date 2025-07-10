@@ -27,6 +27,7 @@
             "pages": [
               "configurations/environment-variables",
               "configurations/using-ollama-models",
+              "configurations/using-custom-llm",
               "configurations/using-gpu"
             ]
           },
