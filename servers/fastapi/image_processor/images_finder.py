@@ -52,8 +52,7 @@ async def generate_image(
 
 async def generate_image_openai(prompt: str, output_directory: str) -> str:
     client = get_llm_client()
-    result = await asyncio.to_thread(
-        client.images.generate,
+    result = await client.images.generate(
         model="dall-e-3",
         prompt=prompt,
         n=1,
@@ -72,7 +71,8 @@ async def generate_image_openai(prompt: str, output_directory: str) -> str:
 
 async def generate_image_google(prompt: str, output_directory: str) -> str:
     client = genai.Client()
-    response = client.models.generate_content(
+    response = await asyncio.to_thread(
+        client.models.generate_content,
         model="gemini-2.0-flash-preview-image-generation",
         contents=[prompt],
         config=GenerateContentConfig(response_modalities=["TEXT", "IMAGE"]),
