@@ -1,47 +1,114 @@
 ---
-title: "Environment Variables"
-description: "Configure Presenton using environment variables."
+title: "🔐 Configuring Presenton with Environment Variables"
+description: "Presenton can be customized and secured using environment variables. These variables control access, integrations, and model providers."
 ---
 
-Presenton can be customized and secured using environment variables. Below are the key variables you can set when running the app:
+### 🔧 Core Configuration
 
-- **`CAN_CHANGE_KEYS`**\
-  Controls whether users can modify API keys through the app interface.\
-  Set to `"false"` to keep keys hidden and unchangeable, or `"true"` to allow changes.\
-  _Example:_ `CAN_CHANGE_KEYS="false"`
+* **`CAN_CHANGE_KEYS`**
+  Controls whether users can view or modify API keys via the interface.
+  Set to `"false"` to keep keys hidden and locked, or `"true"` to allow modification.
+  *Example:*
 
-- **`LLM`**\
-  Select which Large Language Model provider Presenton should use.\
-  Supported values: `"openai"`, `"google"`, `"ollama"`.\
-  _Example:_ `LLM="openai"`
+  ```bash
+  CAN_CHANGE_KEYS="false"
+  ```
 
-- **`OPENAI_API_KEY`**\
-  Your OpenAI API key. Required if `LLM` is set to `"openai"`.\
-  _Example:_ `OPENAI_API_KEY="sk-xxxxxxxxxxxxxxxx"`
+* **`LLM`**
+  Select the Large Language Model (LLM) provider to use.
+  Supported values: `"openai"`, `"google"`, `"ollama"`, `"custom"`
+  *Example:*
 
-  > For image generation you might need to [Verify Organization](https://help.openai.com/en/articles/10910291-api-organization-ver)
+  ```bash
+  LLM="openai"
+  ```
 
-- **`GOOGLE_API_KEY`**\
-  Your Google API key. Required if `LLM` is set to `"google"`.\
-  _Example:_ `GOOGLE_API_KEY="AIzaSyXXXXXXXXXXXX"`
+### 🧠 Model Provider Specific Variables
 
-  > Image generation does not work in `EU Region`. Choose Ollama or OpenAI instead.
+#### 🔹 OpenAI
 
-- **`OLLAMA_MODEL`**\
-  The Ollama model name to use. Required if `LLM` is set to `"ollama"`.\
-  _Example:_ `OLLAMA_MODEL="llama3.2:3b"`
-  
-- **`PEXELS_API_KEY`**\
-  API key for the Pexels image service. Optional but recommended when using Ollama models to enhance image search.\
-  _Example:_ `PEXELS_API_KEY="vzXXXXXXXXXXXXXX"`
+* **`OPENAI_API_KEY`**
+  Required if `LLM="openai"`
+  *Example:*
 
-### Example: Running Presenton with Environment Variables
+  ```bash
+  OPENAI_API_KEY="sk-xxxxxxxxxxxxxxxx"
+  ```
+
+#### 🔹 Google
+
+* **`GOOGLE_API_KEY`**
+  Required if `LLM="google"`
+  *Example:*
+
+  ```bash
+  GOOGLE_API_KEY="AIzaSyXXXXXXXXXXXX"
+  ```
+  > ⚠️ Image generation is not supported in EU regions with Google.
+
+#### 🔹 Ollama
+
+* **`OLLAMA_URL`**
+  (Optional) URL of your custom Ollama server. Useful if you're self-hosting.
+  *Example:*
+
+  ```bash
+  OLLAMA_URL="http://localhost:11434"
+  ```
+
+* **`OLLAMA_MODEL`**
+  Required if `LLM="ollama"`
+  *Example:*
+
+  ```bash
+  OLLAMA_MODEL="llama3.2:3b"
+  ```
+
+#### 🔹 Custom (OpenAI-compatible LLMs)
+
+* **`CUSTOM_LLM_URL`**
+  Required if `LLM="custom"`
+  *Example:*
+
+  ```bash
+  CUSTOM_LLM_URL="https://api.your-custom-llm.com/v1"
+  ```
+
+* **`CUSTOM_LLM_API_KEY`**
+  Required if `LLM="custom"`
+  *Example:*
+
+  ```bash
+  CUSTOM_LLM_API_KEY="your_custom_key"
+  ```
+
+* **`CUSTOM_MODEL`**
+  Required if `LLM="custom"`
+  *Example:*
+
+  ```bash
+  CUSTOM_MODEL="llama3.2:3b"
+  ```
+
+### 🖼️ Image Enhancement
+
+* **`PEXELS_API_KEY`**
+  (Optional) Used to fetch high-quality stock images when using `ollama` or `custom` models.
+  *Example:*
+
+  ```bash
+  PEXELS_API_KEY="vzXXXXXXXXXXXXXX"
+  ```
+
+### 🐳 Docker Example
 
 ```bash
 docker run -it --name presenton -p 5000:80 \
-  -e LLM="openai" \
-  -e OPENAI_API_KEY="your_openai_api_key" \
+  -e LLM="ollama" \
+  -e OLLAMA_MODEL="llama3.2:3b" \
+  -e OLLAMA_URL="http://localhost:11434" \
   -e CAN_CHANGE_KEYS="false" \
+  -e PEXELS_API_KEY="your_pexels_key" \
   -v "./user_data:/app/user_data" \
-  ghcr.io/presenton/presenton:v0.3.0-beta
+  ghcr.io/presenton/presenton:latest
 ```
