@@ -185,45 +185,54 @@ const SupportingDoc = ({ files, onFilesChange }: SupportingDocProps) => {
                                 </h3>
                             </div>
                             <div data-testid="file-list" className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                                {filesWithIds.map((file) => (
-                                    <div key={file.id}
-                                        className="bg-white rounded-lg border border-gray-200 overflow-hidden
+                                {filesWithIds.map((file) => {
+                                    const isImage = isImageFile(file);
+                                    let imageUrl = '';
+                                    if (isImage) {
+                                        imageUrl = URL.createObjectURL(file);
+                                    }
+                                    return (
+                                        (
+                                            <div key={file.id}
+                                                className="bg-white rounded-lg border border-gray-200 overflow-hidden
                                             hover:border-purple-200 group relative"
-                                    >
-                                        <div className="p-4 bg-purple-50 group-hover:bg-purple-100 
+                                            >
+                                                <div className="p-4 bg-purple-50 group-hover:bg-purple-100 
                                             transition-colors flex items-center justify-center relative"
-                                        >
-                                            {isImageFile(file) ? (
-                                                <img src={URL.createObjectURL(file)} className="w-10 h-10 text-purple-600" />
-                                            ) : (
-                                                <File className="w-8 h-8 text-purple-600" />
-                                            )}
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    removeFile(file.id)
-                                                }}
-                                                className="absolute top-1 right-2 p-1.5
+                                                >
+                                                    {isImage ? (
+                                                        <img src={imageUrl} className="w-10 h-10 text-purple-600" />
+                                                    ) : (
+                                                        <File className="w-8 h-8 text-purple-600" />
+                                                    )}
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            removeFile(file.id)
+                                                        }}
+                                                        className="absolute top-1 right-2 p-1.5
                                                     bg-white/80 backdrop-blur-sm rounded-full
                                                     text-gray-500 hover:text-red-500 
                                                     shadow-sm hover:shadow-md
                                                     transition-all duration-200"
-                                                aria-label="Remove file"
-                                            >
-                                                <X className="w-4 h-4" />
-                                            </button>
-                                        </div>
+                                                        aria-label="Remove file"
+                                                    >
+                                                        <X className="w-4 h-4" />
+                                                    </button>
+                                                </div>
 
-                                        <div className="p-3 relative">
-                                            <p className="text-sm font-medium text-gray-700 truncate mb-1 pr-2">
-                                                {file.name || 'Unnamed File'}
-                                            </p>
-                                            <p className="text-xs text-gray-500">
-                                                {formatFileSize(file.size)}
-                                            </p>
-                                        </div>
-                                    </div>
-                                ))}
+                                                <div className="p-3 relative">
+                                                    <p className="text-sm font-medium text-gray-700 truncate mb-1 pr-2">
+                                                        {file.name || 'Unnamed File'}
+                                                    </p>
+                                                    <p className="text-xs text-gray-500">
+                                                        {formatFileSize(file.size)}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )
+                                    )
+                                })}
                             </div>
                         </div>
                     </div>

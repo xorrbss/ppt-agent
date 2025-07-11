@@ -7,14 +7,16 @@ import { NextResponse, NextRequest } from 'next/server';
 
 
 export async function POST(req: NextRequest) {
-  const { url, title } = await req.json();
-
+  const { id, title } = await req.json(); 
+  if (!id) {
+    return NextResponse.json({ error: "Missing Presentation ID" }, { status: 400 });
+  }
   const browser = await puppeteer.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
   const page = await browser.newPage();
-  await page.goto(url, { waitUntil: 'networkidle0' });
+  await page.goto(`http://localhost/pdf-maker?id=${id}`, { waitUntil: 'networkidle0' });
 
   const pdfBuffer = await page.pdf({
     printBackground: true,

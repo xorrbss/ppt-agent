@@ -6,7 +6,25 @@ export async function POST(request: Request) {
   try {
     const { filePath } = await request.json();
  const normalizedPath = path.normalize(filePath);
-    const content=  fs.readFileSync(normalizedPath, 'utf-8');
+   const allowedBaseDirs = [
+      process.env.APP_DATA_DIRECTORY || '/app/user_data',
+      process.env.TEMP_DIRECTORY || '/tmp',
+      '/app/user_data' 
+    ];    
+      const resolvedPath = path.resolve(normalizedPath);
+      const isPathAllowed = allowedBaseDirs.some(baseDir => {
+      const resolvedBaseDir = path.resolve(baseDir);
+      return resolvedPath.startsWith(resolvedBaseDir + path.sep) || resolvedPath === resolvedBaseDir;
+    });
+
+    if (!isPathAllowed) {
+      console.error('Unauthorized file access attempt:', resolvedPath);
+      return NextResponse.json(
+        { error: 'Access denied: File path not allowed' },
+        { status: 403 }
+      );
+    }
+    const content=  fs.readFileSync(resolvedPath, 'utf-8');
     
     return NextResponse.json({ content });
   } catch (error) {

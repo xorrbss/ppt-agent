@@ -132,9 +132,7 @@ const Header = ({
       const metadata = await (await fetch('/api/slide-metadata', {
         method: 'POST',
         body: JSON.stringify({
-          url: 'http://localhost/presentation?id=' + presentation_id,
-          theme: currentTheme,
-          customColors: currentColors,
+          id: presentation_id,
         })
       })).json()
 
@@ -207,7 +205,7 @@ const Header = ({
       const response = await fetch('/api/export-as-pdf', {
         method: 'POST',
         body: JSON.stringify({
-          url: `http://localhost/pdf-maker?id=${presentation_id}`,
+          id: presentation_id,
           title: presentationData!.presentation!.title,
         })
       });
