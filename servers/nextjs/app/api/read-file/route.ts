@@ -11,9 +11,9 @@ export async function POST(request: Request) {
       process.env.TEMP_DIRECTORY || '/tmp',
       '/app/user_data' 
     ];    
-      const resolvedPath = path.resolve(normalizedPath);
+      const resolvedPath = fs.realpathSync(path.resolve(normalizedPath));
       const isPathAllowed = allowedBaseDirs.some(baseDir => {
-      const resolvedBaseDir = path.resolve(baseDir);
+      const resolvedBaseDir = fs.realpathSync(path.resolve(baseDir));
       return resolvedPath.startsWith(resolvedBaseDir + path.sep) || resolvedPath === resolvedBaseDir;
     });
 

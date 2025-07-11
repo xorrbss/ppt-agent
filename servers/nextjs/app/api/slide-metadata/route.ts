@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
     await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
 
     try {
-      await page.goto(`http://localhost/presentation?id=${id}`, {
+      await page.goto(`http://localhost/pdf-maker?id=${id}`, {
         waitUntil: "networkidle0",
         timeout: 60000,
       });

@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useRef, useState } from 'react'
-import { File, X, Upload, Image } from 'lucide-react'
+import { File, X, Upload } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 
@@ -117,9 +117,6 @@ const SupportingDoc = ({ files, onFilesChange }: SupportingDocProps) => {
         onFilesChange(updatedFiles)
     }
 
-    const isImageFile = (file: File): boolean => {
-        return file.type?.startsWith('image/') || false
-    }
 
     return (
         <div className="w-full">
@@ -186,11 +183,7 @@ const SupportingDoc = ({ files, onFilesChange }: SupportingDocProps) => {
                             </div>
                             <div data-testid="file-list" className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                                 {filesWithIds.map((file) => {
-                                    const isImage = isImageFile(file);
-                                    let imageUrl = '';
-                                    if (isImage) {
-                                        imageUrl = URL.createObjectURL(file);
-                                    }
+
                                     return (
                                         (
                                             <div key={file.id}
@@ -200,11 +193,9 @@ const SupportingDoc = ({ files, onFilesChange }: SupportingDocProps) => {
                                                 <div className="p-4 bg-purple-50 group-hover:bg-purple-100 
                                             transition-colors flex items-center justify-center relative"
                                                 >
-                                                    {isImage ? (
-                                                        <img src={imageUrl} className="w-10 h-10 text-purple-600" />
-                                                    ) : (
-                                                        <File className="w-8 h-8 text-purple-600" />
-                                                    )}
+
+                                                    <File className="w-8 h-8 text-purple-600" />
+
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation()
