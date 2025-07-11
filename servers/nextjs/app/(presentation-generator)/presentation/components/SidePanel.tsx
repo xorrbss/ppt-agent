@@ -5,7 +5,6 @@ import ToolTip from "@/components/ToolTip";
 import { Button } from "@/components/ui/button";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store/store";
-import { DashboardApi } from "@/app/dashboard/api/dashboard";
 import {
   DndContext,
   closestCenter,
@@ -20,7 +19,6 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import * as htmlToImage from "html-to-image";
 import { setPresentationData } from "@/store/slices/presentationGeneration";
 import { SortableSlide } from "./SortableSlide";
 import { SortableListItem } from "./SortableListItem";
@@ -58,18 +56,7 @@ const SidePanel = ({
     }
   }, [isMobilePanelOpen]);
 
-  useEffect(() => {
-    if (
-      presentationData?.presentation?.thumbnail === null &&
-      presentationData.slides.some(
-        (slide) => slide.images && slide.images.length > 0
-      )
-    ) {
-      setTimeout(() => {
-        setSlideThumbnail();
-      }, 4000);
-    }
-  }, [presentationData]);
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -84,17 +71,6 @@ const SidePanel = ({
     }
   };
 
-  const dataUrlToFile = (dataUrl: string, filename: string) => {
-    const arr = dataUrl.split(",");
-    const mime = arr[0].match(/:(.*)/)?.[1];
-    const bstr = atob(arr[1]);
-    let n = bstr.length;
-    const u8arr = new Uint8Array(n);
-    while (n--) {
-      u8arr[n] = bstr.charCodeAt(n);
-    }
-    return new File([u8arr], filename, { type: mime });
-  };
 
   const handleDragEnd = (event: any) => {
     const { active, over } = event;
@@ -128,23 +104,6 @@ const SidePanel = ({
         setPresentationData({ ...presentationData, slides: updatedArray })
       );
     }
-  };
-
-  const setSlideThumbnail = async () => {
-    const slideContainer = document.querySelector(".slide-container");
-    if (!slideContainer) return;
-    const image = await htmlToImage
-      .toPng(slideContainer as HTMLElement)
-      .then((dataUrl) => {
-        return dataUrl;
-      });
-
-    const file = dataUrlToFile(image, "thumbnail.png");
-
-    const response = await DashboardApi.setSlideThumbnail(
-      presentationData?.presentation?.id!,
-      file
-    );
   };
 
   // Loading shimmer component
