@@ -22,10 +22,6 @@
 > [!TIP]
 > For detailed setup guides, API documentation, and advanced configuration options, visit our **[Official Documentation](https://docs.presenton.ai)**
 
-> [!NOTE]
-> **Enterprise Inquiries:**  
-> For enterprise use, custom deployments, or partnership opportunities, contact us at **[suraj@presenton.ai](mailto:suraj@presenton.ai)**.
-
 
 ## ✨ More Freedom with AI Presentations
 
