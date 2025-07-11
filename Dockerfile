@@ -6,7 +6,10 @@ RUN apt-get update && apt-get install -y \
     npm \
     nginx \
     curl \
-    redis-server
+    redis-server \
+    default-libmysqlclient-dev \
+    build-essential \
+    pkg-config
 
 # Create a working directory
 WORKDIR /app  
