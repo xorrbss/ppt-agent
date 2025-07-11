@@ -143,9 +143,9 @@ class GeneratePresentationHandler(FetchAssetsOnPresentationGenerationMixin):
                 async with session.post(
                     f"http://localhost/api/slide-metadata",
                     json={
-                        "url": f"http://localhost/presentation?id={self.presentation_id}",
-                        "theme": self.theme["name"],
-                        "customColors": self.theme["colors"],
+                        "id": self.presentation_id,
+                        # "theme": self.theme["name"],
+                        # "customColors": self.theme["colors"],
                     },
                 ) as response:
                     export_request_body = await response.json()

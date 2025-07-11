@@ -218,13 +218,55 @@ export const ThemeImagePrompt = {
 };
 
 
-export function sanitizeFilename(filename: string): string {
-  // Remove emojis and invalid filename characters
-  return filename
-    .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '') // Remove surrogate pairs (emojis)
-    .replace(/[^\x00-\x7F]/g, '') // Remove non-ASCII characters (including remaining emojis)
-    .replace(/[\\/:*?"<>|]/g, '_'); // Replace invalid filename characters
+export function sanitizeFilename(input: string, replacement = '') {
+  // Remove any null bytes first
+  let sanitized = input.replace(/\0/g, '');
+  
+  // Remove or replace path traversal sequences
+  sanitized = sanitized.replace(/\.\./g, replacement);
+  
+  // Regular filename sanitization (but preserve forward slashes for paths)
+  const illegalRe = /[\?<>\\:\*\|"]/g; // Removed / from illegal characters
+  const controlRe = /[\x00-\x1f\x80-\x9f]/g;
+  const reservedRe = /^\.+$/;
+  const windowsReservedRe = /^(con|prn|aux|nul|com\d|lpt\d)$/i;
+  const windowsTrailingRe = /[\. ]+$/;
+
+  sanitized = sanitized
+    .replace(illegalRe, replacement)
+    .replace(controlRe, replacement);
+
+  // Split path into segments to handle reserved names and trailing characters per segment
+  const pathSegments = sanitized.split('/');
+  const cleanedSegments = pathSegments.map(segment => {
+    let cleanSegment = segment
+      .replace(reservedRe, replacement)
+      .replace(windowsReservedRe, replacement)
+      .replace(windowsTrailingRe, replacement);
+    
+    // Remove any remaining path traversal attempts in individual segments
+    cleanSegment = cleanSegment.replace(/\.\./g, replacement);
+    
+    return cleanSegment;
+  });
+
+  sanitized = cleanedSegments.join('/');
+
+  // Remove any remaining path traversal attempts after other replacements
+  sanitized = sanitized.replace(/\.\./g, replacement);
+  
+  // Normalize multiple consecutive slashes to single slash
+  sanitized = sanitized.replace(/\/+/g, '/');
+
+  if (sanitized.length === 0) {
+    sanitized = 'file';
+  }
+  // Note: We don't apply MAX_FILENAME_LENGTH to full paths as they can be longer than 255 chars
+  // Individual filename components should still be reasonable length
+
+  return sanitized;
 }
+
 
 export function getStaticFileUrl(filepath: string): string {
   const pathParts = filepath.split('/');

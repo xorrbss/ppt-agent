@@ -35,6 +35,8 @@ interface FooterContextProps {
   setFooterProperties: (newProperties: FooterProperties | ((prev: FooterProperties) => FooterProperties)) => void;
   resetFooterProperties: () => Promise<void>;
   saveFooterProperties: (newProperties: FooterProperties) => Promise<void>;
+  isPropertyChanged: boolean;
+  setIsPropertyChanged: (newIsPropertyChanged: boolean) => void;
 }
 
 const FooterContext = createContext<FooterContextProps | undefined>(undefined);
@@ -52,6 +54,7 @@ export const FooterProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [footerProperties, setFooterProperties] = useState<FooterProperties>(defaultFooterProperties);
   const footerService = useFooterService();
+  const [isPropertyChanged, setIsPropertyChanged] = useState(false);
 
   // Load footer properties only once when the provider mounts
   useEffect(() => {
@@ -98,6 +101,8 @@ export const FooterProvider: React.FC<{ children: React.ReactNode }> = ({
         setFooterProperties,
         resetFooterProperties,
         saveFooterProperties,
+        isPropertyChanged,
+        setIsPropertyChanged,
       }}
     >
       {children}

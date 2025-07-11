@@ -37,11 +37,12 @@ const SlideFooter: React.FC = () => {
   const whiteLogoRef = useRef<HTMLInputElement | null>(null);
   const darkLogoRef = useRef<HTMLInputElement | null>(null);
 
-  const { footerProperties, setFooterProperties, saveFooterProperties, resetFooterProperties } = useFooterContext();
+  const { footerProperties, setFooterProperties, saveFooterProperties, resetFooterProperties, isPropertyChanged, setIsPropertyChanged } = useFooterContext();
 
 
   const handleSave = async () => {
     await saveFooterProperties(footerProperties);
+    setIsPropertyChanged(false);
     toast({
       title: "Footer properties saved successfully",
     });
@@ -56,16 +57,53 @@ const SlideFooter: React.FC = () => {
   };
 
   const updateProperty = (path: string, value: any): void => {
+    setIsPropertyChanged(true);
     const keys = path.split(".");
+    // Security: Validate path to prevent prototype pollution
+    const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
+    if (keys.some(key => dangerousKeys.includes(key))) {
+      console.warn('Attempted prototype pollution with path:', path);
+      return;
+    }
+
+    const allowedPaths = [
+      'logoProperties.showLogo',
+      'logoProperties.logoPosition',
+      'logoProperties.opacity',
+      'logoProperties.logoImage.light',
+      'logoProperties.logoImage.dark',
+      'logoScale',
+      'logoOffset.x',
+      'logoOffset.y',
+      'footerMessage.showMessage',
+      'footerMessage.message',
+      'footerMessage.fontSize',
+      'footerMessage.opacity'
+    ]
+
+    if (!allowedPaths.includes(path)) {
+      console.error(`Invalid path: ${path}`);
+      return;
+    }
+
     setFooterProperties((prevProps: FooterProperties) => {
       const newProps = { ...prevProps };
       let current: any = newProps;
 
       for (let i = 0; i < keys.length - 1; i++) {
+        if (dangerousKeys.includes(keys[i])) {
+          console.warn('Attempted prototype pollution with path:', path);
+          return prevProps;
+        }
         current[keys[i]] = { ...current[keys[i]] };
         current = current[keys[i]];
       }
 
+      const finalKey = keys[keys.length - 1];
+      if (dangerousKeys.includes(finalKey)) {
+        console.warn('Dangerous final key detected:', finalKey);
+        return prevProps;
+      }
       current[keys[keys.length - 1]] = value;
       return newProps;
     });
@@ -143,6 +181,7 @@ const SlideFooter: React.FC = () => {
   const handleWhiteLogoUpload = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
+    setIsPropertyChanged(true);
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -181,6 +220,7 @@ const SlideFooter: React.FC = () => {
   const handleDarkLogoUpload = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
+    setIsPropertyChanged(true);
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -236,7 +276,14 @@ const SlideFooter: React.FC = () => {
   };
 
   const handleSheetClose = () => {
-    handleSave();
+    if (isPropertyChanged) {
+      toast({
+        title: "Unsaved Changes",
+        description: "Please save changes before closing the editor",
+        variant: "destructive",
+      });
+      return;
+    }
     setShowEditor(false);
   };
 

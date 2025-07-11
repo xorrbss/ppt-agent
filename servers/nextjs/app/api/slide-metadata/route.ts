@@ -87,27 +87,15 @@ interface SlideMetadata {
   elements: SlideElement[];
 }
 
-interface ThemeParams {
-  theme: string;
-  customColors?: {
-    slideBg: string;
-    slideTitle: string;
-    slideHeading: string;
-    slideDescription: string;
-    slideBox: string;
-  };
-}
 
 export async function POST(request: NextRequest) {
   let browser;
   try {
     const body = await request.json();
-    const { url, theme, customColors } = body;
-
-    if (!url) {
-      return NextResponse.json({ error: "Missing URL" }, { status: 400 });
+    const { id } = body;
+    if (!id) {
+      return NextResponse.json({ error: "Missing Presentation ID" }, { status: 400 });
     }
-
     browser = await puppeteer.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox']
@@ -117,13 +105,13 @@ export async function POST(request: NextRequest) {
     await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
 
     try {
-      await page.goto(url, {
+      await page.goto(`http://localhost/pdf-maker?id=${id}`, {
         waitUntil: "networkidle0",
         timeout: 60000,
       });
     } catch (error) {
       await browser.close();
-      return NextResponse.json({ error: "Failed to Navigate to provided URL" }, { status: 500 });
+      return NextResponse.json({ error: "Failed to navigate to provided URL" }, { status: 500 });
     }
 
     try {
@@ -131,27 +119,6 @@ export async function POST(request: NextRequest) {
         timeout: 60000,
       });
 
-      await page.evaluate(
-        async (params: ThemeParams) => {
-          const { theme, customColors } = params;
-          const containers = document.querySelectorAll(".slide-theme");
-
-          containers.forEach((container) => {
-            container.removeAttribute("data-theme");
-            container.setAttribute("data-theme", theme);
-          });
-
-          if (theme === "custom" && customColors) {
-            const root = document.documentElement;
-            root.style.setProperty("--custom-slide-bg", customColors.slideBg);
-            root.style.setProperty("--custom-slide-title", customColors.slideTitle);
-            root.style.setProperty("--custom-slide-heading", customColors.slideHeading);
-            root.style.setProperty("--custom-slide-description", customColors.slideDescription);
-            root.style.setProperty("--custom-slide-box", customColors.slideBox);
-          }
-        },
-        { theme, customColors }
-      );
     } catch (error) {
       await browser.close();
       return NextResponse.json({ error: "Slide container not found" }, { status: 500 });
