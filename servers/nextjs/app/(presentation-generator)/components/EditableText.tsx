@@ -1,12 +1,5 @@
-import {
-  updateSlideDescription,
-  updateSlideBodyString,
-  updateSlideTitle,
-  updateSlideBodyHeading,
-  updateSlideBodyDescription,
-} from "@/store/slices/presentationGeneration";
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import React, { useEffect, useRef } from "react";
+import { useSelector } from "react-redux";
 import TipTapEditor from "./Tiptap";
 import { RootState } from "@/store/store";
 import Typewriter from "./TypeWriter";
@@ -14,7 +7,7 @@ import Typewriter from "./TypeWriter";
 interface EditableTextProps {
   slideIndex: number;
   bodyIdx?: number;
-  elementId: string; // Format: 'title' | 'body.0.heading' | 'body.0.description'
+  elementId: string;
   type:
   | "title"
   | "heading"

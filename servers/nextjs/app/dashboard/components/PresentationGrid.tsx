@@ -102,7 +102,8 @@ export const PresentationGrid = ({
           <PresentationCard
             key={presentation.id}
             {...presentation}
-            type={type}
+            theme={presentation.theme}
+
           />
         ))}
     </div>

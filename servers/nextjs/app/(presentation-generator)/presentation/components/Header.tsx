@@ -47,7 +47,7 @@ import Modal from "./Modal";
 
 import Announcement from "@/components/Announcement";
 import { getFontLink, getStaticFileUrl } from "../../utils/others";
-import path from "path";
+
 
 const Header = ({
   presentation_id,
@@ -132,7 +132,7 @@ const Header = ({
       const metadata = await (await fetch('/api/slide-metadata', {
         method: 'POST',
         body: JSON.stringify({
-          url: 'http://localhost/presentation?id=' + presentation_id,
+          url: 'http://localhost/pdf-maker?id=' + presentation_id,
           theme: currentTheme,
           customColors: currentColors,
         })

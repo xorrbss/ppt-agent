@@ -1,7 +1,7 @@
 import React from "react";
 
 import { Card } from "@/components/ui/card";
-import { DashboardApi, PresentationResponse } from "../api/dashboard";
+import { DashboardApi } from "../api/dashboard";
 import { DotsVerticalIcon, TrashIcon } from "@radix-ui/react-icons";
 import {
   Popover,
@@ -10,21 +10,25 @@ import {
 } from "@/components/ui/popover";
 import { useRouter } from "next/navigation";
 import { toast } from "@/hooks/use-toast";
-import { PresentationGenerationApi } from "@/app/(presentation-generator)/services/api/presentation-generation";
-import { getStaticFileUrl } from "@/app/(presentation-generator)/utils/others";
+import { renderSlideContent } from "@/app/(presentation-generator)/components/slide_config";
 
 export const PresentationCard = ({
   id,
   title,
   created_at,
   thumbnail,
-  type,
-}: PresentationResponse & { type: "video" | "slide" }) => {
+  theme,
+}: {
+  id: string;
+  title: string;
+  created_at: string;
+  thumbnail: string;
+  theme: any;
+}) => {
   const router = useRouter();
 
   const handlePreview = (e: React.MouseEvent) => {
     e.preventDefault();
-
     router.push(`/presentation?id=${id}`);
   };
 
@@ -38,7 +42,7 @@ export const PresentationCard = ({
       variant: "default",
     });
     const response = await DashboardApi.deletePresentation(id);
-    console.log(response);
+
     if (response) {
       toast({
         title: "Presentation deleted",
@@ -55,10 +59,25 @@ export const PresentationCard = ({
     window.location.reload();
   };
 
+  const themeName = theme.name;
+  // Create CSS variables object
+  const cssVariables = {
+    '--slide-bg': theme.colors.slideBg,
+    '--slide-title': theme.colors.slideTitle,
+    '--slide-heading': theme.colors.slideHeading,
+    '--slide-description': theme.colors.slideDescription,
+    '--slide-box': theme.colors.slideBox,
+    '--icon-bg': theme.colors.iconBg,
+    '--background': theme.colors.background,
+    '--font-family': theme.colors.fontFamily,
+  } as React.CSSProperties;
+
   return (
     <Card
       onClick={handlePreview}
-      className="bg-white rounded-[8px] cursor-pointer overflow-hidden p-4"
+      data-theme={themeName}
+      className="bg-white rounded-[8px] slide-theme cursor-pointer overflow-hidden p-4"
+      style={cssVariables}
     >
       <div className="space-y-4">
         {/* Date */}
@@ -83,7 +102,7 @@ export const PresentationCard = ({
         </div>
 
         {/* Thumbnail */}
-        <div className="relative border-2 border-gray-200 aspect-[16/9] rounded-[8px] overflow-hidden">
+        {/* <div className="relative border-2 border-gray-200 aspect-[16/9] rounded-[8px] overflow-hidden">
           {thumbnail ? (
             <img
               src={getStaticFileUrl(thumbnail)}
@@ -100,69 +119,48 @@ export const PresentationCard = ({
               </p>
             </div>
           )}
+        </div> */}
+        <div className=" slide-box relative overflow-hidden border aspect-video"
+          style={{
+
+          }}
+        >
+          <div className="absolute bg-transparent z-40 top-0 left-0 w-full h-full" />
+          <div className="transform scale-[0.2] flex justify-center items-center origin-top-left  w-[500%] h-[500%]">
+            {renderSlideContent({
+              id: 'mock-slide-1',
+              type: 1,
+              index: 0,
+              design_index: 1,
+              properties: null,
+              images: ['/static/user_data/ee7cb066-86d0-45fc-adc9-15bf565eab30/images/af54ed41-483e-4983-aef0-b254aac48408.jpg'],
+              icons: [],
+              graph_id: null,
+              presentation: id,
+              content: {
+                title: title || 'Sample Presentation',
+                body: "This is a sample slide description to demonstrate the layout and styling. The content here helps visualize how actual presentation content would appear.",
+                infographics: [],
+                image_prompts: ['Sample image showing business growth']
+              },
+            }, 'English')}
+          </div>
         </div>
 
         {/* Icon and Title */}
         <div className="flex items-center gap-2 pb-1">
-          {type === "video" ? (
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="w-full h-full max-w-[20px] max-h-[20px]"
-              viewBox="0 0 24 24"
-              fill="none"
-            >
-              <path
-                d="M22 15V9C22 4 20 2 15 2H9C4 2 2 4 2 9V15C2 20 4 22 9 22H15C20 22 22 20 22 15Z"
-                stroke="black"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M2.52002 7.10938H21.48"
-                stroke="black"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M8.52002 2.10938V6.96937"
-                stroke="black"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M15.48 2.10938V6.51937"
-                stroke="black"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M9.75 14.4501V13.2501C9.75 11.7101 10.84 11.0801 12.17 11.8501L13.21 12.4501L14.25 13.0501C15.58 13.8201 15.58 15.0801 14.25 15.8501L13.21 16.4501L12.17 17.0501C10.84 17.8201 9.75 17.1901 9.75 15.6501V14.4501V14.4501Z"
-                stroke="black"
-                strokeWidth="1.5"
-                strokeMiterlimit="10"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          ) : (
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="w-full h-full max-w-[20px] max-h-[20px]"
-              viewBox="0 0 24 24"
-              fill="none"
-            >
-              <path
-                d="M15.75 0.75V6C15.75 6.42 16.08 6.75 16.5 6.75H21.75M9.75 17.25H7.5C7.08 17.25 6.75 16.92 6.75 16.5V12C6.75 11.58 7.08 11.25 7.5 11.25H13.5C13.92 11.25 14.25 11.58 14.25 12V14.25M21.75 6.3V22.5C21.75 22.92 21.42 23.25 21 23.25H3C2.58 23.25 2.25 22.92 2.25 22.5V1.5C2.25 1.08 2.58 0.75 3 0.75H16.275C16.47 0.75 16.665 0.825 16.815 0.975L21.54 5.775C21.675 5.925 21.75 6.105 21.75 6.3ZM10.5 14.25H16.5C16.92 14.25 17.25 14.58 17.25 15V19.5C17.25 19.92 16.92 20.25 16.5 20.25H10.5C10.08 20.25 9.75 19.92 9.75 19.5V15C9.75 14.58 10.08 14.25 10.5 14.25Z"
-                stroke="black"
-                strokeWidth="1.5"
-              />
-            </svg>
-          )}
-
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="w-full h-full max-w-[20px] max-h-[20px]"
+            viewBox="0 0 24 24"
+            fill="none"
+          >
+            <path
+              d="M15.75 0.75V6C15.75 6.42 16.08 6.75 16.5 6.75H21.75M9.75 17.25H7.5C7.08 17.25 6.75 16.92 6.75 16.5V12C6.75 11.58 7.08 11.25 7.5 11.25H13.5C13.92 11.25 14.25 11.58 14.25 12V14.25M21.75 6.3V22.5C21.75 22.92 21.42 23.25 21 23.25H3C2.58 23.25 2.25 22.92 2.25 22.5V1.5C2.25 1.08 2.58 0.75 3 0.75H16.275C16.47 0.75 16.665 0.825 16.815 0.975L21.54 5.775C21.675 5.925 21.75 6.105 21.75 6.3ZM10.5 14.25H16.5C16.92 14.25 17.25 14.58 17.25 15V19.5C17.25 19.92 16.92 20.25 16.5 20.25H10.5C10.08 20.25 9.75 19.92 9.75 19.5V15C9.75 14.58 10.08 14.25 10.5 14.25Z"
+              stroke="black"
+              strokeWidth="1.5"
+            />
+          </svg>
           <p className="text-[#667085] text-sm ml-1 line-clamp-2 font-roboto">
             {title}
           </p>

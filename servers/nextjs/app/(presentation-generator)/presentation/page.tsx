@@ -19,9 +19,9 @@ const page = () => {
     );
   }
   return (
-    <FooterProvider>
-      <PresentationPage presentation_id={queryId} />
-    </FooterProvider>
+
+    <PresentationPage presentation_id={queryId} />
+
   );
 };
 export default page;
