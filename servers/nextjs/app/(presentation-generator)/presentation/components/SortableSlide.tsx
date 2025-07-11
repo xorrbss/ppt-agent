@@ -1,6 +1,6 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { renderMiniSlideContent } from '../../components/slide_config';
+import { renderSlideContent } from '../../components/slide_config';
 import { Slide } from '../../types/slide';
 import { useState } from 'react';
 
@@ -51,12 +51,15 @@ export function SortableSlide({ slide, index, selectedSlide, onSlideClick }: Sor
             {...listeners}
             onMouseDown={handleMouseDown}
             onMouseUp={handleMouseUp}
-            className={`flex justify-center items-center cursor-pointer ${selectedSlide === index
-                ? 'ring-2 ring-[#5141e5]'
-                : 'hover:ring-2 hover:ring-gray-200'
-                } rounded-lg`}
+            className={` cursor-pointer border-[3px] p-1 shadow-lg   rounded-md transition-all duration-200 ${selectedSlide === index ? ' border-[#5141e5]' : 'border-color'
+                }`}
         >
-            {renderMiniSlideContent(slide)}
+            <div className=" slide-box relative overflow-hidden aspect-video">
+                <div className="absolute bg-transparent z-40 top-0 left-0 w-full h-full" />
+                <div className="transform scale-[0.2] flex justify-center items-center origin-top-left  w-[500%] h-[500%]">
+                    {renderSlideContent(slide, 'English')}
+                </div>
+            </div>
         </div>
     );
 } 

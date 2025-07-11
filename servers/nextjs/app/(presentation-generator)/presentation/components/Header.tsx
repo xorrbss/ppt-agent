@@ -47,7 +47,7 @@ import Modal from "./Modal";
 
 import Announcement from "@/components/Announcement";
 import { getFontLink, getStaticFileUrl } from "../../utils/others";
-import path from "path";
+
 
 const Header = ({
   presentation_id,
