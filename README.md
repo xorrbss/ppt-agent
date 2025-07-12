@@ -157,6 +157,11 @@ curl -X POST http://localhost:5000/api/v1/ppt/generate/presentation \
 
 For detailed info checkout [API documentation](https://docs.presenton.ai/using-presenton-api).
 
+### API Tutorials
+- [Generate Presentations via API in 5 minutes](https://docs.presenton.ai/tutorial/generate-presentation-over-api)
+- [Create Presentations from CSV using AI](https://docs.presenton.ai/tutorial/generate-presentation-from-csv)
+- [Create Data Reports Using AI](https://docs.presenton.ai/tutorial/create-data-reports-using-ai)
+
 ## UI Features
 
 ### 1. Add prompt, select number of slides and language
