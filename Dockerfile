@@ -31,7 +31,7 @@ COPY servers/nextjs/package.json servers/nextjs/package-lock.json ./
 RUN npm install
 
 # Install chrome for puppeteer
-RUN npx puppeteer browsers install chrome --install-deps
+RUN npx puppeteer browsers install chrome@136.0.7103.92 --install-deps
 
 # Copy Next.js app
 COPY servers/nextjs/ /app/servers/nextjs/
