@@ -99,6 +99,9 @@
     transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+.slide-theme .border-color{
+  border-color: var(--slide-box);
+}
 
 
 @keyframes progress {

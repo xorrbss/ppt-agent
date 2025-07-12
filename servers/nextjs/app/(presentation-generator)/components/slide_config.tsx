@@ -1,7 +1,5 @@
 import { Slide } from "../types/slide";
-import Type1Mini from "./mini-slides/Type1Mini";
-import Type4Mini from "./mini-slides/Type4Mini";
-import Type2Mini from "./mini-slides/Type2Mini";
+
 import Type1Layout from "./slide_layouts/Type1Layout";
 import Type2Layout from "./slide_layouts/Type2Layout";
 import Type4Layout from "./slide_layouts/Type4Layout";
@@ -10,11 +8,7 @@ import Type6Layout from "./slide_layouts/Type6Layout";
 import Type7Layout from "./slide_layouts/Type7Layout";
 import Type8Layout from "./slide_layouts/Type8Layout";
 import Type9Layout from "./slide_layouts/Type9Layout";
-import Type7Mini from "./mini-slides/Type7Mini";
-import Type6Mini from "./mini-slides/Type6Mini";
-import Type5Mini from "./mini-slides/Type5Mini";
-import Type9Mini from "./mini-slides/Type9Mini";
-import Type8Mini from "./mini-slides/Type8Mini";
+
 
 import { Chart, ChartSettings } from "@/store/slices/presentationGeneration";
 
@@ -154,91 +148,7 @@ export const renderSlideContent = (slide: Slide, language: string) => {
   }
 };
 
-export const renderMiniSlideContent = (slide: Slide) => {
-  const { type, content } = slide;
 
-  switch (type) {
-    case 1:
-      return (
-        <Type1Mini
-          title={content.title}
-          description={
-            typeof slide.content.body === "string"
-              ? slide.content.body
-              : slide.content.body[0]?.description || ""
-          }
-          image={slide.images?.[0] || ""}
-        />
-      );
-    case 2:
-      return (
-        <Type2Mini
-          title={slide.content.title}
-          body={Array.isArray(slide.content.body) ? slide.content.body : []}
-          design_index={slide.design_index || 2}
-        />
-      );
-    case 4:
-      return (
-        <Type4Mini
-          title={slide.content.title}
-          body={Array.isArray(slide.content.body) ? slide.content.body : []}
-          images={slide.images || []}
-        />
-      );
-    case 5:
-      const isFullSizeGraph =
-        slide.content.graph?.data.categories.length > 4 &&
-        slide.content.graph.type !== "pie";
-      return (
-        <Type5Mini
-          title={slide.content.title}
-          isFullSizeGraph={isFullSizeGraph}
-          description={(slide.content.body as string) || ""}
-          chartData={slide.content.graph!}
-          slideIndex={slide.index}
-        />
-      );
-    case 6:
-      return (
-        <Type6Mini
-          title={slide.content.title}
-          description={slide.content.description || ""}
-          body={Array.isArray(slide.content.body) ? slide.content.body : []}
-        />
-      );
-    case 7:
-      return (
-        <Type7Mini
-          title={slide.content.title}
-          body={Array.isArray(slide.content.body) ? slide.content.body : []}
-          icons={slide.icons || []}
-        />
-      );
-    case 8:
-      return (
-        <Type8Mini
-          title={slide.content.title}
-          description={slide.content.description || ""}
-          body={Array.isArray(slide.content.body) ? slide.content.body : []}
-          icons={slide.icons || []}
-        />
-      );
-    case 9:
-      return (
-        <Type9Mini
-          title={slide.content.title}
-          // @ts-ignore
-          body={slide.content.body}
-          chartData={slide.content.graph!}
-          slideIndex={slide.index}
-        />
-      );
-
-    default:
-      return null;
-  }
-};
 
 // CHART RENDERING
 export const renderChart = (

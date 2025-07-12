@@ -5,7 +5,6 @@ import ToolTip from "@/components/ToolTip";
 import { Button } from "@/components/ui/button";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store/store";
-import { DashboardApi } from "@/app/dashboard/api/dashboard";
 import {
   DndContext,
   closestCenter,
@@ -20,11 +19,10 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import * as htmlToImage from "html-to-image";
 import { setPresentationData } from "@/store/slices/presentationGeneration";
 import { SortableSlide } from "./SortableSlide";
 import { SortableListItem } from "./SortableListItem";
-import { renderMiniSlideContent } from "../../components/slide_config";
+import { renderSlideContent } from "../../components/slide_config";
 
 interface SidePanelProps {
   selectedSlide: number;
@@ -58,18 +56,7 @@ const SidePanel = ({
     }
   }, [isMobilePanelOpen]);
 
-  useEffect(() => {
-    if (
-      presentationData?.presentation?.thumbnail === null &&
-      presentationData.slides.some(
-        (slide) => slide.images && slide.images.length > 0
-      )
-    ) {
-      setTimeout(() => {
-        setSlideThumbnail();
-      }, 4000);
-    }
-  }, [presentationData]);
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -84,17 +71,6 @@ const SidePanel = ({
     }
   };
 
-  const dataUrlToFile = (dataUrl: string, filename: string) => {
-    const arr = dataUrl.split(",");
-    const mime = arr[0].match(/:(.*)/)?.[1];
-    const bstr = atob(arr[1]);
-    let n = bstr.length;
-    const u8arr = new Uint8Array(n);
-    while (n--) {
-      u8arr[n] = bstr.charCodeAt(n);
-    }
-    return new File([u8arr], filename, { type: mime });
-  };
 
   const handleDragEnd = (event: any) => {
     const { active, over } = event;
@@ -130,23 +106,6 @@ const SidePanel = ({
     }
   };
 
-  const setSlideThumbnail = async () => {
-    const slideContainer = document.querySelector(".slide-container");
-    if (!slideContainer) return;
-    const image = await htmlToImage
-      .toPng(slideContainer as HTMLElement)
-      .then((dataUrl) => {
-        return dataUrl;
-      });
-
-    const file = dataUrlToFile(image, "thumbnail.png");
-
-    const response = await DashboardApi.setSlideThumbnail(
-      presentationData?.presentation?.id!,
-      file
-    );
-  };
-
   // Loading shimmer component
   if (
     !presentationData ||
@@ -156,18 +115,6 @@ const SidePanel = ({
   ) {
     return null;
 
-    // <div className="space-y-4 ">
-    //     <div className="flex items-center gap-2">
-    //         <div className="w-4 h-4 rounded-lg animate-pulse bg-gray-200" />
-    //         <div className="w-full h-2 rounded-lg animate-pulse bg-gray-200" />
-    //     </div>
-    //     {Array.from({ length: 8 }).map((_, index) => (
-    //         <div key={index} className="animate-pulse">
-    //             <div className="w-full aspect-video bg-gray-200 rounded-lg" />
-
-    //         </div>
-    //     ))}
-    // </div>
   }
 
   return (
@@ -206,10 +153,9 @@ const SidePanel = ({
           fixed xl:relative h-full z-50 xl:z-auto
           transition-all duration-300 ease-in-out
           ${isOpen ? "ml-0" : "-ml-[300px]"}
-          ${
-            isMobilePanelOpen
-              ? "translate-x-0"
-              : "-translate-x-full xl:translate-x-0"
+          ${isMobilePanelOpen
+            ? "translate-x-0"
+            : "-translate-x-full xl:translate-x-0"
           }
         `}
       >
@@ -230,34 +176,30 @@ const SidePanel = ({
               <div className="flex items-center justify-start gap-4">
                 <ToolTip content="Image Preview">
                   <Button
-                    className={`${
-                      active === "grid"
-                        ? "bg-[#5141e5] hover:bg-[#4638c7]"
-                        : "bg-white hover:bg-white"
-                    }`}
+                    className={`${active === "grid"
+                      ? "bg-[#5141e5] hover:bg-[#4638c7]"
+                      : "bg-white hover:bg-white"
+                      }`}
                     onClick={() => setActive("grid")}
                   >
                     <LayoutList
-                      className={`${
-                        active === "grid" ? "text-white" : "text-black"
-                      }`}
+                      className={`${active === "grid" ? "text-white" : "text-black"
+                        }`}
                       size={20}
                     />
                   </Button>
                 </ToolTip>
                 <ToolTip content="List Preview">
                   <Button
-                    className={`${
-                      active === "list"
-                        ? "bg-[#5141e5] hover:bg-[#4638c7]"
-                        : "bg-white hover:bg-white"
-                    }`}
+                    className={`${active === "list"
+                      ? "bg-[#5141e5] hover:bg-[#4638c7]"
+                      : "bg-white hover:bg-white"
+                      }`}
                     onClick={() => setActive("list")}
                   >
                     <ListTree
-                      className={`${
-                        active === "list" ? "text-white" : "text-black"
-                      }`}
+                      className={`${active === "list" ? "text-white" : "text-black"
+                        }`}
                       size={20}
                     />
                   </Button>
@@ -323,8 +265,18 @@ const SidePanel = ({
                 {isStreaming ? (
                   presentationData &&
                   presentationData?.slides.map((slide, index) => (
-                    <div key={`${index}-${slide.type}-${slide.id}`}>
-                      {renderMiniSlideContent(slide)}
+                    <div
+                      key={`${slide.id}-${index}`}
+                      onClick={() => onSlideClick(index)}
+                      className={` cursor-pointer ring-2 p-1  rounded-md transition-all duration-200 ${selectedSlide === index ? ' ring-[#5141e5]' : 'ring-gray-200'
+                        }`}
+                    >
+                      <div className=" bg-white  relative overflow-hidden aspect-video">
+                        <div className="absolute bg-gray-100/5 z-40 top-0 left-0 w-full h-full" />
+                        <div className="transform scale-[0.2] flex justify-center items-center origin-top-left  w-[500%] h-[500%]">
+                          {renderSlideContent(slide, 'English')}
+                        </div>
+                      </div>
                     </div>
                   ))
                 ) : (

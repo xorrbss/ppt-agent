@@ -4,6 +4,7 @@ import { Fraunces, Montserrat, Inria_Serif, Roboto, Instrument_Sans } from "next
 import "./globals.css";
 import { Providers } from "./providers";
 import { Toaster } from "@/components/ui/toaster";
+import { FooterProvider } from "./(presentation-generator)/context/footerContext";
 
 const fraunces = Fraunces({
   subsets: ["latin"],
@@ -100,7 +101,12 @@ export default function RootLayout({
       <body
         className={`$ ${inter.variable} ${fraunces.variable} ${montserrat.variable} ${inria_serif.variable} ${roboto.variable} ${instrument_sans.variable} antialiased`}
       >
-        <Providers>{children}</Providers>
+        <Providers>
+          <FooterProvider>
+
+            {children}
+          </FooterProvider>
+        </Providers>
         <Toaster />
       </body>
     </html>

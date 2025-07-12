@@ -35,6 +35,7 @@ const DashboardPage: React.FC = () => {
     }
   };
 
+
   return (
     <div className="min-h-screen bg-[#E9E8F8]">
       <Header />

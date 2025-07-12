@@ -14,12 +14,13 @@ export interface PresentationResponse {
   n_slides: number;
   prompt: string;
   summary: string | null;
-  theme: string;
-  titles: string[];
-  user_id: string;
-  vector_store: any;
+    theme: string;
+    titles: string[];
+    user_id: string;
+    vector_store: any;
 
-  thumbnail: string;
+    thumbnail: string;
+    slide: any;
 }
 
 export class DashboardApi {
@@ -83,25 +84,5 @@ export class DashboardApi {
       throw error;
     }
   }
-  static async setSlideThumbnail(presentation_id: string, file: any) {
-    const formData = new FormData();
-
-    formData.append("presentation_id", presentation_id);
-    formData.append("thumbnail", file);
-    try {
-      const response = await fetch(
-        `/api/v1/ppt/presentation/thumbnail`,
-        {
-          method: "POST",
-          headers: getHeaderForFormData(),
-          body: formData,
-        }
-      );
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error("Error setting slide thumbnail:", error);
-      throw error;
-    }
-  }
+  
 }
