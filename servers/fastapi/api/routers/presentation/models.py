@@ -177,3 +177,23 @@ class OllamaModelStatusResponse(BaseModel):
 
 class OllamaSupportedModelsResponse(BaseModel):
     models: List[OllamaModelMetadata]
+
+
+class PresentationWithOneSlide(BaseModel):
+    id: str
+    created_at: datetime
+    theme: Optional[dict] = None
+    title: Optional[str] = None
+    slide: SlideSqlModel
+
+    @classmethod
+    def from_presentation_and_slide(
+        cls, presentation: PresentationSqlModel, slide: SlideSqlModel
+    ):
+        return cls(
+            id=presentation.id,
+            created_at=presentation.created_at,
+            theme=presentation.theme,
+            title=presentation.title,
+            slide=slide,
+        )

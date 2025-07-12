@@ -144,8 +144,7 @@ class GeneratePresentationHandler(FetchAssetsOnPresentationGenerationMixin):
                     f"http://localhost/api/slide-metadata",
                     json={
                         "id": self.presentation_id,
-                        # "theme": self.theme["name"],
-                        # "customColors": self.theme["colors"],
+                       
                     },
                 ) as response:
                     export_request_body = await response.json()
@@ -153,6 +152,7 @@ class GeneratePresentationHandler(FetchAssetsOnPresentationGenerationMixin):
             print("-" * 40)
             print("Exporting Presentation")
             export_request_body["presentation_id"] = self.presentation_id
+            print(export_request_body)
             export_request = ExportAsRequest(**export_request_body)
 
             presentation_and_path = await ExportAsPptxHandler(export_request).post(
@@ -167,7 +167,7 @@ class GeneratePresentationHandler(FetchAssetsOnPresentationGenerationMixin):
                 async with session.post(
                     f"http://localhost/api/export-as-pdf",
                     json={
-                        "url": f"http://localhost/pdf-maker?id={self.presentation_id}",
+                        "id": self.presentation_id,
                         "title": presentation_content.title,
                     },
                 ) as response:

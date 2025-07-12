@@ -103,6 +103,7 @@ export const PresentationGrid = ({
             key={presentation.id}
             {...presentation}
             theme={presentation.theme}
+            slide={presentation.slide}
 
           />
         ))}

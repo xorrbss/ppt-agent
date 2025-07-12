@@ -20,7 +20,7 @@ services:
       - CUSTOM_LLM_API_KEY=${CUSTOM_LLM_API_KEY}
       - CUSTOM_MODEL=${CUSTOM_MODEL}
       - PEXELS_API_KEY=${PEXELS_API_KEY}
-      - SQL_URL=${SQL_URL}
+      - DATABASE_URL=${DATABASE_URL}
 
   production-gpu:
     # image: ghcr.io/presenton/presenton:latest
@@ -50,7 +50,7 @@ services:
       - CUSTOM_LLM_API_KEY=${CUSTOM_LLM_API_KEY}
       - CUSTOM_MODEL=${CUSTOM_MODEL}
       - PEXELS_API_KEY=${PEXELS_API_KEY}
-      - SQL_URL=${SQL_URL}
+      - DATABASE_URL=${DATABASE_URL}
 
   development:
     build:
@@ -74,7 +74,7 @@ services:
       - CUSTOM_LLM_API_KEY=${CUSTOM_LLM_API_KEY}
       - CUSTOM_MODEL=${CUSTOM_MODEL}
       - PEXELS_API_KEY=${PEXELS_API_KEY}
-      - SQL_URL=${SQL_URL}
+      - DATABASE_URL=${DATABASE_URL}
 
   development-gpu:
     build:
@@ -105,4 +105,4 @@ services:
       - CUSTOM_LLM_API_KEY=${CUSTOM_LLM_API_KEY}
       - CUSTOM_MODEL=${CUSTOM_MODEL}
       - PEXELS_API_KEY=${PEXELS_API_KEY}
-      - SQL_URL=${SQL_URL}
+      - DATABASE_URL=${DATABASE_URL}

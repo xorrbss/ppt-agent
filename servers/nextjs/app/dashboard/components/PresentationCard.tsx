@@ -18,12 +18,14 @@ export const PresentationCard = ({
   created_at,
   thumbnail,
   theme,
+  slide
 }: {
   id: string;
   title: string;
   created_at: string;
   thumbnail: string;
   theme: any;
+  slide: any
 }) => {
   const router = useRouter();
 
@@ -127,23 +129,7 @@ export const PresentationCard = ({
         >
           <div className="absolute bg-transparent z-40 top-0 left-0 w-full h-full" />
           <div className="transform scale-[0.2] flex justify-center items-center origin-top-left  w-[500%] h-[500%]">
-            {renderSlideContent({
-              id: 'mock-slide-1',
-              type: 1,
-              index: 0,
-              design_index: 1,
-              properties: null,
-              images: ['/static/user_data/ee7cb066-86d0-45fc-adc9-15bf565eab30/images/af54ed41-483e-4983-aef0-b254aac48408.jpg'],
-              icons: [],
-              graph_id: null,
-              presentation: id,
-              content: {
-                title: title || 'Sample Presentation',
-                body: "This is a sample slide description to demonstrate the layout and styling. The content here helps visualize how actual presentation content would appear.",
-                infographics: [],
-                image_prompts: ['Sample image showing business growth']
-              },
-            }, 'English')}
+            {renderSlideContent(slide, 'English')}
           </div>
         </div>
 

@@ -14,12 +14,13 @@ export interface PresentationResponse {
   n_slides: number;
   prompt: string;
   summary: string | null;
-  theme: string;
-  titles: string[];
-  user_id: string;
-  vector_store: any;
+    theme: string;
+    titles: string[];
+    user_id: string;
+    vector_store: any;
 
-  thumbnail: string;
+    thumbnail: string;
+    slide: any;
 }
 
 export class DashboardApi {
