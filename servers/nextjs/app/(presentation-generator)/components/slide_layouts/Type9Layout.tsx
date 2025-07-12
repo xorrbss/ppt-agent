@@ -43,7 +43,7 @@ const Type9Layout = ({
   };
   return (
     <div
-      className="slide-container   rounded-sm w-full max-w-[1280px] font-inter px-3 sm:px-12 lg:px-20 py-[10px] sm:py-[40px] lg:py-[86px] shadow-lg flex flex-col items-center justify-center max-h-[720px] aspect-video bg-white relative"
+      className="slide-container   rounded-sm w-full max-w-[1280px] font-inter px-3 sm:px-12 lg:px-20 py-[10px] sm:py-[40px] lg:py-[86px] shadow-lg flex flex-col items-center justify-center max-h-[720px] aspect-video bg-white relative mx-auto"
       data-slide-element
       data-slide-index={slideIndex}
       data-slide-type="9"

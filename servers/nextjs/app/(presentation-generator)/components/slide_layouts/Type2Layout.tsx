@@ -197,8 +197,8 @@ const Type2Layout = ({
                     : "",
               }}
               className={`w-full relative group ${design_index === 2
-                  ? "slide-box shadow-lg  rounded-lg p-3 lg:p-6"
-                  : ""
+                ? "slide-box shadow-lg  rounded-lg p-3 lg:p-6"
+                : ""
                 }`}
             >
               <div className="flex gap-3 ">
@@ -277,9 +277,9 @@ const Type2Layout = ({
               boxShadow:
                 design_index === 2 ? "0 2px 10px 0 rgba(43, 43, 43, 0.2)" : "",
             }}
-            className={`w-full  relative ${design_index === 2
-                ? "slide-box shadow-lg rounded-lg p-3 lg:p-6"
-                : ""
+            className={`w-full   relative ${design_index === 2
+              ? "slide-box shadow-lg rounded-lg p-3 lg:p-6"
+              : ""
               }`}
           >
             <ElementMenu index={index} handleDeleteItem={onDeleteItem} />
@@ -327,7 +327,7 @@ const Type2Layout = ({
 
   return (
     <div
-      className="slide-container  rounded-sm max-w-[1280px] w-full shadow-lg px-3 sm:px-12 lg:px-20 py-[10px] sm:py-[40px] flex flex-col items-center justify-center max-h-[720px] aspect-video bg-white relative z-20"
+      className="slide-container  rounded-sm max-w-[1280px]w-full shadow-lg px-3 sm:px-12 lg:px-20 py-[10px] sm:py-[40px] flex flex-col items-center justify-center max-h-[720px] aspect-video bg-white relative z-20 mx-auto"
       style={{
         fontFamily: currentColors.fontFamily || "Inter, sans-serif",
       }}

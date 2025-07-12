@@ -28,7 +28,7 @@ const Type5Layout = ({
 
   return (
     <div
-      className="slide-container  font-inter  rounded-sm w-full max-w-[1280px] px-3 py-[10px] sm:px-12  lg:px-20  sm:py-[40px] lg:py-[86px] shadow-lg  max-h-[720px] flex flex-col items-center justify-center aspect-video bg-white relative z-20"
+      className="slide-container  font-inter  rounded-sm w-full max-w-[1280px] px-3 py-[10px] sm:px-12  lg:px-20  sm:py-[40px] lg:py-[86px] shadow-lg  max-h-[720px] flex flex-col items-center justify-center aspect-video bg-white relative z-20 mx-auto"
       data-slide-element
       data-slide-index={slideIndex}
       data-slide-id={slideId}
@@ -47,11 +47,10 @@ const Type5Layout = ({
         isAlingCenter={false}
       />
       <div
-        className={`flex  w-full items-center  ${
-          isFullSizeGraph
+        className={`flex  w-full items-center  ${isFullSizeGraph
             ? " flex-col mt-4 lg:mt-10  gap-2 sm:gap-4 md:gap-6 lg:gap-10"
             : "mt-4 lg:mt-16 gap-4 sm:gap-8 md:gap-12 lg:gap-16 "
-        } `}
+          } `}
       >
         <div className={` w-full`}>
           <AllChart chartData={graphData} slideIndex={slideIndex} />
