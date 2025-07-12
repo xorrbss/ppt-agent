@@ -26,7 +26,7 @@ const Type1Layout = ({
   const { currentColors } = useSelector((state: RootState) => state.theme);
   return (
     <div
-      className="slide-container  w-full  rounded-sm  max-w-[1280px] shadow-lg px-3 sm:px-12 lg:px-20 py-[10px] sm:py-[40px] lg:py-[86px] max-h-[720px] flex items-center  aspect-video bg-white relative z-20"
+      className="slide-container  w-full  rounded-sm  max-w-[1280px] shadow-lg px-3 sm:px-12 lg:px-20 py-[10px] sm:py-[40px] lg:py-[86px] max-h-[720px] flex items-center  aspect-video bg-white relative z-20 mx-auto"
       data-slide-element
       data-slide-id={slideId}
       data-slide-index={slideIndex}

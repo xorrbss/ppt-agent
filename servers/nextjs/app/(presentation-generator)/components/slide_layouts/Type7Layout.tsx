@@ -177,7 +177,7 @@ const Type7Layout = ({
 
   return (
     <div
-      className="slide-container rounded-sm w-full max-w-[1280px] font-inter shadow-lg px-3 sm:px-12 lg:px-20 py-[10px] sm:py-[40px] lg:py-[86px]    flex flex-col items-center justify-center  max-h-[720px] aspect-video bg-white relative z-20"
+      className="slide-container rounded-sm w-full max-w-[1280px] font-inter shadow-lg px-3 sm:px-12 lg:px-20 py-[10px] sm:py-[40px] lg:py-[86px]    flex flex-col items-center justify-center  max-h-[720px] aspect-video bg-white relative z-20 mx-auto"
       data-slide-element
       data-slide-index={slideIndex}
       data-slide-type="7"

@@ -46,7 +46,7 @@ const Type8Layout = ({
 
   return (
     <div
-      className="slide-container  shadow-lg w-full max-w-[1280px]  rounded-sm font-inter px-3 sm:px-12 lg:px-20 py-[10px] sm:py-[40px] lg:py-[86px] flex  items-center justify-center max-h-[720px] aspect-video bg-white relative z-20"
+      className="slide-container  shadow-lg w-full max-w-[1280px]  rounded-sm font-inter px-3 sm:px-12 lg:px-20 py-[10px] sm:py-[40px] lg:py-[86px] flex  items-center justify-center max-h-[720px] aspect-video bg-white relative z-20 mx-auto"
       data-slide-element
       data-slide-index={slideIndex}
       data-slide-id={slideId}
