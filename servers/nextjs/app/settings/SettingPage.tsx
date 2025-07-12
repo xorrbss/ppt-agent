@@ -215,8 +215,14 @@ const SettingsPage = () => {
                     api_key: llmConfig.CUSTOM_LLM_API_KEY || ''
                 })
             });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
             const data = await response.json();
             setCustomModels(data);
+            // Only set customModelsChecked to true if the API call succeeds
             setCustomModelsChecked(true);
 
             // Check if currently selected model is still available
@@ -233,6 +239,8 @@ const SettingsPage = () => {
             }
         } catch (error) {
             console.error('Error fetching custom models:', error);
+            // Don't set customModelsChecked to true on error, so the button remains visible
+            setCustomModels([]);
             toast({
                 title: 'Error',
                 description: 'Failed to fetch available models. Please check your URL and API key.',
@@ -639,7 +647,7 @@ const SettingsPage = () => {
                                 {customModelsChecked && customModels.length === 0 && (
                                     <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                                         <p className="text-sm text-yellow-800">
-                                            No models found. Please check your URL and API key, or try again.
+                                            No models found. Please make sure models are available.
                                         </p>
                                     </div>
                                 )}

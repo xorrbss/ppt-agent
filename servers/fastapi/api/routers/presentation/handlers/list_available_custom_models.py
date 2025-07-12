@@ -11,4 +11,6 @@ class ListAvailableCustomModelsHandler:
         self.api_key = api_key
 
     async def get(self, logging_service: LoggingService, log_metadata: LogMetadata):
+        print("-" * 40)
+        print(self.url, self.api_key)
         return await list_available_custom_models(self.url, self.api_key)
