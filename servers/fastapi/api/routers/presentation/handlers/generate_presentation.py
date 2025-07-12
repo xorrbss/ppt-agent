@@ -153,6 +153,7 @@ class GeneratePresentationHandler(FetchAssetsOnPresentationGenerationMixin):
             print("-" * 40)
             print("Exporting Presentation")
             export_request_body["presentation_id"] = self.presentation_id
+            print(export_request_body)
             export_request = ExportAsRequest(**export_request_body)
 
             presentation_and_path = await ExportAsPptxHandler(export_request).post(

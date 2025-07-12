@@ -1,7 +1,6 @@
 from typing import Annotated, List, Optional
 import uuid
 from fastapi import APIRouter, BackgroundTasks, Body, File, Form, UploadFile
-import openai
 
 from api.models import SessionModel
 from api.request_utils import RequestUtils
@@ -35,6 +34,9 @@ from api.routers.presentation.handlers.generate_outlines import (
 )
 from api.routers.presentation.handlers.get_presentation import GetPresentationHandler
 from api.routers.presentation.handlers.get_presentations import GetPresentationsHandler
+from api.routers.presentation.handlers.list_available_custom_models import (
+    ListAvailableCustomModelsHandler,
+)
 from api.routers.presentation.handlers.list_ollama_pulled_models import (
     ListPulledOllamaModelsHandler,
 )
@@ -80,13 +82,10 @@ from api.routers.presentation.models import (
     SearchImageRequest,
     UpdatePresentationThemeRequest,
     PresentationUpdateRequest,
+    PresentationWithOneSlide,
 )
 from api.sql_models import PresentationSqlModel
-from api.utils.model_utils import get_llm_client, list_available_custom_models
 from api.utils.utils import handle_errors
-from image_processor.images_finder import (
-    generate_image_google,
-)
 from ppt_generator.models.slide_model import SlideModel
 
 route_prefix = "/api/v1/ppt"
@@ -94,7 +93,7 @@ presentation_router = APIRouter(prefix=route_prefix)
 
 
 @presentation_router.get(
-    "/user_presentations", response_model=List[PresentationSqlModel]
+    "/user_presentations", response_model=List[PresentationWithOneSlide]
 )
 async def get_user_presentations():
     request_utils = RequestUtils(f"{route_prefix}/user_presentations")
@@ -398,4 +397,10 @@ async def list_custom_models(
     url: Annotated[Optional[str], Body()] = None,
     api_key: Annotated[Optional[str], Body()] = None,
 ):
-    return await list_available_custom_models(url, api_key)
+    request_utils = RequestUtils(f"{route_prefix}/models/list/custom")
+    logging_service, log_metadata = await request_utils.initialize_logger()
+    return await handle_errors(
+        ListAvailableCustomModelsHandler(url, api_key).get,
+        logging_service,
+        log_metadata,
+    )
