@@ -1,5 +1,5 @@
-from http.client import HTTPException
 import mimetypes
+from fastapi import HTTPException
 import os, pdfplumber, asyncio
 from typing import List, Tuple
 from docx import Document
@@ -15,8 +15,8 @@ from constants.documents import (
 
 class DocumentsLoader:
 
-    def __init__(self, documents: List[str]):
-        self._document_paths = documents
+    def __init__(self, file_paths: List[str]):
+        self._file_paths = file_paths
 
         self._documents: List[str] = []
         self._images: List[List[str]] = []
@@ -38,7 +38,7 @@ class DocumentsLoader:
         documents: List[str] = []
         images: List[str] = []
 
-        for file_path in self._document_paths:
+        for file_path in self._file_paths:
             if not os.path.exists(file_path):
                 raise HTTPException(
                     status_code=404, detail=f"File {file_path} not found"

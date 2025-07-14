@@ -1,6 +1,7 @@
 from http.client import HTTPException
 import os
 from openai import AsyncOpenAI
+from google import genai
 
 from enums.llm_provider import LLMProvider
 from utils.get_env import (
@@ -19,6 +20,10 @@ def get_llm_provider():
 
 def get_ollama_url():
     return get_ollama_url_env() or "http://localhost:11434"
+
+
+def is_google_selected():
+    return get_llm_provider() == LLMProvider.GOOGLE
 
 
 def is_ollama_selected():
@@ -64,3 +69,50 @@ def get_llm_client():
         api_key=get_llm_api_key(),
     )
     return client
+
+
+def get_google_llm_client():
+    client = genai.Client(api_key=get_llm_api_key())
+    return client
+
+
+def get_large_model():
+    selected_llm = get_llm_provider()
+    if selected_llm == LLMProvider.OPENAI:
+        return "gpt-4.1"
+    elif selected_llm == LLMProvider.GOOGLE:
+        return "gemini-2.0-flash"
+    elif selected_llm == LLMProvider.OLLAMA:
+        return os.getenv("OLLAMA_MODEL")
+    elif selected_llm == LLMProvider.CUSTOM:
+        return os.getenv("CUSTOM_MODEL")
+    else:
+        raise ValueError(f"Invalid LLM model")
+
+
+def get_small_model():
+    selected_llm = get_llm_provider()
+    if selected_llm == LLMProvider.OPENAI:
+        return "gpt-4.1-mini"
+    elif selected_llm == LLMProvider.GOOGLE:
+        return "gemini-2.0-flash"
+    elif selected_llm == LLMProvider.OLLAMA:
+        return os.getenv("OLLAMA_MODEL")
+    elif selected_llm == LLMProvider.CUSTOM:
+        return os.getenv("CUSTOM_MODEL")
+    else:
+        raise ValueError(f"Invalid LLM model")
+
+
+def get_nano_model():
+    selected_llm = get_llm_provider()
+    if selected_llm == LLMProvider.OPENAI:
+        return "gpt-4.1-nano"
+    elif selected_llm == LLMProvider.GOOGLE:
+        return "gemini-2.0-flash"
+    elif selected_llm == LLMProvider.OLLAMA:
+        return os.getenv("OLLAMA_MODEL")
+    elif selected_llm == LLMProvider.CUSTOM:
+        return os.getenv("CUSTOM_MODEL")
+    else:
+        raise ValueError(f"Invalid LLM model")

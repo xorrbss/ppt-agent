@@ -3,7 +3,7 @@ import json
 from typing import AsyncGenerator
 import aiohttp
 
-from models.ollama_model_status_response import OllamaModelStatusResponse
+from models.ollama_model_status import OllamaModelStatus
 from utils.get_env import get_ollama_url_env
 
 
@@ -31,7 +31,7 @@ async def pull_ollama_model(model: str) -> AsyncGenerator[dict, None]:
                 yield event
 
 
-async def list_pulled_ollama_models() -> list[OllamaModelStatusResponse]:
+async def list_pulled_ollama_models() -> list[OllamaModelStatus]:
     async with aiohttp.ClientSession() as session:
         async with session.get(
             f"{get_ollama_url_env()}/api/tags",
@@ -39,7 +39,7 @@ async def list_pulled_ollama_models() -> list[OllamaModelStatusResponse]:
             if response.status == 200:
                 pulled_models = await response.json()
                 return [
-                    OllamaModelStatusResponse(
+                    OllamaModelStatus(
                         name=m["model"],
                         size=m["size"],
                         status="pulled",
