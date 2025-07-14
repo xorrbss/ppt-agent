@@ -162,6 +162,14 @@ For detailed info checkout [API documentation](https://docs.presenton.ai/using-p
 - [Create Presentations from CSV using AI](https://docs.presenton.ai/tutorial/generate-presentation-from-csv)
 - [Create Data Reports Using AI](https://docs.presenton.ai/tutorial/create-data-reports-using-ai)
 
+## Roadmap
+- [ ] Support for custom HTML templates by developers
+- [ ] Support for accessing custom templates over API
+- [ ] Implement MCP server
+- [ ] Ability for users to change system prompt
+- [X] Support external SQL database
+
+
 ## UI Features
 
 ### 1. Add prompt, select number of slides and language
