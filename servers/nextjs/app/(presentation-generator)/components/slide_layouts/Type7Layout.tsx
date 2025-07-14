@@ -47,18 +47,21 @@ const Type7Layout = ({
       case 2: return 'lg:grid-cols-2';
       case 3: return 'lg:grid-cols-3';
       case 4: return 'lg:grid-cols-4';
+      case 5: return 'lg:grid-cols-5';
+      case 6: return 'lg:grid-cols-6';
+      case 7: return 'lg:grid-cols-7';
       // Add more cases as needed
       default: return 'lg:grid-cols-1';
     }
   }
 
-  const isGridLayout = body.length === 4;
+  const isGridLayout = body.length >= 4;
 
   const renderContent = () => {
     if (isGridLayout) {
       return (
         <div
-          className={`grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 lg:gap-8 mt-4 lg:mt-12 w-full relative group`}
+          className={`grid grid-cols-1 ${body.length > 4 ? 'md:grid-cols-3' : 'md:grid-cols-2'}  gap-4 sm:gap-6 lg:gap-8 mt-4 lg:mt-12 w-full relative group`}
         >
           <div className="absolute hidden lg:block -inset-[2px] border-2 border-transparent group-hover:border-blue-500 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
 

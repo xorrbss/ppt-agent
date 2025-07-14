@@ -86,7 +86,7 @@ const Type2Layout = ({
     </DropdownMenu>
   );
 
-  const isGridLayout = body.length === 4;
+  const isGridLayout = body.length >= 4;
 
   const renderContent = () => {
     if (design_index === 3) {
