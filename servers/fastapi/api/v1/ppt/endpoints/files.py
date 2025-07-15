@@ -37,7 +37,7 @@ async def upload_files(files: Optional[List[UploadFile]]):
     return temp_files
 
 
-@FILES_ROUTER.post("/decompose")
+@FILES_ROUTER.post("/decompose", response_model=List[DecomposedFileInfo])
 async def decompose_files(file_paths: Annotated[List[str], Body(embed=True)]):
     temp_dir = TEMP_FILE_SERVICE.create_temp_dir(str(uuid.uuid4()))
 
