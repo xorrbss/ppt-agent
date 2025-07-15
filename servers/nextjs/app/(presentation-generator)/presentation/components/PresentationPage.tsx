@@ -131,7 +131,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
       dispatch(setStreaming(true));
 
       evtSource = new EventSource(
-        `/api/v1/ppt/generate/stream?presentation_id=${presentation_id}`
+        `/api/v1/ppt/presentation/stream?presentation_id=${presentation_id}`
       );
 
       evtSource.onopen = () => {
@@ -147,6 +147,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
           try {
             const repairedJson = jsonrepair(accumulatedChunks);
             const partialData = JSON.parse(repairedJson);
+            console.log(partialData);
             if (partialData.slides) {
               // Check if the length of slides has changed
               if (

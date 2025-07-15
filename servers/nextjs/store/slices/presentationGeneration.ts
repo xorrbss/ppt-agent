@@ -18,8 +18,8 @@ export interface ChartSettings {
 }
 
 export interface SlideOutline {
-  title: string;
-  body: string;
+  title?: string;
+  body?: string;
 }
 
 export interface Chart {
@@ -48,7 +48,7 @@ export interface PresentationData {
     theme: string | null;
     title: string;
     titles: string[];
-    vector_store: string | null;
+   
     thumbnail: string | null;
     language: string;
   } | null;

@@ -11,20 +11,21 @@ import MarkdownEditor from "../../components/MarkdownEditor"
 interface OutlineItemProps {
     slideOutline: SlideOutline,
     index: number
+    isStreaming: boolean
 }
 
 export function OutlineItem({
     index,
     slideOutline,
+    isStreaming,
 }: OutlineItemProps) {
     const {
-        presentation_id,
         outlines,
     } = useSelector((state: RootState) => state.presentationGeneration);
     const dispatch = useDispatch()
 
     const handleSlideChange = (newOutline: SlideOutline) => {
-
+        if (isStreaming) return;
         const newData = outlines?.map((each, idx) => {
             if (idx === index - 1) {
                 return newOutline
@@ -45,7 +46,7 @@ export function OutlineItem({
         transform,
         transition,
         isDragging,
-    } = useSortable({ id: slideOutline.title })
+    } = useSortable({ id: slideOutline.title || index })
 
     const style = {
         transform: CSS.Transform.toString(transform),
@@ -54,6 +55,7 @@ export function OutlineItem({
 
 
     const handleSlideDelete = () => {
+        if (isStreaming) return;
         dispatch(deleteSlideOutline({ index: index - 1 }))
 
     }
@@ -83,19 +85,17 @@ export function OutlineItem({
 
                 {/* Main Title Input - Add onFocus handler */}
                 <div className="flex flex-col basis-full gap-2">
-
                     <input
                         type="text"
-                        value={slideOutline.title}
+                        value={slideOutline.title || ''}
                         onChange={(e) => handleSlideChange({ ...slideOutline, title: e.target.value })}
-
                         className="text-md sm:text-lg flex-1 font-semibold bg-transparent outline-none"
                         placeholder="Title goes here"
                     />
 
                     {/* Editable Markdown Content */}
                     <MarkdownEditor
-                        content={slideOutline.body}
+                        content={slideOutline.body || ''}
                         onChange={(content) => handleSlideChange({ ...slideOutline, body: content })}
                     />
                 </div>

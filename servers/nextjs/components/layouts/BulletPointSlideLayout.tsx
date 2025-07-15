@@ -22,6 +22,10 @@ const bulletPointSlideSchema = z.object({
 
 export const Schema = bulletPointSlideSchema
 
+console.log(zodToJsonSchema(Schema, {
+    removeAdditionalStrategy: 'strict',
+}))
+
 export type BulletPointSlideData = z.infer<typeof bulletPointSlideSchema>
 
 interface BulletPointSlideLayoutProps {

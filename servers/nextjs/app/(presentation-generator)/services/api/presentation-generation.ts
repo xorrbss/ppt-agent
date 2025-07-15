@@ -195,10 +195,10 @@ export class PresentationGenerationApi {
     }
   }
 
-  static async generateData(presentationData: any) {
+  static async presentationPrepare(presentationData: any) {
     try {
       const response = await fetch(
-        `/api/v1/ppt/generate/data`,
+        `/api/v1/ppt/presentation/prepare`,
         {
           method: "POST",
           headers: getHeader(),
