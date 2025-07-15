@@ -5,13 +5,13 @@ import aiohttp
 from google import genai
 from google.genai.types import GenerateContentConfig
 from models.image_prompt import ImagePrompt
+from utils.download_helpers import download_file
 from utils.get_env import get_pexels_api_key_env
 from utils.llm_provider import (
     get_llm_client,
     is_google_selected,
     is_openai_selected,
 )
-from utils.randomizers import get_random_uuid
 
 
 class ImageGenerationService:
@@ -35,7 +35,7 @@ class ImageGenerationService:
     async def generate_image(self, prompt: ImagePrompt) -> str:
         if not self.image_gen_func:
             print("No image generation function found. Using placeholder image.")
-            return "static/images/placeholder.jpg"
+            return "/static/images/placeholder.jpg"
 
         image_prompt = prompt.get_image_prompt(not self.use_pexels)
         print(f"Request - Generating Image for {image_prompt}")
@@ -48,7 +48,7 @@ class ImageGenerationService:
 
         except Exception as e:
             print(f"Error generating image: {e}")
-            return "static/images/placeholder.jpg"
+            return "/static/images/placeholder.jpg"
 
     async def generate_image_openai(prompt: str, output_directory: str) -> str:
         client = get_llm_client()
@@ -60,13 +60,7 @@ class ImageGenerationService:
             size="1024x1024",
         )
         image_url = result.data[0].url
-        async with aiohttp.ClientSession() as session:
-            async with session.get(image_url) as response:
-                image_bytes = await response.read()
-                image_path = os.path.join(output_directory, f"{get_random_uuid()}.jpg")
-                with open(image_path, "wb") as f:
-                    f.write(image_bytes)
-                return image_path
+        return await download_file(image_url, output_directory)
 
     async def generate_image_google(prompt: str, output_directory: str) -> str:
         client = genai.Client()
@@ -95,6 +89,4 @@ class ImageGenerationService:
             )
             data = await response.json()
             image_url = data["photos"][0]["src"]["large"]
-            image_path = os.path.join(output_directory, f"{str(uuid.uuid4())}.jpg")
-            await download_file(image_url, image_path)
-            return image_path
+            return await download_file(image_url, output_directory)

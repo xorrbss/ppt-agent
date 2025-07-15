@@ -59,4 +59,4 @@ async def stream_outlines(presentation_id: str):
             key="presentation", value=presentation.model_dump_json()
         ).to_string()
 
-    return StreamingResponse(inner())
+    return StreamingResponse(inner(), media_type="text/event-stream")

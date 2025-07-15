@@ -19,7 +19,9 @@ from utils.llm_calls.generate_document_summary import generate_document_summary
 from utils.llm_calls.generate_presentation_structure import (
     generate_presentation_structure,
 )
-from utils.llm_calls.generate_slide_content import get_slide_content_from_type_and_outline
+from utils.llm_calls.generate_slide_content import (
+    get_slide_content_from_type_and_outline,
+)
 
 PRESENTATION_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
 
@@ -171,4 +173,4 @@ async def stream_presentation(presentation_id: str):
             value=response.model_dump(mode="json"),
         ).to_string()
 
-    return StreamingResponse(inner())
+    return StreamingResponse(inner(), media_type="text/event-stream")

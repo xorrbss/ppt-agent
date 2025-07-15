@@ -7,5 +7,6 @@ from api.lifespan import app_lifespan
 APP = FastAPI(lifespan=app_lifespan)
 
 APP.mount("/static", StaticFiles(directory="static"), name="static")
+# APP.mount("/static/app-data", StaticFiles(directory=get_app_data_directory_env()))
 
 APP.include_router(API_V1_PPT_ROUTER)

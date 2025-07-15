@@ -53,7 +53,7 @@ const startServers = async () => {
 
   const fastApiProcess = spawn(
     "python",
-    [isDev ? "server_autoreload.py" : "server.py", "--port", fastapiPort.toString()],
+    ["server.py", "--port", fastapiPort.toString(), "--reload", isDev],
     {
       cwd: fastapiDir,
       stdio: "inherit",
