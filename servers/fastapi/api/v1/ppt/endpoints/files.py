@@ -10,7 +10,7 @@ from services import TEMP_FILE_SERVICE
 from services.documents_loader import DocumentsLoader
 from utils.validators import validate_files
 
-FILES_ROUTER = APIRouter(prefix="/files")
+FILES_ROUTER = APIRouter(prefix="/files", tags=["Files"])
 
 
 @FILES_ROUTER.post("/upload", response_model=List[str])

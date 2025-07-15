@@ -8,7 +8,7 @@ from models.sse_response import SSECompleteResponse, SSEResponse, SSEStatusRespo
 from services.database import get_sql_session
 from utils.llm_calls.generate_presentation_outlines import generate_ppt_outline
 
-OUTLINES_ROUTER = APIRouter(prefix="/outlines")
+OUTLINES_ROUTER = APIRouter(prefix="/outlines", tags=["Outlines"])
 
 
 @OUTLINES_ROUTER.get("/stream")

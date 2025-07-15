@@ -19,9 +19,9 @@ from utils.llm_calls.generate_document_summary import generate_document_summary
 from utils.llm_calls.generate_presentation_structure import (
     generate_presentation_structure,
 )
-from utils.llm_calls.generate_slide import get_slide_content_from_type_and_outline
+from utils.llm_calls.generate_slide_content import get_slide_content_from_type_and_outline
 
-PRESENTATION_ROUTER = APIRouter(prefix="/presentation")
+PRESENTATION_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
 
 
 @PRESENTATION_ROUTER.post("/create", response_model=PresentationModel)
