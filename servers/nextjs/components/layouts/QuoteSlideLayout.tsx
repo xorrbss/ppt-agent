@@ -1,6 +1,11 @@
 import React from 'react'
 import * as z from "zod";
 
+
+export const layoutId = 'quote-slide'
+export const layoutName = 'Quote Slide'
+export const layoutDescription = 'A slide with a title, subtitle, quote, author, author title, company, and author image'
+
 const quoteSlideSchema = z.object({
     title: z.string().min(3).max(100).default('Testimonials').describe('Title of the slide'),
     subtitle: z.string().min(3).max(150).optional().describe('Optional subtitle or description'),

@@ -126,7 +126,7 @@ const ThemePage = () => {
     }
     dispatch(setTheme(selectedTheme as ThemeType));
 
-    router.push("/create");
+    router.push("/outline");
   };
 
   return (

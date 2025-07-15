@@ -1,8 +1,7 @@
 import React from 'react'
-import CreatePage from './components/CreatePage'
 import Header from '@/app/dashboard/components/Header'
 import { Metadata } from 'next'
-
+import OutlinePage from './components/OutlinePage'
 export const metadata: Metadata = {
   title: "Outline Presentation",
   description: "Customize and organize your presentation outline. Drag and drop slides, add charts, and generate your presentation with ease.",
@@ -26,7 +25,7 @@ const page = () => {
   return (
     <div className='relative min-h-screen'>
       <Header />
-      <CreatePage />
+      <OutlinePage />
     </div>
   )
 }

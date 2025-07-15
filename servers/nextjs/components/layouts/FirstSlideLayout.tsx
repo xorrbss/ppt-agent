@@ -1,6 +1,11 @@
 import React from 'react'
 import * as z from "zod";
 
+
+export const layoutId = 'first-slide'
+export const layoutName = 'First Slide'
+export const layoutDescription = 'A slide with a title, subtitle, author, date, company, and background image'
+
 const firstSlideSchema = z.object({
     title: z.string().min(3).max(100).default('Welcome to Our Presentation').describe('Main title of the presentation'),
     subtitle: z.string().min(10).max(200).default('Subtitle for the slide').optional().describe('Optional subtitle or tagline'),

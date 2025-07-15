@@ -2,6 +2,10 @@ import React from 'react'
 import { zodToJsonSchema } from "zod-to-json-schema";
 import * as z from "zod";
 
+export const layoutId = 'bullet-point-slide'
+export const layoutName = 'Bullet Point Slide'
+export const layoutDescription = 'A slide with a title, subtitle, and a list of bullet points.'
+
 const bulletPointSlideSchema = z.object({
     title: z.string().min(3).max(100).default('Key Points').describe('Title of the slide'),
     subtitle: z.string().min(3).max(150).optional().describe('Optional subtitle or description'),
@@ -15,7 +19,6 @@ const bulletPointSlideSchema = z.object({
     backgroundImage: z.string().optional().describe('URL to background image for the slide')
 })
 
-console.log(zodToJsonSchema(bulletPointSlideSchema))
 
 export const Schema = bulletPointSlideSchema
 
