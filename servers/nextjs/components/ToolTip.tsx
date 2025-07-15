@@ -2,7 +2,6 @@ import { Tooltip } from '@radix-ui/react-tooltip'
 import { TooltipProvider } from '@radix-ui/react-tooltip'
 import React from 'react'
 import { TooltipContent, TooltipTrigger, } from './ui/tooltip'
-import { Button } from './ui/button'
 
 const ToolTip = ({ children, content }: { children: React.ReactNode, content: string }) => {
     return (

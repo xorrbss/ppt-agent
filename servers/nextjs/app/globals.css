@@ -79,6 +79,9 @@ body {
 strong{
   @apply font-black ;
 }
+
+
+
 ::selection {
   background-color: hsl(var(--chart-1));
   color: white;
