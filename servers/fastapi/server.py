@@ -14,7 +14,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     uvicorn.run(
-        "api.main:APP",
+        "api.main:app",
         host="0.0.0.0",
         port=args.port,
         log_level="info",

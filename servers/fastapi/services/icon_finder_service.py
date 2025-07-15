@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 from fastembed_vectorstore import FastembedVectorstore, FastembedEmbeddingModel
@@ -27,6 +28,8 @@ class IconFinderService:
 
         return vector_store
 
-    def search_icons(self, query: str, k: int = 1):
-        result = self.vector_store.search(query, k)
-        return [ f"/static/icons/bold/{result[0].split("||")[0]}.png" for result in result]
+    async def search_icons(self, query: str, k: int = 1):
+        result = await asyncio.to_thread(self.vector_store.search, query, k)
+        return [
+            f"/static/icons/bold/{result[0].split('||')[0]}.png" for result in result
+        ]

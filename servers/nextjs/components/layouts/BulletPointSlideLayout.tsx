@@ -6,6 +6,11 @@ export const layoutId = 'bullet-point-slide'
 export const layoutName = 'Bullet Point Slide'
 export const layoutDescription = 'A slide with a title, subtitle, and a list of bullet points.'
 
+const imageSchema = z.object({
+    url: z.string().url().describe('URL to image'),
+    prompt: z.string().describe('Prompt used to generate the image'),
+})
+
 const bulletPointSlideSchema = z.object({
     title: z.string().min(3).max(100).default('Key Points').describe('Title of the slide'),
     subtitle: z.string().min(3).max(150).optional().describe('Optional subtitle or description'),
@@ -16,7 +21,7 @@ const bulletPointSlideSchema = z.object({
         'Third point demonstrating clear benefits',
         'Fourth item showcasing key features'
     ]).describe('List of bullet points (2-8 items)'),
-    backgroundImage: z.string().optional().describe('URL to background image for the slide')
+    backgroundImage: imageSchema.optional().describe('Background image for the slide'),
 })
 
 

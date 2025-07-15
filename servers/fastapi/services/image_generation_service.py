@@ -20,7 +20,10 @@ class ImageGenerationService:
         self.output_directory = output_directory
         os.makedirs(output_directory, exist_ok=True)
 
-        self.use_pexels = get_pexels_api_key_env() is not None
+        self.use_pexels = False
+        if get_pexels_api_key_env():
+            self.use_pexels = True
+
         self.image_gen_func = self.get_image_gen_func()
 
     def get_image_gen_func(self):
@@ -50,7 +53,7 @@ class ImageGenerationService:
             print(f"Error generating image: {e}")
             return "/static/images/placeholder.jpg"
 
-    async def generate_image_openai(prompt: str, output_directory: str) -> str:
+    async def generate_image_openai(self, prompt: str, output_directory: str) -> str:
         client = get_llm_client()
         result = await client.images.generate(
             model="dall-e-3",
@@ -62,7 +65,7 @@ class ImageGenerationService:
         image_url = result.data[0].url
         return await download_file(image_url, output_directory)
 
-    async def generate_image_google(prompt: str, output_directory: str) -> str:
+    async def generate_image_google(self, prompt: str, output_directory: str) -> str:
         client = genai.Client()
         response = await asyncio.to_thread(
             client.models.generate_content,
@@ -81,11 +84,11 @@ class ImageGenerationService:
 
         return image_path
 
-    async def get_image_from_pexels(prompt: str, output_directory: str) -> str:
+    async def get_image_from_pexels(self, prompt: str, output_directory: str) -> str:
         async with aiohttp.ClientSession() as session:
             response = await session.get(
                 f"https://api.pexels.com/v1/search?query={prompt}&per_page=1",
-                headers={"Authorization": f'{os.getenv("PEXELS_API_KEY")}'},
+                headers={"Authorization": f"{get_pexels_api_key_env()}"},
             )
             data = await response.json()
             image_url = data["photos"][0]["src"]["large"]
