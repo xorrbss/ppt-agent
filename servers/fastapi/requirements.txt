@@ -16,6 +16,7 @@ email_validator==2.2.0
 fastapi==0.116.1
 fastapi-cli==0.0.8
 fastapi-cloud-cli==0.1.4
+fastembed_vectorstore==0.1.6
 frozenlist==1.7.0
 google-auth==2.40.3
 google-genai==1.25.0
@@ -33,6 +34,7 @@ MarkupSafe==3.0.2
 mdurl==0.1.2
 multidict==6.6.3
 openai==1.95.1
+pathvalidate==3.3.1
 pdfminer.six==20250506
 pdfplumber==0.11.7
 pillow==11.3.0

@@ -22,6 +22,10 @@ def get_ollama_url():
     return get_ollama_url_env() or "http://localhost:11434"
 
 
+def is_openai_selected():
+    return get_llm_provider() == LLMProvider.OPENAI
+
+
 def is_google_selected():
     return get_llm_provider() == LLMProvider.GOOGLE
 
