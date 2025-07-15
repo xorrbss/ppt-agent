@@ -1,6 +1,11 @@
 import React from 'react'
 import * as z from "zod";
 
+
+export const layoutId = 'image-slide'
+export const layoutName = 'Image Slide'
+export const layoutDescription = 'A slide with a title, subtitle, image, and content'
+
 const imageSlideSchema = z.object({
     title: z.string().min(3).max(100).default('Image Showcase').describe('Title of the slide'),
     subtitle: z.string().min(3).max(150).default('Subtitle for the slide').optional().describe('Optional subtitle or description'),

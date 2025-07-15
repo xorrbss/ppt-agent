@@ -23,15 +23,11 @@ export class PresentationGenerationApi {
     }
   }
 
-  static async uploadDoc(documents: File[], images: File[]) {
+  static async uploadDoc(documents: File[]) {
     const formData = new FormData();
 
     documents.forEach((document) => {
-      formData.append("documents", document);
-    });
-
-    images.forEach((image) => {
-      formData.append("images", image);
+      formData.append("files", document);
     });
 
     try {
@@ -40,7 +36,6 @@ export class PresentationGenerationApi {
         {
           method: "POST",
           headers: getHeaderForFormData(),
-          // Remove Content-Type header as browser will set it automatically with boundary
           body: formData,
           cache: "no-cache",
         }
@@ -60,7 +55,7 @@ export class PresentationGenerationApi {
 
 
 
-  static async decomposeDocuments(documentKeys: string[], imageKeys: string[]) {
+  static async decomposeDocuments(documentKeys: string[]) {
     try {
       const response = await fetch(
         `/api/v1/ppt/files/decompose`,
@@ -68,8 +63,7 @@ export class PresentationGenerationApi {
           method: "POST",
           headers: getHeader(),
           body: JSON.stringify({
-            documents: documentKeys,
-            images: imageKeys,
+            file_paths: documentKeys,
           }),
           cache: "no-cache",
         }
@@ -93,7 +87,7 @@ export class PresentationGenerationApi {
   }) {
     try {
       const response = await fetch(
-        `/api/v1/ppt/outlines/generate`,
+        `/api/v1/ppt/presentation/outlines/generate`,
         {
           method: "POST",
           headers: getHeader(),
@@ -409,33 +403,32 @@ export class PresentationGenerationApi {
   }
   // QUESTIONS
 
-  static async getQuestions({
+  static async createPresentation({
     prompt,
     n_slides,
-    documents,
-    images,
-    language,
+   file_paths,
+   language,
+   layout
 
   }: {
     prompt: string;
     n_slides: number | null;
-    documents?: string[];
-    images?: string[];
+    file_paths?: string[];
     language: string | null;
-
+    layout: any;
   }) {
     try {
       const response = await fetch(
-        `/api/v1/ppt/create`,
+        `/api/v1/ppt/presentation/create`,
         {
           method: "POST",
           headers: getHeader(),
           body: JSON.stringify({
             prompt,
             n_slides,
+            file_paths,
             language,
-            documents,
-            images,
+            layout
 
           }),
           cache: "no-cache",

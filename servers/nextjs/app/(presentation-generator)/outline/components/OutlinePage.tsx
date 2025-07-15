@@ -20,43 +20,18 @@ import { RootState } from "@/store/store";
 import { useSelector, useDispatch } from "react-redux";
 import { useRouter } from "next/navigation";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "@/hooks/use-toast";
 import {
   setPresentationData,
   setOutlines,
 } from "@/store/slices/presentationGeneration";
 import { OverlayLoader } from "@/components/ui/overlay-loader";
 import Wrapper from "@/components/Wrapper";
+import { jsonrepair } from "jsonrepair";
 
-const CreatePage = () => {
+const OutlinePage = () => {
   const dispatch = useDispatch();
   const router = useRouter();
-  const { presentation_id, images, outlines } = useSelector(
-    (state: RootState) => state.presentationGeneration
-  );
-  const {
-
-    documents,
-    images: imagesUploaded,
-  } = useSelector((state: RootState) => state.pptGenUpload);
-  const { currentTheme, currentColors } = useSelector(
-    (state: RootState) => state.theme
-  );
-  const { toast } = useToast();
-
-  const [loadingState, setLoadingState] = useState({
-    message: "",
-    isLoading: false,
-    showProgress: false,
-    duration: 0,
-  });
-  const [initialSlideCount, setInitialSlideCount] = useState(0);
-
-  useEffect(() => {
-    if (outlines && initialSlideCount === 0) {
-      setInitialSlideCount(outlines.length);
-    }
-  }, [outlines]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -64,6 +39,96 @@ const CreatePage = () => {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
+  const { presentation_id, outlines } = useSelector(
+    (state: RootState) => state.presentationGeneration
+  );
+
+  const { currentTheme, currentColors } = useSelector(
+    (state: RootState) => state.theme
+  );
+
+
+  const [loadingState, setLoadingState] = useState({
+    message: "",
+    isLoading: false,
+    showProgress: false,
+    duration: 0,
+  });
+
+  const [isStreaming, setStreaming] = useState<boolean>(false);
+  const [isLoading, setLoading] = useState<boolean>(true);
+
+
+
+  useEffect(() => {
+    let evtSource: EventSource;
+    let accumulatedChunks = "";
+    const fetchSlides = async () => {
+      setStreaming(true);
+      evtSource = new EventSource(
+        `/api/v1/ppt/outlines/stream?presentation_id=${presentation_id}`
+      );
+      evtSource.onopen = () => {
+        console.log('connection open');
+      };
+
+      evtSource.addEventListener("response", (event) => {
+        const data = JSON.parse(event.data);
+        console.log(data)
+        if (data.type === "chunk") {
+          accumulatedChunks += data.chunk;
+
+          //  try {
+          //    const repairedJson = jsonrepair(accumulatedChunks);
+          //    const partialData = JSON.parse(repairedJson);
+          //    if (partialData.slides) {
+          //      // Check if the length of slides has changed
+          //      if (
+          //        partialData.slides.length !== previousSlidesLength.current &&
+          //        partialData.slides.length > 1
+          //      ) {
+          //        partialData.slides.splice(-1);
+
+          //        previousSlidesLength.current = partialData.slides.length + 1; // Update the previous length
+          //        setLoading(false);
+          //      }
+          //    }
+          //  } catch (error) {
+          //    // console.error('error while repairing json', error)
+          //    // It's okay if this fails, it just means the JSON isn't complete yet
+          //  }
+        } else if (data.type === "complete") {
+          try {
+            setLoading(false);
+            setStreaming(false);
+
+            evtSource.close();
+
+          } catch (error) {
+            evtSource.close();
+            console.error("Error parsing accumulated chunks:", error);
+          }
+          accumulatedChunks = "";
+        } else if (data.type === "closing") {
+          setLoading(false);
+          setStreaming(false);
+          evtSource.close();
+        }
+      });
+      evtSource.onerror = (error) => {
+        console.error("EventSource failed:", error);
+
+        setLoading(false);
+        setStreaming(false);
+        evtSource.close();
+      };
+    };
+    fetchSlides();
+
+  }, [])
+
+
+
 
   const handleDragEnd = (event: any) => {
     const { active, over } = event;
@@ -102,8 +167,7 @@ const CreatePage = () => {
           name: currentTheme.toLocaleLowerCase(),
           colors: currentColors,
         },
-        watermark: false,
-        images: images,
+
         outlines: outlines,
 
       });
@@ -112,7 +176,7 @@ const CreatePage = () => {
         dispatch(setPresentationData(response));
 
         router.push(
-          `/presentation?id=${presentation_id}&session=${response.session}`
+          `/presentation?id=${presentation_id}&stream=true`
         );
       }
     } catch (error) {
@@ -133,28 +197,13 @@ const CreatePage = () => {
   };
 
   const handleAddSlide = () => {
-    if (!outlines) {
-      toast({
-        title: "Error",
-        description: "Cannot add slide at this time",
-        variant: "destructive",
-      });
-      return;
-    }
 
-    if (outlines.length >= initialSlideCount) {
-      toast({
-        title: "Cannot add more slides",
-        description:
-          "You can only add back slides that were previously deleted",
-        variant: "destructive",
-      });
-      return;
-    }
 
-    const newTitleWithCharts = [...outlines, { title: "New Slide", body: "" }];
 
-    dispatch(setOutlines(newTitleWithCharts));
+
+    // const newTitleWithCharts = [...outlines, { title: "New Slide", body: "" }];
+
+    // dispatch(setOutlines(newTitleWithCharts));
   };
 
   if (!presentation_id) {
@@ -175,7 +224,7 @@ const CreatePage = () => {
           <h4 className="text-lg sm:text-xl font-instrument_sans font-medium mb-4">
             Outline
           </h4>
-          <div className="border p-2 sm:p-4 md:p-6 rounded-lg">
+          {/* <div className="border p-2 sm:p-4 md:p-6 rounded-lg">
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
@@ -193,15 +242,11 @@ const CreatePage = () => {
             <Button
               variant="outline"
               onClick={handleAddSlide}
-              disabled={!outlines || outlines.length >= initialSlideCount}
-              className={`w-full mt-4 text-[#9034EA] border-[#9034EA] rounded-[32px] ${!outlines || outlines.length >= initialSlideCount
-                ? "opacity-50 cursor-not-allowed"
-                : ""
-                }`}
+              className={`w-full mt-4 text-[#9034EA] border-[#9034EA] rounded-[32px] `}
             >
               + Add Slide
             </Button>
-          </div>
+          </div> */}
         </div>
         <Button
           disabled={loadingState.isLoading}
@@ -239,4 +284,4 @@ const CreatePage = () => {
   );
 };
 
-export default CreatePage;
+export default OutlinePage;

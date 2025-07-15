@@ -65,7 +65,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isPresentMode = searchParams.get("mode") === "present";
-  const session = searchParams.get("session");
+  const stream = searchParams.get("stream");
   const currentSlide = parseInt(
     searchParams.get("slide") || `${selectedSlide}` || "0"
   );
@@ -131,7 +131,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
       dispatch(setStreaming(true));
 
       evtSource = new EventSource(
-        `/api/v1/ppt/generate/stream?presentation_id=${presentation_id}&session=${session}`
+        `/api/v1/ppt/generate/stream?presentation_id=${presentation_id}`
       );
 
       evtSource.onopen = () => {
@@ -190,7 +190,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
             evtSource.close();
             // Remove session parameter from URL
             const newUrl = new URL(window.location.href);
-            newUrl.searchParams.delete("session");
+            newUrl.searchParams.delete("stream");
             window.history.replaceState({}, "", newUrl.toString());
           } catch (error) {
             evtSource.close();
@@ -216,7 +216,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
           evtSource.close();
           // Remove session parameter from URL
           const newUrl = new URL(window.location.href);
-          newUrl.searchParams.delete("session");
+          newUrl.searchParams.delete("stream");
           window.history.replaceState({}, "", newUrl.toString());
         }
       });
@@ -231,7 +231,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
       };
     };
 
-    if (session) {
+    if (stream) {
       fetchSlides();
     } else {
       fetchUserSlides();
@@ -408,7 +408,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
                       />
                     ))}
                   </div>
-                  {session && <LoadingState />}
+                  {stream && <LoadingState />}
                 </div>
               ) : (
                 <>

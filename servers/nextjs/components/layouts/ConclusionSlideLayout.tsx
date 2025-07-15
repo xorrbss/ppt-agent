@@ -1,6 +1,10 @@
 import React from 'react'
 import * as z from "zod";
 
+export const layoutId = 'conclusion-slide'
+export const layoutName = 'Conclusion Slide'
+export const layoutDescription = 'A slide with a title, subtitle, key takeaways, call to action, and contact information'
+
 const conclusionSlideSchema = z.object({
     title: z.string().min(3).max(100).default('Conclusion').describe('Title of the slide'),
     subtitle: z.string().min(3).max(150).optional().describe('Optional subtitle or description'),

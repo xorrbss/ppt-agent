@@ -1,6 +1,11 @@
 import React from 'react'
 import * as z from "zod";
 
+
+export const layoutId = 'timeline-slide'
+export const layoutName = 'Timeline Slide'
+export const layoutDescription = 'A slide with a title, subtitle, and timeline items'
+
 const timelineSlideSchema = z.object({
     title: z.string().min(3).max(100).default('Project Timeline').describe('Title of the slide'),
     subtitle: z.string().min(3).max(150).optional().describe('Optional subtitle or description'),

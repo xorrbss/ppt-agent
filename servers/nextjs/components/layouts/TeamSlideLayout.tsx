@@ -1,6 +1,10 @@
 import React from 'react'
 import * as z from "zod";
 
+export const layoutId = 'team-slide'
+export const layoutName = 'Team Slide'
+export const layoutDescription = 'A slide with a title, subtitle, and team members'
+
 const teamSlideSchema = z.object({
     title: z.string().min(3).max(100).default('Meet Our Team').describe('Title of the slide'),
     subtitle: z.string().min(3).max(150).optional().describe('Optional subtitle or team description'),
