@@ -1,10 +1,14 @@
 from typing import Optional
 from openai.lib.streaming.chat._events import ContentDeltaEvent
+from google.genai.types import GenerateContentConfig
 
+from utils.async_iterator import iterator_to_async
 from utils.get_dynamic_models import get_presentation_outline_model_with_n_slides
 from utils.llm_provider import (
+    get_google_llm_client,
     get_large_model,
     get_llm_client,
+    is_google_selected,
 )
 
 system_prompt = """
@@ -64,18 +68,33 @@ async def generate_ppt_outline(
     model = get_large_model()
     response_model = get_presentation_outline_model_with_n_slides(n_slides)
 
-    client = get_llm_client()
-    async with client.beta.chat.completions.stream(
-        model=model,
-        messages=get_prompt_template(prompt, n_slides, language, content),
-        response_format={
-            "type": "json_schema",
-            "json_schema": {
-                "name": "PresentationOutline",
-                "schema": response_model.model_json_schema(),
+    if not is_google_selected():
+        client = get_llm_client()
+        async with client.beta.chat.completions.stream(
+            model=model,
+            messages=get_prompt_template(prompt, n_slides, language, content),
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "PresentationOutline",
+                    "schema": response_model.model_json_schema(),
+                },
             },
-        },
-    ) as stream:
-        async for event in stream:
-            if isinstance(event, ContentDeltaEvent):
-                yield event.delta
+        ) as stream:
+            async for event in stream:
+                if isinstance(event, ContentDeltaEvent):
+                    yield event.delta
+
+    else:
+        client = get_google_llm_client()
+        generate_stream = iterator_to_async(client.models.generate_content_stream)
+        async for event in generate_stream(
+            model=model,
+            contents=[get_user_prompt(prompt, n_slides, language, content)],
+            config=GenerateContentConfig(
+                system_instruction=system_prompt,
+                response_mime_type="application/json",
+                response_json_schema=response_model.model_json_schema(),
+            ),
+        ):
+            yield event.text

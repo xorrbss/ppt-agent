@@ -2,6 +2,7 @@ from typing import List, Optional
 from pydantic import BaseModel, Field, HttpUrl, EmailStr
 
 from models.presentation_layout import PresentationLayoutModel, SlideLayoutModel
+from models.presentation_outline_model import PresentationOutlineModel
 
 
 class ContactInfoModel(BaseModel):
@@ -559,4 +560,6 @@ presentation_layout = PresentationLayoutModel(
     ],
 )
 
-print(presentation_layout.model_dump_json())
+# print(presentation_layout.model_dump_json())
+
+print(PresentationOutlineModel.model_json_schema())
