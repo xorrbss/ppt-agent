@@ -1,5 +1,6 @@
 import React from 'react'
 import * as z from "zod";
+import { imageSchema } from './defaultSchemes';
 
 export const layoutId = 'conclusion-slide'
 export const layoutName = 'Conclusion Slide'
@@ -36,8 +37,8 @@ const conclusionSlideSchema = z.object({
     }).optional().meta({
         description: "Optional contact information",
     }),
-    backgroundImage: z.string().optional().meta({
-        description: "URL to background image for the slide",
+    backgroundImage: imageSchema.optional().meta({
+        description: "Background image for the slide",
     })
 })
 
@@ -50,8 +51,7 @@ interface ConclusionSlideLayoutProps {
     accentColor?: 'blue' | 'green' | 'purple' | 'orange' | 'red'
 }
 
-const ConclusionSlideLayout: React.FC<ConclusionSlideLayoutProps> = ({ data, accentColor = 'blue' }) => {
-    const slideData = conclusionSlideSchema.parse(data || {})
+const ConclusionSlideLayout: React.FC<ConclusionSlideLayoutProps> = ({ data: slideData, accentColor = 'blue' }) => {
 
     const accentColors = {
         blue: 'from-blue-600 to-blue-800',
@@ -80,7 +80,7 @@ const ConclusionSlideLayout: React.FC<ConclusionSlideLayoutProps> = ({ data, acc
     return (
         <div
             className="relative w-full aspect-[16/9] flex flex-col bg-gradient-to-br from-slate-50 via-white to-slate-100 overflow-hidden shadow-2xl border border-slate-200"
-            style={slideData.backgroundImage ? {
+            style={slideData?.backgroundImage ? {
                 backgroundImage: `linear-gradient(135deg, rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url(${slideData.backgroundImage})`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center'
@@ -95,21 +95,21 @@ const ConclusionSlideLayout: React.FC<ConclusionSlideLayoutProps> = ({ data, acc
             <div className="relative z-10 flex flex-col h-full px-8 py-8">
                 {/* Professional Header */}
                 <header className="mb-6">
-                    <h1 className={`text-4xl md:text-5xl font-bold mb-3 tracking-tight leading-tight break-words ${slideData.backgroundImage
+                    <h1 className={`text-4xl md:text-5xl font-bold mb-3 tracking-tight leading-tight break-words ${slideData?.backgroundImage
                         ? 'text-white drop-shadow-lg'
                         : 'text-slate-900'
                         }`}>
                         <span className={`bg-gradient-to-r ${accentColors[accentColor]} bg-clip-text text-transparent`}>
-                            {slideData.title}
+                            {slideData?.title}
                         </span>
                     </h1>
 
-                    {slideData.subtitle && (
-                        <p className={`text-xl font-light leading-relaxed break-words ${slideData.backgroundImage
+                    {slideData?.subtitle && (
+                        <p className={`text-xl font-light leading-relaxed break-words ${slideData?.backgroundImage
                             ? 'text-slate-200 drop-shadow-md'
                             : 'text-slate-600'
                             }`}>
-                            {slideData.subtitle}
+                            {slideData?.subtitle}
                         </p>
                     )}
 
@@ -130,7 +130,7 @@ const ConclusionSlideLayout: React.FC<ConclusionSlideLayoutProps> = ({ data, acc
                             <h2 className="text-2xl font-bold text-slate-900 mb-6 relative z-10">Key Takeaways</h2>
 
                             <ul className={`space-y-4 relative z-10`}>
-                                {slideData.keyTakeaways.map((takeaway, index) => (
+                                {slideData?.keyTakeaways?.map((takeaway, index) => (
                                     <li key={index} className="flex items-start group hover:transform hover:translateX-2 transition-all duration-200">
                                         {/* Enhanced bullet point */}
                                         <div className="relative mr-4 mt-1.5 flex-shrink-0">
@@ -153,7 +153,7 @@ const ConclusionSlideLayout: React.FC<ConclusionSlideLayoutProps> = ({ data, acc
                     {/* Call to Action & Contact Info - Takes up 1/3 of space */}
                     <div className="space-y-6">
                         {/* Call to Action */}
-                        {slideData.callToAction && (
+                        {slideData?.callToAction && (
                             <div className="bg-white/95 backdrop-blur-lg rounded-2xl p-6 shadow-2xl border border-white/50 text-center relative overflow-hidden">
                                 {/* CTA accent */}
                                 <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${accentColors[accentColor]}`} />
@@ -167,13 +167,13 @@ const ConclusionSlideLayout: React.FC<ConclusionSlideLayoutProps> = ({ data, acc
 
                                 <h3 className="text-lg font-bold text-slate-900 mb-3">Next Steps</h3>
                                 <p className="text-sm text-slate-600 leading-relaxed break-words font-medium">
-                                    {slideData.callToAction}
+                                    {slideData?.callToAction}
                                 </p>
                             </div>
                         )}
 
                         {/* Contact Information */}
-                        {slideData.contactInfo && Object.values(slideData.contactInfo).some(Boolean) && (
+                        {slideData?.contactInfo && Object.values(slideData?.contactInfo).some(Boolean) && (
                             <div className="bg-white/95 backdrop-blur-lg rounded-2xl p-6 shadow-2xl border border-white/50 relative overflow-hidden">
                                 {/* Contact accent */}
                                 <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${accentColors[accentColor]}`} />
@@ -181,9 +181,9 @@ const ConclusionSlideLayout: React.FC<ConclusionSlideLayoutProps> = ({ data, acc
                                 <h3 className="text-lg font-bold text-slate-900 mb-4 text-center">Get in Touch</h3>
 
                                 <div className="space-y-3">
-                                    {slideData.contactInfo.email && (
+                                    {slideData?.contactInfo?.email && (
                                         <a
-                                            href={`mailto:${slideData.contactInfo.email}`}
+                                            href={`mailto:${slideData?.contactInfo?.email}`}
                                             className="flex items-center space-x-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors duration-200 group"
                                         >
                                             <div className={`w-8 h-8 rounded-full ${accentSolids[accentColor]} flex items-center justify-center group-hover:scale-110 transition-transform duration-200`}>
@@ -192,13 +192,13 @@ const ConclusionSlideLayout: React.FC<ConclusionSlideLayoutProps> = ({ data, acc
                                                     <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
                                                 </svg>
                                             </div>
-                                            <span className="text-sm font-medium text-slate-700 break-all">{slideData.contactInfo.email}</span>
+                                            <span className="text-sm font-medium text-slate-700 break-all">{slideData?.contactInfo?.email}</span>
                                         </a>
                                     )}
 
-                                    {slideData.contactInfo.phone && (
+                                    {slideData?.contactInfo?.phone && (
                                         <a
-                                            href={`tel:${slideData.contactInfo.phone}`}
+                                            href={`tel:${slideData?.contactInfo?.phone}`}
                                             className="flex items-center space-x-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors duration-200 group"
                                         >
                                             <div className={`w-8 h-8 rounded-full ${accentSolids[accentColor]} flex items-center justify-center group-hover:scale-110 transition-transform duration-200`}>
@@ -210,9 +210,9 @@ const ConclusionSlideLayout: React.FC<ConclusionSlideLayoutProps> = ({ data, acc
                                         </a>
                                     )}
 
-                                    {slideData.contactInfo.website && (
+                                    {slideData?.contactInfo?.website && (
                                         <a
-                                            href={slideData.contactInfo.website}
+                                            href={slideData?.contactInfo?.website}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             className="flex items-center space-x-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors duration-200 group"

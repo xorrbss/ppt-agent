@@ -1,5 +1,6 @@
 import React from 'react'
 import * as z from "zod";
+import { imageSchema } from './defaultSchemes';
 
 
 export const layoutId = 'quote-slide'
@@ -28,8 +29,8 @@ const quoteSlideSchema = z.object({
     authorImage: z.string().optional().meta({
         description: "URL to author photo",
     }),
-    backgroundImage: z.string().optional().meta({
-        description: "URL to background image for the slide",
+    backgroundImage: imageSchema.optional().meta({
+        description: "Background image for the slide",
     })
 })
 
@@ -42,8 +43,7 @@ interface QuoteSlideLayoutProps {
     accentColor?: 'blue' | 'green' | 'purple' | 'orange' | 'red'
 }
 
-const QuoteSlideLayout: React.FC<QuoteSlideLayoutProps> = ({ data, accentColor = 'blue' }) => {
-    const slideData = quoteSlideSchema.parse(data || {})
+const QuoteSlideLayout: React.FC<QuoteSlideLayoutProps> = ({ data: slideData, accentColor = 'blue' }) => {
 
     const accentColors = {
         blue: 'from-blue-600 to-blue-800',
@@ -64,8 +64,8 @@ const QuoteSlideLayout: React.FC<QuoteSlideLayoutProps> = ({ data, accentColor =
     return (
         <div
             className="relative w-full aspect-[16/9] flex flex-col bg-gradient-to-br from-slate-50 via-white to-slate-100 overflow-hidden shadow-2xl border border-slate-200"
-            style={slideData.backgroundImage ? {
-                backgroundImage: `linear-gradient(135deg, rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url(${slideData.backgroundImage})`,
+            style={slideData?.backgroundImage ? {
+                backgroundImage: `linear-gradient(135deg, rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url(${slideData?.backgroundImage})`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center'
             } : {}}
@@ -79,21 +79,21 @@ const QuoteSlideLayout: React.FC<QuoteSlideLayoutProps> = ({ data, accentColor =
             <div className="relative z-10 flex flex-col h-full px-8 py-8">
                 {/* Professional Header */}
                 <header className="mb-6">
-                    <h1 className={`text-4xl md:text-5xl font-bold mb-3 tracking-tight leading-tight break-words ${slideData.backgroundImage
+                    <h1 className={`text-4xl md:text-5xl font-bold mb-3 tracking-tight leading-tight break-words ${slideData?.backgroundImage
                         ? 'text-white drop-shadow-lg'
                         : 'text-slate-900'
                         }`}>
                         <span className={`bg-gradient-to-r ${accentColors[accentColor]} bg-clip-text text-transparent`}>
-                            {slideData.title}
+                            {slideData?.title}
                         </span>
                     </h1>
 
-                    {slideData.subtitle && (
-                        <p className={`text-xl font-light leading-relaxed break-words ${slideData.backgroundImage
+                    {slideData?.subtitle && (
+                        <p className={`text-xl font-light leading-relaxed break-words ${slideData?.backgroundImage
                             ? 'text-slate-200 drop-shadow-md'
                             : 'text-slate-600'
                             }`}>
-                            {slideData.subtitle}
+                            {slideData?.subtitle}
                         </p>
                     )}
 
@@ -115,26 +115,26 @@ const QuoteSlideLayout: React.FC<QuoteSlideLayoutProps> = ({ data, accentColor =
                         </div>
 
                         {/* Quote Text */}
-                        <blockquote className={`text-2xl md:text-3xl leading-relaxed mb-8 italic break-words relative z-10 font-light ${slideData.backgroundImage
+                        <blockquote className={`text-2xl md:text-3xl leading-relaxed mb-8 italic break-words relative z-10 font-light ${slideData?.backgroundImage
                             ? 'text-slate-700'
                             : 'text-slate-700'
                             }`}>
-                            "{slideData.quote}"
+                            "{slideData?.quote}"
                         </blockquote>
 
                         {/* Professional Author Attribution */}
                         <div className="flex items-center justify-center space-x-4 relative z-10">
                             {/* Author Avatar */}
                             <div className="flex-shrink-0">
-                                {slideData.authorImage ? (
+                                {slideData?.authorImage ? (
                                     <img
-                                        src={slideData.authorImage}
-                                        alt={slideData.author}
+                                        src={slideData?.authorImage}
+                                        alt={slideData?.author}
                                         className="w-16 h-16 rounded-full object-cover shadow-xl border-4 border-white"
                                     />
                                 ) : (
                                     <div className={`w-16 h-16 rounded-full ${accentSolids[accentColor]} flex items-center justify-center text-white font-bold text-xl shadow-xl border-4 border-white`}>
-                                        {slideData.author.split(' ').map(n => n[0]).join('')}
+                                        {slideData?.author?.split(' ').map(n => n[0]).join('')}
                                     </div>
                                 )}
                             </div>
@@ -142,18 +142,18 @@ const QuoteSlideLayout: React.FC<QuoteSlideLayoutProps> = ({ data, accentColor =
                             {/* Author Details */}
                             <div className="text-left">
                                 <p className="text-xl font-bold text-slate-900 break-words">
-                                    {slideData.author}
+                                    {slideData?.author}
                                 </p>
 
-                                {slideData.authorTitle && (
+                                {slideData?.authorTitle && (
                                     <p className={`text-base font-semibold bg-gradient-to-r ${accentColors[accentColor]} bg-clip-text text-transparent break-words`}>
-                                        {slideData.authorTitle}
+                                        {slideData?.authorTitle}
                                     </p>
                                 )}
 
-                                {slideData.company && (
+                                {slideData?.company && (
                                     <p className="text-sm text-slate-600 font-medium break-words">
-                                        {slideData.company}
+                                        {slideData?.company}
                                     </p>
                                 )}
                             </div>

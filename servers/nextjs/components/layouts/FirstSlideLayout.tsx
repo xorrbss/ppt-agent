@@ -1,5 +1,6 @@
 import React from 'react'
 import * as z from "zod";
+import { imageSchema } from './defaultSchemes';
 
 
 export const layoutId = 'first-slide'
@@ -13,17 +14,17 @@ const firstSlideSchema = z.object({
     subtitle: z.string().min(10).max(200).default('Subtitle for the slide').optional().meta({
         description: "Optional subtitle or tagline",
     }),
-    author: z.string().min(2).max(100).default('John Doe').optional().meta({
+    author: z.string().max(100).default('John Doe').optional().meta({
         description: "Author or presenter name",
     }),
     date: z.string().optional().meta({
         description: "Presentation date",
     }),
-    company: z.string().min(2).max(100).default('Company Name').optional().meta({
+    company: z.string().max(100).default('Company Name').optional().meta({
         description: "Company or organization name",
     }),
-    backgroundImage: z.string().optional().meta({
-        description: "URL to background image for the slide",
+    backgroundImage: imageSchema.optional().meta({
+        description: "Background image for the slide",
     })
 })
 
@@ -36,8 +37,8 @@ interface FirstSlideLayoutProps {
     accentColor?: 'blue' | 'green' | 'purple' | 'orange' | 'red'
 }
 
-const FirstSlideLayout: React.FC<FirstSlideLayoutProps> = ({ data, accentColor = 'blue' }) => {
-    const slideData = firstSlideSchema.parse(data || {})
+const FirstSlideLayout: React.FC<FirstSlideLayoutProps> = ({ data: slideData, accentColor = 'blue' }) => {
+
 
     const accentColors = {
         blue: 'from-blue-600 to-blue-800',
@@ -58,7 +59,7 @@ const FirstSlideLayout: React.FC<FirstSlideLayoutProps> = ({ data, accentColor =
     return (
         <div
             className="relative w-full aspect-[16/9] flex flex-col bg-gradient-to-br from-slate-50 via-white to-slate-100 overflow-hidden shadow-2xl border border-slate-200"
-            style={slideData.backgroundImage ? {
+            style={slideData?.backgroundImage ? {
                 backgroundImage: `linear-gradient(135deg, rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url(${slideData.backgroundImage})`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center'
@@ -82,22 +83,22 @@ const FirstSlideLayout: React.FC<FirstSlideLayoutProps> = ({ data, accentColor =
                 {/* Main Content */}
                 <main className="flex-1 flex flex-col justify-center items-center max-w-5xl">
                     {/* Title */}
-                    <h1 className={`text-5xl md:text-6xl font-black mb-6 tracking-tight leading-[0.9] break-words ${slideData.backgroundImage
+                    <h1 className={`text-5xl md:text-6xl font-black mb-6 tracking-tight leading-[0.9] break-words ${slideData?.backgroundImage
                         ? 'text-white drop-shadow-2xl'
                         : 'text-slate-900'
                         }`}>
                         <span className={`bg-gradient-to-r ${accentColors[accentColor]} bg-clip-text text-transparent`}>
-                            {slideData.title}
+                            {slideData?.title}
                         </span>
                     </h1>
 
                     {/* Subtitle */}
-                    {slideData.subtitle && (
-                        <p className={`text-xl md:text-2xl font-light leading-relaxed mb-8 break-words max-w-4xl ${slideData.backgroundImage
+                    {slideData?.subtitle && (
+                        <p className={`text-xl md:text-2xl font-light leading-relaxed mb-8 break-words max-w-4xl ${slideData?.backgroundImage
                             ? 'text-slate-200 drop-shadow-lg'
                             : 'text-slate-600'
                             }`}>
-                            {slideData.subtitle}
+                            {slideData?.subtitle}
                         </p>
                     )}
 
@@ -110,21 +111,21 @@ const FirstSlideLayout: React.FC<FirstSlideLayoutProps> = ({ data, accentColor =
                     {/* Professional Metadata Container */}
                     <div className="bg-white/90 backdrop-blur-md rounded-2xl px-8 py-6 shadow-xl border border-white/40">
                         <div className="space-y-3">
-                            {slideData.author && (
+                            {slideData?.author && (
                                 <p className={`text-lg font-semibold break-words text-slate-800`}>
-                                    {slideData.author}
+                                    {slideData?.author}
                                 </p>
                             )}
 
-                            {slideData.company && (
+                            {slideData?.company && (
                                 <p className={`text-base font-medium break-words ${accentColors[accentColor]} bg-gradient-to-r bg-clip-text text-transparent`}>
-                                    {slideData.company}
+                                    {slideData?.company}
                                 </p>
                             )}
 
-                            {slideData.date && (
+                            {slideData?.date && (
                                 <p className={`text-sm break-words text-slate-600 font-medium tracking-wide`}>
-                                    {slideData.date}
+                                    {slideData?.date}
                                 </p>
                             )}
                         </div>

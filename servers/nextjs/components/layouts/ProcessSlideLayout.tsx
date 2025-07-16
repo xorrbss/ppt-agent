@@ -1,5 +1,6 @@
 import React from 'react'
 import * as z from "zod";
+import { imageSchema } from './defaultSchemes';
 
 
 export const layoutId = 'process-slide'
@@ -45,8 +46,8 @@ const processSlideSchema = z.object({
             description: 'Final delivery and ongoing support'
         }
     ]).describe('Process steps (2-6 items)'),
-    backgroundImage: z.string().optional().meta({
-        description: "URL to background image for the slide",
+    backgroundImage: imageSchema.optional().meta({
+        description: "Background image for the slide",
     })
 })
 
@@ -59,8 +60,7 @@ interface ProcessSlideLayoutProps {
     accentColor?: 'blue' | 'green' | 'purple' | 'orange' | 'red'
 }
 
-const ProcessSlideLayout: React.FC<ProcessSlideLayoutProps> = ({ data, accentColor = 'blue' }) => {
-    const slideData = processSlideSchema.parse(data || {})
+const ProcessSlideLayout: React.FC<ProcessSlideLayoutProps> = ({ data: slideData, accentColor = 'blue' }) => {
 
     const accentColors = {
         blue: 'from-blue-600 to-blue-800',
@@ -89,8 +89,8 @@ const ProcessSlideLayout: React.FC<ProcessSlideLayoutProps> = ({ data, accentCol
     return (
         <div
             className="relative w-full aspect-[16/9] flex flex-col bg-gradient-to-br from-slate-50 via-white to-slate-100 overflow-hidden shadow-2xl border border-slate-200"
-            style={slideData.backgroundImage ? {
-                backgroundImage: `linear-gradient(135deg, rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url(${slideData.backgroundImage})`,
+            style={slideData?.backgroundImage ? {
+                backgroundImage: `linear-gradient(135deg, rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url(${slideData?.backgroundImage})`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center'
             } : {}}
@@ -104,21 +104,21 @@ const ProcessSlideLayout: React.FC<ProcessSlideLayoutProps> = ({ data, accentCol
             <div className="relative z-10 flex flex-col h-full px-8 py-8">
                 {/* Professional Header */}
                 <header className="mb-6">
-                    <h1 className={`text-4xl md:text-5xl font-bold mb-3 tracking-tight leading-tight break-words ${slideData.backgroundImage
+                    <h1 className={`text-4xl md:text-5xl font-bold mb-3 tracking-tight leading-tight break-words ${slideData?.backgroundImage
                         ? 'text-white drop-shadow-lg'
                         : 'text-slate-900'
                         }`}>
                         <span className={`bg-gradient-to-r ${accentColors[accentColor]} bg-clip-text text-transparent`}>
-                            {slideData.title}
+                            {slideData?.title}
                         </span>
                     </h1>
 
-                    {slideData.subtitle && (
-                        <p className={`text-xl font-light leading-relaxed break-words ${slideData.backgroundImage
+                    {slideData?.subtitle && (
+                        <p className={`text-xl font-light leading-relaxed break-words ${slideData?.backgroundImage
                             ? 'text-slate-200 drop-shadow-md'
                             : 'text-slate-600'
                             }`}>
-                            {slideData.subtitle}
+                            {slideData?.subtitle}
                         </p>
                     )}
 
@@ -132,10 +132,10 @@ const ProcessSlideLayout: React.FC<ProcessSlideLayoutProps> = ({ data, accentCol
                 <main className="flex-1 flex items-center justify-center">
                     <div className="w-full max-w-6xl">
                         <div className="flex items-center justify-between">
-                            {slideData.processSteps.map((step, index) => (
+                            {slideData?.processSteps?.map((step, index) => (
                                 <React.Fragment key={index}>
                                     {/* Process Step */}
-                                    <div className="flex flex-col items-center text-center group" style={{ width: `${100 / slideData.processSteps.length}%` }}>
+                                    <div className="flex flex-col items-center text-center group" style={{ width: `${100 / (slideData?.processSteps?.length || 0)}%` }}>
                                         {/* Step Number Circle */}
                                         <div className={`w-16 h-16 rounded-full ${stepColors[accentColor]} flex items-center justify-center text-2xl font-bold mb-4 shadow-2xl border-4 group-hover:scale-110 transition-all duration-300 relative`}>
                                             <span className="relative z-10">{step.step}</span>
@@ -163,7 +163,7 @@ const ProcessSlideLayout: React.FC<ProcessSlideLayoutProps> = ({ data, accentCol
                                     </div>
 
                                     {/* Arrow Between Steps */}
-                                    {index < slideData.processSteps.length - 1 && (
+                                    {index < (slideData?.processSteps?.length || 0) - 1 && (
                                         <div className="flex items-center justify-center mx-4">
                                             <div className={`w-8 h-1 bg-gradient-to-r ${accentColors[accentColor]} relative`}>
                                                 <div className={`absolute -right-2 -top-1 w-0 h-0 border-l-4 border-t-2 border-b-2 ${accentSolids[accentColor]} border-t-transparent border-b-transparent`}

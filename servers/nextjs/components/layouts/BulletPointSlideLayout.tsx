@@ -1,23 +1,16 @@
 import React from 'react'
 import * as z from "zod";
+import { imageSchema } from './defaultSchemes';
 
 export const layoutId = 'bullet-point-slide'
 export const layoutName = 'Bullet Point Slide'
 export const layoutDescription = 'A slide with a title, subtitle, and a list of bullet points.'
 
-const imageSchema = z.object({
-    url: z.url().meta({
-        description: "URL to image",
-    }),
-    prompt: z.string().meta({
-        description: "Prompt used to generate the image",
-    }),
-})
 
 const bulletPointSlideSchema = z.object({
     title: z.string().min(3).max(100).default('Key Points').meta({
         description: "Title of the slide",
-        badu: "'badf"
+
     }),
     subtitle: z.string().min(3).max(150).optional().meta({
         description: "Optional subtitle or description",
@@ -47,8 +40,8 @@ interface BulletPointSlideLayoutProps {
     accentColor?: 'blue' | 'green' | 'purple' | 'orange' | 'red'
 }
 
-const BulletPointSlideLayout: React.FC<BulletPointSlideLayoutProps> = ({ data, accentColor = 'blue' }) => {
-    const slideData = bulletPointSlideSchema.parse(data || {})
+const BulletPointSlideLayout: React.FC<BulletPointSlideLayoutProps> = ({ data: slideData, accentColor = 'blue' }) => {
+
 
     const accentColors = {
         blue: 'from-blue-600 to-blue-800',
@@ -77,7 +70,7 @@ const BulletPointSlideLayout: React.FC<BulletPointSlideLayoutProps> = ({ data, a
     return (
         <div
             className="relative w-full aspect-[16/9] flex flex-col bg-gradient-to-br from-slate-50 via-white to-slate-100 overflow-hidden shadow-2xl border border-slate-200"
-            style={slideData.backgroundImage ? {
+            style={slideData?.backgroundImage ? {
                 backgroundImage: `linear-gradient(135deg, rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url(${slideData.backgroundImage})`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center'
@@ -92,21 +85,21 @@ const BulletPointSlideLayout: React.FC<BulletPointSlideLayoutProps> = ({ data, a
             <div className="relative z-10 flex flex-col h-full px-8 py-8">
                 {/* Professional Header */}
                 <header className="mb-6">
-                    <h1 className={`text-4xl md:text-5xl font-bold mb-3 tracking-tight leading-tight break-words ${slideData.backgroundImage
+                    <h1 className={`text-4xl md:text-5xl font-bold mb-3 tracking-tight leading-tight break-words ${slideData?.backgroundImage
                         ? 'text-white drop-shadow-lg'
                         : 'text-slate-900'
                         }`}>
                         <span className={`bg-gradient-to-r ${accentColors[accentColor]} bg-clip-text text-transparent`}>
-                            {slideData.title}
+                            {slideData?.title}
                         </span>
                     </h1>
 
-                    {slideData.subtitle && (
-                        <p className={`text-xl font-light leading-relaxed break-words ${slideData.backgroundImage
+                    {slideData?.subtitle && (
+                        <p className={`text-xl font-light leading-relaxed break-words ${slideData?.backgroundImage
                             ? 'text-slate-200 drop-shadow-md'
                             : 'text-slate-600'
                             }`}>
-                            {slideData.subtitle}
+                            {slideData?.subtitle}
                         </p>
                     )}
 
@@ -122,8 +115,8 @@ const BulletPointSlideLayout: React.FC<BulletPointSlideLayoutProps> = ({ data, a
                         {/* Content background accent */}
                         <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl ${accentColors[accentColor]} opacity-5 rounded-bl-full`} />
 
-                        <ul className={`space-y-${slideData.bulletPoints.length <= 4 ? '6' : slideData.bulletPoints.length <= 6 ? '4' : '3'} relative z-10`}>
-                            {slideData.bulletPoints.map((point, index) => (
+                        <ul className={`space-y-${slideData?.bulletPoints?.length && slideData?.bulletPoints?.length <= 4 ? '6' : slideData?.bulletPoints?.length && slideData?.bulletPoints?.length <= 6 ? '4' : '3'} relative z-10`}>
+                            {slideData?.bulletPoints?.map((point, index) => (
                                 <li key={index} className="flex items-start group hover:transform hover:translateX-2 transition-all duration-200">
                                     {/* Enhanced bullet point icon */}
                                     <div className="relative mr-6 mt-1 flex-shrink-0">
@@ -132,7 +125,7 @@ const BulletPointSlideLayout: React.FC<BulletPointSlideLayoutProps> = ({ data, a
                                     </div>
 
                                     {/* Enhanced bullet text */}
-                                    <span className={`text-lg md:text-xl leading-relaxed break-words font-medium ${slideData.backgroundImage
+                                    <span className={`text-lg md:text-xl leading-relaxed break-words font-medium ${slideData?.backgroundImage
                                         ? 'text-slate-700'
                                         : 'text-slate-700'
                                         } group-hover:text-slate-900 transition-colors duration-200`}>
