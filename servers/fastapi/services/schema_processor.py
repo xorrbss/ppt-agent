@@ -27,15 +27,15 @@ class SchemaProcessor:
         return self.resolve_refs(schema, defs)
 
     def find_dict_with_key(
-        self, schema: dict, target_key: str, current_path: Optional[List[str]] = None
+        self, data: dict, target_key: str, current_path: Optional[List[str]] = None
     ) -> List[List[str]]:
         if current_path is None:
             current_path = []
         paths = []
-        if target_key in schema:
+        if target_key in data:
             paths.append(current_path.copy())
 
-        for key, value in schema.items():
+        for key, value in data.items():
             if isinstance(value, dict):
                 new_path = current_path + [key]
                 paths.extend(self.find_dict_with_key(value, target_key, new_path))
@@ -48,8 +48,8 @@ class SchemaProcessor:
                         )
         return paths
 
-    def get_dict_at_path(self, schema: dict, path: List[str]) -> dict:
-        current = schema
+    def get_dict_at_path(self, data: dict, path: List[str]) -> dict:
+        current = data
 
         for part in path:
             if part.isdigit():
@@ -59,19 +59,47 @@ class SchemaProcessor:
 
         return current
 
-    def remove_image_url_fields(self, schema: dict) -> dict:
-        copied_schema = schema.copy()
+    def set_dict_at_path(self, data: dict, path: List[str], value) -> None:
+        if not path:
+            raise ValueError("Path cannot be empty")
 
-        image_type_paths = self.find_dict_with_key(copied_schema, "_image_type")
+        current = data
+
+        # Navigate to the parent of the target location
+        for part in path[:-1]:
+            if part.isdigit():
+                index = int(part)
+                if index >= len(current):
+                    # Extend list if needed
+                    current.extend([{}] * (index - len(current) + 1))
+                current = current[index]
+            else:
+                if part not in current:
+                    current[part] = {}
+                current = current[part]
+
+        # Set the value at the final path component
+        final_part = path[-1]
+        if final_part.isdigit():
+            index = int(final_part)
+            if index >= len(current):
+                # Extend list if needed
+                current.extend([None] * (index - len(current) + 1))
+            current[index] = value
+        else:
+            current[final_part] = value
+
+    def remove_image_url_fields(self, data: dict) -> dict:
+        copied_data = data.copy()
+
+        image_type_paths = self.find_dict_with_key(copied_data, "__image_type__")
 
         for path in image_type_paths:
-            dict_at_path = self.get_dict_at_path(copied_schema, path)
+            dict_at_path = self.get_dict_at_path(copied_data, path)
+            if "properties" in dict_at_path:
+                del dict_at_path["properties"]["url"]
+            dict_at_parent_path = self.get_dict_at_path(copied_data, path[:-1])
+            if "required" in dict_at_parent_path:
+                dict_at_parent_path["required"].remove("url")
 
-            if dict_at_path.get("_image_type") == "image":
-                if "properties" in dict_at_path and "url" in dict_at_path["properties"]:
-                    del dict_at_path["properties"]["url"]
-
-                if "required" in dict_at_path and "url" in dict_at_path["required"]:
-                    dict_at_path["required"].remove("url")
-
-        return copied_schema
+        return copied_data

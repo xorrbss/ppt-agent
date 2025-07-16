@@ -17,7 +17,7 @@ class ContactInfoModel(BaseModel):
 
 class ImageModel(BaseModel):
     url: str = Field(description="Image URL")
-    image_type_: Literal["image"] = "image"
+    __image_type__: Literal["image"] = "image"
     prompt: str = Field(description="Image prompt")
 
 
@@ -415,13 +415,16 @@ presentation_layout = PresentationLayoutModel(
     ],
 )
 
-print(json.dumps(FirstSlideModel.model_json_schema()))
+# print(json.dumps(FirstSlideModel.model_json_schema()))
 
 # slide_schema = FirstSlideModel.model_json_schema()
 
 # schema_processor = SchemaProcessor()
-# print(schema_processor.flatten_schema(slide_schema))
-# print(schema_processor.find_dict_paths_in_object(slide_schema, "_image_type"))
+# print(
+#     json.dumps(
+#         schema_processor.remove_image_url_fields(FirstSlideModel.model_json_schema())
+#     )
+# )
 
 
 # print(PresentationOutlineModel.model_json_schema())

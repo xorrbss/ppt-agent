@@ -66,9 +66,7 @@ async def get_slide_content_from_type_and_outline(
                 "type": "json_schema",
                 "json_schema": {
                     "name": "SlideContent",
-                    "schema": SCHEMA_PROCESSOR.remove_image_url_fields(
-                        slide_layout.json_schema
-                    ),
+                    "schema": slide_layout.json_schema,
                 },
             },
         )

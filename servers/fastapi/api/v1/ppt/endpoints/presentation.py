@@ -1,3 +1,4 @@
+import asyncio
 import json
 import random
 from typing import Annotated, List, Optional
@@ -23,6 +24,7 @@ from utils.llm_calls.generate_presentation_structure import (
 from utils.llm_calls.generate_slide_content import (
     get_slide_content_from_type_and_outline,
 )
+from utils.process_slides import process_slide_and_fetch_assets
 
 PRESENTATION_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
 
@@ -185,6 +187,8 @@ async def stream_presentation(presentation_id: str):
         layout = presentation.get_layout()
         outline = presentation.get_presentation_outline()
 
+        asyncio_tasks = []
+
         slides: List[SlideModel] = []
         yield SSEResponse(
             event="response",
@@ -202,6 +206,7 @@ async def stream_presentation(presentation_id: str):
                 content=slide_content,
             )
             slides.append(slide)
+            asyncio_tasks.append(process_slide_and_fetch_assets(slide))
             yield SSEResponse(
                 event="response",
                 data=json.dumps({"type": "chunk", "chunk": slide.model_dump_json()}),
@@ -211,6 +216,8 @@ async def stream_presentation(presentation_id: str):
             event="response",
             data=json.dumps({"type": "chunk", "chunk": " ] }"}),
         ).to_string()
+
+        await asyncio.gather(*asyncio_tasks)
 
         with get_sql_session() as sql_session:
             sql_session.add(presentation)
