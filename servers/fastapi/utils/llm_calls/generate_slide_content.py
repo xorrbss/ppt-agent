@@ -3,6 +3,8 @@ import json
 from google.genai.types import GenerateContentConfig
 from models.presentation_layout import SlideLayoutModel
 from models.presentation_outline_model import SlideOutlineModel
+from services import SCHEMA_PROCESSOR
+from services.schema_processor import SchemaProcessor
 from utils.llm_provider import (
     get_google_llm_client,
     get_llm_client,
@@ -50,7 +52,6 @@ def get_prompt_to_generate_slide_content(title: str, outline: str):
 async def get_slide_content_from_type_and_outline(
     slide_layout: SlideLayoutModel, outline: SlideOutlineModel
 ):
-
     model = get_small_model()
 
     if not is_google_selected():
@@ -65,7 +66,9 @@ async def get_slide_content_from_type_and_outline(
                 "type": "json_schema",
                 "json_schema": {
                     "name": "SlideContent",
-                    "schema": slide_layout.json_schema,
+                    "schema": SCHEMA_PROCESSOR.remove_image_url_fields(
+                        slide_layout.json_schema
+                    ),
                 },
             },
         )
