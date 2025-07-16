@@ -6,6 +6,7 @@ import { useDispatch, useSelector } from "react-redux"
 import { deleteSlideOutline, setOutlines, SlideOutline } from "@/store/slices/presentationGeneration"
 import ToolTip from "@/components/ToolTip"
 import MarkdownEditor from "../../components/MarkdownEditor"
+import { useEffect } from "react"
 
 
 interface OutlineItemProps {
@@ -23,6 +24,19 @@ export function OutlineItem({
         outlines,
     } = useSelector((state: RootState) => state.presentationGeneration);
     const dispatch = useDispatch()
+
+    useEffect(() => {
+        if (isStreaming && slideOutline.body) {
+            const outlineItem = document.getElementById(`outline-item-${index}`);
+            if (outlineItem) {
+                outlineItem.scrollIntoView({
+                    behavior: "smooth",
+                    block: "center",
+                    inline: "nearest",
+                });
+            }
+        }
+    }, [outlines.length]);
 
     const handleSlideChange = (newOutline: SlideOutline) => {
         if (isStreaming) return;
@@ -60,6 +74,8 @@ export function OutlineItem({
 
     }
 
+
+
     return (
         <div className="mb-2 bg-[#F9F9F9]">
             {/* Main Title Row */}
@@ -84,7 +100,7 @@ export function OutlineItem({
                 </div>
 
                 {/* Main Title Input - Add onFocus handler */}
-                <div className="flex flex-col basis-full gap-2">
+                <div id={`outline-item-${index}`} className="flex flex-col basis-full gap-2">
                     <input
                         type="text"
                         value={slideOutline.title || ''}

@@ -39,7 +39,6 @@ const bulletPointSlideSchema = z.object({
 })
 export const Schema = bulletPointSlideSchema
 
-console.log(z.toJSONSchema(Schema))
 
 export type BulletPointSlideData = z.infer<typeof bulletPointSlideSchema>
 
