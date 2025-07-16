@@ -44,14 +44,14 @@ const Type4SlideLayout: React.FC<Type4SlideLayoutProps> = ({ data: slideData }) 
 
     return (
         <div
-            className="slide-container font-inter rounded-sm w-full max-w-[1280px] px-3 py-[10px] sm:px-12 lg:px-20 sm:py-[40px] lg:py-[86px] shadow-lg max-h-[720px] flex flex-col items-center justify-center aspect-video bg-white relative z-20 mx-auto"
+            className=" rounded-sm w-full max-w-[1280px] px-3 py-[10px] sm:px-12 lg:px-20 sm:py-[40px] lg:py-[86px] shadow-lg max-h-[720px] flex flex-col items-center justify-center aspect-video bg-white relative z-20 mx-auto"
 
         >
             <h1 className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-gray-900 leading-tight mb-4 lg:mb-8">
                 {slideData?.title || 'Chart Analysis'}
             </h1>
 
-            <div className={`flex w-full items-center ${isFullSizeGraph
+            <div className={`flex w-full  items-center ${isFullSizeGraph
                 ? "flex-col mt-4 lg:mt-10 gap-2 sm:gap-4 md:gap-6 lg:gap-10"
                 : "mt-4 lg:mt-16 gap-4 sm:gap-8 md:gap-12 lg:gap-16"
                 }`}>

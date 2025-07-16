@@ -22,7 +22,7 @@ import {
 import { setPresentationData } from "@/store/slices/presentationGeneration";
 import { SortableSlide } from "./SortableSlide";
 import { SortableListItem } from "./SortableListItem";
-import useLayoutCache from "../../hooks/useLayoutCache";
+import { useLayout } from "../../context/LayoutContext";
 
 interface SidePanelProps {
   selectedSlide: number;
@@ -50,7 +50,7 @@ const SidePanel = ({
   );
   console.log('presentationData', presentationData)
   const dispatch = useDispatch();
-  const { getLayout } = useLayoutCache();
+  const { getLayout } = useLayout();
 
   // Memoized slide renderer using layout cache
   const renderSlideContent = useMemo(() => {

@@ -141,7 +141,7 @@ const Type8SlideLayout: React.FC<Type8SlideLayoutProps> = ({ data: slideData }) 
 
     return (
         <div
-            className="slide-container shadow-lg w-full max-w-[1280px] rounded-sm font-inter px-3 sm:px-12 lg:px-20 py-[10px] sm:py-[40px] lg:py-[86px] flex items-center justify-center max-h-[720px] aspect-video bg-white relative z-20 mx-auto"
+            className=" shadow-lg w-full max-w-[1280px] rounded-sm font-inter px-3 sm:px-12 lg:px-20 py-[10px] sm:py-[40px] lg:py-[86px] flex items-center justify-center max-h-[720px] aspect-video bg-white relative z-20 mx-auto"
         >
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8 lg:gap-16 items-center w-full">
                 {/* Left section - Title and Description */}

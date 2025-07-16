@@ -38,7 +38,7 @@ export function SortableListItem({ slide, index, selectedSlide, onSlideClick }: 
 
         // If the mouse was down for less than 200ms, consider it a click
         if (timeDiff < 200 && !isDragging) {
-            onSlideClick(slide.id);
+            onSlideClick(slide.index);
         }
     };
 
@@ -50,10 +50,10 @@ export function SortableListItem({ slide, index, selectedSlide, onSlideClick }: 
             {...listeners}
             onMouseDown={handleMouseDown}
             onMouseUp={handleMouseUp}
-            className={`p-3 cursor-pointer rounded-lg slide-box
+            className={`p-3 cursor-pointer ring-0 border-[3px] rounded-lg slide-box
                 ${selectedSlide === index
-                    ? 'ring-2 ring-[#5141e5] text-white'
-                    : 'hover:slide-box/40'
+                    ? ' border-[#5141e5] '
+                    : 'hover:slide-box/40 border-gray-300'
                 }`}
         >
             <span className="font-medium slide-title">Slide {index + 1}</span>

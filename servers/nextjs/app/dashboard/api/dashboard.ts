@@ -1,6 +1,5 @@
 import {
   getHeader,
-  getHeaderForFormData,
 } from "@/app/(presentation-generator)/services/api/header";
 
 
@@ -28,7 +27,7 @@ export class DashboardApi {
   static async getPresentations(): Promise<PresentationResponse[]> {
     try {
       const response = await fetch(
-        `/api/v1/ppt/user_presentations`,
+        `/api/v1/ppt/presentation/all`,
         {
           method: "GET",
         }
@@ -49,7 +48,7 @@ export class DashboardApi {
   static async getPresentation(id: string) {
     try {
       const response = await fetch(
-        `/api/v1/ppt/presentation?presentation_id=${id}`,
+        `/api/v1/ppt/presentation/?id=${id}`,
         {
           method: "GET",
 
@@ -68,7 +67,7 @@ export class DashboardApi {
   static async deletePresentation(presentation_id: string) {
     try {
       const response = await fetch(
-        `/api/v1/ppt/delete?presentation_id=${presentation_id}`,
+        `/api/v1/ppt/delete?id=${presentation_id}`,
         {
           method: "DELETE",
           headers: getHeader(),

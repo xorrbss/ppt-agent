@@ -260,18 +260,6 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
     try {
       const data = await DashboardApi.getPresentation(presentation_id);
       if (data) {
-        if (data.presentation.theme) {
-          dispatch(
-            setThemeColors({
-              ...data.presentation.theme.colors,
-              theme: data.presentation.theme.name as ThemeType,
-            })
-          );
-          setColorsVariables(
-            data.presentation.theme.colors,
-            data.presentation.theme.name as ThemeType
-          );
-        }
         dispatch(setPresentationData(data));
         setLoading(false);
       }
@@ -393,8 +381,8 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
           />
           <div className="flex-1 h-[calc(100vh-100px)]  overflow-y-auto">
             <div
-              className="mx-auto flex flex-col items-center  overflow-hidden  justify-center p-2 sm:p-6  pt-0 slide-theme"
-              data-theme={currentTheme}
+              className="mx-auto flex flex-col items-center  overflow-hidden  justify-center p-2 sm:p-6  pt-0 "
+
             >
               {!presentationData ||
                 loading ||
