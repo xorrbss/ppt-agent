@@ -25,10 +25,10 @@ const teamSlideSchema = z.object({
         bio: z.string().min(10).max(300).optional().meta({
             description: "Brief biography or description",
         }),
-        email: z.email().optional().meta({
+        email: z.string().email().optional().meta({
             description: "Contact email",
         }),
-        linkedin: z.url().optional().meta({
+        linkedin: z.string().url().optional().meta({
             description: "LinkedIn profile URL",
         })
     })).min(1).max(6).default([

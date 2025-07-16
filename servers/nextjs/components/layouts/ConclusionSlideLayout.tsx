@@ -24,7 +24,7 @@ const conclusionSlideSchema = z.object({
         description: "Optional call to action or next steps",
     }),
     contactInfo: z.object({
-        email: z.string().email().optional().meta({
+        email: z.email().optional().meta({
             description: "Contact email",
         }),
         phone: z.string().min(5).max(50).optional().meta({

@@ -18,7 +18,6 @@ import NewSlide from "../../components/slide_layouts/NewSlide";
 import { getEmptySlideContent } from "../../utils/NewSlideContent";
 import useLayoutSchema from "../../hooks/useLayoutSchema";
 import dynamic from "next/dynamic";
-import FirstSlideLayout from "@/components/layouts/FirstSlideLayout";
 
 interface SlideContentProps {
   slide: Slide;
@@ -117,7 +116,7 @@ const SlideContent = ({
 
   const renderLayout = (slide: any) => {
     const layoutName = idMapFileNames[slide.layoutId];
-    const Layout = dynamic(() => import(`@/components/layouts/${layoutName}.tsx`));
+    const Layout = dynamic(() => import(`@/components/layouts/${layoutName}`)) as React.ComponentType<{ data: any }>;
     return <Layout data={slide.content} />
   };
 

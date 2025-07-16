@@ -242,12 +242,15 @@ const OutlinePage = () => {
   if (!presentation_id) {
     return (
       <Wrapper>
-        <div className="max-w-[1000px] mx-auto px-4 sm:px-6 pb-6">
+        <div className="max-w-[1000px] min-h-screen flex justify-center items-center mx-auto px-4 sm:px-6 pb-6">
           <div className="mt-4 sm:mt-8 font-instrument_sans text-center">
             <h4 className="text-lg sm:text-xl font-medium mb-4">
               No Presentation ID Found
             </h4>
-            <p className="text-gray-600">Please start a new presentation.</p>
+            <p className="text-gray-600 mb-4">Please start a new presentation.</p>
+            <Button onClick={() => router.push("/upload")} className="bg-[#5146E5] w-full rounded-xl text-base sm:text-lg py-4 sm:py-6 transition-all duration-300 font-roboto font-semibold hover:bg-[#5146E5]/80 text-white mt-4 disabled:opacity-50 disabled:cursor-not-allowed">
+              Start New Presentation
+            </Button>
           </div>
         </div>
       </Wrapper>
