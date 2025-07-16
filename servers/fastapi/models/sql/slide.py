@@ -7,4 +7,5 @@ class SlideModel(SQLModel, table=True):
     id: str = Field(primary_key=True, default_factory=get_random_uuid)
     presentation: str
     layout: str
+    index: int
     content: dict = Field(sa_column=Column(JSON))

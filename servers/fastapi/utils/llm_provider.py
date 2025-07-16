@@ -1,5 +1,5 @@
-from http.client import HTTPException
 import os
+from fastapi import HTTPException
 from openai import AsyncOpenAI
 from google import genai
 
@@ -15,7 +15,13 @@ from utils.get_env import (
 
 
 def get_llm_provider():
-    return LLMProvider(get_llm_provider_env())
+    try:
+        return LLMProvider(get_llm_provider_env())
+    except:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Invalid LLM provider. Please select one of: openai, google, ollama, custom",
+        )
 
 
 def get_ollama_url():
