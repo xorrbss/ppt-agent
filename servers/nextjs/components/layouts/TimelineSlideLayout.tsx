@@ -7,13 +7,25 @@ export const layoutName = 'Timeline Slide'
 export const layoutDescription = 'A slide with a title, subtitle, and timeline items'
 
 const timelineSlideSchema = z.object({
-    title: z.string().min(3).max(100).default('Project Timeline').describe('Title of the slide'),
-    subtitle: z.string().min(3).max(150).optional().describe('Optional subtitle or description'),
+    title: z.string().min(3).max(100).default('Project Timeline').meta({
+        description: "Title of the slide",
+    }),
+    subtitle: z.string().min(3).max(150).optional().meta({
+        description: "Optional subtitle or description",
+    }),
     timelineItems: z.array(z.object({
-        date: z.string().min(2).max(50).describe('Date or time period'),
-        title: z.string().min(3).max(100).describe('Event or milestone title'),
-        description: z.string().min(10).max(300).describe('Event description'),
-        status: z.enum(['completed', 'current', 'upcoming']).default('upcoming').describe('Timeline item status')
+        date: z.string().min(2).max(50).meta({
+            description: "Date or time period",
+        }),
+        title: z.string().min(3).max(100).meta({
+            description: "Event or milestone title",
+        }),
+        description: z.string().min(10).max(300).meta({
+            description: "Event description",
+        }),
+        status: z.enum(['completed', 'current', 'upcoming']).default('upcoming').meta({
+            description: "Timeline item status",
+        })
     })).min(2).max(6).default([
         {
             date: 'Q1 2024',
@@ -39,8 +51,12 @@ const timelineSlideSchema = z.object({
             description: 'Final deployment, go-live activities, and post-launch monitoring',
             status: 'upcoming'
         }
-    ]).describe('Timeline events (2-6 items)'),
-    backgroundImage: z.string().optional().describe('URL to background image for the slide')
+    ]).meta({
+        description: "Timeline events (2-6 items)",
+    }),
+    backgroundImage: z.string().optional().meta({
+        description: "URL to background image for the slide",
+    })
 })
 
 export const Schema = timelineSlideSchema

@@ -6,21 +6,39 @@ export const layoutName = 'Conclusion Slide'
 export const layoutDescription = 'A slide with a title, subtitle, key takeaways, call to action, and contact information'
 
 const conclusionSlideSchema = z.object({
-    title: z.string().min(3).max(100).default('Conclusion').describe('Title of the slide'),
-    subtitle: z.string().min(3).max(150).optional().describe('Optional subtitle or description'),
+    title: z.string().min(3).max(100).default('Conclusion').meta({
+        description: "Title of the slide",
+    }),
+    subtitle: z.string().min(3).max(150).optional().meta({
+        description: "Optional subtitle or description",
+    }),
     keyTakeaways: z.array(z.string().min(5).max(200)).min(2).max(6).default([
         'Successfully achieved our primary objectives',
         'Demonstrated significant value and impact',
         'Established clear next steps for continued success',
         'Built strong foundation for future growth'
-    ]).describe('Key takeaways or summary points (2-6 items)'),
-    callToAction: z.string().min(5).max(150).optional().describe('Optional call to action or next steps'),
+    ]).meta({
+        description: "Key takeaways or summary points (2-6 items)",
+    }),
+    callToAction: z.string().min(5).max(150).optional().meta({
+        description: "Optional call to action or next steps",
+    }),
     contactInfo: z.object({
-        email: z.string().email().optional().describe('Contact email'),
-        phone: z.string().min(5).max(50).optional().describe('Contact phone number'),
-        website: z.string().url().optional().describe('Website URL')
-    }).optional().describe('Optional contact information'),
-    backgroundImage: z.string().optional().describe('URL to background image for the slide')
+        email: z.string().email().optional().meta({
+            description: "Contact email",
+        }),
+        phone: z.string().min(5).max(50).optional().meta({
+            description: "Contact phone number",
+        }),
+        website: z.string().url().optional().meta({
+            description: "Website URL",
+        })
+    }).optional().meta({
+        description: "Optional contact information",
+    }),
+    backgroundImage: z.string().optional().meta({
+        description: "URL to background image for the slide",
+    })
 })
 
 export const Schema = conclusionSlideSchema

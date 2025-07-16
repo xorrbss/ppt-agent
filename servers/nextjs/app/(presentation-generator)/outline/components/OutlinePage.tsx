@@ -73,7 +73,7 @@ const OutlinePage = () => {
         );
 
         evtSource.onopen = () => {
-          console.log('connection open');
+
         };
 
         evtSource.addEventListener("response", (event) => {
@@ -85,7 +85,6 @@ const OutlinePage = () => {
             try {
               const repairedJson = jsonrepair(accumulatedChunks);
               const partialData = JSON.parse(repairedJson);
-
               if (partialData.slides) {
                 dispatch(setOutlines(partialData.slides));
                 setLoading(false);

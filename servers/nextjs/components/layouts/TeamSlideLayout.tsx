@@ -6,15 +6,31 @@ export const layoutName = 'Team Slide'
 export const layoutDescription = 'A slide with a title, subtitle, and team members'
 
 const teamSlideSchema = z.object({
-    title: z.string().min(3).max(100).default('Meet Our Team').describe('Title of the slide'),
-    subtitle: z.string().min(3).max(150).optional().describe('Optional subtitle or team description'),
+    title: z.string().min(3).max(100).default('Meet Our Team').meta({
+        description: "Title of the slide",
+    }),
+    subtitle: z.string().min(3).max(150).optional().meta({
+        description: "Optional subtitle or team description",
+    }),
     teamMembers: z.array(z.object({
-        name: z.string().min(2).max(100).describe('Team member name'),
-        title: z.string().min(2).max(100).describe('Job title or role'),
-        image: z.string().optional().describe('URL to team member photo'),
-        bio: z.string().min(10).max(300).optional().describe('Brief biography or description'),
-        email: z.string().email().optional().describe('Contact email'),
-        linkedin: z.string().url().optional().describe('LinkedIn profile URL')
+        name: z.string().min(2).max(100).meta({
+            description: "Team member name",
+        }),
+        title: z.string().min(2).max(100).meta({
+            description: "Job title or role",
+        }),
+        image: z.string().optional().meta({
+            description: "URL to team member photo",
+        }),
+        bio: z.string().min(10).max(300).optional().meta({
+            description: "Brief biography or description",
+        }),
+        email: z.email().optional().meta({
+            description: "Contact email",
+        }),
+        linkedin: z.url().optional().meta({
+            description: "LinkedIn profile URL",
+        })
     })).min(1).max(6).default([
         {
             name: 'Sarah Johnson',
