@@ -1,4 +1,3 @@
-from typing import Annotated
 from fastapi import APIRouter, Body
 
 from models.image_prompt import ImagePrompt
