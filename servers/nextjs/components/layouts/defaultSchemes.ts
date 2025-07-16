@@ -7,7 +7,7 @@ export const ImageSchema = z.object({
     prompt: z.string().meta({
         description: "Prompt used to generate the image",
     }),
-    image_type:z.literal('image')
+    __image_type__:z.literal('image')
 })
 
 export const IconSchema = z.object({
@@ -17,5 +17,5 @@ export const IconSchema = z.object({
     prompt: z.string().meta({
         description: "Prompt used to generate the icon",
     }),
-    image_type:z.literal('icon')
+    __image_type__:z.literal('icon')
 })
