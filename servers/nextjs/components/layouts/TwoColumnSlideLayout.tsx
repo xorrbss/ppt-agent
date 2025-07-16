@@ -50,9 +50,8 @@ interface TwoColumnSlideLayoutProps {
     accentColor?: 'blue' | 'green' | 'purple' | 'orange' | 'red'
 }
 
-const TwoColumnSlideLayout: React.FC<TwoColumnSlideLayoutProps> = ({ data, accentColor = 'blue' }) => {
+const TwoColumnSlideLayout: React.FC<TwoColumnSlideLayoutProps> = ({ data: slideData, accentColor = 'blue' }) => {
 
-    const slideData = twoColumnSlideSchema.parse(data || {})
 
     const accentColors = {
         blue: 'from-blue-600 to-blue-800',
@@ -73,8 +72,8 @@ const TwoColumnSlideLayout: React.FC<TwoColumnSlideLayoutProps> = ({ data, accen
     return (
         <div
             className="relative w-full aspect-[16/9] flex flex-col bg-gradient-to-br from-slate-50 via-white to-slate-100 overflow-hidden shadow-2xl border border-slate-200"
-            style={slideData.backgroundImage ? {
-                backgroundImage: `linear-gradient(135deg, rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url(${slideData.backgroundImage})`,
+            style={slideData?.backgroundImage ? {
+                backgroundImage: `linear-gradient(135deg, rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url(${slideData?.backgroundImage})`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center'
             } : {}}
@@ -88,21 +87,21 @@ const TwoColumnSlideLayout: React.FC<TwoColumnSlideLayoutProps> = ({ data, accen
             <div className="relative z-10 flex flex-col h-full px-8 py-8">
                 {/* Professional Header */}
                 <header className="mb-6">
-                    <h1 className={`text-4xl md:text-5xl font-bold mb-3 tracking-tight leading-tight break-words ${slideData.backgroundImage
+                    <h1 className={`text-4xl md:text-5xl font-bold mb-3 tracking-tight leading-tight break-words ${slideData?.backgroundImage
                         ? 'text-white drop-shadow-lg'
                         : 'text-slate-900'
                         }`}>
                         <span className={`bg-gradient-to-r ${accentColors[accentColor]} bg-clip-text text-transparent`}>
-                            {slideData.title}
+                            {slideData?.title}
                         </span>
                     </h1>
 
-                    {slideData.subtitle && (
-                        <p className={`text-xl font-light leading-relaxed break-words ${slideData.backgroundImage
+                    {slideData?.subtitle && (
+                        <p className={`text-xl font-light leading-relaxed break-words ${slideData?.backgroundImage
                             ? 'text-slate-200 drop-shadow-md'
                             : 'text-slate-600'
                             }`}>
-                            {slideData.subtitle}
+                            {slideData?.subtitle}
                         </p>
                     )}
 
@@ -119,17 +118,17 @@ const TwoColumnSlideLayout: React.FC<TwoColumnSlideLayoutProps> = ({ data, accen
                         {/* Column accent */}
                         <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${accentColors[accentColor]}`} />
 
-                        <h2 className={`text-2xl md:text-3xl font-bold mb-5 break-words ${slideData.backgroundImage
+                        <h2 className={`text-2xl md:text-3xl font-bold mb-5 break-words ${slideData?.backgroundImage
                             ? 'text-slate-900'
                             : 'text-slate-900'
                             }`}>
-                            {slideData.leftColumn.title}
+                            {slideData?.leftColumn?.title}
                         </h2>
-                        <div className={`text-base md:text-lg leading-relaxed break-words flex-1 ${slideData.backgroundImage
+                        <div className={`text-base md:text-lg leading-relaxed break-words flex-1 ${slideData?.backgroundImage
                             ? 'text-slate-700'
                             : 'text-slate-700'
                             }`}>
-                            {slideData.leftColumn.content.split('\n').map((paragraph, index) => (
+                            {slideData?.leftColumn?.content?.split('\n').map((paragraph, index) => (
                                 paragraph.trim() && (
                                     <p key={index} className="mb-4 last:mb-0 font-medium">
                                         {paragraph}
@@ -144,17 +143,17 @@ const TwoColumnSlideLayout: React.FC<TwoColumnSlideLayoutProps> = ({ data, accen
                         {/* Column accent */}
                         <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${accentColors[accentColor]}`} />
 
-                        <h2 className={`text-2xl md:text-3xl font-bold mb-5 break-words ${slideData.backgroundImage
+                        <h2 className={`text-2xl md:text-3xl font-bold mb-5 break-words ${slideData?.backgroundImage
                             ? 'text-slate-900'
                             : 'text-slate-900'
                             }`}>
-                            {slideData.rightColumn.title}
+                            {slideData?.rightColumn?.title}
                         </h2>
-                        <div className={`text-base md:text-lg leading-relaxed break-words flex-1 ${slideData.backgroundImage
+                        <div className={`text-base md:text-lg leading-relaxed break-words flex-1 ${slideData?.backgroundImage
                             ? 'text-slate-700'
                             : 'text-slate-700'
                             }`}>
-                            {slideData.rightColumn.content.split('\n').map((paragraph, index) => (
+                            {slideData?.rightColumn?.content?.split('\n').map((paragraph, index) => (
                                 paragraph.trim() && (
                                     <p key={index} className="mb-4 last:mb-0 font-medium">
                                         {paragraph}

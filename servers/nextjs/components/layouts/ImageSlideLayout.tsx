@@ -36,8 +36,8 @@ interface ImageSlideLayoutProps {
     accentColor?: 'blue' | 'green' | 'purple' | 'orange' | 'red'
 }
 
-const ImageSlideLayout: React.FC<ImageSlideLayoutProps> = ({ data, accentColor = 'blue' }) => {
-    const slideData = imageSlideSchema.parse(data || {})
+const ImageSlideLayout: React.FC<ImageSlideLayoutProps> = ({ data: slideData, accentColor = 'blue' }) => {
+
 
     const accentColors = {
         blue: 'from-blue-600 to-blue-800',
@@ -60,8 +60,8 @@ const ImageSlideLayout: React.FC<ImageSlideLayoutProps> = ({ data, accentColor =
     return (
         <div
             className="relative w-full aspect-[16/9] flex flex-col bg-gradient-to-br from-slate-50 via-white to-slate-100 overflow-hidden shadow-2xl border border-slate-200"
-            style={slideData.backgroundImage ? {
-                backgroundImage: `linear-gradient(135deg, rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url(${slideData.backgroundImage})`,
+            style={slideData?.backgroundImage ? {
+                backgroundImage: `linear-gradient(135deg, rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url(${slideData?.backgroundImage})`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center'
             } : {}}
@@ -75,21 +75,21 @@ const ImageSlideLayout: React.FC<ImageSlideLayoutProps> = ({ data, accentColor =
             <div className="relative z-10 flex flex-col h-full px-8 py-8">
                 {/* Professional Header */}
                 <header className="mb-6">
-                    <h1 className={`text-4xl md:text-5xl font-bold mb-3 tracking-tight leading-tight break-words ${slideData.backgroundImage
+                    <h1 className={`text-4xl md:text-5xl font-bold mb-3 tracking-tight leading-tight break-words ${slideData?.backgroundImage
                         ? 'text-white drop-shadow-lg'
                         : 'text-slate-900'
                         }`}>
                         <span className={`bg-gradient-to-r ${accentColors[accentColor]} bg-clip-text text-transparent`}>
-                            {slideData.title}
+                            {slideData?.title}
                         </span>
                     </h1>
 
-                    {slideData.subtitle && (
-                        <p className={`text-xl font-light leading-relaxed break-words ${slideData.backgroundImage
+                    {slideData?.subtitle && (
+                        <p className={`text-xl font-light leading-relaxed break-words ${slideData?.backgroundImage
                             ? 'text-slate-200 drop-shadow-md'
                             : 'text-slate-600'
                             }`}>
-                            {slideData.subtitle}
+                            {slideData?.subtitle}
                         </p>
                     )}
 
@@ -104,11 +104,11 @@ const ImageSlideLayout: React.FC<ImageSlideLayoutProps> = ({ data, accentColor =
                     <div className=" ">
 
 
-                        <div className={`text-lg md:text-xl leading-relaxed break-words font-medium relative z-10 ${slideData.backgroundImage
+                        <div className={`text-lg md:text-xl leading-relaxed break-words font-medium relative z-10 ${slideData?.backgroundImage
                             ? 'text-slate-700'
                             : 'text-slate-700'
                             }`}>
-                            {slideData.content?.split('\n').map((paragraph, index) => (
+                            {slideData?.content?.split('\n').map((paragraph, index) => (
                                 paragraph.trim() && (
                                     <p key={index} className="mb-5 last:mb-0">
                                         {paragraph}
@@ -123,18 +123,18 @@ const ImageSlideLayout: React.FC<ImageSlideLayoutProps> = ({ data, accentColor =
                     <div className="flex flex-col h-full">
                         <div className="relative flex-1 group overflow-hidden rounded-2xl shadow-2xl">
                             <img
-                                src={slideData.image}
-                                alt={slideData.imageCaption || slideData.title}
+                                src={slideData?.image}
+                                alt={slideData?.imageCaption || slideData?.title}
                                 className="w-full h-full object-cover transition-transform duration-300 "
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                         </div>
-                        {slideData.imageCaption && (
-                            <p className={`text-sm mt-4 text-center italic break-words font-medium ${slideData.backgroundImage
+                        {slideData?.imageCaption && (
+                            <p className={`text-sm mt-4 text-center italic break-words font-medium ${slideData?.backgroundImage
                                 ? 'text-slate-300'
                                 : 'text-slate-600'
                                 }`}>
-                                {slideData.imageCaption}
+                                {slideData?.imageCaption}
                             </p>
                         )}
                     </div>

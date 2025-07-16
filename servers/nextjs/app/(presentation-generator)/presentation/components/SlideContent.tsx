@@ -115,7 +115,13 @@ const SlideContent = ({
   // }, [presentationData?.slides, isStreaming]);
 
   const renderLayout = (slide: any) => {
-    const layoutName = idMapFileNames[slide.layoutId];
+    console.log(slide)
+    console.log(idMapFileNames)
+    const layoutName = idMapFileNames[slide.layout];
+    if (!layoutName) {
+      return <div>Layout not found</div>
+    }
+    console.log(layoutName)
     const Layout = dynamic(() => import(`@/components/layouts/${layoutName}`)) as React.ComponentType<{ data: any }>;
     return <Layout data={slide.content} />
   };

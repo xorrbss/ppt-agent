@@ -68,8 +68,7 @@ interface TimelineSlideLayoutProps {
     accentColor?: 'blue' | 'green' | 'purple' | 'orange' | 'red'
 }
 
-const TimelineSlideLayout: React.FC<TimelineSlideLayoutProps> = ({ data, accentColor = 'blue' }) => {
-    const slideData = timelineSlideSchema.parse(data || {})
+const TimelineSlideLayout: React.FC<TimelineSlideLayoutProps> = ({ data: slideData, accentColor = 'blue' }) => {
 
     const accentColors = {
         blue: 'from-blue-600 to-blue-800',
@@ -122,8 +121,8 @@ const TimelineSlideLayout: React.FC<TimelineSlideLayoutProps> = ({ data, accentC
     return (
         <div
             className="relative w-full aspect-[16/9] flex flex-col bg-gradient-to-br from-slate-50 via-white to-slate-100 overflow-hidden shadow-2xl border border-slate-200"
-            style={slideData.backgroundImage ? {
-                backgroundImage: `linear-gradient(135deg, rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url(${slideData.backgroundImage})`,
+            style={slideData?.backgroundImage ? {
+                backgroundImage: `linear-gradient(135deg, rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url(${slideData?.backgroundImage})`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center'
             } : {}}
@@ -137,21 +136,21 @@ const TimelineSlideLayout: React.FC<TimelineSlideLayoutProps> = ({ data, accentC
             <div className="relative z-10 flex flex-col h-full px-8 py-8">
                 {/* Professional Header */}
                 <header className="mb-6">
-                    <h1 className={`text-4xl md:text-5xl font-bold mb-3 tracking-tight leading-tight break-words ${slideData.backgroundImage
+                    <h1 className={`text-4xl md:text-5xl font-bold mb-3 tracking-tight leading-tight break-words ${slideData?.backgroundImage
                         ? 'text-white drop-shadow-lg'
                         : 'text-slate-900'
                         }`}>
                         <span className={`bg-gradient-to-r ${accentColors[accentColor]} bg-clip-text text-transparent`}>
-                            {slideData.title}
+                            {slideData?.title}
                         </span>
                     </h1>
 
-                    {slideData.subtitle && (
-                        <p className={`text-xl font-light leading-relaxed break-words ${slideData.backgroundImage
+                    {slideData?.subtitle && (
+                        <p className={`text-xl font-light leading-relaxed break-words ${slideData?.backgroundImage
                             ? 'text-slate-200 drop-shadow-md'
                             : 'text-slate-600'
                             }`}>
-                            {slideData.subtitle}
+                            {slideData?.subtitle}
                         </p>
                     )}
 
@@ -169,8 +168,8 @@ const TimelineSlideLayout: React.FC<TimelineSlideLayoutProps> = ({ data, accentC
                             <div className={`absolute top-8 left-0 right-0 h-1 ${lineColors[accentColor]} rounded-full`} />
                             <div className={`absolute top-8 left-0 right-0 h-1 bg-gradient-to-r ${accentColors[accentColor]} rounded-full opacity-20`} />
 
-                            {slideData.timelineItems.map((item, index) => (
-                                <div key={index} className="relative flex flex-col items-center" style={{ width: `${100 / slideData.timelineItems.length}%` }}>
+                            {slideData?.timelineItems?.map((item, index) => (
+                                <div key={index} className="relative flex flex-col items-center" style={{ width: `${100 / (slideData?.timelineItems?.length || 0)}%` }}>
                                     {/* Timeline node */}
                                     <div className={`w-6 h-6 rounded-full border-4 shadow-lg ${statusColors[item.status][accentColor]} relative z-10 mb-4 transition-all duration-300 hover:scale-110`}>
                                         {item.status === 'completed' && (
