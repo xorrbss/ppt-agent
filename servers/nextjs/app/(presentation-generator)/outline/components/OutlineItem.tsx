@@ -103,8 +103,8 @@ export function OutlineItem({
                 <div id={`outline-item-${index}`} className="flex flex-col basis-full gap-2">
                     <input
                         type="text"
-                        value={slideOutline.title || ''}
-                        onChange={(e) => handleSlideChange({ ...slideOutline, title: e.target.value })}
+                        defaultValue={slideOutline.title || ''}
+                        onBlur={(e) => handleSlideChange({ ...slideOutline, title: e.target.value })}
                         className="text-md sm:text-lg flex-1 font-semibold bg-transparent outline-none"
                         placeholder="Title goes here"
                     />
