@@ -13,19 +13,6 @@ def get_prompt(presentation_layout: PresentationLayoutModel, n_slides: int, data
     return [
         {
             "role": "system",
-            # "content": f"""
-            #     You're a professional presentation designer with years of experience in designing clear and engaging presentations.
-            #     {presentation_layout.to_string()}
-            #     # Steps
-            #     1. Analyze provided Number of slides, Presentation title, Slides content and Presentation Layout.
-            #     2. Select appropriate slide layout **index** for each slide.
-            #     # Notes
-            #     - Slide layout should be selected based on provided content for slide and notes.
-            #     - Don't fall into patterns like always using layout 2 and after layout 1.
-            #     - Each presentation should have its own unique flow and rhythm.
-            #     - Select type for {n_slides} slides.
-            #     **Go through notes and steps and make sure they are all followed. Rule breaks are strictly not allowed.**
-            # """,
             "content": f"""
                 You're a professional presentation designer. 
                 {presentation_layout.to_string()}

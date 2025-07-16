@@ -4,6 +4,7 @@ from typing import Annotated, List, Optional
 import uuid
 from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import StreamingResponse
+from sqlmodel import select
 
 from models.presentation_outline_model import SlideOutlineModel
 from models.presentation_layout import PresentationLayoutModel
@@ -144,6 +145,7 @@ async def stream_presentation(presentation_id: str):
             slide = SlideModel(
                 presentation=presentation_id,
                 layout=slide_layout.id,
+                index=i,
                 content=slide_content,
             )
             slides.append(slide)
@@ -176,3 +178,17 @@ async def stream_presentation(presentation_id: str):
         ).to_string()
 
     return StreamingResponse(inner(), media_type="text/event-stream")
+
+
+@PRESENTATION_ROUTER.get("/", response_model=PresentationWithSlides)
+def get_presentation(id: str):
+    with get_sql_session() as sql_session:
+        presentation = sql_session.get(PresentationModel, id)
+        slides = sql_session.exec(
+            select(SlideModel).where(SlideModel.presentation == id)
+        )
+        slides = sorted(slides, key=lambda x: x.index)
+    return PresentationWithSlides(
+        **presentation.model_dump(),
+        slides=slides,
+    )
