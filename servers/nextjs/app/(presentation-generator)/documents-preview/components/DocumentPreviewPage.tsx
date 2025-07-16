@@ -29,7 +29,7 @@ import { getIconFromFile } from "../../utils/others";
 import { ChevronRight, PanelRightOpen, X } from "lucide-react";
 import ToolTip from "@/components/ToolTip";
 import Header from "@/app/dashboard/components/Header";
-import useLayoutSchema from "../../hooks/useLayoutSchema";
+import { useLayout } from "../../context/LayoutContext";
 
 // Types
 interface LoadingState {
@@ -70,7 +70,7 @@ const DocumentsPreviewPage: React.FC = () => {
     duration: 10,
     progress: false,
   });
-  const { layoutSchema } = useLayoutSchema();
+  const { layoutSchema } = useLayout();
 
   // Memoized computed values
   const fileItems: FileItem[] = useMemo(() => {

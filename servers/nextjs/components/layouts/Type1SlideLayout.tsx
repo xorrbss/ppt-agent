@@ -33,7 +33,7 @@ const Type1SlideLayout: React.FC<Type1SlideLayoutProps> = ({ data: slideData }) 
 
     return (
         <div
-            className="slide-container w-full rounded-sm max-w-[1280px] shadow-lg px-3 sm:px-12 lg:px-20 py-[10px] sm:py-[40px] lg:py-[86px] max-h-[720px] flex items-center aspect-video bg-white relative z-20 mx-auto"
+            className=" w-full rounded-sm max-w-[1280px] shadow-lg px-3 sm:px-12 lg:px-20 py-[10px] sm:py-[40px] lg:py-[86px] max-h-[720px] flex items-center aspect-video bg-white relative z-20 mx-auto"
 
         >
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-8 md:gap-12 lg:gap-16 w-full">

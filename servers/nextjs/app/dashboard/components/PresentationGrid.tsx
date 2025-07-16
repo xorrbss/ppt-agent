@@ -101,9 +101,10 @@ export const PresentationGrid = ({
         presentations.map((presentation) => (
           <PresentationCard
             key={presentation.id}
-            {...presentation}
-            theme={presentation.theme}
-            slide={presentation.slide}
+            id={presentation.id}
+            title={presentation.title}
+            created_at={presentation.created_at}
+            slide={presentation.slides[0]}
 
           />
         ))}

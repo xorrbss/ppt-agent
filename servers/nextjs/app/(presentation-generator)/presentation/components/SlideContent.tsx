@@ -16,7 +16,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { addSlide, updateSlide } from "@/store/slices/presentationGeneration";
 import NewSlide from "../../components/slide_layouts/NewSlide";
 import { getEmptySlideContent } from "../../utils/NewSlideContent";
-import useLayoutCache from "../../hooks/useLayoutCache";
+import { useLayout } from "../../context/LayoutContext";
 
 interface SlideContentProps {
   slide: any;
@@ -37,13 +37,15 @@ const SlideContent = ({
   const { presentationData, isStreaming } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
-  const { getLayout } = useLayoutCache();
+  const { getLayout, loading } = useLayout();
 
   // Memoized layout component to prevent re-renders
   const LayoutComponent = useMemo(() => {
     const Layout = getLayout(slide.layout);
     if (!Layout) {
-      return () => <div>Layout not found</div>;
+      return () => <div className="flex flex-col items-center justify-center h-full">
+        Layout not found
+      </div>;
     }
     return Layout;
   }, [slide.layout, getLayout]);
@@ -122,7 +124,7 @@ const SlideContent = ({
     ) {
       // Scroll to the last slide (newly generated during streaming)
       const lastSlideIndex = presentationData.slides.length - 1;
-      const slideElement = document.getElementById(`slide-${presentationData.slides[lastSlideIndex].id}`);
+      const slideElement = document.getElementById(`slide-${presentationData.slides[lastSlideIndex].index}`);
       if (slideElement) {
         slideElement.scrollIntoView({
           behavior: "smooth",
@@ -140,7 +142,7 @@ const SlideContent = ({
   return (
     <>
       <div
-        id={`slide-${slide.id}`}
+        id={`slide-${slide.index}`}
         className=" w-full max-w-[1280px] main-slide flex items-center max-md:mb-4 justify-center relative"
       >
         {isStreaming && (
@@ -148,7 +150,9 @@ const SlideContent = ({
         )}
         <div className={` w-full group `}>
           {/* render slides */}
-          {slideContent}
+          {loading ? <div className="flex flex-col bg-white aspect-video items-center justify-center h-full">
+            <Loader2 className="w-8 h-8 animate-spin" />
+          </div> : slideContent}
 
           {!showNewSlideSelection && (
             <div className="group-hover:opacity-100 hidden md:block opacity-0 transition-opacity my-4 duration-300">

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 
 import { Card } from "@/components/ui/card";
 import { DashboardApi } from "../api/dashboard";
@@ -11,23 +11,23 @@ import {
 import { useRouter } from "next/navigation";
 import { toast } from "@/hooks/use-toast";
 import { renderSlideContent } from "@/app/(presentation-generator)/components/slide_config";
+import { useLayout } from "@/app/(presentation-generator)/context/LayoutContext";
 
 export const PresentationCard = ({
   id,
   title,
   created_at,
-  thumbnail,
-  theme,
   slide
 }: {
   id: string;
   title: string;
   created_at: string;
-  thumbnail: string;
-  theme: any;
   slide: any
 }) => {
+  console.log('slide', slide)
   const router = useRouter();
+  const { getLayout, loading } = useLayout();
+
 
   const handlePreview = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -61,25 +61,27 @@ export const PresentationCard = ({
     window.location.reload();
   };
 
-  const themeName = theme.name;
-  // Create CSS variables object
-  const cssVariables = {
-    '--slide-bg': theme.colors.slideBg,
-    '--slide-title': theme.colors.slideTitle,
-    '--slide-heading': theme.colors.slideHeading,
-    '--slide-description': theme.colors.slideDescription,
-    '--slide-box': theme.colors.slideBox,
-    '--icon-bg': theme.colors.iconBg,
-    '--background': theme.colors.background,
-    '--font-family': theme.colors.fontFamily,
-  } as React.CSSProperties;
+  const LayoutComponent = useMemo(() => {
+    const Layout = getLayout(slide.layout);
+    if (!Layout) {
+      return () => <div className="flex flex-col items-center justify-center h-full">
+        Layout not found
+      </div>;
+    }
+    return Layout;
+  }, [slide.layout, getLayout]);
+  const slideContent = useMemo(() => {
+    return <LayoutComponent data={slide.content} />;
+  }, [LayoutComponent, slide.content]);
+
+
 
   return (
     <Card
       onClick={handlePreview}
-      data-theme={themeName}
+
       className="bg-white rounded-[8px] slide-theme cursor-pointer overflow-hidden p-4"
-      style={cssVariables}
+
     >
       <div className="space-y-4">
         {/* Date */}
@@ -103,25 +105,6 @@ export const PresentationCard = ({
           </Popover>
         </div>
 
-        {/* Thumbnail */}
-        {/* <div className="relative border-2 border-gray-200 aspect-[16/9] rounded-[8px] overflow-hidden">
-          {thumbnail ? (
-            <img
-              src={getStaticFileUrl(thumbnail)}
-              alt={title}
-              className="object-cover h-full w-full"
-            />
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full w-full">
-              <p className="text-gray-500 text-sm font-roboto">
-                No thumbnail yet
-              </p>
-              <p className="text-gray-500 text-sm font-roboto">
-                Will be added shortly
-              </p>
-            </div>
-          )}
-        </div> */}
         <div className=" slide-box relative overflow-hidden border aspect-video"
           style={{
 
@@ -129,7 +112,7 @@ export const PresentationCard = ({
         >
           <div className="absolute bg-transparent z-40 top-0 left-0 w-full h-full" />
           <div className="transform scale-[0.2] flex justify-center items-center origin-top-left  w-[500%] h-[500%]">
-            {renderSlideContent(slide, 'English')}
+            {slideContent}
           </div>
         </div>
 

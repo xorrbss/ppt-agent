@@ -25,7 +25,7 @@ import { PresentationGenerationApi } from "../../services/api/presentation-gener
 import { OverlayLoader } from "@/components/ui/overlay-loader";
 import Wrapper from "@/components/Wrapper";
 import { setPptGenUploadState } from "@/store/slices/presentationGenUpload";
-import useLayoutSchema from "../../hooks/useLayoutSchema";
+import { useLayout } from "../../context/LayoutContext";
 
 // Types for loading state
 interface LoadingState {
@@ -40,7 +40,7 @@ const UploadPage = () => {
   const router = useRouter();
   const dispatch = useDispatch();
   const { toast } = useToast();
-  const { layoutSchema, loading: layoutsLoading, error: layoutsError } = useLayoutSchema();
+  const { layoutSchema, loading: layoutsLoading, error: layoutsError } = useLayout();
 
   // State management
   const [files, setFiles] = useState<File[]>([]);

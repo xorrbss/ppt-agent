@@ -39,7 +39,7 @@ export function SortableSlide({ slide, index, selectedSlide, onSlideClick, rende
 
         // If the mouse was down for less than 200ms, consider it a click
         if (timeDiff < 200 && !isDragging) {
-            onSlideClick(slide.id);
+            onSlideClick(slide.index);
         }
     };
 
@@ -51,7 +51,7 @@ export function SortableSlide({ slide, index, selectedSlide, onSlideClick, rende
             {...listeners}
             onMouseDown={handleMouseDown}
             onMouseUp={handleMouseUp}
-            className={` cursor-pointer border-[3px] p-1 shadow-lg   rounded-md transition-all duration-200 ${selectedSlide === index ? ' border-[#5141e5]' : 'border-color'
+            className={` cursor-pointer border-[3px]  p-1 shadow-lg   rounded-md transition-all duration-200 ${selectedSlide === index ? ' border-[#5141e5]' : 'border-gray-300'
                 }`}
         >
             <div className=" slide-box relative overflow-hidden aspect-video">

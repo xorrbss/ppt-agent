@@ -49,7 +49,7 @@ const Type2NumberedSlideLayout: React.FC<Type2NumberedSlideLayoutProps> = ({ dat
 
     const renderGridContent = () => {
         return (
-            <div className="grid grid-cols-1 lg:grid-cols-2 relative gap-4 lg:gap-8 mt-4 lg:mt-12">
+            <div className="grid grid-cols-1 bg-white lg:grid-cols-2 relative gap-4 lg:gap-8 mt-4 lg:mt-12">
                 {items.map((item, index) => (
                     <div
                         key={index}
@@ -79,7 +79,7 @@ const Type2NumberedSlideLayout: React.FC<Type2NumberedSlideLayoutProps> = ({ dat
 
     const renderHorizontalContent = () => {
         return (
-            <div className="flex flex-col lg:flex-row mt-4 lg:mt-12 w-full relative gap-4 lg:gap-8">
+            <div className="flex flex-col lg:flex-row bg-white mt-4 lg:mt-12 w-full relative gap-4 lg:gap-8">
                 {items.map((item, index) => (
                     <div
                         key={index}
@@ -107,7 +107,7 @@ const Type2NumberedSlideLayout: React.FC<Type2NumberedSlideLayoutProps> = ({ dat
 
     return (
         <div
-            className="slide-container rounded-sm max-w-[1280px] w-full shadow-lg px-3 sm:px-12 lg:px-20 py-[10px] sm:py-[40px] flex flex-col items-center justify-center max-h-[720px] aspect-video bg-white relative z-20 mx-auto"
+            className=" rounded-sm max-w-[1280px] w-full shadow-lg px-3 sm:px-12 lg:px-20 py-[10px] sm:py-[40px] flex flex-col items-center justify-center max-h-[720px] aspect-video bg-white relative z-20 mx-auto"
 
         >
             <div className="text-center lg:pb-8 w-full">
