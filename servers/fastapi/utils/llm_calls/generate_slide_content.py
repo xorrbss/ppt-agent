@@ -82,4 +82,4 @@ async def get_slide_content_from_type_and_outline(
                 response_json_schema=slide_layout.json_schema,
             ),
         )
-        return response.text
+        return json.loads(response.text)
