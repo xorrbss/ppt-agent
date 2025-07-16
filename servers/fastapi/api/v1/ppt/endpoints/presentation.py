@@ -141,7 +141,6 @@ async def stream_presentation(presentation_id: str):
             slide_content = await get_slide_content_from_type_and_outline(
                 slide_layout, outline.slides[i]
             )
-            print(slide_content)
             slide = SlideModel(
                 presentation=presentation_id,
                 layout=slide_layout.id,
@@ -184,11 +183,51 @@ async def stream_presentation(presentation_id: str):
 def get_presentation(id: str):
     with get_sql_session() as sql_session:
         presentation = sql_session.get(PresentationModel, id)
+        if not presentation:
+            raise HTTPException(404, "Presentation not found")
+        slides = sql_session.exec(
+            select(SlideModel)
+            .where(SlideModel.presentation == id)
+            .order_by(SlideModel.index)
+        )
+        return PresentationWithSlides(
+            **presentation.model_dump(),
+            slides=slides,
+        )
+
+
+@PRESENTATION_ROUTER.delete("/", status_code=204)
+def delete_presentation(id: str):
+    with get_sql_session() as sql_session:
+        presentation = sql_session.get(PresentationModel, id)
+        if not presentation:
+            raise HTTPException(404, "Presentation not found")
         slides = sql_session.exec(
             select(SlideModel).where(SlideModel.presentation == id)
-        )
-        slides = sorted(slides, key=lambda x: x.index)
-    return PresentationWithSlides(
-        **presentation.model_dump(),
-        slides=slides,
-    )
+        ).all()
+        for slide in slides:
+            sql_session.delete(slide)
+        sql_session.delete(presentation)
+        sql_session.commit()
+
+
+@PRESENTATION_ROUTER.get("/all", response_model=List[PresentationWithSlides])
+def get_all_presentations():
+    with get_sql_session() as sql_session:
+        presentations_with_slides = []
+        presentations = sql_session.exec(select(PresentationModel))
+        for presentation in presentations:
+            slides = sql_session.exec(
+                select(SlideModel)
+                .where(SlideModel.presentation == presentation.id)
+                .where(SlideModel.index == 0)
+            ).all()
+            if not slides:
+                continue
+            presentations_with_slides.append(
+                PresentationWithSlides(
+                    **presentation.model_dump(),
+                    slides=slides,
+                )
+            )
+        return presentations_with_slides
