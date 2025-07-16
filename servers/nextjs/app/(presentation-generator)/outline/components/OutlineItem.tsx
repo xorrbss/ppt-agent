@@ -95,6 +95,7 @@ export function OutlineItem({
 
                     {/* Editable Markdown Content */}
                     <MarkdownEditor
+                        key={index}
                         content={slideOutline.body || ''}
                         onChange={(content) => handleSlideChange({ ...slideOutline, body: content })}
                     />
