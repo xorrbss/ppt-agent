@@ -10,7 +10,7 @@ from models.presentation_layout import PresentationLayoutModel
 from models.presentation_structure_model import PresentationStructureModel
 from models.presentation_with_slides import PresentationWithSlides
 from models.sql.slide import SlideModel
-from models.sse_response import SSECompleteResponse, SSEResponse
+from models.sse_response import SSECompleteResponse, SSEResponse, SSEStatusResponse
 from services import TEMP_FILE_SERVICE
 from services.database import get_sql_session
 from services.documents_loader import DocumentsLoader
@@ -140,6 +140,7 @@ async def stream_presentation(presentation_id: str):
             slide_content = await get_slide_content_from_type_and_outline(
                 slide_layout, outline.slides[i]
             )
+            print(slide_content)
             slide = SlideModel(
                 presentation=presentation_id,
                 layout=slide_layout.id,
@@ -150,6 +151,7 @@ async def stream_presentation(presentation_id: str):
                 event="response",
                 data=json.dumps({"type": "chunk", "chunk": slide.model_dump_json()}),
             ).to_string()
+
         yield SSEResponse(
             event="response",
             data=json.dumps({"type": "chunk", "chunk": " ] }"}),
