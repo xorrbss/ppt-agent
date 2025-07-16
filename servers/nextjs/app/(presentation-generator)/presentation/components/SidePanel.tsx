@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { LayoutList, ListTree, PanelRightOpen, X } from "lucide-react";
 import ToolTip from "@/components/ToolTip";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,7 @@ import {
 import { setPresentationData } from "@/store/slices/presentationGeneration";
 import { SortableSlide } from "./SortableSlide";
 import { SortableListItem } from "./SortableListItem";
-import { renderSlideContent } from "../../components/slide_config";
+import useLayoutCache from "../../hooks/useLayoutCache";
 
 interface SidePanelProps {
   selectedSlide: number;
@@ -49,13 +49,24 @@ const SidePanel = ({
     (state: RootState) => state.theme
   );
   const dispatch = useDispatch();
+  const { getLayout } = useLayoutCache();
+
+  // Memoized slide renderer using layout cache
+  const renderSlideContent = useMemo(() => {
+    return (slide: any) => {
+      const Layout = getLayout(slide.layout);
+      if (!Layout) {
+        return <div>Layout not found</div>;
+      }
+      return <Layout data={slide.content} />;
+    };
+  }, [getLayout]);
 
   useEffect(() => {
     if (window.innerWidth < 768) {
       setIsOpen(isMobilePanelOpen);
     }
   }, [isMobilePanelOpen]);
-
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -70,7 +81,6 @@ const SidePanel = ({
       setIsMobilePanelOpen(false);
     }
   };
-
 
   const handleDragEnd = (event: any) => {
     const { active, over } = event;
@@ -114,104 +124,73 @@ const SidePanel = ({
     presentationData?.slides.length === 0
   ) {
     return null;
-
   }
 
   return (
     <>
-      {/* Desktop Toggle Button - Always visible when panel is closed */}
-      {!isOpen && (
-        <div className="hidden xl:block fixed left-4 top-1/2 -translate-y-1/2 z-50">
-          <ToolTip content="Open Panel">
-            <Button
-              onClick={() => setIsOpen(true)}
-              className="bg-white hover:bg-gray-50 shadow-lg"
-            >
-              <PanelRightOpen className="text-black" size={20} />
-            </Button>
-          </ToolTip>
-        </div>
-      )}
-
       {/* Mobile Toggle Button */}
-      {!isMobilePanelOpen && (
-        <div className="xl:hidden fixed left-4 bottom-4 z-50">
-          <ToolTip content="Show Panel">
-            <Button
-              onClick={() => setIsMobilePanelOpen(true)}
-              className="bg-[#5146E5] text-white p-3 rounded-full shadow-lg"
-            >
-              <PanelRightOpen className="text-white" size={20} />
-            </Button>
-          </ToolTip>
-        </div>
+      <div className="md:hidden fixed top-20 left-4 z-40">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setIsMobilePanelOpen(true)}
+          className="bg-white shadow-md"
+        >
+          <PanelRightOpen className="w-4 h-4" />
+        </Button>
+      </div>
+
+      {/* Backdrop for mobile */}
+      {isMobilePanelOpen && (
+        <div
+          className="md:hidden fixed inset-0 bg-black/50 z-30"
+          onClick={() => setIsMobilePanelOpen(false)}
+        />
       )}
 
-      {/* Side Panel */}
       <div
-        className={`
-          fixed xl:relative h-full z-50 xl:z-auto
-          transition-all duration-300 ease-in-out
-          ${isOpen ? "ml-0" : "-ml-[300px]"}
-          ${isMobilePanelOpen
-            ? "translate-x-0"
-            : "-translate-x-full xl:translate-x-0"
-          }
-        `}
+        className={`${isOpen ? "w-72" : "w-0"} ${isMobilePanelOpen ? "translate-x-0" : "-translate-x-full"
+          } md:translate-x-0 fixed md:relative left-0 top-0 h-full bg-white border-r border-gray-200 transition-all duration-300 ease-in-out z-40 md:z-auto flex-shrink-0`}
+        style={{
+          background: currentColors.background,
+        }}
       >
-        <div
-          data-theme={currentTheme}
-          style={{
-            backgroundColor: currentColors.slideBg,
-          }}
-          className="min-w-[300px] max-w-[300px] h-[calc(100vh-120px)]  rounded-[20px] hide-scrollbar overflow-hidden slide-theme shadow-xl"
-        >
-          <div
-            style={{
-              backgroundColor: currentColors.slideBg,
-            }}
-            className="sticky top-0 z-40  px-6 py-4"
-          >
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center justify-start gap-4">
-                <ToolTip content="Image Preview">
-                  <Button
-                    className={`${active === "grid"
-                      ? "bg-[#5141e5] hover:bg-[#4638c7]"
-                      : "bg-white hover:bg-white"
-                      }`}
-                    onClick={() => setActive("grid")}
-                  >
-                    <LayoutList
-                      className={`${active === "grid" ? "text-white" : "text-black"
-                        }`}
-                      size={20}
-                    />
-                  </Button>
-                </ToolTip>
-                <ToolTip content="List Preview">
-                  <Button
-                    className={`${active === "list"
-                      ? "bg-[#5141e5] hover:bg-[#4638c7]"
-                      : "bg-white hover:bg-white"
-                      }`}
-                    onClick={() => setActive("list")}
-                  >
-                    <ListTree
-                      className={`${active === "list" ? "text-white" : "text-black"
-                        }`}
-                      size={20}
-                    />
-                  </Button>
-                </ToolTip>
-              </div>
-              <X
+        <div className="h-full flex flex-col">
+          {/* Header */}
+          <div className="p-4 border-b border-color flex items-center justify-between">
+            <h3 className="font-semibold slide-title">Slides</h3>
+            <div className="flex items-center gap-2">
+              <ToolTip content="List view">
+                <Button
+                  variant={active === "list" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setActive("list")}
+                  className="p-2"
+                >
+                  <ListTree className="w-4 h-4" />
+                </Button>
+              </ToolTip>
+              <ToolTip content="Grid view">
+                <Button
+                  variant={active === "grid" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setActive("grid")}
+                  className="p-2"
+                >
+                  <LayoutList className="w-4 h-4" />
+                </Button>
+              </ToolTip>
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={handleClose}
-                className="text-[#6c7081] cursor-pointer hover:text-gray-600"
-                size={20}
-              />
+                className="md:hidden p-2"
+              >
+                <X className="w-4 h-4" />
+              </Button>
             </div>
           </div>
+
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -274,7 +253,7 @@ const SidePanel = ({
                       <div className=" bg-white  relative overflow-hidden aspect-video">
                         <div className="absolute bg-gray-100/5 z-40 top-0 left-0 w-full h-full" />
                         <div className="transform scale-[0.2] flex justify-center items-center origin-top-left  w-[500%] h-[500%]">
-                          {renderSlideContent(slide, 'English')}
+                          {renderSlideContent(slide)}
                         </div>
                       </div>
                     </div>
@@ -294,6 +273,7 @@ const SidePanel = ({
                           index={index}
                           selectedSlide={selectedSlide}
                           onSlideClick={onSlideClick}
+                          renderSlideContent={renderSlideContent}
                         />
                       ))}
                   </SortableContext>
