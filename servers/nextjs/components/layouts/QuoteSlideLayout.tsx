@@ -1,6 +1,6 @@
 import React from 'react'
 import * as z from "zod";
-import { imageSchema } from './defaultSchemes';
+import { ImageSchema } from './defaultSchemes';
 
 
 export const layoutId = 'quote-slide'
@@ -29,7 +29,7 @@ const quoteSlideSchema = z.object({
     authorImage: z.string().optional().meta({
         description: "URL to author photo",
     }),
-    backgroundImage: imageSchema.optional().meta({
+    backgroundImage: ImageSchema.optional().meta({
         description: "Background image for the slide",
     })
 })
@@ -40,26 +40,9 @@ export type QuoteSlideData = z.infer<typeof quoteSlideSchema>
 
 interface QuoteSlideLayoutProps {
     data?: Partial<QuoteSlideData>
-    accentColor?: 'blue' | 'green' | 'purple' | 'orange' | 'red'
 }
 
-const QuoteSlideLayout: React.FC<QuoteSlideLayoutProps> = ({ data: slideData, accentColor = 'blue' }) => {
-
-    const accentColors = {
-        blue: 'from-blue-600 to-blue-800',
-        green: 'from-emerald-600 to-emerald-800',
-        purple: 'from-violet-600 to-violet-800',
-        orange: 'from-orange-600 to-orange-800',
-        red: 'from-red-600 to-red-800'
-    }
-
-    const accentSolids = {
-        blue: 'bg-blue-600',
-        green: 'bg-emerald-600',
-        purple: 'bg-violet-600',
-        orange: 'bg-orange-600',
-        red: 'bg-red-600'
-    }
+const QuoteSlideLayout: React.FC<QuoteSlideLayoutProps> = ({ data: slideData }) => {
 
     return (
         <div
@@ -70,117 +53,89 @@ const QuoteSlideLayout: React.FC<QuoteSlideLayoutProps> = ({ data: slideData, ac
                 backgroundPosition: 'center'
             } : {}}
         >
-            {/* Enhanced geometric background decoration */}
-            <div className="absolute inset-0 opacity-[0.03]">
-                <div className={`absolute top-0 right-0 w-96 h-96 ${accentSolids[accentColor]} rounded-full transform translate-x-32 -translate-y-32 blur-3xl`} />
-                <div className={`absolute bottom-0 left-0 w-64 h-64 ${accentSolids[accentColor]} rounded-full transform -translate-x-16 translate-y-16 blur-2xl`} />
-            </div>
 
-            <div className="relative z-10 flex flex-col h-full px-8 py-8">
-                {/* Professional Header */}
-                <header className="mb-6">
-                    <h1 className={`text-4xl md:text-5xl font-bold mb-3 tracking-tight leading-tight break-words ${slideData?.backgroundImage
-                        ? 'text-white drop-shadow-lg'
-                        : 'text-slate-900'
-                        }`}>
-                        <span className={`bg-gradient-to-r ${accentColors[accentColor]} bg-clip-text text-transparent`}>
-                            {slideData?.title}
-                        </span>
-                    </h1>
 
-                    {slideData?.subtitle && (
-                        <p className={`text-xl font-light leading-relaxed break-words ${slideData?.backgroundImage
-                            ? 'text-slate-200 drop-shadow-md'
-                            : 'text-slate-600'
-                            }`}>
-                            {slideData?.subtitle}
-                        </p>
-                    )}
+            {/* Content */}
+            <div className="relative z-10 h-full flex flex-col justify-center items-center px-16 py-12">
+                {/* Title */}
+                <h1 className="text-5xl font-black mb-16 leading-tight tracking-tight text-center max-w-4xl">
+                    <span className="text-gray-900">{slideData?.title?.split(' ').slice(0, -1).join(' ')}</span>{' '}
+                    <span className={`bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent`}>
+                        {slideData?.title?.split(' ').slice(-1)[0]}
+                    </span>
+                </h1>
 
-                    <div className="relative mt-4">
-                        <div className={`w-32 h-1 bg-gradient-to-r ${accentColors[accentColor]} rounded-full shadow-lg`} />
-                        <div className={`absolute inset-0 w-32 h-1 bg-gradient-to-r ${accentColors[accentColor]} rounded-full blur-sm opacity-50`} />
+                {/* Quote */}
+                <div className="max-w-4xl mx-auto text-center mb-16">
+                    {/* Decorative line */}
+                    <div className="relative flex justify-center mb-12">
+                        <div className={`w-32 h-1 bg-gradient-to-r from-blue-600 to-blue-800 rounded-full shadow-lg`} />
+                        <div className={`absolute inset-0 w-32 h-1 bg-gradient-to-r from-blue-600 to-blue-800 rounded-full blur-sm opacity-50`} />
                     </div>
-                </header>
 
-                {/* Enhanced Quote Content */}
-                <main className="flex-1 flex items-center justify-center">
-                    <div className="bg-white/95 backdrop-blur-lg rounded-3xl p-10 shadow-2xl border border-white/50 max-w-5xl text-center relative overflow-hidden">
-                        {/* Enhanced Background Quote Decoration */}
-                        <div className={`absolute top-4 left-6 text-8xl font-black opacity-10 bg-gradient-to-r ${accentColors[accentColor]} bg-clip-text text-transparent pointer-events-none select-none`}>
-                            "
+                    {/* Quote Text */}
+                    <blockquote className={`text-2xl md:text-3xl leading-relaxed mb-8 italic break-words relative z-10 font-light text-slate-700`}>
+                        "{slideData?.quote}"
+                    </blockquote>
+
+                    {/* Author Attribution */}
+                    <div className="flex items-center justify-center space-x-4 relative z-10">
+                        {/* Author Avatar */}
+                        <div className="flex-shrink-0">
+                            {slideData?.authorImage ? (
+                                <img
+                                    src={slideData?.authorImage}
+                                    alt={slideData?.author}
+                                    className="w-16 h-16 rounded-full object-cover shadow-xl border-4 border-white"
+                                />
+                            ) : (
+                                <div className={`w-16 h-16 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-xl shadow-xl border-4 border-white`}>
+                                    {slideData?.author?.split(' ').map(n => n[0]).join('')}
+                                </div>
+                            )}
                         </div>
-                        <div className={`absolute bottom-4 right-6 text-8xl font-black opacity-10 bg-gradient-to-r ${accentColors[accentColor]} bg-clip-text text-transparent pointer-events-none select-none rotate-180`}>
-                            "
-                        </div>
 
-                        {/* Quote Text */}
-                        <blockquote className={`text-2xl md:text-3xl leading-relaxed mb-8 italic break-words relative z-10 font-light ${slideData?.backgroundImage
-                            ? 'text-slate-700'
-                            : 'text-slate-700'
-                            }`}>
-                            "{slideData?.quote}"
-                        </blockquote>
+                        {/* Author Details */}
+                        <div className="text-left">
+                            <p className="text-xl font-bold text-slate-900 break-words">
+                                {slideData?.author}
+                            </p>
 
-                        {/* Professional Author Attribution */}
-                        <div className="flex items-center justify-center space-x-4 relative z-10">
-                            {/* Author Avatar */}
-                            <div className="flex-shrink-0">
-                                {slideData?.authorImage ? (
-                                    <img
-                                        src={slideData?.authorImage}
-                                        alt={slideData?.author}
-                                        className="w-16 h-16 rounded-full object-cover shadow-xl border-4 border-white"
-                                    />
-                                ) : (
-                                    <div className={`w-16 h-16 rounded-full ${accentSolids[accentColor]} flex items-center justify-center text-white font-bold text-xl shadow-xl border-4 border-white`}>
-                                        {slideData?.author?.split(' ').map(n => n[0]).join('')}
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Author Details */}
-                            <div className="text-left">
-                                <p className="text-xl font-bold text-slate-900 break-words">
-                                    {slideData?.author}
+                            {slideData?.authorTitle && (
+                                <p className={`text-base font-semibold bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent break-words`}>
+                                    {slideData?.authorTitle}
                                 </p>
+                            )}
 
-                                {slideData?.authorTitle && (
-                                    <p className={`text-base font-semibold bg-gradient-to-r ${accentColors[accentColor]} bg-clip-text text-transparent break-words`}>
-                                        {slideData?.authorTitle}
-                                    </p>
-                                )}
-
-                                {slideData?.company && (
-                                    <p className="text-sm text-slate-600 font-medium break-words">
-                                        {slideData?.company}
-                                    </p>
-                                )}
-                            </div>
+                            {slideData?.company && (
+                                <p className="text-sm text-slate-600 font-medium break-words">
+                                    {slideData?.company}
+                                </p>
+                            )}
                         </div>
-
-                        {/* Enhanced Quote Accent Line */}
-                        <div className="flex justify-center mt-6">
-                            <div className="relative">
-                                <div className={`w-24 h-1 bg-gradient-to-r ${accentColors[accentColor]} rounded-full shadow-lg`} />
-                                <div className={`absolute inset-0 w-24 h-1 bg-gradient-to-r ${accentColors[accentColor]} rounded-full blur-sm opacity-50`} />
-                            </div>
-                        </div>
-
-                        {/* Background decoration */}
-                        <div className={`absolute bottom-0 right-0 w-20 h-20 bg-gradient-to-tl ${accentColors[accentColor]} opacity-5 rounded-tl-full`} />
                     </div>
-                </main>
+
+                    {/* Quote Accent Line */}
+                    <div className="flex justify-center mt-6">
+                        <div className="relative">
+                            <div className={`w-24 h-1 bg-gradient-to-r from-blue-600 to-blue-800 rounded-full shadow-lg`} />
+                            <div className={`absolute inset-0 w-24 h-1 bg-gradient-to-r from-blue-600 to-blue-800 rounded-full blur-sm opacity-50`} />
+                        </div>
+                    </div>
+
+                    {/* Background decoration */}
+                    <div className={`absolute bottom-0 right-0 w-20 h-20 bg-gradient-to-tl from-blue-600 to-blue-800 opacity-5 rounded-tl-full`} />
+                </div>
             </div>
 
-            {/* Enhanced decorative accent */}
-            <div className={`absolute bottom-0 left-0 right-0 h-3 bg-gradient-to-r ${accentColors[accentColor]} shadow-lg`}>
+            {/* Decorative accent */}
+            <div className={`absolute bottom-0 left-0 right-0 h-3 bg-gradient-to-r from-blue-600 to-blue-800 shadow-lg`}>
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent" />
-                <div className={`absolute inset-0 bg-gradient-to-r ${accentColors[accentColor]} blur-sm opacity-50`} />
+                <div className={`absolute inset-0 bg-gradient-to-r from-blue-600 to-blue-800 blur-sm opacity-50`} />
             </div>
 
             {/* Professional corner accents */}
-            <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl ${accentColors[accentColor]} opacity-5 rounded-bl-full`} />
+            <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-blue-600 to-blue-800 opacity-5 rounded-bl-full`} />
         </div>
     )
 }

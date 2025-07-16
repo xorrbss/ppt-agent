@@ -52,7 +52,7 @@ export interface PresentationData {
     thumbnail: string | null;
     language: string;
   } | null;
-  slides: Slide[];
+  slides: any;
 }
 
 interface PresentationGenerationState {
@@ -143,7 +143,7 @@ const presentationGenerationSlice = createSlice({
 
         // Update indices for all slides to ensure they remain sequential
         state.presentationData.slides = state.presentationData.slides.map(
-          (slide, idx) => ({
+          (slide: any, idx: number) => ({
             ...slide,
             index: idx,
           })
@@ -154,7 +154,7 @@ const presentationGenerationSlice = createSlice({
       if (state.presentationData) {
         state.presentationData.slides.splice(action.payload, 1);
         state.presentationData.slides = state.presentationData.slides.map(
-          (slide, idx) => ({
+          (slide: any, idx: number) => ({
             ...slide,
             index: idx,
           })

@@ -1,6 +1,6 @@
 import React from 'react'
 import * as z from "zod";
-import { imageSchema } from './defaultSchemes';
+import { ImageSchema } from './defaultSchemes';
 
 
 export const layoutId = 'statistics-slide'
@@ -53,7 +53,7 @@ const statisticsSlideSchema = z.object({
             context: 'Customer service'
         }
     ]).describe('List of statistics (2-6 items)'),
-    backgroundImage: imageSchema.optional().meta({
+    backgroundImage: ImageSchema.optional().meta({
         description: "Background image for the slide",
     })
 })
@@ -64,40 +64,11 @@ export type StatisticsSlideData = z.infer<typeof statisticsSlideSchema>
 
 interface StatisticsSlideLayoutProps {
     data?: Partial<StatisticsSlideData>
-    accentColor?: 'blue' | 'green' | 'purple' | 'orange' | 'red'
 }
 
-const StatisticsSlideLayout: React.FC<StatisticsSlideLayoutProps> = ({ data: slideData, accentColor = 'blue' }) => {
+const StatisticsSlideLayout: React.FC<StatisticsSlideLayoutProps> = ({ data: slideData }) => {
 
     const statsCount = slideData?.statistics?.length || 0
-
-    const accentColors = {
-        blue: 'from-blue-600 to-blue-800',
-        green: 'from-emerald-600 to-emerald-800',
-        purple: 'from-violet-600 to-violet-800',
-        orange: 'from-orange-600 to-orange-800',
-        red: 'from-red-600 to-red-800'
-    }
-
-    const accentSolids = {
-        blue: 'bg-blue-600',
-        green: 'bg-emerald-600',
-        purple: 'bg-violet-600',
-        orange: 'bg-orange-600',
-        red: 'bg-red-600'
-    }
-
-    const trendColors = {
-        up: {
-            blue: 'text-emerald-600 bg-emerald-50 border-emerald-200',
-            green: 'text-emerald-600 bg-emerald-50 border-emerald-200',
-            purple: 'text-emerald-600 bg-emerald-50 border-emerald-200',
-            orange: 'text-emerald-600 bg-emerald-50 border-emerald-200',
-            red: 'text-emerald-600 bg-emerald-50 border-emerald-200'
-        },
-        down: 'text-red-600 bg-red-50 border-red-200',
-        neutral: 'text-slate-600 bg-slate-50 border-slate-200'
-    }
 
     const getTrendIcon = (trend?: string) => {
         switch (trend) {
@@ -121,17 +92,18 @@ const StatisticsSlideLayout: React.FC<StatisticsSlideLayoutProps> = ({ data: sli
 
     return (
         <div
-            className="relative w-full aspect-[16/9] flex flex-col bg-gradient-to-br from-slate-50 via-white to-slate-100 overflow-hidden shadow-2xl border border-slate-200"
+            className="relative w-full aspect-[16/9] bg-gradient-to-br from-slate-50 via-white to-slate-100 overflow-hidden shadow-2xl border border-slate-200 print:shadow-none print:border-gray-300"
             style={slideData?.backgroundImage ? {
-                backgroundImage: `linear-gradient(135deg, rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url(${slideData?.backgroundImage})`,
+                backgroundImage: `url("${slideData.backgroundImage.url}")`,
                 backgroundSize: 'cover',
-                backgroundPosition: 'center'
+                backgroundPosition: 'center',
+                backgroundRepeat: 'no-repeat'
             } : {}}
         >
             {/* Enhanced geometric background decoration */}
             <div className="absolute inset-0 opacity-[0.03]">
-                <div className={`absolute top-0 right-0 w-96 h-96 ${accentSolids[accentColor]} rounded-full transform translate-x-32 -translate-y-32 blur-3xl`} />
-                <div className={`absolute bottom-0 left-0 w-64 h-64 ${accentSolids[accentColor]} rounded-full transform -translate-x-16 translate-y-16 blur-2xl`} />
+                <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600 rounded-full transform translate-x-32 -translate-y-32 blur-3xl" />
+                <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-600 rounded-full transform -translate-x-16 translate-y-16 blur-2xl" />
             </div>
 
             <div className="relative z-10 flex flex-col h-full px-8 py-8">
@@ -141,7 +113,7 @@ const StatisticsSlideLayout: React.FC<StatisticsSlideLayoutProps> = ({ data: sli
                         ? 'text-white drop-shadow-lg'
                         : 'text-slate-900'
                         }`}>
-                        <span className={`bg-gradient-to-r ${accentColors[accentColor]} bg-clip-text text-transparent`}>
+                        <span className="bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent">
                             {slideData?.title}
                         </span>
                     </h1>
@@ -156,8 +128,8 @@ const StatisticsSlideLayout: React.FC<StatisticsSlideLayoutProps> = ({ data: sli
                     )}
 
                     <div className="relative mt-4">
-                        <div className={`w-32 h-1 bg-gradient-to-r ${accentColors[accentColor]} rounded-full shadow-lg`} />
-                        <div className={`absolute inset-0 w-32 h-1 bg-gradient-to-r ${accentColors[accentColor]} rounded-full blur-sm opacity-50`} />
+                        <div className="w-32 h-1 bg-gradient-to-r from-blue-600 to-blue-800 rounded-full shadow-lg" />
+                        <div className="absolute inset-0 w-32 h-1 bg-gradient-to-r from-blue-600 to-blue-800 rounded-full blur-sm opacity-50" />
                     </div>
                 </header>
 
@@ -167,38 +139,39 @@ const StatisticsSlideLayout: React.FC<StatisticsSlideLayoutProps> = ({ data: sli
                         {slideData?.statistics?.map((stat, index) => (
                             <div key={index} className="bg-white/95 backdrop-blur-lg rounded-2xl p-6 shadow-2xl border border-white/50 text-center relative overflow-hidden group hover:transform hover:scale-105 transition-all duration-300">
                                 {/* Card accent */}
-                                <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${accentColors[accentColor]}`} />
+                                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 to-blue-800" />
 
                                 {/* Statistic Value */}
-                                <div className={`text-4xl md:text-5xl font-black mb-2 bg-gradient-to-r ${accentColors[accentColor]} bg-clip-text text-transparent`}>
+                                <div className="text-4xl md:text-5xl font-black mb-2 bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent">
                                     {stat?.value}
                                 </div>
 
                                 {/* Statistic Label */}
-                                <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-2 break-words">
+                                <h3 className="text-lg font-bold text-slate-900 mb-3 break-words leading-tight">
                                     {stat?.label}
                                 </h3>
 
-                                {/* Trend Indicator */}
-                                {stat?.trend && (
-                                    <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold border ${stat?.trend === 'up' ? trendColors.up[accentColor] :
-                                        stat?.trend === 'down' ? trendColors.down :
-                                            trendColors.neutral
-                                        } mb-2`}>
-                                        <span className="mr-1">{getTrendIcon(stat.trend)}</span>
-                                        {stat.trend.toUpperCase()}
-                                    </div>
-                                )}
-
-                                {/* Context */}
-                                {stat.context && (
-                                    <p className="text-sm text-slate-600 break-words font-medium">
-                                        {stat.context}
+                                {/* Description */}
+                                {stat?.context && (
+                                    <p className="text-sm text-slate-600 leading-relaxed break-words mb-4">
+                                        {stat?.context}
                                     </p>
                                 )}
 
+                                {/* Trend Indicator */}
+                                {stat?.trend && (
+                                    <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold border ${stat?.trend === 'up' ? 'text-emerald-600 bg-emerald-50 border-emerald-200' :
+                                        stat?.trend === 'down' ? 'text-red-600 bg-red-50 border-red-200' :
+                                            'text-slate-600 bg-slate-50 border-slate-200'
+                                        }`}>
+                                        <span className="mr-1">{getTrendIcon(stat?.trend)}</span>
+                                        {stat?.trend === 'up' ? 'Trending Up' :
+                                            stat?.trend === 'down' ? 'Trending Down' : 'Stable'}
+                                    </div>
+                                )}
+
                                 {/* Background decoration */}
-                                <div className={`absolute bottom-0 right-0 w-16 h-16 bg-gradient-to-tl ${accentColors[accentColor]} opacity-5 rounded-tl-full`} />
+                                <div className="absolute bottom-0 right-0 w-16 h-16 bg-gradient-to-tl from-blue-600 to-blue-800 opacity-5 rounded-tl-full" />
                             </div>
                         ))}
                     </div>
@@ -206,13 +179,13 @@ const StatisticsSlideLayout: React.FC<StatisticsSlideLayoutProps> = ({ data: sli
             </div>
 
             {/* Enhanced decorative accent */}
-            <div className={`absolute bottom-0 left-0 right-0 h-3 bg-gradient-to-r ${accentColors[accentColor]} shadow-lg`}>
+            <div className="absolute bottom-0 left-0 right-0 h-3 bg-gradient-to-r from-blue-600 to-blue-800 shadow-lg">
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent" />
-                <div className={`absolute inset-0 bg-gradient-to-r ${accentColors[accentColor]} blur-sm opacity-50`} />
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-blue-800 blur-sm opacity-50" />
             </div>
 
             {/* Professional corner accents */}
-            <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl ${accentColors[accentColor]} opacity-5 rounded-bl-full`} />
+            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-blue-600 to-blue-800 opacity-5 rounded-bl-full" />
         </div>
     )
 }

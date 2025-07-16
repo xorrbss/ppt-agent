@@ -1,6 +1,6 @@
 import React from 'react'
 import * as z from "zod";
-import { imageSchema } from './defaultSchemes';
+import { ImageSchema } from './defaultSchemes';
 
 export const layoutId = 'bullet-point-slide'
 export const layoutName = 'Bullet Point Slide'
@@ -26,7 +26,7 @@ const bulletPointSlideSchema = z.object({
     ]).meta({
         description: "List of bullet points (2-8 items)",
     }),
-    backgroundImage: imageSchema.optional().meta({
+    backgroundImage: ImageSchema.optional().meta({
         description: "Background image for the slide",
     }),
 })
@@ -37,35 +37,10 @@ export type BulletPointSlideData = z.infer<typeof bulletPointSlideSchema>
 
 interface BulletPointSlideLayoutProps {
     data?: Partial<BulletPointSlideData>
-    accentColor?: 'blue' | 'green' | 'purple' | 'orange' | 'red'
 }
 
-const BulletPointSlideLayout: React.FC<BulletPointSlideLayoutProps> = ({ data: slideData, accentColor = 'blue' }) => {
+const BulletPointSlideLayout: React.FC<BulletPointSlideLayoutProps> = ({ data: slideData }) => {
 
-
-    const accentColors = {
-        blue: 'from-blue-600 to-blue-800',
-        green: 'from-emerald-600 to-emerald-800',
-        purple: 'from-violet-600 to-violet-800',
-        orange: 'from-orange-600 to-orange-800',
-        red: 'from-red-600 to-red-800'
-    }
-
-    const bulletColors = {
-        blue: 'bg-blue-600',
-        green: 'bg-emerald-600',
-        purple: 'bg-violet-600',
-        orange: 'bg-orange-600',
-        red: 'bg-red-600'
-    }
-
-    const accentSolids = {
-        blue: 'bg-blue-600',
-        green: 'bg-emerald-600',
-        purple: 'bg-violet-600',
-        orange: 'bg-orange-600',
-        red: 'bg-red-600'
-    }
 
     return (
         <div
@@ -76,76 +51,64 @@ const BulletPointSlideLayout: React.FC<BulletPointSlideLayoutProps> = ({ data: s
                 backgroundPosition: 'center'
             } : {}}
         >
-            {/* Enhanced geometric background decoration */}
-            <div className="absolute inset-0 opacity-[0.03]">
-                <div className={`absolute top-0 right-0 w-96 h-96 ${accentSolids[accentColor]} rounded-full transform translate-x-32 -translate-y-32 blur-3xl`} />
-                <div className={`absolute bottom-0 left-0 w-64 h-64 ${accentSolids[accentColor]} rounded-full transform -translate-x-16 translate-y-16 blur-2xl`} />
-            </div>
 
-            <div className="relative z-10 flex flex-col h-full px-8 py-8">
-                {/* Professional Header */}
-                <header className="mb-6">
-                    <h1 className={`text-4xl md:text-5xl font-bold mb-3 tracking-tight leading-tight break-words ${slideData?.backgroundImage
-                        ? 'text-white drop-shadow-lg'
-                        : 'text-slate-900'
-                        }`}>
-                        <span className={`bg-gradient-to-r ${accentColors[accentColor]} bg-clip-text text-transparent`}>
-                            {slideData?.title}
+
+
+            {/* Content */}
+            <div className="relative z-10 h-full flex flex-col px-16 py-12">
+                {/* Header */}
+                <div className="text-center mb-12">
+                    <h1 className="text-6xl font-black mb-8 leading-tight tracking-tight max-w-4xl mx-auto">
+                        <span className="text-gray-900">{slideData?.title?.split(' ').slice(0, -1).join(' ')}</span>{' '}
+                        <span className={`bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent`}>
+                            {slideData?.title?.split(' ').slice(-1)[0]}
                         </span>
                     </h1>
 
+                    {/* Subtitle */}
                     {slideData?.subtitle && (
-                        <p className={`text-xl font-light leading-relaxed break-words ${slideData?.backgroundImage
-                            ? 'text-slate-200 drop-shadow-md'
-                            : 'text-slate-600'
-                            }`}>
-                            {slideData?.subtitle}
-                        </p>
+                        <div className="relative mb-8">
+                            <div className="relative flex justify-center">
+                                <div className={`w-32 h-1 bg-gradient-to-r from-blue-600 to-blue-800 rounded-full shadow-lg`} />
+                                <div className={`absolute inset-0 w-32 h-1 bg-gradient-to-r from-blue-600 to-blue-800 rounded-full blur-sm opacity-50`} />
+                            </div>
+                            <p className="text-xl text-gray-600 font-light mt-6 max-w-2xl mx-auto leading-relaxed">
+                                {slideData.subtitle}
+                            </p>
+                        </div>
                     )}
 
-                    <div className="relative mt-4">
-                        <div className={`w-32 h-1 bg-gradient-to-r ${accentColors[accentColor]} rounded-full shadow-lg`} />
-                        <div className={`absolute inset-0 w-32 h-1 bg-gradient-to-r ${accentColors[accentColor]} rounded-full blur-sm opacity-50`} />
+                    {/* Corner accent */}
+                    <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-blue-600 to-blue-800 opacity-5 rounded-bl-full`} />
+                </div>
+
+                {/* Bullet Points */}
+                <div className="flex-1 max-w-4xl mx-auto">
+                    <div className="grid gap-6">
+                        {slideData?.bulletPoints?.map((point, index) => (
+                            <div key={index} className="group flex items-start gap-6 p-6 rounded-2xl bg-white/80 backdrop-blur-sm hover:bg-white/90 transition-all duration-200 hover:shadow-lg">
+                                <div className="relative flex-shrink-0 mt-1">
+                                    <div className={`bg-blue-600 w-4 h-4 rounded-full shadow-lg group-hover:scale-125 transition-all duration-200 relative z-10`} />
+                                    <div className={`absolute inset-0 bg-blue-600 w-4 h-4 rounded-full blur-sm opacity-50 group-hover:opacity-75 transition-opacity duration-200`} />
+                                </div>
+                                <p className="text-lg text-gray-800 leading-relaxed font-medium">
+                                    {point}
+                                </p>
+                            </div>
+                        ))}
                     </div>
-                </header>
-
-                {/* Enhanced Bullet Points */}
-                <main className="flex-1 flex items-center justify-center">
-                    <div className="bg-white/95 backdrop-blur-lg rounded-2xl p-8 shadow-2xl border border-white/50 w-full max-w-5xl relative overflow-hidden">
-                        {/* Content background accent */}
-                        <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl ${accentColors[accentColor]} opacity-5 rounded-bl-full`} />
-
-                        <ul className={`space-y-${slideData?.bulletPoints?.length && slideData?.bulletPoints?.length <= 4 ? '6' : slideData?.bulletPoints?.length && slideData?.bulletPoints?.length <= 6 ? '4' : '3'} relative z-10`}>
-                            {slideData?.bulletPoints?.map((point, index) => (
-                                <li key={index} className="flex items-start group hover:transform hover:translateX-2 transition-all duration-200">
-                                    {/* Enhanced bullet point icon */}
-                                    <div className="relative mr-6 mt-1 flex-shrink-0">
-                                        <div className={`${bulletColors[accentColor]} w-4 h-4 rounded-full shadow-lg group-hover:scale-125 transition-all duration-200 relative z-10`} />
-                                        <div className={`absolute inset-0 ${bulletColors[accentColor]} w-4 h-4 rounded-full blur-sm opacity-50 group-hover:opacity-75 transition-opacity duration-200`} />
-                                    </div>
-
-                                    {/* Enhanced bullet text */}
-                                    <span className={`text-lg md:text-xl leading-relaxed break-words font-medium ${slideData?.backgroundImage
-                                        ? 'text-slate-700'
-                                        : 'text-slate-700'
-                                        } group-hover:text-slate-900 transition-colors duration-200`}>
-                                        {point}
-                                    </span>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                </main>
+                </div>
             </div>
 
-            {/* Enhanced decorative accent */}
-            <div className={`absolute bottom-0 left-0 right-0 h-3 bg-gradient-to-r ${accentColors[accentColor]} shadow-lg`}>
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent" />
-                <div className={`absolute inset-0 bg-gradient-to-r ${accentColors[accentColor]} blur-sm opacity-50`} />
+            {/* Bottom accent */}
+            <div className="absolute bottom-0 left-0 right-0">
+                <div className={`absolute bottom-0 left-0 right-0 h-3 bg-gradient-to-r from-blue-600 to-blue-800 shadow-lg`}>
+                    {/* Glow effect */}
+                    <div className={`absolute inset-0 bg-gradient-to-r from-blue-600 to-blue-800 blur-sm opacity-50`} />
+                </div>
+                {/* Corner accents */}
+                <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-blue-600 to-blue-800 opacity-5 rounded-bl-full`} />
             </div>
-
-            {/* Professional corner accents */}
-            <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl ${accentColors[accentColor]} opacity-5 rounded-bl-full`} />
         </div>
     )
 }

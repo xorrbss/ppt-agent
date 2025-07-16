@@ -1,52 +1,60 @@
 import React from 'react'
 import * as z from "zod";
-import { imageSchema } from './defaultSchemes';
-
+import { ImageSchema, IconSchema } from './defaultSchemes';
 
 export const layoutId = 'process-slide'
 export const layoutName = 'Process Slide'
-export const layoutDescription = 'A slide with a title, subtitle, and process steps'
+export const layoutDescription = 'A professional slide featuring step-by-step processes with icons, titles, and descriptions.'
 
 const processSlideSchema = z.object({
     title: z.string().min(3).max(100).default('Our Process').meta({
-        description: "Title of the slide",
+        description: "Main title of the slide",
     }),
-    subtitle: z.string().min(3).max(150).optional().meta({
+    subtitle: z.string().min(10).max(200).optional().meta({
         description: "Optional subtitle or description",
     }),
-    processSteps: z.array(z.object({
-        step: z.number().min(1).max(10).meta({
-            description: "Step number",
+    steps: z.array(z.object({
+        icon: IconSchema.default({
+            url: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
+            prompt: 'Default step icon'
+        }).meta({
+            description: "Icon for the step",
         }),
-        title: z.string().min(3).max(100).meta({
-            description: "Step title",
+        title: z.string().min(2).max(50).meta({
+            description: "Title for the step",
         }),
-        description: z.string().min(10).max(200).meta({
-            description: "Step description",
+        description: z.string().min(10).max(150).meta({
+            description: "Description of the step",
         })
     })).min(2).max(6).default([
         {
-            step: 1,
-            title: 'Discovery',
-            description: 'Understanding requirements and gathering initial insights'
+            icon: {
+                url: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
+                prompt: 'Plan and strategy icon'
+            },
+            title: 'Plan & Strategy',
+            description: 'Define objectives, analyze requirements, and create a comprehensive roadmap'
         },
         {
-            step: 2,
-            title: 'Planning',
-            description: 'Strategic planning and roadmap development'
+            icon: {
+                url: 'https://cdn.pixabay.com/photo/2016/02/19/11/19/office-1209640_1280.jpg',
+                prompt: 'Execute and build icon'
+            },
+            title: 'Execute & Build',
+            description: 'Implement solutions with precision using cutting-edge technology and best practices'
         },
         {
-            step: 3,
-            title: 'Implementation',
-            description: 'Executing the plan with precision and quality'
-        },
-        {
-            step: 4,
-            title: 'Delivery',
-            description: 'Final delivery and ongoing support'
+            icon: {
+                url: 'https://cdn.pixabay.com/photo/2017/08/10/08/47/laptop-2619235_1280.jpg',
+                prompt: 'Launch and optimize icon'
+            },
+            title: 'Launch & Optimize',
+            description: 'Deploy the solution and continuously improve based on performance metrics'
         }
-    ]).describe('Process steps (2-6 items)'),
-    backgroundImage: imageSchema.optional().meta({
+    ]).meta({
+        description: "List of process steps (2-6 items)",
+    }),
+    backgroundImage: ImageSchema.optional().meta({
         description: "Background image for the slide",
     })
 })
@@ -57,140 +65,85 @@ export type ProcessSlideData = z.infer<typeof processSlideSchema>
 
 interface ProcessSlideLayoutProps {
     data?: Partial<ProcessSlideData>
-    accentColor?: 'blue' | 'green' | 'purple' | 'orange' | 'red'
 }
 
-const ProcessSlideLayout: React.FC<ProcessSlideLayoutProps> = ({ data: slideData, accentColor = 'blue' }) => {
-
-    const accentColors = {
-        blue: 'from-blue-600 to-blue-800',
-        green: 'from-emerald-600 to-emerald-800',
-        purple: 'from-violet-600 to-violet-800',
-        orange: 'from-orange-600 to-orange-800',
-        red: 'from-red-600 to-red-800'
-    }
-
-    const stepColors = {
-        blue: 'bg-blue-600 text-white border-blue-600',
-        green: 'bg-emerald-600 text-white border-emerald-600',
-        purple: 'bg-violet-600 text-white border-violet-600',
-        orange: 'bg-orange-600 text-white border-orange-600',
-        red: 'bg-red-600 text-white border-red-600'
-    }
-
-    const accentSolids = {
-        blue: 'bg-blue-600',
-        green: 'bg-emerald-600',
-        purple: 'bg-violet-600',
-        orange: 'bg-orange-600',
-        red: 'bg-red-600'
-    }
+const ProcessSlideLayout: React.FC<ProcessSlideLayoutProps> = ({ data: slideData }) => {
 
     return (
         <div
-            className="relative w-full aspect-[16/9] flex flex-col bg-gradient-to-br from-slate-50 via-white to-slate-100 overflow-hidden shadow-2xl border border-slate-200"
+            className="relative w-full aspect-[16/9] flex flex-col bg-gradient-to-br from-slate-50 via-white to-slate-100 overflow-hidden shadow-2xl border border-slate-200 print:shadow-none print:border-gray-300"
             style={slideData?.backgroundImage ? {
-                backgroundImage: `linear-gradient(135deg, rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url(${slideData?.backgroundImage})`,
+                backgroundImage: `linear-gradient(135deg, rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url(${slideData.backgroundImage.url})`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center'
             } : {}}
         >
-            {/* Enhanced geometric background decoration */}
-            <div className="absolute inset-0 opacity-[0.03]">
-                <div className={`absolute top-0 right-0 w-96 h-96 ${accentSolids[accentColor]} rounded-full transform translate-x-32 -translate-y-32 blur-3xl`} />
-                <div className={`absolute bottom-0 left-0 w-64 h-64 ${accentSolids[accentColor]} rounded-full transform -translate-x-16 translate-y-16 blur-2xl`} />
+
+
+            {/* Header section */}
+            <div className="text-center px-12 py-8 print:px-8 print:py-6 relative z-10">
+                <h1 className="text-4xl font-bold text-blue-600 mb-4 leading-tight print:text-3xl">
+                    {slideData?.title || 'Our Process'}
+                </h1>
+                {slideData?.subtitle && (
+                    <p className="text-lg text-gray-600 max-w-2xl mx-auto leading-relaxed print:text-base">
+                        {slideData.subtitle}
+                    </p>
+                )}
+                <div className="mt-4 w-24 h-1 bg-gradient-to-r from-blue-600 to-blue-800 mx-auto rounded-full"></div>
             </div>
 
-            <div className="relative z-10 flex flex-col h-full px-8 py-8">
-                {/* Professional Header */}
-                <header className="mb-6">
-                    <h1 className={`text-4xl md:text-5xl font-bold mb-3 tracking-tight leading-tight break-words ${slideData?.backgroundImage
-                        ? 'text-white drop-shadow-lg'
-                        : 'text-slate-900'
-                        }`}>
-                        <span className={`bg-gradient-to-r ${accentColors[accentColor]} bg-clip-text text-transparent`}>
-                            {slideData?.title}
-                        </span>
-                    </h1>
-
-                    {slideData?.subtitle && (
-                        <p className={`text-xl font-light leading-relaxed break-words ${slideData?.backgroundImage
-                            ? 'text-slate-200 drop-shadow-md'
-                            : 'text-slate-600'
-                            }`}>
-                            {slideData?.subtitle}
-                        </p>
-                    )}
-
-                    <div className="relative mt-4">
-                        <div className={`w-32 h-1 bg-gradient-to-r ${accentColors[accentColor]} rounded-full shadow-lg`} />
-                        <div className={`absolute inset-0 w-32 h-1 bg-gradient-to-r ${accentColors[accentColor]} rounded-full blur-sm opacity-50`} />
-                    </div>
-                </header>
-
-                {/* Enhanced Process Steps */}
-                <main className="flex-1 flex items-center justify-center">
-                    <div className="w-full max-w-6xl">
-                        <div className="flex items-center justify-between">
-                            {slideData?.processSteps?.map((step, index) => (
-                                <React.Fragment key={index}>
-                                    {/* Process Step */}
-                                    <div className="flex flex-col items-center text-center group" style={{ width: `${100 / (slideData?.processSteps?.length || 0)}%` }}>
-                                        {/* Step Number Circle */}
-                                        <div className={`w-16 h-16 rounded-full ${stepColors[accentColor]} flex items-center justify-center text-2xl font-bold mb-4 shadow-2xl border-4 group-hover:scale-110 transition-all duration-300 relative`}>
-                                            <span className="relative z-10">{step.step}</span>
-                                            <div className={`absolute inset-0 rounded-full ${accentSolids[accentColor]} blur-md opacity-50`} />
+            {/* Process steps section */}
+            <div className="flex-1 px-12 pb-8 print:px-8 print:pb-6 relative z-10">
+                <div className="flex justify-center items-center h-full">
+                    <div className="flex flex-wrap justify-center items-center gap-8 max-w-6xl">
+                        {slideData?.steps?.map((step, index) => (
+                            <React.Fragment key={index}>
+                                {/* Process Step */}
+                                <div className="flex flex-col items-center text-center max-w-xs group">
+                                    {/* Step Number and Icon */}
+                                    <div className="relative mb-4">
+                                        <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-blue-800 rounded-full flex items-center justify-center shadow-2xl group-hover:scale-110 transition-transform duration-300 print:w-16 print:h-16">
+                                            <span className="text-white font-bold text-lg print:text-base">
+                                                {index + 1}
+                                            </span>
                                         </div>
-
-                                        {/* Step Content Card */}
-                                        <div className="bg-white/95 backdrop-blur-lg rounded-2xl p-6 shadow-2xl border border-white/50 w-full max-w-xs relative overflow-hidden group-hover:transform group-hover:scale-105 transition-all duration-300">
-                                            {/* Card accent */}
-                                            <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${accentColors[accentColor]}`} />
-
-                                            {/* Step Title */}
-                                            <h3 className="text-xl font-bold text-slate-900 mb-3 break-words">
-                                                {step.title}
-                                            </h3>
-
-                                            {/* Step Description */}
-                                            <p className="text-sm text-slate-600 leading-relaxed break-words font-medium">
-                                                {step.description}
-                                            </p>
-
-                                            {/* Background decoration */}
-                                            <div className={`absolute bottom-0 right-0 w-12 h-12 bg-gradient-to-tl ${accentColors[accentColor]} opacity-5 rounded-tl-full`} />
+                                        <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-lg print:w-6 print:h-6">
+                                            <img
+                                                src={step.icon?.url || ''}
+                                                alt={step.icon?.prompt || step.title}
+                                                className="w-6 h-6 object-cover rounded-full print:w-4 print:h-4"
+                                            />
                                         </div>
                                     </div>
 
-                                    {/* Arrow Between Steps */}
-                                    {index < (slideData?.processSteps?.length || 0) - 1 && (
-                                        <div className="flex items-center justify-center mx-4">
-                                            <div className={`w-8 h-1 bg-gradient-to-r ${accentColors[accentColor]} relative`}>
-                                                <div className={`absolute -right-2 -top-1 w-0 h-0 border-l-4 border-t-2 border-b-2 ${accentSolids[accentColor]} border-t-transparent border-b-transparent`}
-                                                    style={{
-                                                        borderLeftColor: accentColor === 'blue' ? '#2563eb' :
-                                                            accentColor === 'green' ? '#059669' :
-                                                                accentColor === 'purple' ? '#7c3aed' :
-                                                                    accentColor === 'orange' ? '#ea580c' : '#dc2626'
-                                                    }} />
-                                            </div>
+                                    {/* Step Title */}
+                                    <h3 className="text-xl font-bold text-blue-600 mb-3 leading-tight print:text-lg">
+                                        {step.title}
+                                    </h3>
+
+                                    {/* Step Description */}
+                                    <p className="text-gray-700 leading-relaxed text-sm print:text-xs">
+                                        {step.description}
+                                    </p>
+                                </div>
+
+                                {/* Arrow between steps */}
+                                {index < (slideData?.steps?.length || 0) - 1 && (
+                                    <div className="hidden lg:flex items-center">
+                                        <div className="w-12 h-0.5 bg-gradient-to-r from-blue-600 to-blue-800 relative print:w-8">
+                                            <div className="absolute right-0 top-1/2 transform -translate-y-1/2 w-0 h-0 border-l-4 border-l-blue-600 border-t-2 border-b-2 border-t-transparent border-b-transparent"></div>
                                         </div>
-                                    )}
-                                </React.Fragment>
-                            ))}
-                        </div>
+                                    </div>
+                                )}
+                            </React.Fragment>
+                        ))}
                     </div>
-                </main>
+                </div>
             </div>
 
-            {/* Enhanced decorative accent */}
-            <div className={`absolute bottom-0 left-0 right-0 h-3 bg-gradient-to-r ${accentColors[accentColor]} shadow-lg`}>
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent" />
-                <div className={`absolute inset-0 bg-gradient-to-r ${accentColors[accentColor]} blur-sm opacity-50`} />
-            </div>
-
-            {/* Professional corner accents */}
-            <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl ${accentColors[accentColor]} opacity-5 rounded-bl-full`} />
+            {/* Bottom decorative accent */}
+            <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 to-blue-800"></div>
         </div>
     )
 }

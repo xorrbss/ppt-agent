@@ -1,6 +1,6 @@
 import * as z from "zod";
 
-export const imageSchema = z.object({
+export const ImageSchema = z.object({
     url: z.url().meta({
         description: "URL to image",
     }),

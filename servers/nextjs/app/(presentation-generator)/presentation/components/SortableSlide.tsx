@@ -7,7 +7,7 @@ interface SortableSlideProps {
     slide: Slide;
     index: number;
     selectedSlide: number;
-    onSlideClick: (index: number) => void;
+    onSlideClick: (index: any) => void;
     renderSlideContent: (slide: any) => React.ReactElement;
 }
 
@@ -39,7 +39,7 @@ export function SortableSlide({ slide, index, selectedSlide, onSlideClick, rende
 
         // If the mouse was down for less than 200ms, consider it a click
         if (timeDiff < 200 && !isDragging) {
-            onSlideClick(slide.index);
+            onSlideClick(slide.id);
         }
     };
 
