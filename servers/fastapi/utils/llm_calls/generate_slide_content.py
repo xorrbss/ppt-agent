@@ -72,15 +72,14 @@ async def get_slide_content_from_type_and_outline(
         return json.loads(response.choices[0].message.content)
     else:
         client = get_google_llm_client()
-        user_prompt = get_user_prompt(outline.title, outline.body)
         response = await asyncio.to_thread(
             client.models.generate_content,
             model=model,
-            contents=[user_prompt],
+            contents=[get_user_prompt(outline.title, outline.body)],
             config=GenerateContentConfig(
                 system_instruction=system_prompt,
                 response_mime_type="application/json",
                 response_json_schema=slide_layout.json_schema,
             ),
         )
-        return response.model_dump(mode="json")
+        return response.text
