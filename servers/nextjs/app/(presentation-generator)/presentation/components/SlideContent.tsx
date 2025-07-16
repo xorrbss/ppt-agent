@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState, useMemo } from "react";
 import { Slide } from "../../types/slide";
 import { Loader2, PlusIcon, Trash2, WandSparkles } from "lucide-react";
 import {
@@ -16,23 +16,18 @@ import { useDispatch, useSelector } from "react-redux";
 import { addSlide, updateSlide } from "@/store/slices/presentationGeneration";
 import NewSlide from "../../components/slide_layouts/NewSlide";
 import { getEmptySlideContent } from "../../utils/NewSlideContent";
-import useLayoutSchema from "../../hooks/useLayoutSchema";
-import dynamic from "next/dynamic";
+import useLayoutCache from "../../hooks/useLayoutCache";
 
 interface SlideContentProps {
-  slide: Slide;
+  slide: any;
   index: number;
-
   presentationId: string;
-
   onDeleteSlide: (index: number) => void;
 }
-
 
 const SlideContent = ({
   slide,
   index,
-
   presentationId,
   onDeleteSlide,
 }: SlideContentProps) => {
@@ -42,7 +37,16 @@ const SlideContent = ({
   const { presentationData, isStreaming } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
-  const { idMapFileNames, idMapSchema } = useLayoutSchema();
+  const { getLayout } = useLayoutCache();
+
+  // Memoized layout component to prevent re-renders
+  const LayoutComponent = useMemo(() => {
+    const Layout = getLayout(slide.layout);
+    if (!Layout) {
+      return () => <div>Layout not found</div>;
+    }
+    return Layout;
+  }, [slide.layout, getLayout]);
 
   const handleSubmit = async () => {
     const element = document.getElementById(
@@ -96,6 +100,7 @@ const SlideContent = ({
     dispatch(addSlide({ slide: newSlide, index: index + 1 }));
     setShowNewSlideSelection(false);
   };
+
   // Scroll to the new slide when the presentationData is updated
   // useEffect(() => {
   //   if (
@@ -114,17 +119,10 @@ const SlideContent = ({
   //   }
   // }, [presentationData?.slides, isStreaming]);
 
-  const renderLayout = (slide: any) => {
-    console.log(slide)
-    console.log(idMapFileNames)
-    const layoutName = idMapFileNames[slide.layout];
-    if (!layoutName) {
-      return <div>Layout not found</div>
-    }
-    console.log(layoutName)
-    const Layout = dynamic(() => import(`@/components/layouts/${layoutName}`)) as React.ComponentType<{ data: any }>;
-    return <Layout data={slide.content} />
-  };
+  // Memoized slide content rendering to prevent unnecessary re-renders
+  const slideContent = useMemo(() => {
+    return <LayoutComponent data={slide.content} />;
+  }, [LayoutComponent, slide.content]);
 
   return (
     <>
@@ -137,7 +135,7 @@ const SlideContent = ({
         )}
         <div className={` w-full group `}>
           {/* render slides */}
-          {renderLayout(slide)}
+          {slideContent}
 
           {!showNewSlideSelection && (
             <div className="group-hover:opacity-100 hidden md:block opacity-0 transition-opacity my-4 duration-300">
@@ -230,4 +228,13 @@ const SlideContent = ({
   );
 };
 
-export default SlideContent;
+export default React.memo(SlideContent, (prevProps, nextProps) => {
+  // Only re-render if these specific props change
+  return (
+    prevProps.slide.layout === nextProps.slide.layout &&
+    JSON.stringify(prevProps.slide.content) === JSON.stringify(nextProps.slide.content) &&
+    prevProps.slide.index === nextProps.slide.index &&
+    prevProps.index === nextProps.index &&
+    prevProps.presentationId === nextProps.presentationId
+  );
+});
