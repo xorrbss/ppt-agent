@@ -1,5 +1,6 @@
 import React from 'react'
 import * as z from "zod";
+import { imageSchema } from './defaultSchemes';
 
 
 export const layoutId = 'first-slide'
@@ -22,8 +23,8 @@ const firstSlideSchema = z.object({
     company: z.string().max(100).default('Company Name').optional().meta({
         description: "Company or organization name",
     }),
-    backgroundImage: z.string().optional().meta({
-        description: "URL to background image for the slide",
+    backgroundImage: imageSchema.optional().meta({
+        description: "Background image for the slide",
     })
 })
 

@@ -1,5 +1,6 @@
 import React from 'react'
 import * as z from "zod";
+import { imageSchema } from './defaultSchemes';
 
 
 export const layoutId = 'quote-slide'
@@ -28,8 +29,8 @@ const quoteSlideSchema = z.object({
     authorImage: z.string().optional().meta({
         description: "URL to author photo",
     }),
-    backgroundImage: z.string().optional().meta({
-        description: "URL to background image for the slide",
+    backgroundImage: imageSchema.optional().meta({
+        description: "Background image for the slide",
     })
 })
 

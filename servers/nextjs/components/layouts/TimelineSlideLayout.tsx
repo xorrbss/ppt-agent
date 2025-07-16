@@ -1,5 +1,6 @@
 import React from 'react'
 import * as z from "zod";
+import { imageSchema } from './defaultSchemes';
 
 
 export const layoutId = 'timeline-slide'
@@ -54,8 +55,8 @@ const timelineSlideSchema = z.object({
     ]).meta({
         description: "Timeline events (2-6 items)",
     }),
-    backgroundImage: z.string().optional().meta({
-        description: "URL to background image for the slide",
+    backgroundImage: imageSchema.optional().meta({
+        description: "Background image for the slide",
     })
 })
 

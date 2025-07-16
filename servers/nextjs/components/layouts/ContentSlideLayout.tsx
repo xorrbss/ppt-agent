@@ -1,5 +1,6 @@
 import React from 'react'
 import * as z from "zod";
+import { imageSchema } from './defaultSchemes';
 
 
 export const layoutId = 'content-slide'
@@ -16,8 +17,8 @@ const contentSlideSchema = z.object({
     content: z.string().min(10).max(1000).default('Your slide content goes here. This is where you can add detailed information, explanations, or any other text content that supports your presentation.').meta({
         description: "Main content text",
     }),
-    backgroundImage: z.string().optional().meta({
-        description: "URL to background image for the slide",
+    backgroundImage: imageSchema.optional().meta({
+        description: "Background image for the slide",
     })
 })
 

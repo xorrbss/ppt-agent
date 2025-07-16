@@ -1,5 +1,6 @@
 import React from 'react'
 import * as z from "zod";
+import { imageSchema } from './defaultSchemes';
 
 export const layoutId = 'conclusion-slide'
 export const layoutName = 'Conclusion Slide'
@@ -36,8 +37,8 @@ const conclusionSlideSchema = z.object({
     }).optional().meta({
         description: "Optional contact information",
     }),
-    backgroundImage: z.string().optional().meta({
-        description: "URL to background image for the slide",
+    backgroundImage: imageSchema.optional().meta({
+        description: "Background image for the slide",
     })
 })
 

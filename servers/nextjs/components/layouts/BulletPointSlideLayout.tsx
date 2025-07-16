@@ -1,23 +1,16 @@
 import React from 'react'
 import * as z from "zod";
+import { imageSchema } from './defaultSchemes';
 
 export const layoutId = 'bullet-point-slide'
 export const layoutName = 'Bullet Point Slide'
 export const layoutDescription = 'A slide with a title, subtitle, and a list of bullet points.'
 
-const imageSchema = z.object({
-    url: z.url().meta({
-        description: "URL to image",
-    }),
-    prompt: z.string().meta({
-        description: "Prompt used to generate the image",
-    }),
-})
 
 const bulletPointSlideSchema = z.object({
     title: z.string().min(3).max(100).default('Key Points').meta({
         description: "Title of the slide",
-        badu: "'badf"
+
     }),
     subtitle: z.string().min(3).max(150).optional().meta({
         description: "Optional subtitle or description",

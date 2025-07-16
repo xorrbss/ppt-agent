@@ -1,5 +1,6 @@
 import React from 'react'
 import * as z from "zod";
+import { imageSchema } from './defaultSchemes';
 
 export const layoutId = 'team-slide'
 export const layoutName = 'Team Slide'
@@ -57,7 +58,9 @@ const teamSlideSchema = z.object({
             linkedin: 'https://linkedin.com/in/emmarodriguez'
         }
     ]).describe('Team members (1-6 people)'),
-    backgroundImage: z.string().optional().describe('URL to background image for the slide')
+    backgroundImage: imageSchema.optional().meta({
+        description: "Background image for the slide",
+    }),
 })
 
 export const Schema = teamSlideSchema
