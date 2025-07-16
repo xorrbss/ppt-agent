@@ -73,7 +73,7 @@ const OutlinePage = () => {
         );
 
         evtSource.onopen = () => {
-          console.log('connection open');
+
         };
 
         evtSource.addEventListener("response", (event) => {

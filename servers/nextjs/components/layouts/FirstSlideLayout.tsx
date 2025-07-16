@@ -7,12 +7,24 @@ export const layoutName = 'First Slide'
 export const layoutDescription = 'A slide with a title, subtitle, author, date, company, and background image'
 
 const firstSlideSchema = z.object({
-    title: z.string().min(3).max(100).default('Welcome to Our Presentation').describe('Main title of the presentation'),
-    subtitle: z.string().min(10).max(200).default('Subtitle for the slide').optional().describe('Optional subtitle or tagline'),
-    author: z.string().min(2).max(100).default('John Doe').optional().describe('Author or presenter name'),
-    date: z.string().optional().describe('Presentation date'),
-    company: z.string().min(2).max(100).default('Company Name').optional().describe('Company or organization name'),
-    backgroundImage: z.string().optional().describe('URL to background image for the slide')
+    title: z.string().min(3).max(100).default('Welcome to Our Presentation').meta({
+        description: "Main title of the presentation",
+    }),
+    subtitle: z.string().min(10).max(200).default('Subtitle for the slide').optional().meta({
+        description: "Optional subtitle or tagline",
+    }),
+    author: z.string().min(2).max(100).default('John Doe').optional().meta({
+        description: "Author or presenter name",
+    }),
+    date: z.string().optional().meta({
+        description: "Presentation date",
+    }),
+    company: z.string().min(2).max(100).default('Company Name').optional().meta({
+        description: "Company or organization name",
+    }),
+    backgroundImage: z.string().optional().meta({
+        description: "URL to background image for the slide",
+    })
 })
 
 export const Schema = firstSlideSchema

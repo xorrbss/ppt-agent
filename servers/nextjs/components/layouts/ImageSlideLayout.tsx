@@ -7,12 +7,24 @@ export const layoutName = 'Image Slide'
 export const layoutDescription = 'A slide with a title, subtitle, image, and content'
 
 const imageSlideSchema = z.object({
-    title: z.string().min(3).max(100).default('Image Showcase').describe('Title of the slide'),
-    subtitle: z.string().min(3).max(150).default('Subtitle for the slide').optional().describe('Optional subtitle or description'),
-    image: z.string().default('https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&h=600&fit=crop').describe('Main image URL'),
-    imageCaption: z.string().min(5).max(200).default('Image caption').optional().describe('Optional image caption or description'),
-    content: z.string().min(10).max(600).optional().describe('Optional supporting content text'),
-    backgroundImage: z.string().optional().describe('URL to background image for the slide')
+    title: z.string().min(3).max(100).default('Image Showcase').meta({
+        description: "Title of the slide",
+    }),
+    subtitle: z.string().min(3).max(150).default('Subtitle for the slide').optional().meta({
+        description: "Optional subtitle or description",
+    }),
+    image: z.string().default('https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&h=600&fit=crop').meta({
+        description: "Main image URL",
+    }),
+    imageCaption: z.string().min(5).max(200).default('Image caption').optional().meta({
+        description: "Optional image caption or description",
+    }),
+    content: z.string().min(10).max(600).optional().meta({
+        description: "Optional supporting content text",
+    }),
+    backgroundImage: z.string().optional().meta({
+        description: "URL to background image for the slide",
+    })
 })
 
 export const Schema = imageSlideSchema

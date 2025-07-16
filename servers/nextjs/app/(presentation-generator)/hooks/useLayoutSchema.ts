@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { toast } from "@/hooks/use-toast";
-import { zodToJsonSchema } from "zod-to-json-schema";
-
+import * as z from 'zod';
 interface LayoutInfo {
   id: string;
   name?: string;
@@ -17,6 +16,8 @@ interface LayoutInfo {
 
 const useLayoutSchema = () => {
   const [layoutSchema, setLayoutSchema] = useState<LayoutInfo[] | null>(null);
+  const [idMapFileNames, setIdMapFileNames] = useState<Record<string, string>>({});
+  const [idMapSchema, setIdMapSchema] = useState<Record<string, z.ZodSchema>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,11 +25,13 @@ const useLayoutSchema = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch('/api/layouts');
-      const layoutFiles = await response.json();
-      const layouts = await extractSchema(layoutFiles);
-      // console.log(layouts);
-      setLayoutSchema(layouts || []);
+      const layoutResponse = await fetch('/api/layouts');
+      const layoutFiles = await layoutResponse.json();
+      const response = await extractSchema(layoutFiles);
+      
+      setLayoutSchema(response?.layouts || []);
+      setIdMapFileNames(response?.idMapFileNames || {});
+      setIdMapSchema(response?.idMapSchema || {});
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load layouts';
       setError(errorMessage);
@@ -37,6 +40,8 @@ const useLayoutSchema = () => {
       setLoading(false);
     }
   };
+
+
 
   // Auto-load layouts on mount
   useEffect(() => {
@@ -48,7 +53,9 @@ const useLayoutSchema = () => {
     setLayoutSchema, 
     loading, 
     error, 
-    refetch: loadLayouts 
+    refetch: loadLayouts,
+    idMapFileNames,
+    idMapSchema
   };
 };
 
@@ -57,6 +64,8 @@ export default useLayoutSchema;
 
 const extractSchema = async (layoutFiles: string[])  => {
   const layouts: LayoutInfo[] = [];
+  const idMapFileNames: Record<string, string> = {};
+  const idMapSchema: Record<string, z.ZodSchema> = {};
  for (const fileName of layoutFiles) {
   try {
     const file = fileName.replace('.tsx', '').replace('.ts', '')
@@ -88,18 +97,24 @@ const extractSchema = async (layoutFiles: string[])  => {
     }
     const layoutName = module.layoutName 
     const layoutDescription = module.layoutDescription 
-    const jsonSchema = zodToJsonSchema(module.Schema)
+    const jsonSchema = z.toJSONSchema(module.Schema,{
+      override :(ctx)=>{
+        delete ctx.jsonSchema.default
+      },
+    })
     const layout = {
       id: layoutId,
       name: layoutName,
       description: layoutDescription,
-      json_schema: jsonSchema
+      json_schema: jsonSchema,
     }
+    idMapFileNames[layoutId] = fileName
+    idMapSchema[layoutId] = module.Schema
     layouts.push(layout)
   } catch (error) {
     console.error(`Error extracting schema for ${fileName}:`, error)
     return null
   }
  }
- return layouts
+ return {layouts, idMapFileNames, idMapSchema}
 };

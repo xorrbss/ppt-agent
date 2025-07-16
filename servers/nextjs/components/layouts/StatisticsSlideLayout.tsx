@@ -7,13 +7,25 @@ export const layoutName = 'Statistics Slide'
 export const layoutDescription = 'A slide with a title, subtitle, and statistics'
 
 const statisticsSlideSchema = z.object({
-    title: z.string().min(3).max(100).default('Key Statistics').describe('Title of the slide'),
-    subtitle: z.string().min(3).max(150).optional().describe('Optional subtitle or description'),
+    title: z.string().min(3).max(100).default('Key Statistics').meta({
+        description: "Title of the slide",
+    }),
+    subtitle: z.string().min(3).max(150).optional().meta({
+        description: "Optional subtitle or description",
+    }),
     statistics: z.array(z.object({
-        value: z.string().min(1).max(20).describe('Statistical value (e.g., "250%", "$1.2M", "99.9%")'),
-        label: z.string().min(3).max(100).describe('Description of the statistic'),
-        trend: z.enum(['up', 'down', 'neutral']).optional().describe('Trend direction indicator'),
-        context: z.string().min(5).max(200).optional().describe('Additional context or time period')
+        value: z.string().min(1).max(20).meta({
+            description: "Statistical value (e.g., '250%', '$1.2M', '99.9%')",
+        }),
+        label: z.string().min(3).max(100).meta({
+            description: "Description of the statistic",
+        }),
+        trend: z.enum(['up', 'down', 'neutral']).optional().meta({
+            description: "Trend direction indicator",
+        }),
+        context: z.string().min(5).max(200).optional().meta({
+            description: "Additional context or time period",
+        })
     })).min(2).max(6).default([
         {
             value: '250%',
@@ -40,7 +52,9 @@ const statisticsSlideSchema = z.object({
             context: 'Customer service'
         }
     ]).describe('List of statistics (2-6 items)'),
-    backgroundImage: z.string().optional().describe('URL to background image for the slide')
+    backgroundImage: z.string().optional().meta({
+        description: "URL to background image for the slide",
+    })
 })
 
 export const Schema = statisticsSlideSchema

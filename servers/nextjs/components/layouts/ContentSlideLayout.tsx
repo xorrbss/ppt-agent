@@ -7,10 +7,18 @@ export const layoutName = 'Content Slide'
 export const layoutDescription = 'A slide with a title, subtitle, and content'
 
 const contentSlideSchema = z.object({
-    title: z.string().min(3).max(100).default('Slide Title').describe('Title of the slide'),
-    subtitle: z.string().min(3).max(150).optional().describe('Optional subtitle or description'),
-    content: z.string().min(10).max(1000).default('Your slide content goes here. This is where you can add detailed information, explanations, or any other text content that supports your presentation.').describe('Main content text'),
-    backgroundImage: z.string().optional().describe('URL to background image for the slide')
+    title: z.string().min(3).max(100).default('Slide Title').meta({
+        description: "Title of the slide",
+    }),
+    subtitle: z.string().min(3).max(150).optional().meta({
+        description: "Optional subtitle or description",
+    }),
+    content: z.string().min(10).max(1000).default('Your slide content goes here. This is where you can add detailed information, explanations, or any other text content that supports your presentation.').meta({
+        description: "Main content text",
+    }),
+    backgroundImage: z.string().optional().meta({
+        description: "URL to background image for the slide",
+    })
 })
 
 export const Schema = contentSlideSchema

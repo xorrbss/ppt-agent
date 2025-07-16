@@ -147,7 +147,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
           try {
             const repairedJson = jsonrepair(accumulatedChunks);
             const partialData = JSON.parse(repairedJson);
-            console.log(partialData);
+
             if (partialData.slides) {
               // Check if the length of slides has changed
               if (

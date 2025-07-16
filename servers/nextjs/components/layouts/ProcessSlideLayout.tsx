@@ -7,12 +7,22 @@ export const layoutName = 'Process Slide'
 export const layoutDescription = 'A slide with a title, subtitle, and process steps'
 
 const processSlideSchema = z.object({
-    title: z.string().min(3).max(100).default('Our Process').describe('Title of the slide'),
-    subtitle: z.string().min(3).max(150).optional().describe('Optional subtitle or description'),
+    title: z.string().min(3).max(100).default('Our Process').meta({
+        description: "Title of the slide",
+    }),
+    subtitle: z.string().min(3).max(150).optional().meta({
+        description: "Optional subtitle or description",
+    }),
     processSteps: z.array(z.object({
-        step: z.number().min(1).max(10).describe('Step number'),
-        title: z.string().min(3).max(100).describe('Step title'),
-        description: z.string().min(10).max(200).describe('Step description')
+        step: z.number().min(1).max(10).meta({
+            description: "Step number",
+        }),
+        title: z.string().min(3).max(100).meta({
+            description: "Step title",
+        }),
+        description: z.string().min(10).max(200).meta({
+            description: "Step description",
+        })
     })).min(2).max(6).default([
         {
             step: 1,
@@ -35,7 +45,9 @@ const processSlideSchema = z.object({
             description: 'Final delivery and ongoing support'
         }
     ]).describe('Process steps (2-6 items)'),
-    backgroundImage: z.string().optional().describe('URL to background image for the slide')
+    backgroundImage: z.string().optional().meta({
+        description: "URL to background image for the slide",
+    })
 })
 
 export const Schema = processSlideSchema

@@ -1,5 +1,4 @@
 import React from 'react'
-import { zodToJsonSchema } from "zod-to-json-schema";
 import * as z from "zod";
 
 export const layoutId = 'bullet-point-slide'
@@ -7,29 +6,40 @@ export const layoutName = 'Bullet Point Slide'
 export const layoutDescription = 'A slide with a title, subtitle, and a list of bullet points.'
 
 const imageSchema = z.object({
-    url: z.string().url().describe('URL to image'),
-    prompt: z.string().describe('Prompt used to generate the image'),
+    url: z.url().meta({
+        description: "URL to image",
+    }),
+    prompt: z.string().meta({
+        description: "Prompt used to generate the image",
+    }),
 })
 
 const bulletPointSlideSchema = z.object({
-    title: z.string().min(3).max(100).default('Key Points').describe('Title of the slide'),
-    subtitle: z.string().min(3).max(150).optional().describe('Optional subtitle or description'),
-    icon: z.string().optional().describe('Icon to display in the slide'),
+    title: z.string().min(3).max(100).default('Key Points').meta({
+        description: "Title of the slide",
+        badu: "'badf"
+    }),
+    subtitle: z.string().min(3).max(150).optional().meta({
+        description: "Optional subtitle or description",
+    }),
+    icon: z.string().optional().meta({
+        description: "Icon to display in the slide",
+    }),
     bulletPoints: z.array(z.string().min(5).max(200)).min(2).max(8).default([
         'First key point that highlights important information',
         'Second bullet point with valuable insights',
         'Third point demonstrating clear benefits',
         'Fourth item showcasing key features'
-    ]).describe('List of bullet points (2-8 items)'),
-    backgroundImage: imageSchema.optional().describe('Background image for the slide'),
+    ]).meta({
+        description: "List of bullet points (2-8 items)",
+    }),
+    backgroundImage: imageSchema.optional().meta({
+        description: "Background image for the slide",
+    }),
 })
-
-
 export const Schema = bulletPointSlideSchema
 
-console.log(zodToJsonSchema(Schema, {
-    removeAdditionalStrategy: 'strict',
-}))
+console.log(z.toJSONSchema(Schema))
 
 export type BulletPointSlideData = z.infer<typeof bulletPointSlideSchema>
 

@@ -7,23 +7,37 @@ export const layoutName = 'Two Column Slide'
 export const layoutDescription = 'A slide with a title, subtitle, and two columns of content'
 
 const twoColumnSlideSchema = z.object({
-    title: z.string().min(3).max(100).default('Two Column Layout').describe('Title of the slide'),
-    subtitle: z.string().min(3).max(150).optional().describe('Optional subtitle or description'),
+    title: z.string().min(3).max(100).default('Two Column Layout').meta({
+        description: "Title of the slide",
+    }),
+    subtitle: z.string().min(3).max(150).optional().meta({
+        description: "Optional subtitle or description",
+    }),
     leftColumn: z.object({
-        title: z.string().min(3).max(100).default('Left Column').describe('Left column title'),
-        content: z.string().min(10).max(800).default('Content for the left column goes here. This can include detailed information, explanations, or supporting details.').describe('Left column content')
+        title: z.string().min(3).max(100).default('Left Column').meta({
+            description: "Left column title",
+        }),
+        content: z.string().min(10).max(800).default('Content for the left column goes here. This can include detailed information, explanations, or supporting details.').meta({
+            description: "Left column content",
+        })
     }).default({
         title: 'Left Column',
         content: 'Content for the left column goes here. This can include detailed information, explanations, or supporting details.'
     }),
     rightColumn: z.object({
-        title: z.string().min(3).max(100).default('Right Column').describe('Right column title'),
-        content: z.string().min(10).max(800).default('Content for the right column goes here. This can include additional information, comparisons, or contrasting details.').describe('Right column content')
+        title: z.string().min(3).max(100).default('Right Column').meta({
+            description: "Right column title",
+        }),
+        content: z.string().min(10).max(800).default('Content for the right column goes here. This can include additional information, comparisons, or contrasting details.').meta({
+            description: "Right column content",
+        })
     }).default({
         title: 'Right Column',
         content: 'Content for the right column goes here. This can include additional information, comparisons, or contrasting details.'
     }),
-    backgroundImage: z.string().optional().describe('URL to background image for the slide')
+    backgroundImage: z.string().optional().meta({
+        description: "URL to background image for the slide",
+    })
 })
 
 export const Schema = twoColumnSlideSchema

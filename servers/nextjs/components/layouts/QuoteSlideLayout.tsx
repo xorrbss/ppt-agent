@@ -7,14 +7,30 @@ export const layoutName = 'Quote Slide'
 export const layoutDescription = 'A slide with a title, subtitle, quote, author, author title, company, and author image'
 
 const quoteSlideSchema = z.object({
-    title: z.string().min(3).max(100).default('Testimonials').describe('Title of the slide'),
-    subtitle: z.string().min(3).max(150).optional().describe('Optional subtitle or description'),
-    quote: z.string().min(10).max(500).default('This solution has transformed our business operations and exceeded all expectations.').describe('The main quote or testimonial'),
-    author: z.string().min(2).max(100).default('John Smith').describe('Quote author name'),
-    authorTitle: z.string().min(2).max(100).optional().describe('Author job title or position'),
-    company: z.string().min(2).max(100).optional().describe('Author company or organization'),
-    authorImage: z.string().optional().describe('URL to author photo'),
-    backgroundImage: z.string().optional().describe('URL to background image for the slide')
+    title: z.string().min(3).max(100).default('Testimonials').meta({
+        description: "Title of the slide",
+    }),
+    subtitle: z.string().min(3).max(150).optional().meta({
+        description: "Optional subtitle or description",
+    }),
+    quote: z.string().min(10).max(500).default('This solution has transformed our business operations and exceeded all expectations.').meta({
+        description: "The main quote or testimonial",
+    }),
+    author: z.string().min(2).max(100).default('John Smith').meta({
+        description: "Quote author name",
+    }),
+    authorTitle: z.string().min(2).max(100).optional().meta({
+        description: "Author job title or position",
+    }),
+    company: z.string().min(2).max(100).optional().meta({
+        description: "Author company or organization",
+    }),
+    authorImage: z.string().optional().meta({
+        description: "URL to author photo",
+    }),
+    backgroundImage: z.string().optional().meta({
+        description: "URL to background image for the slide",
+    })
 })
 
 export const Schema = quoteSlideSchema
