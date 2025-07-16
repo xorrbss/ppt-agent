@@ -48,6 +48,7 @@ const SidePanel = ({
   const { currentTheme, currentColors } = useSelector(
     (state: RootState) => state.theme
   );
+  console.log('presentationData', presentationData)
   const dispatch = useDispatch();
   const { getLayout } = useLayoutCache();
 
@@ -90,10 +91,10 @@ const SidePanel = ({
     if (active.id !== over.id) {
       // Find the indices of the dragged and target items
       const oldIndex = presentationData?.slides.findIndex(
-        (item) => item.id === active.id
+        (item: any) => item.id === active.id
       );
       const newIndex = presentationData?.slides.findIndex(
-        (item) => item.id === over.id
+        (item: any) => item.id === over.id
       );
 
       // Reorder the array
@@ -104,7 +105,7 @@ const SidePanel = ({
       );
 
       // Update indices of all slides
-      const updatedArray = reorderedArray.map((slide, index) => ({
+      const updatedArray = reorderedArray.map((slide: any, index: number) => ({
         ...slide,
         index: index,
       }));
@@ -128,66 +129,96 @@ const SidePanel = ({
 
   return (
     <>
-      {/* Mobile Toggle Button */}
-      <div className="md:hidden fixed top-20 left-4 z-40">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setIsMobilePanelOpen(true)}
-          className="bg-white shadow-md"
-        >
-          <PanelRightOpen className="w-4 h-4" />
-        </Button>
-      </div>
+      {/* Desktop Toggle Button - Always visible when panel is closed */}
+      {!isOpen && (
+        <div className="hidden xl:block fixed left-4 top-1/2 -translate-y-1/2 z-50">
+          <ToolTip content="Open Panel">
+            <Button
+              onClick={() => setIsOpen(true)}
+              className="bg-white hover:bg-gray-50 shadow-lg"
+            >
+              <PanelRightOpen className="text-black" size={20} />
+            </Button>
+          </ToolTip>
+        </div>
+      )}
 
-      {/* Backdrop for mobile */}
-      {isMobilePanelOpen && (
-        <div
-          className="md:hidden fixed inset-0 bg-black/50 z-30"
-          onClick={() => setIsMobilePanelOpen(false)}
-        />
+      {/* Mobile Toggle Button */}
+      {!isMobilePanelOpen && (
+        <div className="xl:hidden fixed left-4 bottom-4 z-50">
+          <ToolTip content="Show Panel">
+            <Button
+              onClick={() => setIsMobilePanelOpen(true)}
+              className="bg-[#5146E5] text-white p-3 rounded-full shadow-lg"
+            >
+              <PanelRightOpen className="text-white" size={20} />
+            </Button>
+          </ToolTip>
+        </div>
       )}
 
       <div
-        className={`${isOpen ? "w-72" : "w-0"} ${isMobilePanelOpen ? "translate-x-0" : "-translate-x-full"
-          } md:translate-x-0 fixed md:relative left-0 top-0 h-full bg-white border-r border-gray-200 transition-all duration-300 ease-in-out z-40 md:z-auto flex-shrink-0`}
-        style={{
-          background: currentColors.background,
-        }}
+        className={`
+          fixed xl:relative h-full z-50 xl:z-auto
+          transition-all duration-300 ease-in-out
+          ${isOpen ? "ml-0" : "-ml-[300px]"}
+          ${isMobilePanelOpen
+            ? "translate-x-0"
+            : "-translate-x-full xl:translate-x-0"
+          }
+        `}
       >
-        <div className="h-full flex flex-col">
-          {/* Header */}
-          <div className="p-4 border-b border-color flex items-center justify-between">
-            <h3 className="font-semibold slide-title">Slides</h3>
-            <div className="flex items-center gap-2">
-              <ToolTip content="List view">
-                <Button
-                  variant={active === "list" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setActive("list")}
-                  className="p-2"
-                >
-                  <ListTree className="w-4 h-4" />
-                </Button>
-              </ToolTip>
-              <ToolTip content="Grid view">
-                <Button
-                  variant={active === "grid" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setActive("grid")}
-                  className="p-2"
-                >
-                  <LayoutList className="w-4 h-4" />
-                </Button>
-              </ToolTip>
-              <Button
-                variant="ghost"
-                size="sm"
+        <div
+          data-theme={currentTheme}
+          style={{
+            backgroundColor: currentColors.slideBg,
+          }}
+          className="min-w-[300px] max-w-[300px] h-[calc(100vh-120px)]  rounded-[20px] hide-scrollbar overflow-hidden slide-theme shadow-xl"
+        >
+          <div
+            style={{
+              backgroundColor: currentColors.slideBg,
+            }}
+            className="sticky top-0 z-40  px-6 py-4"
+          >
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center justify-start gap-4">
+                <ToolTip content="Image Preview">
+                  <Button
+                    className={`${active === "grid"
+                      ? "bg-[#5141e5] hover:bg-[#4638c7]"
+                      : "bg-white hover:bg-white"
+                      }`}
+                    onClick={() => setActive("grid")}
+                  >
+                    <LayoutList
+                      className={`${active === "grid" ? "text-white" : "text-black"
+                        }`}
+                      size={20}
+                    />
+                  </Button>
+                </ToolTip>
+                <ToolTip content="List Preview">
+                  <Button
+                    className={`${active === "list"
+                      ? "bg-[#5141e5] hover:bg-[#4638c7]"
+                      : "bg-white hover:bg-white"
+                      }`}
+                    onClick={() => setActive("list")}
+                  >
+                    <ListTree
+                      className={`${active === "list" ? "text-white" : "text-black"
+                        }`}
+                      size={20}
+                    />
+                  </Button>
+                </ToolTip>
+              </div>
+              <X
                 onClick={handleClose}
-                className="md:hidden p-2"
-              >
-                <X className="w-4 h-4" />
-              </Button>
+                className="text-[#6c7081] cursor-pointer hover:text-gray-600"
+                size={20}
+              />
             </div>
           </div>
 
@@ -201,7 +232,7 @@ const SidePanel = ({
               <div className="p-4 overflow-y-auto hide-scrollbar h-[calc(100%-100px)]">
                 {isStreaming ? (
                   presentationData &&
-                  presentationData?.slides.map((slide, index) => (
+                  presentationData?.slides.map((slide: any, index: number) => (
                     <div
                       key={`${index}-${slide.type}-${slide.id}`}
                       className={`p-3 cursor-pointer rounded-lg slide-box`}
@@ -217,13 +248,13 @@ const SidePanel = ({
                 ) : (
                   <SortableContext
                     items={
-                      presentationData?.slides.map((slide) => slide.id!) || []
+                      presentationData?.slides.map((slide: any) => slide.id!) || []
                     }
                     strategy={verticalListSortingStrategy}
                   >
                     <div className="space-y-2" id={`slide-${selectedSlide}`}>
                       {presentationData &&
-                        presentationData?.slides.map((slide, index) => (
+                        presentationData?.slides.map((slide: any, index: number) => (
                           <SortableListItem
                             key={`${slide.id}-${index}`}
                             slide={slide}
@@ -243,7 +274,7 @@ const SidePanel = ({
               <div className="p-4 overflow-y-auto hide-scrollbar h-[calc(100%-100px)] space-y-4">
                 {isStreaming ? (
                   presentationData &&
-                  presentationData?.slides.map((slide, index) => (
+                  presentationData?.slides.map((slide: any, index: number) => (
                     <div
                       key={`${slide.id}-${index}`}
                       onClick={() => onSlideClick(index)}
@@ -261,12 +292,12 @@ const SidePanel = ({
                 ) : (
                   <SortableContext
                     items={
-                      presentationData?.slides.map((slide) => slide.id!) || []
+                      presentationData?.slides.map((slide: any) => slide.id!) || []
                     }
                     strategy={verticalListSortingStrategy}
                   >
                     {presentationData &&
-                      presentationData?.slides.map((slide, index) => (
+                      presentationData?.slides.map((slide: any, index: number) => (
                         <SortableSlide
                           key={`${slide.id}-${index}`}
                           slide={slide}

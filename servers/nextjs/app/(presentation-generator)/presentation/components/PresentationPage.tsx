@@ -107,7 +107,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
       !isInitialLoad.current &&
       presentationData.slides &&
       presentationData.slides.some(
-        (slide) => slide.images && slide.images.length > 0
+        (slide: any) => slide.images && slide.images.length > 0
       )
     ) {
 
@@ -245,7 +245,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
     };
   }, []);
   // Function to scroll to specific slide
-  const handleSlideClick = (index: number) => {
+  const handleSlideClick = (index: any) => {
     const slideElement = document.getElementById(`slide-${index}`);
     if (slideElement) {
       slideElement.scrollIntoView({
@@ -416,7 +416,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
                   {presentationData &&
                     presentationData.slides &&
                     presentationData.slides.length > 0 &&
-                    presentationData.slides.map((slide, index) => (
+                    presentationData.slides.map((slide: any, index: number) => (
                       <SlideContent
                         key={`${slide.type}-${index}-${slide.index}}`}
                         slide={slide}

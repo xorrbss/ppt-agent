@@ -121,8 +121,8 @@ interface ThemeState {
 }
 
 const initialState: ThemeState = {
-  currentTheme: ThemeType.Dark,
-  currentColors: defaultColors.dark,
+  currentTheme: ThemeType.Light,
+  currentColors: defaultColors.light,
   isLoading: false,
 };
 

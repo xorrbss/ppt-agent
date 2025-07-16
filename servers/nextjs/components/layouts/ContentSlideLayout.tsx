@@ -1,6 +1,6 @@
 import React from 'react'
 import * as z from "zod";
-import { imageSchema } from './defaultSchemes';
+import { ImageSchema } from './defaultSchemes';
 
 
 export const layoutId = 'content-slide'
@@ -17,7 +17,7 @@ const contentSlideSchema = z.object({
     content: z.string().min(10).max(1000).default('Your slide content goes here. This is where you can add detailed information, explanations, or any other text content that supports your presentation.').meta({
         description: "Main content text",
     }),
-    backgroundImage: imageSchema.optional().meta({
+    backgroundImage: ImageSchema.optional().meta({
         description: "Background image for the slide",
     })
 })
@@ -28,26 +28,9 @@ export type ContentSlideData = z.infer<typeof contentSlideSchema>
 
 interface ContentSlideLayoutProps {
     data?: Partial<ContentSlideData>
-    accentColor?: 'blue' | 'green' | 'purple' | 'orange' | 'red'
 }
 
-const ContentSlideLayout: React.FC<ContentSlideLayoutProps> = ({ data: slideData, accentColor = 'blue' }) => {
-
-    const accentColors = {
-        blue: 'from-blue-600 to-blue-800',
-        green: 'from-emerald-600 to-emerald-800',
-        purple: 'from-violet-600 to-violet-800',
-        orange: 'from-orange-600 to-orange-800',
-        red: 'from-red-600 to-red-800'
-    }
-
-    const accentSolids = {
-        blue: 'bg-blue-600',
-        green: 'bg-emerald-600',
-        purple: 'bg-violet-600',
-        orange: 'bg-orange-600',
-        red: 'bg-red-600'
-    }
+const ContentSlideLayout: React.FC<ContentSlideLayoutProps> = ({ data: slideData }) => {
 
     return (
         <div
@@ -58,11 +41,7 @@ const ContentSlideLayout: React.FC<ContentSlideLayoutProps> = ({ data: slideData
                 backgroundPosition: 'center'
             } : {}}
         >
-            {/* Enhanced geometric background decoration */}
-            <div className="absolute inset-0 opacity-[0.03]">
-                <div className={`absolute top-0 right-0 w-96 h-96 ${accentSolids[accentColor]} rounded-full transform translate-x-32 -translate-y-32 blur-3xl`} />
-                <div className={`absolute bottom-0 left-0 w-64 h-64 ${accentSolids[accentColor]} rounded-full transform -translate-x-16 translate-y-16 blur-2xl`} />
-            </div>
+
 
             {/* Grid overlay for professional look */}
             <div className="absolute inset-0 opacity-[0.015]" style={{
@@ -71,63 +50,57 @@ const ContentSlideLayout: React.FC<ContentSlideLayoutProps> = ({ data: slideData
                 backgroundSize: '40px 40px'
             }} />
 
-            <div className="relative z-10 flex flex-col h-full px-8 py-8">
-                {/* Professional Header */}
-                <header className="mb-6">
-                    <h1 className={`text-4xl md:text-5xl font-bold mb-3 tracking-tight leading-tight break-words ${slideData?.backgroundImage
-                        ? 'text-white drop-shadow-lg'
-                        : 'text-slate-900'
-                        }`}>
-                        <span className={`bg-gradient-to-r ${accentColors[accentColor]} bg-clip-text text-transparent`}>
-                            {slideData?.title}
+            {/* Content */}
+            <div className="relative z-10 h-full flex flex-col px-16 py-12">
+                {/* Header */}
+                <div className="text-center mb-16">
+                    <h1 className="text-6xl font-black mb-8 leading-tight tracking-tight max-w-4xl mx-auto">
+                        <span className="text-gray-900">{slideData?.title?.split(' ').slice(0, -1).join(' ')}</span>{' '}
+                        <span className={`bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent`}>
+                            {slideData?.title?.split(' ').slice(-1)[0]}
                         </span>
                     </h1>
 
+                    {/* Subtitle */}
                     {slideData?.subtitle && (
-                        <p className={`text-xl font-light leading-relaxed break-words ${slideData?.backgroundImage
-                            ? 'text-slate-200 drop-shadow-md'
-                            : 'text-slate-600'
-                            }`}>
-                            {slideData?.subtitle}
-                        </p>
+                        <div className="relative mb-8">
+                            <div className="relative flex justify-center">
+                                <div className={`w-32 h-1 bg-gradient-to-r from-blue-600 to-blue-800 rounded-full shadow-lg`} />
+                                <div className={`absolute inset-0 w-32 h-1 bg-gradient-to-r from-blue-600 to-blue-800 rounded-full blur-sm opacity-50`} />
+                            </div>
+                            <p className="text-xl text-gray-600 font-light mt-6 max-w-2xl mx-auto leading-relaxed">
+                                {slideData.subtitle}
+                            </p>
+                        </div>
                     )}
 
-                    <div className="relative mt-4">
-                        <div className={`w-32 h-1 bg-gradient-to-r ${accentColors[accentColor]} rounded-full shadow-lg`} />
-                        <div className={`absolute inset-0 w-32 h-1 bg-gradient-to-r ${accentColors[accentColor]} rounded-full blur-sm opacity-50`} />
-                    </div>
-                </header>
+                    {/* Corner accent */}
+                    <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-blue-600 to-blue-800 opacity-5 rounded-bl-full`} />
+                </div>
 
-                {/* Main Content with Enhanced Styling */}
-                <main className="flex-1 flex items-center justify-center">
-                    <div className="bg-white/95 backdrop-blur-lg rounded-2xl p-8 shadow-2xl border border-white/50 max-w-5xl relative overflow-hidden">
-                        {/* Content background accent */}
-                        <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl ${accentColors[accentColor]} opacity-5 rounded-bl-full`} />
-
-                        <div className={`text-lg md:text-xl leading-relaxed break-words relative z-10 ${slideData?.backgroundImage
-                            ? 'text-slate-700'
-                            : 'text-slate-700'
-                            }`}>
+                {/* Content */}
+                <div className="flex-1 max-w-4xl mx-auto">
+                    <div className="prose prose-lg prose-gray max-w-none">
+                        <div className="text-lg text-gray-700 leading-relaxed">
                             {slideData?.content?.split('\n').map((paragraph, index) => (
-                                paragraph.trim() && (
-                                    <p key={index} className="mb-5 last:mb-0 font-medium leading-relaxed">
-                                        {paragraph}
-                                    </p>
-                                )
+                                <p key={index} className="mb-6">
+                                    {paragraph}
+                                </p>
                             ))}
                         </div>
                     </div>
-                </main>
+                </div>
             </div>
 
-            {/* Enhanced decorative accent */}
-            <div className={`absolute bottom-0 left-0 right-0 h-3 bg-gradient-to-r ${accentColors[accentColor]} shadow-lg`}>
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent" />
-                <div className={`absolute inset-0 bg-gradient-to-r ${accentColors[accentColor]} blur-sm opacity-50`} />
+            {/* Bottom accent */}
+            <div className="absolute bottom-0 left-0 right-0">
+                <div className={`absolute bottom-0 left-0 right-0 h-3 bg-gradient-to-r from-blue-600 to-blue-800 shadow-lg`}>
+                    {/* Glow effect */}
+                    <div className={`absolute inset-0 bg-gradient-to-r from-blue-600 to-blue-800 blur-sm opacity-50`} />
+                </div>
+                {/* Corner accents */}
+                <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-blue-600 to-blue-800 opacity-5 rounded-bl-full`} />
             </div>
-
-            {/* Professional corner accents */}
-            <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl ${accentColors[accentColor]} opacity-5 rounded-bl-full`} />
         </div>
     )
 }

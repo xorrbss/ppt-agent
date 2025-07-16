@@ -99,25 +99,38 @@ const SlideContent = ({
 
     dispatch(addSlide({ slide: newSlide, index: index + 1 }));
     setShowNewSlideSelection(false);
+
+    // Scroll to the newly added slide after a short delay to ensure it's rendered
+    setTimeout(() => {
+      const newSlideElement = document.getElementById(`slide-${newSlide.id}`);
+      if (newSlideElement) {
+        newSlideElement.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }
+    }, 100);
   };
 
-  // Scroll to the new slide when the presentationData is updated
-  // useEffect(() => {
-  //   if (
-  //     presentationData &&
-  //     presentationData?.slides &&
-  //     presentationData.slides.length > 1 &&
-  //     isStreaming
-  //   ) {
-  //     const slideElement = document.getElementById(`slide-${index}`);
-  //     if (slideElement) {
-  //       slideElement.scrollIntoView({
-  //         behavior: "smooth",
-  //         block: "center",
-  //       });
-  //     }
-  //   }
-  // }, [presentationData?.slides, isStreaming]);
+  // Scroll to the new slide when streaming and new slides are being generated
+  useEffect(() => {
+    if (
+      presentationData &&
+      presentationData?.slides &&
+      presentationData.slides.length > 1 &&
+      isStreaming
+    ) {
+      // Scroll to the last slide (newly generated during streaming)
+      const lastSlideIndex = presentationData.slides.length - 1;
+      const slideElement = document.getElementById(`slide-${presentationData.slides[lastSlideIndex].id}`);
+      if (slideElement) {
+        slideElement.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }
+    }
+  }, [presentationData?.slides?.length, isStreaming]);
 
   // Memoized slide content rendering to prevent unnecessary re-renders
   const slideContent = useMemo(() => {
@@ -127,7 +140,7 @@ const SlideContent = ({
   return (
     <>
       <div
-        id={`slide-${isStreaming ? index : slide.index}`}
+        id={`slide-${slide.id}`}
         className=" w-full max-w-[1280px] main-slide flex items-center max-md:mb-4 justify-center relative"
       >
         {isStreaming && (

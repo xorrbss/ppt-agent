@@ -7,7 +7,7 @@ interface SortableListItemProps {
     slide: Slide;
     index: number;
     selectedSlide: number;
-    onSlideClick: (index: number) => void;
+    onSlideClick: (index: any) => void;
 }
 
 export function SortableListItem({ slide, index, selectedSlide, onSlideClick }: SortableListItemProps) {
@@ -38,7 +38,7 @@ export function SortableListItem({ slide, index, selectedSlide, onSlideClick }: 
 
         // If the mouse was down for less than 200ms, consider it a click
         if (timeDiff < 200 && !isDragging) {
-            onSlideClick(slide.index);
+            onSlideClick(slide.id);
         }
     };
 
