@@ -19,7 +19,7 @@ export interface PresentationResponse {
     vector_store: any;
 
     thumbnail: string;
-    slide: any;
+    slides: any[];
 }
 
 export class DashboardApi {
