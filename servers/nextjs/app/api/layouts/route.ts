@@ -3,8 +3,6 @@ import { promises as fs } from 'fs'
 import path from 'path'
 
 interface GroupSetting {
-    id: string;
-    name: string;
     description: string;
     ordered: boolean;
     isDefault?: boolean;
@@ -23,7 +21,7 @@ export async function GET() {
             .filter(item => item.isDirectory())
             .map(dir => dir.name)
         
-        const allLayouts: { group: string; files: string[]; settings: GroupSetting | null }[] = []
+        const allLayouts: { groupName: string; files: string[]; settings: GroupSetting | null }[] = []
         
         // Scan each group directory for layout files and settings
         for (const groupName of groupDirectories) {
@@ -50,8 +48,6 @@ export async function GET() {
                     console.warn(`No settings.json found for group ${groupName} or invalid JSON`)
                     // Provide default settings if setting.json is missing or invalid
                     settings = {
-                        id: groupName,
-                        name: groupName.charAt(0).toUpperCase() + groupName.slice(1),
                         description: `${groupName} presentation layouts`,
                         ordered: false,
                         isDefault: false
@@ -60,7 +56,7 @@ export async function GET() {
                 
                 if (layoutFiles.length > 0) {
                     allLayouts.push({
-                        group: groupName,
+                        groupName: groupName,
                         files: layoutFiles,
                         settings: settings
                     })
@@ -70,6 +66,7 @@ export async function GET() {
                 // Continue with other groups even if one fails
             }
         }
+      
         
         return NextResponse.json(allLayouts)
     } catch (error) {

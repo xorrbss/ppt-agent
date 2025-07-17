@@ -21,45 +21,40 @@ const LayoutSelection: React.FC<LayoutSelectionProps> = ({
     selectedLayoutGroup,
     onSelectLayoutGroup
 }) => {
-    const { layoutSchema, groupSettings, getLayout, loading } = useLayout();
+    const {
+        getLayoutsByGroup,
+        getGroupSetting,
+        getAllGroups,
+        getLayout,
+        loading
+    } = useLayout();
 
-    // Convert layoutSchema to grouped format using actual group settings
     const layoutGroups: LayoutGroup[] = React.useMemo(() => {
-        if (!layoutSchema || layoutSchema.length === 0) return [];
+        const groups = getAllGroups();
 
-        // Group layouts by their group property
-        const groupMap = new Map<string, any[]>();
-        layoutSchema.forEach(layout => {
-            const groupName = layout.group || 'default';
-            if (!groupMap.has(groupName)) {
-                groupMap.set(groupName, []);
-            }
-            groupMap.get(groupName)?.push(layout);
-        });
+        if (groups.length === 0) return [];
 
-        // Convert to LayoutGroup format using actual group settings
-        const groups: LayoutGroup[] = [];
-        groupMap.forEach((layouts, groupName) => {
-            const settings = groupSettings[groupName];
+        const Groups: LayoutGroup[] = groups.map(groupName => {
+            const layouts = getLayoutsByGroup(groupName);
+            const settings = getGroupSetting(groupName);
 
-            const group: LayoutGroup = {
-                id: settings?.id || groupName,
-                name: settings?.name || groupName.charAt(0).toUpperCase() + groupName.slice(1),
+            return {
+                id: groupName,
+                name: groupName,
                 description: settings?.description || `${groupName} presentation layouts`,
                 ordered: settings?.ordered || false,
                 isDefault: settings?.isDefault || false,
-                slides: layouts.map((layout: any) => layout.id)
+                slides: layouts.map(layout => layout.id)
             };
-            groups.push(group);
         });
 
         // Sort groups to put default first, then by name
-        return groups.sort((a, b) => {
+        return Groups.sort((a, b) => {
             if (a.isDefault && !b.isDefault) return -1;
             if (!a.isDefault && b.isDefault) return 1;
             return a.name.localeCompare(b.name);
         });
-    }, [layoutSchema, groupSettings]);
+    }, [getAllGroups, getLayoutsByGroup, getGroupSetting]);
 
     // Auto-select first group when groups are loaded
     useEffect(() => {

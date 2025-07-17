@@ -58,7 +58,7 @@ const NumberBoxSlideLayout: React.FC<NumberBoxSlideLayoutProps> = ({ data: slide
     // const data = numberBoxSlideSchema.parse(slideData || {})
 
     return (
-        <div className="relative w-full aspect-[16/9] flex flex-col bg-gradient-to-br from-slate-50 via-white to-slate-100 overflow-hidden shadow-2xl border border-slate-200 print:shadow-none print:border-gray-300">
+        <div className="relative w-full aspect-[16/9] flex flex-col bg-white overflow-hidden shadow-2xl border border-slate-200 print:shadow-none print:border-gray-300">
             {/* Subtle background pattern */}
             <div className="absolute inset-0 opacity-[0.02] print:opacity-[0.01]">
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-gray-200 to-transparent transform -rotate-45 scale-150"></div>

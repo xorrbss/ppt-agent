@@ -1,6 +1,3 @@
-/**
- * Shared types for the Layout Preview system
- */
 
 export interface LayoutInfo {
     name: string
@@ -8,25 +5,23 @@ export interface LayoutInfo {
     schema: any
     sampleData: any
     fileName: string
-    group: string
+    groupName: string
 }
 
 export interface GroupSetting {
-    id: string;
-    name: string;
     description: string;
     ordered: boolean;
     isDefault?: boolean;
 }
 
 export interface LayoutGroup {
-    group: string
+    groupName: string
     layouts: LayoutInfo[]
     settings: GroupSetting
 }
 
 export interface GroupedLayoutsResponse {
-    group: string
+    groupName: string
     files: string[]
     settings: GroupSetting | null
 }

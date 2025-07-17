@@ -27,12 +27,10 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
             if (!response.ok) {
                 toast({
                     title: 'Error loading layouts',
-                    description: response.statusText,
-                    
+                    description: response.statusText,       
                 })
                 return
             }
-
             const groupedLayoutsData: GroupedLayoutsResponse[] = await response.json()
             const loadedGroups: LayoutGroup[] = []
             const allLayouts: LayoutInfo[] = []
@@ -40,11 +38,8 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
             for (const groupData of groupedLayoutsData) {
                 const groupLayouts: LayoutInfo[] = []
 
-                // Use settings from setting.json or provide defaults
-                const groupSettings: GroupSetting = groupData.settings || {
-                    id: groupData.group,
-                    name: groupData.group.charAt(0).toUpperCase() + groupData.group.slice(1),
-                    description: `${groupData.group} presentation layouts`,
+                const groupSettings: GroupSetting = groupData.settings ? groupData.settings : {
+                    description: `${groupData.groupName} presentation layouts`,
                     ordered: false,
                     isDefault: false
                 }
@@ -52,7 +47,7 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
                 for (const fileName of groupData.files) {
                     try {
                         const layoutName = fileName.replace('.tsx', '').replace('.ts', '')
-                        const module = await import(`@/presentation-layouts/${groupData.group}/${layoutName}`)
+                        const module = await import(`@/presentation-layouts/${groupData.groupName}/${layoutName}`)
 
                         if (!module.default) {
                             toast({
@@ -85,19 +80,19 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
                             schema: module.Schema,
                             sampleData,
                             fileName,
-                            group: groupData.group
+                            groupName: groupData.groupName
                         }
 
                         groupLayouts.push(layoutInfo)
                         allLayouts.push(layoutInfo)
 
                     } catch (importError) {
-                        console.error(`Failed to import ${fileName} from ${groupData.group}:`, importError)
+                        console.error(`Failed to import ${fileName} from ${groupData.groupName}:`, importError)
 
                         // Try alternative import path
                         try {
                             const layoutName = fileName.replace('.tsx', '').replace('.ts', '')
-                            const module = await import(`@/presentation-layouts/${groupData.group}/${layoutName}`)
+                            const module = await import(`@/presentation-layouts/${groupData.groupName}/${layoutName}`)
 
                             if (module.default && module.Schema) {
                                 // Use empty object to let schema apply its default values
@@ -108,7 +103,7 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
                                     schema: module.Schema,
                                     sampleData,
                                     fileName,
-                                    group: groupData.group
+                                    groupName: groupData.groupName
                                 }
                                 groupLayouts.push(layoutInfo)
                                 allLayouts.push(layoutInfo)
@@ -116,26 +111,19 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
                                 console.error(`${layoutName} is missing required exports (default component or Schema)`)
                             }
                         } catch (altError) {
-                            console.error(`Alternative import also failed for ${fileName} from ${groupData.group}:`, altError)
+                            console.error(`Alternative import also failed for ${fileName} from ${groupData.groupName}:`, altError)
                         }
                     }
                 }
 
                 if (groupLayouts.length > 0) {
                     loadedGroups.push({
-                        group: groupData.group,
+                        groupName: groupData.groupName,
                         layouts: groupLayouts,
                         settings: groupSettings
                     })
                 }
             }
-
-            // Sort groups to put default first, then by name
-            loadedGroups.sort((a, b) => {
-                if (a.settings.isDefault && !b.settings.isDefault) return -1
-                if (!a.settings.isDefault && b.settings.isDefault) return 1
-                return a.settings.name.localeCompare(b.settings.name)
-            })
 
             if (allLayouts.length === 0) {
                 toast({

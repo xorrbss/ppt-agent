@@ -48,7 +48,6 @@ const SidePanel = ({
   const { currentTheme, currentColors } = useSelector(
     (state: RootState) => state.theme
   );
-  console.log('presentationData', presentationData)
   const dispatch = useDispatch();
 
   // Use the centralized group layouts hook

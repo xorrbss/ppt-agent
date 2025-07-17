@@ -10,8 +10,6 @@ import {
 } from "@/components/ui/popover";
 import { useRouter } from "next/navigation";
 import { toast } from "@/hooks/use-toast";
-import { renderSlideContent } from "@/app/(presentation-generator)/components/slide_config";
-import { useLayout } from "@/app/(presentation-generator)/context/LayoutContext";
 import { useGroupLayouts } from "@/app/(presentation-generator)/hooks/useGroupLayouts";
 
 export const PresentationCard = ({
@@ -25,7 +23,6 @@ export const PresentationCard = ({
   created_at: string;
   slide: any
 }) => {
-  console.log('slide', slide)
   const router = useRouter();
   const { renderSlideContent } = useGroupLayouts();
 
@@ -63,18 +60,7 @@ export const PresentationCard = ({
     window.location.reload();
   };
 
-  // const LayoutComponent = useMemo(() => {
-  //   const Layout = getLayout(slide.layout);
-  //   if (!Layout) {
-  //     return () => <div className="flex flex-col items-center justify-center h-full">
-  //       Layout not found
-  //     </div>;
-  //   }
-  //   return Layout;
-  // }, [slide.layout, getLayout]);
-  // const slideContent = useMemo(() => {
-  //   return <LayoutComponent data={slide.content} />;
-  // }, [LayoutComponent, slide.content]);
+
 
 
 

@@ -1,41 +1,32 @@
 'use client'
 import React, { useMemo } from 'react';
 import { useLayout } from '../context/LayoutContext';
-import { useSelector } from 'react-redux';
-import { RootState } from '@/store/store';
-
-interface LayoutInfo {
-    id: string;
-    name?: string;
-    description?: string;
-    json_schema: any;
-    group: string;
-}
 
 export const useGroupLayouts = () => {
-    const { layoutSchema, getLayout, loading } = useLayout();
-    const { presentationData } = useSelector((state: RootState) => state.presentationGeneration);
+    const {
+        getLayoutByIdAndGroup,
+        getLayoutsByGroup,
+        getLayout,
+        loading
+    } = useLayout();
 
-    // Get the selected group name from presentation data
-
-
-
-    // Get group-specific layout component with validation
     const getGroupLayout = useMemo(() => {
         return (layoutId: string, groupName: string) => {
-            // First check if the layout exists in the current group
 
-
-            const groupLayout = layoutSchema?.filter(layout => layout.group === groupName)
-            if (groupLayout) {
+            const layout = getLayoutByIdAndGroup(layoutId, groupName);
+            if (layout) {
                 return getLayout(layoutId);
             }
-
-            // If layout not found in group, return null
-            console.warn(`Layout ${layoutId} not found in group ${groupName} `);
+            console.warn(`Layout ${layoutId} not found in group ${groupName}`);
             return null;
         };
-    }, [getLayout]);
+    }, [getLayoutByIdAndGroup, getLayout]);
+
+    const getGroupLayouts = useMemo(() => {
+        return (groupName: string) => {
+            return getLayoutsByGroup(groupName);
+        };
+    }, [getLayoutsByGroup]);
 
     // Render slide content with group validation
     const renderSlideContent = useMemo(() => {
@@ -56,6 +47,7 @@ export const useGroupLayouts = () => {
 
     return {
         getGroupLayout,
+        getGroupLayouts,
         renderSlideContent,
         loading
     };

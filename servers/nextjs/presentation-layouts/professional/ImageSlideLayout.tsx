@@ -37,7 +37,7 @@ interface ImageSlideLayoutProps {
 const ImageSlideLayout: React.FC<ImageSlideLayoutProps> = ({ data: slideData }) => {
 
     return (
-        <div className="relative w-full aspect-[16/9] flex bg-gradient-to-br from-slate-50 to-slate-100 overflow-hidden shadow-2xl border border-slate-200 print:shadow-none print:border-gray-300">
+        <div className="relative w-full aspect-[16/9] flex bg-white overflow-hidden shadow-2xl border border-slate-200 print:shadow-none print:border-gray-300">
             {/* Left panel - Image */}
             <div className="flex-1 relative">
                 <img

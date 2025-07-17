@@ -9,29 +9,38 @@ interface LayoutInfo {
     name?: string;
     description?: string;
     json_schema: any;
-    group: string;
+    groupName: string;
 }
 
 interface GroupSetting {
-    id: string;
-    name: string;
     description: string;
     ordered: boolean;
     isDefault?: boolean;
 }
 
 interface GroupedLayoutsResponse {
-    group: string;
+    groupName: string;
     files: string[];
     settings: GroupSetting | null;
 }
 
+interface LayoutData {
+    layoutsById: Map<string, LayoutInfo>;
+    layoutsByGroup: Map<string, Set<string>>;
+    groupSettings: Map<string, GroupSetting>;
+    fileMap: Map<string, { fileName: string; groupName: string }>;
+    groupedLayouts: Map<string, LayoutInfo[]>;
+    layoutSchema: LayoutInfo[];
+}
+
 interface LayoutContextType {
-    layoutSchema: LayoutInfo[] | null;
-    groupSettings: Record<string, GroupSetting>;
-    idMapFileNames: Record<string, string>;
-    idMapSchema: Record<string, z.ZodSchema>;
-    idMapGroups: Record<string, string>;
+    getLayoutById: (layoutId: string) => LayoutInfo | null;
+    getLayoutByIdAndGroup: (layoutId: string, groupName: string) => LayoutInfo | null;
+    getLayoutsByGroup: (groupName: string) => LayoutInfo[];
+    getGroupSetting: (groupName: string) => GroupSetting | null;
+    getAllGroups: () => string[];
+    getAllLayouts: () => LayoutInfo[];
+
     loading: boolean;
     error: string | null;
     getLayout: (layoutId: string) => React.ComponentType<{ data: any }> | null;
@@ -42,52 +51,56 @@ interface LayoutContextType {
 
 const LayoutContext = createContext<LayoutContextType | undefined>(undefined);
 
-// Global layout cache
 const layoutCache = new Map<string, React.ComponentType<{ data: any }>>();
 
+const createCacheKey = (groupName: string, fileName: string): string => `${groupName}/${fileName}`;
+
 export const LayoutProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const [layoutSchema, setLayoutSchema] = useState<LayoutInfo[] | null>(null);
-    const [groupSettings, setGroupSettings] = useState<Record<string, GroupSetting>>({});
-    const [idMapFileNames, setIdMapFileNames] = useState<Record<string, string>>({});
-    const [idMapSchema, setIdMapSchema] = useState<Record<string, z.ZodSchema>>({});
-    const [idMapGroups, setIdMapGroups] = useState<Record<string, string>>({});
+    const [layoutData, setLayoutData] = useState<LayoutData | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isPreloading, setIsPreloading] = useState(false);
 
-    const extractSchema = async (groupedLayoutsData: GroupedLayoutsResponse[]) => {
+    const buildData = async (groupedLayoutsData: GroupedLayoutsResponse[]) => {
         const layouts: LayoutInfo[] = [];
-        const idMapFileNames: Record<string, string> = {};
-        const idMapSchema: Record<string, z.ZodSchema> = {};
-        const idMapGroups: Record<string, string> = {};
-        const groupSettings: Record<string, GroupSetting> = {};
+
+        const layoutsById = new Map<string, LayoutInfo>();
+        const layoutsByGroup = new Map<string, Set<string>>();
+        const groupSettingsMap = new Map<string, GroupSetting>();
+        const fileMap = new Map<string, { fileName: string; groupName: string }>();
+        const groupedLayouts = new Map<string, LayoutInfo[]>();
+
 
         for (const groupData of groupedLayoutsData) {
-            // Store group settings
-            if (groupData.settings) {
-                groupSettings[groupData.group] = groupData.settings;
-            } else {
-                // Provide default settings if not available
-                groupSettings[groupData.group] = {
-                    id: groupData.group,
-                    name: groupData.group.charAt(0).toUpperCase() + groupData.group.slice(1),
-                    description: `${groupData.group} presentation layouts`,
-                    ordered: false,
-                    isDefault: false
-                };
+
+            // Initialize group
+            if (!layoutsByGroup.has(groupData.groupName)) {
+                layoutsByGroup.set(groupData.groupName, new Set());
             }
+
+            // group settings or default settings
+            const settings = groupData.settings || {
+                description: `${groupData.groupName} presentation layouts`,
+                ordered: false,
+                isDefault: false
+            };
+
+            groupSettingsMap.set(groupData.groupName, settings);
+            const groupLayouts: LayoutInfo[] = [];
 
             for (const fileName of groupData.files) {
                 try {
                     const file = fileName.replace('.tsx', '').replace('.ts', '');
-                    const module = await import(`@/presentation-layouts/${groupData.group}/${file}`);
+
+                    const module = await import(`@/presentation-layouts/${groupData.groupName}/${file}`);
+
 
                     if (!module.default) {
                         toast({
                             title: `${file} has no default export`,
                             description: 'Please ensure the layout file exports a default component',
                         });
-                        console.warn(`${file} has no default export`);
+                        console.warn(`❌ ${file} has no default export`);
                         continue;
                     }
 
@@ -96,13 +109,15 @@ export const LayoutProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                             title: `${file} has no Schema export`,
                             description: 'Please ensure the layout file exports a Schema',
                         });
-                        console.warn(`${file} has no Schema export`);
+                        console.warn(`❌ ${file} has no Schema export`);
                         continue;
                     }
 
-                    const layoutId = module.layoutId || file.toLowerCase().replace(/layout$/, '');
+                    const originalLayoutId = module.layoutId || file.toLowerCase().replace(/layout$/, '');
+                    const uniqueKey = `${groupData.groupName}:${originalLayoutId}`;
                     const layoutName = module.layoutName || file.replace(/([A-Z])/g, ' $1').trim();
                     const layoutDescription = module.layoutDescription || `${layoutName} layout for presentations`;
+
 
                     const jsonSchema = z.toJSONSchema(module.Schema, {
                         override: (ctx) => {
@@ -110,69 +125,87 @@ export const LayoutProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                         },
                     });
 
-                    const layout = {
-                        id: layoutId,
+                    const layout: LayoutInfo = {
+                        id: originalLayoutId,
                         name: layoutName,
                         description: layoutDescription,
                         json_schema: jsonSchema,
-                        group: groupData.group,
+                        groupName: groupData.groupName,
                     };
 
-                    idMapFileNames[layoutId] = fileName;
-                    idMapSchema[layoutId] = module.Schema;
-                    idMapGroups[layoutId] = groupData.group;
+
+                    layoutsById.set(uniqueKey, layout);
+                    layoutsByGroup.get(groupData.groupName)!.add(originalLayoutId);
+                    fileMap.set(uniqueKey, { fileName, groupName: groupData.groupName });
+                    groupLayouts.push(layout);
                     layouts.push(layout);
+
+
                 } catch (error) {
-                    console.error(`Error extracting schema for ${fileName} from ${groupData.group}:`, error);
+                    console.error(`💥 Error extracting schema for ${fileName} from ${groupData.groupName}:`, error);
                 }
             }
+
+            // Cache grouped layouts
+            groupedLayouts.set(groupData.groupName, groupLayouts);
         }
 
-        return { layouts, idMapFileNames, idMapSchema, idMapGroups, groupSettings };
+        return {
+            layoutsById,
+            layoutsByGroup,
+            groupSettings: groupSettingsMap,
+            fileMap,
+            groupedLayouts,
+            layoutSchema: layouts
+        };
     };
+
 
     const loadLayouts = async () => {
         try {
             setLoading(true);
             setError(null);
 
+
             const layoutResponse = await fetch('/api/layouts');
+
             if (!layoutResponse.ok) {
                 throw new Error(`Failed to fetch layouts: ${layoutResponse.statusText}`);
             }
 
             const groupedLayoutsData: GroupedLayoutsResponse[] = await layoutResponse.json();
-            const response = await extractSchema(groupedLayoutsData);
 
-            setLayoutSchema(response?.layouts || []);
-            setGroupSettings(response?.groupSettings || {});
-            setIdMapFileNames(response?.idMapFileNames || {});
-            setIdMapSchema(response?.idMapSchema || {});
-            setIdMapGroups(response?.idMapGroups || {});
+
+            if (!groupedLayoutsData || groupedLayoutsData.length === 0) {
+                console.warn('⚠️ API returned empty data');
+                setError('No layout groups found');
+                return;
+            }
+
+            const data = await buildData(groupedLayoutsData);
+            setLayoutData(data);
 
             // Preload layouts after loading schema
-            await preloadLayouts(response?.idMapFileNames || {}, response?.idMapGroups || {});
+            await preloadLayouts(data.fileMap);
         } catch (err: unknown) {
             const errorMessage = err instanceof Error ? err.message : 'Failed to load layouts';
             setError(errorMessage);
-            console.error('Error loading layouts:', err);
+            console.error('💥 Error loading layouts:', err);
         } finally {
             setLoading(false);
         }
     };
 
-    const preloadLayouts = async (fileNames: Record<string, string>, groups: Record<string, string>) => {
+    const preloadLayouts = async (fileMap: Map<string, { fileName: string; groupName: string }>) => {
         setIsPreloading(true);
-
         try {
-            const layoutPromises = Object.entries(fileNames).map(async ([layoutId, fileName]) => {
-                const cacheKey = `${groups[layoutId]}/${fileName}`;
+            const layoutPromises = Array.from(fileMap.entries()).map(async ([layoutId, { fileName, groupName }]) => {
+                const cacheKey = createCacheKey(groupName, fileName);
                 if (!layoutCache.has(cacheKey)) {
-                    const group = groups[layoutId];
                     const layoutName = fileName.replace('.tsx', '').replace('.ts', '');
 
                     const Layout = dynamic(
-                        () => import(`@/presentation-layouts/${group}/${layoutName}`),
+                        () => import(`@/presentation-layouts/${groupName}/${layoutName}`),
                         {
                             loading: () => <div className="w-full aspect-[16/9] bg-gray-100 animate-pulse rounded-lg" />,
                             ssr: false,
@@ -182,7 +215,6 @@ export const LayoutProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                     layoutCache.set(cacheKey, Layout);
                 }
             });
-
             await Promise.all(layoutPromises);
         } catch (error) {
             console.error('Error preloading layouts:', error);
@@ -192,24 +224,37 @@ export const LayoutProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     };
 
     const getLayout = (layoutId: string): React.ComponentType<{ data: any }> | null => {
-        const layoutName = idMapFileNames[layoutId];
-        const group = idMapGroups[layoutId];
+        if (!layoutData) return null;
 
-        if (!layoutName || !group) {
+        let fileInfo: { fileName: string; groupName: string } | undefined;
+
+        // Search through all fileMap entries to find the layout
+        for (const [key, info] of Array.from(layoutData.fileMap.entries())) {
+            // Extract original layout ID from unique key (format: "groupName:layoutId")
+            const originalId = key.split(':')[1];
+            if (originalId === layoutId) {
+                fileInfo = info;
+                break;
+            }
+        }
+
+        if (!fileInfo) {
+            console.warn(`No file info found for layout: ${layoutId}`);
             return null;
         }
 
-        const cacheKey = `${group}/${layoutName}`;
+        const cacheKey = createCacheKey(fileInfo.groupName, fileInfo.fileName);
 
         // Return cached layout if available
         if (layoutCache.has(cacheKey)) {
+            console.log(` Returning cached layout: ${cacheKey}`);
             return layoutCache.get(cacheKey)!;
         }
 
         // Create and cache layout if not available
-        const file = layoutName.replace('.tsx', '').replace('.ts', '');
+        const file = fileInfo.fileName.replace('.tsx', '').replace('.ts', '');
         const Layout = dynamic(
-            () => import(`@/presentation-layouts/${group}/${file}`),
+            () => import(`@/presentation-layouts/${fileInfo.groupName}/${file}`),
             {
                 loading: () => <div className="w-full aspect-[16/9] bg-gray-100 animate-pulse rounded-lg" />,
                 ssr: false,
@@ -220,17 +265,56 @@ export const LayoutProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         return Layout;
     };
 
+    // Updated accessor methods to handle group-specific lookups
+    const getLayoutById = (layoutId: string): LayoutInfo | null => {
+        if (!layoutData) return null;
+
+        // Search through all entries to find the layout (since we don't know the group)
+        for (const [key, layout] of Array.from(layoutData.layoutsById.entries())) {
+            const originalId = key.split(':')[1];
+            if (originalId === layoutId) {
+                return layout;
+            }
+        }
+        return null;
+    };
+
+    const getLayoutByIdAndGroup = (layoutId: string, groupName: string): LayoutInfo | null => {
+        if (!layoutData) return null;
+        const uniqueKey = `${groupName}:${layoutId}`;
+        return layoutData.layoutsById.get(uniqueKey) || null;
+    };
+
+    const getLayoutsByGroup = (groupName: string): LayoutInfo[] => {
+        return layoutData?.groupedLayouts.get(groupName) || [];
+    };
+
+    const getGroupSetting = (groupName: string): GroupSetting | null => {
+        return layoutData?.groupSettings.get(groupName) || null;
+    };
+
+    const getAllGroups = (): string[] => {
+        return layoutData ? Array.from(layoutData.groupSettings.keys()) : [];
+    };
+
+    const getAllLayouts = (): LayoutInfo[] => {
+        return layoutData?.layoutSchema || [];
+    };
+
     // Load layouts on mount
     useEffect(() => {
         loadLayouts();
     }, []);
 
     const contextValue: LayoutContextType = {
-        layoutSchema,
-        groupSettings,
-        idMapFileNames,
-        idMapSchema,
-        idMapGroups,
+
+        getLayoutById,
+        getLayoutByIdAndGroup,
+        getLayoutsByGroup,
+        getGroupSetting,
+        getAllGroups,
+        getAllLayouts,
+
         loading,
         error,
         getLayout,

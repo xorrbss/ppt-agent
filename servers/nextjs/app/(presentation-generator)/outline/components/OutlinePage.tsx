@@ -32,7 +32,10 @@ interface LayoutGroup {
 const OutlinePage = () => {
   const dispatch = useDispatch();
   const router = useRouter();
-  const { layoutSchema } = useLayout();
+  const {
+    getLayoutById,
+    loading: layoutLoading,
+  } = useLayout();
 
   const { presentation_id, outlines } = useSelector(
     (state: RootState) => state.presentationGeneration
@@ -192,10 +195,9 @@ const OutlinePage = () => {
     });
 
     try {
-      // Collect the actual schemas for layouts in the selected group
       const groupLayoutSchemas = selectedLayoutGroup.slides
         .map(slideId => {
-          const layout = layoutSchema?.find(l => l.id === slideId);
+          const layout = getLayoutById(slideId);
           return layout ? {
             id: layout.id,
             name: layout.name,
@@ -212,7 +214,6 @@ const OutlinePage = () => {
         slides: groupLayoutSchemas
       };
 
-      console.log("layoutData", layoutData);
       const response = await PresentationGenerationApi.presentationPrepare({
         presentation_id: presentation_id,
         outlines: outlines,

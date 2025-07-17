@@ -1,6 +1,5 @@
 {
-    "id": "professional",
-    "name": "Professional",
     "description": "Clean, corporate designs perfect for business presentations",
-    "ordered": false
+    "ordered": false,
+    "isDefault": false
 }
