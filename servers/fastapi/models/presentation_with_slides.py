@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from models.presentation_layout import PresentationLayoutModel
 from models.presentation_outline_model import SlideOutlineModel
 from models.presentation_structure_model import PresentationStructureModel
+from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 
 
@@ -23,3 +24,6 @@ class PresentationWithSlides(BaseModel):
     layout: PresentationLayoutModel
     structure: Optional[PresentationStructureModel]
     slides: List[SlideModel]
+
+    def to_presentation_model(self) -> PresentationModel:
+        return PresentationModel(**self.model_dump())
