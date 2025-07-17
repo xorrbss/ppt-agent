@@ -9,6 +9,7 @@ from utils.llm_provider import (
     get_small_model,
     is_google_selected,
 )
+from utils.schema_utils import remove_fields_from_schema
 
 system_prompt = """
     Generate structured slide based on provided title and outline, follow mentioned steps and notes and provide structured output.
@@ -50,7 +51,6 @@ def get_prompt_to_generate_slide_content(title: str, outline: str):
 async def get_slide_content_from_type_and_outline(
     slide_layout: SlideLayoutModel, outline: SlideOutlineModel
 ):
-
     model = get_small_model()
 
     if not is_google_selected():
@@ -65,7 +65,9 @@ async def get_slide_content_from_type_and_outline(
                 "type": "json_schema",
                 "json_schema": {
                     "name": "SlideContent",
-                    "schema": slide_layout.json_schema,
+                    "schema": remove_fields_from_schema(
+                        slide_layout.json_schema, ["__image_url__", "__icon_url__"]
+                    ),
                 },
             },
         )

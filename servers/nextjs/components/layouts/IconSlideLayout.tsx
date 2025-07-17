@@ -16,8 +16,8 @@ const iconSlideSchema = z.object({
         description: "Optional subtitle or description",
     }),
     icon: IconSchema.default({
-        url: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
-        prompt: 'A beautiful road in the mountains'
+        __icon_url__: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
+        __icon_query__: 'A beautiful road in the mountains'
     }).meta({
         description: "Main slide icon",
     }),
@@ -55,8 +55,8 @@ const IconSlideLayout: React.FC<IconSlideLayoutProps> = ({ data: slideData }) =>
                 <div className="relative mb-8 p-8 rounded-3xl bg-white border-2 shadow-xl print:shadow-md">
                     <div className="absolute inset-0 bg-gradient-to-br from-blue-600 to-blue-800 opacity-5 rounded-3xl"></div>
                     <img
-                        src={slideData?.icon?.url || ''}
-                        alt={slideData?.icon?.prompt || ''}
+                        src={slideData?.icon?.__icon_url__ || ''}
+                        alt={slideData?.icon?.__icon_query__ || ''}
                         className="w-24 h-24 object-contain relative z-10 print:w-20 print:h-20"
                     />
                     <div className="absolute -bottom-2 -right-2 w-6 h-6 bg-gradient-to-br from-blue-600 to-blue-800 rounded-full opacity-80"></div>

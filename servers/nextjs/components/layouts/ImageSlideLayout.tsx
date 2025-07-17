@@ -19,8 +19,8 @@ const imageSlideSchema = z.object({
         description: "Main description text",
     }),
     image: ImageSchema.default({
-        url: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
-        prompt: 'A beautiful road in the mountains'
+        __image_url__: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
+        __image_prompt__: 'A beautiful road in the mountains'
     }).meta({
         description: "Main slide image",
     }),
@@ -47,8 +47,8 @@ const ImageSlideLayout: React.FC<ImageSlideLayoutProps> = ({ data: slideData }) 
             {/* Left panel - Image */}
             <div className="flex-1 relative">
                 <img
-                    src={slideData?.image?.url || ''}
-                    alt={slideData?.image?.prompt || ''}
+                    src={slideData?.image?.__image_url__ || ''}
+                    alt={slideData?.image?.__image_prompt__ || ''}
                     className="w-full h-full object-cover"
                 />
                 {/* Overlay gradient */}

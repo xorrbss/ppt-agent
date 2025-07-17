@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from api.lifespan import app_lifespan
 from api.middlewares import UserConfigEnvUpdateMiddleware
 from api.v1.ppt.router import API_V1_PPT_ROUTER
+from utils.asset_directory_utils import get_images_directory
 
 
 app = FastAPI(lifespan=app_lifespan)
@@ -14,7 +15,11 @@ app.include_router(API_V1_PPT_ROUTER)
 
 # Static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
-# APP.mount("/static/app-data", StaticFiles(directory=get_app_data_directory_env()))
+app.mount(
+    "/app_data/images",
+    StaticFiles(directory=get_images_directory()),
+    name="app_data/images",
+)
 
 
 # Middlewares

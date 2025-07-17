@@ -18,8 +18,8 @@ const type7SlideSchema = z.object({
             description: "Item description",
         }),
         icon: IconSchema.default({
-            url: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
-            prompt: 'Default icon'
+            __icon_url__: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
+            __icon_query__: 'Default icon'
         }).meta({
             description: "Icon for the item",
         })
@@ -28,32 +28,32 @@ const type7SlideSchema = z.object({
             heading: 'Professional Service',
             description: 'High-quality professional services tailored to your specific needs and requirements',
             icon: {
-                url: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
-                prompt: 'Professional service icon'
+                __icon_url__: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
+                __icon_query__: 'Professional service icon'
             }
         },
         {
             heading: 'Expert Consultation',
             description: 'Expert advice and consultation from experienced professionals in the field',
             icon: {
-                url: 'https://cdn.pixabay.com/photo/2016/02/19/11/19/office-1209640_1280.jpg',
-                prompt: 'Expert consultation icon'
+                __icon_url__: 'https://cdn.pixabay.com/photo/2016/02/19/11/19/office-1209640_1280.jpg',
+                __icon_query__: 'Expert consultation icon'
             }
         },
         {
             heading: 'Quality Assurance',
             description: 'Comprehensive quality assurance processes to ensure excellent results',
             icon: {
-                url: 'https://cdn.pixabay.com/photo/2017/08/10/08/47/laptop-2619235_1280.jpg',
-                prompt: 'Quality assurance icon'
+                __icon_url__: 'https://cdn.pixabay.com/photo/2017/08/10/08/47/laptop-2619235_1280.jpg',
+                __icon_query__: 'Quality assurance icon'
             }
         },
         {
             heading: 'Customer Support',
             description: 'Dedicated customer support available to assist you throughout the process',
             icon: {
-                url: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
-                prompt: 'Customer support icon'
+                __icon_url__: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
+                __icon_query__: 'Customer support icon'
             }
         }
     ]).meta({
@@ -100,8 +100,8 @@ const Type7SlideLayout: React.FC<Type7SlideLayoutProps> = ({ data: slideData }) 
                             <div className="flex-shrink-0 lg:w-16">
                                 <div className="w-12 h-12 lg:w-16 lg:h-16 bg-blue-600 rounded-lg flex items-center justify-center overflow-hidden">
                                     <img
-                                        src={item.icon?.url || ''}
-                                        alt={item.icon?.prompt || item.heading}
+                                        src={item.icon?.__icon_url__ || ''}
+                                        alt={item.icon?.__icon_query__ || item.heading}
                                         className="w-full h-full object-cover"
                                     />
                                 </div>
@@ -135,8 +135,8 @@ const Type7SlideLayout: React.FC<Type7SlideLayoutProps> = ({ data: slideData }) 
                         <div className="text-center mb-4">
                             <div className="w-16 h-16 lg:w-20 lg:h-20 bg-blue-600 rounded-lg flex items-center justify-center mx-auto mb-4 overflow-hidden">
                                 <img
-                                    src={item.icon?.url || ''}
-                                    alt={item.icon?.prompt || item.heading}
+                                    src={item.icon?.__icon_url__ || ''}
+                                    alt={item.icon?.__icon_query__ || item.heading}
                                     className="w-full h-full object-cover"
                                 />
                             </div>

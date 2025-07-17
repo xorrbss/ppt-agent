@@ -24,8 +24,8 @@ const timelineSlideSchema = z.object({
             description: "Event description",
         }),
         icon: IconSchema.default({
-            url: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
-            prompt: 'Default event icon'
+            __icon_url__: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
+            __icon_query__: 'Default event icon'
         }).meta({
             description: "Icon for the event",
         })
@@ -35,8 +35,8 @@ const timelineSlideSchema = z.object({
             title: 'Foundation',
             description: 'Company founded with a vision to transform digital experiences',
             icon: {
-                url: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
-                prompt: 'Foundation icon'
+                __icon_url__: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
+                __icon_query__: 'Foundation icon'
             }
         },
         {
@@ -44,8 +44,8 @@ const timelineSlideSchema = z.object({
             title: 'First Success',
             description: 'Launched first product and gained initial market traction',
             icon: {
-                url: 'https://cdn.pixabay.com/photo/2016/02/19/11/19/office-1209640_1280.jpg',
-                prompt: 'First success icon'
+                __icon_url__: 'https://cdn.pixabay.com/photo/2016/02/19/11/19/office-1209640_1280.jpg',
+                __icon_query__: 'First success icon'
             }
         },
         {
@@ -53,8 +53,8 @@ const timelineSlideSchema = z.object({
             title: 'Expansion',
             description: 'Expanded team and entered new markets with innovative solutions',
             icon: {
-                url: 'https://cdn.pixabay.com/photo/2017/08/10/08/47/laptop-2619235_1280.jpg',
-                prompt: 'Expansion icon'
+                __icon_url__: 'https://cdn.pixabay.com/photo/2017/08/10/08/47/laptop-2619235_1280.jpg',
+                __icon_query__: 'Expansion icon'
             }
         },
         {
@@ -62,8 +62,8 @@ const timelineSlideSchema = z.object({
             title: 'Innovation',
             description: 'Introduced breakthrough technology and achieved industry recognition',
             icon: {
-                url: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
-                prompt: 'Innovation icon'
+                __icon_url__: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
+                __icon_query__: 'Innovation icon'
             }
         }
     ]).meta({
@@ -88,7 +88,7 @@ const TimelineSlideLayout: React.FC<TimelineSlideLayoutProps> = ({ data: slideDa
         <div
             className="relative w-full aspect-[16/9] flex flex-col bg-gradient-to-br from-slate-50 via-white to-slate-100 overflow-hidden shadow-2xl border border-slate-200 print:shadow-none print:border-gray-300"
             style={slideData?.backgroundImage ? {
-                backgroundImage: `linear-gradient(135deg, rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url(${slideData.backgroundImage.url})`,
+                backgroundImage: `linear-gradient(135deg, rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url(${slideData.backgroundImage.__image_url__})`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center'
             } : {}}
@@ -137,8 +137,8 @@ const TimelineSlideLayout: React.FC<TimelineSlideLayoutProps> = ({ data: slideDa
                                         <h3 className="text-xl font-bold text-gray-800 mb-3 leading-tight flex items-center gap-2 print:text-lg">
                                             <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0 print:w-6 print:h-6">
                                                 <img
-                                                    src={event.icon?.url || ''}
-                                                    alt={event.icon?.prompt || event.title}
+                                                    src={event.icon?.__icon_url__ || ''}
+                                                    alt={event.icon?.__icon_query__ || event.title}
                                                     className="w-full h-full object-cover"
                                                 />
                                             </div>

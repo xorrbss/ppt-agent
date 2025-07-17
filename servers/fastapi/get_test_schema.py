@@ -1,8 +1,11 @@
-from typing import List, Optional
+import json
+from typing import List, Literal, Optional
 from pydantic import BaseModel, Field, HttpUrl, EmailStr
 
 from models.presentation_layout import PresentationLayoutModel, SlideLayoutModel
 from models.presentation_outline_model import PresentationOutlineModel
+from utils.dict_utils import get_dict_at_path, get_dict_paths_with_key
+from utils.schema_utils import remove_fields_from_schema
 
 
 class ContactInfoModel(BaseModel):
@@ -11,6 +14,11 @@ class ContactInfoModel(BaseModel):
         None, min_length=5, max_length=50, description="Contact phone number"
     )
     website: Optional[HttpUrl] = Field(None, description="Website URL")
+
+
+class ImageModel(BaseModel):
+    image_url__: str = Field(description="Image URL")
+    image_prompt__: str = Field(description="Image prompt")
 
 
 # First Slide Layout
@@ -34,8 +42,8 @@ class FirstSlideModel(BaseModel):
         max_length=100,
         description="Company or organization name",
     )
-    backgroundImage: Optional[HttpUrl] = Field(
-        description="URL to background image for the slide"
+    backgroundImage: Optional[ImageModel] = Field(
+        description="Background image for the slide"
     )
 
 
@@ -354,59 +362,64 @@ presentation_layout = PresentationLayoutModel(
             name="First Slide",
             json_schema=FirstSlideModel.model_json_schema(),
         ),
-        SlideLayoutModel(
-            id="bullet-point-slide",
-            name="Bullet Point Slide",
-            json_schema=BulletPointSlideModel.model_json_schema(),
-        ),
-        SlideLayoutModel(
-            id="image-slide",
-            name="Image Slide",
-            json_schema=ImageSlideModel.model_json_schema(),
-        ),
-        SlideLayoutModel(
-            id="statistics-slide",
-            name="Statistics Slide",
-            json_schema=StatisticsSlideModel.model_json_schema(),
-        ),
-        SlideLayoutModel(
-            id="quote-slide",
-            name="Quote Slide",
-            json_schema=QuoteSlideModel.model_json_schema(),
-        ),
-        SlideLayoutModel(
-            id="timeline-slide",
-            name="Timeline Slide",
-            json_schema=TimelineSlideModel.model_json_schema(),
-        ),
-        SlideLayoutModel(
-            id="team-slide",
-            name="Team Slide",
-            json_schema=TeamSlideModel.model_json_schema(),
-        ),
-        SlideLayoutModel(
-            id="process-slide",
-            name="Process Slide",
-            json_schema=ProcessSlideModel.model_json_schema(),
-        ),
-        SlideLayoutModel(
-            id="two-column-slide",
-            name="Two Column Slide",
-            json_schema=TwoColumnSlideModel.model_json_schema(),
-        ),
-        SlideLayoutModel(
-            id="conclusion-slide",
-            name="Conclusion Slide",
-            json_schema=ConclusionSlideModel.model_json_schema(),
-        ),
-        SlideLayoutModel(
-            id="content-slide",
-            name="Content Slide",
-            json_schema=ContentSlideModel.model_json_schema(),
-        ),
+        # SlideLayoutModel(
+        #     id="bullet-point-slide",
+        #     name="Bullet Point Slide",
+        #     json_schema=BulletPointSlideModel.model_json_schema(),
+        # ),
+        # SlideLayoutModel(
+        #     id="image-slide",
+        #     name="Image Slide",
+        #     json_schema=ImageSlideModel.model_json_schema(),
+        # ),
+        # SlideLayoutModel(
+        #     id="statistics-slide",
+        #     name="Statistics Slide",
+        #     json_schema=StatisticsSlideModel.model_json_schema(),
+        # ),
+        # SlideLayoutModel(
+        #     id="quote-slide",
+        #     name="Quote Slide",
+        #     json_schema=QuoteSlideModel.model_json_schema(),
+        # ),
+        # SlideLayoutModel(
+        #     id="timeline-slide",
+        #     name="Timeline Slide",
+        #     json_schema=TimelineSlideModel.model_json_schema(),
+        # ),
+        # SlideLayoutModel(
+        #     id="team-slide",
+        #     name="Team Slide",
+        #     json_schema=TeamSlideModel.model_json_schema(),
+        # ),
+        # SlideLayoutModel(
+        #     id="process-slide",
+        #     name="Process Slide",
+        #     json_schema=ProcessSlideModel.model_json_schema(),
+        # ),
+        # SlideLayoutModel(
+        #     id="two-column-slide",
+        #     name="Two Column Slide",
+        #     json_schema=TwoColumnSlideModel.model_json_schema(),
+        # ),
+        # SlideLayoutModel(
+        #     id="conclusion-slide",
+        #     name="Conclusion Slide",
+        #     json_schema=ConclusionSlideModel.model_json_schema(),
+        # ),
+        # SlideLayoutModel(
+        #     id="content-slide",
+        #     name="Content Slide",
+        #     json_schema=ContentSlideModel.model_json_schema(),
+        # ),
     ],
 )
 
-print(presentation_layout.model_dump_json())
+# print(json.dumps(FirstSlideModel.model_json_schema()))
+
+slide_schema = FirstSlideModel.model_json_schema()
+
+slide_schema = remove_fields_from_schema(slide_schema, ["image_url__"])
+print(slide_schema)
 
 # print(PresentationOutlineModel.model_json_schema())

@@ -17,7 +17,7 @@ WORKDIR /app
 RUN ls -a
 
 # Set environment variables
-ENV APP_DATA_DIRECTORY=/app/user_data
+ENV APP_DATA_DIRECTORY=/app_data
 ENV TEMP_DIRECTORY=/tmp/presenton
 
 # Install ollama

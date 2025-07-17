@@ -5,6 +5,7 @@ import aiohttp
 from google import genai
 from google.genai.types import GenerateContentConfig
 from models.image_prompt import ImagePrompt
+from models.sql.image_asset import ImageAsset
 from utils.download_helpers import download_file
 from utils.get_env import get_pexels_api_key_env
 from utils.llm_provider import (
@@ -18,7 +19,6 @@ class ImageGenerationService:
 
     def __init__(self, output_directory: str):
         self.output_directory = output_directory
-        os.makedirs(output_directory, exist_ok=True)
 
         self.use_pexels = False
         if get_pexels_api_key_env():
@@ -35,7 +35,7 @@ class ImageGenerationService:
             return self.generate_image_openai
         return None
 
-    async def generate_image(self, prompt: ImagePrompt) -> str:
+    async def generate_image(self, prompt: ImagePrompt) -> str | ImageAsset:
         if not self.image_gen_func:
             print("No image generation function found. Using placeholder image.")
             return "/static/images/placeholder.jpg"
@@ -45,8 +45,17 @@ class ImageGenerationService:
 
         try:
             image_path = await self.image_gen_func(image_prompt, self.output_directory)
-            if image_path and os.path.exists(image_path):
-                return image_path
+            if image_path:
+                if image_path.startswith("http"):
+                    return image_path
+                elif os.path.exists(image_path):
+                    return ImageAsset(
+                        path=image_path,
+                        extras={
+                            "prompt": prompt.prompt,
+                            "theme_prompt": prompt.theme_prompt,
+                        },
+                    )
             raise Exception(f"Image not found at {image_path}")
 
         except Exception as e:
@@ -84,7 +93,7 @@ class ImageGenerationService:
 
         return image_path
 
-    async def get_image_from_pexels(self, prompt: str, output_directory: str) -> str:
+    async def get_image_from_pexels(self, prompt: str) -> str:
         async with aiohttp.ClientSession() as session:
             response = await session.get(
                 f"https://api.pexels.com/v1/search?query={prompt}&per_page=1",
@@ -92,4 +101,4 @@ class ImageGenerationService:
             )
             data = await response.json()
             image_url = data["photos"][0]["src"]["large"]
-            return await download_file(image_url, output_directory)
+            return image_url

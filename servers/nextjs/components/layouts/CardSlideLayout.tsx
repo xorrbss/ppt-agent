@@ -15,8 +15,8 @@ const cardSlideSchema = z.object({
     }),
     cards: z.array(z.object({
         icon: IconSchema.default({
-            url: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
-            prompt: 'Default card icon'
+            __icon_url__: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
+            __icon_query__: 'Default card icon'
         }).meta({
             description: "Icon for the card",
         }),
@@ -29,24 +29,24 @@ const cardSlideSchema = z.object({
     })).min(2).max(6).default([
         {
             icon: {
-                url: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
-                prompt: 'Lightning fast icon'
+                __icon_url__: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
+                __icon_query__: 'Lightning fast icon'
             },
             title: 'Lightning Fast',
             description: 'Optimized performance for quick results and seamless user experience'
         },
         {
             icon: {
-                url: 'https://cdn.pixabay.com/photo/2016/02/19/11/19/office-1209640_1280.jpg',
-                prompt: 'Secure and safe icon'
+                __icon_url__: 'https://cdn.pixabay.com/photo/2016/02/19/11/19/office-1209640_1280.jpg',
+                __icon_query__: 'Secure and safe icon'
             },
             title: 'Secure & Safe',
             description: 'Enterprise-grade security with advanced encryption and protection'
         },
         {
             icon: {
-                url: 'https://cdn.pixabay.com/photo/2017/08/10/08/47/laptop-2619235_1280.jpg',
-                prompt: 'Precise targeting icon'
+                __icon_url__: 'https://cdn.pixabay.com/photo/2017/08/10/08/47/laptop-2619235_1280.jpg',
+                __icon_query__: 'Precise targeting icon'
             },
             title: 'Precise Targeting',
             description: 'Advanced analytics to reach your exact audience with precision'
@@ -73,7 +73,7 @@ const CardSlideLayout: React.FC<CardSlideLayoutProps> = ({ data: slideData }) =>
         <div
             className="relative w-full aspect-[16/9] flex flex-col bg-gradient-to-br from-slate-50 via-white to-slate-100 overflow-hidden shadow-2xl border border-slate-200 print:shadow-none print:border-gray-300"
             style={slideData?.backgroundImage ? {
-                backgroundImage: `linear-gradient(135deg, rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url(${slideData.backgroundImage.url})`,
+                backgroundImage: `linear-gradient(135deg, rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url(${slideData.backgroundImage.__image_url__})`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center'
             } : {}}
@@ -108,8 +108,8 @@ const CardSlideLayout: React.FC<CardSlideLayoutProps> = ({ data: slideData }) =>
                             <div className="mb-4 group-hover:scale-110 transition-transform duration-300">
                                 <div className="w-16 h-16 mx-auto bg-blue-100 rounded-xl flex items-center justify-center overflow-hidden print:w-12 print:h-12">
                                     <img
-                                        src={card.icon?.url || ''}
-                                        alt={card.icon?.prompt || card.title}
+                                        src={card.icon?.__icon_url__ || ''}
+                                        alt={card.icon?.__icon_query__ || card.title}
                                         className="w-full h-full object-cover"
                                     />
                                 </div>
