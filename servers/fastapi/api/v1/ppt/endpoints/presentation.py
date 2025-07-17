@@ -187,7 +187,8 @@ async def stream_presentation(presentation_id: str):
         layout = presentation.get_layout()
         outline = presentation.get_presentation_outline()
 
-        asyncio_tasks = []
+        # These tasks will be gathered and awaited after all slides are generated
+        async_assets_generation_tasks = []
 
         slides: List[SlideModel] = []
         yield SSEResponse(
@@ -206,7 +207,7 @@ async def stream_presentation(presentation_id: str):
                 content=slide_content,
             )
             slides.append(slide)
-            asyncio_tasks.append(process_slide_and_fetch_assets(slide))
+            async_assets_generation_tasks.append(process_slide_and_fetch_assets(slide))
             yield SSEResponse(
                 event="response",
                 data=json.dumps({"type": "chunk", "chunk": slide.model_dump_json()}),
@@ -217,11 +218,15 @@ async def stream_presentation(presentation_id: str):
             data=json.dumps({"type": "chunk", "chunk": " ] }"}),
         ).to_string()
 
-        await asyncio.gather(*asyncio_tasks)
+        generated_assets_lists = await asyncio.gather(*async_assets_generation_tasks)
+        generated_assets = []
+        for assets_list in generated_assets_lists:
+            generated_assets.extend(assets_list)
 
         with get_sql_session() as sql_session:
             sql_session.add(presentation)
             sql_session.add_all(slides)
+            sql_session.add_all(generated_assets)
             sql_session.commit()
             sql_session.refresh(presentation)
             for each_slide in slides:

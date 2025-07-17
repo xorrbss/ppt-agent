@@ -4,7 +4,8 @@ from pydantic import BaseModel, Field, HttpUrl, EmailStr
 
 from models.presentation_layout import PresentationLayoutModel, SlideLayoutModel
 from models.presentation_outline_model import PresentationOutlineModel
-from services.schema_processor import SchemaProcessor
+from utils.dict_utils import get_dict_at_path, get_dict_paths_with_key
+from utils.schema_utils import remove_fields_from_schema
 
 
 class ContactInfoModel(BaseModel):
@@ -16,9 +17,8 @@ class ContactInfoModel(BaseModel):
 
 
 class ImageModel(BaseModel):
-    url: str = Field(description="Image URL")
-    __image_type__: Literal["image"] = "image"
-    prompt: str = Field(description="Image prompt")
+    image_url__: str = Field(description="Image URL")
+    image_prompt__: str = Field(description="Image prompt")
 
 
 # First Slide Layout
@@ -417,14 +417,9 @@ presentation_layout = PresentationLayoutModel(
 
 # print(json.dumps(FirstSlideModel.model_json_schema()))
 
-# slide_schema = FirstSlideModel.model_json_schema()
+slide_schema = FirstSlideModel.model_json_schema()
 
-# schema_processor = SchemaProcessor()
-# print(
-#     json.dumps(
-#         schema_processor.remove_image_url_fields(FirstSlideModel.model_json_schema())
-#     )
-# )
-
+slide_schema = remove_fields_from_schema(slide_schema, ["image_url__"])
+print(slide_schema)
 
 # print(PresentationOutlineModel.model_json_schema())

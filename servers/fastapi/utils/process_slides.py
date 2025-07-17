@@ -1,33 +1,60 @@
-import os
+import asyncio
 from typing import List, Tuple
-from models.presentation_layout import SlideLayoutModel
-from models.sql.asset import ImageAsset
+from models.image_prompt import ImagePrompt
+from models.sql.image_asset import ImageAsset
 from models.sql.slide import SlideModel
-from services import SCHEMA_PROCESSOR
 from services.icon_finder_service import IconFinderService
 from services.image_generation_service import ImageGenerationService
-from utils.get_env import get_app_data_directory_env
+from utils.asset_directory_utils import get_images_directory
+from utils.dict_utils import get_dict_at_path, get_dict_paths_with_key, set_dict_at_path
 
 
 async def process_slide_and_fetch_assets(
-    slide: SlideModel, layout: SlideLayoutModel
-) -> SlideModel:
-    image_directory = os.path.join(get_app_data_directory_env(), "images")
+    slide: SlideModel,
+) -> List[ImageAsset]:
+    image_directory = get_images_directory()
 
     image_generation_service = ImageGenerationService(image_directory)
     icon_finder_service = IconFinderService()
 
-    image_type_paths = SCHEMA_PROCESSOR.find_dict_with_key(
-        slide.content, "__image_type__"
-    )
-    for path in image_type_paths:
-        image_dict = SCHEMA_PROCESSOR.get_dict_at_path(slide.content, path)
-        image_prompt = image_dict["prompt"]
-        if image_dict["__image_type__"] == "image":
-            image_path = await image_generation_service.generate_image(image_prompt)
-            image_dict["url"] = image_path
-        else:
-            icon_path = await icon_finder_service.search_icons(image_prompt)
-            image_dict["url"] = icon_path[0]
+    async_tasks = []
 
-        SCHEMA_PROCESSOR.set_dict_at_path(slide.content, path, image_dict)
+    image_paths = get_dict_paths_with_key(slide.content, "__image_prompt__")
+    icon_paths = get_dict_paths_with_key(slide.content, "__icon_query__")
+
+    for image_path in image_paths:
+        image_prompt_parent = get_dict_at_path(slide.content, image_path)
+        async_tasks.append(
+            image_generation_service.generate_image(
+                ImagePrompt(
+                    prompt=image_prompt_parent["__image_prompt__"],
+                )
+            )
+        )
+
+    for icon_path in icon_paths:
+        icon_query_parent = get_dict_at_path(slide.content, icon_path)
+        async_tasks.append(
+            icon_finder_service.search_icons(icon_query_parent["__icon_query__"])
+        )
+
+    results = await asyncio.gather(*async_tasks)
+    results.reverse()
+
+    return_assets = []
+    for image_path in image_paths:
+        image_dict = get_dict_at_path(slide.content, image_path)
+        result = results.pop()
+        if isinstance(result, ImageAsset):
+            return_assets.append(result)
+            image_dict["__image_url__"] = result.path
+        else:
+            image_dict["__image_url__"] = result
+        set_dict_at_path(slide.content, image_path, image_dict)
+
+    for icon_path in icon_paths:
+        icon_dict = get_dict_at_path(slide.content, icon_path)
+        icon_dict["__icon_url__"] = results.pop()[0]
+        set_dict_at_path(slide.content, icon_path, icon_dict)
+
+    return return_assets

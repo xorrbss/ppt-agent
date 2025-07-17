@@ -3,14 +3,13 @@ import json
 from google.genai.types import GenerateContentConfig
 from models.presentation_layout import SlideLayoutModel
 from models.presentation_outline_model import SlideOutlineModel
-from services import SCHEMA_PROCESSOR
-from services.schema_processor import SchemaProcessor
 from utils.llm_provider import (
     get_google_llm_client,
     get_llm_client,
     get_small_model,
     is_google_selected,
 )
+from utils.schema_utils import remove_fields_from_schema
 
 system_prompt = """
     Generate structured slide based on provided title and outline, follow mentioned steps and notes and provide structured output.
@@ -66,7 +65,9 @@ async def get_slide_content_from_type_and_outline(
                 "type": "json_schema",
                 "json_schema": {
                     "name": "SlideContent",
-                    "schema": slide_layout.json_schema,
+                    "schema": remove_fields_from_schema(
+                        slide_layout.json_schema, ["__image_url__", "__icon_url__"]
+                    ),
                 },
             },
         )

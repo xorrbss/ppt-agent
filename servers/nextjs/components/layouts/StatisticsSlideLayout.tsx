@@ -94,7 +94,7 @@ const StatisticsSlideLayout: React.FC<StatisticsSlideLayoutProps> = ({ data: sli
         <div
             className="relative w-full aspect-[16/9] bg-gradient-to-br from-slate-50 via-white to-slate-100 overflow-hidden shadow-2xl border border-slate-200 print:shadow-none print:border-gray-300"
             style={slideData?.backgroundImage ? {
-                backgroundImage: `url("${slideData.backgroundImage.url}")`,
+                backgroundImage: `url("${slideData.backgroundImage.__image_url__}")`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
                 backgroundRepeat: 'no-repeat'

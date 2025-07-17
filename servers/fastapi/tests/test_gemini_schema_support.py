@@ -67,4 +67,4 @@ def test_gemini_schema_support():
             response_schema=TwoColumnSlideModel.model_json_schema(),
         ),
     )
-    print(response.parsed)
+    print(response.text)

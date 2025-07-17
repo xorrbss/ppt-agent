@@ -1,0 +1,8 @@
+import os
+from utils.get_env import get_app_data_directory_env
+
+
+def get_images_directory():
+    images_directory = os.path.join(get_app_data_directory_env(), "images")
+    os.makedirs(images_directory, exist_ok=True)
+    return images_directory

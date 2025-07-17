@@ -15,8 +15,8 @@ const processSlideSchema = z.object({
     }),
     steps: z.array(z.object({
         icon: IconSchema.default({
-            url: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
-            prompt: 'Default step icon'
+            __icon_url__: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
+            __icon_query__: 'Default step icon'
         }).meta({
             description: "Icon for the step",
         }),
@@ -29,24 +29,24 @@ const processSlideSchema = z.object({
     })).min(2).max(6).default([
         {
             icon: {
-                url: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
-                prompt: 'Plan and strategy icon'
+                __icon_url__: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
+                __icon_query__: 'Plan and strategy icon'
             },
             title: 'Plan & Strategy',
             description: 'Define objectives, analyze requirements, and create a comprehensive roadmap'
         },
         {
             icon: {
-                url: 'https://cdn.pixabay.com/photo/2016/02/19/11/19/office-1209640_1280.jpg',
-                prompt: 'Execute and build icon'
+                __icon_url__: 'https://cdn.pixabay.com/photo/2016/02/19/11/19/office-1209640_1280.jpg',
+                __icon_query__: 'Execute and build icon'
             },
             title: 'Execute & Build',
             description: 'Implement solutions with precision using cutting-edge technology and best practices'
         },
         {
             icon: {
-                url: 'https://cdn.pixabay.com/photo/2017/08/10/08/47/laptop-2619235_1280.jpg',
-                prompt: 'Launch and optimize icon'
+                __icon_url__: 'https://cdn.pixabay.com/photo/2017/08/10/08/47/laptop-2619235_1280.jpg',
+                __icon_query__: 'Launch and optimize icon'
             },
             title: 'Launch & Optimize',
             description: 'Deploy the solution and continuously improve based on performance metrics'
@@ -73,7 +73,7 @@ const ProcessSlideLayout: React.FC<ProcessSlideLayoutProps> = ({ data: slideData
         <div
             className="relative w-full aspect-[16/9] flex flex-col bg-gradient-to-br from-slate-50 via-white to-slate-100 overflow-hidden shadow-2xl border border-slate-200 print:shadow-none print:border-gray-300"
             style={slideData?.backgroundImage ? {
-                backgroundImage: `linear-gradient(135deg, rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url(${slideData.backgroundImage.url})`,
+                backgroundImage: `linear-gradient(135deg, rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url(${slideData.backgroundImage.__image_url__})`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center'
             } : {}}
@@ -110,8 +110,8 @@ const ProcessSlideLayout: React.FC<ProcessSlideLayoutProps> = ({ data: slideData
                                         </div>
                                         <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-lg print:w-6 print:h-6">
                                             <img
-                                                src={step.icon?.url || ''}
-                                                alt={step.icon?.prompt || step.title}
+                                                src={step.icon?.__icon_url__ || ''}
+                                                alt={step.icon?.__icon_query__ || step.title}
                                                 className="w-6 h-6 object-cover rounded-full print:w-4 print:h-4"
                                             />
                                         </div>

@@ -77,7 +77,7 @@ const TeamSlideLayout: React.FC<TeamSlideLayoutProps> = ({ data: slideData }) =>
         <div
             className="relative w-full aspect-[16/9] bg-gradient-to-br from-slate-50 via-white to-slate-100 overflow-hidden shadow-2xl border border-slate-200 print:shadow-none print:border-gray-300"
             style={slideData?.backgroundImage ? {
-                backgroundImage: `url("${slideData.backgroundImage.url}")`,
+                backgroundImage: `url("${slideData.backgroundImage.__image_url__}")`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
                 backgroundRepeat: 'no-repeat'
@@ -99,7 +99,7 @@ const TeamSlideLayout: React.FC<TeamSlideLayoutProps> = ({ data: slideData }) =>
             <div className="relative z-10 flex flex-col h-full px-8 py-8">
                 {/* Professional Header */}
                 <header className="mb-6">
-                    <h1 className={`text-4xl md:text-5xl font-bold mb-3 tracking-tight leading-tight break-words ${slideData?.backgroundImage
+                    <h1 className={`text-4xl md:text-5xl font-bold mb-3 tracking-tight leading-tight break-words ${slideData?.backgroundImage?.__image_prompt__
                         ? 'text-white drop-shadow-lg'
                         : 'text-slate-900'
                         }`}>
@@ -109,7 +109,7 @@ const TeamSlideLayout: React.FC<TeamSlideLayoutProps> = ({ data: slideData }) =>
                     </h1>
 
                     {slideData?.subtitle && (
-                        <p className={`text-xl font-light leading-relaxed break-words ${slideData?.backgroundImage
+                        <p className={`text-xl font-light leading-relaxed break-words ${slideData?.backgroundImage?.__image_prompt__
                             ? 'text-slate-200 drop-shadow-md'
                             : 'text-slate-600'
                             }`}>

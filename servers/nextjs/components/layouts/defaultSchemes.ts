@@ -1,21 +1,19 @@
 import * as z from "zod";
 
 export const ImageSchema = z.object({
-    url: z.url().meta({
+    __image_url__: z.url().meta({
         description: "URL to image",
     }),
-    prompt: z.string().meta({
+    __image_prompt__: z.string().meta({
         description: "Prompt used to generate the image",
     }),
-    __image_type__:z.literal('image')
 })
 
 export const IconSchema = z.object({
-    url: z.string().meta({
+    __icon_url__: z.string().meta({
         description: "URL to icon",
     }),
-    prompt: z.string().meta({
-        description: "Prompt used to generate the icon",
+    __icon_query__: z.string().meta({
+        description: "Query used to search the icon",
     }),
-    __image_type__:z.literal('icon')
 })
