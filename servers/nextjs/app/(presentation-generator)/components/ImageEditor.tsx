@@ -284,11 +284,7 @@ const ImageEditor = ({
     }
   };
 
-  // Helper function to determine image URL
-  const getImageUrl = (src: string | null) => {
-    if (!src) return "";
-    return getStaticFileUrl(src) || "";
-  };
+
 
   return (
     <Sheet open={true} onOpenChange={() => onClose?.()}>
@@ -296,23 +292,186 @@ const ImageEditor = ({
         side="right"
         className="w-[600px]"
         onOpenAutoFocus={(e) => e.preventDefault()}
+        onClick={(e) => e.stopPropagation()}
       >
         <SheetHeader>
           <SheetTitle>Update Image</SheetTitle>
         </SheetHeader>
 
         <div className="mt-6">
-          <Tabs defaultValue="generate" className="w-full">
-            <TabsList className="grid bg-blue-100 border border-blue-300 w-full grid-cols-2 mx-auto ">
+          <Tabs defaultValue="edit" className="w-full">
+            <TabsList className="grid bg-blue-100 border border-blue-300 w-full grid-cols-3 mx-auto ">
+              <TabsTrigger className="font-medium" value="edit">
+                Edit
+              </TabsTrigger>
               <TabsTrigger className="font-medium" value="generate">
                 AI Generate
               </TabsTrigger>
-
               <TabsTrigger className="font-medium" value="upload">
                 Upload
               </TabsTrigger>
             </TabsList>
 
+            <TabsContent value="edit" className="mt-4 space-y-4">
+              <div className="space-y-4">
+                {/* Current Image Preview */}
+                <div className="space-y-2">
+                  <h3 className="text-base font-medium">Current Image</h3>
+                  <div
+                    ref={imageContainerRef}
+                    className="relative aspect-[4/3] w-full overflow-hidden rounded-lg border bg-gray-100"
+                  >
+                    {image ? (
+                      <img
+                        ref={imageRef}
+                        src={image}
+                        alt="Current image"
+                        className="w-full h-full object-cover cursor-pointer"
+                        style={{
+                          objectFit: objectFit,
+                          objectPosition: `${focusPoint.x}% ${focusPoint.y}%`,
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleFocusPointClick(e);
+                        }}
+                        onError={(e) => {
+                          console.error('Image failed to load:', image);
+                          e.currentTarget.src = '/placeholder-image.png';
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-400">
+                        <div className="text-center">
+                          <Upload className="w-8 h-8 mx-auto mb-2" />
+                          <p className="text-sm">No image selected</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Focus Point Indicator */}
+                    {isFocusPointMode && image && (
+                      <div
+                        className="absolute w-4 h-4 bg-blue-500 border-2 border-white rounded-full transform -translate-x-1/2 -translate-y-1/2 pointer-events-none shadow-lg"
+                        style={{
+                          left: `${focusPoint.x}%`,
+                          top: `${focusPoint.y}%`,
+                        }}
+                      />
+                    )}
+                  </div>
+                  {/* Debug info */}
+                  {image && (
+                    <div className="text-xs text-gray-500 space-y-1">
+                      <p><strong>Image Path:</strong> {image}</p>
+                      <p><strong>Resolved URL:</strong> {image}</p>
+                      <p><strong>Focus Point:</strong> {focusPoint.x.toFixed(1)}%, {focusPoint.y.toFixed(1)}%</p>
+                      <p><strong>Object Fit:</strong> {objectFit}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Editing Controls */}
+                <div className="space-y-4">
+                  {/* Focus Point Controls */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-medium">Focus Point</h4>
+                      <Button
+                        variant={isFocusPointMode ? "default" : "outline"}
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFocusPointMode();
+                        }}
+                        disabled={!image}
+                      >
+                        <Move className="w-4 h-4 mr-2" />
+                        {isFocusPointMode ? "Done" : "Adjust"}
+                      </Button>
+                    </div>
+                    {isFocusPointMode && (
+                      <p className="text-xs text-gray-500">
+                        Click on the image above to set the focus point
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Object Fit Controls */}
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium">Image Fit</h4>
+                    <div className="flex gap-2">
+                      <Button
+                        variant={objectFit === "cover" ? "default" : "outline"}
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleFitChange("cover");
+                        }}
+                        className="flex-1"
+                        disabled={!image}
+                      >
+                        Cover
+                      </Button>
+                      <Button
+                        variant={objectFit === "contain" ? "default" : "outline"}
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleFitChange("contain");
+                        }}
+                        className="flex-1"
+                        disabled={!image}
+                      >
+                        Contain
+                      </Button>
+                      <Button
+                        variant={objectFit === "fill" ? "default" : "outline"}
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleFitChange("fill");
+                        }}
+                        className="flex-1"
+                        disabled={!image}
+                      >
+                        Fill
+                      </Button>
+                    </div>
+                    <div className="text-xs text-gray-500 space-y-1">
+                      <p><strong>Cover:</strong> Fill container, may crop image</p>
+                      <p><strong>Contain:</strong> Fit entire image, may show empty space</p>
+                      <p><strong>Fill:</strong> Stretch to fill container exactly</p>
+                    </div>
+                  </div>
+
+                  {/* Quick Actions */}
+                  <div className="pt-2 border-t">
+                    <h4 className="text-sm font-medium mb-2">Quick Actions</h4>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFocusPoint({ x: 50, y: 50 });
+                          setObjectFit("cover");
+                          saveImageProperties("cover", { x: 50, y: 50 });
+                          if (imageRef.current) {
+                            imageRef.current.style.objectFit = "cover";
+                            imageRef.current.style.objectPosition = "50% 50%";
+                          }
+                        }}
+                        className="flex-1"
+                        disabled={!image}
+                      >
+                        Reset to Default
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
             <TabsContent value="generate" className="mt-4 space-y-4">
               <div></div>
               <div className="space-y-4">
