@@ -40,7 +40,7 @@ const UploadPage = () => {
   const router = useRouter();
   const dispatch = useDispatch();
   const { toast } = useToast();
-  const { layoutSchema, loading: layoutsLoading, error: layoutsError } = useLayout();
+
 
   // State management
   const [files, setFiles] = useState<File[]>([]);
@@ -88,23 +88,7 @@ const UploadPage = () => {
       return false;
     }
 
-    if (layoutsError) {
-      toast({
-        title: "Layouts Error",
-        description: "Failed to load presentation layouts. Please try again.",
-        variant: "destructive",
-      });
-      return false;
-    }
 
-    if (!layoutSchema || layoutSchema.length === 0) {
-      toast({
-        title: "Layouts Not Available",
-        description: "Presentation layouts are still loading. Please wait.",
-        variant: "destructive",
-      });
-      return false;
-    }
 
     return true;
   };
@@ -181,11 +165,7 @@ const UploadPage = () => {
       n_slides: config?.slides ? parseInt(config.slides) : null,
       file_paths: [],
       language: config?.language ?? "",
-      layout: {
-        name: 'Professional',
-        ordered: false,
-        slides: layoutSchema
-      }
+
     });
 
     dispatch(setPresentationId(createResponse.id));

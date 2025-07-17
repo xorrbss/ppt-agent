@@ -408,14 +408,13 @@ export class PresentationGenerationApi {
     n_slides,
    file_paths,
    language,
-   layout
 
   }: {
     prompt: string;
     n_slides: number | null;
     file_paths?: string[];
     language: string | null;
-    layout: any;
+   
   }) {
     try {
       const response = await fetch(
@@ -428,8 +427,6 @@ export class PresentationGenerationApi {
             n_slides,
             file_paths,
             language,
-            layout
-
           }),
           cache: "no-cache",
         }

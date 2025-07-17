@@ -56,7 +56,7 @@ const Type5SlideLayout: React.FC<Type5SlideLayoutProps> = ({ data: slideData }) 
         >
             <div className="flex flex-col lg:flex-row gap-4 sm:gap-18 md:gap-16 items-center w-full">
                 {/* Left section - Title and Description */}
-                <div className="lg:w-1/2 lg:space-y-8">
+                <div className="lg:w-1/2 lg:space-y-8 ">
                     <h1 className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-gray-900 leading-tight">
                         {slideData?.title || 'Key Points'}
                     </h1>

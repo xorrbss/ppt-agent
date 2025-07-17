@@ -1,12 +1,12 @@
 import React from 'react'
 import * as z from "zod";
-import { IconSchema } from './defaultSchemes';
+import { IconSchema } from '@/presentation-layouts/defaultSchemes';
 
-export const layoutId = 'type7-slide'
-export const layoutName = 'Type7 Slide'
+export const layoutId = 'type6-slide'
+export const layoutName = 'Type6 Slide'
 export const layoutDescription = 'A centered title with a flexible grid of icon-based content items, adapting layout based on item count.'
 
-const type7SlideSchema = z.object({
+const type6SlideSchema = z.object({
     title: z.string().min(3).max(100).default('Our Services').meta({
         description: "Main title of the slide",
     }),
@@ -17,43 +17,38 @@ const type7SlideSchema = z.object({
         description: z.string().min(10).max(300).meta({
             description: "Item description",
         }),
-        icon: IconSchema.default({
-            __icon_url__: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
-            __icon_query__: 'Default icon'
-        }).meta({
-            description: "Icon for the item",
-        })
+        icon: IconSchema,
     })).min(2).max(6).default([
         {
             heading: 'Professional Service',
             description: 'High-quality professional services tailored to your specific needs and requirements',
             icon: {
-                __icon_url__: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
-                __icon_query__: 'Professional service icon'
+                __icon_url__: 'https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css',
+                __icon_query__: 'Professional Service'
             }
         },
         {
             heading: 'Expert Consultation',
             description: 'Expert advice and consultation from experienced professionals in the field',
             icon: {
-                __icon_url__: 'https://cdn.pixabay.com/photo/2016/02/19/11/19/office-1209640_1280.jpg',
-                __icon_query__: 'Expert consultation icon'
+                __icon_url__: 'https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css',
+                __icon_query__: 'Expert Consultation'
             }
         },
         {
             heading: 'Quality Assurance',
             description: 'Comprehensive quality assurance processes to ensure excellent results',
             icon: {
-                __icon_url__: 'https://cdn.pixabay.com/photo/2017/08/10/08/47/laptop-2619235_1280.jpg',
-                __icon_query__: 'Quality assurance icon'
+                __icon_url__: 'https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css',
+                __icon_query__: 'Quality Assurance'
             }
         },
         {
             heading: 'Customer Support',
             description: 'Dedicated customer support available to assist you throughout the process',
             icon: {
-                __icon_url__: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
-                __icon_query__: 'Customer support icon'
+                __icon_url__: 'https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css',
+                __icon_query__: 'Customer Support'
             }
         }
     ]).meta({
@@ -61,15 +56,15 @@ const type7SlideSchema = z.object({
     })
 })
 
-export const Schema = type7SlideSchema
+export const Schema = type6SlideSchema
 
-export type Type7SlideData = z.infer<typeof type7SlideSchema>
+export type Type6SlideData = z.infer<typeof type6SlideSchema>
 
-interface Type7SlideLayoutProps {
-    data?: Partial<Type7SlideData>
+interface Type6SlideLayoutProps {
+    data?: Partial<Type6SlideData>
 }
 
-const Type7SlideLayout: React.FC<Type7SlideLayoutProps> = ({ data: slideData }) => {
+const Type6SlideLayout: React.FC<Type6SlideLayoutProps> = ({ data: slideData }) => {
     const items = slideData?.items || []
     const isGridLayout = items.length >= 4
 
@@ -98,12 +93,8 @@ const Type7SlideLayout: React.FC<Type7SlideLayoutProps> = ({ data: slideData }) 
                     >
                         <div className="flex items-start gap-2 mg:gap-4">
                             <div className="flex-shrink-0 lg:w-16">
-                                <div className="w-12 h-12 lg:w-16 lg:h-16 bg-blue-600 rounded-lg flex items-center justify-center overflow-hidden">
-                                    <img
-                                        src={item.icon?.__icon_url__ || ''}
-                                        alt={item.icon?.__icon_query__ || item.heading}
-                                        className="w-full h-full object-cover"
-                                    />
+                                <div className="w-12 h-12 lg:w-16 lg:h-16 bg-blue-600 rounded-lg flex items-center justify-center text-white text-xl lg:text-2xl">
+                                    <img src={item.icon.__icon_url__} className='w-full h-full object-contain' alt={item.icon.__icon_query__} />
                                 </div>
                             </div>
                             <div>
@@ -133,12 +124,8 @@ const Type7SlideLayout: React.FC<Type7SlideLayoutProps> = ({ data: slideData }) 
                         className="w-full rounded-lg p-3 lg:p-6 relative"
                     >
                         <div className="text-center mb-4">
-                            <div className="w-16 h-16 lg:w-20 lg:h-20 bg-blue-600 rounded-lg flex items-center justify-center mx-auto mb-4 overflow-hidden">
-                                <img
-                                    src={item.icon?.__icon_url__ || ''}
-                                    alt={item.icon?.__icon_query__ || item.heading}
-                                    className="w-full h-full object-cover"
-                                />
+                            <div className="w-16 h-16 lg:w-20 lg:h-20 bg-blue-600 rounded-lg flex items-center justify-center text-white text-2xl lg:text-3xl mx-auto mb-4">
+                                <img src={item.icon.__icon_url__} className='w-full h-full object-contain' alt={item.icon.__icon_query__} />
                             </div>
                         </div>
                         <div className="lg:space-y-4 mt-2 lg:mt-4">
@@ -158,6 +145,7 @@ const Type7SlideLayout: React.FC<Type7SlideLayoutProps> = ({ data: slideData }) 
     return (
         <div
             className=" rounded-sm w-full max-w-[1280px] font-inter shadow-lg px-3 sm:px-12 lg:px-20 py-[10px] sm:py-[40px] lg:py-[86px] flex flex-col items-center justify-center max-h-[720px] aspect-video bg-white relative z-20 mx-auto"
+
         >
             <div className="text-center sm:pb-2 lg:pb-8 w-full">
                 <h1 className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-gray-900 leading-tight">
@@ -170,4 +158,4 @@ const Type7SlideLayout: React.FC<Type7SlideLayoutProps> = ({ data: slideData }) 
     )
 }
 
-export default Type7SlideLayout 
+export default Type6SlideLayout 

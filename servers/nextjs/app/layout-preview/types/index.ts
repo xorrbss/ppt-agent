@@ -8,6 +8,17 @@ export interface LayoutInfo {
     schema: any
     sampleData: any
     fileName: string
+    group: string
+}
+
+export interface LayoutGroup {
+    group: string
+    layouts: LayoutInfo[]
+}
+
+export interface GroupedLayoutsResponse {
+    group: string
+    files: string[]
 }
 
 export interface LoadingState {

@@ -1,6 +1,6 @@
 import React from 'react'
 import * as z from "zod";
-import { IconSchema } from './defaultSchemes';
+import { IconSchema } from '@/presentation-layouts/defaultSchemes';
 
 export const layoutId = 'type8-slide'
 export const layoutName = 'Type8 Slide'

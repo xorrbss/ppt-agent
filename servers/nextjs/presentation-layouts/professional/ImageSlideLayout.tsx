@@ -1,6 +1,6 @@
 import React from 'react'
 import * as z from "zod";
-import { ImageSchema } from './defaultSchemes';
+import { ImageSchema } from '@/presentation-layouts/defaultSchemes';
 
 export const layoutId = 'image-slide'
 export const layoutName = 'Image Slide'
@@ -24,12 +24,6 @@ const imageSlideSchema = z.object({
     }).meta({
         description: "Main slide image",
     }),
-    buttonText: z.string().max(50).default('Learn More').optional().meta({
-        description: "Optional button text",
-    }),
-    buttonUrl: z.string().url().optional().meta({
-        description: "Optional button URL",
-    })
 })
 
 export const Schema = imageSlideSchema
@@ -73,14 +67,7 @@ const ImageSlideLayout: React.FC<ImageSlideLayoutProps> = ({ data: slideData }) 
                         {slideData?.description || 'Transform your ideas into reality with innovative solutions that drive success and growth.'}
                     </p>
 
-                    {/* Button */}
-                    {slideData?.buttonText && (
-                        <div className="inline-flex">
-                            <button className="px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-800 text-white font-semibold rounded-lg shadow-lg print:shadow-md">
-                                {slideData.buttonText}
-                            </button>
-                        </div>
-                    )}
+
 
                     {/* Decorative line */}
                     <div className="mt-8 w-24 h-1 bg-gradient-to-r from-blue-600 to-blue-800 rounded-full"></div>

@@ -1,5 +1,6 @@
 import React from 'react'
 import * as z from "zod";
+import { IconSchema } from '@/presentation-layouts/defaultSchemes';
 
 export const layoutId = 'type6-slide'
 export const layoutName = 'Type6 Slide'
@@ -16,29 +17,39 @@ const type6SlideSchema = z.object({
         description: z.string().min(10).max(300).meta({
             description: "Item description",
         }),
-        icon: z.string().default('⭐').meta({
-            description: "Icon emoji for the item",
-        })
+        icon: IconSchema,
     })).min(2).max(6).default([
         {
             heading: 'Professional Service',
             description: 'High-quality professional services tailored to your specific needs and requirements',
-            icon: '🎯'
+            icon: {
+                __icon_url__: 'https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css',
+                __icon_query__: 'Professional Service'
+            }
         },
         {
             heading: 'Expert Consultation',
             description: 'Expert advice and consultation from experienced professionals in the field',
-            icon: '💡'
+            icon: {
+                __icon_url__: 'https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css',
+                __icon_query__: 'Expert Consultation'
+            }
         },
         {
             heading: 'Quality Assurance',
             description: 'Comprehensive quality assurance processes to ensure excellent results',
-            icon: '✅'
+            icon: {
+                __icon_url__: 'https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css',
+                __icon_query__: 'Quality Assurance'
+            }
         },
         {
             heading: 'Customer Support',
             description: 'Dedicated customer support available to assist you throughout the process',
-            icon: '🤝'
+            icon: {
+                __icon_url__: 'https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css',
+                __icon_query__: 'Customer Support'
+            }
         }
     ]).meta({
         description: "List of service items (2-6 items)",
@@ -83,7 +94,7 @@ const Type6SlideLayout: React.FC<Type6SlideLayoutProps> = ({ data: slideData }) 
                         <div className="flex items-start gap-2 mg:gap-4">
                             <div className="flex-shrink-0 lg:w-16">
                                 <div className="w-12 h-12 lg:w-16 lg:h-16 bg-blue-600 rounded-lg flex items-center justify-center text-white text-xl lg:text-2xl">
-                                    {item.icon}
+                                    <img src={item.icon.__icon_url__} className='w-full h-full object-contain' alt={item.icon.__icon_query__} />
                                 </div>
                             </div>
                             <div>
@@ -114,7 +125,7 @@ const Type6SlideLayout: React.FC<Type6SlideLayoutProps> = ({ data: slideData }) 
                     >
                         <div className="text-center mb-4">
                             <div className="w-16 h-16 lg:w-20 lg:h-20 bg-blue-600 rounded-lg flex items-center justify-center text-white text-2xl lg:text-3xl mx-auto mb-4">
-                                {item.icon}
+                                <img src={item.icon.__icon_url__} className='w-full h-full object-contain' alt={item.icon.__icon_query__} />
                             </div>
                         </div>
                         <div className="lg:space-y-4 mt-2 lg:mt-4">

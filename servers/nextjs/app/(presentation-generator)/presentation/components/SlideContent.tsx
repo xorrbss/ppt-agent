@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { Slide } from "../../types/slide";
 import { Loader2, PlusIcon, Trash2, WandSparkles } from "lucide-react";
 import {

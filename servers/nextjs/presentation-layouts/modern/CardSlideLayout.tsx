@@ -1,6 +1,6 @@
 import React from 'react'
 import * as z from "zod";
-import { ImageSchema, IconSchema } from './defaultSchemes';
+import { ImageSchema, IconSchema } from '@/presentation-layouts/defaultSchemes';
 
 export const layoutId = 'card-slide'
 export const layoutName = 'Card Slide'

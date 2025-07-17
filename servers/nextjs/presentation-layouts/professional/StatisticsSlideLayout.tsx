@@ -1,6 +1,6 @@
 import React from 'react'
 import * as z from "zod";
-import { ImageSchema } from './defaultSchemes';
+import { ImageSchema } from '@/presentation-layouts/defaultSchemes';
 
 
 export const layoutId = 'statistics-slide'

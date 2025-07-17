@@ -1,0 +1,102 @@
+import React from 'react'
+import * as z from "zod";
+
+export const layoutId = 'type2-timeline-slide'
+export const layoutName = 'Type2 Timeline Slide'
+export const layoutDescription = 'A timeline layout with title and content items arranged horizontally with numbered circles and connecting line.'
+
+const type2TimelineSlideSchema = z.object({
+    title: z.string().min(3).max(100).default('Main Title').meta({
+        description: "Main title of the slide",
+    }),
+    items: z.array(z.object({
+        heading: z.string().min(2).max(100).meta({
+            description: "Item heading",
+        }),
+        description: z.string().min(10).max(300).meta({
+            description: "Item description",
+        })
+    })).min(2).max(4).default([
+        {
+            heading: 'First Point',
+            description: 'Description for the first key point that explains important details'
+        },
+        {
+            heading: 'Second Point',
+            description: 'Description for the second key point with relevant information'
+        },
+        {
+            heading: 'Third Point',
+            description: 'Description for the third key point highlighting crucial aspects'
+        }
+    ]).meta({
+        description: "List of content items (2-4 items)",
+    })
+})
+
+export const Schema = type2TimelineSlideSchema
+
+export type Type2TimelineSlideData = z.infer<typeof type2TimelineSlideSchema>
+
+interface Type2TimelineSlideLayoutProps {
+    data?: Partial<Type2TimelineSlideData>
+}
+
+const Type2TimelineSlideLayout: React.FC<Type2TimelineSlideLayoutProps> = ({ data: slideData }) => {
+    const items = slideData?.items || []
+    const numberTranslations: string[] = ['01', '02', '03', '04', '05', '06']
+
+    const renderTimelineContent = () => {
+        return (
+            <div className="w-full flex flex-col relative mt-4 lg:mt-16">
+                {/* Timeline Header with Numbers and Line */}
+                <div className="relative flex justify-between w-[85%] mx-auto items-center mb-8 px-8">
+                    {/* Horizontal Line */}
+                    <div className="absolute top-1/2 w-[87%] left-1/2 -translate-x-1/2 h-[2px] bg-blue-600" />
+
+                    {/* Timeline Numbers */}
+                    {items.map((_, index) => (
+                        <div
+                            key={`timeline-${index}`}
+                            className="relative z-10 w-12 h-12 rounded-full bg-blue-600 px-1 text-white flex items-center justify-center font-bold text-lg"
+                        >
+                            <span>{numberTranslations[index] || `0${index + 1}`}</span>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Timeline Content */}
+                <div className="flex justify-between gap-8">
+                    {items.map((item, index) => (
+                        <div key={index} className="flex-1 text-center relative">
+                            <div className="space-y-4">
+                                <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 leading-tight">
+                                    {item.heading}
+                                </h3>
+                                <p className="text-sm sm:text-base lg:text-lg text-gray-700 leading-relaxed">
+                                    {item.description}
+                                </p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        )
+    }
+
+    return (
+        <div
+            className=" rounded-sm max-w-[1280px] w-full shadow-lg px-3 sm:px-12 lg:px-20 py-[10px] sm:py-[40px] flex flex-col items-center justify-center max-h-[720px] aspect-video bg-white relative z-20 mx-auto"
+        >
+            <div className="text-center lg:pb-8 w-full">
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-gray-900 leading-tight">
+                    {slideData?.title || 'Main Title'}
+                </h1>
+            </div>
+
+            {renderTimelineContent()}
+        </div>
+    )
+}
+
+export default Type2TimelineSlideLayout 

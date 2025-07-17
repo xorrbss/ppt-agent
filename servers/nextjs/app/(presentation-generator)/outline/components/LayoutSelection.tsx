@@ -1,8 +1,16 @@
 "use client";
-import React from "react";
-import { LayoutGroups, LayoutGroup } from "@/components/layouts/layoutGroup";
+import React, { useEffect } from "react";
 import { useLayout } from "../../context/LayoutContext";
 import { CheckCircle } from "lucide-react";
+
+interface LayoutGroup {
+    id: string;
+    name: string;
+    description: string;
+    ordered: boolean;
+    isDefault?: boolean;
+    slides: string[];
+}
 
 interface LayoutSelectionProps {
     selectedLayoutGroup: LayoutGroup | null;
@@ -13,7 +21,67 @@ const LayoutSelection: React.FC<LayoutSelectionProps> = ({
     selectedLayoutGroup,
     onSelectLayoutGroup
 }) => {
-    const { getLayout } = useLayout();
+    const { layoutSchema, getLayout, loading } = useLayout();
+
+    // Create layout groups from the loaded layout schema
+    const layoutGroups: LayoutGroup[] = React.useMemo(() => {
+        if (!layoutSchema || layoutSchema.length === 0) return [];
+
+        // Group layouts by their group property
+        const groupMap = new Map<string, any[]>();
+        layoutSchema.forEach(layout => {
+            const groupName = layout.group || 'default';
+            if (!groupMap.has(groupName)) {
+                groupMap.set(groupName, []);
+            }
+            groupMap.get(groupName)?.push(layout);
+        });
+
+        // Convert to LayoutGroup format
+        const groups: LayoutGroup[] = [];
+        groupMap.forEach((layouts, groupName) => {
+            const group: LayoutGroup = {
+                id: groupName,
+                name: groupName.charAt(0).toUpperCase() + groupName.slice(1),
+                description: getGroupDescription(groupName),
+                ordered: getGroupOrdered(groupName),
+                isDefault: groupName === 'professional',
+                slides: layouts.map(layout => layout.id)
+            };
+            groups.push(group);
+        });
+
+        // Sort groups to put default first
+        return groups.sort((a, b) => {
+            if (a.isDefault) return -1;
+            if (b.isDefault) return 1;
+            return a.name.localeCompare(b.name);
+        });
+    }, [layoutSchema]);
+
+    // Auto-select first group when groups are loaded
+    useEffect(() => {
+        if (layoutGroups.length > 0 && !selectedLayoutGroup) {
+            const defaultGroup = layoutGroups.find(g => g.isDefault) || layoutGroups[0];
+            onSelectLayoutGroup(defaultGroup);
+        }
+    }, [layoutGroups, selectedLayoutGroup, onSelectLayoutGroup]);
+
+    const getGroupDescription = (groupName: string): string => {
+        const descriptions: Record<string, string> = {
+            professional: 'Clean, corporate designs perfect for business presentations',
+            modern: 'Contemporary designs with clean lines and sophisticated layouts',
+            default: 'Standard layouts suitable for general presentations',
+            creative: 'Vibrant, artistic layouts for innovative presentations',
+            minimal: 'Simple, focused layouts that emphasize content'
+        };
+        return descriptions[groupName] || `${groupName} presentation layouts`;
+    };
+
+    const getGroupOrdered = (groupName: string): boolean => {
+        const orderedGroups = ['professional', 'modern'];
+        return orderedGroups.includes(groupName);
+    };
 
     const renderLayoutPreview = (layoutId: string) => {
         const Layout = getLayout(layoutId);
@@ -41,6 +109,49 @@ const LayoutSelection: React.FC<LayoutSelectionProps> = ({
         );
     };
 
+    if (loading) {
+        return (
+            <div className="space-y-6">
+                <div className="mb-6">
+                    <h5 className="text-lg font-medium mb-2">
+                        Loading Layout Styles...
+                    </h5>
+                    <p className="text-gray-600 text-sm">
+                        Please wait while we load the available presentation styles.
+                    </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {[1, 2, 3, 4].map((i) => (
+                        <div key={i} className="p-4 rounded-lg border border-gray-200 bg-gray-50 animate-pulse">
+                            <div className="h-4 bg-gray-200 rounded mb-2"></div>
+                            <div className="h-3 bg-gray-200 rounded mb-3"></div>
+                            <div className="grid grid-cols-3 gap-2 mb-3">
+                                {[1, 2, 3].map((j) => (
+                                    <div key={j} className="aspect-video bg-gray-200 rounded"></div>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    }
+
+    if (layoutGroups.length === 0) {
+        return (
+            <div className="space-y-6">
+                <div className="mb-6">
+                    <h5 className="text-lg font-medium mb-2">
+                        No Layout Styles Available
+                    </h5>
+                    <p className="text-gray-600 text-sm">
+                        No presentation layout styles could be loaded. Please try refreshing the page.
+                    </p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6">
             <div className="mb-6">
@@ -53,13 +164,13 @@ const LayoutSelection: React.FC<LayoutSelectionProps> = ({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {LayoutGroups.map((group) => (
+                {layoutGroups.map((group) => (
                     <div
                         key={group.id}
                         onClick={() => onSelectLayoutGroup(group)}
-                        className={`relative p-4 rounded-lg border cursor-pointer ${selectedLayoutGroup?.id === group.id
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-200 bg-white'
+                        className={`relative p-4 rounded-lg border cursor-pointer transition-all duration-200 ${selectedLayoutGroup?.id === group.id
+                            ? 'border-blue-500 bg-blue-50 shadow-md'
+                            : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
                             }`}
                     >
                         {selectedLayoutGroup?.id === group.id && (

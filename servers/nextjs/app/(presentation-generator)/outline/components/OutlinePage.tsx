@@ -16,9 +16,17 @@ import {
 import { OverlayLoader } from "@/components/ui/overlay-loader";
 import Wrapper from "@/components/Wrapper";
 import { jsonrepair } from "jsonrepair";
-import { LayoutGroup, getDefaultLayoutGroup } from "@/components/layouts/layoutGroup";
 import OutlineContent from "./OutlineContent";
 import LayoutSelection from "./LayoutSelection";
+
+interface LayoutGroup {
+  id: string;
+  name: string;
+  description: string;
+  ordered: boolean;
+  isDefault?: boolean;
+  slides: string[];
+}
 
 const OutlinePage = () => {
   const dispatch = useDispatch();
@@ -29,7 +37,7 @@ const OutlinePage = () => {
   );
 
   const [activeTab, setActiveTab] = useState<string>('outline');
-  const [selectedLayoutGroup, setSelectedLayoutGroup] = useState<LayoutGroup | null>(getDefaultLayoutGroup());
+  const [selectedLayoutGroup, setSelectedLayoutGroup] = useState<LayoutGroup | null>(null);
   const [loadingState, setLoadingState] = useState({
     message: "",
     isLoading: false,
@@ -182,10 +190,17 @@ const OutlinePage = () => {
     });
 
     try {
+      // Prepare layout data in the expected format
+      const layoutData = {
+        name: selectedLayoutGroup.name,
+        ordered: selectedLayoutGroup.ordered,
+        slides: selectedLayoutGroup.slides
+      };
+
       const response = await PresentationGenerationApi.presentationPrepare({
         presentation_id: presentation_id,
         outlines: outlines,
-        layoutGroup: selectedLayoutGroup,
+        layout: layoutData,
       });
 
       if (response) {

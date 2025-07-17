@@ -70,7 +70,6 @@ const DocumentsPreviewPage: React.FC = () => {
     duration: 10,
     progress: false,
   });
-  const { layoutSchema } = useLayout();
 
   // Memoized computed values
   const fileItems: FileItem[] = useMemo(() => {
@@ -137,16 +136,6 @@ const DocumentsPreviewPage: React.FC = () => {
 
   const handleCreatePresentation = async () => {
     try {
-      if (!layoutSchema) {
-        toast({
-          title: "Error",
-          description: "No layout schema found",
-          variant: "destructive",
-        });
-        return;
-      }
-
-
 
       setShowLoading({
         message: "Generating presentation outline...",
@@ -161,11 +150,7 @@ const DocumentsPreviewPage: React.FC = () => {
         n_slides: config?.slides ? parseInt(config.slides) : null,
         file_paths: documentPaths,
         language: config?.language ?? "",
-        layout: {
-          name: 'Professional',
-          ordered: false,
-          slides: layoutSchema
-        }
+
       });
 
       dispatch(setPresentationId(createResponse.id));
