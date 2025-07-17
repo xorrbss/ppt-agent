@@ -8,7 +8,7 @@ interface SortableSlideProps {
     index: number;
     selectedSlide: number;
     onSlideClick: (index: any) => void;
-    renderSlideContent: (slide: any) => React.ReactElement;
+    renderSlideContent: (slide: any, isEditMode?: boolean) => React.ReactElement;
 }
 
 export function SortableSlide({ slide, index, selectedSlide, onSlideClick, renderSlideContent }: SortableSlideProps) {
@@ -57,7 +57,7 @@ export function SortableSlide({ slide, index, selectedSlide, onSlideClick, rende
             <div className=" slide-box relative overflow-hidden aspect-video">
                 <div className="absolute bg-transparent z-40 top-0 left-0 w-full h-full" />
                 <div className="transform scale-[0.2] flex justify-center items-center origin-top-left  w-[500%] h-[500%]">
-                    {renderSlideContent(slide)}
+                    {renderSlideContent(slide, false)}
                 </div>
             </div>
         </div>

@@ -1,6 +1,7 @@
 'use client'
 import React, { useMemo } from 'react';
 import { useLayout } from '../context/LayoutContext';
+import { SmartEditableProvider } from '../components/SmartEditableWrapper';
 
 export const useGroupLayouts = () => {
     const {
@@ -28,9 +29,9 @@ export const useGroupLayouts = () => {
         };
     }, [getLayoutsByGroup]);
 
-    // Render slide content with group validation
+    // Render slide content with group validation and smart editing capabilities
     const renderSlideContent = useMemo(() => {
-        return (slide: any) => {
+        return (slide: any, isEditMode: boolean = true) => {
             const Layout = getGroupLayout(slide.layout, slide.layout_group);
             if (!Layout) {
                 return (
@@ -39,6 +40,19 @@ export const useGroupLayouts = () => {
                             Layout &quot;{slide.layout}&quot; not found in &quot;{slide.layout_group}&quot; group
                         </p>
                     </div>
+                );
+            }
+
+            if (isEditMode) {
+                return (
+                    <SmartEditableProvider
+                        slideIndex={slide.index}
+                        slideId={slide.id || `slide-${slide.index}`}
+                        slideData={slide.content}
+                        isEditMode={isEditMode}
+                    >
+                        <Layout data={slide.content} />
+                    </SmartEditableProvider>
                 );
             }
             return <Layout data={slide.content} />;

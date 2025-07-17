@@ -39,22 +39,7 @@ const SlideContent = ({
   );
 
   // Use the centralized group layouts hook
-  const { getGroupLayout, loading } = useGroupLayouts();
-
-  // Memoized layout component to prevent re-renders
-  const LayoutComponent = useMemo(() => {
-    const Layout = getGroupLayout(slide.layout, slide.layout_group);
-    if (!Layout) {
-      return () => (
-        <div className="flex flex-col items-center justify-center h-full bg-gray-100 rounded-lg">
-          <p className="text-gray-600 text-center">
-            Layout "{slide.layout}" not found in current group
-          </p>
-        </div>
-      );
-    }
-    return Layout;
-  }, [slide.layout, getGroupLayout]);
+  const { renderSlideContent, loading } = useGroupLayouts();
 
   const handleSubmit = async () => {
     const element = document.getElementById(
@@ -142,8 +127,8 @@ const SlideContent = ({
 
   // Memoized slide content rendering to prevent unnecessary re-renders
   const slideContent = useMemo(() => {
-    return <LayoutComponent data={slide.content} />;
-  }, [LayoutComponent, slide.content]);
+    return renderSlideContent(slide, true); // Enable edit mode for main content
+  }, [renderSlideContent, slide]);
 
   return (
     <>
