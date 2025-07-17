@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { LayoutList, ListTree, PanelRightOpen, X } from "lucide-react";
 import ToolTip from "@/components/ToolTip";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,7 @@ import {
 import { setPresentationData } from "@/store/slices/presentationGeneration";
 import { SortableSlide } from "./SortableSlide";
 import { SortableListItem } from "./SortableListItem";
-import { useLayout } from "../../context/LayoutContext";
+import { useGroupLayouts } from "../../hooks/useGroupLayouts";
 
 interface SidePanelProps {
   selectedSlide: number;
@@ -50,18 +50,9 @@ const SidePanel = ({
   );
   console.log('presentationData', presentationData)
   const dispatch = useDispatch();
-  const { getLayout } = useLayout();
 
-  // Memoized slide renderer using layout cache
-  const renderSlideContent = useMemo(() => {
-    return (slide: any) => {
-      const Layout = getLayout(slide.layout);
-      if (!Layout) {
-        return <div>Layout not found</div>;
-      }
-      return <Layout data={slide.content} />;
-    };
-  }, [getLayout]);
+  // Use the centralized group layouts hook
+  const { renderSlideContent } = useGroupLayouts();
 
   useEffect(() => {
     if (window.innerWidth < 768) {

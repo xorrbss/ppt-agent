@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 
-import { LayoutInfo, LayoutGroup, GroupedLayoutsResponse } from '../types'
+import { LayoutInfo, LayoutGroup, GroupedLayoutsResponse, GroupSetting } from '../types'
 import { toast } from '@/hooks/use-toast'
 
 interface UseLayoutLoaderReturn {
@@ -39,6 +39,15 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
 
             for (const groupData of groupedLayoutsData) {
                 const groupLayouts: LayoutInfo[] = []
+
+                // Use settings from setting.json or provide defaults
+                const groupSettings: GroupSetting = groupData.settings || {
+                    id: groupData.group,
+                    name: groupData.group.charAt(0).toUpperCase() + groupData.group.slice(1),
+                    description: `${groupData.group} presentation layouts`,
+                    ordered: false,
+                    isDefault: false
+                }
 
                 for (const fileName of groupData.files) {
                     try {
@@ -115,10 +124,18 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
                 if (groupLayouts.length > 0) {
                     loadedGroups.push({
                         group: groupData.group,
-                        layouts: groupLayouts
+                        layouts: groupLayouts,
+                        settings: groupSettings
                     })
                 }
             }
+
+            // Sort groups to put default first, then by name
+            loadedGroups.sort((a, b) => {
+                if (a.settings.isDefault && !b.settings.isDefault) return -1
+                if (!a.settings.isDefault && b.settings.isDefault) return 1
+                return a.settings.name.localeCompare(b.settings.name)
+            })
 
             if (allLayouts.length === 0) {
                 toast({

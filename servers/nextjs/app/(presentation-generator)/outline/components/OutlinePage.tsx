@@ -18,6 +18,7 @@ import Wrapper from "@/components/Wrapper";
 import { jsonrepair } from "jsonrepair";
 import OutlineContent from "./OutlineContent";
 import LayoutSelection from "./LayoutSelection";
+import { useLayout } from "../../context/LayoutContext";
 
 interface LayoutGroup {
   id: string;
@@ -31,6 +32,7 @@ interface LayoutGroup {
 const OutlinePage = () => {
   const dispatch = useDispatch();
   const router = useRouter();
+  const { layoutSchema } = useLayout();
 
   const { presentation_id, outlines } = useSelector(
     (state: RootState) => state.presentationGeneration
@@ -190,13 +192,27 @@ const OutlinePage = () => {
     });
 
     try {
-      // Prepare layout data in the expected format
+      // Collect the actual schemas for layouts in the selected group
+      const groupLayoutSchemas = selectedLayoutGroup.slides
+        .map(slideId => {
+          const layout = layoutSchema?.find(l => l.id === slideId);
+          return layout ? {
+            id: layout.id,
+            name: layout.name,
+            description: layout.description,
+            json_schema: layout.json_schema
+          } : null;
+        })
+        .filter(schema => schema !== null);
+
+      // Prepare layout data in the expected format with schemas
       const layoutData = {
         name: selectedLayoutGroup.name,
         ordered: selectedLayoutGroup.ordered,
-        slides: selectedLayoutGroup.slides
+        slides: groupLayoutSchemas
       };
 
+      console.log("layoutData", layoutData);
       const response = await PresentationGenerationApi.presentationPrepare({
         presentation_id: presentation_id,
         outlines: outlines,

@@ -41,7 +41,6 @@ const UploadPage = () => {
   const dispatch = useDispatch();
   const { toast } = useToast();
 
-
   // State management
   const [files, setFiles] = useState<File[]>([]);
   const [config, setConfig] = useState<PresentationConfig>({
@@ -87,9 +86,6 @@ const UploadPage = () => {
       });
       return false;
     }
-
-
-
     return true;
   };
 
@@ -165,7 +161,6 @@ const UploadPage = () => {
       n_slides: config?.slides ? parseInt(config.slides) : null,
       file_paths: [],
       language: config?.language ?? "",
-
     });
 
     dispatch(setPresentationId(createResponse.id));

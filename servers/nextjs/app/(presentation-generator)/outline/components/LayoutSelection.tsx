@@ -21,9 +21,9 @@ const LayoutSelection: React.FC<LayoutSelectionProps> = ({
     selectedLayoutGroup,
     onSelectLayoutGroup
 }) => {
-    const { layoutSchema, getLayout, loading } = useLayout();
+    const { layoutSchema, groupSettings, getLayout, loading } = useLayout();
 
-    // Create layout groups from the loaded layout schema
+    // Convert layoutSchema to grouped format using actual group settings
     const layoutGroups: LayoutGroup[] = React.useMemo(() => {
         if (!layoutSchema || layoutSchema.length === 0) return [];
 
@@ -37,27 +37,29 @@ const LayoutSelection: React.FC<LayoutSelectionProps> = ({
             groupMap.get(groupName)?.push(layout);
         });
 
-        // Convert to LayoutGroup format
+        // Convert to LayoutGroup format using actual group settings
         const groups: LayoutGroup[] = [];
         groupMap.forEach((layouts, groupName) => {
+            const settings = groupSettings[groupName];
+
             const group: LayoutGroup = {
-                id: groupName,
-                name: groupName.charAt(0).toUpperCase() + groupName.slice(1),
-                description: getGroupDescription(groupName),
-                ordered: getGroupOrdered(groupName),
-                isDefault: groupName === 'professional',
-                slides: layouts.map(layout => layout.id)
+                id: settings?.id || groupName,
+                name: settings?.name || groupName.charAt(0).toUpperCase() + groupName.slice(1),
+                description: settings?.description || `${groupName} presentation layouts`,
+                ordered: settings?.ordered || false,
+                isDefault: settings?.isDefault || false,
+                slides: layouts.map((layout: any) => layout.id)
             };
             groups.push(group);
         });
 
-        // Sort groups to put default first
+        // Sort groups to put default first, then by name
         return groups.sort((a, b) => {
-            if (a.isDefault) return -1;
-            if (b.isDefault) return 1;
+            if (a.isDefault && !b.isDefault) return -1;
+            if (!a.isDefault && b.isDefault) return 1;
             return a.name.localeCompare(b.name);
         });
-    }, [layoutSchema]);
+    }, [layoutSchema, groupSettings]);
 
     // Auto-select first group when groups are loaded
     useEffect(() => {
@@ -66,22 +68,6 @@ const LayoutSelection: React.FC<LayoutSelectionProps> = ({
             onSelectLayoutGroup(defaultGroup);
         }
     }, [layoutGroups, selectedLayoutGroup, onSelectLayoutGroup]);
-
-    const getGroupDescription = (groupName: string): string => {
-        const descriptions: Record<string, string> = {
-            professional: 'Clean, corporate designs perfect for business presentations',
-            modern: 'Contemporary designs with clean lines and sophisticated layouts',
-            default: 'Standard layouts suitable for general presentations',
-            creative: 'Vibrant, artistic layouts for innovative presentations',
-            minimal: 'Simple, focused layouts that emphasize content'
-        };
-        return descriptions[groupName] || `${groupName} presentation layouts`;
-    };
-
-    const getGroupOrdered = (groupName: string): boolean => {
-        const orderedGroups = ['professional', 'modern'];
-        return orderedGroups.includes(groupName);
-    };
 
     const renderLayoutPreview = (layoutId: string) => {
         const Layout = getLayout(layoutId);
@@ -112,14 +98,6 @@ const LayoutSelection: React.FC<LayoutSelectionProps> = ({
     if (loading) {
         return (
             <div className="space-y-6">
-                <div className="mb-6">
-                    <h5 className="text-lg font-medium mb-2">
-                        Loading Layout Styles...
-                    </h5>
-                    <p className="text-gray-600 text-sm">
-                        Please wait while we load the available presentation styles.
-                    </p>
-                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[1, 2, 3, 4].map((i) => (
                         <div key={i} className="p-4 rounded-lg border border-gray-200 bg-gray-50 animate-pulse">
@@ -140,8 +118,8 @@ const LayoutSelection: React.FC<LayoutSelectionProps> = ({
     if (layoutGroups.length === 0) {
         return (
             <div className="space-y-6">
-                <div className="mb-6">
-                    <h5 className="text-lg font-medium mb-2">
+                <div className="text-center py-8">
+                    <h5 className="text-lg font-medium mb-2 text-gray-700">
                         No Layout Styles Available
                     </h5>
                     <p className="text-gray-600 text-sm">
@@ -154,15 +132,6 @@ const LayoutSelection: React.FC<LayoutSelectionProps> = ({
 
     return (
         <div className="space-y-6">
-            <div className="mb-6">
-                <h5 className="text-lg font-medium mb-2">
-                    Select Your Presentation Style
-                </h5>
-                <p className="text-gray-600 text-sm">
-                    Choose a layout group that best fits your presentation style and content.
-                </p>
-            </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {layoutGroups.map((group) => (
                     <div

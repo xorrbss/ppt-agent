@@ -17,8 +17,7 @@ import {
 } from "@/store/slices/presentationGeneration";
 import { toast } from "@/hooks/use-toast";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
-import { setThemeColors, ThemeColors } from "../../store/themeSlice";
-import { ThemeType } from "../../upload/type";
+
 import LoadingState from "../../components/LoadingState";
 import Header from "../components/Header";
 import { Loader2 } from "lucide-react";
@@ -135,7 +134,6 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
       );
 
       evtSource.onopen = () => {
-        setColorsVariables(currentColors, currentTheme);
       };
 
       evtSource.addEventListener("response", (event) => {
@@ -157,7 +155,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
                 partialData.slides.splice(-1);
                 dispatch(
                   setPresentationData({
-                    presentation: null,
+                    ...partialData,
                     slides: partialData.slides,
                   })
                 );
@@ -174,18 +172,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
 
             dispatch(setPresentationData(data.presentation));
             dispatch(setStreaming(false));
-            if (data.presentation.theme) {
-              dispatch(
-                setThemeColors({
-                  ...data.presentation.presentation.theme.colors,
-                  theme: data.presentation.presentation.theme.name as ThemeType,
-                })
-              );
-              setColorsVariables(
-                data.presentation.presentation.theme.colors,
-                data.presentation.presentation.theme.name as ThemeType
-              );
-            }
+
             setLoading(false);
 
             evtSource.close();
@@ -200,18 +187,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
           accumulatedChunks = "";
         } else if (data.type === "closing") {
           dispatch(setPresentationData(data.presentation));
-          if (data.presentation.theme) {
-            dispatch(
-              setThemeColors({
-                ...data.presentation.presentation.theme.colors,
-                theme: data.presentation.presentation.theme.name as ThemeType,
-              })
-            );
-            setColorsVariables(
-              data.presentation.presentation.theme.colors,
-              data.presentation.presentation.theme.name as ThemeType
-            );
-          }
+
           setLoading(false);
           dispatch(setStreaming(false));
           evtSource.close();
@@ -275,13 +251,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
       setLoading(false);
     }
   };
-  const setColorsVariables = (colors: ThemeColors, theme: ThemeType) => {
-    const root = document.documentElement;
-    Object.entries(colors).forEach(([key, value]) => {
-      const cssKey = key.replace(/[A-Z]/g, (m) => "-" + m.toLowerCase());
-      root.style.setProperty(`--${theme}-${cssKey}`, value);
-    });
-  };
+
   // Function to toggle fullscreen
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -316,21 +286,21 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
     );
   };
 
-  if (isPresentMode) {
-    return (
-      <PresentationMode
+  // if (isPresentMode) {
+  //   return (
+  //     <PresentationMode
 
-        slides={presentationData?.slides!}
-        currentSlide={currentSlide}
-        currentTheme={currentTheme}
-        isFullscreen={isFullscreen}
-        onFullscreenToggle={toggleFullscreen}
-        onExit={handlePresentExit}
-        onSlideChange={handleSlideChange}
-        language={presentationData?.presentation?.language || "English"}
-      />
-    );
-  }
+  //       slides={presentationData?.slides!}
+  //       currentSlide={currentSlide}
+  //       currentTheme={currentTheme}
+  //       isFullscreen={isFullscreen}
+  //       onFullscreenToggle={toggleFullscreen}
+  //       onExit={handlePresentExit}
+  //       onSlideChange={handleSlideChange}
+  //       language={presentationData?.presentation?.language || "English"}
+  //     />
+  //   );
+  // }
 
   // Regular view
   return (

@@ -12,13 +12,23 @@ interface LayoutInfo {
     group: string;
 }
 
+interface GroupSetting {
+    id: string;
+    name: string;
+    description: string;
+    ordered: boolean;
+    isDefault?: boolean;
+}
+
 interface GroupedLayoutsResponse {
     group: string;
     files: string[];
+    settings: GroupSetting | null;
 }
 
 interface LayoutContextType {
     layoutSchema: LayoutInfo[] | null;
+    groupSettings: Record<string, GroupSetting>;
     idMapFileNames: Record<string, string>;
     idMapSchema: Record<string, z.ZodSchema>;
     idMapGroups: Record<string, string>;
@@ -37,6 +47,7 @@ const layoutCache = new Map<string, React.ComponentType<{ data: any }>>();
 
 export const LayoutProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [layoutSchema, setLayoutSchema] = useState<LayoutInfo[] | null>(null);
+    const [groupSettings, setGroupSettings] = useState<Record<string, GroupSetting>>({});
     const [idMapFileNames, setIdMapFileNames] = useState<Record<string, string>>({});
     const [idMapSchema, setIdMapSchema] = useState<Record<string, z.ZodSchema>>({});
     const [idMapGroups, setIdMapGroups] = useState<Record<string, string>>({});
@@ -49,8 +60,23 @@ export const LayoutProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         const idMapFileNames: Record<string, string> = {};
         const idMapSchema: Record<string, z.ZodSchema> = {};
         const idMapGroups: Record<string, string> = {};
+        const groupSettings: Record<string, GroupSetting> = {};
 
         for (const groupData of groupedLayoutsData) {
+            // Store group settings
+            if (groupData.settings) {
+                groupSettings[groupData.group] = groupData.settings;
+            } else {
+                // Provide default settings if not available
+                groupSettings[groupData.group] = {
+                    id: groupData.group,
+                    name: groupData.group.charAt(0).toUpperCase() + groupData.group.slice(1),
+                    description: `${groupData.group} presentation layouts`,
+                    ordered: false,
+                    isDefault: false
+                };
+            }
+
             for (const fileName of groupData.files) {
                 try {
                     const file = fileName.replace('.tsx', '').replace('.ts', '');
@@ -102,7 +128,7 @@ export const LayoutProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             }
         }
 
-        return { layouts, idMapFileNames, idMapSchema, idMapGroups };
+        return { layouts, idMapFileNames, idMapSchema, idMapGroups, groupSettings };
     };
 
     const loadLayouts = async () => {
@@ -119,6 +145,7 @@ export const LayoutProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             const response = await extractSchema(groupedLayoutsData);
 
             setLayoutSchema(response?.layouts || []);
+            setGroupSettings(response?.groupSettings || {});
             setIdMapFileNames(response?.idMapFileNames || {});
             setIdMapSchema(response?.idMapSchema || {});
             setIdMapGroups(response?.idMapGroups || {});
@@ -200,6 +227,7 @@ export const LayoutProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     const contextValue: LayoutContextType = {
         layoutSchema,
+        groupSettings,
         idMapFileNames,
         idMapSchema,
         idMapGroups,

@@ -11,14 +11,24 @@ export interface LayoutInfo {
     group: string
 }
 
+export interface GroupSetting {
+    id: string;
+    name: string;
+    description: string;
+    ordered: boolean;
+    isDefault?: boolean;
+}
+
 export interface LayoutGroup {
     group: string
     layouts: LayoutInfo[]
+    settings: GroupSetting
 }
 
 export interface GroupedLayoutsResponse {
     group: string
     files: string[]
+    settings: GroupSetting | null
 }
 
 export interface LoadingState {

@@ -36,22 +36,15 @@ export interface Chart {
   };
 }
 export interface PresentationData {
-  presentation: {
-    created_at: string;
-    data: string | null;
-    file: string;
-    id: string;
-    user_id: string;
-    n_slides: number;
-    prompt: string;
-    summary: string | null;
-    theme: string | null;
-    title: string;
-    titles: string[];
-   
-    thumbnail: string | null;
-    language: string;
-  } | null;
+  id: string;
+  language: string;
+  layouts: {
+    name: string;
+    ordered: boolean;
+    slides: any[];
+  };
+  n_slides: number;
+  title: string;
   slides: any;
 }
 

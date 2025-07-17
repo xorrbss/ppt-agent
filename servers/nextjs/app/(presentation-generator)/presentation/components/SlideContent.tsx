@@ -16,7 +16,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { addSlide, updateSlide } from "@/store/slices/presentationGeneration";
 import NewSlide from "../../components/slide_layouts/NewSlide";
 import { getEmptySlideContent } from "../../utils/NewSlideContent";
-import { useLayout } from "../../context/LayoutContext";
+import { useGroupLayouts } from "../../hooks/useGroupLayouts";
 
 interface SlideContentProps {
   slide: any;
@@ -37,18 +37,24 @@ const SlideContent = ({
   const { presentationData, isStreaming } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
-  const { getLayout, loading } = useLayout();
+
+  // Use the centralized group layouts hook
+  const { groupLayouts, getGroupLayout, loading } = useGroupLayouts();
 
   // Memoized layout component to prevent re-renders
   const LayoutComponent = useMemo(() => {
-    const Layout = getLayout(slide.layout);
+    const Layout = getGroupLayout(slide.layout);
     if (!Layout) {
-      return () => <div className="flex flex-col items-center justify-center h-full">
-        Layout not found
-      </div>;
+      return () => (
+        <div className="flex flex-col items-center justify-center h-full bg-gray-100 rounded-lg">
+          <p className="text-gray-600 text-center">
+            Layout "{slide.layout}" not found in current group
+          </p>
+        </div>
+      );
     }
     return Layout;
-  }, [slide.layout, getLayout]);
+  }, [slide.layout, getGroupLayout]);
 
   const handleSubmit = async () => {
     const element = document.getElementById(
@@ -96,7 +102,7 @@ const SlideContent = ({
     const newSlide: Slide = getEmptySlideContent(
       type,
       index + 1,
-      presentationData?.presentation!.id!
+      presentationData?.id!
     );
 
     dispatch(addSlide({ slide: newSlide, index: index + 1 }));
@@ -172,6 +178,7 @@ const SlideContent = ({
             <NewSlide
               onSelectLayout={(type) => handleNewSlide(type, slide.index)}
               setShowNewSlideSelection={setShowNewSlideSelection}
+
             />
           )}
           {!isStreaming && (

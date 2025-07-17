@@ -408,6 +408,7 @@ export class PresentationGenerationApi {
     n_slides,
    file_paths,
    language,
+  
 
   }: {
     prompt: string;
@@ -427,6 +428,8 @@ export class PresentationGenerationApi {
             n_slides,
             file_paths,
             language,
+           
+
           }),
           cache: "no-cache",
         }
