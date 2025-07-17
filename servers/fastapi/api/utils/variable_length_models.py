@@ -23,7 +23,8 @@ def get_presentation_markdown_model_with_n_slides(n_slides: int):
             min_length=10,
             max_length=50,
         )
-        notes: Optional[List[str]] = Field(
+        notes: List[str] = Field(
+            default=[],
             description="Important notes for the presentation styling and formatting",
             min_length=0,
             max_length=10,
