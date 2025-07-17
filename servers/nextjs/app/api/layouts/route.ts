@@ -1,12 +1,8 @@
 import { NextResponse } from 'next/server'
 import { promises as fs } from 'fs'
 import path from 'path'
+import { GroupSetting } from '@/app/layout-preview/types'
 
-interface GroupSetting {
-    description: string;
-    ordered: boolean;
-    isDefault?: boolean;
-}
 
 export async function GET() {
     try {

@@ -154,13 +154,13 @@ const SlideContent = ({
         {isStreaming && (
           <Loader2 className="w-8 h-8 absolute right-2 top-2 z-30 text-blue-800 animate-spin" />
         )}
-        <div className={` w-full group `}>
+        <div className={` w-full group  mb-6`}>
           {/* render slides */}
           {loading ? <div className="flex flex-col bg-white aspect-video items-center justify-center h-full">
             <Loader2 className="w-8 h-8 animate-spin" />
           </div> : slideContent}
 
-          {!showNewSlideSelection && (
+          {/* {!showNewSlideSelection && (
             <div className="group-hover:opacity-100 hidden md:block opacity-0 transition-opacity my-4 duration-300">
               <ToolTip content="Add new slide below">
                 {!isStreaming && (
@@ -178,9 +178,8 @@ const SlideContent = ({
             <NewSlide
               onSelectLayout={(type) => handleNewSlide(type, slide.index)}
               setShowNewSlideSelection={setShowNewSlideSelection}
-
             />
-          )}
+          )} */}
           {!isStreaming && (
             <ToolTip content="Delete slide">
               <div

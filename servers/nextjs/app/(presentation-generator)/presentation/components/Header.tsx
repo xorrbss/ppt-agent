@@ -47,6 +47,7 @@ import Modal from "./Modal";
 
 import Announcement from "@/components/Announcement";
 import { getFontLink, getStaticFileUrl } from "../../utils/others";
+import JSPowerPointExtractor from "../../components/JSPowerPointExtractor";
 
 
 const Header = ({
@@ -206,7 +207,7 @@ const Header = ({
         method: 'POST',
         body: JSON.stringify({
           id: presentation_id,
-          title: presentationData!.presentation!.title,
+          title: presentationData?.title,
         })
       });
 
@@ -248,6 +249,9 @@ const Header = ({
         <img src="/pptx.svg" alt="pptx export" width={30} height={30} />
         Export as PPTX
       </Button>
+      {/* <div className={`w-full ${mobile ? "bg-white py-2 rounded-lg" : ""}`}>
+        <JSPowerPointExtractor />
+      </div> */}
       <p className={`text-sm pt-3 border-t border-gray-300 ${mobile ? "border-none text-white font-semibold" : ""}`}>
         Font Used:
         <a className={`text-blue-500  flex items-center gap-1 ${mobile ? "mt-2 py-2 px-4 bg-white rounded-lg w-fit" : ""}`} href={getFontLink(currentColors.fontFamily).link || ''} target="_blank" rel="noopener noreferrer">

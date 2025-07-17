@@ -185,20 +185,6 @@ const UploadPage = () => {
     });
   };
 
-  // Show loading state while layouts are being loaded
-  // if (layoutsLoading) {
-  //   return (
-  //     <Wrapper className="pb-10 lg:max-w-[70%] xl:max-w-[65%]">
-  //       <OverlayLoader
-  //         show={true}
-  //         text="Loading presentation layouts..."
-  //         showProgress={true}
-  //         duration={10}
-  //       />
-  //     </Wrapper>
-  //   );
-  // }
-
   return (
     <Wrapper className="pb-10 lg:max-w-[70%] xl:max-w-[65%]">
       <OverlayLoader

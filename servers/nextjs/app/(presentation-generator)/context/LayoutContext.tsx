@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 import { toast } from "@/hooks/use-toast";
 import * as z from 'zod';
 
-interface LayoutInfo {
+export interface LayoutInfo {
     id: string;
     name?: string;
     description?: string;
@@ -12,19 +12,19 @@ interface LayoutInfo {
     groupName: string;
 }
 
-interface GroupSetting {
+export interface GroupSetting {
     description: string;
     ordered: boolean;
     isDefault?: boolean;
 }
 
-interface GroupedLayoutsResponse {
+export interface GroupedLayoutsResponse {
     groupName: string;
     files: string[];
     settings: GroupSetting | null;
 }
 
-interface LayoutData {
+export interface LayoutData {
     layoutsById: Map<string, LayoutInfo>;
     layoutsByGroup: Map<string, Set<string>>;
     groupSettings: Map<string, GroupSetting>;
@@ -33,7 +33,7 @@ interface LayoutData {
     layoutSchema: LayoutInfo[];
 }
 
-interface LayoutContextType {
+export interface LayoutContextType {
     getLayoutById: (layoutId: string) => LayoutInfo | null;
     getLayoutByIdAndGroup: (layoutId: string, groupName: string) => LayoutInfo | null;
     getLayoutsByGroup: (groupName: string) => LayoutInfo[];
