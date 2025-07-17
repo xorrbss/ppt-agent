@@ -2,6 +2,6 @@
     "id": "modern",
     "name": "Modern",
     "description": "Contemporary designs with clean lines and sophisticated layouts",
-    "ordered": true,
-    "isDefault": true
+    "ordered": false,
+    "isDefault": false
 }

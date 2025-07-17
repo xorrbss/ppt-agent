@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "@/hooks/use-toast";
 import { renderSlideContent } from "@/app/(presentation-generator)/components/slide_config";
 import { useLayout } from "@/app/(presentation-generator)/context/LayoutContext";
+import { useGroupLayouts } from "@/app/(presentation-generator)/hooks/useGroupLayouts";
 
 export const PresentationCard = ({
   id,
@@ -26,7 +27,8 @@ export const PresentationCard = ({
 }) => {
   console.log('slide', slide)
   const router = useRouter();
-  const { getLayout, loading } = useLayout();
+  const { renderSlideContent } = useGroupLayouts();
+
 
 
   const handlePreview = (e: React.MouseEvent) => {
@@ -61,18 +63,18 @@ export const PresentationCard = ({
     window.location.reload();
   };
 
-  const LayoutComponent = useMemo(() => {
-    const Layout = getLayout(slide.layout);
-    if (!Layout) {
-      return () => <div className="flex flex-col items-center justify-center h-full">
-        Layout not found
-      </div>;
-    }
-    return Layout;
-  }, [slide.layout, getLayout]);
-  const slideContent = useMemo(() => {
-    return <LayoutComponent data={slide.content} />;
-  }, [LayoutComponent, slide.content]);
+  // const LayoutComponent = useMemo(() => {
+  //   const Layout = getLayout(slide.layout);
+  //   if (!Layout) {
+  //     return () => <div className="flex flex-col items-center justify-center h-full">
+  //       Layout not found
+  //     </div>;
+  //   }
+  //   return Layout;
+  // }, [slide.layout, getLayout]);
+  // const slideContent = useMemo(() => {
+  //   return <LayoutComponent data={slide.content} />;
+  // }, [LayoutComponent, slide.content]);
 
 
 
@@ -112,7 +114,7 @@ export const PresentationCard = ({
         >
           <div className="absolute bg-transparent z-40 top-0 left-0 w-full h-full" />
           <div className="transform scale-[0.2] flex justify-center items-center origin-top-left  w-[500%] h-[500%]">
-            {slideContent}
+            {renderSlideContent(slide)}
           </div>
         </div>
 

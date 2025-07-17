@@ -2,6 +2,6 @@
     "id": "default",
     "name": "Default",
     "description": "Default layout for presentations",
-    "ordered": true,
-    "isDefault": false
+    "ordered": false,
+    "isDefault": true
 }

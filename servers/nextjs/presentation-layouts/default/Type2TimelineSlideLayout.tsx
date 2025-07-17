@@ -52,7 +52,7 @@ const Type2TimelineSlideLayout: React.FC<Type2TimelineSlideLayoutProps> = ({ dat
                 {/* Timeline Header with Numbers and Line */}
                 <div className="relative flex justify-between w-[85%] mx-auto items-center mb-8 px-8">
                     {/* Horizontal Line */}
-                    <div className="absolute top-1/2 w-[87%] left-1/2 -translate-x-1/2 h-[2px] bg-blue-600" />
+                    <div className="absolute z-10 top-1/2 w-[87%] left-1/2 -translate-x-1/2 h-[2px] bg-blue-600" />
 
                     {/* Timeline Numbers */}
                     {items.map((_, index) => (

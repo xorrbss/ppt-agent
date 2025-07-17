@@ -38,7 +38,7 @@ export interface Chart {
 export interface PresentationData {
   id: string;
   language: string;
-  layouts: {
+  layout: {
     name: string;
     ordered: boolean;
     slides: any[];

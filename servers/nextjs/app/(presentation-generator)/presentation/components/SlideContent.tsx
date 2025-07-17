@@ -39,11 +39,11 @@ const SlideContent = ({
   );
 
   // Use the centralized group layouts hook
-  const { groupLayouts, getGroupLayout, loading } = useGroupLayouts();
+  const { getGroupLayout, renderSlideContent, loading } = useGroupLayouts();
 
   // Memoized layout component to prevent re-renders
   const LayoutComponent = useMemo(() => {
-    const Layout = getGroupLayout(slide.layout);
+    const Layout = getGroupLayout(slide.layout, slide.layout_group);
     if (!Layout) {
       return () => (
         <div className="flex flex-col items-center justify-center h-full bg-gray-100 rounded-lg">
@@ -158,7 +158,7 @@ const SlideContent = ({
           {/* render slides */}
           {loading ? <div className="flex flex-col bg-white aspect-video items-center justify-center h-full">
             <Loader2 className="w-8 h-8 animate-spin" />
-          </div> : slideContent}
+          </div> : renderSlideContent(slide)}
 
           {!showNewSlideSelection && (
             <div className="group-hover:opacity-100 hidden md:block opacity-0 transition-opacity my-4 duration-300">
@@ -252,13 +252,4 @@ const SlideContent = ({
   );
 };
 
-export default React.memo(SlideContent, (prevProps, nextProps) => {
-  // Only re-render if these specific props change
-  return (
-    prevProps.slide.layout === nextProps.slide.layout &&
-    JSON.stringify(prevProps.slide.content) === JSON.stringify(nextProps.slide.content) &&
-    prevProps.slide.index === nextProps.slide.index &&
-    prevProps.index === nextProps.index &&
-    prevProps.presentationId === nextProps.presentationId
-  );
-});
+export default SlideContent;

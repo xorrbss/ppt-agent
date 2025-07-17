@@ -78,47 +78,47 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
   const previousSlidesLength = useRef(0);
 
   // Create auto-save function
-  const autoSave = useCallback(
-    (data: { presentation_id: string; slides: any[] }) => {
-      setAutoSaveLoading(true);
-      // Fire and forget - no await
-      PresentationGenerationApi.updatePresentationContent(data)
-        .then(() => { })
-        .catch((error) => {
-          console.error("Error AAYO", error);
-        })
-        .finally(() => {
+  // const autoSave = useCallback(
+  //   (data: { presentation_id: string; slides: any[] }) => {
+  //     setAutoSaveLoading(true);
+  //     // Fire and forget - no await
+  //     PresentationGenerationApi.updatePresentationContent(data)
+  //       .then(() => { })
+  //       .catch((error) => {
+  //         console.error("Error AAYO", error);
+  //       })
+  //       .finally(() => {
 
-          setAutoSaveLoading(false);
-        });
-    },
-    [presentation_id]
-  );
+  //         setAutoSaveLoading(false);
+  //       });
+  //   },
+  //   [presentation_id]
+  // );
 
   // Create debounced version of autoSave
-  const debouncedSave = useDebounce(autoSave, 2000);
+  // const debouncedSave = useDebounce(autoSave, 2000);
 
   // Watch for changes in presentationData and trigger auto-save
-  useEffect(() => {
-    if (
-      presentationData &&
-      !isStreaming &&
-      !isInitialLoad.current &&
-      presentationData.slides &&
-      presentationData.slides.some(
-        (slide: any) => slide.images && slide.images.length > 0
-      )
-    ) {
+  // useEffect(() => {
+  //   if (
+  //     presentationData &&
+  //     !isStreaming &&
+  //     !isInitialLoad.current &&
+  //     presentationData.slides &&
+  //     presentationData.slides.some(
+  //       (slide: any) => slide.images && slide.images.length > 0
+  //     )
+  //   ) {
 
-      debouncedSave({
-        presentation_id: presentation_id,
-        slides: presentationData.slides,
-      });
-    }
-    if (isInitialLoad.current) {
-      isInitialLoad.current = false;
-    }
-  }, [presentationData, debouncedSave]);
+  //     debouncedSave({
+  //       presentation_id: presentation_id,
+  //       slides: presentationData.slides,
+  //     });
+  //   }
+  //   if (isInitialLoad.current) {
+  //     isInitialLoad.current = false;
+  //   }
+  // }, [presentationData, debouncedSave]);
 
   // Function to fetch the slides
   useEffect(() => {
@@ -141,25 +141,24 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
 
         if (data.type === "chunk") {
           accumulatedChunks += data.chunk;
-
           try {
             const repairedJson = jsonrepair(accumulatedChunks);
             const partialData = JSON.parse(repairedJson);
-
+            console.log('partialData', partialData)
             if (partialData.slides) {
               // Check if the length of slides has changed
               if (
                 partialData.slides.length !== previousSlidesLength.current &&
-                partialData.slides.length > 1
+                partialData.slides.length > 0
               ) {
-                partialData.slides.splice(-1);
+                // partialData.slides.splice(-1);
                 dispatch(
                   setPresentationData({
                     ...partialData,
                     slides: partialData.slides,
                   })
                 );
-                previousSlidesLength.current = partialData.slides.length + 1; // Update the previous length
+                previousSlidesLength.current = partialData.slides.length; // Update the previous length
                 setLoading(false);
               }
             }
