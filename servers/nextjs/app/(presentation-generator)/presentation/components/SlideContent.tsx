@@ -39,7 +39,7 @@ const SlideContent = ({
   );
 
   // Use the centralized group layouts hook
-  const { getGroupLayout, renderSlideContent, loading } = useGroupLayouts();
+  const { getGroupLayout, loading } = useGroupLayouts();
 
   // Memoized layout component to prevent re-renders
   const LayoutComponent = useMemo(() => {
@@ -158,7 +158,7 @@ const SlideContent = ({
           {/* render slides */}
           {loading ? <div className="flex flex-col bg-white aspect-video items-center justify-center h-full">
             <Loader2 className="w-8 h-8 animate-spin" />
-          </div> : renderSlideContent(slide)}
+          </div> : slideContent}
 
           {!showNewSlideSelection && (
             <div className="group-hover:opacity-100 hidden md:block opacity-0 transition-opacity my-4 duration-300">

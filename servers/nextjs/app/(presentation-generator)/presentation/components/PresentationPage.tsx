@@ -285,21 +285,19 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
     );
   };
 
-  // if (isPresentMode) {
-  //   return (
-  //     <PresentationMode
-
-  //       slides={presentationData?.slides!}
-  //       currentSlide={currentSlide}
-  //       currentTheme={currentTheme}
-  //       isFullscreen={isFullscreen}
-  //       onFullscreenToggle={toggleFullscreen}
-  //       onExit={handlePresentExit}
-  //       onSlideChange={handleSlideChange}
-  //       language={presentationData?.presentation?.language || "English"}
-  //     />
-  //   );
-  // }
+  if (isPresentMode) {
+    return (
+      <PresentationMode
+        slides={presentationData?.slides!}
+        currentSlide={currentSlide}
+        currentTheme={currentTheme}
+        isFullscreen={isFullscreen}
+        onFullscreenToggle={toggleFullscreen}
+        onExit={handlePresentExit}
+        onSlideChange={handleSlideChange}
+      />
+    );
+  }
 
   // Regular view
   return (

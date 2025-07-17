@@ -247,10 +247,8 @@ export const LayoutProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
         // Return cached layout if available
         if (layoutCache.has(cacheKey)) {
-            console.log(` Returning cached layout: ${cacheKey}`);
             return layoutCache.get(cacheKey)!;
         }
-
         // Create and cache layout if not available
         const file = fileInfo.fileName.replace('.tsx', '').replace('.ts', '');
         const Layout = dynamic(
