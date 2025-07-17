@@ -5,6 +5,7 @@ from typing import Annotated, List, Optional
 import uuid
 from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import StreamingResponse
+from sqlalchemy import delete
 from sqlmodel import select
 
 from models.presentation_outline_model import SlideOutlineModel
@@ -243,3 +244,30 @@ async def stream_presentation(presentation_id: str):
         ).to_string()
 
     return StreamingResponse(inner(), media_type="text/event-stream")
+
+
+@PRESENTATION_ROUTER.put("/update", response_model=PresentationWithSlides)
+def update_presentation(
+    presentation_with_slides: Annotated[PresentationWithSlides, Body()],
+):
+    updated_presentation = presentation_with_slides.to_presentation_model()
+    updated_slides = presentation_with_slides.slides
+    with get_sql_session() as sql_session:
+        presentation = sql_session.get(PresentationModel, updated_presentation.id)
+        if not presentation:
+            raise HTTPException(status_code=404, detail="Presentation not found")
+        presentation.sqlmodel_update(updated_presentation)
+
+        sql_session.exec(
+            delete(SlideModel).where(SlideModel.presentation == updated_presentation.id)
+        )
+        sql_session.add_all(updated_slides)
+        sql_session.commit()
+        sql_session.refresh(presentation)
+        for slide in updated_slides:
+            sql_session.refresh(slide)
+
+    return PresentationWithSlides(
+        **presentation.model_dump(),
+        slides=updated_slides,
+    )
