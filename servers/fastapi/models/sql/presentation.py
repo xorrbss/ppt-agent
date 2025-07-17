@@ -22,7 +22,7 @@ class PresentationModel(SQLModel, table=True):
     summary: Optional[str] = None
     created_at: datetime = Field(sa_column=Column(DateTime, default=datetime.now))
     updated_at: datetime = Field(sa_column=Column(DateTime, default=datetime.now))
-    layout: dict = Field(sa_column=Column(JSON))
+    layout: Optional[dict] = Field(sa_column=Column(JSON), default=None)
     structure: Optional[dict] = Field(sa_column=Column(JSON), default=None)
 
     def get_presentation_outline(self):
