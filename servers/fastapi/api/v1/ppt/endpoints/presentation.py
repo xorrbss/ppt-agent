@@ -12,7 +12,7 @@ from models.presentation_layout import PresentationLayoutModel
 from models.presentation_structure_model import PresentationStructureModel
 from models.presentation_with_slides import PresentationWithSlides
 from models.sql.slide import SlideModel
-from models.sse_response import SSECompleteResponse, SSEResponse, SSEStatusResponse
+from models.sse_response import SSECompleteResponse, SSEResponse
 from services import TEMP_FILE_SERVICE
 from services.database import get_sql_session
 from services.documents_loader import DocumentsLoader
@@ -88,7 +88,6 @@ async def create_presentation(
     prompt: Annotated[str, Body()],
     n_slides: Annotated[int, Body()],
     language: Annotated[str, Body()],
-    layout: Annotated[PresentationLayoutModel, Body()],
     file_paths: Annotated[Optional[List[str]], Body()] = None,
 ):
     presentation_id = str(uuid.uuid4())
@@ -106,7 +105,6 @@ async def create_presentation(
         prompt=prompt,
         n_slides=n_slides,
         language=language,
-        layout=layout.model_dump(),
         summary=summary,
     )
 
@@ -122,6 +120,7 @@ async def create_presentation(
 async def prepare_presentation(
     presentation_id: Annotated[str, Body()],
     outlines: Annotated[List[SlideOutlineModel], Body()],
+    layout: Annotated[PresentationLayoutModel, Body()],
     title: Annotated[Optional[str], Body()] = None,
 ):
     if not outlines:
@@ -131,10 +130,10 @@ async def prepare_presentation(
         presentation = sql_session.get(PresentationModel, presentation_id)
         presentation.outlines = [each.model_dump() for each in outlines]
         presentation.title = title or presentation.title
+        presentation.layout = layout.model_dump()
         sql_session.commit()
         sql_session.refresh(presentation)
 
-    layout = presentation.get_layout()
     total_slide_layouts = len(layout.slides)
     total_outlines = len(outlines)
 
