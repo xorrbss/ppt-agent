@@ -202,6 +202,7 @@ async def stream_presentation(presentation_id: str):
             )
             slide = SlideModel(
                 presentation=presentation_id,
+                layout_group=layout.name,
                 layout=slide_layout.id,
                 index=i,
                 content=slide_content,
