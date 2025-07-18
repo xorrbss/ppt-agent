@@ -10,7 +10,8 @@ interface TiptapTextReplacerProps {
     }>;
     children: ReactNode;
     slideData?: any;
-    onContentChange?: (content: string, path: string) => void;
+    slideIndex?: number;
+    onContentChange?: (content: string, path: string, slideIndex?: number) => void;
     isEditMode?: boolean;
 }
 
@@ -18,6 +19,7 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
     children,
     slideData,
     layout,
+    slideIndex,
     onContentChange = () => { },
     isEditMode = true
 }) => {
@@ -109,7 +111,7 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
                         content={trimmedText}
                         onContentChange={(content: string) => {
                             if (dataPath && onContentChange) {
-                                onContentChange(content, dataPath);
+                                onContentChange(content, dataPath, slideIndex);
                             }
                         }}
                         placeholder="Enter text..."
@@ -257,7 +259,7 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
         return () => {
             clearTimeout(timer);
         };
-    }, [slideData, isEditMode]);
+    }, [slideData, isEditMode, slideIndex]);
 
     return (
         <div ref={containerRef} className="tiptap-text-replacer">

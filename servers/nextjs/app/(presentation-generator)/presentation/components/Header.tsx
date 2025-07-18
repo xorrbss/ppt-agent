@@ -47,7 +47,6 @@ import Modal from "./Modal";
 
 import Announcement from "@/components/Announcement";
 import { getFontLink, getStaticFileUrl } from "../../utils/others";
-import JSPowerPointExtractor from "../../components/JSPowerPointExtractor";
 
 
 const Header = ({
@@ -108,13 +107,7 @@ const Header = ({
             themeColors.slideBox
           );
 
-          // Save in background
-          await PresentationGenerationApi.setThemeColors(presentation_id, {
-            name: themeType,
-            colors: {
-              ...themeColors,
-            },
-          });
+
         } catch (error) {
           console.error("Failed to update theme:", error);
           toast({

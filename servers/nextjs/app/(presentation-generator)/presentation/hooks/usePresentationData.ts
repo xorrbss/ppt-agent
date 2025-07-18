@@ -16,7 +16,6 @@ export const usePresentationData = (
   const fetchUserSlides = useCallback(async () => {
     try {
       const data = await DashboardApi.getPresentation(presentationId);
-      console.log('Presentation Data',data);
       if (data) {
         dispatch(setPresentationData(data));
         setLoading(false);

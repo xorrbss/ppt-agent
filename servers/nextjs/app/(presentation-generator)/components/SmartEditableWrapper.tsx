@@ -61,7 +61,6 @@ export const SmartEditableProvider: React.FC<SmartEditableProviderProps> = ({
         const findEditableElements = () => {
             const elements: EditableElement[] = [];
 
-            console.log('🔍 Starting smart detection with slideData:', slideData);
 
             // Detect Images and Icons only (text is now handled by SmartText components)
             const detectEditableElementsFromData = (data: any, path: string = '') => {
@@ -69,7 +68,6 @@ export const SmartEditableProvider: React.FC<SmartEditableProviderProps> = ({
 
                 // Check for __image_url__ pattern
                 if (data.__image_url__) {
-                    console.log(`📸 Found __image_url__ at ${path}:`, data.__image_url__);
                     const imgElement = findDOMElementByImageUrl(container, data.__image_url__);
                     if (imgElement) {
                         elements.push({
@@ -83,13 +81,11 @@ export const SmartEditableProvider: React.FC<SmartEditableProviderProps> = ({
                                 imageIdx: elements.filter(e => e.type === 'image').length
                             }
                         });
-                        console.log(`✅ Matched image to DOM element:`, imgElement);
                     }
                 }
 
                 // Check for __icon_url__ pattern
                 if (data.__icon_url__) {
-                    console.log(`🎯 Found __icon_url__ at ${path}:`, data.__icon_url__);
                     const imgElement = findDOMElementByImageUrl(container, data.__icon_url__);
                     if (imgElement) {
                         elements.push({
@@ -106,7 +102,6 @@ export const SmartEditableProvider: React.FC<SmartEditableProviderProps> = ({
                                 icon_prompt: data.__icon_query__ ? [data.__icon_query__] : []
                             }
                         });
-                        console.log(`✅ Matched icon to DOM element:`, imgElement);
                     }
                 }
                 // Recursively scan nested objects and arrays
@@ -125,7 +120,6 @@ export const SmartEditableProvider: React.FC<SmartEditableProviderProps> = ({
             };
 
             detectEditableElementsFromData(slideData);
-            console.log('🎉 Final detected elements:', elements);
             setEditableElements(elements);
         };
 

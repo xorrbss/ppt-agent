@@ -8,14 +8,14 @@ import SidePanel from "../components/SidePanel";
 import SlideContent from "../components/SlideContent";
 import LoadingState from "../../components/LoadingState";
 import Header from "../components/Header";
-import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Loader2 } from "lucide-react";
 import Help from "./Help";
 import {
   usePresentationStreaming,
   usePresentationData,
-  usePresentationNavigation
+  usePresentationNavigation,
+  useAutoSave
 } from "../hooks";
 import { PresentationPageProps } from "../types";
 
@@ -26,7 +26,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({ presentation_id }) 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [error, setError] = useState(false);
   const [isMobilePanelOpen, setIsMobilePanelOpen] = useState(false);
-  const [autoSaveLoading, setAutoSaveLoading] = useState(false);
 
   // Redux state
   const { currentTheme, currentColors } = useSelector(
@@ -36,13 +35,19 @@ const PresentationPage: React.FC<PresentationPageProps> = ({ presentation_id }) 
     (state: RootState) => state.presentationGeneration
   );
 
+  // Auto-save functionality
+  const { isSaving } = useAutoSave({
+    debounceMs: 2000,
+    enabled: !!presentationData && !isStreaming,
+
+  });
+
   // Custom hooks
   const { fetchUserSlides, handleDeleteSlide } = usePresentationData(
     presentation_id,
     setLoading,
     setError
   );
-
   const {
     isPresentMode,
     stream,
@@ -98,33 +103,29 @@ const PresentationPage: React.FC<PresentationPageProps> = ({ presentation_id }) 
           role="alert"
         >
           <AlertCircle className="w-16 h-16 mb-4 text-red-500" />
-          <strong className="font-bold text-4xl mb-2">Oops!</strong>
-          <p className="block text-2xl py-2">
-            We encountered an issue loading your presentation.
+          <h2 className="text-xl font-semibold mb-2">
+            Something went wrong
+          </h2>
+          <p className="text-center mb-4">
+            We couldn't load your presentation. Please try again.
           </p>
-          <p className="text-lg py-2">
-            Please check your internet connection or try again later.
-          </p>
-          <Button
-            className="mt-4 bg-red-500 text-white hover:bg-red-600 focus:ring-4 focus:ring-red-300"
-            onClick={() => window.location.reload()}
-          >
-            Retry
+          <Button onClick={() => window.location.reload()}>
+            Refresh Page
           </Button>
         </div>
       </div>
     );
   }
 
-
   return (
     <div className="h-screen flex overflow-hidden flex-col">
-      {/* Auto save loading indicator */}
-      {autoSaveLoading && (
-        <div className="fixed right-6 top-[5.2rem] z-50 bg-white bg-opacity-50 flex items-center justify-center">
-          <Loader2 className="animate-spin text-primary" />
-        </div>
-      )}
+
+      <div className="fixed right-6 top-[5.2rem] z-50">
+        {isSaving && (
+          <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+        )}
+
+      </div>
 
       <Header presentation_id={presentation_id} currentSlide={currentSlide} />
       <Help />
