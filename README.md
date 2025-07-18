@@ -6,8 +6,11 @@
   <a href="https://discord.gg/9ZsKKxudNE">
     <img src="https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&style=for-the-badge" alt="Join our Discord" />
   </a>
+  &nbsp;
+  <a href="https://x.com/presentonai">
+    <img src="https://img.shields.io/badge/X-Follow%20Us-000000?logo=twitter&style=for-the-badge" alt="Follow us on X" />
+  </a>
 </p>
-
 
 # Open-Source AI Presentation Generator and API (Gamma Alternative)
 
