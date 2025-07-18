@@ -13,6 +13,8 @@ from utils.get_env import (
     get_openai_api_key_env,
     get_pexels_api_key_env,
     get_user_config_path_env,
+    get_image_provider_env,
+    get_pixabay_api_key_env
 )
 from utils.set_env import (
     set_custom_llm_api_key_env,
@@ -24,6 +26,8 @@ from utils.set_env import (
     set_ollama_url_env,
     set_openai_api_key_env,
     set_pexels_api_key_env,
+    set_image_provider_env,
+    set_pixabay_api_key_env
 )
 
 
@@ -49,6 +53,8 @@ def get_user_config():
         CUSTOM_LLM_API_KEY=existing_config.CUSTOM_LLM_API_KEY
         or get_custom_llm_api_key_env(),
         CUSTOM_MODEL=existing_config.CUSTOM_MODEL or get_custom_model_env(),
+        IMAGE_PROVIDER=existing_config.IMAGE_PROVIDER or get_image_provider_env(),
+        PIXABAY_API_KEY=existing_config.PIXABAY_API_KEY or get_pixabay_api_key_env(),
         PEXELS_API_KEY=existing_config.PEXELS_API_KEY or get_pexels_api_key_env(),
     )
 
@@ -71,5 +77,9 @@ def update_env_with_user_config():
         set_custom_llm_api_key_env(user_config.CUSTOM_LLM_API_KEY)
     if user_config.CUSTOM_MODEL:
         set_custom_model_env(user_config.CUSTOM_MODEL)
+    if user_config.IMAGE_PROVIDER:
+        set_image_provider_env(user_config.IMAGE_PROVIDER)
+    if user_config.PIXABAY_API_KEY:
+        set_pixabay_api_key_env(user_config.PIXABAY_API_KEY)
     if user_config.PEXELS_API_KEY:
         set_pexels_api_key_env(user_config.PEXELS_API_KEY)

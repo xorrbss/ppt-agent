@@ -8,43 +8,59 @@ from models.image_prompt import ImagePrompt
 from models.sql.image_asset import ImageAsset
 from utils.download_helpers import download_file
 from utils.get_env import get_pexels_api_key_env
+from utils.get_env import get_pixabay_api_key_env
 from utils.llm_provider import (
     get_llm_client,
     is_google_selected,
     is_openai_selected,
 )
-
+from utils.image_provider import (
+    is_pixels_selected,
+    is_pixabay_selected,
+    is_imagen_selected,
+    is_dalle3_selected
+)
 
 class ImageGenerationService:
 
     def __init__(self, output_directory: str):
         self.output_directory = output_directory
-
-        self.use_pexels = False
-        if get_pexels_api_key_env():
-            self.use_pexels = True
-
         self.image_gen_func = self.get_image_gen_func()
 
     def get_image_gen_func(self):
-        if self.use_pexels:
+        if is_pixabay_selected():
+            return self.get_image_from_pixabay
+        elif is_pixels_selected():
             return self.get_image_from_pexels
-        elif is_google_selected():
+        elif is_imagen_selected():
             return self.generate_image_google
-        elif is_openai_selected():
+        elif is_dalle3_selected():
             return self.generate_image_openai
         return None
 
+    def is_stock_provider_selected(self):
+        return is_pixels_selected() or is_pixabay_selected()
+
     async def generate_image(self, prompt: ImagePrompt) -> str | ImageAsset:
+        """
+        Generates an image based on the provided prompt.
+        - If no image generation function is available, returns a placeholder image.
+        - If the stock provider is selected, it uses the prompt directly,
+        otherwise it uses the full image prompt with theme.
+        - Output Directory is used for saving the generated image not the stock provider.
+        """
         if not self.image_gen_func:
             print("No image generation function found. Using placeholder image.")
             return "/static/images/placeholder.jpg"
 
-        image_prompt = prompt.get_image_prompt(not self.use_pexels)
+        image_prompt = prompt.get_image_prompt(with_theme=not self.is_stock_provider_selected())
         print(f"Request - Generating Image for {image_prompt}")
 
         try:
-            image_path = await self.image_gen_func(image_prompt, self.output_directory)
+            if self.is_stock_provider_selected():
+                image_path = await self.image_gen_func(image_prompt)
+            else:
+                image_path = await self.image_gen_func(image_prompt, self.output_directory)
             if image_path:
                 if image_path.startswith("http"):
                     return image_path
@@ -101,4 +117,13 @@ class ImageGenerationService:
             )
             data = await response.json()
             image_url = data["photos"][0]["src"]["large"]
+            return image_url
+        
+    async def get_image_from_pixabay(self, prompt: str) -> str:
+        async with aiohttp.ClientSession() as session:
+            response = await session.get(
+                f"https://pixabay.com/api/?key={os.getenv('PIXABAY_API_KEY')}&q={prompt}&image_type=photo&per_page=3"
+            )
+            data = await response.json()
+            image_url = data["hits"][0]["largeImageURL"]
             return image_url

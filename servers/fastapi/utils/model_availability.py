@@ -9,9 +9,14 @@ from utils.llm_provider import (
     is_ollama_selected,
 )
 from utils.ollama import pull_ollama_model
+from utils.image_provider import (
+    is_pixels_selected,
+    is_pixabay_selected,
+    is_imagen_selected,
+    is_dalle3_selected,
+)
 
-
-async def check_llm_model_availability():
+async def check_llm_and_image_provider_api_or_model_availability():
     can_change_keys = get_can_change_keys_env() != "false"
     if not can_change_keys:
         if get_llm_provider() == LLMProvider.OPENAI:
@@ -58,3 +63,22 @@ async def check_llm_model_availability():
             print("-" * 50)
             if custom_model not in models:
                 raise Exception(f"Model {custom_model} is not available")
+        elif is_pixels_selected():
+            pexels_api_key = os.getenv("PEXELS_API_KEY")
+            if not pexels_api_key:
+                raise Exception("PEXELS_API_KEY must be provided")
+
+        elif is_pixabay_selected():
+            pixabay_api_key = os.getenv("PIXABAY_API_KEY")
+            if not pixabay_api_key:
+                raise Exception("PIXABAY_API_KEY must be provided")
+
+        elif is_imagen_selected():
+            google_api_key = os.getenv("GOOGLE_API_KEY")
+            if not google_api_key:
+                raise Exception("GOOGLE_API_KEY must be provided")
+
+        elif is_dalle3_selected():
+            openai_api_key = os.getenv("OPENAI_API_KEY")
+            if not openai_api_key:
+                raise Exception("OPENAI_API_KEY must be provided")
