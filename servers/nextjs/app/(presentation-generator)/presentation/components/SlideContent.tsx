@@ -139,7 +139,7 @@ const SlideContent = ({
         {isStreaming && (
           <Loader2 className="w-8 h-8 absolute right-2 top-2 z-30 text-blue-800 animate-spin" />
         )}
-        <div className={` w-full group  mb-6`}>
+        <div className={` w-full  group  mb-6`}>
           {/* render slides */}
           {loading ? <div className="flex flex-col bg-white aspect-video items-center justify-center h-full">
             <Loader2 className="w-8 h-8 animate-spin" />
