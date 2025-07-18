@@ -31,6 +31,7 @@ from models.pptx_models import (
     PptxTextBoxModel,
     PptxTextRunModel,
 )
+from utils.download_helpers import download_files
 from utils.image_utils import (
     change_image_color,
     clip_image,
@@ -53,6 +54,28 @@ class PptxPresentationCreator:
         self._ppt = Presentation()
         self._ppt.slide_width = Pt(1280)
         self._ppt.slide_height = Pt(720)
+
+    async def fetch_network_assets(self):
+        image_urls = []
+        image_local_paths = []
+
+        for each_slide in self._slide_models:
+            for each_shape in each_slide.shapes:
+                if isinstance(each_shape, PptxPictureBoxModel):
+                    image_path = each_shape.picture.path
+                    # if image_path.startswith("http"):
+                    #     image_urls.append(image_path)
+                    #     parsed_url = unquote(urlparse(image_path).path)
+                    #     image_name = replace_file_name(
+                    #         os.path.basename(parsed_url), str(uuid.uuid4())
+                    #     )
+                    #     image_path = os.path.join(self.temp_dir, image_name)
+                    #     image_local_paths.append(image_path)
+
+                    each_shape.picture.path = image_path
+                    each_shape.picture.is_network = False
+
+            await download_files(image_urls, self._temp_dir)
 
     def create_ppt(self):
 

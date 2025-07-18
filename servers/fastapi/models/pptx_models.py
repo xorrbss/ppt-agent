@@ -153,6 +153,6 @@ class PptxSlideModel(BaseModel):
 
 
 class PptxPresentationModel(BaseModel):
-    name: str
+    name: Optional[str] = None
     shapes: Optional[List[PptxShapeModel]] = None
     slides: List[PptxSlideModel]

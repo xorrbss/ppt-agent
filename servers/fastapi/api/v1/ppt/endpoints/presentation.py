@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import random
 from typing import Annotated, List, Optional
 import uuid
@@ -20,6 +21,7 @@ from services.database import get_sql_session
 from services.documents_loader import DocumentsLoader
 from models.sql.presentation import PresentationModel
 from services.pptx_presentation_creator import PptxPresentationCreator
+from utils.asset_directory_utils import get_export_directory
 from utils.llm_calls.generate_document_summary import generate_document_summary
 from utils.llm_calls.generate_presentation_structure import (
     generate_presentation_structure,
@@ -28,6 +30,7 @@ from utils.llm_calls.generate_slide_content import (
     get_slide_content_from_type_and_outline,
 )
 from utils.process_slides import process_slide_and_fetch_assets
+from utils.randomizers import get_random_uuid
 
 PRESENTATION_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
 
@@ -280,4 +283,11 @@ def update_presentation(
 def create_pptx(pptx_model: Annotated[PptxPresentationModel, Body()]):
     pptx_creator = PptxPresentationCreator(pptx_model)
     pptx_creator.create_ppt()
-    pptx_creator.save(pptx_model.id)
+
+    export_directory = get_export_directory()
+    pptx_path = os.path.join(
+        export_directory, f"{pptx_model.name or get_random_uuid()}.pptx"
+    )
+    pptx_creator.save(pptx_path)
+
+    return pptx_path

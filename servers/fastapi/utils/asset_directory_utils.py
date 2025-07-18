@@ -6,3 +6,9 @@ def get_images_directory():
     images_directory = os.path.join(get_app_data_directory_env(), "images")
     os.makedirs(images_directory, exist_ok=True)
     return images_directory
+
+
+def get_export_directory():
+    export_directory = os.path.join(get_app_data_directory_env(), "exports")
+    os.makedirs(export_directory, exist_ok=True)
+    return export_directory
