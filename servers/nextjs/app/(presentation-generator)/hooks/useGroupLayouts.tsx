@@ -2,6 +2,7 @@
 import React, { useMemo } from 'react';
 import { useLayout } from '../context/LayoutContext';
 import { SmartEditableProvider } from '../components/SmartEditableWrapper';
+import TiptapTextReplacer from '../components/TiptapTextReplacer';
 
 export const useGroupLayouts = () => {
     const {
@@ -29,7 +30,7 @@ export const useGroupLayouts = () => {
         };
     }, [getLayoutsByGroup]);
 
-    // Render slide content with group validation and smart editing capabilities
+    // Render slide content with group validation and automatic Tiptap text editing
     const renderSlideContent = useMemo(() => {
         return (slide: any, isEditMode: boolean = true) => {
             const Layout = getGroupLayout(slide.layout, slide.layout_group);
@@ -51,7 +52,17 @@ export const useGroupLayouts = () => {
                         slideData={slide.content}
                         isEditMode={isEditMode}
                     >
-                        <Layout data={slide.content} />
+                        <TiptapTextReplacer
+                            slideData={slide.content}
+                            isEditMode={isEditMode}
+                            layout={Layout}
+                            onContentChange={(content: string, dataPath: string) => {
+                                console.log(`Text content changed at ${dataPath}:`, content);
+
+                            }}
+                        >
+                            <Layout data={slide.content} />
+                        </TiptapTextReplacer>
                     </SmartEditableProvider>
                 );
             }

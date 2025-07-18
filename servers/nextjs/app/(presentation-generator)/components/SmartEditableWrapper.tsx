@@ -5,14 +5,19 @@ import ReactDOM from 'react-dom';
 import ImageEditor from './ImageEditor';
 import IconsEditor from './IconsEditor';
 
+interface EditableElement {
+    type: 'image' | 'icon';
+    element: HTMLElement;
+    dataPath?: string;
+    props: any;
+}
+
 interface SmartEditableContextType {
     slideIndex: number;
     slideId: string;
     isEditMode: boolean;
     slideData: any;
 }
-
-const SmartEditableContext = createContext<SmartEditableContextType | null>(null);
 
 interface SmartEditableProviderProps {
     children: ReactNode;
@@ -22,12 +27,15 @@ interface SmartEditableProviderProps {
     isEditMode?: boolean;
 }
 
-interface EditableElement {
-    type: 'image' | 'icon';
-    element: HTMLImageElement;
-    dataPath: string;
-    props: any;
-}
+const SmartEditableContext = createContext<SmartEditableContextType | null>(null);
+
+export const useSmartEditable = () => {
+    const context = useContext(SmartEditableContext);
+    if (!context) {
+        throw new Error('useSmartEditable must be used within SmartEditableProvider');
+    }
+    return context;
+};
 
 export const SmartEditableProvider: React.FC<SmartEditableProviderProps> = ({
     children,
@@ -40,7 +48,7 @@ export const SmartEditableProvider: React.FC<SmartEditableProviderProps> = ({
     const [editableElements, setEditableElements] = useState<EditableElement[]>([]);
     const [activeEditor, setActiveEditor] = useState<{
         type: 'image' | 'icon';
-        element: HTMLImageElement;
+        element: HTMLElement;
         props: any;
         rect: DOMRect;
     } | null>(null);
@@ -55,7 +63,7 @@ export const SmartEditableProvider: React.FC<SmartEditableProviderProps> = ({
 
             console.log('🔍 Starting smart detection with slideData:', slideData);
 
-            // Scan data structure for __image_url__ and __icon_url__ patterns
+            // Detect Images and Icons only (text is now handled by SmartText components)
             const detectEditableElementsFromData = (data: any, path: string = '') => {
                 if (!data || typeof data !== 'object') return;
 
@@ -101,7 +109,6 @@ export const SmartEditableProvider: React.FC<SmartEditableProviderProps> = ({
                         console.log(`✅ Matched icon to DOM element:`, imgElement);
                     }
                 }
-
                 // Recursively scan nested objects and arrays
                 Object.keys(data).forEach(key => {
                     const value = data[key];
@@ -161,7 +168,7 @@ export const SmartEditableProvider: React.FC<SmartEditableProviderProps> = ({
         return () => {
             clearTimeout(timer);
         };
-    }, [slideIndex, slideId, slideData, isEditMode]);
+    }, [slideIndex, slideId, slideData, isEditMode]); // Removed editableElements from dependency array
 
     // Set up event listeners when editableElements change
     useEffect(() => {
@@ -171,11 +178,13 @@ export const SmartEditableProvider: React.FC<SmartEditableProviderProps> = ({
 
         const handleClick = (event: MouseEvent) => {
             const target = event.target as HTMLElement;
+
+            // Handle image/icon clicks only
             if (target.tagName === 'IMG') {
                 const imgElement = target as HTMLImageElement;
                 const editableElement = editableElements.find(el => el.element === imgElement);
 
-                if (editableElement) {
+                if (editableElement && (editableElement.type === 'image' || editableElement.type === 'icon')) {
                     event.preventDefault();
                     event.stopPropagation();
 
@@ -192,6 +201,8 @@ export const SmartEditableProvider: React.FC<SmartEditableProviderProps> = ({
 
         const handleMouseEnter = (event: MouseEvent) => {
             const target = event.target as HTMLElement;
+
+            // Handle image/icon hover only
             if (target.tagName === 'IMG') {
                 const imgElement = target as HTMLImageElement;
                 const isEditable = editableElements.some(el => el.element === imgElement);
@@ -206,6 +217,8 @@ export const SmartEditableProvider: React.FC<SmartEditableProviderProps> = ({
 
         const handleMouseLeave = (event: MouseEvent) => {
             const target = event.target as HTMLElement;
+
+            // Handle image/icon hover only
             if (target.tagName === 'IMG') {
                 const imgElement = target as HTMLImageElement;
                 const isEditable = editableElements.some(el => el.element === imgElement);
@@ -244,11 +257,11 @@ export const SmartEditableProvider: React.FC<SmartEditableProviderProps> = ({
     );
 };
 
-// overlay component for editors
+// Simple overlay component for editors
 const EditorOverlay: React.FC<{
     activeEditor: {
         type: 'image' | 'icon';
-        element: HTMLImageElement;
+        element: HTMLElement;
         props: any;
         rect: DOMRect;
     };
@@ -266,6 +279,7 @@ const EditorOverlay: React.FC<{
                 onClose();
             }
         };
+
         document.addEventListener('keydown', handleEscape);
         document.addEventListener('click', handleClickOutside);
 
@@ -275,6 +289,7 @@ const EditorOverlay: React.FC<{
         };
     }, [onClose]);
 
+    // Handle image/icon editing in modal
     const EditorComponent = activeEditor.type === 'image' ? ImageEditor : IconsEditor;
 
     return ReactDOM.createPortal(
@@ -288,12 +303,4 @@ const EditorOverlay: React.FC<{
         </div>,
         document.body
     );
-};
-
-export const useSmartEditable = () => {
-    const context = useContext(SmartEditableContext);
-    if (!context) {
-        throw new Error('useSmartEditable must be used within SmartEditableProvider');
-    }
-    return context;
 }; 

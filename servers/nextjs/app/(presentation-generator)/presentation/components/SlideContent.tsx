@@ -127,8 +127,8 @@ const SlideContent = ({
 
   // Memoized slide content rendering to prevent unnecessary re-renders
   const slideContent = useMemo(() => {
-    return renderSlideContent(slide, true); // Enable edit mode for main content
-  }, [renderSlideContent, slide]);
+    return renderSlideContent(slide, isStreaming ? false : true); // Enable edit mode for main content
+  }, [renderSlideContent, slide, isStreaming]);
 
   return (
     <>
