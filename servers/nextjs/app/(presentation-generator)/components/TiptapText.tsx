@@ -40,9 +40,9 @@ const TiptapText: React.FC<TiptapTextProps> = ({
             },
         },
         onBlur: ({ editor }) => {
-            const text = editor.getText();
+            const markdown = editor?.storage.markdown.getMarkdown();
             if (onContentChange) {
-                onContentChange(text);
+                onContentChange(markdown);
             }
         },
         editable: !disabled,
