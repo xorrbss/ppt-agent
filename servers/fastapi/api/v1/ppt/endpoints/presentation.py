@@ -279,10 +279,10 @@ def update_presentation(
     )
 
 
-@PRESENTATION_ROUTER.post("/export/pptx")
-def create_pptx(pptx_model: Annotated[PptxPresentationModel, Body()]):
+@PRESENTATION_ROUTER.post("/export/pptx", response_model=str)
+async def create_pptx(pptx_model: Annotated[PptxPresentationModel, Body()]):
     pptx_creator = PptxPresentationCreator(pptx_model)
-    pptx_creator.create_ppt()
+    await pptx_creator.create_ppt()
 
     export_directory = get_export_directory()
     pptx_path = os.path.join(

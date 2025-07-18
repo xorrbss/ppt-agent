@@ -57,27 +57,26 @@ class PptxPresentationCreator:
 
     async def fetch_network_assets(self):
         image_urls = []
-        image_local_paths = []
 
         for each_slide in self._slide_models:
+            models_with_network_asset: List[PptxPictureBoxModel] = []
             for each_shape in each_slide.shapes:
                 if isinstance(each_shape, PptxPictureBoxModel):
                     image_path = each_shape.picture.path
-                    # if image_path.startswith("http"):
-                    #     image_urls.append(image_path)
-                    #     parsed_url = unquote(urlparse(image_path).path)
-                    #     image_name = replace_file_name(
-                    #         os.path.basename(parsed_url), str(uuid.uuid4())
-                    #     )
-                    #     image_path = os.path.join(self.temp_dir, image_name)
-                    #     image_local_paths.append(image_path)
+                    if not image_path.startswith("http"):
+                        continue
+                    image_urls.append(image_path)
+                    models_with_network_asset.append(each_shape)
 
-                    each_shape.picture.path = image_path
-                    each_shape.picture.is_network = False
+            image_paths = await download_files(image_urls, self._temp_dir)
+            for each_shape, each_image_path in zip(
+                models_with_network_asset, image_paths
+            ):
+                each_shape.picture.path = each_image_path
+                each_shape.picture.is_network = False
 
-            await download_files(image_urls, self._temp_dir)
-
-    def create_ppt(self):
+    async def create_ppt(self):
+        await self.fetch_network_assets()
 
         for slide_model in self._slide_models:
             # Adding global shapes to slide
