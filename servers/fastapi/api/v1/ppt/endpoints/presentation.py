@@ -147,14 +147,15 @@ async def prepare_presentation(
                 presentation_layout=layout,
             )
         )
-        presentation_structure.slides = presentation_structure.slides[: len(outlines)]
-        for index in range(total_outlines):
-            random_slide_index = random.randint(0, total_slide_layouts - 1)
-            if index >= total_outlines:
-                presentation_structure.slides.append(random_slide_index)
-                continue
-            if presentation_structure.slides[index] >= total_slide_layouts:
-                presentation_structure.slides[index] = random_slide_index
+
+    presentation_structure.slides = presentation_structure.slides[: len(outlines)]
+    for index in range(total_outlines):
+        random_slide_index = random.randint(0, total_slide_layouts - 1)
+        if index >= total_outlines:
+            presentation_structure.slides.append(random_slide_index)
+            continue
+        if presentation_structure.slides[index] >= total_slide_layouts:
+            presentation_structure.slides[index] = random_slide_index
 
     with get_sql_session() as sql_session:
         sql_session.add(presentation)
