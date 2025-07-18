@@ -104,6 +104,7 @@ const IconsEditor = ({
         side="right"
         className="w-[400px]"
         onOpenAutoFocus={(e) => e.preventDefault()}
+        onClick={(e) => e.stopPropagation()}
       >
         <SheetHeader>
           <SheetTitle>Choose Icon</SheetTitle>
@@ -112,6 +113,7 @@ const IconsEditor = ({
           <form
             onSubmit={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               handleIconSearch();
             }}
           >
@@ -122,6 +124,7 @@ const IconsEditor = ({
                 placeholder="Search icons..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
                 className="pl-10"
               />
             </div>
@@ -129,6 +132,7 @@ const IconsEditor = ({
               type="submit"
               variant="outline"
               className="w-full text-semibold text-[#51459e]"
+              onClick={(e) => e.stopPropagation()}
             >
               Search
             </Button>
@@ -147,7 +151,10 @@ const IconsEditor = ({
                 {icons.map((iconSrc, idx) => (
                   <div
                     key={idx}
-                    onClick={() => handleIconChange(iconSrc)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleIconChange(iconSrc);
+                    }}
                     className="w-12 h-12 cursor-pointer group relative rounded-lg overflow-hidden hover:bg-gray-100 p-2"
                   >
                     <img

@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     // Return the relative path that can be used in the frontend
     return NextResponse.json({
       success: true,
-      filePath: `/app/user_data/uploads/${filename}`
+      filePath: `${userDataDir}/uploads/${filename}`
     });
   } catch (error) {
     console.error("Error saving image:", error);

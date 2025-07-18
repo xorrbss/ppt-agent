@@ -70,9 +70,7 @@ export const SmartEditableProvider: React.FC<SmartEditableProviderProps> = ({
                             dataPath: path,
                             props: {
                                 slideIndex,
-                                elementId: `image-${path.replace(/[^\w]/g, '-')}`,
                                 initialImage: data.__image_url__,
-                                title: imgElement.alt || 'Image',
                                 promptContent: data.__image_prompt__ || '',
                                 imageIdx: elements.filter(e => e.type === 'image').length
                             }
@@ -155,55 +153,6 @@ export const SmartEditableProvider: React.FC<SmartEditableProviderProps> = ({
             return getFilename(domSrc) === getFilename(dataSrc) && getFilename(domSrc) !== '';
         };
 
-        // Add event delegation for clicks
-        const handleClick = (event: MouseEvent) => {
-            const target = event.target as HTMLElement;
-            if (target.tagName === 'IMG') {
-                const imgElement = target as HTMLImageElement;
-                const editableElement = editableElements.find(el => el.element === imgElement);
-
-                if (editableElement) {
-                    event.preventDefault();
-                    event.stopPropagation();
-
-                    const rect = imgElement.getBoundingClientRect();
-                    setActiveEditor({
-                        type: editableElement.type,
-                        element: imgElement,
-                        props: editableElement.props,
-                        rect
-                    });
-                }
-            }
-        };
-
-        // Add hover effects
-        const handleMouseEnter = (event: MouseEvent) => {
-            const target = event.target as HTMLElement;
-            if (target.tagName === 'IMG') {
-                const imgElement = target as HTMLImageElement;
-                const isEditable = editableElements.some(el => el.element === imgElement);
-
-                if (isEditable) {
-                    imgElement.style.cursor = 'pointer';
-                    imgElement.style.filter = 'brightness(0.9)';
-                    imgElement.style.transition = 'filter 0.2s ease';
-                }
-            }
-        };
-
-        const handleMouseLeave = (event: MouseEvent) => {
-            const target = event.target as HTMLElement;
-            if (target.tagName === 'IMG') {
-                const imgElement = target as HTMLImageElement;
-                const isEditable = editableElements.some(el => el.element === imgElement);
-
-                if (isEditable) {
-                    imgElement.style.filter = '';
-                }
-            }
-        };
-
         // Set up event listeners after elements are found
         const timer = setTimeout(() => {
             findEditableElements();
@@ -211,11 +160,8 @@ export const SmartEditableProvider: React.FC<SmartEditableProviderProps> = ({
 
         return () => {
             clearTimeout(timer);
-            container.removeEventListener('click', handleClick);
-            container.removeEventListener('mouseenter', handleMouseEnter, true);
-            container.removeEventListener('mouseleave', handleMouseLeave, true);
         };
-    }, [slideIndex, slideId, slideData, isEditMode, editableElements]);
+    }, [slideIndex, slideId, slideData, isEditMode]);
 
     // Set up event listeners when editableElements change
     useEffect(() => {
@@ -298,7 +244,7 @@ export const SmartEditableProvider: React.FC<SmartEditableProviderProps> = ({
     );
 };
 
-// Simple overlay component for editors
+// overlay component for editors
 const EditorOverlay: React.FC<{
     activeEditor: {
         type: 'image' | 'icon';
@@ -320,7 +266,6 @@ const EditorOverlay: React.FC<{
                 onClose();
             }
         };
-
         document.addEventListener('keydown', handleEscape);
         document.addEventListener('click', handleClickOutside);
 

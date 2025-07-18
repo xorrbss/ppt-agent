@@ -12,9 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Wand2,
   Upload,
-  Edit,
   Move,
-  Maximize,
+
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDispatch, useSelector } from "react-redux";
@@ -28,20 +27,14 @@ import {
 } from "@/store/slices/presentationGeneration";
 import { getStaticFileUrl, ThemeImagePrompt } from "../utils/others";
 
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import ToolTip from "@/components/ToolTip";
 
 
 interface ImageEditorProps {
   initialImage: string | null;
   imageIdx?: number;
-  title: string;
+
   slideIndex: number;
-  elementId: string;
+
   className?: string;
   promptContent?: string;
   properties?: null | any;
@@ -51,10 +44,7 @@ interface ImageEditorProps {
 const ImageEditor = ({
   initialImage,
   imageIdx = 0,
-  className,
-  title,
   slideIndex,
-  elementId,
   promptContent,
   properties,
   onClose,
@@ -66,9 +56,6 @@ const ImageEditor = ({
   const searchParams = useSearchParams();
   const [image, setImage] = useState(initialImage);
   const [previewImages, setPreviewImages] = useState([initialImage]);
-
-  const [isEditorOpen, setIsEditorOpen] = useState(false);
-  const [isToolbarOpen, setIsToolbarOpen] = useState(false);
   const [prompt, setPrompt] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -110,7 +97,7 @@ const ImageEditor = ({
         !toolbarRef.current.contains(event.target as Node) &&
         !popoverContentRef.current
       ) {
-        setIsToolbarOpen(false);
+
         if (isFocusPointMode) {
           // saveFocusPoint(); // Save focus point before closing
           saveImageProperties(objectFit, focusPoint);
@@ -125,16 +112,7 @@ const ImageEditor = ({
     };
   }, [isFocusPointMode, focusPoint]);
 
-  const handleImageClick = () => {
-    if (!isFocusPointMode) {
-      setIsToolbarOpen(true);
-    }
-  };
 
-  const handleOpenEditor = () => {
-    setIsToolbarOpen(false);
-    setIsEditorOpen(true);
-  };
 
   const handleImageChange = (newImage: string) => {
     setImage(newImage);
@@ -145,7 +123,6 @@ const ImageEditor = ({
         image: newImage,
       })
     );
-    setIsEditorOpen(false);
   };
 
   const handleFocusPointClick = (e: React.MouseEvent) => {
@@ -600,7 +577,7 @@ const ImageEditor = ({
                             className="cursor-pointer group w-full h-full"
                           >
                             <img
-                              src={getStaticFileUrl(uploadedImageUrl)}
+                              src={uploadedImageUrl}
                               alt="Uploaded preview"
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                             />
