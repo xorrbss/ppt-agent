@@ -37,9 +37,9 @@ async def stream_outlines(presentation_id: str):
             ).to_string()
             presentation_content_text += chunk
 
-        presentation_content = PresentationOutlineModel.model_validate_json(
-            presentation_content_text
-        )
+        presentation_content_json = json.loads(presentation_content_text)
+
+        presentation_content = PresentationOutlineModel(**presentation_content_json)
         presentation_content.slides = presentation_content.slides[
             : presentation.n_slides
         ]
