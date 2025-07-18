@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import delete
 from sqlmodel import select
 
+from models.pptx_models import PptxPresentationModel
 from models.presentation_outline_model import SlideOutlineModel
 from models.presentation_layout import PresentationLayoutModel
 from models.presentation_structure_model import PresentationStructureModel
@@ -18,6 +19,7 @@ from services import TEMP_FILE_SERVICE
 from services.database import get_sql_session
 from services.documents_loader import DocumentsLoader
 from models.sql.presentation import PresentationModel
+from services.pptx_presentation_creator import PptxPresentationCreator
 from utils.llm_calls.generate_document_summary import generate_document_summary
 from utils.llm_calls.generate_presentation_structure import (
     generate_presentation_structure,
@@ -272,3 +274,10 @@ def update_presentation(
         **presentation.model_dump(),
         slides=updated_slides,
     )
+
+
+@PRESENTATION_ROUTER.post("/export/pptx")
+def create_pptx(pptx_model: Annotated[PptxPresentationModel, Body()]):
+    pptx_creator = PptxPresentationCreator(pptx_model)
+    pptx_creator.create_ppt()
+    pptx_creator.save(pptx_model.id)

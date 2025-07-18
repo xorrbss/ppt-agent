@@ -144,7 +144,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({ presentation_id }) 
         />
 
         <div className="flex-1 h-[calc(100vh-100px)] overflow-y-auto">
-          <div className="mx-auto flex flex-col items-center overflow-hidden justify-center p-2 sm:p-6 pt-0">
+          <div id="presentation-slides-wrapper" className="mx-auto flex flex-col items-center overflow-hidden justify-center p-2 sm:p-6 pt-0">
             {!presentationData ||
               loading ||
               !presentationData?.slides ||
