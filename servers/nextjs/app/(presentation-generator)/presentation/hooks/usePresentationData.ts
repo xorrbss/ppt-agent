@@ -1,6 +1,5 @@
 import { useCallback } from "react";
 import { useDispatch } from "react-redux";
-import { useRouter } from "next/navigation";
 import { toast } from "@/hooks/use-toast";
 import { DashboardApi } from "@/app/dashboard/api/dashboard";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
@@ -12,11 +11,12 @@ export const usePresentationData = (
   setError: (error: boolean) => void
 ) => {
   const dispatch = useDispatch();
-  const router = useRouter();
+
 
   const fetchUserSlides = useCallback(async () => {
     try {
       const data = await DashboardApi.getPresentation(presentationId);
+      console.log('Presentation Data',data);
       if (data) {
         dispatch(setPresentationData(data));
         setLoading(false);

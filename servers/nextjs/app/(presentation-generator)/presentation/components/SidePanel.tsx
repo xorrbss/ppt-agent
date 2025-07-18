@@ -274,7 +274,7 @@ const SidePanel = ({
                       <div className=" bg-white  relative overflow-hidden aspect-video">
                         <div className="absolute bg-gray-100/5 z-40 top-0 left-0 w-full h-full" />
                         <div className="transform scale-[0.2] flex justify-center items-center origin-top-left  w-[500%] h-[500%]">
-                          {renderSlideContent(slide)}
+                          {renderSlideContent(slide, false)}
                         </div>
                       </div>
                     </div>
@@ -294,7 +294,7 @@ const SidePanel = ({
                           index={index}
                           selectedSlide={selectedSlide}
                           onSlideClick={onSlideClick}
-                          renderSlideContent={renderSlideContent}
+                          renderSlideContent={(slide) => renderSlideContent(slide, false)}
                         />
                       ))}
                   </SortableContext>
