@@ -1,5 +1,4 @@
 "use client";
-import { renderToStaticMarkup } from 'react-dom/server';
 
 import React, { useRef, useEffect, useState, ReactNode } from 'react';
 import ReactDOM from 'react-dom/client';
@@ -24,9 +23,6 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
 }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const [processedElements, setProcessedElements] = useState(new Set<HTMLElement>());
-
-
-
     useEffect(() => {
         if (!isEditMode || !containerRef.current) return;
 
@@ -45,6 +41,9 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
                     htmlElement.closest('.tiptap-text-editor')) {
                     return;
                 }
+
+                // Skip if element is inside an ignored element tree
+                if (isInIgnoredElementTree(htmlElement)) return;
 
                 // Get direct text content (not from child elements)
                 const directTextContent = getDirectTextContent(htmlElement);
@@ -120,6 +119,56 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
             });
         };
 
+        // Function to check if element is inside an ignored element tree
+        const isInIgnoredElementTree = (element: HTMLElement): boolean => {
+            // List of element types that should be ignored entirely with all their children
+            const ignoredElementTypes = [
+                'TABLE', 'TBODY', 'THEAD', 'TFOOT', 'TR', 'TD', 'TH',  // Table elements
+                'SVG', 'G', 'PATH', 'CIRCLE', 'RECT', 'LINE',          // SVG elements
+                'CANVAS',                                                // Canvas element
+                'VIDEO', 'AUDIO',                                       // Media elements
+                'IFRAME', 'EMBED', 'OBJECT',                           // Embedded content
+                'SELECT', 'OPTION', 'OPTGROUP',                       // Select dropdown elements
+                'SCRIPT', 'STYLE', 'NOSCRIPT',                        // Script/style elements
+            ];
+
+            // List of class patterns that indicate ignored element trees
+            const ignoredClassPatterns = [
+                'chart', 'graph', 'visualization',  // Chart/graph components
+                'menu', 'dropdown', 'tooltip',      // UI components
+                'editor', 'wysiwyg',                // Editor components
+                'calendar', 'datepicker',           // Date picker components
+                'slider', 'carousel',               // Interactive components
+            ];
+
+            // Check if current element or any parent is in ignored list
+            let currentElement: HTMLElement | null = element;
+            while (currentElement) {
+                // Check element type
+                if (ignoredElementTypes.includes(currentElement.tagName)) {
+                    return true;
+                }
+
+                // Check class patterns
+                const className = currentElement.className.length > 0 ? currentElement.className.toLowerCase() : '';
+                if (ignoredClassPatterns.some(pattern => className.includes(pattern))) {
+                    return true;
+                }
+
+                // Check for specific attributes that indicate non-text content
+                if (currentElement.hasAttribute('contenteditable') ||
+                    currentElement.hasAttribute('data-chart') ||
+                    currentElement.hasAttribute('data-visualization') ||
+                    currentElement.hasAttribute('data-interactive')) {
+                    return true;
+                }
+
+                currentElement = currentElement.parentElement;
+            }
+
+            return false;
+        };
+
         // Helper function to get only direct text content (not from children)
         const getDirectTextContent = (element: HTMLElement): string => {
             let text = '';
@@ -155,7 +204,7 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
                 return true;
             }
 
-            // Skip elements that contain interactive content
+            // Skip elements that contain interactive content (simplified since we now use isInIgnoredElementTree)
             if (element.querySelector('img, svg, button, input, textarea, select, a[href]')) {
                 return true;
             }
@@ -163,7 +212,7 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
             // Skip container elements (elements that primarily serve as layout containers)
             const containerClasses = ['grid', 'flex', 'space-', 'gap-', 'container', 'wrapper'];
             const hasContainerClass = containerClasses.some(cls =>
-                element.className.includes(cls)
+                element.className.length > 0 ? element.className.includes(cls) : false
             );
             if (hasContainerClass) return true;
 

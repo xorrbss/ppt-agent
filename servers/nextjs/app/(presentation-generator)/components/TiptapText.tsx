@@ -61,10 +61,10 @@ const TiptapText: React.FC<TiptapTextProps> = ({
     }
 
     return (
-        <div className="relative w-full">
+        <div className="relative z-50 w-full">
             {!disabled && (
                 <BubbleMenu editor={editor} tippyOptions={{ duration: 100 }}>
-                    <div className="flex bg-white rounded-lg shadow-lg p-2 gap-1 border border-gray-200 z-50">
+                    <div className="flex bg-white  rounded-lg shadow-lg p-2 gap-1 border border-gray-200 z-50">
                         <button
                             onClick={() => editor?.chain().focus().toggleBold().run()}
                             className={`p-1 rounded hover:bg-gray-100 transition-colors ${editor?.isActive("bold") ? "bg-blue-100 text-blue-600" : ""

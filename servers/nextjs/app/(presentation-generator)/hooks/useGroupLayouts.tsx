@@ -43,7 +43,6 @@ export const useGroupLayouts = () => {
                     </div>
                 );
             }
-
             if (isEditMode) {
                 return (
                     <SmartEditableProvider
