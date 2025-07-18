@@ -3,25 +3,6 @@ import { IconSearch, ImageGenerate, ImageSearch } from "./params";
 
 export class PresentationGenerationApi {
 
-  static async getChapterDetails() {
-    try {
-      const response = await fetch(
-        `/api/v1/ppt/chapter-details`,
-        {
-          method: "GET",
-          headers: getHeader(),
-          cache: "no-cache",
-        }
-      );
-      if (response.status === 200) {
-        const data = await response.json();
-        return data;
-      }
-    } catch (error) {
-      console.error("Error getting chapter details:", error);
-      throw error;
-    }
-  }
 
   static async uploadDoc(documents: File[]) {
     const formData = new FormData();
@@ -80,62 +61,9 @@ export class PresentationGenerationApi {
       throw error;
     }
   }
-  static async titleGeneration({
-    presentation_id,
-  }: {
-    presentation_id: string;
-  }) {
-    try {
-      const response = await fetch(
-        `/api/v1/ppt/presentation/outlines/generate`,
-        {
-          method: "POST",
-          headers: getHeader(),
-          body: JSON.stringify({
-            prompt: prompt,
-            presentation_id: presentation_id,
-          }),
-          cache: "no-cache",
-        }
-      );
-      if (response.status === 200) {
-        const data = await response.json();
+ 
 
-        return data;
-      } else {
-        throw new Error(`Failed to generate titles: ${response.statusText}`);
-      }
-    } catch (error) {
-      console.error("error in title generation", error);
-      throw error;
-    }
-  }
-
-  static async generatePresentation(presentationData: any) {
-    try {
-      const response = await fetch(
-        `/api/v1/ppt/generate`,
-        {
-          method: "POST",
-          headers: getHeader(),
-          body: JSON.stringify(presentationData),
-          cache: "no-cache",
-        }
-      );
-      if (response.status === 200) {
-        const data = await response.json();
-
-        return data;
-      } else {
-        throw new Error(
-          `Failed to generate presentation: ${response.statusText}`
-        );
-      }
-    } catch (error) {
-      console.error("error in presentation generation", error);
-      throw error;
-    }
-  }
+ 
   static async editSlide(
     presentation_id: string,
     index: number,
@@ -172,9 +100,9 @@ export class PresentationGenerationApi {
   static async updatePresentationContent(body: any) {
     try {
       const response = await fetch(
-        `/api/v1/ppt/slides/update`,
+        `/api/v1/ppt/presentation/update`,
         {
-          method: "POST",
+          method: "PUT",
           headers: getHeader(),
           body: JSON.stringify(body),
           cache: "no-cache",
@@ -375,33 +303,7 @@ export class PresentationGenerationApi {
       throw error;
     }
   }
-  // SET THEME COLORS
-  static async setThemeColors(presentation_id: string, theme: any) {
-    try {
-      const response = await fetch(
-        `/api/v1/ppt/presentation/theme`,
-        {
-          method: "POST",
-          headers: getHeader(),
-          body: JSON.stringify({
-            presentation_id,
-            theme,
-          }),
-
-        }
-      );
-      if (response.ok) {
-        const data = await response.json();
-        return data;
-      } else {
-        throw new Error(`Failed to set theme colors: ${response.statusText}`);
-      }
-    } catch (error) {
-      console.error("error in theme colors set", error);
-      throw error;
-    }
-  }
-  // QUESTIONS
+ 
 
   static async createPresentation({
     prompt,

@@ -1,10 +1,13 @@
 'use client'
 import React, { useMemo } from 'react';
+import { useDispatch } from 'react-redux';
 import { useLayout } from '../context/LayoutContext';
 import { SmartEditableProvider } from '../components/SmartEditableWrapper';
 import TiptapTextReplacer from '../components/TiptapTextReplacer';
+import { updateSlideContent } from '../../../store/slices/presentationGeneration';
 
 export const useGroupLayouts = () => {
+    const dispatch = useDispatch();
     const {
         getLayoutByIdAndGroup,
         getLayoutsByGroup,
@@ -43,7 +46,6 @@ export const useGroupLayouts = () => {
                     </div>
                 );
             }
-
             if (isEditMode) {
                 return (
                     <SmartEditableProvider
@@ -54,11 +56,20 @@ export const useGroupLayouts = () => {
                     >
                         <TiptapTextReplacer
                             slideData={slide.content}
+                            slideIndex={slide.index}
                             isEditMode={isEditMode}
                             layout={Layout}
-                            onContentChange={(content: string, dataPath: string) => {
-                                console.log(`Text content changed at ${dataPath}:`, content);
+                            onContentChange={(content: string, dataPath: string, slideIndex?: number) => {
+                                console.log(`Text content changed at slide ${slideIndex}, path ${dataPath}:`, content);
 
+                                // Dispatch Redux action to update slide content
+                                if (dataPath && slideIndex !== undefined) {
+                                    dispatch(updateSlideContent({
+                                        slideIndex: slideIndex,
+                                        dataPath: dataPath,
+                                        content: content
+                                    }));
+                                }
                             }}
                         >
                             <Layout data={slide.content} />
@@ -68,7 +79,7 @@ export const useGroupLayouts = () => {
             }
             return <Layout data={slide.content} />;
         };
-    }, [getGroupLayout]);
+    }, [getGroupLayout, dispatch]);
 
     return {
         getGroupLayout,
