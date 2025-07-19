@@ -1,7 +1,7 @@
 from models.ollama_model_metadata import OllamaModelMetadata
 
 
-SUPPORTED_LLAMA_MODELS = {
+SUPPORTED_OLLAMA_MODELS = {
     "llama3:8b": OllamaModelMetadata(
         label="Llama 3:8b",
         value="llama3:8b",
@@ -246,7 +246,7 @@ SUPPORTED_QWEN_MODELS = {
 }
 
 SUPPORTED_OLLAMA_MODELS = {
-    **SUPPORTED_LLAMA_MODELS,
+    **SUPPORTED_OLLAMA_MODELS,
     **SUPPORTED_GEMMA_MODELS,
     **SUPPORTED_DEEPSEEK_MODELS,
     **SUPPORTED_QWEN_MODELS,
