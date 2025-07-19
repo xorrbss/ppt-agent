@@ -1,13 +1,13 @@
 from http.client import HTTPException
 import os
 from typing import Annotated, List, Optional
-import uuid
 from fastapi import APIRouter, Body, File, UploadFile
 
 from constants.documents import UPLOAD_ACCEPTED_FILE_TYPES
 from models.decomposed_file_info import DecomposedFileInfo
 from services import TEMP_FILE_SERVICE
 from services.documents_loader import DocumentsLoader
+from utils.randomizers import get_random_uuid
 from utils.validators import validate_files
 
 FILES_ROUTER = APIRouter(prefix="/files", tags=["Files"])
@@ -18,7 +18,7 @@ async def upload_files(files: Optional[List[UploadFile]]):
     if not files:
         raise HTTPException(400, "Documents are required")
 
-    temp_dir = TEMP_FILE_SERVICE.create_temp_dir(str(uuid.uuid4()))
+    temp_dir = TEMP_FILE_SERVICE.create_temp_dir(get_random_uuid())
 
     validate_files(files, True, True, 50, UPLOAD_ACCEPTED_FILE_TYPES)
 
@@ -39,7 +39,7 @@ async def upload_files(files: Optional[List[UploadFile]]):
 
 @FILES_ROUTER.post("/decompose", response_model=List[DecomposedFileInfo])
 async def decompose_files(file_paths: Annotated[List[str], Body(embed=True)]):
-    temp_dir = TEMP_FILE_SERVICE.create_temp_dir(str(uuid.uuid4()))
+    temp_dir = TEMP_FILE_SERVICE.create_temp_dir(get_random_uuid())
 
     txt_files = []
     other_files = []
@@ -56,7 +56,7 @@ async def decompose_files(file_paths: Annotated[List[str], Body(embed=True)]):
     response = []
     for index, parsed_doc in enumerate(parsed_documents):
         file_path = TEMP_FILE_SERVICE.create_temp_file_path(
-            f"{str(uuid.uuid4())}.txt", temp_dir
+            f"{get_random_uuid()}.txt", temp_dir
         )
         parsed_doc = parsed_doc.replace("<br>", "\n")
         with open(file_path, "w") as text_file:
