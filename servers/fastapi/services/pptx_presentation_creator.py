@@ -10,6 +10,7 @@ from pptx.text.text import _Paragraph, TextFrame, Font, _Run
 from pptx.opc.constants import RELATIONSHIP_TYPE as RT
 from lxml.etree import fromstring, tostring
 from PIL import Image
+from pptx.oxml.xmlchemy import OxmlElement
 
 from pptx.util import Pt
 from pptx.dml.color import RGBColor
@@ -54,6 +55,13 @@ class PptxPresentationCreator:
         self._ppt = Presentation()
         self._ppt.slide_width = Pt(1280)
         self._ppt.slide_height = Pt(720)
+
+    def get_sub_element(self, parent, tagname, **kwargs):
+        """Helper method to create XML elements"""
+        element = OxmlElement(tagname)
+        element.attrib.update(kwargs)
+        parent.append(element)
+        return element
 
     async def fetch_network_assets(self):
         image_urls = []
@@ -158,6 +166,8 @@ class PptxPresentationCreator:
         )
         connector_shape.line.width = Pt(connector_model.thickness)
         connector_shape.line.color.rgb = RGBColor.from_string(connector_model.color)
+        # Set line opacity using XML manipulation for better reliability
+        self.set_line_opacity(connector_shape, connector_model.opacity)
 
     def add_picture(self, slide: Slide, picture_model: PptxPictureBoxModel):
         image_path = picture_model.picture.path
@@ -251,6 +261,9 @@ class PptxPresentationCreator:
     ):
         if paragraph_model.spacing:
             self.apply_spacing_to_paragraph(paragraph, paragraph_model.spacing)
+
+        if paragraph_model.line_height:
+            paragraph.line_spacing = paragraph_model.line_height
 
         if paragraph_model.alignment:
             paragraph.alignment = paragraph_model.alignment
@@ -365,6 +378,7 @@ class PptxPresentationCreator:
         else:
             shape.fill.solid()
             shape.fill.fore_color.rgb = RGBColor.from_string(fill.color)
+            self.set_fill_opacity(shape.fill, fill.opacity)
 
     def apply_stroke_to_shape(
         self, shape: Shape, stroke: Optional[PptxStrokeModel] = None
@@ -375,6 +389,7 @@ class PptxPresentationCreator:
             shape.line.fill.solid()
             shape.line.fill.fore_color.rgb = RGBColor.from_string(stroke.color)
             shape.line.width = Pt(stroke.thickness)
+            self.set_fill_opacity(shape.line.fill, stroke.opacity)
 
     def apply_shadow_to_shape(
         self, shape: Shape, shadow: Optional[PptxShadowModel] = None
@@ -426,6 +441,19 @@ class PptxPresentationCreator:
             {"val": f"{int(shadow.opacity * 100000)}"},
             nsmap=nsmap,
         )
+
+    def set_fill_opacity(self, fill, opacity):
+        if opacity is None or opacity >= 1.0:
+            return
+
+        alpha = int((opacity) * 100000)
+
+        try:
+            ts = fill._xPr.solidFill
+            sF = ts.get_or_change_to_srgbClr()
+            self.get_sub_element(sF, "a:alpha", val=str(alpha))
+        except Exception as e:
+            print(f"Could not set fill opacity: {e}")
 
     def get_margined_position(
         self, position: PptxPositionModel, margin: Optional[PptxSpacingModel]
