@@ -7,6 +7,7 @@ import { PptxPresentationModel } from "@/types/pptx_models";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
+import sharp from "sharp";
 
 // Interface for getAllChildElementsAttributes function arguments
 interface GetAllChildElementsAttributesArgs {
@@ -15,6 +16,8 @@ interface GetAllChildElementsAttributesArgs {
   depth?: number;
   inheritedFont?: ElementAttributes['font'];
   inheritedBackground?: ElementAttributes['background'];
+  inheritedBorderRadius?: number[];
+  screenshotsDir: string;
 }
 
 
@@ -27,8 +30,19 @@ export async function GET(request: NextRequest) {
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
 
+    // Ensure screenshots directory exists
+    const tempDir = process.env.TEMP_DIRECTORY;
+    if (!tempDir) {
+      console.warn('TEMP_DIRECTORY environment variable not set, skipping screenshot');
+      return undefined;
+    }
+    const screenshotsDir = path.join(tempDir, 'screenshots');
+    if (!fs.existsSync(screenshotsDir)) {
+      fs.mkdirSync(screenshotsDir, { recursive: true });
+    }
+
     const slides = await getSlides(browser, id);
-    const slides_attributes = await getSlidesAttributes(slides);
+    const slides_attributes = await getSlidesAttributes(slides, screenshotsDir);
     const slides_pptx_models = convertElementAttributesToPptxSlides(slides_attributes.elements, slides_attributes.backgroundColors);
     const presentation_pptx_model: PptxPresentationModel = {
       slides: slides_pptx_models,
@@ -59,12 +73,12 @@ async function getPresentationId(request: NextRequest) {
   return id;
 }
 
-async function getSlidesAttributes(slides: ElementHandle<Element>[]) {
+async function getSlidesAttributes(slides: ElementHandle<Element>[], screenshotsDir: string) {
   const slideResults: SlideAttributesResult[] = [];
   //? Can't use Promise.all because of the screenshot
   //? taking screenshot with mess up position of elements
   for (const slide of slides) {
-    const result = await getAllChildElementsAttributes({ element: slide });
+    const result = await getAllChildElementsAttributes({ element: slide, screenshotsDir });
     slideResults.push(result);
   }
 
@@ -112,7 +126,7 @@ async function getPresentationPage(browser: Browser, id: string) {
 }
 
 
-async function getAllChildElementsAttributes({ element, rootRect = null, depth = 0, inheritedFont, inheritedBackground }: GetAllChildElementsAttributesArgs): Promise<SlideAttributesResult> {
+async function getAllChildElementsAttributes({ element, rootRect = null, depth = 0, inheritedFont, inheritedBackground, inheritedBorderRadius, screenshotsDir }: GetAllChildElementsAttributesArgs): Promise<SlideAttributesResult> {
   // Get rootRect if not provided (first call)
   const currentRootRect = rootRect || await element.evaluate((el) => {
     const rect = el.getBoundingClientRect();
@@ -127,16 +141,17 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
   // Check if this element is SVG or canvas or table
   const tagName = await element.evaluate((el) => el.tagName.toLowerCase());
 
+
   if (tagName === 'svg' || tagName === 'canvas' || tagName === 'table') {
     return {
       elements: [],
       backgroundColor: undefined
     };
-    // // Take screenshot of SVG/canvas element
-    // const screenshotPath = await takeElementScreenshot(element);
 
     // // Get basic attributes for the element
     // const attributes = await getElementAttributes(element);
+    // // Take screenshot of SVG/canvas/table element with accurate colors and opacity
+    // const screenshotPath = await takeElementScreenshot(element, screenshotsDir);
 
     // // Update image source to point to the screenshot
     // if (screenshotPath) {
@@ -153,7 +168,7 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
     //   };
     // }
 
-    // // Return early without processing children for SVG/canvas elements
+    // // Return early without processing children for these elements
     // return {
     //   elements: [attributes],
     //   backgroundColor: undefined
@@ -178,6 +193,10 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
     if (inheritedBackground && !attributes.background && attributes.shadow) {
       attributes.background = inheritedBackground;
     }
+    // Apply inherited border radius if element doesn't have it
+    if (inheritedBorderRadius && !attributes.borderRadius) {
+      attributes.borderRadius = inheritedBorderRadius;
+    }
 
     // Adjust position relative to root
     if (attributes.position && attributes.position.left !== undefined && attributes.position.top !== undefined) {
@@ -199,6 +218,8 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
       depth: depth + 1,
       inheritedFont: attributes.font || inheritedFont,
       inheritedBackground: attributes.background || inheritedBackground,
+      inheritedBorderRadius: attributes.borderRadius || inheritedBorderRadius,
+      screenshotsDir,
     });
     allResults.push(...childResults.elements.map(attr => ({ attributes: attr, depth: depth + 1 })));
   }
@@ -784,71 +805,31 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
   return attributes;
 }
 
-async function takeElementScreenshot(element: ElementHandle<Element>): Promise<string | undefined> {
+async function takeElementScreenshot(element: ElementHandle<Element>, screenshotsDir: string): Promise<string | undefined> {
   try {
-    // Validate environment configuration
-    const tempDir = process.env.TEMP_DIRECTORY;
-    if (!tempDir) {
-      console.warn('TEMP_DIRECTORY environment variable not set, skipping screenshot');
-      return undefined;
-    }
-
     // Check element visibility and dimensions
     const elementInfo = await element.evaluate((el) => {
       const rect = el.getBoundingClientRect();
       const styles = window.getComputedStyle(el);
 
+      // Check if element is visible
+      const isVisible = styles.visibility !== 'hidden' &&
+        styles.display !== 'none' &&
+        styles.opacity !== '0';
+
+      if (!isVisible || rect.width <= 0 || rect.height <= 0) {
+        return null;
+      }
+
       return {
-        isVisible: styles.visibility !== 'hidden' &&
-          styles.display !== 'none' &&
-          styles.opacity !== '0',
-        hasValidDimensions: rect.width > 0 && rect.height > 0,
-        isInViewport: rect.top < window.innerHeight &&
-          rect.bottom > 0 &&
-          rect.left < window.innerWidth &&
-          rect.right > 0,
-        dimensions: {
-          width: rect.width,
-          height: rect.height,
-          top: rect.top,
-          left: rect.left
-        }
+        width: rect.width,
+        height: rect.height
       };
-    }).catch((error) => {
-      console.warn('Failed to evaluate element visibility:', error.message);
-      return { isVisible: false, hasValidDimensions: false, isInViewport: false, dimensions: null };
     });
 
-    if (!elementInfo.isVisible || !elementInfo.hasValidDimensions) {
-      console.warn('Element is not visible or has invalid dimensions, skipping screenshot', {
-        visible: elementInfo.isVisible,
-        validDimensions: elementInfo.hasValidDimensions,
-        dimensions: elementInfo.dimensions
-      });
+    if (!elementInfo) {
+      console.warn('Element is not visible or has invalid dimensions, skipping screenshot');
       return undefined;
-    }
-
-    // Scroll element into viewport if not visible
-    if (!elementInfo.isInViewport) {
-      try {
-        await element.evaluate((el) => {
-          el.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' });
-        });
-
-        // Wait a brief moment for scrolling to complete
-        await new Promise(resolve => setTimeout(resolve, 200));
-
-        console.log('Element scrolled into viewport for screenshot');
-      } catch (scrollError: any) {
-        console.warn('Failed to scroll element into view:', scrollError.message);
-        // Continue with screenshot attempt even if scrolling fails
-      }
-    }
-
-    // Ensure screenshots directory exists
-    const screenshotsDir = path.join(tempDir, 'screenshots');
-    if (!fs.existsSync(screenshotsDir)) {
-      fs.mkdirSync(screenshotsDir, { recursive: true });
     }
 
     // Generate unique filename
@@ -856,11 +837,12 @@ async function takeElementScreenshot(element: ElementHandle<Element>): Promise<s
     const filename = `${uuid}.png`;
     const filePath = path.join(screenshotsDir, filename);
 
-    // Take screenshot of the element
+    // Take screenshot of the element with accurate colors and opacity
+    // This captures the element exactly as rendered in the browser with all CSS styles applied
     await element.screenshot({
       path: filePath as `${string}.png`,
       type: 'png',
-      omitBackground: false
+      omitBackground: true // Use transparent background for better quality
     });
 
     console.log(`Screenshot saved: ${filePath}`);
@@ -871,3 +853,4 @@ async function takeElementScreenshot(element: ElementHandle<Element>): Promise<s
     return undefined;
   }
 }
+
