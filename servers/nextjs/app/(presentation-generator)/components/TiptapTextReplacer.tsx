@@ -60,7 +60,6 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
                 // Skip certain element types that shouldn't be editable
                 if (shouldSkipElement(htmlElement)) return;
 
-                console.log('Making element editable:', trimmedText, htmlElement);
 
                 // Get all computed styles to preserve them
                 const computedStyles = window.getComputedStyle(htmlElement);

@@ -13,32 +13,25 @@ import {
   Wand2,
   Upload,
   Move,
-
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useDispatch, useSelector } from "react-redux";
+import { useSelector } from "react-redux";
 import { PresentationGenerationApi } from "../services/api/presentation-generation";
 import { RootState } from "@/store/store";
 import { useSearchParams } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  updateSlideImage,
-  updateSlideProperties,
-} from "@/store/slices/presentationGeneration";
-import { getStaticFileUrl, ThemeImagePrompt } from "../utils/others";
-
-
+import { ThemeImagePrompt } from "../utils/others";
 
 interface ImageEditorProps {
   initialImage: string | null;
   imageIdx?: number;
-
   slideIndex: number;
-
   className?: string;
   promptContent?: string;
   properties?: null | any;
   onClose?: () => void;
+  onImageChange?: (newImageUrl: string, prompt?: string) => void;
+
 }
 
 const ImageEditor = ({
@@ -48,12 +41,13 @@ const ImageEditor = ({
   promptContent,
   properties,
   onClose,
+  onImageChange,
+
 }: ImageEditorProps) => {
-  const dispatch = useDispatch();
-
   const { currentTheme } = useSelector((state: RootState) => state.theme);
-
   const searchParams = useSearchParams();
+
+  // State management
   const [image, setImage] = useState(initialImage);
   const [previewImages, setPreviewImages] = useState([initialImage]);
   const [prompt, setPrompt] = useState<string>("");
@@ -62,6 +56,8 @@ const ImageEditor = ({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+
+  // Focus point and object fit for image editing
   const [isFocusPointMode, setIsFocusPointMode] = useState(false);
   const [focusPoint, setFocusPoint] = useState(
     (properties &&
@@ -77,11 +73,14 @@ const ImageEditor = ({
       properties[imageIdx].initialObjectFit) ||
     "cover"
   );
+
+  // Refs
   const imageRef = useRef<HTMLImageElement>(null);
   const imageContainerRef = useRef<HTMLDivElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const popoverContentRef = useRef<HTMLDivElement>(null);
 
+  // Update local state when initial image changes
   useEffect(() => {
     setImage(initialImage);
     setPreviewImages([initialImage]);
@@ -97,9 +96,7 @@ const ImageEditor = ({
         !toolbarRef.current.contains(event.target as Node) &&
         !popoverContentRef.current
       ) {
-
         if (isFocusPointMode) {
-          // saveFocusPoint(); // Save focus point before closing
           saveImageProperties(objectFit, focusPoint);
         }
         setIsFocusPointMode(false);
@@ -110,21 +107,22 @@ const ImageEditor = ({
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [isFocusPointMode, focusPoint]);
+  }, [isFocusPointMode, focusPoint, objectFit]);
 
-
-
+  /**
+   * Handles image selection and calls the parent callback
+   */
   const handleImageChange = (newImage: string) => {
     setImage(newImage);
-    dispatch(
-      updateSlideImage({
-        index: slideIndex,
-        imageIdx: imageIdx,
-        image: newImage,
-      })
-    );
+
+    if (onImageChange) {
+      onImageChange(newImage, promptContent);
+    }
   };
 
+  /**
+   * Handles focus point adjustment when clicking on the image
+   */
   const handleFocusPointClick = (e: React.MouseEvent) => {
     if (!isFocusPointMode || !imageRef.current) return;
 
@@ -147,14 +145,19 @@ const ImageEditor = ({
     }
   };
 
+  /**
+   * Toggles focus point adjustment mode
+   */
   const toggleFocusPointMode = () => {
     if (isFocusPointMode) {
-      // If turning off focus point mode, save the current focus point
-      // saveFocusPoint();
+      saveImageProperties(objectFit, focusPoint);
     }
     setIsFocusPointMode(!isFocusPointMode);
   };
 
+  /**
+   * Handles object fit change
+   */
   const handleFitChange = (fit: "cover" | "contain" | "fill") => {
     setObjectFit(fit);
 
@@ -162,10 +165,12 @@ const ImageEditor = ({
       imageRef.current.style.objectFit = fit;
     }
 
-    // Save the fit change to your state
     saveImageProperties(fit, focusPoint);
   };
 
+  /**
+   * Saves image properties (focus point and object fit)
+   */
   const saveImageProperties = (
     fit: "cover" | "contain" | "fill",
     focusPoint: { x: number; y: number }
@@ -174,16 +179,12 @@ const ImageEditor = ({
       initialObjectFit: fit,
       initialFocusPoint: focusPoint,
     };
-
-    dispatch(
-      updateSlideProperties({
-        index: slideIndex,
-        itemIdx: imageIdx,
-        properties: propertiesData,
-      })
-    );
+    // TODO: Save to Redux store if needed
   };
 
+  /**
+   * Generates new images using AI
+   */
   const handleGenerateImage = async () => {
     try {
       setIsGenerating(true);
@@ -208,26 +209,24 @@ const ImageEditor = ({
     }
   };
 
+  /**
+   * Handles file upload
+   */
   const handleFileUpload = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
-    const presentation_id = searchParams.get("id");
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Check file size (e.g., 5MB limit)
+    // Validate file size (5MB limit)
     if (file.size > 5 * 1024 * 1024) {
-      const error_message = "File size should be less than 5MB";
-
-      setUploadError(error_message);
+      setUploadError("File size should be less than 5MB");
       return;
     }
 
-    // Check file type
+    // Validate file type
     if (!file.type.startsWith("image/")) {
-      const error_message = "Please upload an image file";
-
-      setUploadError(error_message);
+      setUploadError("Please upload an image file");
       return;
     }
 
@@ -249,356 +248,191 @@ const ImageEditor = ({
         throw new Error(result.error || 'Upload failed');
       }
 
-      // Update state with the returned path
       setUploadedImageUrl(result.filePath);
     } catch (err) {
-      const error_message = "Failed to upload image. Please try again.";
-
-      setUploadError(error_message);
+      setUploadError("Failed to upload image. Please try again.");
       console.error("Upload error:", err);
     } finally {
       setIsUploading(false);
     }
   };
 
-
-
   return (
-    <Sheet open={true} onOpenChange={() => onClose?.()}>
-      <SheetContent
-        side="right"
-        className="w-[600px]"
-        onOpenAutoFocus={(e) => e.preventDefault()}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <SheetHeader>
-          <SheetTitle>Update Image</SheetTitle>
-        </SheetHeader>
+    <div className="image-editor-container">
 
-        <div className="mt-6">
-          <Tabs defaultValue="edit" className="w-full">
-            <TabsList className="grid bg-blue-100 border border-blue-300 w-full grid-cols-3 mx-auto ">
-              <TabsTrigger className="font-medium" value="edit">
-                Edit
-              </TabsTrigger>
-              <TabsTrigger className="font-medium" value="generate">
-                AI Generate
-              </TabsTrigger>
-              <TabsTrigger className="font-medium" value="upload">
-                Upload
-              </TabsTrigger>
-            </TabsList>
 
-            <TabsContent value="edit" className="mt-4 space-y-4">
-              <div className="space-y-4">
-                {/* Current Image Preview */}
-                <div className="space-y-2">
-                  <h3 className="text-base font-medium">Current Image</h3>
-                  <div
-                    ref={imageContainerRef}
-                    className="relative aspect-[4/3] w-full overflow-hidden rounded-lg border bg-gray-100"
-                  >
-                    {image ? (
-                      <img
-                        ref={imageRef}
-                        src={image}
-                        alt="Current image"
-                        className="w-full h-full object-cover cursor-pointer"
-                        style={{
-                          objectFit: objectFit,
-                          objectPosition: `${focusPoint.x}% ${focusPoint.y}%`,
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleFocusPointClick(e);
-                        }}
-                        onError={(e) => {
-                          console.error('Image failed to load:', image);
-                          e.currentTarget.src = '/placeholder-image.png';
-                        }}
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-400">
-                        <div className="text-center">
-                          <Upload className="w-8 h-8 mx-auto mb-2" />
-                          <p className="text-sm">No image selected</p>
-                        </div>
-                      </div>
-                    )}
+      <Sheet open={true} onOpenChange={() => onClose?.()}>
+        <SheetContent
+          side="right"
+          className="w-[600px]"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <SheetHeader>
+            <SheetTitle>Update Image</SheetTitle>
+          </SheetHeader>
 
-                    {/* Focus Point Indicator */}
-                    {isFocusPointMode && image && (
-                      <div
-                        className="absolute w-4 h-4 bg-blue-500 border-2 border-white rounded-full transform -translate-x-1/2 -translate-y-1/2 pointer-events-none shadow-lg"
-                        style={{
-                          left: `${focusPoint.x}%`,
-                          top: `${focusPoint.y}%`,
-                        }}
-                      />
-                    )}
-                  </div>
-                  {/* Debug info */}
-                  {image && (
-                    <div className="text-xs text-gray-500 space-y-1">
-                      <p><strong>Image Path:</strong> {image}</p>
-                      <p><strong>Resolved URL:</strong> {image}</p>
-                      <p><strong>Focus Point:</strong> {focusPoint.x.toFixed(1)}%, {focusPoint.y.toFixed(1)}%</p>
-                      <p><strong>Object Fit:</strong> {objectFit}</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Editing Controls */}
+          <div className="mt-6">
+            <Tabs defaultValue="generate" className="w-full">
+              <TabsList className="grid bg-blue-100 border border-blue-300 w-full grid-cols-2 mx-auto">
+                <TabsTrigger className="font-medium" value="generate">
+                  AI Generate
+                </TabsTrigger>
+                <TabsTrigger className="font-medium" value="upload">
+                  Upload
+                </TabsTrigger>
+              </TabsList>
+              {/* Generate Tab */}
+              <TabsContent value="generate" className="mt-4 space-y-4">
                 <div className="space-y-4">
-                  {/* Focus Point Controls */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-medium">Focus Point</h4>
-                      <Button
-                        variant={isFocusPointMode ? "default" : "outline"}
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleFocusPointMode();
-                        }}
-                        disabled={!image}
-                      >
-                        <Move className="w-4 h-4 mr-2" />
-                        {isFocusPointMode ? "Done" : "Adjust"}
-                      </Button>
-                    </div>
-                    {isFocusPointMode && (
-                      <p className="text-xs text-gray-500">
-                        Click on the image above to set the focus point
-                      </p>
-                    )}
+                  <div>
+                    <h3 className="text-sm font-medium mb-1">Current Prompt</h3>
+                    <p className="text-sm text-gray-500">{promptContent}</p>
                   </div>
 
-                  {/* Object Fit Controls */}
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-medium">Image Fit</h4>
-                    <div className="flex gap-2">
-                      <Button
-                        variant={objectFit === "cover" ? "default" : "outline"}
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleFitChange("cover");
-                        }}
-                        className="flex-1"
-                        disabled={!image}
-                      >
-                        Cover
-                      </Button>
-                      <Button
-                        variant={objectFit === "contain" ? "default" : "outline"}
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleFitChange("contain");
-                        }}
-                        className="flex-1"
-                        disabled={!image}
-                      >
-                        Contain
-                      </Button>
-                      <Button
-                        variant={objectFit === "fill" ? "default" : "outline"}
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleFitChange("fill");
-                        }}
-                        className="flex-1"
-                        disabled={!image}
-                      >
-                        Fill
-                      </Button>
-                    </div>
-                    <div className="text-xs text-gray-500 space-y-1">
-                      <p><strong>Cover:</strong> Fill container, may crop image</p>
-                      <p><strong>Contain:</strong> Fit entire image, may show empty space</p>
-                      <p><strong>Fill:</strong> Stretch to fill container exactly</p>
-                    </div>
+                  <div>
+                    <h3 className="text-base font-medium mb-2">Image Description</h3>
+                    <Textarea
+                      placeholder="Describe the image you want to generate..."
+                      value={prompt}
+                      onChange={(e) => setPrompt(e.target.value)}
+                      className="min-h-[100px]"
+                    />
                   </div>
 
-                  {/* Quick Actions */}
-                  <div className="pt-2 border-t">
-                    <h4 className="text-sm font-medium mb-2">Quick Actions</h4>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setFocusPoint({ x: 50, y: 50 });
-                          setObjectFit("cover");
-                          saveImageProperties("cover", { x: 50, y: 50 });
-                          if (imageRef.current) {
-                            imageRef.current.style.objectFit = "cover";
-                            imageRef.current.style.objectPosition = "50% 50%";
-                          }
-                        }}
-                        className="flex-1"
-                        disabled={!image}
-                      >
-                        Reset to Default
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </TabsContent>
-            <TabsContent value="generate" className="mt-4 space-y-4">
-              <div></div>
-              <div className="space-y-4">
-                <div className="">
-                  <h3 className="text-sm font-medium mb-1">Current Prompt</h3>
+                  <Button
+                    onClick={handleGenerateImage}
+                    className="w-full"
+                    disabled={!prompt || isGenerating}
+                  >
+                    <Wand2 className="w-4 h-4 mr-2" />
+                    {isGenerating ? "Generating..." : "Generate Image"}
+                  </Button>
 
-                  <p className="text-sm text-gray-500">{promptContent}</p>
-                </div>
-                <div>
-                  <h3 className="text-base font-medium mb-2">
-                    Image Description
-                  </h3>
-                  <Textarea
-                    placeholder="Describe the image you want to generate..."
-                    value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
-                    className="min-h-[100px]"
-                  />
-                </div>
-                <Button
-                  onClick={handleGenerateImage}
-                  className="w-full"
-                  disabled={!prompt || isGenerating}
-                >
-                  <Wand2 className="w-4 h-4 mr-2" />
-                  {isGenerating ? "Generating..." : "Generate Image"}
-                </Button>
+                  {error && <p className="text-red-500 text-sm">{error}</p>}
 
-                {error && <p className="text-red-500 text-sm">{error}</p>}
-
-                <div className="grid grid-cols-2 gap-4">
-                  {isGenerating || previewImages.length === 0
-                    ? Array.from({ length: 4 }).map((_, index) => (
-                      <Skeleton
-                        key={index}
-                        className="aspect-[4/3] w-full rounded-lg"
-                      />
-                    ))
-                    : previewImages.map((image, index) => (
-                      <div
-                        key={index}
-                        onClick={() => handleImageChange(image as string)}
-                        className="aspect-[4/3] w-full overflow-hidden rounded-lg border cursor-pointer"
-                      >
-                        <img
-                          src={
-                            image
-                              ? getStaticFileUrl(image)
-                              : ""
-                          }
-                          alt={`Preview ${index + 1}`}
-                          className="w-full h-full object-cover"
+                  <div className="grid grid-cols-2 gap-4">
+                    {isGenerating || previewImages.length === 0
+                      ? Array.from({ length: 4 }).map((_, index) => (
+                        <Skeleton
+                          key={index}
+                          className="aspect-[4/3] w-full rounded-lg"
                         />
-                      </div>
-                    ))}
+                      ))
+                      : previewImages.map((image, index) => (
+                        <div
+                          key={index}
+                          onClick={() => handleImageChange(image as string)}
+                          className="aspect-[4/3] w-full overflow-hidden rounded-lg border cursor-pointer hover:border-blue-500 transition-colors"
+                        >
+                          {image && (
+                            <img
+                              src={image}
+                              alt={`Preview ${index + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                          )}
+                        </div>
+                      ))}
+                  </div>
                 </div>
-              </div>
-            </TabsContent>
-            <TabsContent value="upload" className="mt-4 space-y-4">
-              <div className="space-y-4">
-                <div
-                  className={cn(
-                    "border-2 border-dashed rounded-lg p-8 text-center transition-colors",
-                    isUploading
-                      ? "border-gray-400 bg-gray-50"
-                      : "border-gray-300"
-                  )}
-                >
-                  <input
-                    type="file"
-                    id="file-upload"
-                    className="hidden"
-                    accept="image/*"
-                    onChange={handleFileUpload}
-                    disabled={isUploading}
-                  />
-                  <label
-                    htmlFor="file-upload"
+              </TabsContent>
+
+              {/* Upload Tab */}
+              <TabsContent value="upload" className="mt-4 space-y-4">
+                <div className="space-y-4">
+                  <div
                     className={cn(
-                      "flex flex-col items-center",
-                      isUploading ? "cursor-wait" : "cursor-pointer"
+                      "border-2 border-dashed rounded-lg p-8 text-center transition-colors",
+                      isUploading
+                        ? "border-gray-400 bg-gray-50"
+                        : "border-gray-300 hover:border-blue-400"
                     )}
                   >
-                    {isUploading ? (
-                      <div className="w-8 h-8 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mb-2" />
-                    ) : (
-                      <Upload className="w-8 h-8 text-gray-500 mb-2" />
-                    )}
-                    <span className="text-sm text-gray-600">
-                      {isUploading
-                        ? "Uploading your image..."
-                        : "Click to upload an image"}
-                    </span>
-                    <span className="text-xs text-gray-500 mt-1">
-                      Maximum file size: 5MB
-                    </span>
-                  </label>
-                </div>
-                {uploadError && (
-                  <p className="text-red-500 text-sm text-center">
-                    {uploadError}
-                  </p>
-                )}
-
-                {(uploadedImageUrl || isUploading) && (
-                  <div className="mt-4">
-                    <h3 className="text-sm font-medium mb-2">
-                      Uploaded Image Preview
-                    </h3>
-                    <div className="aspect-[4/3] relative rounded-lg overflow-hidden border border-gray-200">
+                    <input
+                      type="file"
+                      id="file-upload"
+                      className="hidden"
+                      accept="image/*"
+                      onChange={handleFileUpload}
+                      disabled={isUploading}
+                    />
+                    <label
+                      htmlFor="file-upload"
+                      className={cn(
+                        "flex flex-col items-center",
+                        isUploading ? "cursor-wait" : "cursor-pointer"
+                      )}
+                    >
                       {isUploading ? (
-                        <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                          <div className="flex flex-col items-center">
-                            <div className="w-8 h-8 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mb-2" />
-                            <span className="text-sm text-gray-500">
-                              Processing...
-                            </span>
-                          </div>
-                        </div>
+                        <div className="w-8 h-8 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mb-2" />
                       ) : (
-                        uploadedImageUrl && (
-                          <div
-                            onClick={() =>
-                              handleImageChange(uploadedImageUrl)
-                            }
-                            className="cursor-pointer group w-full h-full"
-                          >
-                            <img
-                              src={uploadedImageUrl}
-                              alt="Uploaded preview"
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                            />
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-200" />
-                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                              <span className="bg-white/90 px-3 py-1 rounded-full text-sm font-medium">
-                                Click to use this image
+                        <Upload className="w-8 h-8 text-gray-500 mb-2" />
+                      )}
+                      <span className="text-sm text-gray-600">
+                        {isUploading
+                          ? "Uploading your image..."
+                          : "Click to upload an image"}
+                      </span>
+                      <span className="text-xs text-gray-500 mt-1">
+                        Maximum file size: 5MB
+                      </span>
+                    </label>
+                  </div>
+
+                  {uploadError && (
+                    <p className="text-red-500 text-sm text-center">
+                      {uploadError}
+                    </p>
+                  )}
+
+                  {(uploadedImageUrl || isUploading) && (
+                    <div className="mt-4">
+                      <h3 className="text-sm font-medium mb-2">
+                        Uploaded Image Preview
+                      </h3>
+                      <div className="aspect-[4/3] relative rounded-lg overflow-hidden border border-gray-200">
+                        {isUploading ? (
+                          <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                            <div className="flex flex-col items-center">
+                              <div className="w-8 h-8 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mb-2" />
+                              <span className="text-sm text-gray-500">
+                                Processing...
                               </span>
                             </div>
                           </div>
-                        )
-                      )}
+                        ) : (
+                          uploadedImageUrl && (
+                            <div
+                              onClick={() =>
+                                handleImageChange(uploadedImageUrl)
+                              }
+                              className="cursor-pointer group w-full h-full"
+                            >
+                              <img
+                                src={uploadedImageUrl}
+                                alt="Uploaded preview"
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                              />
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-200" />
+                              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <span className="bg-white/90 px-3 py-1 rounded-full text-sm font-medium">
+                                  Click to use this image
+                                </span>
+                              </div>
+                            </div>
+                          )
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            </TabsContent>
-          </Tabs>
-        </div>
-      </SheetContent>
-    </Sheet>
+                  )}
+                </div>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </SheetContent>
+      </Sheet>
+    </div>
   );
 };
 
