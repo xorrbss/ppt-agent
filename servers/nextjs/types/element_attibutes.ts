@@ -15,11 +15,15 @@ export interface ElementAttributes {
     offset?: [number, number];
     color?: string;
     opacity?: number;
+    radius?: number;
+    angle?: number;
   },
   font?: {
+    name?: string;
     size?: number;
     weight?: number;
     color?: string;
+    italic?: boolean;
   };
   position?: {
     left?: number;
@@ -39,4 +43,19 @@ export interface ElementAttributes {
     left?: number;
     right?: number;
   };
+  zIndex?: number;
+  textAlign?: 'left' | 'center' | 'right' | 'justify';
+  borderRadius?: number | number[];
+  imageSrc?: string;
+  objectFit?: 'contain' | 'cover' | 'fill';
+  clip?: boolean;
+  overlay?: string;
+  shape?: 'rectangle' | 'circle';
+  connectorType?: string;
+  textWrap?: boolean;
+}
+
+export interface SlideAttributesResult {
+  elements: ElementAttributes[];
+  backgroundColor?: string;
 }

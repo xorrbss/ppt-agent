@@ -11,29 +11,7 @@ from utils.llm_provider import (
     is_google_selected,
 )
 
-# system_prompt = """
-#     Create a presentation based on the provided prompt, number of slides, output language, and additional informational details.
-#     Format the output in the specified JSON schema with structured markdown content.
 
-#     # Steps
-
-#     1. Identify key points from the provided prompt, including the topic, number of slides, output language, and additional content directions.
-#     2. Create a concise and descriptive title reflecting the main topic, adhering to the specified language.
-#     3. Generate a clear title for each slide.
-#     4. Develop comprehensive content using markdown structure:
-#         * Use bullet points (- or *) for lists.
-#         * Use **bold** for emphasis, *italic* for secondary emphasis, and `code` for technical terms.
-#     5. Provide important points from prompt as notes.
-
-#     # Notes
-#     - Content must be generated for every slide.
-#     - Images or Icons information provided in **Input** must be included in the **notes**.
-#     - Notes should cleary define if it is for specific slide or for the presentation.
-#     - Slide **body** should not contain slide **title**.
-#     - Slide **title** should not contain "Slide 1", "Slide 2", etc.
-#     - Slide **title** should not be in markdown format.
-#     - There must be exact **Number of Slides** as specified.
-# """
 system_prompt = """
 You are an expert presentation creator. Generate structured presentations based on user requirements and format them according to the specified JSON schema with markdown content.
 
@@ -183,13 +161,7 @@ async def generate_ppt_outline(
         async with client.beta.chat.completions.stream(
             model=model,
             messages=get_prompt_template(prompt, n_slides, language, content),
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "PresentationOutline",
-                    "schema": response_model.model_json_schema(),
-                },
-            },
+            response_format=response_model,
         ) as stream:
             async for event in stream:
                 if isinstance(event, ContentDeltaEvent):
