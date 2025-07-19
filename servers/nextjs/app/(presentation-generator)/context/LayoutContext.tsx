@@ -70,84 +70,92 @@ export const LayoutProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         const fileMap = new Map<string, { fileName: string; groupName: string }>();
         const groupedLayouts = new Map<string, LayoutInfo[]>();
 
+        // Start preloading process
+        setIsPreloading(true);
 
-        for (const groupData of groupedLayoutsData) {
+        try {
+            for (const groupData of groupedLayoutsData) {
 
-            // Initialize group
-            if (!layoutsByGroup.has(groupData.groupName)) {
-                layoutsByGroup.set(groupData.groupName, new Set());
-            }
-
-            // group settings or default settings
-            const settings = groupData.settings || {
-                description: `${groupData.groupName} presentation layouts`,
-                ordered: false,
-                isDefault: false
-            };
-
-            groupSettingsMap.set(groupData.groupName, settings);
-            const groupLayouts: LayoutInfo[] = [];
-
-            for (const fileName of groupData.files) {
-                try {
-                    const file = fileName.replace('.tsx', '').replace('.ts', '');
-
-                    const module = await import(`@/presentation-layouts/${groupData.groupName}/${file}`);
-
-
-                    if (!module.default) {
-                        toast({
-                            title: `${file} has no default export`,
-                            description: 'Please ensure the layout file exports a default component',
-                        });
-                        console.warn(`❌ ${file} has no default export`);
-                        continue;
-                    }
-
-                    if (!module.Schema) {
-                        toast({
-                            title: `${file} has no Schema export`,
-                            description: 'Please ensure the layout file exports a Schema',
-                        });
-                        console.warn(`❌ ${file} has no Schema export`);
-                        continue;
-                    }
-
-                    const originalLayoutId = module.layoutId || file.toLowerCase().replace(/layout$/, '');
-                    const uniqueKey = `${groupData.groupName}:${originalLayoutId}`;
-                    const layoutName = module.layoutName || file.replace(/([A-Z])/g, ' $1').trim();
-                    const layoutDescription = module.layoutDescription || `${layoutName} layout for presentations`;
-
-
-                    const jsonSchema = z.toJSONSchema(module.Schema, {
-                        override: (ctx) => {
-                            delete ctx.jsonSchema.default;
-                        },
-                    });
-
-                    const layout: LayoutInfo = {
-                        id: originalLayoutId,
-                        name: layoutName,
-                        description: layoutDescription,
-                        json_schema: jsonSchema,
-                        groupName: groupData.groupName,
-                    };
-
-
-                    layoutsById.set(uniqueKey, layout);
-                    layoutsByGroup.get(groupData.groupName)!.add(originalLayoutId);
-                    fileMap.set(uniqueKey, { fileName, groupName: groupData.groupName });
-                    groupLayouts.push(layout);
-                    layouts.push(layout);
-
-
-                } catch (error) {
-                    console.error(`💥 Error extracting schema for ${fileName} from ${groupData.groupName}:`, error);
+                // Initialize group
+                if (!layoutsByGroup.has(groupData.groupName)) {
+                    layoutsByGroup.set(groupData.groupName, new Set());
                 }
-            }
 
-            // Cache grouped layouts
-            groupedLayouts.set(groupData.groupName, groupLayouts);
+                // group settings or default settings
+                const settings = groupData.settings || {
+                    description: `${groupData.groupName} presentation layouts`,
+                    ordered: false,
+                    isDefault: false
+                };
+
+                groupSettingsMap.set(groupData.groupName, settings);
+                const groupLayouts: LayoutInfo[] = [];
+
+                for (const fileName of groupData.files) {
+                    try {
+                        const file = fileName.replace('.tsx', '').replace('.ts', '');
+
+                        const module = await import(`@/presentation-layouts/${groupData.groupName}/${file}`);
+
+                        if (!module.default) {
+                            toast({
+                                title: `${file} has no default export`,
+                                description: 'Please ensure the layout file exports a default component',
+                            });
+                            console.warn(`❌ ${file} has no default export`);
+                            continue;
+                        }
+
+                        if (!module.Schema) {
+                            toast({
+                                title: `${file} has no Schema export`,
+                                description: 'Please ensure the layout file exports a Schema',
+                            });
+                            console.warn(`❌ ${file} has no Schema export`);
+                            continue;
+                        }
+
+                        // Cache the layout component immediately after import
+                        const cacheKey = createCacheKey(groupData.groupName, fileName);
+                        if (!layoutCache.has(cacheKey)) {
+                            layoutCache.set(cacheKey, module.default);
+                        }
+
+                        const originalLayoutId = module.layoutId || file.toLowerCase().replace(/layout$/, '');
+                        const uniqueKey = `${groupData.groupName}:${originalLayoutId}`;
+                        const layoutName = module.layoutName || file.replace(/([A-Z])/g, ' $1').trim();
+                        const layoutDescription = module.layoutDescription || `${layoutName} layout for presentations`;
+
+                        const jsonSchema = z.toJSONSchema(module.Schema, {
+                            override: (ctx) => {
+                                delete ctx.jsonSchema.default;
+                            },
+                        });
+
+                        const layout: LayoutInfo = {
+                            id: uniqueKey,
+                            name: layoutName,
+                            description: layoutDescription,
+                            json_schema: jsonSchema,
+                            groupName: groupData.groupName,
+                        };
+
+                        layoutsById.set(uniqueKey, layout);
+                        layoutsByGroup.get(groupData.groupName)!.add(uniqueKey);
+                        fileMap.set(uniqueKey, { fileName, groupName: groupData.groupName });
+                        groupLayouts.push(layout);
+                        layouts.push(layout);
+
+                    } catch (error) {
+                        console.error(`💥 Error extracting schema for ${fileName} from ${groupData.groupName}:`, error);
+                    }
+                }
+
+                // Cache grouped layouts
+                groupedLayouts.set(groupData.groupName, groupLayouts);
+            }
+        } finally {
+            setIsPreloading(false);
         }
 
         return {
@@ -185,41 +193,13 @@ export const LayoutProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             const data = await buildData(groupedLayoutsData);
             setLayoutData(data);
 
-            // Preload layouts after loading schema
-            await preloadLayouts(data.fileMap);
+            // The preloading is now handled within buildData
         } catch (err: unknown) {
             const errorMessage = err instanceof Error ? err.message : 'Failed to load layouts';
             setError(errorMessage);
             console.error('💥 Error loading layouts:', err);
         } finally {
             setLoading(false);
-        }
-    };
-
-    const preloadLayouts = async (fileMap: Map<string, { fileName: string; groupName: string }>) => {
-        setIsPreloading(true);
-        try {
-            const layoutPromises = Array.from(fileMap.entries()).map(async ([layoutId, { fileName, groupName }]) => {
-                const cacheKey = createCacheKey(groupName, fileName);
-                if (!layoutCache.has(cacheKey)) {
-                    const layoutName = fileName.replace('.tsx', '').replace('.ts', '');
-
-                    const Layout = dynamic(
-                        () => import(`@/presentation-layouts/${groupName}/${layoutName}`),
-                        {
-                            loading: () => <div className="w-full aspect-[16/9] bg-gray-100 animate-pulse rounded-lg" />,
-                            ssr: false,
-                        }
-                    ) as React.ComponentType<{ data: any }>;
-
-                    layoutCache.set(cacheKey, Layout);
-                }
-            });
-            await Promise.all(layoutPromises);
-        } catch (error) {
-            console.error('Error preloading layouts:', error);
-        } finally {
-            setIsPreloading(false);
         }
     };
 
@@ -230,9 +210,7 @@ export const LayoutProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
         // Search through all fileMap entries to find the layout
         for (const [key, info] of Array.from(layoutData.fileMap.entries())) {
-            // Extract original layout ID from unique key (format: "groupName:layoutId")
-            const originalId = key.split(':')[1];
-            if (originalId === layoutId) {
+            if (key === layoutId) {
                 fileInfo = info;
                 break;
             }
@@ -269,8 +247,7 @@ export const LayoutProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
         // Search through all entries to find the layout (since we don't know the group)
         for (const [key, layout] of Array.from(layoutData.layoutsById.entries())) {
-            const originalId = key.split(':')[1];
-            if (originalId === layoutId) {
+            if (key === layoutId) {
                 return layout;
             }
         }
@@ -279,8 +256,7 @@ export const LayoutProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     const getLayoutByIdAndGroup = (layoutId: string, groupName: string): LayoutInfo | null => {
         if (!layoutData) return null;
-        const uniqueKey = `${groupName}:${layoutId}`;
-        return layoutData.layoutsById.get(uniqueKey) || null;
+        return layoutData.layoutsById.get(layoutId) || null;
     };
 
     const getLayoutsByGroup = (groupName: string): LayoutInfo[] => {

@@ -191,6 +191,146 @@ const presentationGenerationSlice = createSlice({
         }
       }
     },
+
+    // Update slide image at specific data path
+    updateSlideImage: (
+      state,
+      action: PayloadAction<{
+        slideIndex: number;
+        dataPath: string;
+        imageUrl: string;
+        prompt?: string;
+      }>
+    ) => {
+      if (
+        state.presentationData &&
+        state.presentationData.slides &&
+        state.presentationData.slides[action.payload.slideIndex]
+      ) {
+        const slide = state.presentationData.slides[action.payload.slideIndex];
+        const { dataPath, imageUrl, prompt } = action.payload;
+        
+        // Helper function to set nested property value for images
+        const setNestedImageValue = (obj: any, path: string, url: string, promptText?: string) => {
+          const keys = path.split(/[.\[\]]+/).filter(Boolean);
+          let current = obj;
+          
+          // Navigate to the parent object
+          for (let i = 0; i < keys.length - 1; i++) {
+            const key = keys[i];
+            if (isNaN(Number(key))) {
+              if (!current[key]) {
+                current[key] = {};
+              }
+              current = current[key];
+            } else {
+              const index = Number(key);
+              if (!current[index]) {
+                current[index] = {};
+              }
+              current = current[index];
+            }
+          }
+          
+          // Set the image properties
+          const finalKey = keys[keys.length - 1];
+          if (isNaN(Number(finalKey))) {
+            current[finalKey] = {
+              __image_url__: url,
+              __image_prompt__: promptText || ''
+            };
+          } else {
+            current[Number(finalKey)] = {
+              __image_url__: url,
+              __image_prompt__: promptText || ''
+            };
+          }
+        };
+        
+        // Update the slide image
+        if (dataPath && slide.content) {
+          setNestedImageValue(slide.content, dataPath, imageUrl, prompt);
+        }
+        
+        // Also update the images array if it exists
+        if (slide.images && Array.isArray(slide.images)) {
+          const imageIndex = parseInt(dataPath.split('[')[1]?.split(']')[0]) || 0;
+          if (slide.images[imageIndex] !== undefined) {
+            slide.images[imageIndex] = imageUrl;
+          }
+        }
+      }
+    },
+
+    // Update slide icon at specific data path
+    updateSlideIcon: (
+      state,
+      action: PayloadAction<{
+        slideIndex: number;
+        dataPath: string;
+        iconUrl: string;
+        query?: string;
+      }>
+    ) => {
+      if (
+        state.presentationData &&
+        state.presentationData.slides &&
+        state.presentationData.slides[action.payload.slideIndex]
+      ) {
+        const slide = state.presentationData.slides[action.payload.slideIndex];
+        const { dataPath, iconUrl, query } = action.payload;
+        
+        // Helper function to set nested property value for icons
+        const setNestedIconValue = (obj: any, path: string, url: string, queryText?: string) => {
+          const keys = path.split(/[.\[\]]+/).filter(Boolean);
+          let current = obj;
+          
+          // Navigate to the parent object
+          for (let i = 0; i < keys.length - 1; i++) {
+            const key = keys[i];
+            if (isNaN(Number(key))) {
+              if (!current[key]) {
+                current[key] = {};
+              }
+              current = current[key];
+            } else {
+              const index = Number(key);
+              if (!current[index]) {
+                current[index] = {};
+              }
+              current = current[index];
+            }
+          }
+          
+          // Set the icon properties
+          const finalKey = keys[keys.length - 1];
+          if (isNaN(Number(finalKey))) {
+            current[finalKey] = {
+              __icon_url__: url,
+              __icon_query__: queryText || ''
+            };
+          } else {
+            current[Number(finalKey)] = {
+              __icon_url__: url,
+              __icon_query__: queryText || ''
+            };
+          }
+        };
+        
+        // Update the slide icon
+        if (dataPath && slide.content) {
+          setNestedIconValue(slide.content, dataPath, iconUrl, query);
+        }
+        
+        // Also update the icons array if it exists
+        if (slide.icons && Array.isArray(slide.icons)) {
+          const iconIndex = parseInt(dataPath.split('[')[1]?.split(']')[0]) || 0;
+          if (slide.icons[iconIndex] !== undefined) {
+            slide.icons[iconIndex] = iconUrl;
+          }
+        }
+      }
+    },
   },
 });
 
@@ -209,6 +349,8 @@ export const {
   updateSlide,
   deletePresentationSlide,
   updateSlideContent,
+  updateSlideImage,
+  updateSlideIcon,
 } = presentationGenerationSlice.actions;
 
 export default presentationGenerationSlice.reducer;
