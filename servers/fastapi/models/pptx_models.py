@@ -61,11 +61,13 @@ class PptxFontModel(BaseModel):
 
 class PptxFillModel(BaseModel):
     color: str
+    opacity: float = 1.0
 
 
 class PptxStrokeModel(BaseModel):
     color: str
     thickness: float
+    opacity: float = 1.0
 
 
 class PptxShadowModel(BaseModel):
@@ -85,6 +87,7 @@ class PptxParagraphModel(BaseModel):
     spacing: Optional[PptxSpacingModel] = None
     alignment: Optional[PP_ALIGN] = None
     font: Optional[PptxFontModel] = None
+    line_height: Optional[float] = None
     text: Optional[str] = None
     text_runs: Optional[List[PptxTextRunModel]] = None
 
@@ -141,6 +144,7 @@ class PptxConnectorModel(PptxShapeModel):
     position: PptxPositionModel
     thickness: float = 0.5
     color: str = "000000"
+    opacity: float = 1.0
 
 
 class PptxSlideModel(BaseModel):
