@@ -6,7 +6,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import PresentationMode from "../../components/PresentationMode";
 import SidePanel from "../components/SidePanel";
 import SlideContent from "../components/SlideContent";
-import LoadingState from "../../components/LoadingState";
 import Header from "../components/Header";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Loader2 } from "lucide-react";
@@ -18,6 +17,7 @@ import {
   useAutoSave
 } from "../hooks";
 import { PresentationPageProps } from "../types";
+import LoadingState from "./LoadingState";
 
 const PresentationPage: React.FC<PresentationPageProps> = ({ presentation_id }) => {
   // State management
@@ -27,10 +27,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({ presentation_id }) 
   const [error, setError] = useState(false);
   const [isMobilePanelOpen, setIsMobilePanelOpen] = useState(false);
 
-  // Redux state
-  const { currentTheme, currentColors } = useSelector(
-    (state: RootState) => state.theme
-  );
+
   const { presentationData, isStreaming } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
@@ -84,7 +81,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({ presentation_id }) 
       <PresentationMode
         slides={presentationData?.slides!}
         currentSlide={currentSlide}
-        currentTheme={currentTheme}
+
         isFullscreen={isFullscreen}
         onFullscreenToggle={toggleFullscreen}
         onExit={handlePresentExit}
@@ -130,7 +127,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({ presentation_id }) 
 
       <div
         style={{
-          background: currentColors.background,
+          background: '#c8c7c9',
         }}
         className="flex flex-1 relative pt-6"
       >

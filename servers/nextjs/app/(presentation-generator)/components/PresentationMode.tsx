@@ -15,7 +15,7 @@ import { useGroupLayouts } from "../hooks/useGroupLayouts";
 interface PresentationModeProps {
   slides: Slide[];
   currentSlide: number;
-  currentTheme: string;
+
   isFullscreen: boolean;
   onFullscreenToggle: () => void;
   onExit: () => void;
@@ -26,7 +26,7 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
 
   slides,
   currentSlide,
-  currentTheme,
+
   isFullscreen,
   onFullscreenToggle,
   onExit,
@@ -190,10 +190,9 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
       <div className="flex-1 flex items-center justify-center p-8">
         <div
           className={`w-full max-w-[1280px] scale-110 aspect-video slide-theme slide-container border rounded-sm font-inter shadow-lg bg-white`}
-          data-theme={currentTheme}
         >
           {slides[currentSlide] &&
-            renderSlideContent(slides[currentSlide])}
+            renderSlideContent(slides[currentSlide], false)}
         </div>
       </div>
     </div>

@@ -45,9 +45,7 @@ const SidePanel = ({
   const { presentationData, isStreaming } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
-  const { currentTheme, currentColors } = useSelector(
-    (state: RootState) => state.theme
-  );
+
   const dispatch = useDispatch();
 
   // Use the centralized group layouts hook
@@ -159,16 +157,10 @@ const SidePanel = ({
         `}
       >
         <div
-          data-theme={currentTheme}
-          style={{
-            backgroundColor: currentColors.slideBg,
-          }}
-          className="min-w-[300px] max-w-[300px] h-[calc(100vh-120px)]  rounded-[20px] hide-scrollbar overflow-hidden slide-theme shadow-xl"
+
+          className="min-w-[300px] bg-white max-w-[300px] h-[calc(100vh-120px)]  rounded-[20px] hide-scrollbar overflow-hidden slide-theme shadow-xl"
         >
           <div
-            style={{
-              backgroundColor: currentColors.slideBg,
-            }}
             className="sticky top-0 z-40  px-6 py-4"
           >
             <div className="flex items-center justify-between gap-4">

@@ -3,9 +3,9 @@
 import Wrapper from "@/components/Wrapper";
 import React from "react";
 import Link from "next/link";
-import UserAccount from "@/app/(presentation-generator)/components/UserAccount";
 import BackBtn from "@/components/BackBtn";
 import { usePathname } from "next/navigation";
+import HeaderNav from "@/app/(presentation-generator)/components/HeaderNab";
 const Header = () => {
   const pathname = usePathname();
   return (
@@ -23,7 +23,7 @@ const Header = () => {
             </Link>
           </div>
           <div className="flex items-center gap-3 sm:gap-5 md:gap-10">
-            <UserAccount />
+            <HeaderNav />
           </div>
         </div>
       </Wrapper>
