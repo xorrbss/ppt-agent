@@ -67,20 +67,29 @@ export class DashboardApi {
   static async deletePresentation(presentation_id: string) {
     try {
       const response = await fetch(
-        `/api/v1/ppt/delete?id=${presentation_id}`,
+        `/api/v1/ppt/presentation/?id=${presentation_id}`,
         {
           method: "DELETE",
           headers: getHeader(),
         }
       );
+      const data = await response.json();
 
       if (response.status === 204) {
-        return true;
+        return {
+          success: true,
+        };
       }
-      return false;
+      return {
+        success: false,
+        message:  data.detail || "Failed to delete presentation",
+      };
     } catch (error) {
       console.error("Error deleting presentation:", error);
-      throw error;
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : "Failed to delete presentation",
+      };
     }
   }
   

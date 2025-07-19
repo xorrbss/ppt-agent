@@ -31,23 +31,20 @@ const IconsEditor = ({
 
 }: IconsEditorProps) => {
   // State management
-  const [icon, setIcon] = useState(initialIcon);
   const [icons, setIcons] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>(
     icon_prompt?.[0] || ""
   );
   const [loading, setLoading] = useState(true);
 
-  const searchParams = useSearchParams();
 
-  // Update local state when initial icon changes
-  useEffect(() => {
-    setIcon(initialIcon);
-  }, [initialIcon]);
+
 
   // Search for icons when component opens
   useEffect(() => {
-    handleIconSearch();
+    if (icon_prompt && icon_prompt.length > 0 && icons.length === 0) {
+      handleIconSearch();
+    }
   }, []);
 
   /**
@@ -55,17 +52,15 @@ const IconsEditor = ({
    */
   const handleIconSearch = async () => {
     setLoading(true);
-    const presentation_id = searchParams.get("id");
     const query = searchQuery.length > 0 ? searchQuery : icon_prompt?.[0] || "";
 
     try {
       const data = await PresentationGenerationApi.searchIcons({
-        presentation_id: presentation_id!,
         query,
-        page: 1,
         limit: 40,
       });
-      setIcons(data.paths);
+      console.log("icons search data", data);
+      setIcons(data);
     } catch (error) {
       console.error("Error fetching icons:", error);
       setIcons([]);
@@ -78,7 +73,6 @@ const IconsEditor = ({
    * Handles icon selection and calls the parent callback
    */
   const handleIconChange = (newIcon: string) => {
-    setIcon(newIcon);
 
     if (onIconChange) {
       onIconChange(newIcon, searchQuery || icon_prompt?.[0] || '');
@@ -137,7 +131,7 @@ const IconsEditor = ({
                     <Skeleton key={index} className="w-16 h-16 rounded-lg" />
                   ))}
                 </div>
-              ) : icons.length > 0 ? (
+              ) : icons && icons.length > 0 ? (
                 <div className="grid grid-cols-4 gap-4">
                   {icons.map((iconSrc, idx) => (
                     <div

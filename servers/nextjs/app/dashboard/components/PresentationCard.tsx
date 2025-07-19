@@ -16,12 +16,14 @@ export const PresentationCard = ({
   id,
   title,
   created_at,
-  slide
+  slide,
+  onDeleted
 }: {
   id: string;
   title: string;
   created_at: string;
-  slide: any
+  slide: any;
+  onDeleted?: (presentationId: string) => void;
 }) => {
   const router = useRouter();
   const { renderSlideContent } = useGroupLayouts();
@@ -50,6 +52,10 @@ export const PresentationCard = ({
         description: "The presentation has been deleted successfully",
         variant: "default",
       });
+      // Call the onDeleted callback to update the parent state
+      if (onDeleted) {
+        onDeleted(id);
+      }
     } else {
       toast({
         title: "Error",
@@ -57,7 +63,7 @@ export const PresentationCard = ({
         variant: "destructive",
       });
     }
-    window.location.reload();
+    // Removed window.location.reload() - no longer needed
   };
 
 
@@ -79,7 +85,10 @@ export const PresentationCard = ({
           </p>
           <Popover>
             <PopoverTrigger onClick={(e) => e.stopPropagation()}>
-              <DotsVerticalIcon className="w-4 h-4 text-gray-500" />
+              <button className="w-6 h-6 rounded-full flex items-center justify-center text-gray-500 hover:text-gray-700" >
+
+                <DotsVerticalIcon className="w-4 h-4 text-gray-500" />
+              </button>
             </PopoverTrigger>
             <PopoverContent align="end" className="bg-white w-[200px]">
               <button

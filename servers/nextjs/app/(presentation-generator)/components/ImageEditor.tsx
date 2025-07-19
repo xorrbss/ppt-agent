@@ -44,8 +44,6 @@ const ImageEditor = ({
   onImageChange,
 
 }: ImageEditorProps) => {
-  const { currentTheme } = useSelector((state: RootState) => state.theme);
-  const searchParams = useSearchParams();
 
   // State management
   const [image, setImage] = useState(initialImage);
@@ -186,23 +184,21 @@ const ImageEditor = ({
    * Generates new images using AI
    */
   const handleGenerateImage = async () => {
+    if (!prompt) {
+      setError("Please enter a prompt");
+      return;
+    }
+    console.log("prompt", prompt);
     try {
       setIsGenerating(true);
       setError(null);
-
-      const presentation_id = searchParams.get("id");
-
       const response = await PresentationGenerationApi.generateImage({
-        presentation_id: presentation_id!,
-        prompt: {
-          theme_prompt: ThemeImagePrompt[currentTheme],
-          image_prompt: prompt,
-          aspect_ratio: "4:5",
-        },
+        prompt: prompt,
       });
 
       setPreviewImages(response.paths);
     } catch (err) {
+      console.error("Error in image generation", err);
       setError("Failed to generate image. Please try again.");
     } finally {
       setIsGenerating(false);

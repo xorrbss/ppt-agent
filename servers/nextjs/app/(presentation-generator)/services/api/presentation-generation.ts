@@ -172,11 +172,10 @@ export class PresentationGenerationApi {
   static async generateImage(imageGenerate: ImageGenerate) {
     try {
       const response = await fetch(
-        `/api/v1/ppt/image/generate`,
+        `/api/v1/ppt/images/generate?prompt=${imageGenerate.prompt}`,
         {
-          method: "POST",
+          method: "GET",
           headers: getHeader(),
-          body: JSON.stringify(imageGenerate),
           cache: "no-cache",
         }
       );
@@ -195,11 +194,10 @@ export class PresentationGenerationApi {
   static async searchIcons(iconSearch: IconSearch) {
     try {
       const response = await fetch(
-        `/api/v1/ppt/icon/search`,
+        `/api/v1/ppt/icons/search?query=${iconSearch.query}&limit=${iconSearch.limit}`,
         {
-          method: "POST",
+          method: "GET",
           headers: getHeader(),
-          body: JSON.stringify(iconSearch),
           cache: "no-cache",
         }
       );

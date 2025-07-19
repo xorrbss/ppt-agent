@@ -9,6 +9,7 @@ interface PresentationGridProps {
   type: "slide" | "video";
   isLoading?: boolean;
   error?: string | null;
+  onPresentationDeleted?: (presentationId: string) => void;
 }
 
 export const PresentationGrid = ({
@@ -16,6 +17,7 @@ export const PresentationGrid = ({
   type,
   isLoading = false,
   error = null,
+  onPresentationDeleted,
 }: PresentationGridProps) => {
   const router = useRouter();
   const handleCreateNewPresentation = () => {
@@ -105,7 +107,7 @@ export const PresentationGrid = ({
             title={presentation.title}
             created_at={presentation.created_at}
             slide={presentation.slides[0]}
-
+            onDeleted={onPresentationDeleted}
           />
         ))}
     </div>

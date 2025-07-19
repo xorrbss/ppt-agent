@@ -35,6 +35,11 @@ const DashboardPage: React.FC = () => {
     }
   };
 
+  const removePresentation = (presentationId: string) => {
+    setPresentations((prev: any) =>
+      prev ? prev.filter((p: any) => p.id !== presentationId) : []
+    );
+  };
 
   return (
     <div className="min-h-screen bg-[#E9E8F8]">
@@ -50,6 +55,7 @@ const DashboardPage: React.FC = () => {
               type="slide"
               isLoading={isLoading}
               error={error}
+              onPresentationDeleted={removePresentation}
             />
           </section>
         </main>
