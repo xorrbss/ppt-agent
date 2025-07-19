@@ -2,6 +2,8 @@
 
 import React, { createContext, useContext, useRef, useEffect, ReactNode, useState } from 'react';
 import ReactDOM from 'react-dom';
+import { useDispatch } from 'react-redux';
+import { updateSlideImage, updateSlideIcon } from '../../../store/slices/presentationGeneration';
 import ImageEditor from './ImageEditor';
 import IconsEditor from './IconsEditor';
 
@@ -53,6 +55,8 @@ export const SmartEditableProvider: React.FC<SmartEditableProviderProps> = ({
         rect: DOMRect;
     } | null>(null);
 
+    const dispatch = useDispatch();
+
     useEffect(() => {
         if (!isEditMode || !containerRef.current || !slideData) return;
 
@@ -61,13 +65,15 @@ export const SmartEditableProvider: React.FC<SmartEditableProviderProps> = ({
         const findEditableElements = () => {
             const elements: EditableElement[] = [];
 
+            console.log('🔍 Starting smart detection with slideData:', slideData);
 
-            // Detect Images and Icons only (text is now handled by SmartText components)
+            // Detect Images and Icons only (text is now handled by TiptapTextReplacer)
             const detectEditableElementsFromData = (data: any, path: string = '') => {
                 if (!data || typeof data !== 'object') return;
 
                 // Check for __image_url__ pattern
                 if (data.__image_url__) {
+                    console.log(`📸 Found __image_url__ at ${path}:`, data.__image_url__);
                     const imgElement = findDOMElementByImageUrl(container, data.__image_url__);
                     if (imgElement) {
                         elements.push({
@@ -78,14 +84,25 @@ export const SmartEditableProvider: React.FC<SmartEditableProviderProps> = ({
                                 slideIndex,
                                 initialImage: data.__image_url__,
                                 promptContent: data.__image_prompt__ || '',
-                                imageIdx: elements.filter(e => e.type === 'image').length
+                                imageIdx: elements.filter(e => e.type === 'image').length,
+                                onImageChange: (newImageUrl: string, prompt?: string) => {
+                                    console.log(`🖼️ Image changed at ${path}:`, newImageUrl);
+                                    dispatch(updateSlideImage({
+                                        slideIndex,
+                                        dataPath: path,
+                                        imageUrl: newImageUrl,
+                                        prompt: prompt
+                                    }));
+                                }
                             }
                         });
+                        console.log(`✅ Matched image to DOM element:`, imgElement);
                     }
                 }
 
                 // Check for __icon_url__ pattern
                 if (data.__icon_url__) {
+                    console.log(`🎯 Found __icon_url__ at ${path}:`, data.__icon_url__);
                     const imgElement = findDOMElementByImageUrl(container, data.__icon_url__);
                     if (imgElement) {
                         elements.push({
@@ -99,11 +116,22 @@ export const SmartEditableProvider: React.FC<SmartEditableProviderProps> = ({
                                 index: elements.filter(e => e.type === 'icon').length,
                                 backgroundColor: '#3B82F6',
                                 hasBg: false,
-                                icon_prompt: data.__icon_query__ ? [data.__icon_query__] : []
+                                icon_prompt: data.__icon_query__ ? [data.__icon_query__] : [],
+                                onIconChange: (newIconUrl: string, query?: string) => {
+                                    console.log(`🎯 Icon changed at ${path}:`, newIconUrl);
+                                    dispatch(updateSlideIcon({
+                                        slideIndex,
+                                        dataPath: path,
+                                        iconUrl: newIconUrl,
+                                        query: query
+                                    }));
+                                }
                             }
                         });
+                        console.log(`✅ Matched icon to DOM element:`, imgElement);
                     }
                 }
+
                 // Recursively scan nested objects and arrays
                 Object.keys(data).forEach(key => {
                     const value = data[key];
@@ -120,6 +148,7 @@ export const SmartEditableProvider: React.FC<SmartEditableProviderProps> = ({
             };
 
             detectEditableElementsFromData(slideData);
+            console.log('🎉 Final detected elements:', elements);
             setEditableElements(elements);
         };
 
@@ -162,7 +191,7 @@ export const SmartEditableProvider: React.FC<SmartEditableProviderProps> = ({
         return () => {
             clearTimeout(timer);
         };
-    }, [slideIndex, slideId, slideData, isEditMode]); // Removed editableElements from dependency array
+    }, [slideIndex, slideId, slideData, isEditMode, dispatch]);
 
     // Set up event listeners when editableElements change
     useEffect(() => {
