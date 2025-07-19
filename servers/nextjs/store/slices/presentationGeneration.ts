@@ -69,9 +69,6 @@ const presentationGenerationSlice = createSlice({
     },
     // Clear presentation data
     clearPresentationData: (state) => {
-      state.presentation_id = null;
-      state.error = null;
-      state.isLoading = false;
       state.presentationData = null;
     },
     clearOutlines: (state) => {
@@ -238,17 +235,23 @@ const presentationGenerationSlice = createSlice({
           
           // Set the image properties
           const finalKey = keys[keys.length - 1];
+          const target = isNaN(Number(finalKey)) ? current[finalKey] : current[Number(finalKey)];
+          
+          // Preserve existing properties if the target already exists
+          const updatedValue = {
+            ...(target && typeof target === 'object' ? target : {}),
+            __image_url__: url,
+            __image_prompt__: promptText || (target?.__image_prompt__) || ''
+          };
+          
           if (isNaN(Number(finalKey))) {
-            current[finalKey] = {
-              __image_url__: url,
-              __image_prompt__: promptText || ''
-            };
+            current[finalKey] = updatedValue;
           } else {
-            current[Number(finalKey)] = {
-              __image_url__: url,
-              __image_prompt__: promptText || ''
-            };
+            current[Number(finalKey)] = updatedValue;
           }
+          
+          // Add debugging
+          console.log('Redux: Updated slide image at path:', path, 'with URL:', url);
         };
         
         // Update the slide image
@@ -308,17 +311,23 @@ const presentationGenerationSlice = createSlice({
           
           // Set the icon properties
           const finalKey = keys[keys.length - 1];
+          const target = isNaN(Number(finalKey)) ? current[finalKey] : current[Number(finalKey)];
+          
+          // Preserve existing properties if the target already exists
+          const updatedValue = {
+            ...(target && typeof target === 'object' ? target : {}),
+            __icon_url__: url,
+            __icon_query__: queryText || (target?.__icon_query__) || ''
+          };
+          
           if (isNaN(Number(finalKey))) {
-            current[finalKey] = {
-              __icon_url__: url,
-              __icon_query__: queryText || ''
-            };
+            current[finalKey] = updatedValue;
           } else {
-            current[Number(finalKey)] = {
-              __icon_url__: url,
-              __icon_query__: queryText || ''
-            };
+            current[Number(finalKey)] = updatedValue;
           }
+          
+          // Add debugging
+          console.log('Redux: Updated slide icon at path:', path, 'with URL:', url);
         };
         
         // Update the slide icon

@@ -8,23 +8,18 @@ import {
 } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
-import { useSearchParams } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { PresentationGenerationApi } from "../services/api/presentation-generation";
 import { getStaticFileUrl } from "../utils/others";
 
 interface IconsEditorProps {
-  icon: string;
-  index: number;
-  className?: string;
   icon_prompt?: string[] | null;
   onClose?: () => void;
   onIconChange?: (newIconUrl: string, query?: string) => void;
 }
 
 const IconsEditor = ({
-  icon: initialIcon,
   icon_prompt,
   onClose,
   onIconChange,
@@ -36,9 +31,7 @@ const IconsEditor = ({
     icon_prompt?.[0] || ""
   );
   const [loading, setLoading] = useState(true);
-
-
-
+  const [isOpen, setIsOpen] = useState(true);
 
   // Search for icons when component opens
   useEffect(() => {
@@ -59,7 +52,6 @@ const IconsEditor = ({
         query,
         limit: 40,
       });
-      console.log("icons search data", data);
       setIcons(data);
     } catch (error) {
       console.error("Error fetching icons:", error);
@@ -79,11 +71,20 @@ const IconsEditor = ({
     }
   };
 
+  // Handle close with animation
+  const handleClose = () => {
+    setIsOpen(false);
+    // Delay the actual close to allow animation to complete
+    setTimeout(() => {
+      onClose?.();
+    }, 300); // Match the Sheet animation duration
+  };
+
   return (
     <div className="icons-editor-container">
 
 
-      <Sheet open={true} onOpenChange={() => onClose?.()}>
+      <Sheet open={isOpen} onOpenChange={() => handleClose()}>
         <SheetContent
           side="right"
           className="w-[400px]"

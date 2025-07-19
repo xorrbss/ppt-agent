@@ -52,7 +52,6 @@ export const PresentationCard = ({
         description: "The presentation has been deleted successfully",
         variant: "default",
       });
-      // Call the onDeleted callback to update the parent state
       if (onDeleted) {
         onDeleted(id);
       }
@@ -63,7 +62,6 @@ export const PresentationCard = ({
         variant: "destructive",
       });
     }
-    // Removed window.location.reload() - no longer needed
   };
 
 

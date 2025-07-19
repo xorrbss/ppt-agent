@@ -166,7 +166,6 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
 
                 currentElement = currentElement.parentElement;
             }
-
             return false;
         };
 

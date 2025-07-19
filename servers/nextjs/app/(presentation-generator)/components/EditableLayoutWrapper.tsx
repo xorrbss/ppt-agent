@@ -34,18 +34,20 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
     const [activeEditor, setActiveEditor] = useState<EditableElement | null>(null);
 
     /**
-     * Recursively searches for image/icon data in the slide data structure
+     * Recursively searches for ALL image/icon data paths in the slide data structure
      */
-    const findDataPath = (targetUrl: string, data: any, path: string = ''): { path: string; type: 'image' | 'icon'; data: any } | null => {
-        if (!data || typeof data !== 'object') return null;
+    const findAllDataPaths = (targetUrl: string, data: any, path: string = ''): { path: string; type: 'image' | 'icon'; data: any }[] => {
+        if (!data || typeof data !== 'object') return [];
+
+        const matches: { path: string; type: 'image' | 'icon'; data: any }[] = [];
 
         // Check current level for __image_url__ or __icon_url__
         if (data.__image_url__ && isMatchingUrl(data.__image_url__, targetUrl)) {
-            return { path, type: 'image', data };
+            matches.push({ path, type: 'image', data });
         }
 
         if (data.__icon_url__ && isMatchingUrl(data.__icon_url__, targetUrl)) {
-            return { path, type: 'icon', data };
+            matches.push({ path, type: 'icon', data });
         }
 
         // Recursively check nested objects and arrays
@@ -54,16 +56,53 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
 
             if (Array.isArray(value)) {
                 for (let i = 0; i < value.length; i++) {
-                    const result = findDataPath(targetUrl, value[i], `${newPath}[${i}]`);
-                    if (result) return result;
+                    const results = findAllDataPaths(targetUrl, value[i], `${newPath}[${i}]`);
+                    matches.push(...results);
                 }
             } else if (value && typeof value === 'object') {
-                const result = findDataPath(targetUrl, value, newPath);
-                if (result) return result;
+                const results = findAllDataPaths(targetUrl, value, newPath);
+                matches.push(...results);
             }
         }
 
-        return null;
+        return matches;
+    };
+
+    /**
+     * Finds the best matching data path for a specific DOM element
+     */
+    const findBestDataPath = (targetUrl: string, imgElement: HTMLImageElement, data: any): { path: string; type: 'image' | 'icon'; data: any } | null => {
+        const allMatches = findAllDataPaths(targetUrl, data);
+
+        if (allMatches.length === 0) return null;
+        if (allMatches.length === 1) return allMatches[0];
+
+        // If multiple matches, use DOM position to find the correct one
+        const allImagesInContainer = containerRef.current?.querySelectorAll('img') || [];
+        const imgIndex = Array.from(allImagesInContainer).indexOf(imgElement);
+
+        // Find images with the same URL pattern
+        const sameUrlImages: HTMLImageElement[] = [];
+        allImagesInContainer.forEach((img) => {
+            if (isMatchingUrl((img as HTMLImageElement).src, targetUrl)) {
+                sameUrlImages.push(img as HTMLImageElement);
+            }
+        });
+
+        const sameUrlIndex = sameUrlImages.indexOf(imgElement);
+
+        // Try to match based on position in the same URL group
+        if (sameUrlIndex >= 0 && sameUrlIndex < allMatches.length) {
+            return allMatches[sameUrlIndex];
+        }
+
+        // Fallback: try to match based on overall DOM position
+        if (imgIndex >= 0 && imgIndex < allMatches.length) {
+            return allMatches[imgIndex];
+        }
+
+        // Last resort: return the first match
+        return allMatches[0];
     };
 
     /**
@@ -81,30 +120,32 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
 
         if (cleanUrl1 === cleanUrl2) return true;
 
-        // Handle app_data paths and placeholder URLs
-        if (url1.includes('/app_data/') || url2.includes('/app_data/') ||
-            url1.includes('placeholder') || url2.includes('placeholder')) {
+        // Handle placeholder URLs - be more specific
+        if ((url1.includes('placeholder') && url2.includes('placeholder')) ||
+            (url1.includes('/static/images/') && url2.includes('/static/images/'))) {
+            return url1 === url2; // Require exact match for placeholders
+        }
+
+        // Handle app_data paths - be more specific about filename matching
+        if (url1.includes('/app_data/') || url2.includes('/app_data/')) {
             const getFilename = (path: string) => path.split('/').pop() || '';
             const filename1 = getFilename(url1);
             const filename2 = getFilename(url2);
-            if (filename1 === filename2 && filename1 !== '') return true;
+            if (filename1 === filename2 && filename1 !== '' && filename1.length > 10) { // Ensure significant filename
+                return true;
+            }
         }
 
-        // Extract and compare filenames for other URLs
+        // Extract and compare filenames for other URLs - be more restrictive
         const getFilename = (path: string) => path.split('/').pop() || '';
         const filename1 = getFilename(url1);
         const filename2 = getFilename(url2);
 
-        if (filename1 === filename2 && filename1 !== '') {
+        if (filename1 === filename2 && filename1 !== '' && filename1.length > 10) { // Ensure significant filename
             return true;
         }
 
-        // Check if one URL is contained in another (for partial matches)
-        if (url1.includes(url2) || url2.includes(url1)) {
-            return true;
-        }
-
-        return false;
+        return false; // Remove the overly permissive substring matching
     };
 
     /**
@@ -121,13 +162,16 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
             const src = htmlImg.src;
 
             if (src) {
-                const result = findDataPath(src, slideData);
+                const result = findBestDataPath(src, htmlImg, slideData);
 
                 if (result) {
                     const { path: dataPath, type, data } = result;
 
                     // Mark as processed to prevent re-processing
                     htmlImg.setAttribute('data-editable-processed', 'true');
+
+                    // Add a unique identifier to help with debugging
+                    htmlImg.setAttribute('data-editable-id', `${type}-${dataPath}-${index}`);
 
                     const editableElement: EditableElement = {
                         id: `${type}-${dataPath}-${index}`,
@@ -248,6 +292,8 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
      */
     const handleImageChange = (newImageUrl: string, prompt?: string) => {
         if (activeEditor && activeEditor.element) {
+
+
             // Update the DOM element immediately for visual feedback
             activeEditor.element.src = newImageUrl;
 
@@ -259,10 +305,8 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                 prompt: prompt || activeEditor.data?.__image_prompt__ || ''
             }));
 
-            setActiveEditor(null);
         }
     };
-
     /**
      * Handles icon change from IconsEditor
      */
@@ -279,7 +323,6 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                 query: query || activeEditor.data?.__icon_query__ || ''
             }));
 
-            setActiveEditor(null);
         }
     };
 
@@ -305,8 +348,6 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
             {/* Render IconsEditor when an icon is being edited */}
             {activeEditor && activeEditor.type === 'icon' && (
                 <IconsEditor
-                    icon={activeEditor.src}
-                    index={0}
                     icon_prompt={activeEditor.data?.__icon_query__ ? [activeEditor.data.__icon_query__] : []}
                     onClose={handleEditorClose}
                     onIconChange={handleIconChange}

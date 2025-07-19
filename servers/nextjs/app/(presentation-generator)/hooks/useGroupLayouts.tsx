@@ -60,7 +60,6 @@ export const useGroupLayouts = () => {
                             isEditMode={isEditMode}
                             layout={Layout}
                             onContentChange={(content: string, dataPath: string, slideIndex?: number) => {
-                                console.log(`Text content changed at slide ${slideIndex}, path ${dataPath}:`, content);
 
                                 // Dispatch Redux action to update slide content
                                 if (dataPath && slideIndex !== undefined) {

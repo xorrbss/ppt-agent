@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,30 +8,21 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DashboardApi } from "@/app/dashboard/api/dashboard";
 
 
-import {
-    setPresentationData,
-} from "@/store/slices/presentationGeneration";
 import { toast } from "@/hooks/use-toast";
 
 
 
 import { Button } from "@/components/ui/button";
 import { AlertCircle } from "lucide-react";
-import { setThemeColors, ThemeColors } from "../store/themeSlice";
-import { ThemeType } from "../upload/type";
-import { renderSlideContent } from "../components/slide_config";
-
+import { useGroupLayouts } from "../hooks/useGroupLayouts";
+import { setPresentationData } from "@/store/slices/presentationGeneration";
 
 
 
 const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
-
+    const { renderSlideContent, loading } = useGroupLayouts();
+    const [contentLoading, setContentLoading] = useState(true);
     const dispatch = useDispatch();
-    const [loading, setLoading] = useState(true);
-
-    const { currentTheme, currentColors } = useSelector(
-        (state: RootState) => state.theme
-    );
     const { presentationData } = useSelector(
         (state: RootState) => state.presentationGeneration
     );
@@ -45,22 +36,8 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
     const fetchUserSlides = async () => {
         try {
             const data = await DashboardApi.getPresentation(presentation_id);
-            if (data) {
-                if (data.presentation.theme) {
-                    dispatch(
-                        setThemeColors({
-                            ...data.presentation.theme.colors,
-                            theme: data.presentation.theme.name as ThemeType,
-                        })
-                    );
-                    setColorsVariables(
-                        data.presentation.theme.colors,
-                        data.presentation.theme.name as ThemeType
-                    );
-                }
-                dispatch(setPresentationData(data));
-                setLoading(false);
-            }
+            dispatch(setPresentationData(data));
+            setContentLoading(false);
         } catch (error) {
             setError(true);
             toast({
@@ -68,19 +45,11 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
                 description: "Failed to load presentation",
                 variant: "destructive",
             });
-
             console.error("Error fetching user slides:", error);
-            setLoading(false);
+            setContentLoading(false);
         }
     };
-    const setColorsVariables = (colors: ThemeColors, theme: ThemeType) => {
-        const root = document.documentElement;
-        Object.entries(colors).forEach(([key, value]) => {
-            const cssKey = key.replace(/[A-Z]/g, (m) => "-" + m.toLowerCase());
-            root.style.setProperty(`--${theme}-${cssKey}`, value);
-        });
-    };
-    const language = presentationData?.presentation?.language || "English";
+    console.log("presentationData", presentationData);
     // Regular view
     return (
         <div className="flex overflow-hidden flex-col">
@@ -109,15 +78,14 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
             ) : (
 
 
-                <div style={{
-                    background: currentColors.background,
-                }} className="">
+                <div className="">
                     <div
-                        className="mx-auto flex flex-col items-center  overflow-hidden  justify-center   slide-theme"
-                        data-theme={currentTheme}
+                        className="mx-auto flex flex-col items-center  overflow-hidden  justify-center   "
+
                     >
                         {!presentationData ||
                             loading ||
+                            contentLoading ||
                             !presentationData?.slides ||
                             presentationData?.slides.length === 0 ? (
                             <div className="relative w-full h-[calc(100vh-120px)] mx-auto ">
@@ -136,10 +104,10 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
                                 {presentationData &&
                                     presentationData.slides &&
                                     presentationData.slides.length > 0 &&
-                                    presentationData.slides.map((slide, index) => (
+                                    presentationData.slides.map((slide: any, index: number) => (
                                         <div key={index} className="w-full">
 
-                                            {renderSlideContent(slide, language)}
+                                            {renderSlideContent(slide, false)}
                                         </div>
                                     ))}
                             </>

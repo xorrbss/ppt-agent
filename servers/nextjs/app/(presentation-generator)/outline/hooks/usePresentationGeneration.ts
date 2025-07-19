@@ -5,7 +5,7 @@ import { toast } from "@/hooks/use-toast";
 import { clearPresentationData, setPresentationData, SlideOutline } from "@/store/slices/presentationGeneration";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import { useLayout } from "../../context/LayoutContext";
-import { LayoutGroup, LoadingState } from "../types/index";
+import { LayoutGroup, LoadingState, TABS } from "../types/index";
 
 const DEFAULT_LOADING_STATE: LoadingState = {
   message: "",
@@ -17,7 +17,8 @@ const DEFAULT_LOADING_STATE: LoadingState = {
 export const usePresentationGeneration = (
   presentationId: string | null,
   outlines: SlideOutline[] | null,
-  selectedLayoutGroup: LayoutGroup | null
+  selectedLayoutGroup: LayoutGroup | null,
+  setActiveTab: (tab: string) => void
 ) => {
   const dispatch = useDispatch();
   const router = useRouter();
@@ -69,7 +70,10 @@ export const usePresentationGeneration = (
   }, [selectedLayoutGroup, getLayoutById]);
 
   const handleSubmit = useCallback(async () => {
-      
+    if (!selectedLayoutGroup) {
+      setActiveTab(TABS.LAYOUTS);
+      return;
+    }
     if (!validateInputs()) return;
 
     

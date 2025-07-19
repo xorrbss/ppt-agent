@@ -12,15 +12,10 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Wand2,
   Upload,
-  Move,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useSelector } from "react-redux";
 import { PresentationGenerationApi } from "../services/api/presentation-generation";
-import { RootState } from "@/store/store";
-import { useSearchParams } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ThemeImagePrompt } from "../utils/others";
 
 interface ImageEditorProps {
   initialImage: string | null;
@@ -44,16 +39,15 @@ const ImageEditor = ({
   onImageChange,
 
 }: ImageEditorProps) => {
-
   // State management
-  const [image, setImage] = useState(initialImage);
-  const [previewImages, setPreviewImages] = useState([initialImage]);
+  const [previewImages, setPreviewImages] = useState(initialImage);
   const [prompt, setPrompt] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const [isOpen, setIsOpen] = useState(true);
 
   // Focus point and object fit for image editing
   const [isFocusPointMode, setIsFocusPointMode] = useState(false);
@@ -71,6 +65,7 @@ const ImageEditor = ({
       properties[imageIdx].initialObjectFit) ||
     "cover"
   );
+  console.log("previewImages", previewImages);
 
   // Refs
   const imageRef = useRef<HTMLImageElement>(null);
@@ -78,11 +73,18 @@ const ImageEditor = ({
   const toolbarRef = useRef<HTMLDivElement>(null);
   const popoverContentRef = useRef<HTMLDivElement>(null);
 
-  // Update local state when initial image changes
   useEffect(() => {
-    setImage(initialImage);
-    setPreviewImages([initialImage]);
+    setPreviewImages(initialImage);
   }, [initialImage]);
+
+  // Handle close with animation
+  const handleClose = () => {
+    setIsOpen(false);
+    // Delay the actual close to allow animation to complete
+    setTimeout(() => {
+      onClose?.();
+    }, 300); // Match the Sheet animation duration
+  };
 
   // Close toolbar when clicking outside
   useEffect(() => {
@@ -111,10 +113,11 @@ const ImageEditor = ({
    * Handles image selection and calls the parent callback
    */
   const handleImageChange = (newImage: string) => {
-    setImage(newImage);
+
 
     if (onImageChange) {
       onImageChange(newImage, promptContent);
+      setPreviewImages(newImage);
     }
   };
 
@@ -188,7 +191,6 @@ const ImageEditor = ({
       setError("Please enter a prompt");
       return;
     }
-    console.log("prompt", prompt);
     try {
       setIsGenerating(true);
       setError(null);
@@ -196,7 +198,7 @@ const ImageEditor = ({
         prompt: prompt,
       });
 
-      setPreviewImages(response.paths);
+      setPreviewImages(response);
     } catch (err) {
       console.error("Error in image generation", err);
       setError("Failed to generate image. Please try again.");
@@ -257,7 +259,7 @@ const ImageEditor = ({
     <div className="image-editor-container">
 
 
-      <Sheet open={true} onOpenChange={() => onClose?.()}>
+      <Sheet open={isOpen} onOpenChange={() => handleClose()}>
         <SheetContent
           side="right"
           className="w-[600px]"
@@ -308,28 +310,26 @@ const ImageEditor = ({
                   {error && <p className="text-red-500 text-sm">{error}</p>}
 
                   <div className="grid grid-cols-2 gap-4">
-                    {isGenerating || previewImages.length === 0
+                    {isGenerating || !previewImages
                       ? Array.from({ length: 4 }).map((_, index) => (
                         <Skeleton
                           key={index}
                           className="aspect-[4/3] w-full rounded-lg"
                         />
                       ))
-                      : previewImages.map((image, index) => (
-                        <div
-                          key={index}
-                          onClick={() => handleImageChange(image as string)}
-                          className="aspect-[4/3] w-full overflow-hidden rounded-lg border cursor-pointer hover:border-blue-500 transition-colors"
-                        >
-                          {image && (
-                            <img
-                              src={image}
-                              alt={`Preview ${index + 1}`}
-                              className="w-full h-full object-cover"
-                            />
-                          )}
-                        </div>
-                      ))}
+                      : <div
+                        onClick={() => handleImageChange(previewImages)}
+                        className="aspect-[4/3] w-full overflow-hidden rounded-lg border cursor-pointer hover:border-blue-500 transition-colors"
+                      >
+                        {previewImages && (
+                          <img
+                            src={previewImages}
+                            alt={`Preview`}
+                            className="w-full h-full object-cover"
+                          />
+                        )}
+                      </div>
+                    }
                   </div>
                 </div>
               </TabsContent>

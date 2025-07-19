@@ -31,7 +31,8 @@ const OutlinePage: React.FC = () => {
   const { loadingState, handleSubmit } = usePresentationGeneration(
     presentation_id,
     outlines,
-    selectedLayoutGroup
+    selectedLayoutGroup,
+    setActiveTab
   );
 
   if (!presentation_id) {
