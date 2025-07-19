@@ -6,6 +6,7 @@ export interface ElementAttributes {
   background?: {
     color?: string;
     opacity?: number;
+    isInherited?: boolean;
   };
   border?: {
     color?: string;
@@ -17,6 +18,8 @@ export interface ElementAttributes {
     opacity?: number;
     radius?: number;
     angle?: number;
+    spread?: number;
+    inset?: boolean;
   },
   font?: {
     name?: string;
@@ -45,7 +48,7 @@ export interface ElementAttributes {
   };
   zIndex?: number;
   textAlign?: 'left' | 'center' | 'right' | 'justify';
-  borderRadius?: number | number[];
+  borderRadius?: number[];
   imageSrc?: string;
   objectFit?: 'contain' | 'cover' | 'fill';
   clip?: boolean;

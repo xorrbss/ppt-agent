@@ -243,7 +243,7 @@ export class PresentationGenerationApi {
   static async exportAsPPTX(presentationData: any) {
     try {
       const response = await fetch(
-        `/api/v1/ppt/presentation/export_as_pptx`,
+        `/api/v1/ppt/presentation/export/pptx`,
         {
           method: "POST",
           headers: getHeader(),

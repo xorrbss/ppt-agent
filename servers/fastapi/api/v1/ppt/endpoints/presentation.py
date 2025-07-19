@@ -21,7 +21,7 @@ from services.database import get_sql_session
 from services.documents_loader import DocumentsLoader
 from models.sql.presentation import PresentationModel
 from services.pptx_presentation_creator import PptxPresentationCreator
-from utils.asset_directory_utils import get_export_directory
+from utils.asset_directory_utils import get_exports_directory
 from utils.llm_calls.generate_document_summary import generate_document_summary
 from utils.llm_calls.generate_presentation_structure import (
     generate_presentation_structure,
@@ -281,10 +281,12 @@ def update_presentation(
 
 @PRESENTATION_ROUTER.post("/export/pptx", response_model=str)
 async def create_pptx(pptx_model: Annotated[PptxPresentationModel, Body()]):
-    pptx_creator = PptxPresentationCreator(pptx_model)
+    temp_dir = TEMP_FILE_SERVICE.create_temp_dir()
+
+    pptx_creator = PptxPresentationCreator(pptx_model, temp_dir)
     await pptx_creator.create_ppt()
 
-    export_directory = get_export_directory()
+    export_directory = get_exports_directory()
     pptx_path = os.path.join(
         export_directory, f"{pptx_model.name or get_random_uuid()}.pptx"
     )

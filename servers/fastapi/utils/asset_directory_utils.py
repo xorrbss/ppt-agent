@@ -8,7 +8,7 @@ def get_images_directory():
     return images_directory
 
 
-def get_export_directory():
+def get_exports_directory():
     export_directory = os.path.join(get_app_data_directory_env(), "exports")
     os.makedirs(export_directory, exist_ok=True)
     return export_directory

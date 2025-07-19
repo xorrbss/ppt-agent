@@ -15,8 +15,31 @@ import {
   PptxPictureModel,
   PptxObjectFitModel,
   PptxBoxShapeEnum,
-  PptxObjectFitEnum
+  PptxObjectFitEnum,
+  PptxAlignment,
+  PptxShapeType,
+  PptxConnectorType
 } from "@/types/pptx_models";
+
+/**
+ * Converts text alignment string to PptxAlignment enum value
+ */
+function convertTextAlignToPptxAlignment(textAlign?: string): PptxAlignment | undefined {
+  if (!textAlign) return undefined;
+
+  switch (textAlign.toLowerCase()) {
+    case 'left':
+      return PptxAlignment.LEFT;
+    case 'center':
+      return PptxAlignment.CENTER;
+    case 'right':
+      return PptxAlignment.RIGHT;
+    case 'justify':
+      return PptxAlignment.JUSTIFY;
+    default:
+      return PptxAlignment.LEFT;
+  }
+}
 
 /**
  * Converts ElementAttributes[][] to PptxSlideModel[]
@@ -38,7 +61,7 @@ export function convertElementAttributesToPptxSlides(
     // Add background color if available
     if (backgroundColors && backgroundColors[index]) {
       slide.background = {
-        color: backgroundColors[index]
+        color: backgroundColors[index]!
       };
     }
 
@@ -58,7 +81,7 @@ function convertElementToPptxShape(
   }
 
   // Check if it's an image element
-  if (element.tagName === 'img' || element.className?.includes('image')) {
+  if (element.tagName === 'img' || (element.className && typeof element.className === 'string' && element.className.includes('image'))) {
     return convertToPictureBox(element);
   }
 
@@ -68,7 +91,7 @@ function convertElementToPptxShape(
   }
 
   // Check if it's a connector/line element
-  if (element.tagName === 'hr' || element.className?.includes('connector') || element.className?.includes('line')) {
+  if (element.tagName === 'hr' || (element.className && typeof element.className === 'string' && (element.className.includes('connector') || element.className.includes('line')))) {
     return convertToConnector(element);
   }
 
@@ -81,34 +104,36 @@ function convertElementToPptxShape(
  */
 function convertToTextBox(element: ElementAttributes): PptxTextBoxModel {
   const position: PptxPositionModel = {
-    left: element.position?.left,
-    top: element.position?.top,
-    width: element.position?.width,
-    height: element.position?.height
+    left: Math.round(element.position?.left ?? 0),
+    top: Math.round(element.position?.top ?? 0),
+    width: Math.round(element.position?.width ?? 0),
+    height: Math.round(element.position?.height ?? 0)
   };
 
   const margin: PptxSpacingModel | undefined = element.margin ? {
-    top: element.margin.top,
-    bottom: element.margin.bottom,
-    left: element.margin.left,
-    right: element.margin.right
+    top: Math.round(element.margin.top ?? 0),
+    bottom: Math.round(element.margin.bottom ?? 0),
+    left: Math.round(element.margin.left ?? 0),
+    right: Math.round(element.margin.right ?? 0)
   } : undefined;
 
-  const fill: PptxFillModel | undefined = element.background?.color ? {
-    color: element.background.color
-  } : undefined;
+  const fill: PptxFillModel | undefined = element.background?.color ?
+    (element.background.isInherited ?
+      (element.shadow?.color ? { color: element.background.color } : undefined) :
+      { color: element.background.color }
+    ) : undefined;
 
   const font: PptxFontModel | undefined = element.font ? {
-    name: element.font.name,
-    size: element.font.size,
-    bold: element.font.weight ? element.font.weight >= 600 : undefined,
-    italic: element.font.italic,
-    color: element.font.color
+    name: element.font.name ?? "Inter",
+    size: Math.round(element.font.size ?? 16),
+    bold: element.font.weight ? element.font.weight >= 600 : false,
+    italic: element.font.italic ?? false,
+    color: element.font.color ?? "000000"
   } : undefined;
 
   const paragraph: PptxParagraphModel = {
     spacing: undefined,
-    alignment: element.textAlign,
+    alignment: convertTextAlignToPptxAlignment(element.textAlign),
     font,
     text: element.innerText
   };
@@ -127,58 +152,61 @@ function convertToTextBox(element: ElementAttributes): PptxTextBoxModel {
  */
 function convertToAutoShapeBox(element: ElementAttributes): PptxAutoShapeBoxModel {
   const position: PptxPositionModel = {
-    left: element.position?.left,
-    top: element.position?.top,
-    width: element.position?.width,
-    height: element.position?.height
+    left: Math.round(element.position?.left ?? 0),
+    top: Math.round(element.position?.top ?? 0),
+    width: Math.round(element.position?.width ?? 0),
+    height: Math.round(element.position?.height ?? 0)
   };
 
   const margin: PptxSpacingModel | undefined = element.margin ? {
-    top: element.margin.top,
-    bottom: element.margin.bottom,
-    left: element.margin.left,
-    right: element.margin.right
+    top: Math.round(element.margin.top ?? 0),
+    bottom: Math.round(element.margin.bottom ?? 0),
+    left: Math.round(element.margin.left ?? 0),
+    right: Math.round(element.margin.right ?? 0)
   } : undefined;
 
-  const fill: PptxFillModel | undefined = element.background?.color ? {
-    color: element.background.color
-  } : undefined;
+  const fill: PptxFillModel | undefined = element.background?.color ?
+    (element.background.isInherited ?
+      (element.shadow?.color ? { color: element.background.color } : undefined) :
+      { color: element.background.color }
+    ) : undefined;
 
   const stroke: PptxStrokeModel | undefined = element.border?.color ? {
     color: element.border.color,
-    thickness: element.border.width || 1
+    thickness: element.border.width ?? 1 // float - keep as number
   } : undefined;
 
   const shadow: PptxShadowModel | undefined = element.shadow?.color ? {
-    radius: element.shadow.radius ?? 4,
-    offset: element.shadow.offset ? Math.sqrt(element.shadow.offset[0] ** 2 + element.shadow.offset[1] ** 2) : undefined,
+    radius: Math.round(element.shadow.radius ?? 4), // int
+    offset: Math.round(element.shadow.offset ? Math.sqrt(element.shadow.offset[0] ** 2 + element.shadow.offset[1] ** 2) : 0), // int
     color: element.shadow.color,
-    opacity: element.shadow.opacity,
-    angle: element.shadow.angle
+    opacity: element.shadow.opacity ?? 0.5, // float - keep as number
+    angle: Math.round(element.shadow.angle ?? 0) // int
   } : undefined;
 
   // Check if element has text content
   const paragraphs: PptxParagraphModel[] | undefined = element.innerText ? [{
     spacing: undefined,
-    alignment: element.textAlign,
+    alignment: convertTextAlignToPptxAlignment(element.textAlign),
     font: element.font ? {
-      name: element.font.name,
-      size: element.font.size,
-      bold: element.font.weight ? element.font.weight >= 600 : undefined,
-      italic: element.font.italic,
-      color: element.font.color
+      name: element.font.name ?? "Inter",
+      size: Math.round(element.font.size ?? 16), // int
+      bold: element.font.weight ? element.font.weight >= 600 : false,
+      italic: element.font.italic ?? false,
+      color: element.font.color ?? "000000"
     } : undefined,
     text: element.innerText
   }] : undefined;
 
   return {
+    type: PptxShapeType.ROUNDED_RECTANGLE, // Default to rounded rectangle
     margin,
     fill,
     stroke,
     shadow,
     position,
     text_wrap: element.textWrap ?? true,
-    border_radius: element.borderRadius ? (Array.isArray(element.borderRadius) ? element.borderRadius[0] : element.borderRadius) : 0,
+    border_radius: element.borderRadius ? Math.round(element.borderRadius[0]) : 0, // int - use first value for autoshape
     paragraphs
   };
 }
@@ -188,17 +216,17 @@ function convertToAutoShapeBox(element: ElementAttributes): PptxAutoShapeBoxMode
  */
 function convertToPictureBox(element: ElementAttributes): PptxPictureBoxModel {
   const position: PptxPositionModel = {
-    left: element.position?.left,
-    top: element.position?.top,
-    width: element.position?.width,
-    height: element.position?.height
+    left: Math.round(element.position?.left ?? 0),
+    top: Math.round(element.position?.top ?? 0),
+    width: Math.round(element.position?.width ?? 0),
+    height: Math.round(element.position?.height ?? 0)
   };
 
   const margin: PptxSpacingModel | undefined = element.margin ? {
-    top: element.margin.top,
-    bottom: element.margin.bottom,
-    left: element.margin.left,
-    right: element.margin.right
+    top: Math.round(element.margin.top ?? 0),
+    bottom: Math.round(element.margin.bottom ?? 0),
+    left: Math.round(element.margin.left ?? 0),
+    right: Math.round(element.margin.right ?? 0)
   } : undefined;
 
   const objectFit: PptxObjectFitModel = {
@@ -214,9 +242,9 @@ function convertToPictureBox(element: ElementAttributes): PptxPictureBoxModel {
   return {
     position,
     margin,
-    clip: element.clip ?? false,
+    clip: element.clip ?? true,
     overlay: element.overlay,
-    border_radius: element.borderRadius ? (Array.isArray(element.borderRadius) ? element.borderRadius : [element.borderRadius]) : undefined,
+    border_radius: element.borderRadius ? element.borderRadius.map(r => Math.round(r)) : undefined, // List[int] - 4 elements from route parsing
     shape: element.shape ? (element.shape as PptxBoxShapeEnum) : PptxBoxShapeEnum.RECTANGLE,
     object_fit: objectFit,
     picture
@@ -228,16 +256,16 @@ function convertToPictureBox(element: ElementAttributes): PptxPictureBoxModel {
  */
 function convertToConnector(element: ElementAttributes): PptxConnectorModel {
   const position: PptxPositionModel = {
-    left: element.position?.left,
-    top: element.position?.top,
-    width: element.position?.width,
-    height: element.position?.height
+    left: Math.round(element.position?.left ?? 0),
+    top: Math.round(element.position?.top ?? 0),
+    width: Math.round(element.position?.width ?? 0),
+    height: Math.round(element.position?.height ?? 0)
   };
 
   return {
-    type: element.connectorType,
+    type: PptxConnectorType.STRAIGHT, // Default to straight connector
     position,
-    thickness: element.border?.width || 1,
-    color: element.border?.color || element.background?.color || '#000000'
+    thickness: element.border?.width ?? 0.5, // float - keep as number
+    color: element.border?.color || element.background?.color || '000000'
   };
 }

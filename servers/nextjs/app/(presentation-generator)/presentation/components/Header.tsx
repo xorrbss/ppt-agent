@@ -47,6 +47,7 @@ import Modal from "./Modal";
 
 import Announcement from "@/components/Announcement";
 import { getFontLink, getStaticFileUrl } from "../../utils/others";
+import { PptxPresentationModel } from "@/types/pptx_models";
 
 
 const Header = ({
@@ -121,44 +122,12 @@ const Header = ({
     }
   };
 
-  const getSlideMetadata = async () => {
-    try {
-      const metadata = await (await fetch('/api/slide-metadata', {
-        method: 'POST',
-        body: JSON.stringify({
-          id: presentation_id,
-        })
-      })).json()
-
-      console.log("metadata", metadata);
-      return metadata;
-    } catch (error) {
-      setShowLoader(false);
-      console.error("Error fetching metadata:", error);
-      toast({
-        title: "Error fetching slide metadata",
-        description: error instanceof Error ? error.message : "Failed to fetch metadata",
-        variant: "destructive",
-      });
-      throw error;
-    }
+  const get_presentation_pptx_model = async (id: string): Promise<PptxPresentationModel> => {
+    const response = await fetch(`/api/presentation_to_pptx_model?id=${id}`);
+    const pptx_model = await response.json();
+    return pptx_model;
   };
-  const metaData = async () => {
-    const body = {
-      presentation_id: presentation_id,
-      slides: presentationData?.slides,
-    };
-    await PresentationGenerationApi.updatePresentationContent(body)
-      .then(() => { })
-      .catch((error) => {
-        console.error(error);
-      });
 
-    const apiBody = await getSlideMetadata();
-    apiBody.presentation_id = presentation_id;
-
-    return apiBody;
-  };
   const handleExportPptx = async () => {
     if (isStreaming) return;
 
@@ -166,12 +135,13 @@ const Header = ({
       setOpen(false);
       setShowLoader(true);
 
-      const apiBody = await metaData();
-
-      const response = await PresentationGenerationApi.exportAsPPTX(apiBody);
-      if (response.path) {
-        const staticFileUrl = getStaticFileUrl(response.path);
-        window.open(staticFileUrl, '_self');
+      const pptx_model = await get_presentation_pptx_model(presentation_id);
+      if (!pptx_model) {
+        throw new Error("Failed to get presentation PPTX model");
+      }
+      const pptx_path = await PresentationGenerationApi.exportAsPPTX(pptx_model);
+      if (pptx_path) {
+        window.open(pptx_path, '_self');
       } else {
         throw new Error("No path returned from export");
       }
