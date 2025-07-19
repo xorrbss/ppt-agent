@@ -1,15 +1,21 @@
-import os
 from typing import Any, Optional
 import redis
 from redis.exceptions import RedisError
 
+from utils.get_env import (
+    get_redis_db_env,
+    get_redis_host_env,
+    get_redis_password_env,
+    get_redis_port_env,
+)
+
 
 class RedisService:
     def __init__(self):
-        self.redis_host = os.getenv("REDIS_HOST", "localhost")
-        self.redis_port = int(os.getenv("REDIS_PORT", "6379"))
-        self.redis_db = int(os.getenv("REDIS_DB", "0"))
-        self.redis_password = os.getenv("REDIS_PASSWORD")
+        self.redis_host = get_redis_host_env() or "localhost"
+        self.redis_port = int(get_redis_port_env() or "6379")
+        self.redis_db = int(get_redis_db_env() or "0")
+        self.redis_password = get_redis_password_env() or None
         self.client = self._create_client()
 
     def _create_client(self) -> redis.Redis:

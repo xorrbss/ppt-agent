@@ -122,7 +122,7 @@ class ImageGenerationService:
     async def get_image_from_pixabay(self, prompt: str) -> str:
         async with aiohttp.ClientSession() as session:
             response = await session.get(
-                f"https://pixabay.com/api/?key={os.getenv('PIXABAY_API_KEY')}&q={prompt}&image_type=photo&per_page=3"
+                f"https://pixabay.com/api/?key={get_pixabay_api_key_env()}&q={prompt}&image_type=photo&per_page=3"
             )
             data = await response.json()
             image_url = data["hits"][0]["largeImageURL"]

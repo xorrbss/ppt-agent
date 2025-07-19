@@ -56,8 +56,26 @@ def get_custom_model_env():
 def get_pexels_api_key_env():
     return os.getenv("PEXELS_API_KEY")
 
+
 def get_image_provider_env():
     return os.getenv("IMAGE_PROVIDER")
 
+
 def get_pixabay_api_key_env():
     return os.getenv("PIXABAY_API_KEY")
+
+
+def get_redis_host_env():
+    return os.getenv("REDIS_HOST")
+
+
+def get_redis_port_env():
+    return os.getenv("REDIS_PORT")
+
+
+def get_redis_db_env():
+    return os.getenv("REDIS_DB")
+
+
+def get_redis_password_env():
+    return os.getenv("REDIS_PASSWORD")

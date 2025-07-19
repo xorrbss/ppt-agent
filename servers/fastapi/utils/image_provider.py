@@ -1,5 +1,12 @@
 import os
 from enums.image_provider import ImageProvider
+from utils.get_env import (
+    get_google_api_key_env,
+    get_image_provider_env,
+    get_openai_api_key_env,
+    get_pexels_api_key_env,
+    get_pixabay_api_key_env,
+)
 
 
 def is_pixels_selected() -> bool:
@@ -24,18 +31,18 @@ def get_selected_image_provider() -> ImageProvider:
     Returns:
         ImageProvider: The selected image provider.
     """
-    return ImageProvider(os.getenv("IMAGE_PROVIDER"))
+    return ImageProvider(get_image_provider_env())
 
 
 def get_image_provider_api_key() -> str:
     selected_image_provider = get_selected_image_provider()
     if selected_image_provider == ImageProvider.PEXELS:
-        return os.getenv("PEXELS_API_KEY")
+        return get_pexels_api_key_env()
     elif selected_image_provider == ImageProvider.PIXABAY:
-        return os.getenv("PIXABAY_API_KEY")
+        return get_pixabay_api_key_env()
     elif selected_image_provider == ImageProvider.GEMINI_FLASH:
-        return os.getenv("GOOGLE_API_KEY")
+        return get_google_api_key_env()
     elif selected_image_provider == ImageProvider.DALLE3:
-        return os.getenv("OPENAI_API_KEY")
+        return get_openai_api_key_env()
     else:
         raise ValueError(f"Invalid image provider: {selected_image_provider}")
