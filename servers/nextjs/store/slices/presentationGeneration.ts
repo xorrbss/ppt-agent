@@ -72,6 +72,10 @@ const presentationGenerationSlice = createSlice({
       state.presentation_id = null;
       state.error = null;
       state.isLoading = false;
+      state.presentationData = null;
+    },
+    clearOutlines: (state) => {
+      state.outlines = [];
     },
     // Set outlines
     setOutlines: (state, action: PayloadAction<SlideOutline[]>) => {
@@ -341,6 +345,7 @@ export const {
   setSlidesRendered,
   setError,
   clearPresentationData,
+  clearOutlines,
   deleteSlideOutline,
   setPresentationData,
   setOutlines,

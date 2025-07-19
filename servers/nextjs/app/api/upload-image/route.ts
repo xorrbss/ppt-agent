@@ -22,12 +22,14 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(bytes);
 
     // Create uploads directory if it doesn't exist
-    const uploadsDir = path.join(userDataDir, "uploads");
+    const uploadsDir = path.join(userDataDir, "images");
     fs.mkdirSync(uploadsDir, { recursive: true });
+    console.log("uploadsDir", uploadsDir);
 
     // Generate unique filename
     const filename = `${crypto.randomBytes(16).toString("hex")}.png`;
     const filePath = path.join(uploadsDir, filename);
+    console.log("filePath", filePath);
 
     // Write file to disk
     fs.writeFileSync(filePath, buffer);
@@ -35,7 +37,7 @@ export async function POST(request: NextRequest) {
     // Return the relative path that can be used in the frontend
     return NextResponse.json({
       success: true,
-      filePath: `${userDataDir}/uploads/${filename}`
+      filePath: `${uploadsDir}/${filename}`
     });
   } catch (error) {
     console.error("Error saving image:", error);

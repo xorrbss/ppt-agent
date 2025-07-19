@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import { useDispatch } from "react-redux";
 import { useRouter } from "next/navigation";
 import { toast } from "@/hooks/use-toast";
-import { setPresentationData, SlideOutline } from "@/store/slices/presentationGeneration";
+import { clearPresentationData, setPresentationData, SlideOutline } from "@/store/slices/presentationGeneration";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import { useLayout } from "../../context/LayoutContext";
 import { LayoutGroup, LoadingState } from "../types/index";
@@ -69,7 +69,10 @@ export const usePresentationGeneration = (
   }, [selectedLayoutGroup, getLayoutById]);
 
   const handleSubmit = useCallback(async () => {
+      
     if (!validateInputs()) return;
+
+    
 
     setLoadingState({
       message: "Generating presentation data...",
@@ -89,8 +92,8 @@ export const usePresentationGeneration = (
       });
 
       if (response) {
-        dispatch(setPresentationData(response));
-        router.push(`/presentation?id=${presentationId}&stream=true`);
+        dispatch(clearPresentationData());
+          router.push(`/presentation?id=${presentationId}&stream=true`);
       }
     } catch (error) {
       console.error("Error in data generation", error);

@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { toast } from "@/hooks/use-toast";
 import { setOutlines, SlideOutline } from "@/store/slices/presentationGeneration";
 import { jsonrepair } from "jsonrepair";
 import { StreamState } from "../types/index";
+import { RootState } from "@/store/store";
 
 const DEFAULT_STREAM_STATE: StreamState = {
   isStreaming: false,
@@ -12,10 +13,11 @@ const DEFAULT_STREAM_STATE: StreamState = {
 
 export const useOutlineStreaming = (presentationId: string | null) => {
   const dispatch = useDispatch();
+  const {outlines} = useSelector((state: RootState) => state.presentationGeneration);
   const [streamState, setStreamState] = useState<StreamState>(DEFAULT_STREAM_STATE);
 
   useEffect(() => {
-    if (!presentationId) return;
+    if (!presentationId || outlines.length > 0) return;
 
     let eventSource: EventSource;
     let accumulatedChunks = "";

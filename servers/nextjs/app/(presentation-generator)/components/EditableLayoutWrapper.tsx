@@ -298,7 +298,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                     onClose={handleEditorClose}
                     onImageChange={handleImageChange}
                 >
-                    <div />
+
                 </ImageEditor>
             )}
 
@@ -311,7 +311,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                     onClose={handleEditorClose}
                     onIconChange={handleIconChange}
                 >
-                    <div />
+
                 </IconsEditor>
             )}
         </div>

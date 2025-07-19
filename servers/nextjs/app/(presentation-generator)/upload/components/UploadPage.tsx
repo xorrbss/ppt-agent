@@ -13,7 +13,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDispatch } from "react-redux";
-import { setPresentationId } from "@/store/slices/presentationGeneration";
+import { clearOutlines, setPresentationId } from "@/store/slices/presentationGeneration";
 import { ConfigurationSelects } from "./ConfigurationSelects";
 import { PromptInput } from "./PromptInput";
 import { LanguageType, PresentationConfig } from "../type";
@@ -154,8 +154,6 @@ const UploadPage = () => {
     });
 
     // Use the first available layout group for direct generation
-
-
     const createResponse = await PresentationGenerationApi.createPresentation({
       prompt: config?.prompt ?? "",
       n_slides: config?.slides ? parseInt(config.slides) : null,
@@ -164,6 +162,7 @@ const UploadPage = () => {
     });
 
     dispatch(setPresentationId(createResponse.id));
+    dispatch(clearOutlines());
     router.push("/outline");
   };
 
