@@ -10,8 +10,8 @@ def is_pixabay_selected() -> bool:
     return ImageProvider.PIXABAY == get_selected_image_provider()
 
 
-def is_imagen_selected() -> bool:
-    return ImageProvider.IMAGEN == get_selected_image_provider()
+def is_gemini_flash_selected() -> bool:
+    return ImageProvider.GEMINI_FLASH == get_selected_image_provider()
 
 
 def is_dalle3_selected() -> bool:
@@ -33,7 +33,7 @@ def get_image_provider_api_key() -> str:
         return os.getenv("PEXELS_API_KEY")
     elif selected_image_provider == ImageProvider.PIXABAY:
         return os.getenv("PIXABAY_API_KEY")
-    elif selected_image_provider == ImageProvider.IMAGEN:
+    elif selected_image_provider == ImageProvider.GEMINI_FLASH:
         return os.getenv("GOOGLE_API_KEY")
     elif selected_image_provider == ImageProvider.DALLE3:
         return os.getenv("OPENAI_API_KEY")

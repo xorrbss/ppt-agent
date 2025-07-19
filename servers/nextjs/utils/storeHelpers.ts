@@ -44,7 +44,7 @@ export const hasValidLLMConfig = (llmConfig: LLMConfig) => {
         return llmConfig.PIXABAY_API_KEY && llmConfig.PIXABAY_API_KEY !== "";
       case "dall-e-3":
         return OPENAI_API_KEY && OPENAI_API_KEY !== "";
-      case "imagen":
+      case "gemini_flash":
         return GOOGLE_API_KEY && GOOGLE_API_KEY !== "";
       default:
         return false;

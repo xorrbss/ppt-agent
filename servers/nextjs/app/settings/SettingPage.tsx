@@ -50,9 +50,9 @@ const IMAGE_PROVIDERS: Record<string, ImageProviderConfig> = {
     placeholder: "Enter your OpenAI API key",
     apiKeyField: "OPENAI_API_KEY",
   },
-  imagen: {
-    title: "imagen",
-    description: "Required for using Imagen services from Google",
+  gemini_flash: {
+    title: "gemini_flash",
+    description: "Required for using Gemini Flash services from Google",
     placeholder: "Enter your Google API key",
     apiKeyField: "GOOGLE_API_KEY",
   },
@@ -943,7 +943,7 @@ const SettingsPage = () => {
                   return <></>;
                 }
 
-                if (provider.title === "imagen" && llmConfig.LLM === "google") {
+                if (provider.title === "gemini_flash" && llmConfig.LLM === "google") {
                   return <> </>;
                 }
 

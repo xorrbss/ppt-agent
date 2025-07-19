@@ -87,9 +87,9 @@ const IMAGE_PROVIDERS: Record<string, ImageProviderOption> = {
     requiresApiKey: true,
     apiKeyField: "OPENAI_API_KEY",
   },
-  imagen: {
-    value: "imagen",
-    label: "Imagen",
+  gemini_flash: {
+    value: "gemini_flash",
+    label: "Gemini Flash",
     description: "Google's primary image generation model",
     icon: "/icons/google.png",
     requiresApiKey: true,
@@ -142,8 +142,8 @@ const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     ],
     imageModels: [
       {
-        value: "imagen",
-        label: "Imagen",
+        value: "gemini_flash",
+        label: "Gemini Flash",
         description: "Google's primary image generation model",
         icon: "/icons/google.png",
         size: "8GB",
@@ -323,7 +323,7 @@ export default function Home() {
     if (provider === "openai") {
       newConfig.IMAGE_PROVIDER = "dall-e-3";
     } else if (provider === "google") {
-      newConfig.IMAGE_PROVIDER = "imagen";
+      newConfig.IMAGE_PROVIDER = "gemini_flash";
     } else {
       newConfig.IMAGE_PROVIDER = "pexels"; // default for ollama and custom
     }
@@ -967,7 +967,7 @@ export default function Home() {
                 return <></>;
               }
 
-              if (provider.value === "imagen" && llmConfig.LLM === "google") {
+              if (provider.value === "gemini_flash" && llmConfig.LLM === "google") {
                 return <> </>;
               }
 

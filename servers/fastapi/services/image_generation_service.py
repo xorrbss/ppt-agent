@@ -17,7 +17,7 @@ from utils.llm_provider import (
 from utils.image_provider import (
     is_pixels_selected,
     is_pixabay_selected,
-    is_imagen_selected,
+    is_gemini_flash_selected,
     is_dalle3_selected
 )
 
@@ -32,7 +32,7 @@ class ImageGenerationService:
             return self.get_image_from_pixabay
         elif is_pixels_selected():
             return self.get_image_from_pexels
-        elif is_imagen_selected():
+        elif is_gemini_flash_selected():
             return self.generate_image_google
         elif is_dalle3_selected():
             return self.generate_image_openai

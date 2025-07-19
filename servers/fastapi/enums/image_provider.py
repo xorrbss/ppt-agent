@@ -3,5 +3,5 @@ from enum import Enum
 class ImageProvider(Enum):
     PEXELS = "pexels"
     PIXABAY = "pixabay"
-    IMAGEN = "imagen"
+    GEMINI_FLASH = "gemini_flash"
     DALLE3 = "dall-e-3"

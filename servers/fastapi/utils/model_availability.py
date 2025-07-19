@@ -12,7 +12,7 @@ from utils.ollama import pull_ollama_model
 from utils.image_provider import (
     is_pixels_selected,
     is_pixabay_selected,
-    is_imagen_selected,
+    is_gemini_flash_selected,
     is_dalle3_selected,
 )
 
@@ -73,7 +73,7 @@ async def check_llm_and_image_provider_api_or_model_availability():
             if not pixabay_api_key:
                 raise Exception("PIXABAY_API_KEY must be provided")
 
-        elif is_imagen_selected():
+        elif is_gemini_flash_selected():
             google_api_key = os.getenv("GOOGLE_API_KEY")
             if not google_api_key:
                 raise Exception("GOOGLE_API_KEY must be provided")
