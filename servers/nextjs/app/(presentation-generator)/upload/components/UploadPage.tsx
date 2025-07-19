@@ -191,7 +191,7 @@ const UploadPage = () => {
           onConfigChange={handleConfigChange}
         />
       </div>
-      <ToastTesting />
+
       <div className="relative">
         <PromptInput
           value={config.prompt}

@@ -109,7 +109,7 @@ export default function RootLayout({
             </FooterProvider>
           </LayoutProvider>
         </Providers>
-        <Toaster position="top-center" />
+        <Toaster position="top-center" richColors={true} />
       </body>
     </html>
   );
