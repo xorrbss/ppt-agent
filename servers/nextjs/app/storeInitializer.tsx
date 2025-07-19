@@ -84,9 +84,9 @@ export function StoreInitializer({ children }: { children: React.ReactNode }) {
 
   const checkIfSelectedOllamaModelIsPulled = async (ollamaModel: string) => {
     try {
-      const response = await fetch('/api/v1/ppt/ollama/list-pulled-models');
-      const data = await response.json();
-      const pulledModels = data.map((model: any) => model.name);
+      const response = await fetch('/api/v1/ppt/ollama/models/available');
+      const models = await response.json();
+      const pulledModels = models.map((model: any) => model.name);
       return pulledModels.includes(ollamaModel);
     } catch (error) {
       console.error('Error checking if selected Ollama model is pulled:', error);
@@ -96,7 +96,7 @@ export function StoreInitializer({ children }: { children: React.ReactNode }) {
 
   const checkIfSelectedCustomModelIsAvailable = async (customModel: string) => {
     try {
-      const response = await fetch('/api/v1/ppt/models/list/custom', {
+      const response = await fetch('/api/v1/ppt/custom_llm/models/available', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

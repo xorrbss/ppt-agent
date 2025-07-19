@@ -214,7 +214,8 @@ export default function Home() {
   const router = useRouter();
   const [openImageProviderSelect, setOpenImageProviderSelect] = useState(false);
   const config = useSelector((state: RootState) => state.userConfig);
-  const [llmConfig, setLlmConfig] = useState({...config.llm_config,
+  const [llmConfig, setLlmConfig] = useState({
+    ...config.llm_config,
     IMAGE_PROVIDER: "dall-e-3",
   });
   const [ollamaModels, setOllamaModels] = useState<
@@ -297,13 +298,13 @@ export default function Home() {
 
   const fetchOllamaModelsWithConfig = async (config: any) => {
     try {
-      const response = await fetch("/api/v1/ppt/ollama/list-supported-models");
-      const data = await response.json();
-      setOllamaModels(data.models || []);
+      const response = await fetch("/api/v1/ppt/ollama/models/supported");
+      const models = await response.json();
+      setOllamaModels(models || []);
 
       // Check if currently selected model is still available
-      if (config.OLLAMA_MODEL && data.models && data.models.length > 0) {
-        const isModelAvailable = data.models.some(
+      if (config.OLLAMA_MODEL && models && models.length > 0) {
+        const isModelAvailable = models.some(
           (model: any) => model.value === config.OLLAMA_MODEL
         );
         if (!isModelAvailable) {
@@ -350,7 +351,7 @@ export default function Home() {
       const interval = setInterval(async () => {
         try {
           const response = await fetch(
-            `/api/v1/ppt/ollama/pull-model?name=${llmConfig.OLLAMA_MODEL}`
+            `/api/v1/ppt/ollama/model/pull?model=${llmConfig.OLLAMA_MODEL}`
           );
           if (response.status === 200) {
             const data = await response.json();
@@ -389,7 +390,7 @@ export default function Home() {
   const fetchCustomModels = async () => {
     try {
       setCustomModelsLoading(true);
-      const response = await fetch("/api/v1/ppt/models/list/custom", {
+      const response = await fetch("/api/v1/ppt/custom_llm/models/available", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -505,19 +506,17 @@ export default function Home() {
                 <button
                   key={provider}
                   onClick={() => changeProvider(provider)}
-                  className={`relative p-4 rounded-lg border-2 transition-all duration-200 ${
-                    llmConfig.LLM === provider
-                      ? "border-blue-500 bg-blue-50"
-                      : "border-gray-200 hover:border-blue-200 hover:bg-gray-50"
-                  }`}
+                  className={`relative p-4 rounded-lg border-2 transition-all duration-200 ${llmConfig.LLM === provider
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-gray-200 hover:border-blue-200 hover:bg-gray-50"
+                    }`}
                 >
                   <div className="flex items-center justify-center gap-3">
                     <span
-                      className={`font-medium text-center ${
-                        llmConfig.LLM === provider
-                          ? "text-blue-700"
-                          : "text-gray-700"
-                      }`}
+                      className={`font-medium text-center ${llmConfig.LLM === provider
+                        ? "text-blue-700"
+                        : "text-gray-700"
+                        }`}
                     >
                       {provider === "openai"
                         ? "OpenAI"
@@ -599,8 +598,8 @@ export default function Home() {
                             <span className="text-sm font-medium text-gray-900">
                               {llmConfig.OLLAMA_MODEL
                                 ? ollamaModels?.find(
-                                    (m) => m.value === llmConfig.OLLAMA_MODEL
-                                  )?.label || llmConfig.OLLAMA_MODEL
+                                  (m) => m.value === llmConfig.OLLAMA_MODEL
+                                )?.label || llmConfig.OLLAMA_MODEL
                                 : "Select a model"}
                             </span>
                             {llmConfig.OLLAMA_MODEL && (
@@ -840,27 +839,26 @@ export default function Home() {
               {/* Check for available models button - show when no models checked or no models found */}
               {(!customModelsChecked ||
                 (customModelsChecked && customModels.length === 0)) && (
-                <div className="mb-4">
-                  <button
-                    onClick={fetchCustomModels}
-                    disabled={customModelsLoading || !llmConfig.CUSTOM_LLM_URL}
-                    className={`w-full py-2.5 px-4 rounded-lg transition-all duration-200 border-2 ${
-                      customModelsLoading || !llmConfig.CUSTOM_LLM_URL
+                  <div className="mb-4">
+                    <button
+                      onClick={fetchCustomModels}
+                      disabled={customModelsLoading || !llmConfig.CUSTOM_LLM_URL}
+                      className={`w-full py-2.5 px-4 rounded-lg transition-all duration-200 border-2 ${customModelsLoading || !llmConfig.CUSTOM_LLM_URL
                         ? "bg-gray-100 border-gray-300 cursor-not-allowed text-gray-500"
                         : "bg-white border-blue-600 text-blue-600 hover:bg-blue-50 focus:ring-2 focus:ring-blue-500/20"
-                    }`}
-                  >
-                    {customModelsLoading ? (
-                      <div className="flex items-center justify-center gap-2">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Checking for models...
-                      </div>
-                    ) : (
-                      "Check for available models"
-                    )}
-                  </button>
-                </div>
-              )}
+                        }`}
+                    >
+                      {customModelsLoading ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Checking for models...
+                        </div>
+                      ) : (
+                        "Check for available models"
+                      )}
+                    </button>
+                  </div>
+                )}
 
               {/* Show message if no models found */}
               {customModelsChecked && customModels.length === 0 && (
@@ -893,7 +891,7 @@ export default function Home() {
                       <span className="text-sm font-medium text-gray-900">
                         {llmConfig.IMAGE_PROVIDER
                           ? IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]?.label ||
-                            llmConfig.IMAGE_PROVIDER
+                          llmConfig.IMAGE_PROVIDER
                           : "Select image provider"}
                       </span>
                     </div>
@@ -986,8 +984,8 @@ export default function Home() {
                         provider.apiKeyField === "PEXELS_API_KEY"
                           ? llmConfig.PEXELS_API_KEY || ""
                           : provider.apiKeyField === "PIXABAY_API_KEY"
-                          ? llmConfig.PIXABAY_API_KEY || ""
-                          : ""
+                            ? llmConfig.PIXABAY_API_KEY || ""
+                            : ""
                       }
                       onChange={(e) => {
                         if (provider.apiKeyField === "PEXELS_API_KEY") {
@@ -1022,11 +1020,11 @@ export default function Home() {
                   {llmConfig.LLM === "ollama"
                     ? llmConfig.OLLAMA_MODEL ?? "_____"
                     : llmConfig.LLM === "custom"
-                    ? llmConfig.CUSTOM_MODEL ?? "_____"
-                    : PROVIDER_CONFIGS[llmConfig.LLM!].textModels[0].label}{" "}
+                      ? llmConfig.CUSTOM_MODEL ?? "_____"
+                      : PROVIDER_CONFIGS[llmConfig.LLM!].textModels[0].label}{" "}
                   for text generation and{" "}
                   {llmConfig.IMAGE_PROVIDER &&
-                  IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]
+                    IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]
                     ? IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER].label
                     : "_____"}{" "}
                   for images
@@ -1101,24 +1099,23 @@ export default function Home() {
               (llmConfig.LLM === "ollama" && !llmConfig.OLLAMA_MODEL) ||
               (llmConfig.LLM === "custom" && !llmConfig.CUSTOM_MODEL)
             }
-            className={`mt-8 w-full font-semibold py-3 px-4 rounded-lg transition-all duration-500 ${
-              isLoading ||
+            className={`mt-8 w-full font-semibold py-3 px-4 rounded-lg transition-all duration-500 ${isLoading ||
               (llmConfig.LLM === "ollama" && !llmConfig.OLLAMA_MODEL) ||
               (llmConfig.LLM === "custom" && !llmConfig.CUSTOM_MODEL)
-                ? "bg-gray-400 cursor-not-allowed"
-                : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:ring-4 focus:ring-blue-200"
-            } text-white`}
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:ring-4 focus:ring-blue-200"
+              } text-white`}
           >
             {isLoading ? (
               <div className="flex items-center justify-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
                 {(llmConfig.LLM === "ollama" && downloadingModel.downloaded) ||
-                0 > 0
+                  0 > 0
                   ? `Downloading Model (${(
-                      ((downloadingModel.downloaded || 0) /
-                        (downloadingModel.size || 1)) *
-                      100
-                    ).toFixed(0)}%)`
+                    ((downloadingModel.downloaded || 0) /
+                      (downloadingModel.size || 1)) *
+                    100
+                  ).toFixed(0)}%)`
                   : "Saving Configuration..."}
               </div>
             ) : (llmConfig.LLM === "ollama" && !llmConfig.OLLAMA_MODEL) ||

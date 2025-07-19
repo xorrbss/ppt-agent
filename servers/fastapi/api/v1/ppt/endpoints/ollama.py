@@ -22,7 +22,7 @@ async def get_available_models():
     return await list_pulled_ollama_models()
 
 
-@OLLAMA_ROUTER.get("/models/pull", response_model=OllamaModelStatus)
+@OLLAMA_ROUTER.get("/model/pull", response_model=OllamaModelStatus)
 async def pull_model(model: str, background_tasks: BackgroundTasks):
 
     if model not in SUPPORTED_OLLAMA_MODELS:

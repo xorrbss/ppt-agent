@@ -178,13 +178,13 @@ const SettingsPage = () => {
 
   const fetchOllamaModelsWithConfig = async (config: any) => {
     try {
-      const response = await fetch("/api/v1/ppt/ollama/list-supported-models");
-      const data = await response.json();
-      setOllamaModels(data.models);
+      const response = await fetch("/api/v1/ppt/ollama/models/supported");
+      const models = await response.json();
+      setOllamaModels(models);
 
       // Check if currently selected model is still available
-      if (config.OLLAMA_MODEL && data.models.length > 0) {
-        const isModelAvailable = data.models.some(
+      if (config.OLLAMA_MODEL && models.length > 0) {
+        const isModelAvailable = models.some(
           (model: any) => model.value === config.OLLAMA_MODEL
         );
         if (!isModelAvailable) {
@@ -220,7 +220,7 @@ const SettingsPage = () => {
       const interval = setInterval(async () => {
         try {
           const response = await fetch(
-            `/api/v1/ppt/ollama/pull-model?name=${llmConfig.OLLAMA_MODEL}`
+            `/api/v1/ppt/ollama/model/pull?model=${llmConfig.OLLAMA_MODEL}`
           );
           if (response.status === 200) {
             const data = await response.json();
@@ -259,7 +259,7 @@ const SettingsPage = () => {
   const fetchCustomModels = async () => {
     try {
       setCustomModelsLoading(true);
-      const response = await fetch("/api/v1/ppt/models/list/custom", {
+      const response = await fetch("/api/v1/ppt/custom_llm/models/available", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -384,24 +384,22 @@ const SettingsPage = () => {
                   <button
                     key={provider}
                     onClick={() => changeProvider(provider)}
-                    className={`relative p-4 rounded-lg border-2 transition-all duration-200 ${
-                      llmConfig.LLM === provider
+                    className={`relative p-4 rounded-lg border-2 transition-all duration-200 ${llmConfig.LLM === provider
                         ? "border-blue-500 bg-blue-50"
                         : "border-gray-200 hover:border-blue-200 hover:bg-gray-50"
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-center gap-3">
                       <span
-                        className={`font-medium text-center ${
-                          llmConfig.LLM === provider
+                        className={`font-medium text-center ${llmConfig.LLM === provider
                             ? "text-blue-700"
                             : "text-gray-700"
-                        }`}
+                          }`}
                       >
                         {provider === "openai"
                           ? "OpenAI"
                           : provider.charAt(0).toUpperCase() +
-                            provider.slice(1)}
+                          provider.slice(1)}
                       </span>
                     </div>
                   </button>
@@ -481,8 +479,8 @@ const SettingsPage = () => {
                               <span className="text-sm font-medium text-gray-900">
                                 {llmConfig.OLLAMA_MODEL
                                   ? ollamaModels.find(
-                                      (m) => m.value === llmConfig.OLLAMA_MODEL
-                                    )?.label || llmConfig.OLLAMA_MODEL
+                                    (m) => m.value === llmConfig.OLLAMA_MODEL
+                                  )?.label || llmConfig.OLLAMA_MODEL
                                   : "Select a model"}
                               </span>
                               {llmConfig.OLLAMA_MODEL && (
@@ -686,80 +684,80 @@ const SettingsPage = () => {
                 {/* Model selection dropdown - show if models are available or if there's a selected model */}
                 {((customModelsChecked && customModels.length > 0) ||
                   llmConfig.CUSTOM_MODEL) && (
-                  <div>
-                    <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                      <p className="text-sm text-amber-800">
-                        <strong>Important:</strong> Only models with function
-                        calling capabilities (tool calls) or JSON schema support
-                        will work.
-                      </p>
-                    </div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Select Model
-                    </label>
-                    <div className="w-full">
-                      <Popover
-                        open={openModelSelect}
-                        onOpenChange={setOpenModelSelect}
-                      >
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            aria-expanded={openModelSelect}
-                            className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
-                          >
-                            <span className="text-sm font-medium text-gray-900">
-                              {llmConfig.CUSTOM_MODEL || "Select a model"}
-                            </span>
-                            <ChevronsUpDown className="w-4 h-4 text-gray-500" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent
-                          className="p-0"
-                          align="start"
-                          style={{
-                            width: "var(--radix-popover-trigger-width)",
-                          }}
+                    <div>
+                      <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <p className="text-sm text-amber-800">
+                          <strong>Important:</strong> Only models with function
+                          calling capabilities (tool calls) or JSON schema support
+                          will work.
+                        </p>
+                      </div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Select Model
+                      </label>
+                      <div className="w-full">
+                        <Popover
+                          open={openModelSelect}
+                          onOpenChange={setOpenModelSelect}
                         >
-                          <Command>
-                            <CommandInput placeholder="Search model..." />
-                            <CommandList>
-                              <CommandEmpty>No model found.</CommandEmpty>
-                              <CommandGroup>
-                                {customModels.map((model, index) => (
-                                  <CommandItem
-                                    key={index}
-                                    value={model}
-                                    onSelect={(value) => {
-                                      setLlmConfig({
-                                        ...llmConfig,
-                                        CUSTOM_MODEL: value,
-                                      });
-                                      setOpenModelSelect(false);
-                                    }}
-                                  >
-                                    <Check
-                                      className={cn(
-                                        "mr-2 h-4 w-4",
-                                        llmConfig.CUSTOM_MODEL === model
-                                          ? "opacity-100"
-                                          : "opacity-0"
-                                      )}
-                                    />
-                                    <span className="text-sm font-medium text-gray-900">
-                                      {model}
-                                    </span>
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={openModelSelect}
+                              className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
+                            >
+                              <span className="text-sm font-medium text-gray-900">
+                                {llmConfig.CUSTOM_MODEL || "Select a model"}
+                              </span>
+                              <ChevronsUpDown className="w-4 h-4 text-gray-500" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            className="p-0"
+                            align="start"
+                            style={{
+                              width: "var(--radix-popover-trigger-width)",
+                            }}
+                          >
+                            <Command>
+                              <CommandInput placeholder="Search model..." />
+                              <CommandList>
+                                <CommandEmpty>No model found.</CommandEmpty>
+                                <CommandGroup>
+                                  {customModels.map((model, index) => (
+                                    <CommandItem
+                                      key={index}
+                                      value={model}
+                                      onSelect={(value) => {
+                                        setLlmConfig({
+                                          ...llmConfig,
+                                          CUSTOM_MODEL: value,
+                                        });
+                                        setOpenModelSelect(false);
+                                      }}
+                                    >
+                                      <Check
+                                        className={cn(
+                                          "mr-2 h-4 w-4",
+                                          llmConfig.CUSTOM_MODEL === model
+                                            ? "opacity-100"
+                                            : "opacity-0"
+                                        )}
+                                      />
+                                      <span className="text-sm font-medium text-gray-900">
+                                        {model}
+                                      </span>
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
                 {/* Check for available models button - show when no models checked or no models found, and no model is selected */}
                 {(!customModelsChecked ||
@@ -771,11 +769,10 @@ const SettingsPage = () => {
                         disabled={
                           customModelsLoading || !llmConfig.CUSTOM_LLM_URL
                         }
-                        className={`w-full py-2.5 px-4 rounded-lg transition-all duration-200 border-2 font-semibold ${
-                          customModelsLoading || !llmConfig.CUSTOM_LLM_URL
+                        className={`w-full py-2.5 px-4 rounded-lg transition-all duration-200 border-2 font-semibold ${customModelsLoading || !llmConfig.CUSTOM_LLM_URL
                             ? "bg-gray-100 border-gray-300 cursor-not-allowed text-gray-500"
                             : "bg-white border-blue-600 text-blue-600 hover:bg-blue-50 focus:ring-2 focus:ring-blue-500/20"
-                        }`}
+                          }`}
                       >
                         {customModelsLoading ? (
                           <div className="flex items-center justify-center gap-2">
@@ -806,11 +803,10 @@ const SettingsPage = () => {
                       disabled={
                         customModelsLoading || !llmConfig.CUSTOM_LLM_URL
                       }
-                      className={`w-full py-2.5 px-4 rounded-lg transition-all duration-200 border-2 font-semibold ${
-                        customModelsLoading || !llmConfig.CUSTOM_LLM_URL
+                      className={`w-full py-2.5 px-4 rounded-lg transition-all duration-200 border-2 font-semibold ${customModelsLoading || !llmConfig.CUSTOM_LLM_URL
                           ? "bg-gray-100 border-gray-300 cursor-not-allowed text-gray-500"
                           : "bg-white border-gray-600 text-gray-600 hover:bg-gray-50 focus:ring-2 focus:ring-gray-500/20"
-                      }`}
+                        }`}
                     >
                       {customModelsLoading ? (
                         <div className="flex items-center justify-center gap-2">
@@ -868,7 +864,7 @@ const SettingsPage = () => {
                         <span className="text-sm font-medium text-gray-900">
                           {llmConfig.IMAGE_PROVIDER
                             ? IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]
-                                ?.title || llmConfig.IMAGE_PROVIDER
+                              ?.title || llmConfig.IMAGE_PROVIDER
                             : "Select image provider"}
                         </span>
                       </div>
@@ -962,8 +958,8 @@ const SettingsPage = () => {
                           provider.apiKeyField === "PEXELS_API_KEY"
                             ? llmConfig.PEXELS_API_KEY || ""
                             : provider.apiKeyField === "PIXABAY_API_KEY"
-                            ? llmConfig.PIXABAY_API_KEY || ""
-                            : ""
+                              ? llmConfig.PIXABAY_API_KEY || ""
+                              : ""
                         }
                         onChange={(e) => {
                           if (provider.apiKeyField === "PEXELS_API_KEY") {
@@ -998,25 +994,24 @@ const SettingsPage = () => {
                 (llmConfig.LLM === "ollama" && !llmConfig.OLLAMA_MODEL) ||
                 (llmConfig.LLM === "custom" && !llmConfig.CUSTOM_MODEL)
               }
-              className={`mt-8 w-full font-semibold py-3 px-4 rounded-lg transition-all duration-500 ${
-                isLoading ||
-                (llmConfig.LLM === "ollama" && !llmConfig.OLLAMA_MODEL) ||
-                (llmConfig.LLM === "custom" && !llmConfig.CUSTOM_MODEL)
+              className={`mt-8 w-full font-semibold py-3 px-4 rounded-lg transition-all duration-500 ${isLoading ||
+                  (llmConfig.LLM === "ollama" && !llmConfig.OLLAMA_MODEL) ||
+                  (llmConfig.LLM === "custom" && !llmConfig.CUSTOM_MODEL)
                   ? "bg-gray-400 cursor-not-allowed"
                   : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:ring-4 focus:ring-blue-200"
-              } text-white`}
+                } text-white`}
             >
               {isLoading ? (
                 <div className="flex items-center justify-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
                   {(llmConfig.LLM === "ollama" &&
                     downloadingModel.downloaded) ||
-                  0 > 0
+                    0 > 0
                     ? `Downloading Model (${(
-                        ((downloadingModel.downloaded || 0) /
-                          (downloadingModel.size || 1)) *
-                        100
-                      ).toFixed(0)}%)`
+                      ((downloadingModel.downloaded || 0) /
+                        (downloadingModel.size || 1)) *
+                      100
+                    ).toFixed(0)}%)`
                     : "Saving Configuration..."}
                 </div>
               ) : (llmConfig.LLM === "ollama" && !llmConfig.OLLAMA_MODEL) ||

@@ -1,4 +1,3 @@
-import os
 from enums.image_provider import ImageProvider
 from utils.get_env import (
     get_google_api_key_env,

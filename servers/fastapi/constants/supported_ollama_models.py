@@ -8,7 +8,7 @@ SUPPORTED_OLLAMA_MODELS = {
         description="❌ Graphs not supported.",
         size="4.7GB",
         supports_graph=False,
-        icon="/static/servers/fastapi/assets/icons/meta.png",
+        icon="/static/icons/meta.png",
     ),
     "llama3:70b": OllamaModelMetadata(
         label="Llama 3:70b",
@@ -16,7 +16,7 @@ SUPPORTED_OLLAMA_MODELS = {
         description="✅ Graphs supported.",
         size="40GB",
         supports_graph=True,
-        icon="/static/servers/fastapi/assets/icons/meta.png",
+        icon="/static/icons/meta.png",
     ),
     "llama3.1:8b": OllamaModelMetadata(
         label="Llama 3.1:8b",
@@ -24,7 +24,7 @@ SUPPORTED_OLLAMA_MODELS = {
         description="❌ Graphs not supported.",
         size="4.9GB",
         supports_graph=False,
-        icon="/static/servers/fastapi/assets/icons/meta.png",
+        icon="/static/icons/meta.png",
     ),
     "llama3.1:70b": OllamaModelMetadata(
         label="Llama 3.1:70b",
@@ -32,7 +32,7 @@ SUPPORTED_OLLAMA_MODELS = {
         description="✅ Graphs supported.",
         size="43GB",
         supports_graph=True,
-        icon="/static/servers/fastapi/assets/icons/meta.png",
+        icon="/static/icons/meta.png",
     ),
     "llama3.1:405b": OllamaModelMetadata(
         label="Llama 3.1:405b",
@@ -40,7 +40,7 @@ SUPPORTED_OLLAMA_MODELS = {
         description="✅ Graphs supported.",
         size="243GB",
         supports_graph=True,
-        icon="/static/servers/fastapi/assets/icons/meta.png",
+        icon="/static/icons/meta.png",
     ),
     "llama3.2:1b": OllamaModelMetadata(
         label="Llama 3.2:1b",
@@ -48,7 +48,7 @@ SUPPORTED_OLLAMA_MODELS = {
         description="❌ Graphs not supported.",
         size="1.3GB",
         supports_graph=False,
-        icon="/static/servers/fastapi/assets/icons/meta.png",
+        icon="/static/icons/meta.png",
     ),
     "llama3.2:3b": OllamaModelMetadata(
         label="Llama 3.2:3b",
@@ -56,7 +56,7 @@ SUPPORTED_OLLAMA_MODELS = {
         description="❌ Graphs not supported.",
         size="2GB",
         supports_graph=False,
-        icon="/static/servers/fastapi/assets/icons/meta.png",
+        icon="/static/icons/meta.png",
     ),
     "llama3.3:70b": OllamaModelMetadata(
         label="Llama 3.3:70b",
@@ -64,7 +64,7 @@ SUPPORTED_OLLAMA_MODELS = {
         description="✅ Graphs supported.",
         size="43GB",
         supports_graph=True,
-        icon="/static/servers/fastapi/assets/icons/meta.png",
+        icon="/static/icons/meta.png",
     ),
     "llama4:16x17b": OllamaModelMetadata(
         label="Llama 4:16x17b",
@@ -72,7 +72,7 @@ SUPPORTED_OLLAMA_MODELS = {
         description="✅ Graphs supported.",
         size="67GB",
         supports_graph=True,
-        icon="/static/servers/fastapi/assets/icons/meta.png",
+        icon="/static/icons/meta.png",
     ),
     "llama4:128x17b": OllamaModelMetadata(
         label="Llama 4:128x17b",
@@ -80,7 +80,7 @@ SUPPORTED_OLLAMA_MODELS = {
         description="✅ Graphs supported.",
         size="245GB",
         supports_graph=True,
-        icon="/static/servers/fastapi/assets/icons/meta.png",
+        icon="/static/icons/meta.png",
     ),
 }
 
@@ -91,7 +91,7 @@ SUPPORTED_GEMMA_MODELS = {
         description="❌ Graphs not supported.",
         size="815MB",
         supports_graph=False,
-        icon="/static/servers/fastapi/assets/icons/gemma.png",
+        icon="/static/icons/gemma.png",
     ),
     "gemma3:4b": OllamaModelMetadata(
         label="Gemma 3:4b",
@@ -99,7 +99,7 @@ SUPPORTED_GEMMA_MODELS = {
         description="❌ Graphs not supported.",
         size="3.3GB",
         supports_graph=False,
-        icon="/static/servers/fastapi/assets/icons/gemma.png",
+        icon="/static/icons/gemma.png",
     ),
     "gemma3:12b": OllamaModelMetadata(
         label="Gemma 3:12b",
@@ -107,7 +107,7 @@ SUPPORTED_GEMMA_MODELS = {
         description="❌ Graphs not supported.",
         size="8.1GB",
         supports_graph=False,
-        icon="/static/servers/fastapi/assets/icons/gemma.png",
+        icon="/static/icons/gemma.png",
     ),
     "gemma3:27b": OllamaModelMetadata(
         label="Gemma 3:27b",
@@ -115,7 +115,7 @@ SUPPORTED_GEMMA_MODELS = {
         description="✅ Graphs supported.",
         size="17GB",
         supports_graph=True,
-        icon="/static/servers/fastapi/assets/icons/gemma.png",
+        icon="/static/icons/gemma.png",
     ),
 }
 
@@ -126,7 +126,7 @@ SUPPORTED_DEEPSEEK_MODELS = {
         description="❌ Graphs not supported.",
         size="1.1GB",
         supports_graph=False,
-        icon="/static/servers/fastapi/assets/icons/deepseek.png",
+        icon="/static/icons/deepseek.png",
     ),
     "deepseek-r1:7b": OllamaModelMetadata(
         label="DeepSeek R1:7b",
@@ -134,7 +134,7 @@ SUPPORTED_DEEPSEEK_MODELS = {
         description="❌ Graphs not supported.",
         size="4.7GB",
         supports_graph=False,
-        icon="/static/servers/fastapi/assets/icons/deepseek.png",
+        icon="/static/icons/deepseek.png",
     ),
     "deepseek-r1:8b": OllamaModelMetadata(
         label="DeepSeek R1:8b",
@@ -142,7 +142,7 @@ SUPPORTED_DEEPSEEK_MODELS = {
         description="❌ Graphs not supported.",
         size="5.2GB",
         supports_graph=False,
-        icon="/static/servers/fastapi/assets/icons/deepseek.png",
+        icon="/static/icons/deepseek.png",
     ),
     "deepseek-r1:14b": OllamaModelMetadata(
         label="DeepSeek R1:14b",
@@ -150,7 +150,7 @@ SUPPORTED_DEEPSEEK_MODELS = {
         description="❌ Graphs not supported.",
         size="9GB",
         supports_graph=False,
-        icon="/static/servers/fastapi/assets/icons/deepseek.png",
+        icon="/static/icons/deepseek.png",
     ),
     "deepseek-r1:32b": OllamaModelMetadata(
         label="DeepSeek R1:32b",
@@ -158,7 +158,7 @@ SUPPORTED_DEEPSEEK_MODELS = {
         description="✅ Graphs supported.",
         size="20GB",
         supports_graph=True,
-        icon="/static/servers/fastapi/assets/icons/deepseek.png",
+        icon="/static/icons/deepseek.png",
     ),
     "deepseek-r1:70b": OllamaModelMetadata(
         label="DeepSeek R1:70b",
@@ -166,7 +166,7 @@ SUPPORTED_DEEPSEEK_MODELS = {
         description="✅ Graphs supported.",
         size="43GB",
         supports_graph=True,
-        icon="/static/servers/fastapi/assets/icons/deepseek.png",
+        icon="/static/icons/deepseek.png",
     ),
     "deepseek-r1:671b": OllamaModelMetadata(
         label="DeepSeek R1:671b",
@@ -174,7 +174,7 @@ SUPPORTED_DEEPSEEK_MODELS = {
         description="✅ Graphs supported.",
         size="404GB",
         supports_graph=True,
-        icon="/static/servers/fastapi/assets/icons/deepseek.png",
+        icon="/static/icons/deepseek.png",
     ),
 }
 
@@ -185,7 +185,7 @@ SUPPORTED_QWEN_MODELS = {
         description="❌ Graphs not supported.",
         size="523MB",
         supports_graph=False,
-        icon="/static/servers/fastapi/assets/icons/qwen.png",
+        icon="/static/icons/qwen.png",
     ),
     "qwen3:1.7b": OllamaModelMetadata(
         label="Qwen 3:1.7b",
@@ -193,7 +193,7 @@ SUPPORTED_QWEN_MODELS = {
         description="❌ Graphs not supported.",
         size="1.4GB",
         supports_graph=False,
-        icon="/static/servers/fastapi/assets/icons/qwen.png",
+        icon="/static/icons/qwen.png",
     ),
     "qwen3:4b": OllamaModelMetadata(
         label="Qwen 3:4b",
@@ -201,7 +201,7 @@ SUPPORTED_QWEN_MODELS = {
         description="❌ Graphs not supported.",
         size="2.6GB",
         supports_graph=False,
-        icon="/static/servers/fastapi/assets/icons/qwen.png",
+        icon="/static/icons/qwen.png",
     ),
     "qwen3:8b": OllamaModelMetadata(
         label="Qwen 3:8b",
@@ -209,7 +209,7 @@ SUPPORTED_QWEN_MODELS = {
         description="❌ Graphs not supported.",
         size="5.2GB",
         supports_graph=False,
-        icon="/static/servers/fastapi/assets/icons/qwen.png",
+        icon="/static/icons/qwen.png",
     ),
     "qwen3:14b": OllamaModelMetadata(
         label="Qwen 3:14b",
@@ -217,7 +217,7 @@ SUPPORTED_QWEN_MODELS = {
         description="❌ Graphs not supported.",
         size="9.3GB",
         supports_graph=False,
-        icon="/static/servers/fastapi/assets/icons/qwen.png",
+        icon="/static/icons/qwen.png",
     ),
     "qwen3:30b": OllamaModelMetadata(
         label="Qwen 3:30b",
@@ -225,7 +225,7 @@ SUPPORTED_QWEN_MODELS = {
         description="✅ Graphs supported.",
         size="19GB",
         supports_graph=True,
-        icon="/static/servers/fastapi/assets/icons/qwen.png",
+        icon="/static/icons/qwen.png",
     ),
     "qwen3:32b": OllamaModelMetadata(
         label="Qwen 3:32b",
@@ -233,7 +233,7 @@ SUPPORTED_QWEN_MODELS = {
         description="✅ Graphs supported.",
         size="20GB",
         supports_graph=True,
-        icon="/static/servers/fastapi/assets/icons/qwen.png",
+        icon="/static/icons/qwen.png",
     ),
     "qwen3:235b": OllamaModelMetadata(
         label="Qwen 3:235b",
@@ -241,7 +241,7 @@ SUPPORTED_QWEN_MODELS = {
         description="✅ Graphs supported.",
         size="142GB",
         supports_graph=True,
-        icon="/static/servers/fastapi/assets/icons/qwen.png",
+        icon="/static/icons/qwen.png",
     ),
 }
 

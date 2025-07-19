@@ -9,17 +9,14 @@ from models.sql.image_asset import ImageAsset
 from utils.download_helpers import download_file
 from utils.get_env import get_pexels_api_key_env
 from utils.get_env import get_pixabay_api_key_env
-from utils.llm_provider import (
-    get_llm_client,
-    is_google_selected,
-    is_openai_selected,
-)
+from utils.llm_provider import get_llm_client
 from utils.image_provider import (
     is_pixels_selected,
     is_pixabay_selected,
     is_gemini_flash_selected,
-    is_dalle3_selected
+    is_dalle3_selected,
 )
+
 
 class ImageGenerationService:
 
@@ -53,14 +50,18 @@ class ImageGenerationService:
             print("No image generation function found. Using placeholder image.")
             return "/static/images/placeholder.jpg"
 
-        image_prompt = prompt.get_image_prompt(with_theme=not self.is_stock_provider_selected())
+        image_prompt = prompt.get_image_prompt(
+            with_theme=not self.is_stock_provider_selected()
+        )
         print(f"Request - Generating Image for {image_prompt}")
 
         try:
             if self.is_stock_provider_selected():
                 image_path = await self.image_gen_func(image_prompt)
             else:
-                image_path = await self.image_gen_func(image_prompt, self.output_directory)
+                image_path = await self.image_gen_func(
+                    image_prompt, self.output_directory
+                )
             if image_path:
                 if image_path.startswith("http"):
                     return image_path
@@ -118,11 +119,11 @@ class ImageGenerationService:
             data = await response.json()
             image_url = data["photos"][0]["src"]["large"]
             return image_url
-        
+
     async def get_image_from_pixabay(self, prompt: str) -> str:
         async with aiohttp.ClientSession() as session:
             response = await session.get(
-                f"https://pixabay.com/api/?key={get_pixabay_api_key_env()}&q={prompt}&image_type=photo&per_page=3"
+                f"https://pixabay.com/api/?key={get_pixabay_api_key_env()}&q={prompt}&image_type=photo&per_page=1"
             )
             data = await response.json()
             image_url = data["hits"][0]["largeImageURL"]
