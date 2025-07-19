@@ -43,7 +43,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({ presentation_id }) 
   });
 
   // Custom hooks
-  const { fetchUserSlides, handleDeleteSlide } = usePresentationData(
+  const { fetchUserSlides } = usePresentationData(
     presentation_id,
     setLoading,
     setError
@@ -72,9 +72,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({ presentation_id }) 
     fetchUserSlides
   );
 
-  const onDeleteSlide = (index: number) => {
-    handleDeleteSlide(index, presentationData);
-  };
+
 
   const onSlideChange = (newSlide: number) => {
     handleSlideChange(newSlide, presentationData);
@@ -172,7 +170,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({ presentation_id }) 
                       slide={slide}
                       index={index}
                       presentationId={presentation_id}
-                      onDeleteSlide={onDeleteSlide}
+
                     />
                   ))}
               </>

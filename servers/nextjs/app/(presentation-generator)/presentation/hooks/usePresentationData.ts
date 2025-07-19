@@ -2,8 +2,7 @@ import { useCallback } from "react";
 import { useDispatch } from "react-redux";
 import { toast } from "@/hooks/use-toast";
 import { DashboardApi } from "@/app/dashboard/api/dashboard";
-import { PresentationGenerationApi } from "../../services/api/presentation-generation";
-import { setPresentationData, deletePresentationSlide } from "@/store/slices/presentationGeneration";
+import { setPresentationData } from "@/store/slices/presentationGeneration";
 
 export const usePresentationData = (
   presentationId: string,
@@ -32,25 +31,10 @@ export const usePresentationData = (
     }
   }, [presentationId, dispatch, setLoading, setError]);
 
-  const handleDeleteSlide = useCallback(async (index: number, presentationData: any) => {
-    dispatch(deletePresentationSlide(index));
-    try {
-      await PresentationGenerationApi.deleteSlide(
-        presentationId,
-        presentationData?.slides[index].id!
-      );
-    } catch (error) {
-      console.error("Error deleting slide:", error);
-      toast({
-        title: "Error",
-        description: "Failed to delete slide",
-        variant: "destructive",
-      });
-    }
-  }, [presentationId, dispatch]);
+
 
   return {
     fetchUserSlides,
-    handleDeleteSlide,
+
   };
 }; 

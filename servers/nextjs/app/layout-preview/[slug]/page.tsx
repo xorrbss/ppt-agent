@@ -70,7 +70,7 @@ const GroupLayoutPreview = () => {
             {/* Layout Grid */}
             <main className="max-w-7xl mx-auto px-6 py-8">
                 <div className="space-y-8">
-                    {layoutGroup.layouts.map((layout, index) => {
+                    {layoutGroup.layouts.map((layout: any, index: number) => {
                         const { component: LayoutComponent, sampleData, name, fileName } = layout
 
                         return (

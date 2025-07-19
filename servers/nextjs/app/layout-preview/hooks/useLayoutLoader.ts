@@ -73,6 +73,7 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
                         // Use empty object to let schema apply its default values
                         // User will need to provide actual data when using the layouts
                         const sampleData = module.Schema.parse({})
+                        const layoutId = module.layoutId || layoutName.toLowerCase().replace(/layout$/, '')
 
                         const layoutInfo: LayoutInfo = {
                             name: layoutName,
@@ -80,7 +81,8 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
                             schema: module.Schema,
                             sampleData,
                             fileName,
-                            groupName: groupData.groupName
+                            groupName: groupData.groupName,
+                            layoutId
                         }
 
                         groupLayouts.push(layoutInfo)
@@ -97,13 +99,15 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
                             if (module.default && module.Schema) {
                                 // Use empty object to let schema apply its default values
                                 const sampleData = module.Schema.parse({})
+                                const layoutId = module.layoutId || layoutName.toLowerCase().replace(/layout$/, '')
                                 const layoutInfo: LayoutInfo = {
                                     name: layoutName,
                                     component: module.default,
                                     schema: module.Schema,
                                     sampleData,
                                     fileName,
-                                    groupName: groupData.groupName
+                                    groupName: groupData.groupName,
+                                    layoutId
                                 }
                                 groupLayouts.push(layoutInfo)
                                 allLayouts.push(layoutInfo)
