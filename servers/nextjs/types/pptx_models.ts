@@ -112,12 +112,13 @@ export interface PptxConnectorModel extends PptxShapeModel {
   color?: string;
 }
 
+
 export interface PptxSlideModel {
+  background?: PptxFillModel;
   shapes: (PptxTextBoxModel | PptxAutoShapeBoxModel | PptxConnectorModel | PptxPictureBoxModel)[];
 }
 
 export interface PptxPresentationModel {
-  background_color: string;
   shapes?: PptxShapeModel[];
   slides: PptxSlideModel[];
 }
@@ -145,6 +146,6 @@ export const positionToPtXyxy = (position: PptxPositionModel): number[] => {
   const top = position.top || 0;
   const width = position.width || 0;
   const height = position.height || 0;
-  
+
   return [left, top, left + width, top + height];
 };
