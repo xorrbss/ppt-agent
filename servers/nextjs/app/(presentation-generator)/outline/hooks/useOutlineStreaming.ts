@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { setOutlines, SlideOutline } from "@/store/slices/presentationGeneration";
 import { jsonrepair } from "jsonrepair";
 import { StreamState } from "../types/index";
@@ -56,11 +56,7 @@ export const useOutlineStreaming = (presentationId: string | null) => {
                 eventSource.close();
               } catch (error) {
                 console.error("Error parsing accumulated chunks:", error);
-                toast({
-                  title: "Error",
-                  description: "Failed to parse presentation data",
-                  variant: "destructive",
-                });
+                toast.error("Failed to parse presentation data");
                 eventSource.close();
               }
               accumulatedChunks = "";
@@ -76,19 +72,11 @@ export const useOutlineStreaming = (presentationId: string | null) => {
         eventSource.onerror = () => {
           setStreamState({ isStreaming: false, isLoading: false });
           eventSource.close();
-          toast({
-            title: "Connection Error",
-            description: "Failed to connect to the server. Please try again.",
-            variant: "destructive",
-          });
+          toast.error("Failed to connect to the server. Please try again.");
         };
       } catch (error) {
         setStreamState({ isStreaming: false, isLoading: false });
-        toast({
-          title: "Error",
-          description: "Failed to initialize connection",
-          variant: "destructive",
-        });
+        toast.error("Failed to initialize connection");
       }
     };
 

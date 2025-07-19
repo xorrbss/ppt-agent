@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DashboardApi } from "@/app/dashboard/api/dashboard";
 
 
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 
 
@@ -40,11 +40,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
             setContentLoading(false);
         } catch (error) {
             setError(true);
-            toast({
-                title: "Error",
-                description: "Failed to load presentation",
-                variant: "destructive",
-            });
+            toast.error("Failed to load presentation");
             console.error("Error fetching user slides:", error);
             setContentLoading(false);
         }

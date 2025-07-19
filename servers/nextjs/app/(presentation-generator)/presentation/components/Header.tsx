@@ -20,7 +20,7 @@ import { useDispatch, useSelector } from "react-redux";
 import Link from "next/link";
 
 import { RootState } from "@/store/store";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 import Modal from "./Modal";
 
@@ -75,11 +75,9 @@ const Header = ({
     } catch (error) {
       console.error("Export failed:", error);
       setShowLoader(false);
-      toast({
-        title: "Having trouble exporting!",
+      toast.error("Having trouble exporting!", {
         description:
           "We are having trouble exporting your presentation. Please try again.",
-        variant: "default",
       });
     } finally {
       setShowLoader(false);
@@ -111,11 +109,9 @@ const Header = ({
 
     } catch (err) {
       console.error(err);
-      toast({
-        title: "Having trouble exporting!",
+      toast.error("Having trouble exporting!", {
         description:
           "We are having trouble exporting your presentation. Please try again.",
-        variant: "default",
       });
     } finally {
       setShowLoader(false);

@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { SendHorizontal } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import ToolTip from "@/components/ToolTip";
 import { RootState } from "@/store/store";
@@ -45,11 +45,7 @@ const SlideContent = ({
     ) as HTMLInputElement;
     const value = element?.value;
     if (!value?.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter a prompt before submitting",
-        variant: "destructive",
-      });
+      toast.error("Please enter a prompt before submitting");
       return;
     }
     setIsUpdating(true);
@@ -64,18 +60,11 @@ const SlideContent = ({
       if (response) {
         console.log("response", response);
         dispatch(updateSlide({ index: slide.index, slide: response }));
-        toast({
-          title: "Success",
-          description: "Slide updated successfully",
-        });
+        toast.success("Slide updated successfully");
       }
     } catch (error) {
       console.error("Error updating slide:", error);
-      toast({
-        title: "Error",
-        description: "Failed to update slide. Please try again.",
-        variant: "destructive",
-      });
+      toast.error("Failed to update slide. Please try again.");
     } finally {
       setIsUpdating(false);
     }

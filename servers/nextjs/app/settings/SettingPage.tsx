@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import Header from "../dashboard/components/Header";
 import Wrapper from "@/components/Wrapper";
 import { Settings, Key, Loader2, Check, ChevronsUpDown } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { RootState } from "@/store/store";
 import { useSelector } from "react-redux";
 import { handleSaveLLMConfig } from "@/utils/storeHelpers";
@@ -156,22 +156,16 @@ const SettingsPage = () => {
         setIsLoading(true);
         await pullOllamaModels();
       }
-      toast({
-        title: "Success",
-        description: "Configuration saved successfully",
-      });
+      toast.success("Configuration saved successfully");
       setIsLoading(false);
       router.back();
     } catch (error) {
       console.error("Error:", error);
-      toast({
-        title: "Error",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Failed to save configuration",
-        variant: "destructive",
-      });
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to save configuration"
+      );
       setIsLoading(false);
     }
   };
@@ -284,23 +278,18 @@ const SettingsPage = () => {
         const isModelAvailable = data.includes(llmConfig.CUSTOM_MODEL);
         if (!isModelAvailable) {
           setLlmConfig({ ...llmConfig, CUSTOM_MODEL: "" });
-          toast({
-            title: "Model Unavailable",
-            description: `The selected model "${llmConfig.CUSTOM_MODEL}" is no longer available. Please select a different model.`,
-            variant: "destructive",
-          });
+          toast.error(
+            `The selected model "${llmConfig.CUSTOM_MODEL}" is no longer available. Please select a different model.`
+          );
         }
       }
     } catch (error) {
       console.error("Error fetching custom models:", error);
       // Don't set customModelsChecked to true on error, so the button remains visible
       setCustomModels([]);
-      toast({
-        title: "Error",
-        description:
-          "Failed to fetch available models. Please check your URL and API key.",
-        variant: "destructive",
-      });
+      toast.error(
+        "Failed to fetch available models. Please check your URL and API key."
+      );
     } finally {
       setCustomModelsLoading(false);
     }
@@ -385,15 +374,15 @@ const SettingsPage = () => {
                     key={provider}
                     onClick={() => changeProvider(provider)}
                     className={`relative p-4 rounded-lg border-2 transition-all duration-200 ${llmConfig.LLM === provider
-                        ? "border-blue-500 bg-blue-50"
-                        : "border-gray-200 hover:border-blue-200 hover:bg-gray-50"
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-gray-200 hover:border-blue-200 hover:bg-gray-50"
                       }`}
                   >
                     <div className="flex items-center justify-center gap-3">
                       <span
                         className={`font-medium text-center ${llmConfig.LLM === provider
-                            ? "text-blue-700"
-                            : "text-gray-700"
+                          ? "text-blue-700"
+                          : "text-gray-700"
                           }`}
                       >
                         {provider === "openai"
@@ -770,8 +759,8 @@ const SettingsPage = () => {
                           customModelsLoading || !llmConfig.CUSTOM_LLM_URL
                         }
                         className={`w-full py-2.5 px-4 rounded-lg transition-all duration-200 border-2 font-semibold ${customModelsLoading || !llmConfig.CUSTOM_LLM_URL
-                            ? "bg-gray-100 border-gray-300 cursor-not-allowed text-gray-500"
-                            : "bg-white border-blue-600 text-blue-600 hover:bg-blue-50 focus:ring-2 focus:ring-blue-500/20"
+                          ? "bg-gray-100 border-gray-300 cursor-not-allowed text-gray-500"
+                          : "bg-white border-blue-600 text-blue-600 hover:bg-blue-50 focus:ring-2 focus:ring-blue-500/20"
                           }`}
                       >
                         {customModelsLoading ? (
@@ -804,8 +793,8 @@ const SettingsPage = () => {
                         customModelsLoading || !llmConfig.CUSTOM_LLM_URL
                       }
                       className={`w-full py-2.5 px-4 rounded-lg transition-all duration-200 border-2 font-semibold ${customModelsLoading || !llmConfig.CUSTOM_LLM_URL
-                          ? "bg-gray-100 border-gray-300 cursor-not-allowed text-gray-500"
-                          : "bg-white border-gray-600 text-gray-600 hover:bg-gray-50 focus:ring-2 focus:ring-gray-500/20"
+                        ? "bg-gray-100 border-gray-300 cursor-not-allowed text-gray-500"
+                        : "bg-white border-gray-600 text-gray-600 hover:bg-gray-50 focus:ring-2 focus:ring-gray-500/20"
                         }`}
                     >
                       {customModelsLoading ? (
@@ -995,10 +984,10 @@ const SettingsPage = () => {
                 (llmConfig.LLM === "custom" && !llmConfig.CUSTOM_MODEL)
               }
               className={`mt-8 w-full font-semibold py-3 px-4 rounded-lg transition-all duration-500 ${isLoading ||
-                  (llmConfig.LLM === "ollama" && !llmConfig.OLLAMA_MODEL) ||
-                  (llmConfig.LLM === "custom" && !llmConfig.CUSTOM_MODEL)
-                  ? "bg-gray-400 cursor-not-allowed"
-                  : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:ring-4 focus:ring-blue-200"
+                (llmConfig.LLM === "ollama" && !llmConfig.OLLAMA_MODEL) ||
+                (llmConfig.LLM === "custom" && !llmConfig.CUSTOM_MODEL)
+                ? "bg-gray-400 cursor-not-allowed"
+                : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:ring-4 focus:ring-blue-200"
                 } text-white`}
             >
               {isLoading ? (

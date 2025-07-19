@@ -13,7 +13,7 @@ export const useAutoSave = ({
     debounceMs = 2000,
     enabled = true,
 }: UseAutoSaveOptions = {}) => {
-    const { presentationData } = useSelector(
+    const { presentationData, isStreaming, isLoading } = useSelector(
         (state: RootState) => state.presentationGeneration
     );
 
@@ -61,7 +61,7 @@ export const useAutoSave = ({
 
     // Effect to trigger auto-save when presentation data changes
     useEffect(() => {
-        if (!enabled || !presentationData) return;
+        if (!enabled || !presentationData || isStreaming || isLoading) return;
 
         // Trigger debounced save
         debouncedSave(presentationData);

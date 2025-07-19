@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 
 import { LayoutInfo, LayoutGroup, GroupedLayoutsResponse, GroupSetting } from '../types'
-import { toast } from '@/hooks/use-toast'
+import { toast } from 'sonner'
 
 interface UseGroupLayoutLoaderReturn {
     layoutGroup: LayoutGroup | null
@@ -42,8 +42,7 @@ export const useGroupLayoutLoader = (groupSlug: string): UseGroupLayoutLoaderRet
 
             const response = await fetch('/api/layouts')
             if (!response.ok) {
-                toast({
-                    title: 'Error loading layouts',
+                toast.error('Error loading layouts', {
                     description: response.statusText,       
                 })
                 return
@@ -75,8 +74,7 @@ export const useGroupLayoutLoader = (groupSlug: string): UseGroupLayoutLoaderRet
                     const module = await import(`@/presentation-layouts/${targetGroupData.groupName}/${layoutName}`)
 
                     if (!module.default) {
-                        toast({
-                            title: `${layoutName} has no default export`,
+                        toast.error(`${layoutName} has no default export`, {
                             description: 'Please ensure the layout file exports a default component',
                         })
                         console.warn(`${layoutName} has no default export`)
@@ -84,8 +82,7 @@ export const useGroupLayoutLoader = (groupSlug: string): UseGroupLayoutLoaderRet
                     }
 
                     if (!module.Schema) {
-                        toast({
-                            title: `${layoutName} is missing required Schema export`,
+                        toast.error(`${layoutName} is missing required Schema export`, {
                             description: 'Please ensure the layout file exports a Schema',
                         })
                         console.error(`${layoutName} is missing required Schema export`)
@@ -139,8 +136,7 @@ export const useGroupLayoutLoader = (groupSlug: string): UseGroupLayoutLoaderRet
             }
 
             if (groupLayouts.length === 0) {
-                toast({
-                    title: 'No valid layouts found',
+                toast.error('No valid layouts found', {
                     description: `No valid layouts found in "${groupSlug}" group.`,
                 })
                 setError(`No valid layouts found in "${groupSlug}" group.`)

@@ -22,7 +22,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { useRouter } from "next/navigation";
 import { RootState } from "@/store/store";
 import { Button } from "@/components/ui/button";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import MarkdownRenderer from "./MarkdownRenderer";
 import { getIconFromFile } from "../../utils/others";
 import { ChevronRight, PanelRightOpen, X } from "lucide-react";
@@ -122,11 +122,7 @@ const DocumentsPreviewPage: React.FC = () => {
         });
       } catch (error) {
         console.error('Error reading files:', error);
-        toast({
-          title: "Error",
-          description: "Failed to read document content",
-          variant: "destructive",
-        });
+        toast.error("Failed to read document content");
       }
       setDownloadingDocuments([]);
     }
@@ -155,11 +151,7 @@ const DocumentsPreviewPage: React.FC = () => {
       router.push("/outline");
     } catch (error) {
       console.error("Error in presentation creation:", error);
-      toast({
-        title: "Error in presentation creation.",
-        description: "Please try again.",
-        variant: "destructive",
-      });
+      toast.error("Error in presentation creation. Please try again.");
       setShowLoading({
         message: "Error in presentation creation.",
         show: true,

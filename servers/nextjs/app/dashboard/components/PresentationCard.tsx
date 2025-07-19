@@ -9,7 +9,7 @@ import {
   PopoverContent,
 } from "@/components/ui/popover";
 import { useRouter } from "next/navigation";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { useGroupLayouts } from "@/app/(presentation-generator)/hooks/useGroupLayouts";
 
 export const PresentationCard = ({
@@ -39,28 +39,20 @@ export const PresentationCard = ({
     e.preventDefault();
     e.stopPropagation();
 
-    toast({
-      title: "Deleting presentation",
+    toast.loading("Deleting presentation", {
       description: "Please wait while we delete the presentation",
-      variant: "default",
     });
     const response = await DashboardApi.deletePresentation(id);
 
     if (response) {
-      toast({
-        title: "Presentation deleted",
+      toast.success("Presentation deleted", {
         description: "The presentation has been deleted successfully",
-        variant: "default",
       });
       if (onDeleted) {
         onDeleted(id);
       }
     } else {
-      toast({
-        title: "Error",
-        description: "Failed to delete presentation",
-        variant: "destructive",
-      });
+      toast.error("Error deleting presentation");
     }
   };
   return (

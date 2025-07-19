@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { useDispatch } from "react-redux";
 import { useRouter } from "next/navigation";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { clearPresentationData, setPresentationData, SlideOutline } from "@/store/slices/presentationGeneration";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import { useLayout } from "../../context/LayoutContext";
@@ -27,19 +27,15 @@ export const usePresentationGeneration = (
 
   const validateInputs = useCallback(() => {
     if (!outlines || outlines.length === 0) {
-      toast({
-        title: "No Outlines",
+      toast.error("No Outlines", {
         description: "Please wait for outlines to load before generating presentation",
-        variant: "destructive",
       });
       return false;
     }
 
     if (!selectedLayoutGroup) {
-      toast({
-        title: "Select Layout Group",
+      toast.error("Select Layout Group", {
         description: "Please select a layout group before generating presentation",
-        variant: "destructive",
       });
       return false;
     }
@@ -101,10 +97,8 @@ export const usePresentationGeneration = (
       }
     } catch (error) {
       console.error("Error in data generation", error);
-      toast({
-        title: "Generation Error",
+      toast.error("Generation Error", {
         description: "Failed to generate presentation. Please try again.",
-        variant: "destructive",
       });
     } finally {
       setLoadingState(DEFAULT_LOADING_STATE);
