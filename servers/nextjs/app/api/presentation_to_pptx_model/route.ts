@@ -4,6 +4,9 @@ import puppeteer, { Browser, ElementHandle } from "puppeteer";
 import { ElementAttributes, SlideAttributesResult } from "@/types/element_attibutes";
 import { convertElementAttributesToPptxSlides } from "@/utils/pptx_models_utils";
 import { PptxPresentationModel } from "@/types/pptx_models";
+import fs from "fs";
+import path from "path";
+import crypto from "crypto";
 
 // Interface for getAllChildElementsAttributes function arguments
 interface GetAllChildElementsAttributesArgs {
@@ -57,9 +60,13 @@ async function getPresentationId(request: NextRequest) {
 }
 
 async function getSlidesAttributes(slides: ElementHandle<Element>[]) {
-  const slideResults = await Promise.all(slides.map(async (slide) => {
-    return await getAllChildElementsAttributes({ element: slide });
-  }));
+  const slideResults: SlideAttributesResult[] = [];
+  //? Can't use Promise.all because of the screenshot
+  //? taking screenshot with mess up position of elements
+  for (const slide of slides) {
+    const result = await getAllChildElementsAttributes({ element: slide });
+    slideResults.push(result);
+  }
 
   const elements = slideResults.map(result => result.elements);
   const backgroundColors = slideResults.map(result => result.backgroundColor);
@@ -93,9 +100,10 @@ async function getPresentationPage(browser: Browser, id: string) {
   page.on('console', (msg) => {
     const type = msg.type();
     const text = msg.text();
+    console.log(`${type}: ${text}`);
   });
 
-  await page.setViewport({ width: 1640, height: 720, deviceScaleFactor: 1 });
+  await page.setViewport({ width: 1920, height: 1080, deviceScaleFactor: 1 });
   await page.goto(`http://localhost/presentation?id=${id}`, {
     waitUntil: "networkidle0",
     timeout: 60000,
@@ -115,6 +123,42 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
       height: isFinite(rect.height) ? rect.height : 0,
     };
   });
+
+  // Check if this element is SVG or canvas or table
+  const tagName = await element.evaluate((el) => el.tagName.toLowerCase());
+
+  if (tagName === 'svg' || tagName === 'canvas' || tagName === 'table') {
+    return {
+      elements: [],
+      backgroundColor: undefined
+    };
+    // // Take screenshot of SVG/canvas element
+    // const screenshotPath = await takeElementScreenshot(element);
+
+    // // Get basic attributes for the element
+    // const attributes = await getElementAttributes(element);
+
+    // // Update image source to point to the screenshot
+    // if (screenshotPath) {
+    //   attributes.imageSrc = screenshotPath;
+    // }
+
+    // // Adjust position relative to root
+    // if (attributes.position && attributes.position.left !== undefined && attributes.position.top !== undefined) {
+    //   attributes.position = {
+    //     left: attributes.position.left - currentRootRect.left,
+    //     top: attributes.position.top - currentRootRect.top,
+    //     width: attributes.position.width,
+    //     height: attributes.position.height,
+    //   };
+    // }
+
+    // // Return early without processing children for SVG/canvas elements
+    // return {
+    //   elements: [attributes],
+    //   backgroundColor: undefined
+    // };
+  }
 
   // Get direct children only (not all descendants)
   const directChildElementHandles = await element.$$(':scope > *');
@@ -232,7 +276,6 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
 }
 
 
-// Do not edit this function, it is used to get the attributes of an element
 async function getElementAttributes(element: ElementHandle<Element>): Promise<ElementAttributes> {
 
   const attributes = await element.evaluate((el: Element) => {
@@ -333,6 +376,7 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
       return borderWidth === 0 ? undefined : {
         color: borderColorResult.hex,
         width: isNaN(borderWidth) ? undefined : borderWidth,
+        opacity: borderColorResult.opacity,
       };
     }
 
@@ -384,7 +428,6 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
 
         for (let i = 0; i < shadows.length; i++) {
           const shadowStr = shadows[i];
-          console.log(`Analyzing shadow ${i}: "${shadowStr}"`);
 
           // Parse the shadow to check if it has meaningful values
           const shadowParts = shadowStr.split(' ');
@@ -582,6 +625,38 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
       };
     }
 
+    function parseLineHeight(computedStyles: CSSStyleDeclaration, el: Element) {
+      const lineHeight = computedStyles.lineHeight;
+      const innerText = el.textContent || '';
+
+      // Check if text is multiline by looking for newline characters or checking if text wraps due to bounds
+      const htmlEl = el as HTMLElement;
+
+      // Get font size for comparison
+      const fontSize = parseFloat(computedStyles.fontSize);
+      const computedLineHeight = parseFloat(computedStyles.lineHeight);
+
+      // Estimate single line height (use computed line height if available, otherwise use font size * 1.2)
+      const singleLineHeight = !isNaN(computedLineHeight) ? computedLineHeight : fontSize * 1.2;
+
+      // Check for multiline text
+      const hasExplicitLineBreaks = innerText.includes('\n') || innerText.includes('\r') || innerText.includes('\r\n');
+      const hasTextWrapping = htmlEl.offsetHeight > singleLineHeight * 2; // Allow some tolerance
+      const hasOverflow = htmlEl.scrollHeight > htmlEl.clientHeight;
+
+      const isMultiline = hasExplicitLineBreaks || hasTextWrapping || hasOverflow;
+
+      // Only return line height if text is multiline
+      if (isMultiline && lineHeight && lineHeight !== 'normal') {
+        const parsedLineHeight = parseFloat(lineHeight);
+        if (!isNaN(parsedLineHeight)) {
+          return parsedLineHeight;
+        }
+      }
+
+      return undefined;
+    }
+
     function parseMargin(computedStyles: CSSStyleDeclaration) {
       const marginTop = parseFloat(computedStyles.marginTop);
       const marginBottom = parseFloat(computedStyles.marginBottom);
@@ -657,6 +732,8 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
 
       const font = parseFont(computedStyles);
 
+      const lineHeight = parseLineHeight(computedStyles, el);
+
       const margin = parseMargin(computedStyles);
 
       const padding = parsePadding(computedStyles);
@@ -690,6 +767,7 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
         padding,
         zIndex: zIndexValue,
         textAlign: textAlign !== 'left' ? textAlign : undefined,
+        lineHeight,
         borderRadius: borderRadiusValue,
         imageSrc: imageSrc || undefined,
         objectFit,
@@ -704,4 +782,92 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
     return parseElementAttributes(el);
   });
   return attributes;
+}
+
+async function takeElementScreenshot(element: ElementHandle<Element>): Promise<string | undefined> {
+  try {
+    // Validate environment configuration
+    const tempDir = process.env.TEMP_DIRECTORY;
+    if (!tempDir) {
+      console.warn('TEMP_DIRECTORY environment variable not set, skipping screenshot');
+      return undefined;
+    }
+
+    // Check element visibility and dimensions
+    const elementInfo = await element.evaluate((el) => {
+      const rect = el.getBoundingClientRect();
+      const styles = window.getComputedStyle(el);
+
+      return {
+        isVisible: styles.visibility !== 'hidden' &&
+          styles.display !== 'none' &&
+          styles.opacity !== '0',
+        hasValidDimensions: rect.width > 0 && rect.height > 0,
+        isInViewport: rect.top < window.innerHeight &&
+          rect.bottom > 0 &&
+          rect.left < window.innerWidth &&
+          rect.right > 0,
+        dimensions: {
+          width: rect.width,
+          height: rect.height,
+          top: rect.top,
+          left: rect.left
+        }
+      };
+    }).catch((error) => {
+      console.warn('Failed to evaluate element visibility:', error.message);
+      return { isVisible: false, hasValidDimensions: false, isInViewport: false, dimensions: null };
+    });
+
+    if (!elementInfo.isVisible || !elementInfo.hasValidDimensions) {
+      console.warn('Element is not visible or has invalid dimensions, skipping screenshot', {
+        visible: elementInfo.isVisible,
+        validDimensions: elementInfo.hasValidDimensions,
+        dimensions: elementInfo.dimensions
+      });
+      return undefined;
+    }
+
+    // Scroll element into viewport if not visible
+    if (!elementInfo.isInViewport) {
+      try {
+        await element.evaluate((el) => {
+          el.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' });
+        });
+
+        // Wait a brief moment for scrolling to complete
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        console.log('Element scrolled into viewport for screenshot');
+      } catch (scrollError: any) {
+        console.warn('Failed to scroll element into view:', scrollError.message);
+        // Continue with screenshot attempt even if scrolling fails
+      }
+    }
+
+    // Ensure screenshots directory exists
+    const screenshotsDir = path.join(tempDir, 'screenshots');
+    if (!fs.existsSync(screenshotsDir)) {
+      fs.mkdirSync(screenshotsDir, { recursive: true });
+    }
+
+    // Generate unique filename
+    const uuid = crypto.randomUUID();
+    const filename = `${uuid}.png`;
+    const filePath = path.join(screenshotsDir, filename);
+
+    // Take screenshot of the element
+    await element.screenshot({
+      path: filePath as `${string}.png`,
+      type: 'png',
+      omitBackground: false
+    });
+
+    console.log(`Screenshot saved: ${filePath}`);
+    return filePath;
+
+  } catch (error) {
+    console.error('Error taking element screenshot:', error);
+    return undefined;
+  }
 }

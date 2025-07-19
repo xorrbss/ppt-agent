@@ -41,6 +41,28 @@ function convertTextAlignToPptxAlignment(textAlign?: string): PptxAlignment | un
 }
 
 /**
+ * Converts line height from pixels to relative format (e.g., 1.5)
+ * If lineHeight is already a relative number (less than 10), return as is
+ * Otherwise, convert from pixels to relative by dividing by font size
+ */
+function convertLineHeightToRelative(lineHeight?: number, fontSize?: number): number | undefined {
+  if (!lineHeight) return undefined;
+
+  let calculatedLineHeight = 1.2;
+  // If lineHeight is already a relative number (typically between 1.0 and 3.0)
+  if (lineHeight < 10) {
+    calculatedLineHeight = lineHeight;
+  }
+
+  // If we have font size, convert from pixels to relative
+  if (fontSize && fontSize > 0) {
+    calculatedLineHeight = Math.round((lineHeight / fontSize) * 100) / 100; // Round to 2 decimal places
+  }
+
+  return calculatedLineHeight - 0.4 + (fontSize ?? 16) * 0.004;
+}
+
+/**
  * Converts ElementAttributes[][] to PptxSlideModel[]
  * Each inner array represents elements on a slide
  */
@@ -60,7 +82,8 @@ export function convertElementAttributesToPptxSlides(
     // Add background color if available
     if (backgroundColors && backgroundColors[index]) {
       slide.background = {
-        color: backgroundColors[index]!
+        color: backgroundColors[index]!,
+        opacity: 1.0
       };
     }
 
@@ -80,7 +103,7 @@ function convertElementToPptxShape(
   }
 
   // Check if it's an image element
-  if (element.tagName === 'img' || (element.className && typeof element.className === 'string' && element.className.includes('image'))) {
+  if (element.tagName === 'img' || (element.className && typeof element.className === 'string' && element.className.includes('image')) || element.imageSrc) {
     return convertToPictureBox(element);
   }
 
@@ -109,7 +132,10 @@ function convertToTextBox(element: ElementAttributes): PptxTextBoxModel {
     height: Math.round(element.position?.height ?? 0)
   };
 
-  const fill: PptxFillModel | undefined = element.background?.color ? { color: element.background.color } : undefined;
+  const fill: PptxFillModel | undefined = element.background?.color ? {
+    color: element.background.color,
+    opacity: element.background.opacity ?? 1.0
+  } : undefined;
 
   const font: PptxFontModel | undefined = element.font ? {
     name: element.font.name ?? "Inter",
@@ -123,6 +149,7 @@ function convertToTextBox(element: ElementAttributes): PptxTextBoxModel {
     spacing: undefined,
     alignment: convertTextAlignToPptxAlignment(element.textAlign),
     font,
+    line_height: convertLineHeightToRelative(element.lineHeight, element.font?.size),
     text: element.innerText
   };
 
@@ -145,11 +172,15 @@ function convertToAutoShapeBox(element: ElementAttributes): PptxAutoShapeBoxMode
     width: Math.round(element.position?.width ?? 0),
     height: Math.round(element.position?.height ?? 0)
   };
-  const fill: PptxFillModel | undefined = element.background?.color ? { color: element.background.color } : undefined;
+  const fill: PptxFillModel | undefined = element.background?.color ? {
+    color: element.background.color,
+    opacity: element.background.opacity ?? 1.0
+  } : undefined;
 
   const stroke: PptxStrokeModel | undefined = element.border?.color ? {
     color: element.border.color,
-    thickness: element.border.width ?? 1 // float - keep as number
+    thickness: element.border.width ?? 1, // float - keep as number
+    opacity: element.border.opacity ?? 1.0
   } : undefined;
 
   const shadow: PptxShadowModel | undefined = element.shadow?.color ? {
@@ -171,6 +202,7 @@ function convertToAutoShapeBox(element: ElementAttributes): PptxAutoShapeBoxMode
       italic: element.font.italic ?? false,
       color: element.font.color ?? "000000"
     } : undefined,
+    line_height: convertLineHeightToRelative(element.lineHeight, element.font?.size),
     text: element.innerText
   }] : undefined;
 
@@ -235,6 +267,7 @@ function convertToConnector(element: ElementAttributes): PptxConnectorModel {
     type: PptxConnectorType.STRAIGHT, // Default to straight connector
     position,
     thickness: element.border?.width ?? 0.5, // float - keep as number
-    color: element.border?.color || element.background?.color || '000000'
+    color: element.border?.color || element.background?.color || '000000',
+    opacity: element.border?.opacity ?? 1.0
   };
 }

@@ -236,11 +236,13 @@ export interface PptxFontModel {
 
 export interface PptxFillModel {
   color: string;
+  opacity: number;
 }
 
 export interface PptxStrokeModel {
   color: string;
   thickness: number;
+  opacity: number;
 }
 
 export interface PptxShadowModel {
@@ -260,6 +262,7 @@ export interface PptxParagraphModel {
   spacing?: PptxSpacingModel;
   alignment?: PptxAlignment;
   font?: PptxFontModel;
+  line_height?: number;
   text?: string;
   text_runs?: PptxTextRunModel[];
 }
@@ -313,6 +316,7 @@ export interface PptxConnectorModel extends PptxShapeModel {
   position: PptxPositionModel;
   thickness: number;
   color: string;
+  opacity: number;
 }
 
 export interface PptxSlideModel {
