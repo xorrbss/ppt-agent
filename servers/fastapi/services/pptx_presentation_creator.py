@@ -57,23 +57,47 @@ class PptxPresentationCreator:
 
     async def fetch_network_assets(self):
         image_urls = []
+        models_with_network_asset: List[PptxPictureBoxModel] = []
+
+        if self._ppt_model.shapes:
+            for each_shape in self._ppt_model.shapes:
+                if isinstance(each_shape, PptxPictureBoxModel):
+                    image_path = each_shape.picture.path
+                    if image_path.startswith("http"):
+                        if "app_data/images" in image_path:
+                            relative_path = image_path.split("/app_data/images/")[1]
+                            each_shape.picture.path = os.path.join(
+                                "app_data/images", relative_path
+                            )
+                            each_shape.picture.is_network = False
+                            continue
+                        image_urls.append(image_path)
+                        models_with_network_asset.append(each_shape)
 
         for each_slide in self._slide_models:
-            models_with_network_asset: List[PptxPictureBoxModel] = []
             for each_shape in each_slide.shapes:
                 if isinstance(each_shape, PptxPictureBoxModel):
                     image_path = each_shape.picture.path
-                    if not image_path.startswith("http"):
-                        continue
-                    image_urls.append(image_path)
-                    models_with_network_asset.append(each_shape)
+                    if image_path.startswith("http"):
+                        if "app_data/images" in image_path:
+                            relative_path = image_path.split("/app_data/images/")[1]
+                            each_shape.picture.path = os.path.join(
+                                "app_data/images", relative_path
+                            )
+                            each_shape.picture.is_network = False
+                            continue
+                        image_urls.append(image_path)
+                        models_with_network_asset.append(each_shape)
 
+        if image_urls:
             image_paths = await download_files(image_urls, self._temp_dir)
+
             for each_shape, each_image_path in zip(
                 models_with_network_asset, image_paths
             ):
-                each_shape.picture.path = each_image_path
-                each_shape.picture.is_network = False
+                if each_image_path:
+                    each_shape.picture.path = each_image_path
+                    each_shape.picture.is_network = False
 
     async def create_ppt(self):
         await self.fetch_network_assets()
@@ -261,6 +285,7 @@ class PptxPresentationCreator:
                     font_json = font.model_dump()
                     font_json["bold"] = True
                     font_json["italic"] = True
+                    font_json["font_weight"] = 700  # Set font weight to bold
                     text_runs.append(
                         PptxTextRunModel(
                             text=text_content, font=PptxFontModel(**font_json)
@@ -276,6 +301,7 @@ class PptxPresentationCreator:
                     text_content = line[current_pos + 2 : end_pos]
                     font_json = font.model_dump()
                     font_json["bold"] = True
+                    font_json["font_weight"] = 700  # Set font weight to bold
                     text_runs.append(
                         PptxTextRunModel(
                             text=text_content, font=PptxFontModel(**font_json)
@@ -434,9 +460,9 @@ class PptxPresentationCreator:
     def apply_font(self, font: Font, font_model: PptxFontModel):
         font.name = font_model.name
         font.color.rgb = RGBColor.from_string(font_model.color)
-        font.bold = font_model.bold
         font.italic = font_model.italic
         font.size = Pt(font_model.size)
+        font.bold = font_model.font_weight >= 600
 
     def save(self, path: str):
         self._ppt.save(path)

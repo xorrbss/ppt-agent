@@ -54,9 +54,9 @@ class PptxPositionModel(BaseModel):
 class PptxFontModel(BaseModel):
     name: str = "Inter"
     size: int = 16
-    bold: bool = False
     italic: bool = False
     color: str = "000000"
+    font_weight: Optional[int] = 400
 
 
 class PptxFillModel(BaseModel):

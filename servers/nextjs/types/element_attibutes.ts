@@ -6,7 +6,6 @@ export interface ElementAttributes {
   background?: {
     color?: string;
     opacity?: number;
-    isInherited?: boolean;
   };
   border?: {
     color?: string;

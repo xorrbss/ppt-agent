@@ -5,6 +5,15 @@ import { ElementAttributes, SlideAttributesResult } from "@/types/element_attibu
 import { convertElementAttributesToPptxSlides } from "@/utils/pptx_models_utils";
 import { PptxPresentationModel } from "@/types/pptx_models";
 
+// Interface for getAllChildElementsAttributes function arguments
+interface GetAllChildElementsAttributesArgs {
+  element: ElementHandle<Element>;
+  rootRect?: { left: number; top: number; width: number; height: number } | null;
+  depth?: number;
+  inheritedFont?: ElementAttributes['font'];
+  inheritedBackground?: ElementAttributes['background'];
+}
+
 
 export async function GET(request: NextRequest) {
   let browser: Browser | null = null;
@@ -49,7 +58,7 @@ async function getPresentationId(request: NextRequest) {
 
 async function getSlidesAttributes(slides: ElementHandle<Element>[]) {
   const slideResults = await Promise.all(slides.map(async (slide) => {
-    return await getAllChildElementsAttributes(slide);
+    return await getAllChildElementsAttributes({ element: slide });
   }));
 
   const elements = slideResults.map(result => result.elements);
@@ -84,7 +93,6 @@ async function getPresentationPage(browser: Browser, id: string) {
   page.on('console', (msg) => {
     const type = msg.type();
     const text = msg.text();
-    console.log(`[Puppeteer Console ${type.toUpperCase()}] ${text}`);
   });
 
   await page.setViewport({ width: 1640, height: 720, deviceScaleFactor: 1 });
@@ -96,8 +104,9 @@ async function getPresentationPage(browser: Browser, id: string) {
 }
 
 
-async function getAllChildElementsAttributes(element: ElementHandle<Element>): Promise<SlideAttributesResult> {
-  const rootRect = await element.evaluate((el) => {
+async function getAllChildElementsAttributes({ element, rootRect = null, depth = 0, inheritedFont, inheritedBackground }: GetAllChildElementsAttributesArgs): Promise<SlideAttributesResult> {
+  // Get rootRect if not provided (first call)
+  const currentRootRect = rootRect || await element.evaluate((el) => {
     const rect = el.getBoundingClientRect();
     return {
       left: isFinite(rect.left) ? rect.left : 0,
@@ -107,54 +116,71 @@ async function getAllChildElementsAttributes(element: ElementHandle<Element>): P
     };
   });
 
-  const childElementHandles = await element.$$(':scope *');
+  // Get direct children only (not all descendants)
+  const directChildElementHandles = await element.$$(':scope > *');
 
-  const attributesPromises = childElementHandles.map(async (childElementHandle) => {
+  const allResults: { attributes: ElementAttributes; depth: number }[] = [];
+
+  // Process direct children recursively
+  for (const childElementHandle of directChildElementHandles) {
+    // Get attributes for current child
     const attributes = await getElementAttributes(childElementHandle);
 
-    const depth = await childElementHandle.evaluate((el) => {
-      let depth = 0;
-      let current = el;
-      while (current.parentElement) {
-        depth++;
-        current = current.parentElement;
-      }
-      return depth;
-    });
+    // Apply inherited font only on elements that have direct text
+    if (inheritedFont && !attributes.font && attributes.innerText && attributes.innerText.trim().length > 0) {
+      attributes.font = inheritedFont;
+    }
+    // Apply inherited background only on elements that have shadow
+    if (inheritedBackground && !attributes.background && attributes.shadow) {
+      attributes.background = inheritedBackground;
+    }
 
+    // Adjust position relative to root
     if (attributes.position && attributes.position.left !== undefined && attributes.position.top !== undefined) {
       attributes.position = {
-        left: attributes.position.left - rootRect.left,
-        top: attributes.position.top - rootRect.top,
+        left: attributes.position.left - currentRootRect.left,
+        top: attributes.position.top - currentRootRect.top,
         width: attributes.position.width,
         height: attributes.position.height,
       };
     }
 
-    return { attributes, depth };
-  });
+    // Add current child to results
+    allResults.push({ attributes, depth });
 
-  const allResults = await Promise.all(attributesPromises);
+    // Recursively process children of this child
+    const childResults = await getAllChildElementsAttributes({
+      element: childElementHandle,
+      rootRect: currentRootRect,
+      depth: depth + 1,
+      inheritedFont: attributes.font || inheritedFont,
+      inheritedBackground: attributes.background || inheritedBackground,
+    });
+    allResults.push(...childResults.elements.map(attr => ({ attributes: attr, depth: depth + 1 })));
+  }
 
+  // Find background color from elements with root position (only in first call)
   let backgroundColor: string | undefined;
-  const elementsWithRootPosition = allResults.filter(({ attributes }) => {
-    return attributes.position &&
-      attributes.position.left === 0 &&
-      attributes.position.top === 0 &&
-      attributes.position.width === rootRect.width &&
-      attributes.position.height === rootRect.height;
-  });
+  if (!rootRect) {
+    const elementsWithRootPosition = allResults.filter(({ attributes }) => {
+      return attributes.position &&
+        attributes.position.left === 0 &&
+        attributes.position.top === 0 &&
+        attributes.position.width === currentRootRect.width &&
+        attributes.position.height === currentRootRect.height;
+    });
 
-  for (const { attributes } of elementsWithRootPosition) {
-    if (attributes.background && attributes.background.color) {
-      backgroundColor = attributes.background.color;
-      break;
+    for (const { attributes } of elementsWithRootPosition) {
+      if (attributes.background && attributes.background.color) {
+        backgroundColor = attributes.background.color;
+        break;
+      }
     }
   }
 
-  const filteredResults = allResults.filter(({ attributes }) => {
-    const hasOwnBackground = attributes.background && attributes.background.color && !attributes.background.isInherited;
-    const hasInheritedBackground = attributes.background && attributes.background.color && attributes.background.isInherited;
+  // Filter results (only in first call)
+  const filteredResults = !rootRect ? allResults.filter(({ attributes }) => {
+    const hasBackground = attributes.background && attributes.background.color;
     const hasBorder = attributes.border && attributes.border.color;
     const hasShadow = attributes.shadow && attributes.shadow.color;
     const hasText = attributes.innerText && attributes.innerText.trim().length > 0;
@@ -163,40 +189,54 @@ async function getAllChildElementsAttributes(element: ElementHandle<Element>): P
     const isRootPosition = attributes.position &&
       attributes.position.left === 0 &&
       attributes.position.top === 0 &&
-      attributes.position.width === rootRect.width &&
-      attributes.position.height === rootRect.height;
+      attributes.position.width === currentRootRect.width &&
+      attributes.position.height === currentRootRect.height;
 
-    // Include elements that have meaningful visual properties
-    // Elements with own background colors, borders, shadows, text, or images should be included
-    // Elements with only inherited background colors should only be included if they have other properties
-    const hasOtherProperties = hasBorder || hasShadow || hasText || hasImage;
-    const hasVisualProperties = hasOwnBackground || hasOtherProperties || (hasInheritedBackground && hasOtherProperties);
+    const hasOtherProperties = hasBackground || hasBorder || hasShadow || hasText || hasImage;
+    return hasOtherProperties && !isRootPosition;
+  }) : allResults;
 
-    return hasVisualProperties && !isRootPosition;
-  });
+  if (!rootRect) {
+    const sortedElements = filteredResults
+      .sort((a, b) => {
+        const zIndexA = a.attributes.zIndex || 0;
+        const zIndexB = b.attributes.zIndex || 0;
 
-  const sortedElements = filteredResults
-    .sort((a, b) => {
-      const zIndexA = a.attributes.zIndex || 0;
-      const zIndexB = b.attributes.zIndex || 0;
+        if (zIndexA === zIndexB) {
+          return b.depth - a.depth;
+        }
 
-      if (zIndexA === zIndexB) {
-        return b.depth - a.depth;
-      }
+        return zIndexB - zIndexA;
+      })
+      .map(({ attributes }) => {
+        // Set background color to backgroundColor for elements that have shadow but no background color
+        if (attributes.shadow && attributes.shadow.color && (!attributes.background || !attributes.background.color) && backgroundColor) {
+          attributes.background = {
+            color: backgroundColor,
+            opacity: undefined
+          };
+        }
+        return attributes;
+      });
 
-      return zIndexB - zIndexA;
-    })
-    .map(({ attributes }) => attributes);
-
-  return {
-    elements: sortedElements,
-    backgroundColor
-  };
+    return {
+      elements: sortedElements,
+      backgroundColor
+    };
+  } else {
+    return {
+      elements: filteredResults.map(({ attributes }) => attributes),
+      backgroundColor
+    };
+  }
 }
 
 
+// Do not edit this function, it is used to get the attributes of an element
 async function getElementAttributes(element: ElementHandle<Element>): Promise<ElementAttributes> {
-  const attributes = await element.evaluate((el) => {
+
+  const attributes = await element.evaluate((el: Element) => {
+
     function colorToHex(color: string): { hex: string | undefined; opacity: number | undefined } {
       if (!color || color === 'transparent' || color === 'rgba(0, 0, 0, 0)') {
         return { hex: undefined, opacity: undefined };
@@ -278,45 +318,12 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
 
 
 
-    function getInheritedBackgroundColor(el: Element): { color: string | undefined; opacity: number | undefined } {
-      let current = el.parentElement;
-      while (current) {
-        const computedStyles = window.getComputedStyle(current);
-        const backgroundColorResult = colorToHex(computedStyles.backgroundColor);
-        // Only return inherited background if it's not transparent and has a meaningful color
-        // (not black or white, which are likely defaults)
-        if (backgroundColorResult.hex && backgroundColorResult.opacity !== 0 &&
-          backgroundColorResult.hex !== '000000' && backgroundColorResult.hex !== 'ffffff' &&
-          backgroundColorResult.hex !== 'transparent') {
-          return {
-            color: backgroundColorResult.hex,
-            opacity: backgroundColorResult.opacity,
-          };
-        }
-        current = current.parentElement;
-      }
-      return { color: undefined, opacity: undefined };
-    }
-
-    function parseBackground(computedStyles: CSSStyleDeclaration, el?: Element, hasShadow?: boolean) {
+    function parseBackground(computedStyles: CSSStyleDeclaration) {
       const backgroundColorResult = colorToHex(computedStyles.backgroundColor);
-
-      // Only use inherited background if the element has no background color at all
-      // and has a shadow (indicating it might need a background for the shadow to be visible)
-      if (!backgroundColorResult.hex && hasShadow && el) {
-        const inheritedBackground = getInheritedBackgroundColor(el);
-        if (inheritedBackground.color) {
-          return {
-            ...inheritedBackground,
-            isInherited: true
-          };
-        }
-      }
 
       return {
         color: backgroundColorResult.hex,
-        opacity: backgroundColorResult.opacity,
-        isInherited: false
+        opacity: backgroundColorResult.opacity
       };
     }
 
@@ -332,7 +339,6 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
     function parseShadow(computedStyles: CSSStyleDeclaration) {
       const boxShadow = computedStyles.boxShadow;
       if (boxShadow !== 'none') {
-        console.log(`Parsing shadow: ${boxShadow}`);
       }
       let shadow: {
         offset?: [number, number];
@@ -371,7 +377,7 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
           shadows.push(currentShadow.trim());
         }
 
-        console.log(`Split shadows: ${JSON.stringify(shadows)}`);
+
 
         let selectedShadow = '';
         let bestShadowScore = -1;
@@ -431,21 +437,16 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
             }
           }
 
-          console.log(`Shadow ${i} - numericParts: ${JSON.stringify(numericParts)}, colorParts: ${JSON.stringify(colorParts)}`);
-
           // Check if the color is not completely transparent using colorToHex
           let hasVisibleColor = false;
           if (colorParts.length > 0) {
             const shadowColor = colorParts.join(' ');
             const colorResult = colorToHex(shadowColor);
             hasVisibleColor = !!(colorResult.hex && colorResult.hex !== '000000' && colorResult.opacity !== 0);
-            console.log(`Shadow ${i} color analysis - color: "${shadowColor}", result: ${JSON.stringify(colorResult)}, hasVisibleColor: ${hasVisibleColor}`);
           }
 
           // Check if we have any non-zero numeric values (offset, blur, or spread)
           const hasNonZeroValues = numericParts.some(value => value !== 0);
-
-          console.log(`Shadow ${i} - hasNonZeroValues: ${hasNonZeroValues}, hasVisibleColor: ${hasVisibleColor}`);
 
           // Calculate a score for this shadow (higher is better)
           let shadowScore = 0;
@@ -461,18 +462,15 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
           if ((hasNonZeroValues || hasVisibleColor) && shadowScore > bestShadowScore) {
             selectedShadow = shadowStr;
             bestShadowScore = shadowScore;
-            console.log(`Selected shadow ${i} with score ${shadowScore}: "${selectedShadow}"`);
           }
         }
 
         // If no meaningful shadow found, use the first one
         if (!selectedShadow && shadows.length > 0) {
           selectedShadow = shadows[0];
-          console.log(`No meaningful shadow found, using first: "${selectedShadow}"`);
         }
 
         if (selectedShadow) {
-          console.log(`Parsing selected shadow: "${selectedShadow}"`);
 
           // Parse the selected shadow
           const shadowParts = selectedShadow.split(' ');
@@ -525,8 +523,6 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
             }
           }
 
-          console.log(`Selected shadow parsing - numericParts: ${JSON.stringify(numericParts)}, colorParts: ${JSON.stringify(colorParts)}`);
-
           // Handle different shadow formats
           if (numericParts.length >= 2) {
             const offsetX = numericParts[0];
@@ -541,13 +537,10 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
             }
 
             const shadowColorResult = colorToHex(shadowColor);
-            console.log(`Shadow color result: ${JSON.stringify(shadowColorResult)}`);
 
             // Create shadow object if we have any meaningful values or visible color
             const hasValidValues = offsetX !== 0 || offsetY !== 0 || blurRadius > 0 || spreadRadius !== 0 ||
               (shadowColorResult.hex && shadowColorResult.hex !== '000000' && shadowColorResult.opacity !== 0);
-
-            console.log(`Has valid values: ${hasValidValues} (offsetX: ${offsetX}, offsetY: ${offsetY}, blurRadius: ${blurRadius}, spreadRadius: ${spreadRadius}, color: ${shadowColorResult.hex}, opacity: ${shadowColorResult.opacity})`);
 
             if (hasValidValues) {
               shadow = {
@@ -559,14 +552,9 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
                 inset: isInset,
                 angle: Math.atan2(offsetY, offsetX) * (180 / Math.PI),
               };
-              console.log(`Created shadow object: ${JSON.stringify(shadow)}`);
             }
           }
         }
-      }
-
-      if (boxShadow !== 'none') {
-        console.log(`Final parsed shadow: ${JSON.stringify(shadow)}`);
       }
 
       return shadow;
@@ -663,7 +651,7 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
 
       const shadow = parseShadow(computedStyles);
 
-      const background = parseBackground(computedStyles, el, !!shadow);
+      const background = parseBackground(computedStyles);
 
       const border = parseBorder(computedStyles);
 

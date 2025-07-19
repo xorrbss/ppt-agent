@@ -229,7 +229,7 @@ export interface PptxPositionModel {
 export interface PptxFontModel {
   name: string;
   size: number;
-  bold: boolean;
+  font_weight: number;
   italic: boolean;
   color: string;
 }

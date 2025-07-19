@@ -6,7 +6,6 @@ import {
   PptxPictureBoxModel,
   PptxConnectorModel,
   PptxPositionModel,
-  PptxSpacingModel,
   PptxFillModel,
   PptxStrokeModel,
   PptxShadowModel,
@@ -110,23 +109,12 @@ function convertToTextBox(element: ElementAttributes): PptxTextBoxModel {
     height: Math.round(element.position?.height ?? 0)
   };
 
-  const margin: PptxSpacingModel | undefined = element.margin ? {
-    top: Math.round(element.margin.top ?? 0),
-    bottom: Math.round(element.margin.bottom ?? 0),
-    left: Math.round(element.margin.left ?? 0),
-    right: Math.round(element.margin.right ?? 0)
-  } : undefined;
-
-  const fill: PptxFillModel | undefined = element.background?.color ?
-    (element.background.isInherited ?
-      (element.shadow?.color ? { color: element.background.color } : undefined) :
-      { color: element.background.color }
-    ) : undefined;
+  const fill: PptxFillModel | undefined = element.background?.color ? { color: element.background.color } : undefined;
 
   const font: PptxFontModel | undefined = element.font ? {
     name: element.font.name ?? "Inter",
     size: Math.round(element.font.size ?? 16),
-    bold: element.font.weight ? element.font.weight >= 600 : false,
+    font_weight: element.font.weight ?? 400,
     italic: element.font.italic ?? false,
     color: element.font.color ?? "000000"
   } : undefined;
@@ -139,7 +127,7 @@ function convertToTextBox(element: ElementAttributes): PptxTextBoxModel {
   };
 
   return {
-    margin,
+    margin: undefined,
     fill,
     position,
     text_wrap: element.textWrap ?? true,
@@ -157,19 +145,7 @@ function convertToAutoShapeBox(element: ElementAttributes): PptxAutoShapeBoxMode
     width: Math.round(element.position?.width ?? 0),
     height: Math.round(element.position?.height ?? 0)
   };
-
-  const margin: PptxSpacingModel | undefined = element.margin ? {
-    top: Math.round(element.margin.top ?? 0),
-    bottom: Math.round(element.margin.bottom ?? 0),
-    left: Math.round(element.margin.left ?? 0),
-    right: Math.round(element.margin.right ?? 0)
-  } : undefined;
-
-  const fill: PptxFillModel | undefined = element.background?.color ?
-    (element.background.isInherited ?
-      (element.shadow?.color ? { color: element.background.color } : undefined) :
-      { color: element.background.color }
-    ) : undefined;
+  const fill: PptxFillModel | undefined = element.background?.color ? { color: element.background.color } : undefined;
 
   const stroke: PptxStrokeModel | undefined = element.border?.color ? {
     color: element.border.color,
@@ -191,7 +167,7 @@ function convertToAutoShapeBox(element: ElementAttributes): PptxAutoShapeBoxMode
     font: element.font ? {
       name: element.font.name ?? "Inter",
       size: Math.round(element.font.size ?? 16), // int
-      bold: element.font.weight ? element.font.weight >= 600 : false,
+      font_weight: element.font.weight ?? 400,
       italic: element.font.italic ?? false,
       color: element.font.color ?? "000000"
     } : undefined,
@@ -200,7 +176,7 @@ function convertToAutoShapeBox(element: ElementAttributes): PptxAutoShapeBoxMode
 
   return {
     type: PptxShapeType.ROUNDED_RECTANGLE, // Default to rounded rectangle
-    margin,
+    margin: undefined,
     fill,
     stroke,
     shadow,
@@ -222,13 +198,6 @@ function convertToPictureBox(element: ElementAttributes): PptxPictureBoxModel {
     height: Math.round(element.position?.height ?? 0)
   };
 
-  const margin: PptxSpacingModel | undefined = element.margin ? {
-    top: Math.round(element.margin.top ?? 0),
-    bottom: Math.round(element.margin.bottom ?? 0),
-    left: Math.round(element.margin.left ?? 0),
-    right: Math.round(element.margin.right ?? 0)
-  } : undefined;
-
   const objectFit: PptxObjectFitModel = {
     fit: element.objectFit ? (element.objectFit as PptxObjectFitEnum) : PptxObjectFitEnum.CONTAIN
   };
@@ -241,7 +210,7 @@ function convertToPictureBox(element: ElementAttributes): PptxPictureBoxModel {
 
   return {
     position,
-    margin,
+    margin: undefined,
     clip: element.clip ?? true,
     overlay: element.overlay,
     border_radius: element.borderRadius ? element.borderRadius.map(r => Math.round(r)) : undefined, // List[int] - 4 elements from route parsing
