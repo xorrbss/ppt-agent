@@ -13,7 +13,6 @@
 
 "use client";
 
-import styles from "../styles/main.module.css";
 import { useEffect, useState, useRef, useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OverlayLoader } from "@/components/ui/overlay-loader";
@@ -29,7 +28,6 @@ import { getIconFromFile } from "../../utils/others";
 import { ChevronRight, PanelRightOpen, X } from "lucide-react";
 import ToolTip from "@/components/ToolTip";
 import Header from "@/app/dashboard/components/Header";
-import { useLayout } from "../../context/LayoutContext";
 
 // Types
 interface LoadingState {
@@ -214,7 +212,7 @@ const DocumentsPreviewPage: React.FC = () => {
     if (!isOpen) return null;
 
     return (
-      <div className={`${styles.sidebar} fixed xl:relative w-full z-50 xl:z-auto
+      <div className={`border-r border-gray-200 fixed xl:relative w-full z-50 xl:z-auto
         transition-all duration-300 ease-in-out max-w-[200px] md:max-w-[300px] h-[85vh] rounded-md p-5`}>
         <X
           onClick={() => setIsOpen(false)}
@@ -230,7 +228,7 @@ const DocumentsPreviewPage: React.FC = () => {
                 <div
                   key={key}
                   onClick={() => updateSelectedDocument(key)}
-                  className={`${selectedDocument === key ? styles.selected_border : ""
+                  className={`${selectedDocument === key ? 'border border-blue-500' : ""
                     } flex p-2 rounded-sm gap-2 items-center cursor-pointer`}
                 >
                   <img
@@ -251,7 +249,7 @@ const DocumentsPreviewPage: React.FC = () => {
   };
 
   return (
-    <div className={`${styles.wrapper} min-h-screen flex flex-col w-full`}>
+    <div className={`bg-white/90 min-h-screen flex flex-col w-full`}>
       <OverlayLoader
         show={showLoading.show}
         text={showLoading.message}

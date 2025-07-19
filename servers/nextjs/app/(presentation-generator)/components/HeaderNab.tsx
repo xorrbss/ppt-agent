@@ -5,7 +5,7 @@ import Link from "next/link";
 import { RootState } from "@/store/store";
 import { useSelector } from "react-redux";
 
-const UserAccount = () => {
+const HeaderNav = () => {
 
   const canChangeKeys = useSelector((state: RootState) => state.userConfig.can_change_keys);
 
@@ -39,4 +39,4 @@ const UserAccount = () => {
   );
 };
 
-export default UserAccount;
+export default HeaderNav;

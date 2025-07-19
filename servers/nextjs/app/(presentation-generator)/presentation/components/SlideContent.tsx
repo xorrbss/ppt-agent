@@ -14,8 +14,8 @@ import ToolTip from "@/components/ToolTip";
 import { RootState } from "@/store/store";
 import { useDispatch, useSelector } from "react-redux";
 import { deletePresentationSlide, updateSlide } from "@/store/slices/presentationGeneration";
-import NewSlide from "../../components/slide_layouts/NewSlide";
 import { useGroupLayouts } from "../../hooks/useGroupLayouts";
+import NewSlide from "../../components/NewSlide";
 
 interface SlideContentProps {
   slide: any;
