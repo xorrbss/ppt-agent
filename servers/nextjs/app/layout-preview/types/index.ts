@@ -6,6 +6,7 @@ export interface LayoutInfo {
     sampleData: any
     fileName: string
     groupName: string
+    layoutId: string
 }
 
 export interface GroupSetting {

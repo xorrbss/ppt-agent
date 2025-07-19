@@ -107,6 +107,7 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
                 const root = ReactDOM.createRoot(tiptapContainer);
                 root.render(
                     <TiptapText
+                        key={trimmedText}
                         content={trimmedText}
                         onContentChange={(content: string) => {
                             if (dataPath && onContentChange) {

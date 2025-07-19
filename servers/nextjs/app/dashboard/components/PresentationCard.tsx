@@ -63,11 +63,6 @@ export const PresentationCard = ({
       });
     }
   };
-
-
-
-
-
   return (
     <Card
       onClick={handlePreview}
@@ -82,11 +77,11 @@ export const PresentationCard = ({
             {new Date(created_at).toLocaleDateString()}
           </p>
           <Popover>
-            <PopoverTrigger onClick={(e) => e.stopPropagation()}>
-              <button className="w-6 h-6 rounded-full flex items-center justify-center text-gray-500 hover:text-gray-700" >
+            <PopoverTrigger className="w-6 h-6 rounded-full flex items-center justify-center text-gray-500 hover:text-gray-700" onClick={(e) => e.stopPropagation()}>
 
-                <DotsVerticalIcon className="w-4 h-4 text-gray-500" />
-              </button>
+
+              <DotsVerticalIcon className="w-4 h-4 text-gray-500" />
+
             </PopoverTrigger>
             <PopoverContent align="end" className="bg-white w-[200px]">
               <button
