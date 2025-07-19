@@ -37,7 +37,6 @@ const LayoutSelection: React.FC<LayoutSelectionProps> = ({
         const Groups: LayoutGroup[] = groups.map(groupName => {
             const layouts = getLayoutsByGroup(groupName);
             const settings = getGroupSetting(groupName);
-
             return {
                 id: groupName,
                 name: groupName,

@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
 import { useDispatch } from "react-redux";
-import { toast } from "@/hooks/use-toast";
 import { setPresentationData, setStreaming } from "@/store/slices/presentationGeneration";
 import { jsonrepair } from "jsonrepair";
 

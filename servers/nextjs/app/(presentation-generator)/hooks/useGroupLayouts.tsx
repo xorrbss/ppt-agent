@@ -1,10 +1,13 @@
 'use client'
 import React, { useMemo } from 'react';
+import { useDispatch } from 'react-redux';
 import { useLayout } from '../context/LayoutContext';
-import { SmartEditableProvider } from '../components/SmartEditableWrapper';
+import EditableLayoutWrapper from '../components/EditableLayoutWrapper';
 import TiptapTextReplacer from '../components/TiptapTextReplacer';
+import { updateSlideContent } from '../../../store/slices/presentationGeneration';
 
 export const useGroupLayouts = () => {
+    const dispatch = useDispatch();
     const {
         getLayoutByIdAndGroup,
         getLayoutsByGroup,
@@ -30,7 +33,7 @@ export const useGroupLayouts = () => {
         };
     }, [getLayoutsByGroup]);
 
-    // Render slide content with group validation and automatic Tiptap text editing
+    // Render slide content with group validation, automatic Tiptap text editing, and editable images/icons
     const renderSlideContent = useMemo(() => {
         return (slide: any, isEditMode: boolean = true) => {
             const Layout = getGroupLayout(slide.layout, slide.layout_group);
@@ -46,29 +49,37 @@ export const useGroupLayouts = () => {
 
             if (isEditMode) {
                 return (
-                    <SmartEditableProvider
+                    <EditableLayoutWrapper
                         slideIndex={slide.index}
-                        slideId={slide.id || `slide-${slide.index}`}
                         slideData={slide.content}
                         isEditMode={isEditMode}
                     >
                         <TiptapTextReplacer
                             slideData={slide.content}
+                            slideIndex={slide.index}
                             isEditMode={isEditMode}
                             layout={Layout}
-                            onContentChange={(content: string, dataPath: string) => {
-                                console.log(`Text content changed at ${dataPath}:`, content);
+                            onContentChange={(content: string, dataPath: string, slideIndex?: number) => {
+                                console.log(`Text content changed at slide ${slideIndex}, path ${dataPath}:`, content);
 
+                                // Dispatch Redux action to update slide content
+                                if (dataPath && slideIndex !== undefined) {
+                                    dispatch(updateSlideContent({
+                                        slideIndex: slideIndex,
+                                        dataPath: dataPath,
+                                        content: content
+                                    }));
+                                }
                             }}
                         >
                             <Layout data={slide.content} />
                         </TiptapTextReplacer>
-                    </SmartEditableProvider>
+                    </EditableLayoutWrapper>
                 );
             }
             return <Layout data={slide.content} />;
         };
-    }, [getGroupLayout]);
+    }, [getGroupLayout, dispatch]);
 
     return {
         getGroupLayout,

@@ -7,8 +7,10 @@ from enums.llm_provider import LLMProvider
 from utils.get_env import (
     get_custom_llm_api_key_env,
     get_custom_llm_url_env,
+    get_custom_model_env,
     get_google_api_key_env,
     get_llm_provider_env,
+    get_ollama_model_env,
     get_ollama_url_env,
     get_openai_api_key_env,
 )
@@ -93,9 +95,9 @@ def get_large_model():
     elif selected_llm == LLMProvider.GOOGLE:
         return "gemini-2.0-flash"
     elif selected_llm == LLMProvider.OLLAMA:
-        return os.getenv("OLLAMA_MODEL")
+        return get_ollama_model_env()
     elif selected_llm == LLMProvider.CUSTOM:
-        return os.getenv("CUSTOM_MODEL")
+        return get_custom_model_env()
     else:
         raise ValueError(f"Invalid LLM model")
 
@@ -107,9 +109,9 @@ def get_small_model():
     elif selected_llm == LLMProvider.GOOGLE:
         return "gemini-2.0-flash"
     elif selected_llm == LLMProvider.OLLAMA:
-        return os.getenv("OLLAMA_MODEL")
+        return get_ollama_model_env()
     elif selected_llm == LLMProvider.CUSTOM:
-        return os.getenv("CUSTOM_MODEL")
+        return get_custom_model_env()
     else:
         raise ValueError(f"Invalid LLM model")
 
@@ -121,8 +123,8 @@ def get_nano_model():
     elif selected_llm == LLMProvider.GOOGLE:
         return "gemini-2.0-flash"
     elif selected_llm == LLMProvider.OLLAMA:
-        return os.getenv("OLLAMA_MODEL")
+        return get_ollama_model_env()
     elif selected_llm == LLMProvider.CUSTOM:
-        return os.getenv("CUSTOM_MODEL")
+        return get_custom_model_env()
     else:
         raise ValueError(f"Invalid LLM model")

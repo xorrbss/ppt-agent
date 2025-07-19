@@ -108,6 +108,9 @@ class PptxPresentationCreator:
     def add_and_populate_slide(self, slide_model: PptxSlideModel):
         slide = self._ppt.slides.add_slide(self._ppt.slide_layouts[BLANK_SLIDE_LAYOUT])
 
+        if slide_model.background:
+            self.apply_fill_to_shape(slide.background, slide_model.background)
+
         for shape_model in slide_model.shapes:
             model_type = type(shape_model)
 

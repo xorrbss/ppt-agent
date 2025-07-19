@@ -1,40 +1,14 @@
 import { Slide } from "@/app/(presentation-generator)/types/slide";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
-interface Series {
-  data: number[];
-  name?: string;
-}
-interface DataLabel {
-  dataLabelPosition: "Outside" | "Inside";
-  dataLabelAlignment: "Base" | "Center" | "End";
-}
-export interface ChartSettings {
-  showLegend: boolean;
-  showGrid: boolean;
-  showAxisLabel: boolean;
-  showDataLabel: boolean;
-  dataLabel: DataLabel;
-}
+
 
 export interface SlideOutline {
   title?: string;
   body?: string;
 }
 
-export interface Chart {
-  id: string;
-  name: string;
-  type: string;
-  style: ChartSettings | {} | null;
-  unit?: string | null;
-  presentation: string;
-  postfix: string;
-  data: {
-    categories: string[];
-    series: Series[];
-  };
-}
+
 export interface PresentationData {
   id: string;
   language: string;
@@ -50,20 +24,18 @@ export interface PresentationData {
 
 interface PresentationGenerationState {
   presentation_id: string | null;
-  documents: string[];
-  images: string[];
   isLoading: boolean;
   isStreaming: boolean | null;
   outlines: SlideOutline[];
   error: string | null;
   presentationData: PresentationData | null;
+  isSlidesRendered: boolean;
 }
 
 const initialState: PresentationGenerationState = {
   presentation_id: null,
-  documents: [],
-  images: [],
   outlines: [],
+  isSlidesRendered: false,
   isLoading: false,
   isStreaming: null,
   error: null,
@@ -86,6 +58,10 @@ const presentationGenerationSlice = createSlice({
       state.presentation_id = action.payload;
       state.error = null;
     },
+    // Slides rendered
+    setSlidesRendered: (state, action: PayloadAction<boolean>) => {
+      state.isSlidesRendered = action.payload;
+    },
     // Error
     setError: (state, action: PayloadAction<string>) => {
       state.error = action.payload;
@@ -96,14 +72,6 @@ const presentationGenerationSlice = createSlice({
       state.presentation_id = null;
       state.error = null;
       state.isLoading = false;
-    },
-    // Set documents
-    setDocs: (state, action: PayloadAction<string[]>) => {
-      state.documents = action.payload;
-    },
-    // Set images
-    setImgs: (state, action: PayloadAction<string[]>) => {
-      state.images = action.payload;
     },
     // Set outlines
     setOutlines: (state, action: PayloadAction<SlideOutline[]>) => {
@@ -166,252 +134,201 @@ const presentationGenerationSlice = createSlice({
           action.payload.slide;
       }
     },
-    updateSlideVariant: (
+    
+    // Update slide content at specific data path (for Tiptap text editing)
+    updateSlideContent: (
       state,
-      action: PayloadAction<{ index: number; variant: number }>
+      action: PayloadAction<{
+        slideIndex: number;
+        dataPath: string;
+        content: string;
+      }>
     ) => {
       if (
         state.presentationData &&
-        state.presentationData.slides[action.payload.index]
+        state.presentationData.slides &&
+        state.presentationData.slides[action.payload.slideIndex]
       ) {
-        state.presentationData.slides[action.payload.index].design_index =
-          action.payload.variant;
-      }
-    },
-    updateSlideTitle: (
-      state,
-      action: PayloadAction<{ index: number; title: string }>
-    ) => {
-      if (state.presentationData?.slides[action.payload.index]) {
-        state.presentationData.slides[action.payload.index].content.title =
-          action.payload.title;
-      }
-    },
-    updateSlideDescription: (
-      state,
-      action: PayloadAction<{ index: number; description: string }>
-    ) => {
-      if (state.presentationData?.slides[action.payload.index]) {
-        state.presentationData.slides[
-          action.payload.index
-        ].content.description = action.payload.description;
-      }
-    },
-    updateSlideBodyString: (
-      state,
-      action: PayloadAction<{ index: number; body: string }>
-    ) => {
-      if (state.presentationData?.slides[action.payload.index]) {
-        state.presentationData.slides[action.payload.index].content.body =
-          action.payload.body;
-      }
-    },
-    updateSlideBodyHeading: (
-      state,
-      action: PayloadAction<{ index: number; bodyIdx: number; heading: string }>
-    ) => {
-      if (state.presentationData?.slides[action.payload.index]) {
-        state.presentationData.slides[action.payload.index].content.body[
-          action.payload.bodyIdx
-          // @ts-ignore
-        ].heading = action.payload.heading;
-      }
-    },
-    updateSlideBodyDescription: (
-      state,
-      action: PayloadAction<{
-        index: number;
-        bodyIdx: number;
-        description: string;
-      }>
-    ) => {
-      if (state.presentationData?.slides[action.payload.index]) {
-        state.presentationData.slides[action.payload.index].content.body[
-          action.payload.bodyIdx
-          // @ts-ignore
-        ].description = action.payload.description;
-      }
-    },
-    updateSlideImage: (
-      state,
-      action: PayloadAction<{ index: number; imageIdx: number; image: string }>
-    ) => {
-      if (state.presentationData?.slides[action.payload.index]?.images) {
-        state.presentationData.slides[action.payload.index].images![
-          action.payload.imageIdx
-        ] = action.payload.image;
-      }
-    },
-    updateSlideIcon: (
-      state,
-      action: PayloadAction<{ index: number; iconIdx: number; icon: string }>
-    ) => {
-      if (state.presentationData?.slides[action.payload.index]?.icons) {
-        state.presentationData.slides[action.payload.index].icons![
-          action.payload.iconIdx
-        ] = action.payload.icon;
-      }
-    },
-    updateSlideChart: (
-      state,
-      action: PayloadAction<{ index: number; chart: Chart }>
-    ) => {
-      if (state.presentationData?.slides[action.payload.index]) {
-        state.presentationData.slides[action.payload.index].content.graph =
-          action.payload.chart;
-      }
-    },
-    updateSlideChartSettings: (
-      state,
-      action: PayloadAction<{ index: number; chartSettings: ChartSettings }>
-    ) => {
-      if (state.presentationData?.slides[action.payload.index]) {
-        const defaultSettings: ChartSettings = {
-          showLegend: false,
-          showGrid: false,
-          showAxisLabel: true,
-          showDataLabel: true,
-          dataLabel: {
-            dataLabelPosition: "Outside",
-            dataLabelAlignment: "Center",
-          },
+        const slide = state.presentationData.slides[action.payload.slideIndex];
+        const { dataPath, content } = action.payload;
+        
+        // Helper function to set nested property value
+        const setNestedValue = (obj: any, path: string, value: string) => {
+          const keys = path.split(/[.\[\]]+/).filter(Boolean);
+          let current = obj;
+          
+          // Navigate to the parent object
+          for (let i = 0; i < keys.length - 1; i++) {
+            const key = keys[i];
+            if (isNaN(Number(key))) {
+              // String key
+              if (!current[key]) {
+                current[key] = {};
+              }
+              current = current[key];
+            } else {
+              // Array index
+              const index = Number(key);
+              if (!current[index]) {
+                current[index] = {};
+              }
+              current = current[index];
+            }
+          }
+          
+          // Set the final value
+          const finalKey = keys[keys.length - 1];
+          if (isNaN(Number(finalKey))) {
+            current[finalKey] = value;
+          } else {
+            current[Number(finalKey)] = value;
+          }
         };
-        state.presentationData.slides[
-          action.payload.index
-        ].content.graph.style = {
-          ...defaultSettings,
-          ...action.payload.chartSettings,
-        };
+        
+        // Update the slide content
+        if (dataPath && slide.content) {
+          setNestedValue(slide.content, dataPath, content);
+        }
       }
     },
 
-    addSlideBodyItem: (
+    // Update slide image at specific data path
+    updateSlideImage: (
       state,
       action: PayloadAction<{
-        index: number;
-        item: { heading: string; description: string };
+        slideIndex: number;
+        dataPath: string;
+        imageUrl: string;
+        prompt?: string;
       }>
     ) => {
-      if (state.presentationData?.slides[action.payload.index]?.content.body) {
-        // @ts-ignore
-        state.presentationData.slides[action.payload.index].content.body.push(
-          action.payload.item
-        );
-      }
-    },
-    addSlideImage: (
-      state,
-      action: PayloadAction<{ index: number; image: string }>
-    ) => {
-      if (state.presentationData?.slides[action.payload.index]?.images) {
-        state.presentationData.slides[action.payload.index].images!.push(
-          action.payload.image
-        );
-      }
-    },
-    deleteSlideImage: (
-      state,
-      action: PayloadAction<{ index: number; imageIdx: number }>
-    ) => {
-      if (state.presentationData?.slides[action.payload.index]?.images) {
-        state.presentationData.slides[action.payload.index].images!.splice(
-          action.payload.imageIdx,
-          1
-        );
-      }
-    },
-    updateSlideProperties: (
-      state,
-      action: PayloadAction<{ index: number; itemIdx: number; properties: any }>
-    ) => {
-      if (state.presentationData?.slides[action.payload.index]) {
-        // Initialize properties object if it doesn't exist
-        if (!state.presentationData.slides[action.payload.index].properties) {
-          state.presentationData.slides[action.payload.index].properties = {};
+      if (
+        state.presentationData &&
+        state.presentationData.slides &&
+        state.presentationData.slides[action.payload.slideIndex]
+      ) {
+        const slide = state.presentationData.slides[action.payload.slideIndex];
+        const { dataPath, imageUrl, prompt } = action.payload;
+        
+        // Helper function to set nested property value for images
+        const setNestedImageValue = (obj: any, path: string, url: string, promptText?: string) => {
+          const keys = path.split(/[.\[\]]+/).filter(Boolean);
+          let current = obj;
+          
+          // Navigate to the parent object
+          for (let i = 0; i < keys.length - 1; i++) {
+            const key = keys[i];
+            if (isNaN(Number(key))) {
+              if (!current[key]) {
+                current[key] = {};
+              }
+              current = current[key];
+            } else {
+              const index = Number(key);
+              if (!current[index]) {
+                current[index] = {};
+              }
+              current = current[index];
+            }
+          }
+          
+          // Set the image properties
+          const finalKey = keys[keys.length - 1];
+          if (isNaN(Number(finalKey))) {
+            current[finalKey] = {
+              __image_url__: url,
+              __image_prompt__: promptText || ''
+            };
+          } else {
+            current[Number(finalKey)] = {
+              __image_url__: url,
+              __image_prompt__: promptText || ''
+            };
+          }
+        };
+        
+        // Update the slide image
+        if (dataPath && slide.content) {
+          setNestedImageValue(slide.content, dataPath, imageUrl, prompt);
         }
-        // Assign the properties to the specific item index
-        state.presentationData.slides[action.payload.index].properties[
-          action.payload.itemIdx
-        ] = action.payload.properties;
+        
+        // Also update the images array if it exists
+        if (slide.images && Array.isArray(slide.images)) {
+          const imageIndex = parseInt(dataPath.split('[')[1]?.split(']')[0]) || 0;
+          if (slide.images[imageIndex] !== undefined) {
+            slide.images[imageIndex] = imageUrl;
+          }
+        }
       }
     },
-    // Infographics
-    addInfographics: (
-      state,
-      action: PayloadAction<{ slideIndex: number; item: any }>
-    ) => {
-      if (state.presentationData?.slides[action.payload.slideIndex]?.content) {
-        // @ts-ignore
-        state.presentationData.slides[
-          action.payload.slideIndex
-        ].content.infographics.push(action.payload.item);
-      }
-    },
-    deleteInfographics: (
-      state,
-      action: PayloadAction<{ slideIndex: number; itemIdx: number }>
-    ) => {
-      if (state.presentationData?.slides[action.payload.slideIndex]?.content) {
-        // @ts-ignore
-        state.presentationData.slides[
-          action.payload.slideIndex
-        ].content.infographics.splice(action.payload.itemIdx, 1);
-      }
-    },
-    updateInfographicsTitle: (
+
+    // Update slide icon at specific data path
+    updateSlideIcon: (
       state,
       action: PayloadAction<{
         slideIndex: number;
-        itemIdx: number;
-        title: string;
+        dataPath: string;
+        iconUrl: string;
+        query?: string;
       }>
     ) => {
-      if (state.presentationData?.slides[action.payload.slideIndex]?.content) {
-        // @ts-ignore
-        state.presentationData.slides[
-          action.payload.slideIndex
-        ].content.infographics[action.payload.itemIdx].title =
-          action.payload.title;
-      }
-    },
-    updateInfographicsDescription: (
-      state,
-      action: PayloadAction<{
-        slideIndex: number;
-        itemIdx: number;
-        description: string;
-      }>
-    ) => {
-      if (state.presentationData?.slides[action.payload.slideIndex]?.content) {
-        // @ts-ignore
-        state.presentationData.slides[
-          action.payload.slideIndex
-        ].content.infographics[action.payload.itemIdx].description =
-          action.payload.description;
-      }
-    },
-    updateInfographicsChart: (
-      state,
-      action: PayloadAction<{ slideIndex: number; itemIdx: number; chart: any }>
-    ) => {
-      if (state.presentationData?.slides[action.payload.slideIndex]?.content) {
-        // @ts-ignore
-        state.presentationData.slides[
-          action.payload.slideIndex
-        ].content.infographics[action.payload.itemIdx].chart =
-          action.payload.chart;
-      }
-    },
-    deleteSlideBodyItem: (
-      state,
-      action: PayloadAction<{ index: number; itemIdx: number }>
-    ) => {
-      if (state.presentationData?.slides[action.payload.index]?.content.body) {
-        // @ts-ignore
-        state.presentationData.slides[action.payload.index].content.body.splice(
-          action.payload.itemIdx,
-          1
-        );
+      if (
+        state.presentationData &&
+        state.presentationData.slides &&
+        state.presentationData.slides[action.payload.slideIndex]
+      ) {
+        const slide = state.presentationData.slides[action.payload.slideIndex];
+        const { dataPath, iconUrl, query } = action.payload;
+        
+        // Helper function to set nested property value for icons
+        const setNestedIconValue = (obj: any, path: string, url: string, queryText?: string) => {
+          const keys = path.split(/[.\[\]]+/).filter(Boolean);
+          let current = obj;
+          
+          // Navigate to the parent object
+          for (let i = 0; i < keys.length - 1; i++) {
+            const key = keys[i];
+            if (isNaN(Number(key))) {
+              if (!current[key]) {
+                current[key] = {};
+              }
+              current = current[key];
+            } else {
+              const index = Number(key);
+              if (!current[index]) {
+                current[index] = {};
+              }
+              current = current[index];
+            }
+          }
+          
+          // Set the icon properties
+          const finalKey = keys[keys.length - 1];
+          if (isNaN(Number(finalKey))) {
+            current[finalKey] = {
+              __icon_url__: url,
+              __icon_query__: queryText || ''
+            };
+          } else {
+            current[Number(finalKey)] = {
+              __icon_url__: url,
+              __icon_query__: queryText || ''
+            };
+          }
+        };
+        
+        // Update the slide icon
+        if (dataPath && slide.content) {
+          setNestedIconValue(slide.content, dataPath, iconUrl, query);
+        }
+        
+        // Also update the icons array if it exists
+        if (slide.icons && Array.isArray(slide.icons)) {
+          const iconIndex = parseInt(dataPath.split('[')[1]?.split(']')[0]) || 0;
+          if (slide.icons[iconIndex] !== undefined) {
+            slide.icons[iconIndex] = iconUrl;
+          }
+        }
       }
     },
   },
@@ -421,39 +338,19 @@ export const {
   setStreaming,
   setLoading,
   setPresentationId,
+  setSlidesRendered,
   setError,
   clearPresentationData,
-  setDocs,
-  setImgs,
-
   deleteSlideOutline,
   setPresentationData,
   setOutlines,
   // slides operations
   addSlide,
   updateSlide,
-  updateSlideVariant,
-  updateSlideChart,
-  updateSlideChartSettings,
-  updateSlideTitle,
-  updateSlideDescription,
-  updateSlideBodyString,
-  updateSlideBodyHeading,
-  updateSlideBodyDescription,
+  deletePresentationSlide,
+  updateSlideContent,
   updateSlideImage,
   updateSlideIcon,
-  deletePresentationSlide,
-  addSlideBodyItem,
-  addSlideImage,
-  deleteSlideImage,
-  deleteSlideBodyItem,
-  updateSlideProperties,
-  // infographics
-  addInfographics,
-  deleteInfographics,
-  updateInfographicsTitle,
-  updateInfographicsDescription,
-  updateInfographicsChart,
 } = presentationGenerationSlice.actions;
 
 export default presentationGenerationSlice.reducer;
