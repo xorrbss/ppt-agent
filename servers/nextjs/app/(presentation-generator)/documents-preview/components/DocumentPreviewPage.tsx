@@ -13,7 +13,6 @@
 
 "use client";
 
-import styles from "../styles/main.module.css";
 import { useEffect, useState, useRef, useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OverlayLoader } from "@/components/ui/overlay-loader";
@@ -23,13 +22,12 @@ import { useDispatch, useSelector } from "react-redux";
 import { useRouter } from "next/navigation";
 import { RootState } from "@/store/store";
 import { Button } from "@/components/ui/button";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import MarkdownRenderer from "./MarkdownRenderer";
 import { getIconFromFile } from "../../utils/others";
 import { ChevronRight, PanelRightOpen, X } from "lucide-react";
 import ToolTip from "@/components/ToolTip";
 import Header from "@/app/dashboard/components/Header";
-import { useLayout } from "../../context/LayoutContext";
 
 // Types
 interface LoadingState {
@@ -124,11 +122,7 @@ const DocumentsPreviewPage: React.FC = () => {
         });
       } catch (error) {
         console.error('Error reading files:', error);
-        toast({
-          title: "Error",
-          description: "Failed to read document content",
-          variant: "destructive",
-        });
+        toast.error("Failed to read document content");
       }
       setDownloadingDocuments([]);
     }
@@ -157,11 +151,7 @@ const DocumentsPreviewPage: React.FC = () => {
       router.push("/outline");
     } catch (error) {
       console.error("Error in presentation creation:", error);
-      toast({
-        title: "Error in presentation creation.",
-        description: "Please try again.",
-        variant: "destructive",
-      });
+      toast.error("Error in presentation creation. Please try again.");
       setShowLoading({
         message: "Error in presentation creation.",
         show: true,
@@ -214,7 +204,7 @@ const DocumentsPreviewPage: React.FC = () => {
     if (!isOpen) return null;
 
     return (
-      <div className={`${styles.sidebar} fixed xl:relative w-full z-50 xl:z-auto
+      <div className={`border-r border-gray-200 fixed xl:relative w-full z-50 xl:z-auto
         transition-all duration-300 ease-in-out max-w-[200px] md:max-w-[300px] h-[85vh] rounded-md p-5`}>
         <X
           onClick={() => setIsOpen(false)}
@@ -230,7 +220,7 @@ const DocumentsPreviewPage: React.FC = () => {
                 <div
                   key={key}
                   onClick={() => updateSelectedDocument(key)}
-                  className={`${selectedDocument === key ? styles.selected_border : ""
+                  className={`${selectedDocument === key ? 'border border-blue-500' : ""
                     } flex p-2 rounded-sm gap-2 items-center cursor-pointer`}
                 >
                   <img
@@ -251,7 +241,7 @@ const DocumentsPreviewPage: React.FC = () => {
   };
 
   return (
-    <div className={`${styles.wrapper} min-h-screen flex flex-col w-full`}>
+    <div className={`bg-white/90 min-h-screen flex flex-col w-full`}>
       <OverlayLoader
         show={showLoading.show}
         text={showLoading.message}

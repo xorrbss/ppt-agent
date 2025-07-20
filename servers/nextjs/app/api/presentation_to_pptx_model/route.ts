@@ -4,6 +4,10 @@ import puppeteer, { Browser, ElementHandle } from "puppeteer";
 import { ElementAttributes, SlideAttributesResult } from "@/types/element_attibutes";
 import { convertElementAttributesToPptxSlides } from "@/utils/pptx_models_utils";
 import { PptxPresentationModel } from "@/types/pptx_models";
+import fs from "fs";
+import path from "path";
+import crypto from "crypto";
+import sharp from "sharp";
 
 // Interface for getAllChildElementsAttributes function arguments
 interface GetAllChildElementsAttributesArgs {
@@ -12,6 +16,8 @@ interface GetAllChildElementsAttributesArgs {
   depth?: number;
   inheritedFont?: ElementAttributes['font'];
   inheritedBackground?: ElementAttributes['background'];
+  inheritedBorderRadius?: number[];
+  screenshotsDir: string;
 }
 
 
@@ -24,8 +30,19 @@ export async function GET(request: NextRequest) {
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
 
+    // Ensure screenshots directory exists
+    const tempDir = process.env.TEMP_DIRECTORY;
+    if (!tempDir) {
+      console.warn('TEMP_DIRECTORY environment variable not set, skipping screenshot');
+      return undefined;
+    }
+    const screenshotsDir = path.join(tempDir, 'screenshots');
+    if (!fs.existsSync(screenshotsDir)) {
+      fs.mkdirSync(screenshotsDir, { recursive: true });
+    }
+
     const slides = await getSlides(browser, id);
-    const slides_attributes = await getSlidesAttributes(slides);
+    const slides_attributes = await getSlidesAttributes(slides, screenshotsDir);
     const slides_pptx_models = convertElementAttributesToPptxSlides(slides_attributes.elements, slides_attributes.backgroundColors);
     const presentation_pptx_model: PptxPresentationModel = {
       slides: slides_pptx_models,
@@ -56,10 +73,14 @@ async function getPresentationId(request: NextRequest) {
   return id;
 }
 
-async function getSlidesAttributes(slides: ElementHandle<Element>[]) {
-  const slideResults = await Promise.all(slides.map(async (slide) => {
-    return await getAllChildElementsAttributes({ element: slide });
-  }));
+async function getSlidesAttributes(slides: ElementHandle<Element>[], screenshotsDir: string) {
+  const slideResults: SlideAttributesResult[] = [];
+  //? Can't use Promise.all because of the screenshot
+  //? taking screenshot with mess up position of elements
+  for (const slide of slides) {
+    const result = await getAllChildElementsAttributes({ element: slide, screenshotsDir });
+    slideResults.push(result);
+  }
 
   const elements = slideResults.map(result => result.elements);
   const backgroundColors = slideResults.map(result => result.backgroundColor);
@@ -93,9 +114,10 @@ async function getPresentationPage(browser: Browser, id: string) {
   page.on('console', (msg) => {
     const type = msg.type();
     const text = msg.text();
+    console.log(`${type}: ${text}`);
   });
 
-  await page.setViewport({ width: 1640, height: 720, deviceScaleFactor: 1 });
+  await page.setViewport({ width: 1920, height: 1080, deviceScaleFactor: 1 });
   await page.goto(`http://localhost/presentation?id=${id}`, {
     waitUntil: "networkidle0",
     timeout: 60000,
@@ -104,7 +126,7 @@ async function getPresentationPage(browser: Browser, id: string) {
 }
 
 
-async function getAllChildElementsAttributes({ element, rootRect = null, depth = 0, inheritedFont, inheritedBackground }: GetAllChildElementsAttributesArgs): Promise<SlideAttributesResult> {
+async function getAllChildElementsAttributes({ element, rootRect = null, depth = 0, inheritedFont, inheritedBackground, inheritedBorderRadius, screenshotsDir }: GetAllChildElementsAttributesArgs): Promise<SlideAttributesResult> {
   // Get rootRect if not provided (first call)
   const currentRootRect = rootRect || await element.evaluate((el) => {
     const rect = el.getBoundingClientRect();
@@ -115,6 +137,43 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
       height: isFinite(rect.height) ? rect.height : 0,
     };
   });
+
+  // Check if this element is SVG or canvas or table
+  const tagName = await element.evaluate((el) => el.tagName.toLowerCase());
+
+
+  if (tagName === 'svg' || tagName === 'canvas' || tagName === 'table') {
+    return {
+      elements: [],
+      backgroundColor: undefined
+    };
+
+    // // Get basic attributes for the element
+    // const attributes = await getElementAttributes(element);
+    // // Take screenshot of SVG/canvas/table element with accurate colors and opacity
+    // const screenshotPath = await takeElementScreenshot(element, screenshotsDir);
+
+    // // Update image source to point to the screenshot
+    // if (screenshotPath) {
+    //   attributes.imageSrc = screenshotPath;
+    // }
+
+    // // Adjust position relative to root
+    // if (attributes.position && attributes.position.left !== undefined && attributes.position.top !== undefined) {
+    //   attributes.position = {
+    //     left: attributes.position.left - currentRootRect.left,
+    //     top: attributes.position.top - currentRootRect.top,
+    //     width: attributes.position.width,
+    //     height: attributes.position.height,
+    //   };
+    // }
+
+    // // Return early without processing children for these elements
+    // return {
+    //   elements: [attributes],
+    //   backgroundColor: undefined
+    // };
+  }
 
   // Get direct children only (not all descendants)
   const directChildElementHandles = await element.$$(':scope > *');
@@ -133,6 +192,10 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
     // Apply inherited background only on elements that have shadow
     if (inheritedBackground && !attributes.background && attributes.shadow) {
       attributes.background = inheritedBackground;
+    }
+    // Apply inherited border radius if element doesn't have it
+    if (inheritedBorderRadius && !attributes.borderRadius) {
+      attributes.borderRadius = inheritedBorderRadius;
     }
 
     // Adjust position relative to root
@@ -155,6 +218,8 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
       depth: depth + 1,
       inheritedFont: attributes.font || inheritedFont,
       inheritedBackground: attributes.background || inheritedBackground,
+      inheritedBorderRadius: attributes.borderRadius || inheritedBorderRadius,
+      screenshotsDir,
     });
     allResults.push(...childResults.elements.map(attr => ({ attributes: attr, depth: depth + 1 })));
   }
@@ -232,7 +297,6 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
 }
 
 
-// Do not edit this function, it is used to get the attributes of an element
 async function getElementAttributes(element: ElementHandle<Element>): Promise<ElementAttributes> {
 
   const attributes = await element.evaluate((el: Element) => {
@@ -333,6 +397,7 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
       return borderWidth === 0 ? undefined : {
         color: borderColorResult.hex,
         width: isNaN(borderWidth) ? undefined : borderWidth,
+        opacity: borderColorResult.opacity,
       };
     }
 
@@ -384,7 +449,6 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
 
         for (let i = 0; i < shadows.length; i++) {
           const shadowStr = shadows[i];
-          console.log(`Analyzing shadow ${i}: "${shadowStr}"`);
 
           // Parse the shadow to check if it has meaningful values
           const shadowParts = shadowStr.split(' ');
@@ -582,6 +646,38 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
       };
     }
 
+    function parseLineHeight(computedStyles: CSSStyleDeclaration, el: Element) {
+      const lineHeight = computedStyles.lineHeight;
+      const innerText = el.textContent || '';
+
+      // Check if text is multiline by looking for newline characters or checking if text wraps due to bounds
+      const htmlEl = el as HTMLElement;
+
+      // Get font size for comparison
+      const fontSize = parseFloat(computedStyles.fontSize);
+      const computedLineHeight = parseFloat(computedStyles.lineHeight);
+
+      // Estimate single line height (use computed line height if available, otherwise use font size * 1.2)
+      const singleLineHeight = !isNaN(computedLineHeight) ? computedLineHeight : fontSize * 1.2;
+
+      // Check for multiline text
+      const hasExplicitLineBreaks = innerText.includes('\n') || innerText.includes('\r') || innerText.includes('\r\n');
+      const hasTextWrapping = htmlEl.offsetHeight > singleLineHeight * 2; // Allow some tolerance
+      const hasOverflow = htmlEl.scrollHeight > htmlEl.clientHeight;
+
+      const isMultiline = hasExplicitLineBreaks || hasTextWrapping || hasOverflow;
+
+      // Only return line height if text is multiline
+      if (isMultiline && lineHeight && lineHeight !== 'normal') {
+        const parsedLineHeight = parseFloat(lineHeight);
+        if (!isNaN(parsedLineHeight)) {
+          return parsedLineHeight;
+        }
+      }
+
+      return undefined;
+    }
+
     function parseMargin(computedStyles: CSSStyleDeclaration) {
       const marginTop = parseFloat(computedStyles.marginTop);
       const marginBottom = parseFloat(computedStyles.marginBottom);
@@ -657,6 +753,8 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
 
       const font = parseFont(computedStyles);
 
+      const lineHeight = parseLineHeight(computedStyles, el);
+
       const margin = parseMargin(computedStyles);
 
       const padding = parsePadding(computedStyles);
@@ -690,6 +788,7 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
         padding,
         zIndex: zIndexValue,
         textAlign: textAlign !== 'left' ? textAlign : undefined,
+        lineHeight,
         borderRadius: borderRadiusValue,
         imageSrc: imageSrc || undefined,
         objectFit,
@@ -705,3 +804,53 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
   });
   return attributes;
 }
+
+async function takeElementScreenshot(element: ElementHandle<Element>, screenshotsDir: string): Promise<string | undefined> {
+  try {
+    // Check element visibility and dimensions
+    const elementInfo = await element.evaluate((el) => {
+      const rect = el.getBoundingClientRect();
+      const styles = window.getComputedStyle(el);
+
+      // Check if element is visible
+      const isVisible = styles.visibility !== 'hidden' &&
+        styles.display !== 'none' &&
+        styles.opacity !== '0';
+
+      if (!isVisible || rect.width <= 0 || rect.height <= 0) {
+        return null;
+      }
+
+      return {
+        width: rect.width,
+        height: rect.height
+      };
+    });
+
+    if (!elementInfo) {
+      console.warn('Element is not visible or has invalid dimensions, skipping screenshot');
+      return undefined;
+    }
+
+    // Generate unique filename
+    const uuid = crypto.randomUUID();
+    const filename = `${uuid}.png`;
+    const filePath = path.join(screenshotsDir, filename);
+
+    // Take screenshot of the element with accurate colors and opacity
+    // This captures the element exactly as rendered in the browser with all CSS styles applied
+    await element.screenshot({
+      path: filePath as `${string}.png`,
+      type: 'png',
+      omitBackground: true // Use transparent background for better quality
+    });
+
+    console.log(`Screenshot saved: ${filePath}`);
+    return filePath;
+
+  } catch (error) {
+    console.error('Error taking element screenshot:', error);
+    return undefined;
+  }
+}
+

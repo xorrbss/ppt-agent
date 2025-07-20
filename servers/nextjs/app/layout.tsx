@@ -3,9 +3,9 @@ import localFont from "next/font/local";
 import { Fraunces, Montserrat, Inria_Serif, Roboto, Instrument_Sans } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
-import { Toaster } from "@/components/ui/toaster";
 import { FooterProvider } from "./(presentation-generator)/context/footerContext";
 import { LayoutProvider } from "./(presentation-generator)/context/LayoutContext";
+import { Toaster } from "sonner";
 
 const fraunces = Fraunces({
   subsets: ["latin"],
@@ -105,13 +105,11 @@ export default function RootLayout({
         <Providers>
           <LayoutProvider>
             <FooterProvider>
-
-
               {children}
             </FooterProvider>
           </LayoutProvider>
         </Providers>
-        <Toaster />
+        <Toaster position="top-center" richColors={true} />
       </body>
     </html>
   );

@@ -22,14 +22,13 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(bytes);
 
     // Create uploads directory if it doesn't exist
-    const uploadsDir = path.join(userDataDir, "images");
+    const uploadsDir = path.join(userDataDir, "uploads");
     fs.mkdirSync(uploadsDir, { recursive: true });
-    console.log("uploadsDir", uploadsDir);
+ 
 
     // Generate unique filename
     const filename = `${crypto.randomBytes(16).toString("hex")}.png`;
     const filePath = path.join(uploadsDir, filename);
-    console.log("filePath", filePath);
 
     // Write file to disk
     fs.writeFileSync(filePath, buffer);

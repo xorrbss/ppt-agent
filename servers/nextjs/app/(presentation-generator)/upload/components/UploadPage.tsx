@@ -20,12 +20,12 @@ import { LanguageType, PresentationConfig } from "../type";
 import SupportingDoc from "./SupportingDoc";
 import { Button } from "@/components/ui/button";
 import { ChevronRight } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import { OverlayLoader } from "@/components/ui/overlay-loader";
 import Wrapper from "@/components/Wrapper";
 import { setPptGenUploadState } from "@/store/slices/presentationGenUpload";
-import { useLayout } from "../../context/LayoutContext";
+import ToastTesting from "./ToastTesting";
 
 // Types for loading state
 interface LoadingState {
@@ -39,7 +39,6 @@ interface LoadingState {
 const UploadPage = () => {
   const router = useRouter();
   const dispatch = useDispatch();
-  const { toast } = useToast();
 
   // State management
   const [files, setFiles] = useState<File[]>([]);
@@ -72,18 +71,12 @@ const UploadPage = () => {
    */
   const validateConfiguration = (): boolean => {
     if (!config.language || !config.slides) {
-      toast({
-        title: "Please select number of Slides & Language",
-        variant: "destructive",
-      });
+      toast.error("Please select number of Slides & Language");
       return false;
     }
 
     if (!config.prompt.trim() && files.length === 0) {
-      toast({
-        title: "No Prompt or Document Provided",
-        variant: "destructive",
-      });
+      toast.error("No Prompt or Document Provided");
       return false;
     }
     return true;
@@ -177,10 +170,8 @@ const UploadPage = () => {
       duration: 0,
       showProgress: false,
     });
-    toast({
-      title: "Error",
+    toast.error("Error", {
       description: "Failed to generate presentation. Please try again.",
-      variant: "destructive",
     });
   };
 
@@ -200,6 +191,7 @@ const UploadPage = () => {
           onConfigChange={handleConfigChange}
         />
       </div>
+
       <div className="relative">
         <PromptInput
           value={config.prompt}

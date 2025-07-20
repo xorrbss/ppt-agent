@@ -1,7 +1,7 @@
 "use client";
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import dynamic from 'next/dynamic';
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import * as z from 'zod';
 
 export interface LayoutInfo {
@@ -98,8 +98,7 @@ export const LayoutProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                         const module = await import(`@/presentation-layouts/${groupData.groupName}/${file}`);
 
                         if (!module.default) {
-                            toast({
-                                title: `${file} has no default export`,
+                            toast.error(`${file} has no default export`, {
                                 description: 'Please ensure the layout file exports a default component',
                             });
                             console.warn(`❌ ${file} has no default export`);
@@ -107,8 +106,7 @@ export const LayoutProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                         }
 
                         if (!module.Schema) {
-                            toast({
-                                title: `${file} has no Schema export`,
+                            toast.error(`${file} has no Schema export`, {
                                 description: 'Please ensure the layout file exports a Schema',
                             });
                             console.warn(`❌ ${file} has no Schema export`);

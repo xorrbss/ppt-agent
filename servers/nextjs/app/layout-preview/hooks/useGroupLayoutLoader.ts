@@ -1,8 +1,8 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 import { LayoutInfo, LayoutGroup, GroupedLayoutsResponse, GroupSetting } from '../types'
-import { toast } from '@/hooks/use-toast'
+import { toast } from 'sonner'
 
 interface UseGroupLayoutLoaderReturn {
     layoutGroup: LayoutGroup | null
@@ -11,21 +11,38 @@ interface UseGroupLayoutLoaderReturn {
     retry: () => void
 }
 
+// Global cache to store layout groups and avoid re-fetching
+const layoutGroupCache = new Map<string, LayoutGroup>()
+const loadingGroupsCache = new Set<string>()
+
 export const useGroupLayoutLoader = (groupSlug: string): UseGroupLayoutLoaderReturn => {
     const [layoutGroup, setLayoutGroup] = useState<LayoutGroup | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const hasMountedRef = useRef(false)
 
     const loadGroupLayouts = async () => {
+        // Check cache first
+        if (layoutGroupCache.has(groupSlug)) {
+            setLayoutGroup(layoutGroupCache.get(groupSlug)!)
+            setLoading(false)
+            setError(null)
+            return
+        }
+
+        // Prevent multiple simultaneous requests for the same group
+        if (loadingGroupsCache.has(groupSlug)) {
+            return
+        }
+
         try {
             setLoading(true)
             setError(null)
-            setLayoutGroup(null)
+            loadingGroupsCache.add(groupSlug)
 
             const response = await fetch('/api/layouts')
             if (!response.ok) {
-                toast({
-                    title: 'Error loading layouts',
+                toast.error('Error loading layouts', {
                     description: response.statusText,       
                 })
                 return
@@ -57,8 +74,7 @@ export const useGroupLayoutLoader = (groupSlug: string): UseGroupLayoutLoaderRet
                     const module = await import(`@/presentation-layouts/${targetGroupData.groupName}/${layoutName}`)
 
                     if (!module.default) {
-                        toast({
-                            title: `${layoutName} has no default export`,
+                        toast.error(`${layoutName} has no default export`, {
                             description: 'Please ensure the layout file exports a default component',
                         })
                         console.warn(`${layoutName} has no default export`)
@@ -66,8 +82,7 @@ export const useGroupLayoutLoader = (groupSlug: string): UseGroupLayoutLoaderRet
                     }
 
                     if (!module.Schema) {
-                        toast({
-                            title: `${layoutName} is missing required Schema export`,
+                        toast.error(`${layoutName} is missing required Schema export`, {
                             description: 'Please ensure the layout file exports a Schema',
                         })
                         console.error(`${layoutName} is missing required Schema export`)
@@ -76,6 +91,7 @@ export const useGroupLayoutLoader = (groupSlug: string): UseGroupLayoutLoaderRet
 
                     // Use empty object to let schema apply its default values
                     const sampleData = module.Schema.parse({})
+                    const layoutId = module.layoutId || layoutName.toLowerCase().replace(/layout$/, '')
 
                     const layoutInfo: LayoutInfo = {
                         name: layoutName,
@@ -83,7 +99,8 @@ export const useGroupLayoutLoader = (groupSlug: string): UseGroupLayoutLoaderRet
                         schema: module.Schema,
                         sampleData,
                         fileName,
-                        groupName: targetGroupData.groupName
+                        groupName: targetGroupData.groupName,
+                        layoutId
                     }
 
                     groupLayouts.push(layoutInfo)
@@ -98,13 +115,15 @@ export const useGroupLayoutLoader = (groupSlug: string): UseGroupLayoutLoaderRet
 
                         if (module.default && module.Schema) {
                             const sampleData = module.Schema.parse({})
+                            const layoutId = module.layoutId || layoutName.toLowerCase().replace(/layout$/, '')
                             const layoutInfo: LayoutInfo = {
                                 name: layoutName,
                                 component: module.default,
                                 schema: module.Schema,
                                 sampleData,
                                 fileName,
-                                groupName: targetGroupData.groupName
+                                groupName: targetGroupData.groupName,
+                                layoutId
                             }
                             groupLayouts.push(layoutInfo)
                         } else {
@@ -117,17 +136,20 @@ export const useGroupLayoutLoader = (groupSlug: string): UseGroupLayoutLoaderRet
             }
 
             if (groupLayouts.length === 0) {
-                toast({
-                    title: 'No valid layouts found',
+                toast.error('No valid layouts found', {
                     description: `No valid layouts found in "${groupSlug}" group.`,
                 })
                 setError(`No valid layouts found in "${groupSlug}" group.`)
             } else {
-                setLayoutGroup({
+                const group: LayoutGroup = {
                     groupName: targetGroupData.groupName,
                     layouts: groupLayouts,
                     settings: groupSettings
-                })
+                }
+                
+                // Cache the result
+                layoutGroupCache.set(groupSlug, group)
+                setLayoutGroup(group)
                 setError(null)
             }
 
@@ -136,15 +158,19 @@ export const useGroupLayoutLoader = (groupSlug: string): UseGroupLayoutLoaderRet
             setError(error instanceof Error ? error.message : 'Failed to load group layouts')
         } finally {
             setLoading(false)
+            loadingGroupsCache.delete(groupSlug)
         }
     }
 
     const retry = () => {
+        // Clear cache for this group to force reload
+        layoutGroupCache.delete(groupSlug)
         loadGroupLayouts()
     }
 
     useEffect(() => {
-        if (groupSlug) {
+        if (groupSlug && !hasMountedRef.current) {
+            hasMountedRef.current = true
             loadGroupLayouts()
         }
     }, [groupSlug])

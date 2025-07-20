@@ -193,6 +193,21 @@ const presentationGenerationSlice = createSlice({
       }
     },
 
+    addNewSlide: (state, action: PayloadAction<{ slideData: any; index: number }>) => {
+      if (state.presentationData?.slides) {
+        // Insert the new slide at the specified index + 1 (after current slide)
+        state.presentationData.slides.splice(action.payload.index +1, 0, action.payload.slideData);
+        
+        // Update indices for all slides to ensure they remain sequential
+        state.presentationData.slides = state.presentationData.slides.map(
+          (slide: any, idx: number) => ({
+            ...slide,
+            index: idx,
+          })
+        );
+      }
+    },
+
     // Update slide image at specific data path
     updateSlideImage: (
       state,
@@ -365,6 +380,7 @@ export const {
   updateSlideContent,
   updateSlideImage,
   updateSlideIcon,
+  addNewSlide,
 } = presentationGenerationSlice.actions;
 
 export default presentationGenerationSlice.reducer;

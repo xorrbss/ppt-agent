@@ -10,6 +10,7 @@ export interface ElementAttributes {
   border?: {
     color?: string;
     width?: number;
+    opacity?: number;
   };
   shadow?: {
     offset?: [number, number];
@@ -47,6 +48,7 @@ export interface ElementAttributes {
   };
   zIndex?: number;
   textAlign?: 'left' | 'center' | 'right' | 'justify';
+  lineHeight?: number;
   borderRadius?: number[];
   imageSrc?: string;
   objectFit?: 'contain' | 'cover' | 'fill';

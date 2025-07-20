@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import {
   Info,
   ExternalLink,
@@ -276,22 +276,20 @@ export default function Home() {
         setIsLoading(true);
         await pullOllamaModels();
       }
-      toast({
-        title: "Success",
-        description: "Configuration saved successfully",
-      });
+      toast.success("Configuration saved successfully");
       setIsLoading(false);
       router.push("/upload");
     } catch (error) {
       console.error("Error:", error);
-      toast({
-        title: "Error",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Failed to save configuration",
-        variant: "destructive",
-      });
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to save configuration",
+        {
+          description:
+            "Failed to save configuration",
+        }
+      );
       setIsLoading(false);
     }
   };
@@ -413,12 +411,13 @@ export default function Home() {
       console.error("Error fetching custom models:", error);
       // Don't set customModelsChecked to true on error, so the button remains visible
       setCustomModels([]);
-      toast({
-        title: "Error",
-        description:
-          "Failed to fetch available models. Please check your URL and API key.",
-        variant: "destructive",
-      });
+      toast.error(
+        "Failed to fetch available models. Please check your URL and API key.",
+        {
+          description:
+            "Failed to fetch available models. Please check your URL and API key.",
+        }
+      );
     } finally {
       setCustomModelsLoading(false);
     }

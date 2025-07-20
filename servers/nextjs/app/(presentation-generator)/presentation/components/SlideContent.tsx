@@ -8,28 +8,26 @@ import {
 } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { SendHorizontal } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import ToolTip from "@/components/ToolTip";
 import { RootState } from "@/store/store";
 import { useDispatch, useSelector } from "react-redux";
-import { addSlide, updateSlide } from "@/store/slices/presentationGeneration";
-import NewSlide from "../../components/slide_layouts/NewSlide";
-import { getEmptySlideContent } from "../../utils/NewSlideContent";
+import { deletePresentationSlide, updateSlide } from "@/store/slices/presentationGeneration";
 import { useGroupLayouts } from "../../hooks/useGroupLayouts";
+import NewSlide from "../../components/NewSlide";
 
 interface SlideContentProps {
   slide: any;
   index: number;
   presentationId: string;
-  onDeleteSlide: (index: number) => void;
 }
 
 const SlideContent = ({
   slide,
   index,
   presentationId,
-  onDeleteSlide,
+
 }: SlideContentProps) => {
   const dispatch = useDispatch();
   const [isUpdating, setIsUpdating] = useState(false);
@@ -47,11 +45,7 @@ const SlideContent = ({
     ) as HTMLInputElement;
     const value = element?.value;
     if (!value?.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter a prompt before submitting",
-        variant: "destructive",
-      });
+      toast.error("Please enter a prompt before submitting");
       return;
     }
     setIsUpdating(true);
@@ -66,44 +60,24 @@ const SlideContent = ({
       if (response) {
         console.log("response", response);
         dispatch(updateSlide({ index: slide.index, slide: response }));
-        toast({
-          title: "Success",
-          description: "Slide updated successfully",
-        });
+        toast.success("Slide updated successfully");
       }
     } catch (error) {
       console.error("Error updating slide:", error);
-      toast({
-        title: "Error",
-        description: "Failed to update slide. Please try again.",
-        variant: "destructive",
-      });
+      toast.error("Failed to update slide. Please try again.");
     } finally {
       setIsUpdating(false);
     }
   };
-
-  const handleNewSlide = (type: number, index: number) => {
-    const newSlide: Slide = getEmptySlideContent(
-      type,
-      index + 1,
-      presentationData?.id!
-    );
-
-    dispatch(addSlide({ slide: newSlide, index: index + 1 }));
-    setShowNewSlideSelection(false);
-
-    // Scroll to the newly added slide after a short delay to ensure it's rendered
-    setTimeout(() => {
-      const newSlideElement = document.getElementById(`slide-${newSlide.id}`);
-      if (newSlideElement) {
-        newSlideElement.scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-        });
-      }
-    }, 100);
+  const onDeleteSlide = async () => {
+    try {
+      dispatch(deletePresentationSlide(slide.index));
+    } catch (error) {
+      console.error("Error deleting slide:", error);
+    }
   };
+
+
 
   // Scroll to the new slide when streaming and new slides are being generated
   useEffect(() => {
@@ -139,16 +113,16 @@ const SlideContent = ({
         {isStreaming && (
           <Loader2 className="w-8 h-8 absolute right-2 top-2 z-30 text-blue-800 animate-spin" />
         )}
-        <div data-layout={slide.layout} data-group={slide.layout_group} className={` w-full  group  mb-6`}>
+        <div data-layout={slide.layout} data-group={slide.layout_group} className={` w-full  group `}>
           {/* render slides */}
           {loading ? <div className="flex flex-col bg-white aspect-video items-center justify-center h-full">
             <Loader2 className="w-8 h-8 animate-spin" />
           </div> : slideContent}
 
-          {/* {!showNewSlideSelection && (
+          {!showNewSlideSelection && (
             <div className="group-hover:opacity-100 hidden md:block opacity-0 transition-opacity my-4 duration-300">
               <ToolTip content="Add new slide below">
-                {!isStreaming && (
+                {!isStreaming && !loading && (
                   <div
                     onClick={() => setShowNewSlideSelection(true)}
                     className="  bg-white shadow-md w-[80px] py-2 border hover:border-[#5141e5] duration-300  flex items-center justify-center rounded-lg cursor-pointer mx-auto"
@@ -159,16 +133,18 @@ const SlideContent = ({
               </ToolTip>
             </div>
           )}
-          {showNewSlideSelection && (
+          {showNewSlideSelection && !loading && (
             <NewSlide
-              onSelectLayout={(type) => handleNewSlide(type, slide.index)}
+              index={index}
+              group={slide.layout_group}
               setShowNewSlideSelection={setShowNewSlideSelection}
+              presentationId={presentationId}
             />
-          )} */}
-          {!isStreaming && (
+          )}
+          {!isStreaming && !loading && (
             <ToolTip content="Delete slide">
               <div
-                onClick={() => onDeleteSlide(slide.index)}
+                onClick={onDeleteSlide}
                 className="absolute top-2 z-20 sm:top-4 right-2 sm:right-4 hidden md:block  transition-transform"
               >
                 <Trash2 className="text-gray-500 text-xl cursor-pointer" />

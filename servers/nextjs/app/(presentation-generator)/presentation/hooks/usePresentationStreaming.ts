@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
-import { useDispatch } from "react-redux";
-import { setPresentationData, setStreaming } from "@/store/slices/presentationGeneration";
+import { useDispatch, useSelector } from "react-redux";
+import { clearPresentationData, setPresentationData, setStreaming } from "@/store/slices/presentationGeneration";
 import { jsonrepair } from "jsonrepair";
+import { RootState } from "@/store/store";
 
 export const usePresentationStreaming = (
   presentationId: string,
@@ -10,6 +11,8 @@ export const usePresentationStreaming = (
   setError: (error: boolean) => void,
   fetchUserSlides: () => void
 ) => {
+  const { presentationData } = useSelector((state: RootState) => state.presentationGeneration);
+
   const dispatch = useDispatch();
   const previousSlidesLength = useRef(0);
 
@@ -19,6 +22,7 @@ export const usePresentationStreaming = (
 
     const initializeStream = async () => {
       dispatch(setStreaming(true));
+      dispatch(clearPresentationData());
 
       eventSource = new EventSource(
         `/api/v1/ppt/presentation/stream?presentation_id=${presentationId}`
@@ -98,7 +102,9 @@ export const usePresentationStreaming = (
     if (stream) {
       initializeStream();
     } else {
-      fetchUserSlides();
+      if(!presentationData || presentationData.slides.length === 0){
+        fetchUserSlides();
+      }
     }
 
     return () => {

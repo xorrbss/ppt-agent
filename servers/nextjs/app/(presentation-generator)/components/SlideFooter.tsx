@@ -18,12 +18,12 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import React, { useRef, useState, useEffect } from "react";
 import { Camera, Loader2, Plus } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import { getStaticFileUrl, isDarkColor } from "../../utils/others";
 import { defaultFooterProperties, useFooterContext } from "../../context/footerContext";
 import { FooterProperties } from "../../services/footerService";
+import { toast } from "sonner";
 
 const SlideFooter: React.FC = () => {
   const [showEditor, setShowEditor] = useState<boolean>(false);
@@ -43,17 +43,13 @@ const SlideFooter: React.FC = () => {
   const handleSave = async () => {
     await saveFooterProperties(footerProperties);
     setIsPropertyChanged(false);
-    toast({
-      title: "Footer properties saved successfully",
-    });
+    toast.success("Footer properties saved successfully");
   };
 
   const handleReset = async () => {
     await resetFooterProperties();
     setFooterProperties(defaultFooterProperties);
-    toast({
-      title: "Footer properties reset to default",
-    });
+    toast.success("Footer properties reset to default");
   };
 
   const updateProperty = (path: string, value: any): void => {
@@ -186,9 +182,7 @@ const SlideFooter: React.FC = () => {
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      toast({
-        title: "Please Upload An Image File",
-      });
+      toast.error("Please Upload An Image File");
       return;
     }
 
@@ -208,10 +202,7 @@ const SlideFooter: React.FC = () => {
       }));
     } catch (error) {
       console.error("Error converting image:", error);
-      toast({
-        title: "Error uploading image",
-        variant: "destructive",
-      });
+      toast.error("Error uploading image");
     } finally {
       setIsUploading({ ...isUploading, white: false });
     }
@@ -225,9 +216,7 @@ const SlideFooter: React.FC = () => {
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      toast({
-        title: "Please Upload An Image File",
-      });
+      toast.error("Please Upload An Image File");
       return;
     }
 
@@ -247,10 +236,7 @@ const SlideFooter: React.FC = () => {
       }));
     } catch (error) {
       console.error("Error converting image:", error);
-      toast({
-        title: "Error uploading image",
-        variant: "destructive",
-      });
+      toast.error("Error uploading image");
     } finally {
       setIsUploading({ ...isUploading, dark: false });
     }
@@ -277,10 +263,8 @@ const SlideFooter: React.FC = () => {
 
   const handleSheetClose = () => {
     if (isPropertyChanged) {
-      toast({
-        title: "Unsaved Changes",
+      toast.error("Unsaved Changes", {
         description: "Please save changes before closing the editor",
-        variant: "destructive",
       });
       return;
     }

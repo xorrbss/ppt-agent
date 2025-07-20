@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 
 import { LayoutInfo, LayoutGroup, GroupedLayoutsResponse, GroupSetting } from '../types'
-import { toast } from '@/hooks/use-toast'
+import { toast } from 'sonner'
 
 interface UseLayoutLoaderReturn {
     layoutGroups: LayoutGroup[]
@@ -25,8 +25,7 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
 
             const response = await fetch('/api/layouts')
             if (!response.ok) {
-                toast({
-                    title: 'Error loading layouts',
+                toast.error('Error loading layouts', {
                     description: response.statusText,       
                 })
                 return
@@ -50,21 +49,16 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
                         const module = await import(`@/presentation-layouts/${groupData.groupName}/${layoutName}`)
 
                         if (!module.default) {
-                            toast({
-                                title: `${layoutName} has no default export`,
+                            toast.error(`${layoutName} has no default export`, {
                                 description: 'Please ensure the layout file exports a default component',
-                               
                             })
                             console.warn(`${layoutName} has no default export`)
                             continue
                         }
 
                         if (!module.Schema) {
-                            toast({
-                                title: `${layoutName} is missing required Schema export`,
+                            toast.error(`${layoutName} is missing required Schema export`, {
                                 description: 'Please ensure the layout file exports a Schema',
-                               
-
                             })
                             console.error(`${layoutName} is missing required Schema export`)
                             continue
@@ -73,6 +67,7 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
                         // Use empty object to let schema apply its default values
                         // User will need to provide actual data when using the layouts
                         const sampleData = module.Schema.parse({})
+                        const layoutId = module.layoutId || layoutName.toLowerCase().replace(/layout$/, '')
 
                         const layoutInfo: LayoutInfo = {
                             name: layoutName,
@@ -80,7 +75,8 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
                             schema: module.Schema,
                             sampleData,
                             fileName,
-                            groupName: groupData.groupName
+                            groupName: groupData.groupName,
+                            layoutId
                         }
 
                         groupLayouts.push(layoutInfo)
@@ -97,13 +93,15 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
                             if (module.default && module.Schema) {
                                 // Use empty object to let schema apply its default values
                                 const sampleData = module.Schema.parse({})
+                                const layoutId = module.layoutId || layoutName.toLowerCase().replace(/layout$/, '')
                                 const layoutInfo: LayoutInfo = {
                                     name: layoutName,
                                     component: module.default,
                                     schema: module.Schema,
                                     sampleData,
                                     fileName,
-                                    groupName: groupData.groupName
+                                    groupName: groupData.groupName,
+                                    layoutId
                                 }
                                 groupLayouts.push(layoutInfo)
                                 allLayouts.push(layoutInfo)
@@ -126,10 +124,8 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
             }
 
             if (allLayouts.length === 0) {
-                toast({
-                    title: 'No valid layouts found',
+                toast.error('No valid layouts found', {
                     description: 'Make sure your layout files export both a default component and a Schema.',
-
                 })
                 setError('No valid layouts found. Make sure your layout files export both a default component and a Schema.')
             } else {

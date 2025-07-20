@@ -1,9 +1,8 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from 'react';
 import { useDispatch } from "react-redux";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { DashboardApi } from "@/app/dashboard/api/dashboard";
-import { PresentationGenerationApi } from "../../services/api/presentation-generation";
-import { setPresentationData, deletePresentationSlide } from "@/store/slices/presentationGeneration";
+import { setPresentationData } from "@/store/slices/presentationGeneration";
 
 export const usePresentationData = (
   presentationId: string,
@@ -11,7 +10,6 @@ export const usePresentationData = (
   setError: (error: boolean) => void
 ) => {
   const dispatch = useDispatch();
-
 
   const fetchUserSlides = useCallback(async () => {
     try {
@@ -22,35 +20,17 @@ export const usePresentationData = (
       }
     } catch (error) {
       setError(true);
-      toast({
-        title: "Error",
-        description: "Failed to load presentation",
-        variant: "destructive",
-      });
+      toast.error("Failed to load presentation");
       console.error("Error fetching user slides:", error);
       setLoading(false);
     }
   }, [presentationId, dispatch, setLoading, setError]);
 
-  const handleDeleteSlide = useCallback(async (index: number, presentationData: any) => {
-    dispatch(deletePresentationSlide(index));
-    try {
-      await PresentationGenerationApi.deleteSlide(
-        presentationId,
-        presentationData?.slides[index].id!
-      );
-    } catch (error) {
-      console.error("Error deleting slide:", error);
-      toast({
-        title: "Error",
-        description: "Failed to delete slide",
-        variant: "destructive",
-      });
-    }
-  }, [presentationId, dispatch]);
+  useEffect(() => {
+    fetchUserSlides();
+  }, [fetchUserSlides]);
 
   return {
     fetchUserSlides,
-    handleDeleteSlide,
   };
 }; 

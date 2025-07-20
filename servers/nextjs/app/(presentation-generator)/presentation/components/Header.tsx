@@ -1,12 +1,9 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import {
-  Menu,
-  Palette,
   SquareArrowOutUpRight,
   Play,
   Loader2,
-  ExternalLink,
 } from "lucide-react";
 import React, { useState } from "react";
 import Wrapper from "@/components/Wrapper";
@@ -16,38 +13,20 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import UserAccount from "../../components/UserAccount";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import { OverlayLoader } from "@/components/ui/overlay-loader";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useDispatch, useSelector } from "react-redux";
 
 import Link from "next/link";
 
-import { ThemeType } from "@/app/(presentation-generator)/upload/type";
-import {
-  setTheme,
-  setThemeColors,
-  defaultColors,
-  serverColors,
-} from "../../store/themeSlice";
-import CustomThemeSettings from "../../components/CustomThemeSettings";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { RootState } from "@/store/store";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
-import ThemeSelector from "./ThemeSelector";
-import Modal from "./Modal";
 
 import Announcement from "@/components/Announcement";
-import { getFontLink, getStaticFileUrl } from "../../utils/others";
+import { getStaticFileUrl } from "../../utils/others";
 import { PptxPresentationModel } from "@/types/pptx_models";
+import HeaderNav from "../../components/HeaderNab";
 
 
 const Header = ({
@@ -61,66 +40,10 @@ const Header = ({
   const [showLoader, setShowLoader] = useState(false);
   const router = useRouter();
 
-  const [showCustomThemeModal, setShowCustomThemeModal] = useState(false);
-  const [showDownloadModal, setShowDownloadModal] = useState(false);
-  const [downloadPath, setDownloadPath] = useState("");
-  const { currentTheme, currentColors } = useSelector(
-    (state: RootState) => state.theme
-  );
+
   const { presentationData, isStreaming } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
-  const dispatch = useDispatch();
-  const handleThemeSelect = async (value: string) => {
-    if (isStreaming) return;
-    if (value === "custom") {
-      setShowCustomThemeModal(true);
-      return;
-    } else {
-      const themeType = value as ThemeType;
-      const themeColors = serverColors[themeType] || defaultColors[themeType];
-
-      if (themeColors) {
-        try {
-          // Update UI
-          dispatch(setTheme(themeType));
-          dispatch(setThemeColors({ ...themeColors, theme: themeType }));
-          // Set CSS variables
-          const root = document.documentElement;
-          root.style.setProperty(
-            `--${themeType}-slide-bg`,
-            themeColors.slideBg
-          );
-          root.style.setProperty(
-            `--${themeType}-slide-title`,
-            themeColors.slideTitle
-          );
-          root.style.setProperty(
-            `--${themeType}-slide-heading`,
-            themeColors.slideHeading
-          );
-          root.style.setProperty(
-            `--${themeType}-slide-description`,
-            themeColors.slideDescription
-          );
-          root.style.setProperty(
-            `--${themeType}-slide-box`,
-            themeColors.slideBox
-          );
-
-
-        } catch (error) {
-          console.error("Failed to update theme:", error);
-          toast({
-            title: "Error updating theme",
-            description:
-              "Failed to update the presentation theme. Please try again.",
-            variant: "destructive",
-          });
-        }
-      }
-    }
-  };
 
   const get_presentation_pptx_model = async (id: string): Promise<PptxPresentationModel> => {
     const response = await fetch(`/api/presentation_to_pptx_model?id=${id}`);
@@ -148,11 +71,9 @@ const Header = ({
     } catch (error) {
       console.error("Export failed:", error);
       setShowLoader(false);
-      toast({
-        title: "Having trouble exporting!",
+      toast.error("Having trouble exporting!", {
         description:
           "We are having trouble exporting your presentation. Please try again.",
-        variant: "default",
       });
     } finally {
       setShowLoader(false);
@@ -176,19 +97,16 @@ const Header = ({
 
       if (response.ok) {
         const { path: pdfPath } = await response.json();
-        const staticFileUrl = getStaticFileUrl(pdfPath);
-        window.open(staticFileUrl, '_blank');
+        window.open(pdfPath, '_blank');
       } else {
         throw new Error("Failed to export PDF");
       }
 
     } catch (err) {
       console.error(err);
-      toast({
-        title: "Having trouble exporting!",
+      toast.error("Having trouble exporting!", {
         description:
           "We are having trouble exporting your presentation. Please try again.",
-        variant: "default",
       });
     } finally {
       setShowLoader(false);
@@ -212,15 +130,8 @@ const Header = ({
         <img src="/pptx.svg" alt="pptx export" width={30} height={30} />
         Export as PPTX
       </Button>
-      {/* <div className={`w-full ${mobile ? "bg-white py-2 rounded-lg" : ""}`}>
-        <JSPowerPointExtractor />
-      </div> */}
-      <p className={`text-sm pt-3 border-t border-gray-300 ${mobile ? "border-none text-white font-semibold" : ""}`}>
-        Font Used:
-        <a className={`text-blue-500  flex items-center gap-1 ${mobile ? "mt-2 py-2 px-4 bg-white rounded-lg w-fit" : ""}`} href={getFontLink(currentColors.fontFamily).link || ''} target="_blank" rel="noopener noreferrer">
-          {getFontLink(currentColors.fontFamily).name || ''} <ExternalLink className="w-4 h-4" />
-        </a>
-      </p>
+
+
     </div>
   );
 
@@ -282,81 +193,19 @@ const Header = ({
           {isStreaming && (
             <Loader2 className="animate-spin text-white font-bold w-6 h-6" />
           )}
-          <Select value={currentTheme} onValueChange={handleThemeSelect}>
-            <SelectTrigger className="w-[160px] bg-[#6358fd] text-white border-none hover:bg-[#5146E5] transition-colors">
-              <div className="flex items-center gap-2">
-                <Palette className="w-4 h-4" />
-                <span>Change Theme</span>
-              </div>
-            </SelectTrigger>
-            <SelectContent className="w-[300px] p-0">
-              <ThemeSelector
-                onSelect={handleThemeSelect}
-                selectedTheme={currentTheme}
-              />
-            </SelectContent>
-          </Select>
-          {/* Custom Theme Modal */}
-          <Modal
-            isOpen={showCustomThemeModal}
-            onClose={() => setShowCustomThemeModal(false)}
-            title="Custom Theme Colors"
-          >
-            <CustomThemeSettings
-              onClose={() => setShowCustomThemeModal(false)}
-              presentationId={presentation_id}
-            />
-          </Modal>
+
+
           <MenuItems mobile={false} />
-          <UserAccount />
+          <HeaderNav />
         </div>
 
         {/* Mobile Menu */}
         <div className="lg:hidden flex items-center gap-4">
-          <UserAccount />
-          <Sheet>
-            <SheetTrigger asChild>
-              <button className="text-white">
-                <Menu className="h-6 w-6" />
-              </button>
-            </SheetTrigger>
-            <SheetContent side="right" className="bg-[#5146E5] border-none p-4">
-              <div className="flex flex-col gap-6 mt-10">
-                <Select onValueChange={handleThemeSelect}>
-                  <SelectTrigger className="w-full bg-[#6358fd] flex justify-center gap-2 text-white border-none">
-                    <Palette className="w-4 h-4 mr-2" />
-                    <SelectValue placeholder="Theme" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="light">Light Theme</SelectItem>
-                    <SelectItem value="dark">Dark Theme</SelectItem>
-                    <SelectItem value="royal_blue">Royal Blue Theme</SelectItem>
-                    <SelectItem value="cream">Cream Theme</SelectItem>
-                    <SelectItem value="dark_pink">Dark Pink Theme</SelectItem>
-                    <SelectItem value="light_red">Light Red Theme</SelectItem>
-                    <SelectItem value="faint_yellow">
-                      Faint Yellow Theme
-                    </SelectItem>
-                    <SelectItem value="custom">Custom Theme</SelectItem>
-                  </SelectContent>
-                </Select>
-                <MenuItems mobile={true} />
-              </div>
-            </SheetContent>
-          </Sheet>
+          <HeaderNav />
+
         </div>
       </Wrapper>
-      {/* Download Modal */}
-      <Modal
-        isOpen={showDownloadModal}
-        onClose={() => setShowDownloadModal(false)}
-        title="File Downloaded"
-      >
-        <div className="text-center">
-          <p className="text-gray-600">Your file is saved at:</p>
-          <p className="font-mono text-sm mt-2 break-all">{downloadPath}</p>
-        </div>
-      </Modal>
+
     </div>
   );
 };
