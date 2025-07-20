@@ -1,5 +1,5 @@
 "use client";
-import { LayoutDashboard, Settings } from "lucide-react";
+import { LayoutDashboard, Settings, Upload } from "lucide-react";
 import React from "react";
 import Link from "next/link";
 import { RootState } from "@/store/store";
@@ -11,6 +11,7 @@ const HeaderNav = () => {
 
   return (
     <div className="flex items-center gap-2">
+
       <Link
         href="/dashboard"
         prefetch={false}

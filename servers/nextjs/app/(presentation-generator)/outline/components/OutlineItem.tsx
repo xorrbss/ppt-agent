@@ -66,16 +66,11 @@ export function OutlineItem({
         transform: CSS.Transform.toString(transform),
         transition,
     }
-
-
     const handleSlideDelete = () => {
         if (isStreaming) return;
         dispatch(deleteSlideOutline({ index: index - 1 }))
 
     }
-
-
-
     return (
         <div className="mb-2 bg-[#F9F9F9]">
             {/* Main Title Row */}

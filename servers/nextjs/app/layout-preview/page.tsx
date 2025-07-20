@@ -5,7 +5,7 @@ import { useLayoutLoader } from './hooks/useLayoutLoader'
 import LoadingStates from './components/LoadingStates'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ExternalLink } from 'lucide-react'
+import { ExternalLink, Wifi, WifiOff, RefreshCw } from 'lucide-react'
 
 const LayoutPreview = () => {
     const { layoutGroups, layouts, loading, error, retry } = useLayoutLoader()
@@ -35,6 +35,7 @@ const LayoutPreview = () => {
                         <p className="text-gray-600 mt-2">
                             {layoutGroups.length} groups • {layouts.length} layouts
                         </p>
+
                     </div>
                 </div>
 
