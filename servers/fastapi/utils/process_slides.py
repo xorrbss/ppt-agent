@@ -165,7 +165,7 @@ async def process_old_and_new_slides_and_fetch_assets(
 
     for i, new_icon in enumerate(new_icons):
         if new_icons_fetch_status[i]:
-            new_icon_dicts[i]["__icon_url__"] = new_icons[i]
+            new_icon_dicts[i]["__icon_url__"] = new_icons[i][0]
 
     for i, new_image_dict in enumerate(new_image_dicts):
         set_dict_at_path(new_slide_content, new_image_dict_paths[i], new_image_dict)
