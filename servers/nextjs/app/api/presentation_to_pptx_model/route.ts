@@ -118,12 +118,46 @@ async function postProcessSlidesAttributes(slidesAttributes: SlideAttributesResu
 }
 
 async function screenshotElement(element: ElementAttributes, screenshotsDir: string) {
-  console.log('Taking screenshot of', element.tagName);
   const screenshotPath = path.join(screenshotsDir, `${uuidv4()}.png`) as `${string}.png`;
+
+  // Hide all elements except the target element and its ancestors
+  await element.element?.evaluate((el) => {
+    const originalDisplays = new Map();
+
+    const hideAllExcept = (targetElement: Element) => {
+      const allElements = document.querySelectorAll('*');
+
+      allElements.forEach((elem) => {
+        if (targetElement === elem || targetElement.contains(elem) || elem.contains(targetElement)) {
+          return;
+        }
+
+        const computedStyle = window.getComputedStyle(elem);
+        originalDisplays.set(elem, computedStyle.display);
+        (elem as HTMLElement).style.display = 'none';
+      });
+    };
+
+    hideAllExcept(el);
+
+    (el as any).__restoreDisplays = () => {
+      originalDisplays.forEach((display, elem) => {
+        (elem as HTMLElement).style.display = display;
+      });
+    };
+  });
+
   const screenshot = await element.element?.screenshot({ path: screenshotPath });
   if (!screenshot) {
     throw new ApiError("Failed to screenshot element");
   }
+
+  await element.element?.evaluate((el) => {
+    if ((el as any).__restoreDisplays) {
+      (el as any).__restoreDisplays();
+    }
+  });
+
   return screenshotPath;
 }
 
