@@ -36,8 +36,10 @@ def get_user_prompt(title: str, outline: str):
     """
 
 
-def get_prompt_to_generate_slide_content(title: str, outline: str, schema_constraints: str = ""):
-    
+def get_prompt_to_generate_slide_content(
+    title: str, outline: str, schema_constraints: str = ""
+):
+
     return [
         {
             "role": "system",
@@ -54,8 +56,11 @@ async def get_slide_content_from_type_and_outline(
     slide_layout: SlideLayoutModel, outline: SlideOutlineModel
 ):
     model = get_small_model()
-    
-    schema_constraints = generate_constraint_sentences(slide_layout.json_schema)
+
+    response_schema = remove_fields_from_schema(
+        slide_layout.json_schema, ["__image_url__", "__icon_url__"]
+    )
+    schema_constraints = generate_constraint_sentences(response_schema)
 
     if not is_google_selected():
         client = get_llm_client()
@@ -70,9 +75,7 @@ async def get_slide_content_from_type_and_outline(
                 "type": "json_schema",
                 "json_schema": {
                     "name": "SlideContent",
-                    "schema": remove_fields_from_schema(
-                        slide_layout.json_schema, ["__image_url__", "__icon_url__"]
-                    ),
+                    "schema": response_schema,
                 },
             },
         )
@@ -86,7 +89,7 @@ async def get_slide_content_from_type_and_outline(
             config=GenerateContentConfig(
                 system_instruction=system_prompt + f"\n{schema_constraints}",
                 response_mime_type="application/json",
-                response_json_schema=slide_layout.json_schema,
+                response_json_schema=response_schema,
             ),
         )
         return json.loads(response.text)
