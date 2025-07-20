@@ -159,11 +159,9 @@ async function screenshotElement(element: ElementAttributes, screenshotsDir: str
 
 
 async function getSlidesAttributes(slides: ElementHandle<Element>[], screenshotsDir: string): Promise<SlideAttributesResult[]> {
-  const slideAttributes = [];
-  for (const slide of slides) {
-    const attributes = await getAllChildElementsAttributes({ element: slide, screenshotsDir });
-    slideAttributes.push(attributes);
-  }
+  const slideAttributes = await Promise.all(
+    slides.map((slide) => getAllChildElementsAttributes({ element: slide, screenshotsDir }))
+  );
 
   return slideAttributes;
 }
