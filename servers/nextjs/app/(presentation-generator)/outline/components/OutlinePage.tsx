@@ -24,7 +24,6 @@ const OutlinePage: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<string>(TABS.OUTLINE);
   const [selectedLayoutGroup, setSelectedLayoutGroup] = useState<LayoutGroup | null>(null);
-
   // Custom hooks
   const streamState = useOutlineStreaming(presentation_id);
   const { handleDragEnd, handleAddSlide } = useOutlineManagement(outlines);
@@ -38,6 +37,7 @@ const OutlinePage: React.FC = () => {
   if (!presentation_id) {
     return <EmptyStateView />;
   }
+
 
   return (
     <Wrapper>

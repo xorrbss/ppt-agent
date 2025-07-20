@@ -4,7 +4,7 @@ export interface LayoutGroup {
   description: string;
   ordered: boolean;
   isDefault?: boolean;
-  slides: string[];
+  slides?: any
 }
 
 export interface LoadingState {
