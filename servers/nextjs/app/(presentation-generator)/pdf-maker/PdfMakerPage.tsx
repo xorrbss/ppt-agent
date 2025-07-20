@@ -76,6 +76,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
 
                 <div className="">
                     <div
+                        id="presentation-slides-wrapper"
                         className="mx-auto flex flex-col items-center  overflow-hidden  justify-center   "
 
                     >
@@ -102,7 +103,6 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
                                     presentationData.slides.length > 0 &&
                                     presentationData.slides.map((slide: any, index: number) => (
                                         <div key={index} className="w-full">
-
                                             {renderSlideContent(slide, false)}
                                         </div>
                                     ))}
