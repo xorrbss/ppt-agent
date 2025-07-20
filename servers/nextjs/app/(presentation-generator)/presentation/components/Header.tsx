@@ -22,7 +22,6 @@ import Link from "next/link";
 import { RootState } from "@/store/store";
 import { toast } from "sonner";
 
-import Modal from "./Modal";
 
 import Announcement from "@/components/Announcement";
 import { getStaticFileUrl } from "../../utils/others";
@@ -41,13 +40,10 @@ const Header = ({
   const [showLoader, setShowLoader] = useState(false);
   const router = useRouter();
 
-  const [showDownloadModal, setShowDownloadModal] = useState(false);
-  const [downloadPath, setDownloadPath] = useState("");
 
   const { presentationData, isStreaming } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
-  const dispatch = useDispatch();
 
   const get_presentation_pptx_model = async (id: string): Promise<PptxPresentationModel> => {
     const response = await fetch(`/api/presentation_to_pptx_model?id=${id}`);
@@ -101,8 +97,7 @@ const Header = ({
 
       if (response.ok) {
         const { path: pdfPath } = await response.json();
-        const staticFileUrl = getStaticFileUrl(pdfPath);
-        window.open(staticFileUrl, '_blank');
+        window.open(pdfPath, '_blank');
       } else {
         throw new Error("Failed to export PDF");
       }
@@ -210,17 +205,7 @@ const Header = ({
 
         </div>
       </Wrapper>
-      {/* Download Modal */}
-      <Modal
-        isOpen={showDownloadModal}
-        onClose={() => setShowDownloadModal(false)}
-        title="File Downloaded"
-      >
-        <div className="text-center">
-          <p className="text-gray-600">Your file is saved at:</p>
-          <p className="font-mono text-sm mt-2 break-all">{downloadPath}</p>
-        </div>
-      </Modal>
+
     </div>
   );
 };
