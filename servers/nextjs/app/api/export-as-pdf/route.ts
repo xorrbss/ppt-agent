@@ -7,17 +7,25 @@ import { NextResponse, NextRequest } from 'next/server';
 
 
 export async function POST(req: NextRequest) {
-  const { id, title } = await req.json(); 
+  const { id, title } = await req.json();
   console.log('path', process.env.APP_DATA_DIRECTORY);
   if (!id) {
     return NextResponse.json({ error: "Missing Presentation ID" }, { status: 400 });
   }
   const browser = await puppeteer.launch({
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--disable-web-security',
+      '--window-size=1920,1080'
+    ]
   });
   const page = await browser.newPage();
-  await page.goto(`http://localhost/pdf-maker?id=${id}`, { waitUntil: 'networkidle0' });
+  await page.goto(`http://localhost/pdf-maker?id=${id}`);
+  await page.waitForNetworkIdle();
 
   const pdfBuffer = await page.pdf({
     printBackground: true,
@@ -27,7 +35,7 @@ export async function POST(req: NextRequest) {
   });
   browser.close();
   const sanitizedTitle = sanitizeFilename(title);
-  const destinationPath = path.join(process.env.APP_DATA_DIRECTORY!,'exports', `${sanitizedTitle}.pdf`);
+  const destinationPath = path.join(process.env.APP_DATA_DIRECTORY!, 'exports', `${sanitizedTitle}.pdf`);
   console.log('destinationPath', destinationPath);
   await fs.promises.writeFile(destinationPath, pdfBuffer);
 
