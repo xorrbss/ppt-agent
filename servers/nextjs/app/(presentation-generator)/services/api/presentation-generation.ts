@@ -65,20 +65,18 @@ export class PresentationGenerationApi {
 
  
   static async editSlide(
-    presentation_id: string,
-    index: number,
+    slide_id: string,
+   
     prompt: string
   ) {
     try {
       const response = await fetch(
-        `/api/v1/ppt/edit`,
+        `/api/v1/ppt/slide/edit`,
         {
           method: "POST",
           headers: getHeader(),
           body: JSON.stringify({
-            presentation_id,
-
-            index,
+            id: slide_id,
             prompt,
           }),
           cache: "no-cache",

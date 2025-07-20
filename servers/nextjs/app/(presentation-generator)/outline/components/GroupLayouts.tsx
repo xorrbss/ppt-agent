@@ -26,7 +26,7 @@ const GroupLayouts: React.FC<GroupLayoutsProps> = ({ group, onSelectLayoutGroup,
             )}
 
             <div className="mb-3">
-                <h6 className="text-base font-medium text-gray-900 mb-1">
+                <h6 className="text-base capitalize font-medium text-gray-900 mb-1">
                     {group.name}
                 </h6>
                 <p className="text-sm text-gray-600">

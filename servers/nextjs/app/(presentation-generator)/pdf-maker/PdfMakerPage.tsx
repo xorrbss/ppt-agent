@@ -45,7 +45,6 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
             setContentLoading(false);
         }
     };
-    console.log("presentationData", presentationData);
     // Regular view
     return (
         <div className="flex overflow-hidden flex-col">

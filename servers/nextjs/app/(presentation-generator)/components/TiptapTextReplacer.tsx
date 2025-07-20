@@ -5,9 +5,6 @@ import ReactDOM from 'react-dom/client';
 import TiptapText from './TiptapText';
 
 interface TiptapTextReplacerProps {
-    layout: React.ComponentType<{
-        data: any;
-    }>;
     children: ReactNode;
     slideData?: any;
     slideIndex?: number;
@@ -18,11 +15,11 @@ interface TiptapTextReplacerProps {
 const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
     children,
     slideData,
-    layout,
     slideIndex,
     onContentChange = () => { },
     isEditMode = true
 }) => {
+
     const containerRef = useRef<HTMLDivElement>(null);
     const [processedElements, setProcessedElements] = useState(new Set<HTMLElement>());
     useEffect(() => {
@@ -107,7 +104,6 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
                 const root = ReactDOM.createRoot(tiptapContainer);
                 root.render(
                     <TiptapText
-                        key={trimmedText}
                         content={trimmedText}
                         onContentChange={(content: string) => {
                             if (dataPath && onContentChange) {
@@ -261,7 +257,7 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
     }, [slideData, isEditMode, slideIndex]);
 
     return (
-        <div ref={containerRef} className="tiptap-text-replacer">
+        <div ref={containerRef} key={slideData} className="tiptap-text-replacer">
             {children}
         </div>
     );

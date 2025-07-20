@@ -52,13 +52,11 @@ const SlideContent = ({
 
     try {
       const response = await PresentationGenerationApi.editSlide(
-        presentationId,
-        slide.index,
+        slide.id,
         value
       );
 
       if (response) {
-        console.log("response", response);
         dispatch(updateSlide({ index: slide.index, slide: response }));
         toast.success("Slide updated successfully");
       }

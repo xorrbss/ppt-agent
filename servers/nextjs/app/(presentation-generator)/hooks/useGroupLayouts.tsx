@@ -55,13 +55,11 @@ export const useGroupLayouts = () => {
                         isEditMode={isEditMode}
                     >
                         <TiptapTextReplacer
-                            key={slide.id}
+
                             slideData={slide.content}
                             slideIndex={slide.index}
                             isEditMode={isEditMode}
-                            layout={Layout}
                             onContentChange={(content: string, dataPath: string, slideIndex?: number) => {
-
                                 // Dispatch Redux action to update slide content
                                 if (dataPath && slideIndex !== undefined) {
                                     dispatch(updateSlideContent({
@@ -72,12 +70,12 @@ export const useGroupLayouts = () => {
                                 }
                             }}
                         >
-                            <Layout data={slide.content} />
+                            <Layout key={`layout-${slide.index}-${JSON.stringify(slide.content)}`} data={slide.content} />
                         </TiptapTextReplacer>
                     </EditableLayoutWrapper>
                 );
             }
-            return <Layout data={slide.content} />;
+            return <Layout key={`layout-${slide.index}-${JSON.stringify(slide.content)}`} data={slide.content} />;
         };
     }, [getGroupLayout, dispatch]);
 

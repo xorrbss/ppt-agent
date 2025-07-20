@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing Presentation ID" }, { status: 400 });
   }
   const browser = await puppeteer.launch({
-    headless: true,
+    headless: false,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
     width: "1280px",
     height: "720px",
     margin: { top: 0, right: 0, bottom: 0, left: 0 }
+    
   });
   browser.close();
   const sanitizedTitle = sanitizeFilename(title);

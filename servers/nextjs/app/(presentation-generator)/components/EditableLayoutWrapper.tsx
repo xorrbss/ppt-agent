@@ -42,11 +42,11 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
         const matches: { path: string; type: 'image' | 'icon'; data: any }[] = [];
 
         // Check current level for __image_url__ or __icon_url__
-        if (data.__image_url__ && isMatchingUrl(data.__image_url__, targetUrl)) {
+        if (data.__image_url__ && targetUrl.includes(data.__image_url__)) {
             matches.push({ path, type: 'image', data });
         }
 
-        if (data.__icon_url__ && isMatchingUrl(data.__icon_url__, targetUrl)) {
+        if (data.__icon_url__ && targetUrl.includes(data.__icon_url__)) {
             matches.push({ path, type: 'icon', data });
         }
 
@@ -109,14 +109,16 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
      * Checks if two URLs match using various comparison strategies
      */
     const isMatchingUrl = (url1: string, url2: string): boolean => {
+        console.log('url1', url1);
+        console.log('url2', url2);
         if (!url1 || !url2) return false;
 
         // Direct match
         if (url1 === url2) return true;
 
         // Remove protocol and domain differences
-        const cleanUrl1 = url1.replace(/^https?:\/\/[^\/]+/, '').replace(/^\/+/, '');
-        const cleanUrl2 = url2.replace(/^https?:\/\/[^\/]+/, '').replace(/^\/+/, '');
+        const cleanUrl1 = url1 && url1.replace(/^https?:\/\/[^\/]+/, '').replace(/^\/+/, '');
+        const cleanUrl2 = url2 && url2.replace(/^https?:\/\/[^\/]+/, '').replace(/^\/+/, '');
 
         if (cleanUrl1 === cleanUrl2) return true;
 
@@ -304,7 +306,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                 imageUrl: newImageUrl,
                 prompt: prompt || activeEditor.data?.__image_prompt__ || ''
             }));
-
+            setActiveEditor(null);
         }
     };
     /**
@@ -322,6 +324,8 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                 iconUrl: newIconUrl,
                 query: query || activeEditor.data?.__icon_query__ || ''
             }));
+
+
 
         }
     };
@@ -341,7 +345,6 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                     onClose={handleEditorClose}
                     onImageChange={handleImageChange}
                 >
-
                 </ImageEditor>
             )}
 
