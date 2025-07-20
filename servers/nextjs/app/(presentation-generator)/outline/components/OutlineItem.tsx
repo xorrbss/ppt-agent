@@ -105,11 +105,17 @@ export function OutlineItem({
                     />
 
                     {/* Editable Markdown Content */}
-                    <MarkdownEditor
+                    {isStreaming ? <textarea
+                        defaultValue={slideOutline.body || ''}
+                        onBlur={(e) => handleSlideChange({ ...slideOutline, body: e.target.value })}
+                        className="text-md sm:text-lg flex-1 font-semibold bg-transparent outline-none"
+                        placeholder="Content goes here"
+                    /> : <MarkdownEditor
                         key={index}
                         content={slideOutline.body || ''}
                         onChange={(content) => handleSlideChange({ ...slideOutline, body: content })}
-                    />
+                    />}
+
                 </div>
 
                 {/* Action Buttons */}

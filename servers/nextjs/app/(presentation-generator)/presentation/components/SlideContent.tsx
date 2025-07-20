@@ -76,9 +76,6 @@ const SlideContent = ({
       console.error("Error deleting slide:", error);
     }
   };
-
-
-
   // Scroll to the new slide when streaming and new slides are being generated
   useEffect(() => {
     if (

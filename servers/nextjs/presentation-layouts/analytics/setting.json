@@ -1,6 +1,5 @@
 {
-    "id": "analytics",
-    "name": "Analytics", 
+
     "description": "Data-focused layouts with glass visual style and modern typography",
     "ordered": true,
     "isDefault": false
