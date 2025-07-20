@@ -130,6 +130,7 @@ async def edit_slide(id: Annotated[str, Body()], prompt: Annotated[str, Body()])
     with get_sql_session() as sql_session:
         sql_session.add(slide)
         slide.content = edited_slide_content
+        slide.layout = slide_layout.id
         sql_session.commit()
         sql_session.refresh(slide)
 
