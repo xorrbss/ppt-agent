@@ -72,12 +72,6 @@ async function getBrowserAndPage(id: string): Promise<[Browser, Page]> {
 
   const page = await browser.newPage();
 
-  page.on('console', (msg) => {
-    const type = msg.type();
-    const text = msg.text();
-    console.log(`${type}: ${text}`);
-  });
-
   await page.setViewport({ width: 1920, height: 1080, deviceScaleFactor: 1 });
   await page.goto(`http://localhost/pdf-maker?id=${id}`, {
     waitUntil: "networkidle0",
@@ -122,27 +116,29 @@ async function screenshotElement(element: ElementAttributes, screenshotsDir: str
 
   // Hide all elements except the target element and its ancestors
   await element.element?.evaluate((el) => {
-    const originalDisplays = new Map();
+    const originalOpacities = new Map();
 
     const hideAllExcept = (targetElement: Element) => {
       const allElements = document.querySelectorAll('*');
 
       allElements.forEach((elem) => {
+        const computedStyle = window.getComputedStyle(elem);
+        originalOpacities.set(elem, computedStyle.opacity);
+
         if (targetElement === elem || targetElement.contains(elem) || elem.contains(targetElement)) {
+          (elem as HTMLElement).style.opacity = computedStyle.opacity || "1";
           return;
         }
 
-        const computedStyle = window.getComputedStyle(elem);
-        originalDisplays.set(elem, computedStyle.display);
-        (elem as HTMLElement).style.display = 'none';
+        (elem as HTMLElement).style.opacity = '0';
       });
     };
 
     hideAllExcept(el);
 
-    (el as any).__restoreDisplays = () => {
-      originalDisplays.forEach((display, elem) => {
-        (elem as HTMLElement).style.display = display;
+    (el as any).__restoreOpacities = () => {
+      originalOpacities.forEach((opacity, elem) => {
+        (elem as HTMLElement).style.opacity = opacity;
       });
     };
   });
@@ -153,8 +149,8 @@ async function screenshotElement(element: ElementAttributes, screenshotsDir: str
   }
 
   await element.element?.evaluate((el) => {
-    if ((el as any).__restoreDisplays) {
-      (el as any).__restoreDisplays();
+    if ((el as any).__restoreOpacities) {
+      (el as any).__restoreOpacities();
     }
   });
 
@@ -163,9 +159,11 @@ async function screenshotElement(element: ElementAttributes, screenshotsDir: str
 
 
 async function getSlidesAttributes(slides: ElementHandle<Element>[], screenshotsDir: string): Promise<SlideAttributesResult[]> {
-  const slideAttributes = await Promise.all(slides.map(async (slide) => {
-    return await getAllChildElementsAttributes({ element: slide, screenshotsDir });
-  }));
+  const slideAttributes = [];
+  for (const slide of slides) {
+    const attributes = await getAllChildElementsAttributes({ element: slide, screenshotsDir });
+    slideAttributes.push(attributes);
+  }
 
   return slideAttributes;
 }
@@ -184,9 +182,6 @@ async function getSlidesWrapper(page: Page): Promise<ElementHandle<Element>> {
   }
   return slides_wrapper;
 }
-
-
-
 
 async function getAllChildElementsAttributes({ element, rootRect = null, depth = 0, inheritedFont, inheritedBackground, inheritedBorderRadius, screenshotsDir }: GetAllChildElementsAttributesArgs): Promise<SlideAttributesResult> {
   const currentRootRect = rootRect || await element.evaluate((el) => {
@@ -236,6 +231,7 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
     if (attributes.should_screenshot) {
       break;
     }
+
 
     const childResults = await getAllChildElementsAttributes({
       element: childElementHandle,
