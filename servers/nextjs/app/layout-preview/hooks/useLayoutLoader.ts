@@ -1,6 +1,6 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
-import { useLayoutWatcher } from './useLayoutWatcher'
+import { useState, useEffect } from 'react'
+
 import { LayoutInfo, LayoutGroup, GroupedLayoutsResponse, GroupSetting } from '../types'
 import { toast } from 'sonner'
 
@@ -10,7 +10,6 @@ interface UseLayoutLoaderReturn {
     loading: boolean
     error: string | null
     retry: () => void
-    isWatcherConnected: boolean
 }
 
 export const useLayoutLoader = (): UseLayoutLoaderReturn => {
@@ -19,17 +18,12 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
 
-    const loadAllLayouts = useCallback(async () => {
+    const loadAllLayouts = async () => {
         try {
             setLoading(true)
             setError(null)
 
-            // Always fetch fresh data for layout preview
-            const response = await fetch('/api/layouts', {
-                cache: 'no-cache',
-                headers: { 'Cache-Control': 'no-cache' }
-            })
-            
+            const response = await fetch('/api/layouts')
             if (!response.ok) {
                 toast.error('Error loading layouts', {
                     description: response.statusText,       
@@ -52,8 +46,6 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
                 for (const fileName of groupData.files) {
                     try {
                         const layoutName = fileName.replace('.tsx', '').replace('.ts', '')
-                        
-                        // Always fresh import for hot reloading - no caching
                         const module = await import(`@/presentation-layouts/${groupData.groupName}/${layoutName}`)
 
                         if (!module.default) {
@@ -73,8 +65,8 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
                         }
 
                         // Use empty object to let schema apply its default values
+                        // User will need to provide actual data when using the layouts
                         const sampleData = module.Schema.parse({})
-                        console.log('🔍 Sample data:', sampleData)
                         const layoutId = module.layoutId || layoutName.toLowerCase().replace(/layout$/, '')
 
                         const layoutInfo: LayoutInfo = {
@@ -92,6 +84,33 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
 
                     } catch (importError) {
                         console.error(`Failed to import ${fileName} from ${groupData.groupName}:`, importError)
+
+                        // Try alternative import path
+                        try {
+                            const layoutName = fileName.replace('.tsx', '').replace('.ts', '')
+                            const module = await import(`@/presentation-layouts/${groupData.groupName}/${layoutName}`)
+
+                            if (module.default && module.Schema) {
+                                // Use empty object to let schema apply its default values
+                                const sampleData = module.Schema.parse({})
+                                const layoutId = module.layoutId || layoutName.toLowerCase().replace(/layout$/, '')
+                                const layoutInfo: LayoutInfo = {
+                                    name: layoutName,
+                                    component: module.default,
+                                    schema: module.Schema,
+                                    sampleData,
+                                    fileName,
+                                    groupName: groupData.groupName,
+                                    layoutId
+                                }
+                                groupLayouts.push(layoutInfo)
+                                allLayouts.push(layoutInfo)
+                            } else {
+                                console.error(`${layoutName} is missing required exports (default component or Schema)`)
+                            }
+                        } catch (altError) {
+                            console.error(`Alternative import also failed for ${fileName} from ${groupData.groupName}:`, altError)
+                        }
                     }
                 }
 
@@ -121,35 +140,21 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
         } finally {
             setLoading(false)
         }
-    }, []) 
+    }
 
-    const handleLayoutChange = () => {
-        console.log('🔄 Layout change detected, reloading...')
-        setTimeout(() => {
-            loadAllLayouts()
-        }, 150)
-    };
-
-    // Setup file watcher for development
-    const { isConnected: isWatcherConnected } = useLayoutWatcher({
-        onLayoutChange: handleLayoutChange,
-        enabled: process.env.NODE_ENV === 'development'
-    })
-
-    const retry = useCallback(() => {
+    const retry = () => {
         loadAllLayouts()
-    }, [loadAllLayouts])
+    }
 
     useEffect(() => {
         loadAllLayouts()
-    }, [loadAllLayouts])
+    }, [])
 
     return {
         layoutGroups,
         layouts,
         loading,
         error,
-        retry,
-        isWatcherConnected
+        retry
     }
 } 

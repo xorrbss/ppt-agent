@@ -4,14 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "WATCHPACK_POLLING=true next dev",
-    "dev:with-watcher": "concurrently \"npm run dev\" \"npm run layout-watcher\"",
-    "layout-watcher": "node scripts/layout-watcher.cjs",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "get:version": "next --version"
-  },
+    "lint": "next lint"
+    },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
@@ -40,11 +37,11 @@
     "@tiptap/extension-underline": "^2.0.0",
     "@tiptap/react": "^2.11.5",
     "@tiptap/starter-kit": "^2.11.5",
-    "chokidar": "^4.0.1",
+   
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
-    "concurrently": "^9.1.0",
+   
     "jsonrepair": "^3.12.0",
     "lucide-react": "^0.447.0",
     "marked": "^15.0.11",

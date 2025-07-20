@@ -12,7 +12,7 @@ const GroupLayoutPreview = () => {
     const router = useRouter()
     const slug = params.slug as string
 
-    const { layoutGroup, loading, error, retry, isWatcherConnected } = useGroupLayoutLoader(slug)
+    const { layoutGroup, loading, error, retry } = useGroupLayoutLoader(slug)
 
     // Handle loading state
     if (loading) {

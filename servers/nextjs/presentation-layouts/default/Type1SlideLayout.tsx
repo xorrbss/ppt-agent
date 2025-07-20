@@ -39,7 +39,7 @@ const Type1SlideLayout: React.FC<Type1SlideLayoutProps> = ({ data: slideData }) 
                 <div className="flex flex-col w-full items-start justify-center space-y-1 md:space-y-2 lg:space-y-6">
                     {/* Title */}
                     <h1 className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-gray-900 leading-tight">
-                        {slideData?.title || ' This is the title of slide'}
+                        nice {slideData?.title || ' This is the title of slide'}
                     </h1>
 
                     {/* Description */}
