@@ -67,7 +67,6 @@ export const useGroupLayoutLoader = (groupSlug: string): UseGroupLayoutLoaderRet
                 ordered: false,
                 isDefault: false
             }
-
             for (const fileName of targetGroupData.files) {
                 try {
                     const layoutName = fileName.replace('.tsx', '').replace('.ts', '')
@@ -163,8 +162,7 @@ export const useGroupLayoutLoader = (groupSlug: string): UseGroupLayoutLoaderRet
     }
 
     const retry = () => {
-        // Clear cache for this group to force reload
-        layoutGroupCache.delete(groupSlug)
+        hasMountedRef.current = false
         loadGroupLayouts()
     }
 
@@ -179,6 +177,6 @@ export const useGroupLayoutLoader = (groupSlug: string): UseGroupLayoutLoaderRet
         layoutGroup,
         loading,
         error,
-        retry
+        retry,
     }
 } 

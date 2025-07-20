@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import { useDispatch } from "react-redux";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { clearPresentationData, setPresentationData, SlideOutline } from "@/store/slices/presentationGeneration";
+import { clearPresentationData, SlideOutline } from "@/store/slices/presentationGeneration";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import { useLayout } from "../../context/LayoutContext";
 import { LayoutGroup, LoadingState, TABS } from "../types/index";
@@ -46,22 +46,12 @@ export const usePresentationGeneration = (
   const prepareLayoutData = useCallback(() => {
     if (!selectedLayoutGroup) return null;
 
-    const groupLayoutSchemas = selectedLayoutGroup.slides
-      .map(slideId => {
-        const layout = getLayoutById(slideId);
-        return layout ? {
-          id: layout.id,
-          name: layout.name,
-          description: layout.description,
-          json_schema: layout.json_schema
-        } : null;
-      })
-      .filter(schema => schema !== null);
+
 
     return {
       name: selectedLayoutGroup.name,
       ordered: selectedLayoutGroup.ordered,
-      slides: groupLayoutSchemas
+      slides: selectedLayoutGroup.slides
     };
   }, [selectedLayoutGroup, getLayoutById]);
 
@@ -84,7 +74,6 @@ export const usePresentationGeneration = (
     try {
       const layoutData = prepareLayoutData();
       if (!layoutData) return;
-
       const response = await PresentationGenerationApi.presentationPrepare({
         presentation_id: presentationId,
         outlines: outlines,
