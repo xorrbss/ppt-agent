@@ -9,7 +9,7 @@ from utils.llm_provider import (
     get_small_model,
     is_google_selected,
 )
-from utils.schema_utils import remove_fields_from_schema
+from utils.schema_utils import remove_fields_from_schema, generate_constraint_sentences
 
 system_prompt = """
     Generate structured slide based on provided title and outline, follow mentioned steps and notes and provide structured output.
@@ -19,6 +19,7 @@ system_prompt = """
     2. Generate structured slide based on the outline and title.
 
     # Notes
+    - **Strictly follow the max and min character limit for each property in the slide.**
     - Slide body should not use words like "This slide", "This presentation".
     - Rephrase the slide body to make it flow naturally.
     - Do not use markdown formatting in slide body.
@@ -35,11 +36,12 @@ def get_user_prompt(title: str, outline: str):
     """
 
 
-def get_prompt_to_generate_slide_content(title: str, outline: str):
+def get_prompt_to_generate_slide_content(title: str, outline: str, schema_constraints: str = ""):
+    
     return [
         {
             "role": "system",
-            "content": system_prompt,
+            "content": system_prompt + f"\n{schema_constraints}",
         },
         {
             "role": "user",
@@ -52,6 +54,8 @@ async def get_slide_content_from_type_and_outline(
     slide_layout: SlideLayoutModel, outline: SlideOutlineModel
 ):
     model = get_small_model()
+    
+    schema_constraints = generate_constraint_sentences(slide_layout.json_schema)
 
     if not is_google_selected():
         client = get_llm_client()
@@ -60,6 +64,7 @@ async def get_slide_content_from_type_and_outline(
             messages=get_prompt_to_generate_slide_content(
                 outline.title,
                 outline.body,
+                schema_constraints,
             ),
             response_format={
                 "type": "json_schema",
@@ -79,7 +84,7 @@ async def get_slide_content_from_type_and_outline(
             model=model,
             contents=[get_user_prompt(outline.title, outline.body)],
             config=GenerateContentConfig(
-                system_instruction=system_prompt,
+                system_instruction=system_prompt + f"\n{schema_constraints}",
                 response_mime_type="application/json",
                 response_json_schema=slide_layout.json_schema,
             ),

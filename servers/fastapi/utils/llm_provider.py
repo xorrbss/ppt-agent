@@ -16,6 +16,7 @@ from utils.get_env import (
 )
 
 
+
 def get_llm_provider():
     try:
         return LLMProvider(get_llm_provider_env())
@@ -77,9 +78,9 @@ def get_llm_api_key():
 
 def get_llm_client():
     client = AsyncOpenAI(
-        base_url=get_model_base_url(),
-        api_key=get_llm_api_key(),
-    )
+            base_url=get_model_base_url(),
+            api_key=get_llm_api_key(),
+        )
     return client
 
 

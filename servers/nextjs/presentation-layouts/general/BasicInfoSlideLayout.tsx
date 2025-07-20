@@ -7,10 +7,10 @@ export const layoutName = 'Basic Info'
 export const layoutDescription = 'A clean slide layout with title, description text, and a supporting image.'
 
 const basicInfoSlideSchema = z.object({
-    title: z.string().min(3).max(100).default('Product Overview').meta({
+    title: z.string().min(3).max(50).default('Product Overview').meta({
         description: "Main title of the slide",
     }),
-    description: z.string().min(10).max(800).default('Our product offers customizable dashboards for real-time reporting and data-driven decisions. It integrates with third-party tools to enhance operations and scales with business growth for improved efficiency.').meta({
+    description: z.string().min(10).max(180).default('Our product offers customizable dashboards for real-time reporting and data-driven decisions. It integrates with third-party tools to enhance operations and scales with business growth for improved efficiency.').meta({
         description: "Main description text content",
     }),
     image: ImageSchema.default({

@@ -1,4 +1,4 @@
-import { ElementAttributes } from "@/types/element_attibutes";
+import { ElementAttributes, SlideAttributesResult } from "@/types/element_attibutes";
 import {
   PptxSlideModel,
   PptxTextBoxModel,
@@ -63,15 +63,14 @@ function convertLineHeightToRelative(lineHeight?: number, fontSize?: number): nu
 }
 
 /**
- * Converts ElementAttributes[][] to PptxSlideModel[]
- * Each inner array represents elements on a slide
+ * Converts SlideAttributesResult[] to PptxSlideModel[]
+ * Each SlideAttributesResult represents elements on a slide
  */
 export function convertElementAttributesToPptxSlides(
-  slidesAttributes: ElementAttributes[][],
-  backgroundColors?: (string | undefined)[]
+  slidesAttributes: SlideAttributesResult[]
 ): PptxSlideModel[] {
-  return slidesAttributes.map((slideElements, index) => {
-    const shapes = slideElements.map(element => {
+  return slidesAttributes.map((slideAttributes) => {
+    const shapes = slideAttributes.elements.map(element => {
       return convertElementToPptxShape(element);
     }).filter(Boolean); // Remove any null/undefined shapes
 
@@ -80,9 +79,9 @@ export function convertElementAttributesToPptxSlides(
     };
 
     // Add background color if available
-    if (backgroundColors && backgroundColors[index]) {
+    if (slideAttributes.backgroundColor) {
       slide.background = {
-        color: backgroundColors[index]!,
+        color: slideAttributes.backgroundColor,
         opacity: 1.0
       };
     }
