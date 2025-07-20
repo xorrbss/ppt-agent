@@ -214,7 +214,10 @@ async def stream_presentation(presentation_id: str):
                 content=slide_content,
             )
             slides.append(slide)
+
+            # This will mutate slide
             async_assets_generation_tasks.append(process_slide_and_fetch_assets(slide))
+
             yield SSEResponse(
                 event="response",
                 data=json.dumps({"type": "chunk", "chunk": slide.model_dump_json()}),
