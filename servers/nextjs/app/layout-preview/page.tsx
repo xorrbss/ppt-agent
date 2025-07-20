@@ -5,10 +5,10 @@ import { useLayoutLoader } from './hooks/useLayoutLoader'
 import LoadingStates from './components/LoadingStates'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ExternalLink } from 'lucide-react'
+import { ExternalLink, Wifi, WifiOff, RefreshCw } from 'lucide-react'
 
 const LayoutPreview = () => {
-    const { layoutGroups, layouts, loading, error, retry } = useLayoutLoader()
+    const { layoutGroups, layouts, loading, error, retry, isWatcherConnected } = useLayoutLoader()
     const router = useRouter()
 
     // Handle loading state
@@ -35,6 +35,40 @@ const LayoutPreview = () => {
                         <p className="text-gray-600 mt-2">
                             {layoutGroups.length} groups • {layouts.length} layouts
                         </p>
+
+                        {/* Development Mode Status */}
+                        {process.env.NODE_ENV === 'development' && (
+                            <div className="mt-4 flex items-center justify-center gap-2">
+                                <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${isWatcherConnected
+                                    ? 'bg-green-100 text-green-800'
+                                    : 'bg-orange-100 text-orange-800'
+                                    }`}>
+                                    {isWatcherConnected ? (
+                                        <>
+                                            <Wifi className="w-4 h-4" />
+                                            Hot Reload Active
+                                        </>
+                                    ) : (
+                                        <>
+                                            <WifiOff className="w-4 h-4" />
+                                            Hot Reload Disconnected
+                                        </>
+                                    )}
+                                </div>
+
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={retry}
+                                    className="flex items-center gap-2"
+                                >
+                                    <RefreshCw className="w-4 h-4" />
+                                    Refresh
+                                </Button>
+                            </div>
+                        )}
+
+
                     </div>
                 </div>
 

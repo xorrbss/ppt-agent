@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev",
+    "dev": "WATCHPACK_POLLING=true next dev",
+    "dev:with-watcher": "concurrently \"npm run dev\" \"npm run layout-watcher\"",
+    "layout-watcher": "node scripts/layout-watcher.cjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -38,9 +40,11 @@
     "@tiptap/extension-underline": "^2.0.0",
     "@tiptap/react": "^2.11.5",
     "@tiptap/starter-kit": "^2.11.5",
+    "chokidar": "^4.0.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
+    "concurrently": "^9.1.0",
     "jsonrepair": "^3.12.0",
     "lucide-react": "^0.447.0",
     "marked": "^15.0.11",
@@ -57,6 +61,7 @@
     "tailwind-scrollbar-hide": "^2.0.0",
     "tailwindcss-animate": "^1.0.7",
     "tiptap-markdown": "^0.8.10",
+    "ws": "^8.18.0",
     "zod": "^4.0.5"
   },
   "devDependencies": {
@@ -67,6 +72,7 @@
     "@types/react-dom": "^18",
     "@types/sharp": "^0.32.0",
     "@types/uuid": "^10.0.0",
+    "@types/ws": "^8.5.13",
     "cypress": "^14.3.3",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"

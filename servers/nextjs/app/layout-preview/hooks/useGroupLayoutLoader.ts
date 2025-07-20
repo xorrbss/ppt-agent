@@ -1,6 +1,6 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
-
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useLayoutWatcher } from './useLayoutWatcher'
 import { LayoutInfo, LayoutGroup, GroupedLayoutsResponse, GroupSetting } from '../types'
 import { toast } from 'sonner'
 
@@ -9,44 +9,33 @@ interface UseGroupLayoutLoaderReturn {
     loading: boolean
     error: string | null
     retry: () => void
+    isWatcherConnected: boolean
 }
-
-// Global cache to store layout groups and avoid re-fetching
-const layoutGroupCache = new Map<string, LayoutGroup>()
-const loadingGroupsCache = new Set<string>()
 
 export const useGroupLayoutLoader = (groupSlug: string): UseGroupLayoutLoaderReturn => {
     const [layoutGroup, setLayoutGroup] = useState<LayoutGroup | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    
     const hasMountedRef = useRef(false)
 
-    const loadGroupLayouts = async () => {
-        // Check cache first
-        if (layoutGroupCache.has(groupSlug)) {
-            setLayoutGroup(layoutGroupCache.get(groupSlug)!)
-            setLoading(false)
-            setError(null)
-            return
-        }
-
-        // Prevent multiple simultaneous requests for the same group
-        if (loadingGroupsCache.has(groupSlug)) {
-            return
-        }
-
+    const loadGroupLayouts = useCallback(async () => {
         try {
             setLoading(true)
             setError(null)
-            loadingGroupsCache.add(groupSlug)
 
-            const response = await fetch('/api/layouts')
+            const response = await fetch('/api/layouts', {
+                cache: 'no-cache',
+                headers: { 'Cache-Control': 'no-cache' }
+            })
+            
             if (!response.ok) {
                 toast.error('Error loading layouts', {
                     description: response.statusText,       
                 })
                 return
             }
+            
             const groupedLayoutsData: GroupedLayoutsResponse[] = await response.json()
             
             // Find the specific group by slug
@@ -71,6 +60,8 @@ export const useGroupLayoutLoader = (groupSlug: string): UseGroupLayoutLoaderRet
             for (const fileName of targetGroupData.files) {
                 try {
                     const layoutName = fileName.replace('.tsx', '').replace('.ts', '')
+                    
+                    // Import the module to get exports
                     const module = await import(`@/presentation-layouts/${targetGroupData.groupName}/${layoutName}`)
 
                     if (!module.default) {
@@ -92,7 +83,9 @@ export const useGroupLayoutLoader = (groupSlug: string): UseGroupLayoutLoaderRet
                     // Use empty object to let schema apply its default values
                     const sampleData = module.Schema.parse({})
                     const layoutId = module.layoutId || layoutName.toLowerCase().replace(/layout$/, '')
-
+                    
+                  
+                    
                     const layoutInfo: LayoutInfo = {
                         name: layoutName,
                         component: module.default,
@@ -107,31 +100,6 @@ export const useGroupLayoutLoader = (groupSlug: string): UseGroupLayoutLoaderRet
 
                 } catch (importError) {
                     console.error(`Failed to import ${fileName} from ${targetGroupData.groupName}:`, importError)
-
-                    // Try alternative import path
-                    try {
-                        const layoutName = fileName.replace('.tsx', '').replace('.ts', '')
-                        const module = await import(`@/presentation-layouts/${targetGroupData.groupName}/${layoutName}`)
-
-                        if (module.default && module.Schema) {
-                            const sampleData = module.Schema.parse({})
-                            const layoutId = module.layoutId || layoutName.toLowerCase().replace(/layout$/, '')
-                            const layoutInfo: LayoutInfo = {
-                                name: layoutName,
-                                component: module.default,
-                                schema: module.Schema,
-                                sampleData,
-                                fileName,
-                                groupName: targetGroupData.groupName,
-                                layoutId
-                            }
-                            groupLayouts.push(layoutInfo)
-                        } else {
-                            console.error(`${layoutName} is missing required exports (default component or Schema)`)
-                        }
-                    } catch (altError) {
-                        console.error(`Alternative import also failed for ${fileName} from ${targetGroupData.groupName}:`, altError)
-                    }
                 }
             }
 
@@ -147,8 +115,6 @@ export const useGroupLayoutLoader = (groupSlug: string): UseGroupLayoutLoaderRet
                     settings: groupSettings
                 }
                 
-                // Cache the result
-                layoutGroupCache.set(groupSlug, group)
                 setLayoutGroup(group)
                 setError(null)
             }
@@ -158,27 +124,39 @@ export const useGroupLayoutLoader = (groupSlug: string): UseGroupLayoutLoaderRet
             setError(error instanceof Error ? error.message : 'Failed to load group layouts')
         } finally {
             setLoading(false)
-            loadingGroupsCache.delete(groupSlug)
         }
-    }
+    }, [groupSlug]) 
 
-    const retry = () => {
-        // Clear cache for this group to force reload
-        layoutGroupCache.delete(groupSlug)
+    const handleLayoutChange = useCallback(() => {
+        console.log(`🔄 Layout change detected for group: ${groupSlug}, reloading...`)
+        
+        setTimeout(() => {
+            loadGroupLayouts()
+        }, 150)
+    }, [loadGroupLayouts])
+
+    // Setup file watcher for development
+    const { isConnected: isWatcherConnected } = useLayoutWatcher({
+        onLayoutChange: handleLayoutChange,
+        enabled: process.env.NODE_ENV === 'development'
+    })
+
+    const retry = useCallback(() => {
         loadGroupLayouts()
-    }
+    }, [loadGroupLayouts])
 
     useEffect(() => {
         if (groupSlug && !hasMountedRef.current) {
             hasMountedRef.current = true
             loadGroupLayouts()
         }
-    }, [groupSlug])
+    }, [groupSlug, loadGroupLayouts])
 
     return {
         layoutGroup,
         loading,
         error,
-        retry
+        retry,
+        isWatcherConnected
     }
 } 

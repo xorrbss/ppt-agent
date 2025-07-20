@@ -7,10 +7,10 @@ export const layoutName = 'Type1 Slide'
 export const layoutDescription = 'A clean two-column layout with title and description on the left and a featured image on the right.'
 
 const type1SlideSchema = z.object({
-    title: z.string().min(3).max(100).default('Sample Title').meta({
+    title: z.string().min(3).max(100).default('Hot NOT Reload Working!').meta({
         description: "Main title of the slide",
     }),
-    description: z.string().min(10).max(500).default('Your description content goes here. This layout provides a clean and professional way to present content with supporting imagery.').meta({
+    description: z.string().min(10).max(500).default('This is a test of the hot reload system! If you can see this text, hot reload is working perfectly. Changes should appear instantly without page refresh.').meta({
         description: "Main description text",
     }),
     image: ImageSchema.default({
@@ -30,7 +30,6 @@ interface Type1SlideLayoutProps {
 }
 
 const Type1SlideLayout: React.FC<Type1SlideLayoutProps> = ({ data: slideData }) => {
-
     return (
         <div
             className=" w-full rounded-sm max-w-[1280px] shadow-lg px-3 sm:px-12 lg:px-20 py-[10px] sm:py-[40px] lg:py-[86px] max-h-[720px] flex items-center aspect-video bg-white relative z-20 mx-auto"
@@ -40,12 +39,12 @@ const Type1SlideLayout: React.FC<Type1SlideLayoutProps> = ({ data: slideData }) 
                 <div className="flex flex-col w-full items-start justify-center space-y-1 md:space-y-2 lg:space-y-6">
                     {/* Title */}
                     <h1 className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-gray-900 leading-tight">
-                        {slideData?.title || 'Sample Title'}
+                        {slideData?.title || ' This is the title of slide'}
                     </h1>
 
                     {/* Description */}
                     <p className="text-base sm:text-lg lg:text-xl text-gray-700 leading-relaxed">
-                        {slideData?.description || 'Your description content goes here. This layout provides a clean and professional way to present content with supporting imagery.'}
+                        {slideData?.description || 'This is a test of the hot reload system! If you can see this text, hot reload is working perfectly. Changes should appear instantly without page refresh.'}
                     </p>
                 </div>
 
