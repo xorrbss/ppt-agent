@@ -7,7 +7,7 @@ export const layoutName = 'Numbered Bullets'
 export const layoutDescription = 'A slide layout with large title, supporting image, and numbered bullet points with descriptions.'
 
 const numberedBulletsSlideSchema = z.object({
-    title: z.string().min(3).max(100).default('Market Validation').meta({
+    title: z.string().min(3).max(50).default('Market Validation').meta({
         description: "Main title of the slide",
     }),
     image: ImageSchema.default({
@@ -17,10 +17,10 @@ const numberedBulletsSlideSchema = z.object({
         description: "Supporting image for the slide",
     }),
     bulletPoints: z.array(z.object({
-        title: z.string().min(2).max(100).meta({
+        title: z.string().min(2).max(80).meta({
             description: "Bullet point title",
         }),
-        description: z.string().min(10).max(300).meta({
+        description: z.string().min(10).max(180).meta({
             description: "Bullet point description",
         }),
     })).min(1).max(4).default([

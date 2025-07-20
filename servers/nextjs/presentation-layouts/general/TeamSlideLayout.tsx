@@ -13,17 +13,17 @@ const teamMemberSchema = z.object({
     position: z.string().min(2).max(50).meta({
         description: "Job title or position"
     }),
-    description: z.string().min(10).max(120).meta({
+    description: z.string().max(180).meta({
         description: "Brief description of the team member (around 100 characters)"
     }),
     image: ImageSchema
 });
 
 const teamSlideSchema = z.object({
-    title: z.string().min(3).max(100).default('Our Team Members').meta({
-        description: "Main title of the slide",
+    title: z.string().min(3).max(50).default('Our Team Members').meta({
+        description: "Main title of the slide", 
     }),
-    companyDescription: z.string().min(10).max(600).default('Ginyard International Co. is a leading provider of innovative digital solutions tailored for businesses. Our mission is to empower organizations to achieve their goals through cutting-edge technology and strategic partnerships.').meta({
+    companyDescription: z.string().min(10).max(180).default('Ginyard International Co. is a leading provider of innovative digital solutions tailored for businesses. Our mission is to empower organizations to achieve their goals through cutting-edge technology and strategic partnerships.').meta({
         description: "Company description or team introduction text",
     }),
     teamMembers: z.array(teamMemberSchema).min(2).max(6).default([

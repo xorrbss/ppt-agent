@@ -7,7 +7,7 @@ export const layoutName = 'Bullet Icons Only'
 export const layoutDescription = 'A slide layout with title, grid of bullet points with icons (no descriptions), and a supporting image.'
 
 const bulletIconsOnlySlideSchema = z.object({
-    title: z.string().min(3).max(100).default('Solutions').meta({
+    title: z.string().min(3).max(50).default('Solutions').meta({
         description: "Main title of the slide",
     }),
     image: ImageSchema.default({
@@ -17,10 +17,10 @@ const bulletIconsOnlySlideSchema = z.object({
         description: "Supporting image for the slide",
     }),
     bulletPoints: z.array(z.object({
-        title: z.string().min(2).max(100).meta({
+        title: z.string().min(2).max(80).meta({
             description: "Bullet point title",
         }),
-        subtitle: z.string().min(5).max(200).optional().meta({
+        subtitle: z.string().min(5).max(180).optional().meta({
             description: "Optional short subtitle or brief explanation",
         }),
         icon: IconSchema,

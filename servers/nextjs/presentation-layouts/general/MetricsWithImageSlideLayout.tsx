@@ -7,10 +7,10 @@ export const layoutName = 'Metrics with Image'
 export const layoutDescription = 'A slide layout with supporting image on the left and title, description, and metrics grid on the right. Can be used alternatively with MetricSlide.'
 
 const metricsWithImageSlideSchema = z.object({
-    title: z.string().min(3).max(100).default('Competitive Advantage').meta({
+    title: z.string().min(3).max(50).default('Competitive Advantage').meta({   
         description: "Main title of the slide",
     }),
-    description: z.string().min(10).max(600).default('Ginyard International Co. stands out by offering custom digital solutions tailored to client needs, alongside long-term support to ensure lasting relationships and continuous adaptation.').meta({
+    description: z.string().min(10).max(180).default('Ginyard International Co. stands out by offering custom digital solutions tailored to client needs, alongside long-term support to ensure lasting relationships and continuous adaptation.').meta({
         description: "Description text below the title",
     }),
     image: ImageSchema.default({
