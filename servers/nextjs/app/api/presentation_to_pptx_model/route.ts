@@ -1,15 +1,13 @@
 import { ApiError } from "@/models/errors";
 import { NextRequest, NextResponse } from "next/server";
-import puppeteer, { Browser, ElementHandle } from "puppeteer";
+import puppeteer, { Browser, ElementHandle, Page } from "puppeteer";
 import { ElementAttributes, SlideAttributesResult } from "@/types/element_attibutes";
 import { convertElementAttributesToPptxSlides } from "@/utils/pptx_models_utils";
 import { PptxPresentationModel } from "@/types/pptx_models";
 import fs from "fs";
 import path from "path";
-import crypto from "crypto";
-import sharp from "sharp";
+import { v4 as uuidv4 } from 'uuid';
 
-// Interface for getAllChildElementsAttributes function arguments
 interface GetAllChildElementsAttributesArgs {
   element: ElementHandle<Element>;
   rootRect?: { left: number; top: number; width: number; height: number } | null;
@@ -23,41 +21,27 @@ interface GetAllChildElementsAttributesArgs {
 
 export async function GET(request: NextRequest) {
   let browser: Browser | null = null;
+  let page: Page | null = null;
+
   try {
     const id = await getPresentationId(request);
-    browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
+    [browser, page] = await getBrowserAndPage(id);
+    const screenshotsDir = getScreenshotsDir();
 
-    // Ensure screenshots directory exists
-    const tempDir = process.env.TEMP_DIRECTORY;
-    if (!tempDir) {
-      console.warn('TEMP_DIRECTORY environment variable not set, skipping screenshot');
-      return undefined;
-    }
-    const screenshotsDir = path.join(tempDir, 'screenshots');
-    if (!fs.existsSync(screenshotsDir)) {
-      fs.mkdirSync(screenshotsDir, { recursive: true });
-    }
-
-    const slides = await getSlides(browser, id);
+    const slides = await getSlides(page);
     const slides_attributes = await getSlidesAttributes(slides, screenshotsDir);
-    const slides_pptx_models = convertElementAttributesToPptxSlides(slides_attributes.elements, slides_attributes.backgroundColors);
+    await postProcessSlidesAttributes(slides_attributes, screenshotsDir);
+    const slides_pptx_models = convertElementAttributesToPptxSlides(slides_attributes);
     const presentation_pptx_model: PptxPresentationModel = {
       slides: slides_pptx_models,
     };
 
-    if (browser) {
-      await browser.close();
-    }
+    await closeBrowserAndPage(browser, page);
 
     return NextResponse.json(presentation_pptx_model);
   } catch (error: any) {
     console.error(error);
-    if (browser) {
-      await browser.close();
-    }
+    await closeBrowserAndPage(browser, page);
     if (error instanceof ApiError) {
       return NextResponse.json(error, { status: 400 });
     }
@@ -73,42 +57,19 @@ async function getPresentationId(request: NextRequest) {
   return id;
 }
 
-async function getSlidesAttributes(slides: ElementHandle<Element>[], screenshotsDir: string) {
-  const slideResults: SlideAttributesResult[] = [];
-  //? Can't use Promise.all because of the screenshot
-  //? taking screenshot with mess up position of elements
-  for (const slide of slides) {
-    const result = await getAllChildElementsAttributes({ element: slide, screenshotsDir });
-    slideResults.push(result);
-  }
+async function getBrowserAndPage(id: string): Promise<[Browser, Page]> {
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--disable-web-security',
+      '--window-size=1920,1080'
+    ],
+  });
 
-  const elements = slideResults.map(result => result.elements);
-  const backgroundColors = slideResults.map(result => result.backgroundColor);
-
-  return {
-    elements,
-    backgroundColors
-  };
-}
-
-
-async function getSlides(browser: Browser, id: string) {
-  const slides_wrapper = await getSlidesWrapper(browser, id);
-  const slides = await slides_wrapper.$$(":scope > div > div");
-  return slides;
-}
-
-async function getSlidesWrapper(browser: Browser, id: string): Promise<ElementHandle<Element>> {
-  const page = await getPresentationPage(browser, id);
-  const slides_wrapper = await page.$("#presentation-slides-wrapper");
-  if (!slides_wrapper) {
-    throw new ApiError("Presentation slides not found");
-  }
-  return slides_wrapper;
-}
-
-
-async function getPresentationPage(browser: Browser, id: string) {
   const page = await browser.newPage();
 
   page.on('console', (msg) => {
@@ -118,16 +79,82 @@ async function getPresentationPage(browser: Browser, id: string) {
   });
 
   await page.setViewport({ width: 1920, height: 1080, deviceScaleFactor: 1 });
-  await page.goto(`http://localhost/presentation?id=${id}`, {
+  await page.goto(`http://localhost/pdf-maker?id=${id}`, {
     waitUntil: "networkidle0",
     timeout: 60000,
   });
-  return page;
+  return [browser, page];
+}
+
+async function closeBrowserAndPage(browser: Browser | null, page: Page | null) {
+  await page?.close();
+  await browser?.close();
+}
+
+function getScreenshotsDir() {
+  const tempDir = process.env.TEMP_DIRECTORY;
+  if (!tempDir) {
+    console.warn('TEMP_DIRECTORY environment variable not set, skipping screenshot');
+    throw new ApiError('TEMP_DIRECTORY environment variable not set');
+  }
+  const screenshotsDir = path.join(tempDir, 'screenshots');
+  if (!fs.existsSync(screenshotsDir)) {
+    fs.mkdirSync(screenshotsDir, { recursive: true });
+  }
+  return screenshotsDir;
+}
+
+async function postProcessSlidesAttributes(slidesAttributes: SlideAttributesResult[], screenshotsDir: string) {
+  for (const slideAttributes of slidesAttributes) {
+    for (const element of slideAttributes.elements) {
+      if (element.should_screenshot) {
+        const screenshotPath = await screenshotElement(element, screenshotsDir);
+        element.imageSrc = screenshotPath;
+        element.should_screenshot = false;
+        element.element = undefined;
+      }
+    }
+  }
+}
+
+async function screenshotElement(element: ElementAttributes, screenshotsDir: string) {
+  console.log('Taking screenshot of', element.tagName);
+  const screenshotPath = path.join(screenshotsDir, `${uuidv4()}.png`) as `${string}.png`;
+  const screenshot = await element.element?.screenshot({ path: screenshotPath });
+  if (!screenshot) {
+    throw new ApiError("Failed to screenshot element");
+  }
+  return screenshotPath;
 }
 
 
+async function getSlidesAttributes(slides: ElementHandle<Element>[], screenshotsDir: string): Promise<SlideAttributesResult[]> {
+  const slideAttributes = await Promise.all(slides.map(async (slide) => {
+    return await getAllChildElementsAttributes({ element: slide, screenshotsDir });
+  }));
+
+  return slideAttributes;
+}
+
+
+async function getSlides(page: Page) {
+  const slides_wrapper = await getSlidesWrapper(page);
+  const slides = await slides_wrapper.$$(":scope > div > div");
+  return slides;
+}
+
+async function getSlidesWrapper(page: Page): Promise<ElementHandle<Element>> {
+  const slides_wrapper = await page.$("#presentation-slides-wrapper");
+  if (!slides_wrapper) {
+    throw new ApiError("Presentation slides not found");
+  }
+  return slides_wrapper;
+}
+
+
+
+
 async function getAllChildElementsAttributes({ element, rootRect = null, depth = 0, inheritedFont, inheritedBackground, inheritedBorderRadius, screenshotsDir }: GetAllChildElementsAttributesArgs): Promise<SlideAttributesResult> {
-  // Get rootRect if not provided (first call)
   const currentRootRect = rootRect || await element.evaluate((el) => {
     const rect = el.getBoundingClientRect();
     return {
@@ -138,67 +165,23 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
     };
   });
 
-  // Check if this element is SVG or canvas or table
-  const tagName = await element.evaluate((el) => el.tagName.toLowerCase());
-
-
-  if (tagName === 'svg' || tagName === 'canvas' || tagName === 'table') {
-    return {
-      elements: [],
-      backgroundColor: undefined
-    };
-
-    // // Get basic attributes for the element
-    // const attributes = await getElementAttributes(element);
-    // // Take screenshot of SVG/canvas/table element with accurate colors and opacity
-    // const screenshotPath = await takeElementScreenshot(element, screenshotsDir);
-
-    // // Update image source to point to the screenshot
-    // if (screenshotPath) {
-    //   attributes.imageSrc = screenshotPath;
-    // }
-
-    // // Adjust position relative to root
-    // if (attributes.position && attributes.position.left !== undefined && attributes.position.top !== undefined) {
-    //   attributes.position = {
-    //     left: attributes.position.left - currentRootRect.left,
-    //     top: attributes.position.top - currentRootRect.top,
-    //     width: attributes.position.width,
-    //     height: attributes.position.height,
-    //   };
-    // }
-
-    // // Return early without processing children for these elements
-    // return {
-    //   elements: [attributes],
-    //   backgroundColor: undefined
-    // };
-  }
-
-  // Get direct children only (not all descendants)
   const directChildElementHandles = await element.$$(':scope > *');
 
   const allResults: { attributes: ElementAttributes; depth: number }[] = [];
 
-  // Process direct children recursively
   for (const childElementHandle of directChildElementHandles) {
-    // Get attributes for current child
     const attributes = await getElementAttributes(childElementHandle);
 
-    // Apply inherited font only on elements that have direct text
     if (inheritedFont && !attributes.font && attributes.innerText && attributes.innerText.trim().length > 0) {
       attributes.font = inheritedFont;
     }
-    // Apply inherited background only on elements that have shadow
     if (inheritedBackground && !attributes.background && attributes.shadow) {
       attributes.background = inheritedBackground;
     }
-    // Apply inherited border radius if element doesn't have it
     if (inheritedBorderRadius && !attributes.borderRadius) {
       attributes.borderRadius = inheritedBorderRadius;
     }
 
-    // Adjust position relative to root
     if (attributes.position && attributes.position.left !== undefined && attributes.position.top !== undefined) {
       attributes.position = {
         left: attributes.position.left - currentRootRect.left,
@@ -208,10 +191,18 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
       };
     }
 
-    // Add current child to results
+    if (attributes.tagName === 'svg' || attributes.tagName === 'canvas' || attributes.tagName === 'table') {
+      attributes.should_screenshot = true;
+      attributes.element = childElementHandle;
+    }
+
     allResults.push({ attributes, depth });
 
-    // Recursively process children of this child
+    //? If the element is a svg, canvas, or table, we don't need to go deeper
+    if (attributes.should_screenshot) {
+      break;
+    }
+
     const childResults = await getAllChildElementsAttributes({
       element: childElementHandle,
       rootRect: currentRootRect,
@@ -224,7 +215,6 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
     allResults.push(...childResults.elements.map(attr => ({ attributes: attr, depth: depth + 1 })));
   }
 
-  // Find background color from elements with root position (only in first call)
   let backgroundColor: string | undefined;
   if (!rootRect) {
     const elementsWithRootPosition = allResults.filter(({ attributes }) => {
@@ -243,13 +233,15 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
     }
   }
 
-  // Filter results (only in first call)
   const filteredResults = !rootRect ? allResults.filter(({ attributes }) => {
     const hasBackground = attributes.background && attributes.background.color;
     const hasBorder = attributes.border && attributes.border.color;
     const hasShadow = attributes.shadow && attributes.shadow.color;
     const hasText = attributes.innerText && attributes.innerText.trim().length > 0;
     const hasImage = attributes.imageSrc;
+    const isSvg = attributes.tagName === 'svg';
+    const isCanvas = attributes.tagName === 'canvas';
+    const isTable = attributes.tagName === 'table';
 
     const isRootPosition = attributes.position &&
       attributes.position.left === 0 &&
@@ -257,7 +249,7 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
       attributes.position.width === currentRootRect.width &&
       attributes.position.height === currentRootRect.height;
 
-    const hasOtherProperties = hasBackground || hasBorder || hasShadow || hasText || hasImage;
+    const hasOtherProperties = hasBackground || hasBorder || hasShadow || hasText || hasImage || isSvg || isCanvas || isTable;
     return hasOtherProperties && !isRootPosition;
   }) : allResults;
 
@@ -274,7 +266,6 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
         return zIndexB - zIndexA;
       })
       .map(({ attributes }) => {
-        // Set background color to backgroundColor for elements that have shadow but no background color
         if (attributes.shadow && attributes.shadow.color && (!attributes.background || !attributes.background.color) && backgroundColor) {
           attributes.background = {
             color: backgroundColor,
@@ -416,8 +407,6 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
       } = {};
 
       if (boxShadow && boxShadow !== 'none') {
-        // Handle multiple shadows (comma-separated) - find the first meaningful one
-        // Need to split on commas but not inside function calls like rgba()
         const shadows: string[] = [];
         let currentShadow = '';
         let parenCount = 0;
@@ -429,7 +418,6 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
           } else if (char === ')') {
             parenCount--;
           } else if (char === ',' && parenCount === 0) {
-            // This comma is outside of any function call, so it separates shadows
             shadows.push(currentShadow.trim());
             currentShadow = '';
             continue;
@@ -437,7 +425,6 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
           currentShadow += char;
         }
 
-        // Add the last shadow
         if (currentShadow.trim()) {
           shadows.push(currentShadow.trim());
         }
@@ -450,7 +437,6 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
         for (let i = 0; i < shadows.length; i++) {
           const shadowStr = shadows[i];
 
-          // Parse the shadow to check if it has meaningful values
           const shadowParts = shadowStr.split(' ');
           const numericParts: number[] = [];
           const colorParts: string[] = [];
@@ -458,7 +444,6 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
           let currentColor = '';
           let inColorFunction = false;
 
-          // Parse each part
           for (let j = 0; j < shadowParts.length; j++) {
             const part = shadowParts[j];
             const trimmedPart = part.trim();
@@ -469,23 +454,19 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
               continue;
             }
 
-            // Check if this part starts a color function (rgba, rgb, hsl, hsla)
             if (trimmedPart.match(/^(rgba?|hsla?)\s*\(/i)) {
               inColorFunction = true;
               currentColor = trimmedPart;
               continue;
             }
 
-            // If we're inside a color function, keep building it
             if (inColorFunction) {
               currentColor += ' ' + trimmedPart;
 
-              // Check if we've reached the end of the color function
               const openParens = (currentColor.match(/\(/g) || []).length;
               const closeParens = (currentColor.match(/\)/g) || []).length;
 
               if (openParens <= closeParens) {
-                // Color function is complete
                 colorParts.push(currentColor);
                 currentColor = '';
                 inColorFunction = false;
@@ -501,7 +482,6 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
             }
           }
 
-          // Check if the color is not completely transparent using colorToHex
           let hasVisibleColor = false;
           if (colorParts.length > 0) {
             const shadowColor = colorParts.join(' ');
@@ -509,34 +489,28 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
             hasVisibleColor = !!(colorResult.hex && colorResult.hex !== '000000' && colorResult.opacity !== 0);
           }
 
-          // Check if we have any non-zero numeric values (offset, blur, or spread)
           const hasNonZeroValues = numericParts.some(value => value !== 0);
 
-          // Calculate a score for this shadow (higher is better)
           let shadowScore = 0;
           if (hasNonZeroValues) {
-            // Count non-zero numeric values
             shadowScore += numericParts.filter(value => value !== 0).length;
           }
           if (hasVisibleColor) {
-            shadowScore += 2; // Bonus for visible color
+            shadowScore += 2;
           }
 
-          // Select this shadow if it has a better score
           if ((hasNonZeroValues || hasVisibleColor) && shadowScore > bestShadowScore) {
             selectedShadow = shadowStr;
             bestShadowScore = shadowScore;
           }
         }
 
-        // If no meaningful shadow found, use the first one
         if (!selectedShadow && shadows.length > 0) {
           selectedShadow = shadows[0];
         }
 
         if (selectedShadow) {
 
-          // Parse the selected shadow
           const shadowParts = selectedShadow.split(' ');
           const numericParts: number[] = [];
           const colorParts: string[] = [];
@@ -544,7 +518,6 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
           let currentColor = '';
           let inColorFunction = false;
 
-          // Parse each part
           for (let i = 0; i < shadowParts.length; i++) {
             const part = shadowParts[i];
             const trimmedPart = part.trim();
@@ -555,23 +528,19 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
               continue;
             }
 
-            // Check if this part starts a color function (rgba, rgb, hsl, hsla)
             if (trimmedPart.match(/^(rgba?|hsla?)\s*\(/i)) {
               inColorFunction = true;
               currentColor = trimmedPart;
               continue;
             }
 
-            // If we're inside a color function, keep building it
             if (inColorFunction) {
               currentColor += ' ' + trimmedPart;
 
-              // Check if we've reached the end of the color function
               const openParens = (currentColor.match(/\(/g) || []).length;
               const closeParens = (currentColor.match(/\)/g) || []).length;
 
               if (openParens <= closeParens) {
-                // Color function is complete
                 colorParts.push(currentColor);
                 currentColor = '';
                 inColorFunction = false;
@@ -587,14 +556,12 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
             }
           }
 
-          // Handle different shadow formats
           if (numericParts.length >= 2) {
             const offsetX = numericParts[0];
             const offsetY = numericParts[1];
             const blurRadius = numericParts.length >= 3 ? numericParts[2] : 0;
             const spreadRadius = numericParts.length >= 4 ? numericParts[3] : 0;
 
-            // Handle color - it can be anywhere in the parts
             let shadowColor = 'rgba(0, 0, 0, 0.3)'; // default color
             if (colorParts.length > 0) {
               shadowColor = colorParts.join(' ');
@@ -602,7 +569,6 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
 
             const shadowColorResult = colorToHex(shadowColor);
 
-            // Create shadow object if we have any meaningful values or visible color
             const hasValidValues = offsetX !== 0 || offsetY !== 0 || blurRadius > 0 || spreadRadius !== 0 ||
               (shadowColorResult.hex && shadowColorResult.hex !== '000000' && shadowColorResult.opacity !== 0);
 
@@ -650,24 +616,19 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
       const lineHeight = computedStyles.lineHeight;
       const innerText = el.textContent || '';
 
-      // Check if text is multiline by looking for newline characters or checking if text wraps due to bounds
       const htmlEl = el as HTMLElement;
 
-      // Get font size for comparison
       const fontSize = parseFloat(computedStyles.fontSize);
       const computedLineHeight = parseFloat(computedStyles.lineHeight);
 
-      // Estimate single line height (use computed line height if available, otherwise use font size * 1.2)
       const singleLineHeight = !isNaN(computedLineHeight) ? computedLineHeight : fontSize * 1.2;
 
-      // Check for multiline text
       const hasExplicitLineBreaks = innerText.includes('\n') || innerText.includes('\r') || innerText.includes('\r\n');
-      const hasTextWrapping = htmlEl.offsetHeight > singleLineHeight * 2; // Allow some tolerance
+      const hasTextWrapping = htmlEl.offsetHeight > singleLineHeight * 2;
       const hasOverflow = htmlEl.scrollHeight > htmlEl.clientHeight;
 
       const isMultiline = hasExplicitLineBreaks || hasTextWrapping || hasOverflow;
 
-      // Only return line height if text is multiline
       if (isMultiline && lineHeight && lineHeight !== 'normal') {
         const parsedLineHeight = parseFloat(lineHeight);
         if (!isNaN(parsedLineHeight)) {
@@ -804,53 +765,3 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
   });
   return attributes;
 }
-
-async function takeElementScreenshot(element: ElementHandle<Element>, screenshotsDir: string): Promise<string | undefined> {
-  try {
-    // Check element visibility and dimensions
-    const elementInfo = await element.evaluate((el) => {
-      const rect = el.getBoundingClientRect();
-      const styles = window.getComputedStyle(el);
-
-      // Check if element is visible
-      const isVisible = styles.visibility !== 'hidden' &&
-        styles.display !== 'none' &&
-        styles.opacity !== '0';
-
-      if (!isVisible || rect.width <= 0 || rect.height <= 0) {
-        return null;
-      }
-
-      return {
-        width: rect.width,
-        height: rect.height
-      };
-    });
-
-    if (!elementInfo) {
-      console.warn('Element is not visible or has invalid dimensions, skipping screenshot');
-      return undefined;
-    }
-
-    // Generate unique filename
-    const uuid = crypto.randomUUID();
-    const filename = `${uuid}.png`;
-    const filePath = path.join(screenshotsDir, filename);
-
-    // Take screenshot of the element with accurate colors and opacity
-    // This captures the element exactly as rendered in the browser with all CSS styles applied
-    await element.screenshot({
-      path: filePath as `${string}.png`,
-      type: 'png',
-      omitBackground: true // Use transparent background for better quality
-    });
-
-    console.log(`Screenshot saved: ${filePath}`);
-    return filePath;
-
-  } catch (error) {
-    console.error('Error taking element screenshot:', error);
-    return undefined;
-  }
-}
-

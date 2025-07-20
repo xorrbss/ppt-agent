@@ -77,7 +77,7 @@ def get_llm_api_key():
 
 
 def get_llm_client():
-    client = =AsyncOpenAI(
+    client = AsyncOpenAI(
             base_url=get_model_base_url(),
             api_key=get_llm_api_key(),
         )

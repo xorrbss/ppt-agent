@@ -1,3 +1,5 @@
+import { ElementHandle } from "puppeteer";
+
 export interface ElementAttributes {
   tagName: string;
   id?: string;
@@ -57,6 +59,8 @@ export interface ElementAttributes {
   shape?: 'rectangle' | 'circle';
   connectorType?: string;
   textWrap?: boolean;
+  should_screenshot?: boolean;
+  element?: ElementHandle<Element>;
 }
 
 export interface SlideAttributesResult {
