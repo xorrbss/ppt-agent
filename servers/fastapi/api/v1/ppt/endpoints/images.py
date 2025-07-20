@@ -1,4 +1,6 @@
+from typing import List
 from fastapi import APIRouter
+from sqlmodel import select
 
 from models.image_prompt import ImagePrompt
 from models.sql.image_asset import ImageAsset
@@ -24,3 +26,15 @@ async def generate_image(prompt: str):
         sql_session.commit()
 
     return image.path
+
+
+@IMAGES_ROUTER.get("/generated", response_model=List[ImageAsset])
+async def get_generated_images():
+    try:
+        with get_sql_session() as sql_session:
+            images = sql_session.exec(
+                select(ImageAsset).order_by(ImageAsset.created_at.desc())
+            ).all()
+        return images
+    except Exception as e:
+        return {"error": f"Failed to retrieve generated images: {str(e)}"}
