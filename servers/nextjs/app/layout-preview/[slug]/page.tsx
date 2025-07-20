@@ -5,7 +5,7 @@ import { useGroupLayoutLoader } from '../hooks/useGroupLayoutLoader'
 import LoadingStates from '../components/LoadingStates'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Home } from 'lucide-react'
+import { ArrowLeft, Home, Wifi, WifiOff, RefreshCw } from 'lucide-react'
 
 const GroupLayoutPreview = () => {
     const params = useParams()
@@ -63,6 +63,7 @@ const GroupLayoutPreview = () => {
                         <p className="text-gray-600 mt-2">
                             {layoutGroup.layouts.length} layout{layoutGroup.layouts.length !== 1 ? 's' : ''} • {layoutGroup.settings.description}
                         </p>
+
                     </div>
                 </div>
             </header>

@@ -3,7 +3,6 @@ import localFont from "next/font/local";
 import { Fraunces, Montserrat, Inria_Serif, Roboto, Instrument_Sans } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
-import { FooterProvider } from "./(presentation-generator)/context/footerContext";
 import { LayoutProvider } from "./(presentation-generator)/context/LayoutContext";
 import { Toaster } from "sonner";
 
@@ -104,9 +103,9 @@ export default function RootLayout({
       >
         <Providers>
           <LayoutProvider>
-            <FooterProvider>
-              {children}
-            </FooterProvider>
+
+            {children}
+
           </LayoutProvider>
         </Providers>
         <Toaster position="top-center" richColors={true} />

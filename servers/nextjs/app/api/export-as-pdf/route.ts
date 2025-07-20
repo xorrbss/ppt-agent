@@ -24,8 +24,7 @@ export async function POST(req: NextRequest) {
     ]
   });
   const page = await browser.newPage();
-  await page.goto(`http://localhost/pdf-maker?id=${id}`);
-  await page.waitForNetworkIdle();
+  await page.goto(`http://localhost/pdf-maker?id=${id}`, { waitUntil: 'networkidle0',timeout: 80000 });
 
   const pdfBuffer = await page.pdf({
     printBackground: true,

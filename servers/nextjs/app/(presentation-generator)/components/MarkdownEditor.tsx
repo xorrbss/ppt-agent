@@ -21,11 +21,11 @@ export default function MarkdownEditor({ content, onChange }: { content: string;
     });
 
     // Update editor content when the content prop changes (for streaming)
-    useEffect(() => {
-        if (editor && content !== editor.storage.markdown.getMarkdown()) {
-            editor.commands.setContent(content);
-        }
-    }, [content, editor]);
+    // useEffect(() => {
+    //     if (editor && content !== editor.storage.markdown.getMarkdown()) {
+    //         editor.commands.setContent(content);
+    //     }
+    // }, [content, editor]);
 
     return (
         <div className="relative">

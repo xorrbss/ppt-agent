@@ -86,13 +86,7 @@ const helpQuestions = [
     answer:
       "Absolutely! Hover near the bottom of any text box or content block, and you'll see a + icon appear. Click this button to add a new section below the current one. You can also use the Insert menu to add specific section types.",
   },
-  {
-    id: 7,
-    category: "Layout",
-    question: "How do I add a consistent footer to all slides?",
-    answer:
-      "Look for the 'Insert your logo' option at the bottom left of the slide. Clicking this will open a side panel where you can customize your footer content, including logos, text, and more. Changes will apply to all slides automatically.",
-  },
+
   {
     id: 8,
     category: "Export",
@@ -222,11 +216,10 @@ const Help = () => {
               <button
                 key={category}
                 onClick={() => setSelectedCategory(category)}
-                className={`px-3 py-1 rounded-full text-sm whitespace-nowrap ${
-                  selectedCategory === category
+                className={`px-3 py-1 rounded-full text-sm whitespace-nowrap ${selectedCategory === category
                     ? "bg-emerald-600 text-white"
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
+                  }`}
               >
                 {category}
               </button>
