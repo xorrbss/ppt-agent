@@ -7,7 +7,7 @@ export const layoutName = 'Numbered Bullets'
 export const layoutDescription = 'A slide layout with large title, supporting image, and numbered bullet points with descriptions.'
 
 const numberedBulletsSlideSchema = z.object({
-    title: z.string().min(3).max(50).default('Market Validation').meta({
+    title: z.string().min(3).max(40).default('Market Validation').meta({
         description: "Main title of the slide",
     }),
     image: ImageSchema.default({
@@ -20,7 +20,7 @@ const numberedBulletsSlideSchema = z.object({
         title: z.string().min(2).max(80).meta({
             description: "Bullet point title",
         }),
-        description: z.string().min(10).max(180).meta({
+        description: z.string().min(10).max(150).meta({
             description: "Bullet point description",
         }),
     })).min(1).max(4).default([
@@ -59,12 +59,12 @@ const NumberedBulletsSlideLayout: React.FC<NumberedBulletsSlideLayoutProps> = ({
     return (
         <>
             {/* Import Google Fonts */}
-            <link 
-                href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" 
+            <link
+                href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
                 rel="stylesheet"
             />
-            
-            <div 
+
+            <div
                 className="w-full rounded-sm max-w-[1280px] shadow-lg max-h-[720px] aspect-video bg-white relative z-20 mx-auto overflow-hidden"
                 style={{
                     fontFamily: 'Poppins, sans-serif'
@@ -104,7 +104,7 @@ const NumberedBulletsSlideLayout: React.FC<NumberedBulletsSlideLayoutProps> = ({
                                         {String(index + 1).padStart(2, '0')}
                                     </div>
                                 </div>
-                                
+
                                 {/* Content */}
                                 <div className="flex-1 pt-2">
                                     <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-3">
@@ -120,15 +120,15 @@ const NumberedBulletsSlideLayout: React.FC<NumberedBulletsSlideLayoutProps> = ({
 
                     {/* Decorative Wave Pattern at Bottom */}
                     <div className="absolute bottom-0 left-0 right-0 h-20 overflow-hidden">
-                        <svg 
-                            className="w-full h-full opacity-20" 
-                            viewBox="0 0 1200 200" 
-                            fill="none" 
+                        <svg
+                            className="w-full h-full opacity-20"
+                            viewBox="0 0 1200 200"
+                            fill="none"
                             xmlns="http://www.w3.org/2000/svg"
                         >
-                            <path 
-                                d="M0 100C300 150 600 50 900 100C1050 125 1125 100 1200 100V200H0V100Z" 
-                                fill="url(#wave-gradient)" 
+                            <path
+                                d="M0 100C300 150 600 50 900 100C1050 125 1125 100 1200 100V200H0V100Z"
+                                fill="url(#wave-gradient)"
                             />
                             <defs>
                                 <linearGradient id="wave-gradient" x1="0%" y1="0%" x2="100%" y2="0%">

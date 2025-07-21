@@ -1,7 +1,7 @@
 from models.presentation_layout import PresentationLayoutModel, SlideLayoutModel
 from models.slide_layout_index import SlideLayoutIndex
 from models.sql.slide import SlideModel
-from utils.llm_provider import get_llm_client, get_small_model
+from utils.llm_provider import get_llm_client, get_nano_model, get_small_model
 
 
 def get_prompt_to_select_slide_layout(
@@ -42,7 +42,7 @@ async def get_slide_layout_from_prompt(
 ) -> SlideLayoutModel:
 
     client = get_llm_client()
-    model = get_small_model()
+    model = get_nano_model()
 
     slide_layout_ids = list(map(lambda x: x.id, layout.slides))
 

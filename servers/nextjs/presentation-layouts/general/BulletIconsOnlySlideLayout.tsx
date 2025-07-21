@@ -7,7 +7,7 @@ export const layoutName = 'Bullet Icons Only'
 export const layoutDescription = 'A slide layout with title, grid of bullet points with icons (no descriptions), and a supporting image.'
 
 const bulletIconsOnlySlideSchema = z.object({
-    title: z.string().min(3).max(50).default('Solutions').meta({
+    title: z.string().min(3).max(40).default('Solutions').meta({
         description: "Main title of the slide",
     }),
     image: ImageSchema.default({
@@ -20,11 +20,11 @@ const bulletIconsOnlySlideSchema = z.object({
         title: z.string().min(2).max(80).meta({
             description: "Bullet point title",
         }),
-        subtitle: z.string().min(5).max(180).optional().meta({
+        subtitle: z.string().min(5).max(150).optional().meta({
             description: "Optional short subtitle or brief explanation",
         }),
         icon: IconSchema,
-    })).min(2).max(6).default([
+    })).min(2).max(4).default([
         {
             title: 'Custom Software',
             subtitle: 'We create tailored software to optimize processes and boost efficiency.',
@@ -72,7 +72,7 @@ interface BulletIconsOnlySlideLayoutProps {
 
 const BulletIconsOnlySlideLayout: React.FC<BulletIconsOnlySlideLayoutProps> = ({ data: slideData }) => {
     const bulletPoints = slideData?.bulletPoints || []
-    
+
     // Function to determine grid classes based on number of bullets
     const getGridClasses = (count: number) => {
         if (count <= 2) {
@@ -87,12 +87,12 @@ const BulletIconsOnlySlideLayout: React.FC<BulletIconsOnlySlideLayoutProps> = ({
     return (
         <>
             {/* Import Google Fonts */}
-            <link 
-                href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" 
+            <link
+                href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
                 rel="stylesheet"
             />
-            
-            <div 
+
+            <div
                 className="w-full rounded-sm max-w-[1280px] shadow-lg max-h-[720px] aspect-video bg-white relative z-20 mx-auto overflow-hidden"
                 style={{
                     fontFamily: 'Poppins, sans-serif'
@@ -101,14 +101,14 @@ const BulletIconsOnlySlideLayout: React.FC<BulletIconsOnlySlideLayoutProps> = ({
                 {/* Decorative Wave Patterns */}
                 <div className="absolute top-0 left-0 w-32 h-full opacity-10 overflow-hidden">
                     <svg className="w-full h-full" viewBox="0 0 100 400" fill="none">
-                        <path d="M0 100C25 150 50 50 75 100C87.5 125 100 100 100 100V0H0V100Z" fill="#8b5cf6" opacity="0.4"/>
-                        <path d="M0 200C37.5 250 62.5 150 100 200V150C75 175 50 150 25 175L0 200Z" fill="#8b5cf6" opacity="0.3"/>
+                        <path d="M0 100C25 150 50 50 75 100C87.5 125 100 100 100 100V0H0V100Z" fill="#8b5cf6" opacity="0.4" />
+                        <path d="M0 200C37.5 250 62.5 150 100 200V150C75 175 50 150 25 175L0 200Z" fill="#8b5cf6" opacity="0.3" />
                     </svg>
                 </div>
-                
+
                 <div className="absolute bottom-0 left-0 w-48 h-32 opacity-10 overflow-hidden">
                     <svg className="w-full h-full" viewBox="0 0 200 100" fill="none">
-                        <path d="M0 50C50 25 100 75 150 50C175 37.5 200 50 200 50V100H0V50Z" fill="#8b5cf6" opacity="0.2"/>
+                        <path d="M0 50C50 25 100 75 150 50C175 37.5 200 50 200 50V100H0V50Z" fill="#8b5cf6" opacity="0.2" />
                     </svg>
                 </div>
 
@@ -124,19 +124,19 @@ const BulletIconsOnlySlideLayout: React.FC<BulletIconsOnlySlideLayoutProps> = ({
                         {/* Bullet Points Grid */}
                         <div className={`grid ${getGridClasses(bulletPoints.length)} flex-1 content-center`}>
                             {bulletPoints.map((bullet, index) => (
-                                <div 
-                                    key={index} 
+                                <div
+                                    key={index}
                                     className={`flex items-start space-x-4 p-4 rounded-lg transition-all duration-200 hover:bg-gray-50`}
                                 >
                                     {/* Icon */}
                                     <div className="flex-shrink-0 w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center">
-                                        <img 
-                                            src={bullet.icon.__icon_url__} 
+                                        <img
+                                            src={bullet.icon.__icon_url__}
                                             alt={bullet.icon.__icon_query__}
                                             className="w-6 h-6 object-contain brightness-0 invert"
                                         />
                                     </div>
-                                    
+
                                     {/* Content */}
                                     <div className="flex-1">
                                         <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-1">
@@ -158,10 +158,10 @@ const BulletIconsOnlySlideLayout: React.FC<BulletIconsOnlySlideLayoutProps> = ({
                         {/* Decorative Elements */}
                         <div className="absolute top-8 right-8 text-purple-600 opacity-60">
                             <svg width="32" height="32" viewBox="0 0 32 32" fill="currentColor">
-                                <path d="M16 0l4.12 8.38L28 12l-7.88 3.62L16 24l-4.12-8.38L4 12l7.88-3.62L16 0z"/>
+                                <path d="M16 0l4.12 8.38L28 12l-7.88 3.62L16 24l-4.12-8.38L4 12l7.88-3.62L16 0z" />
                             </svg>
                         </div>
-                        
+
                         <div className="absolute top-16 left-8 opacity-20">
                             <svg width="80" height="20" viewBox="0 0 80 20" className="text-purple-600">
                                 <path

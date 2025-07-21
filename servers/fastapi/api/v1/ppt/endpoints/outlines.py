@@ -32,6 +32,9 @@ async def stream_outlines(presentation_id: str):
             presentation.language,
             presentation.summary,
         ):
+            # Give control to the event loop
+            await asyncio.sleep(0)
+
             yield SSEResponse(
                 event="response",
                 data=json.dumps({"type": "chunk", "chunk": chunk}),

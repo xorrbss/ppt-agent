@@ -6,10 +6,11 @@ from models.presentation_outline_model import SlideOutlineModel
 from utils.llm_provider import (
     get_google_llm_client,
     get_llm_client,
+    get_nano_model,
     get_small_model,
     is_google_selected,
 )
-from utils.schema_utils import remove_fields_from_schema, generate_constraint_sentences
+from utils.schema_utils import remove_fields_from_schema
 
 system_prompt = """
     Generate structured slide based on provided title and outline, follow mentioned steps and notes and provide structured output.
@@ -36,14 +37,12 @@ def get_user_prompt(title: str, outline: str):
     """
 
 
-def get_prompt_to_generate_slide_content(
-    title: str, outline: str, schema_constraints: str = ""
-):
+def get_prompt_to_generate_slide_content(title: str, outline: str):
 
     return [
         {
             "role": "system",
-            "content": system_prompt + f"\n{schema_constraints}",
+            "content": system_prompt,
         },
         {
             "role": "user",
@@ -55,12 +54,11 @@ def get_prompt_to_generate_slide_content(
 async def get_slide_content_from_type_and_outline(
     slide_layout: SlideLayoutModel, outline: SlideOutlineModel
 ):
-    model = get_small_model()
+    model = get_nano_model()
 
     response_schema = remove_fields_from_schema(
         slide_layout.json_schema, ["__image_url__", "__icon_url__"]
     )
-    schema_constraints = generate_constraint_sentences(response_schema)
 
     if not is_google_selected():
         client = get_llm_client()
@@ -69,7 +67,6 @@ async def get_slide_content_from_type_and_outline(
             messages=get_prompt_to_generate_slide_content(
                 outline.title,
                 outline.body,
-                schema_constraints,
             ),
             response_format={
                 "type": "json_schema",
@@ -87,7 +84,7 @@ async def get_slide_content_from_type_and_outline(
             model=model,
             contents=[get_user_prompt(outline.title, outline.body)],
             config=GenerateContentConfig(
-                system_instruction=system_prompt + f"\n{schema_constraints}",
+                system_instruction=system_prompt,
                 response_mime_type="application/json",
                 response_json_schema=response_schema,
             ),
