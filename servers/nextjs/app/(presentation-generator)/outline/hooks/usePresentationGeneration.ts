@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { clearPresentationData, SlideOutline } from "@/store/slices/presentationGeneration";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
-import { useLayout } from "../../context/LayoutContext";
 import { LayoutGroup, LoadingState, TABS } from "../types/index";
 
 const DEFAULT_LOADING_STATE: LoadingState = {
@@ -22,7 +21,6 @@ export const usePresentationGeneration = (
 ) => {
   const dispatch = useDispatch();
   const router = useRouter();
-  const { getLayoutById } = useLayout();
   const [loadingState, setLoadingState] = useState<LoadingState>(DEFAULT_LOADING_STATE);
 
   const validateInputs = useCallback(() => {
@@ -39,21 +37,24 @@ export const usePresentationGeneration = (
       });
       return false;
     }
+    if(!selectedLayoutGroup.slides.length){
+      toast.error("No Slide Schema found", {
+        description: "Please select a Group before generating presentation",
+      });
+      return false;
+    }
 
     return true;
   }, [outlines, selectedLayoutGroup]);
 
   const prepareLayoutData = useCallback(() => {
     if (!selectedLayoutGroup) return null;
-
-
-
     return {
       name: selectedLayoutGroup.name,
       ordered: selectedLayoutGroup.ordered,
       slides: selectedLayoutGroup.slides
     };
-  }, [selectedLayoutGroup, getLayoutById]);
+  }, [selectedLayoutGroup]);
 
   const handleSubmit = useCallback(async () => {
     if (!selectedLayoutGroup) {
@@ -73,6 +74,7 @@ export const usePresentationGeneration = (
 
     try {
       const layoutData = prepareLayoutData();
+ 
       if (!layoutData) return;
       const response = await PresentationGenerationApi.presentationPrepare({
         presentation_id: presentationId,

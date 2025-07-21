@@ -48,7 +48,12 @@ const LayoutSelection: React.FC<LayoutSelectionProps> = ({
     useEffect(() => {
         if (layoutGroups.length > 0 && !selectedLayoutGroup) {
             const defaultGroup = layoutGroups.find(g => g.isDefault) || layoutGroups[0];
-            onSelectLayoutGroup(defaultGroup);
+            const slides = getLayoutsByGroup(defaultGroup.id);
+
+            onSelectLayoutGroup({
+                ...defaultGroup,
+                slides: slides,
+            });
         }
     }, [layoutGroups, selectedLayoutGroup, onSelectLayoutGroup]);
 

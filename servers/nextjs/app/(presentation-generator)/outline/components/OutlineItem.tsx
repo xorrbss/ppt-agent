@@ -108,7 +108,7 @@ export function OutlineItem({
                     {isStreaming ? <textarea
                         defaultValue={slideOutline.body || ''}
                         onBlur={(e) => handleSlideChange({ ...slideOutline, body: e.target.value })}
-                        className="text-md sm:text-lg flex-1 font-semibold bg-transparent outline-none"
+                        className="text-sm  flex-1 font-normal bg-transparent outline-none"
                         placeholder="Content goes here"
                     /> : <MarkdownEditor
                         key={index}
