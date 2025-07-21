@@ -7,10 +7,10 @@ export const layoutName = 'Bullet with Icons'
 export const layoutDescription = 'A bullets style slide with main content, supporting image, and bullet points with icons and descriptions.'
 
 const bulletWithIconsSlideSchema = z.object({
-    title: z.string().min(3).max(50).default('Problem').meta({
+    title: z.string().min(3).max(40).default('Problem').meta({
         description: "Main title of the slide",
     }),
-    description: z.string().max(180).default('Businesses face challenges with outdated technology and rising costs, limiting efficiency and growth in competitive markets.').meta({
+    description: z.string().max(150).default('Businesses face challenges with outdated technology and rising costs, limiting efficiency and growth in competitive markets.').meta({
         description: "Main description text explaining the problem or topic",
     }),
     image: ImageSchema.default({
@@ -23,7 +23,7 @@ const bulletWithIconsSlideSchema = z.object({
         title: z.string().min(2).max(80).meta({
             description: "Bullet point title",
         }),
-        description: z.string().min(10).max(180).meta({
+        description: z.string().min(10).max(150).meta({
             description: "Bullet point description",
         }),
         icon: IconSchema,

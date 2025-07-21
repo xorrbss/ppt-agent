@@ -1,6 +1,6 @@
 from models.presentation_layout import PresentationLayoutModel
 from models.presentation_outline_model import PresentationOutlineModel
-from utils.llm_provider import get_llm_client, get_small_model
+from utils.llm_provider import get_llm_client, get_nano_model, get_small_model
 from utils.get_dynamic_models import (
     get_presentation_structure_model_with_n_slides,
 )
@@ -14,30 +14,37 @@ def get_prompt(presentation_layout: PresentationLayoutModel, n_slides: int, data
         {
             "role": "system",
             "content": f"""
-                You're a professional presentation designer. 
+                You're a professional presentation designer with creative freedom to design engaging presentations.
+
                 {presentation_layout.to_string()}
 
-                # CRITICAL RULES
-                - NEVER use layout type 1 (bullet points) for more than 30% of slides
-                - MUST use at least 3 different layout types across presentation
-                - NO consecutive slides with same layout type
+                # DESIGN PHILOSOPHY
+                - Create visually compelling and varied presentations
+                - Match layout to content purpose and audience needs
+                - Prioritize engagement over rigid formatting rules
 
-                # Selection Strategy
-                1. **Ignore bullet point format** - focus on slide PURPOSE
-                2. **Match content to layout**:
-                - Title/intro → Title layouts
-                - Process/steps → Visual process layouts
-                - Comparisons → Side-by-side layouts
-                - Data → Chart/graph layouts
-                - Concepts → Image + text layouts
-                - Key messages → Emphasis layouts
+                # Layout Selection Guidelines
+                1. **Content-driven choices**: Let the slide's purpose guide layout selection
+                - Opening/closing → Title layouts
+                - Processes/workflows → Visual process layouts  
+                - Comparisons/contrasts → Side-by-side layouts
+                - Data/metrics → Chart/graph layouts
+                - Concepts/ideas → Image + text layouts
+                - Key insights → Emphasis layouts
 
-                3. **Force variety**: If recently used a layout type, pick different one
-                4. **Prioritize visual layouts** over text-heavy ones
+                2. **Visual variety**: Aim for diverse, engaging presentation flow
+                - Mix text-heavy and visual-heavy slides naturally
+                - Use your judgment on when repetition serves the content
+                - Balance information density across slides
 
-                **Think PURPOSE not FORMAT. Make it visually engaging.**
+                3. **Audience experience**: Consider how slides work together
+                - Create natural transitions between topics
+                - Use layouts that enhance comprehension
+                - Design for maximum impact and retention
 
-                Select layout index for each of the {n_slides} slides.
+                **Trust your design instincts. Focus on creating the most effective presentation for the content and audience.**
+
+                Select layout index for each of the {n_slides} slides based on what will best serve the presentation's goals.
             """,
         },
         {
@@ -55,7 +62,7 @@ async def generate_presentation_structure(
 ) -> PresentationStructureModel:
 
     client = get_llm_client()
-    model = get_small_model()
+    model = get_nano_model()
     response_model = get_presentation_structure_model_with_n_slides(
         len(presentation_outline.slides)
     )

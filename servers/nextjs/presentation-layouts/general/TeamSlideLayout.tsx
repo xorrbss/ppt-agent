@@ -13,20 +13,20 @@ const teamMemberSchema = z.object({
     position: z.string().min(2).max(50).meta({
         description: "Job title or position"
     }),
-    description: z.string().max(180).meta({
+    description: z.string().max(150).meta({
         description: "Brief description of the team member (around 100 characters)"
     }),
     image: ImageSchema
 });
 
 const teamSlideSchema = z.object({
-    title: z.string().min(3).max(50).default('Our Team Members').meta({
-        description: "Main title of the slide", 
+    title: z.string().min(3).max(40).default('Our Team Members').meta({
+        description: "Main title of the slide",
     }),
-    companyDescription: z.string().min(10).max(180).default('Ginyard International Co. is a leading provider of innovative digital solutions tailored for businesses. Our mission is to empower organizations to achieve their goals through cutting-edge technology and strategic partnerships.').meta({
+    companyDescription: z.string().min(10).max(150).default('Ginyard International Co. is a leading provider of innovative digital solutions tailored for businesses. Our mission is to empower organizations to achieve their goals through cutting-edge technology and strategic partnerships.').meta({
         description: "Company description or team introduction text",
     }),
-    teamMembers: z.array(teamMemberSchema).min(2).max(6).default([
+    teamMembers: z.array(teamMemberSchema).min(2).max(4).default([
         {
             name: 'Juliana Silva',
             position: 'CEO',
@@ -78,7 +78,7 @@ interface TeamSlideLayoutProps {
 
 const TeamSlideLayout: React.FC<TeamSlideLayoutProps> = ({ data: slideData }) => {
     const teamMembers = slideData?.teamMembers || []
-    
+
     // Function to determine grid classes based on number of team members
     const getGridClasses = (count: number) => {
         if (count <= 2) {
@@ -93,12 +93,12 @@ const TeamSlideLayout: React.FC<TeamSlideLayoutProps> = ({ data: slideData }) =>
     return (
         <>
             {/* Import Google Fonts */}
-            <link 
-                href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" 
+            <link
+                href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
                 rel="stylesheet"
             />
-            
-            <div 
+
+            <div
                 className="w-full rounded-sm max-w-[1280px] shadow-lg max-h-[720px] aspect-video bg-white relative z-20 mx-auto overflow-hidden"
                 style={{
                     fontFamily: 'Poppins, sans-serif'
@@ -107,8 +107,8 @@ const TeamSlideLayout: React.FC<TeamSlideLayoutProps> = ({ data: slideData }) =>
                 {/* Decorative Wave Pattern */}
                 <div className="absolute bottom-0 left-0 w-80 h-40 opacity-10 overflow-hidden">
                     <svg className="w-full h-full" viewBox="0 0 300 150" fill="none">
-                        <path d="M0 75C75 50 150 100 225 75C262.5 62.5 300 75 300 75V150H0V75Z" fill="#8b5cf6" opacity="0.3"/>
-                        <path d="M0 100C100 125 200 75 300 100V125C225 112.5 150 125 75 112.5L0 100Z" fill="#8b5cf6" opacity="0.2"/>
+                        <path d="M0 75C75 50 150 100 225 75C262.5 62.5 300 75 300 75V150H0V75Z" fill="#8b5cf6" opacity="0.3" />
+                        <path d="M0 100C100 125 200 75 300 100V125C225 112.5 150 125 75 112.5L0 100Z" fill="#8b5cf6" opacity="0.2" />
                     </svg>
                 </div>
 
@@ -143,7 +143,7 @@ const TeamSlideLayout: React.FC<TeamSlideLayoutProps> = ({ data: slideData }) =>
                                             className="w-full h-full object-cover"
                                         />
                                     </div>
-                                    
+
                                     {/* Member Info */}
                                     <div>
                                         <h3 className="text-lg font-semibold text-gray-900">
