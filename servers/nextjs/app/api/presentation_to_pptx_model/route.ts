@@ -105,6 +105,7 @@ async function postProcessSlidesAttributes(slidesAttributes: SlideAttributesResu
         const screenshotPath = await screenshotElement(element, screenshotsDir);
         element.imageSrc = screenshotPath;
         element.should_screenshot = false;
+        element.objectFit = 'cover';
         element.element = undefined;
       }
     }
@@ -701,7 +702,7 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
         : paddingObj;
     }
 
-    function parseBorderRadius(computedStyles: CSSStyleDeclaration) {
+    function parseBorderRadius(computedStyles: CSSStyleDeclaration, el: Element) {
       const borderRadius = computedStyles.borderRadius;
       let borderRadiusValue;
 
@@ -715,6 +716,20 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
           borderRadiusValue = [radiusParts[0], radiusParts[1], radiusParts[2], radiusParts[1]];
         } else if (radiusParts.length === 4) {
           borderRadiusValue = radiusParts;
+        }
+
+        // Clamp border radius values to be between 0 and half the width/height
+        if (borderRadiusValue) {
+          const rect = el.getBoundingClientRect();
+          const maxRadiusX = rect.width / 2;
+          const maxRadiusY = rect.height / 2;
+          
+          borderRadiusValue = borderRadiusValue.map((radius, index) => {
+            // For top-left and bottom-right corners, use maxRadiusX
+            // For top-right and bottom-left corners, use maxRadiusY
+            const maxRadius = (index === 0 || index === 2) ? maxRadiusX : maxRadiusY;
+            return Math.max(0, Math.min(radius, maxRadius));
+          });
         }
       }
 
@@ -757,7 +772,7 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
       const objectFit = computedStyles.objectFit as 'contain' | 'cover' | 'fill' | undefined;
       const imageSrc = (el as HTMLImageElement).src;
 
-      const borderRadiusValue = parseBorderRadius(computedStyles);
+      const borderRadiusValue = parseBorderRadius(computedStyles, el);
 
       const shape = parseShape(el, borderRadiusValue) as 'rectangle' | 'circle' | undefined;
 
