@@ -111,10 +111,8 @@ const TextIconListSlideLayout: React.FC<TextIconListSlideLayoutProps> = ({ data:
 
     const renderSVGIcon = (iconText: string) => {
         // If it's an emoji, return as is
-        if (/[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u.test(iconText)) {
-            return <span className="text-2xl">{iconText}</span>;
-        }
-        
+
+
         // For non-emoji, create a simple circle with text
         return (
             <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-bold">
@@ -126,11 +124,11 @@ const TextIconListSlideLayout: React.FC<TextIconListSlideLayoutProps> = ({ data:
     return (
         <>
             {/* Import Google Fonts */}
-            <link 
-                href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Nunito:wght@400;500;600;700&display=swap" 
+            <link
+                href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Nunito:wght@400;500;600;700&display=swap"
                 rel="stylesheet"
             />
-            
+
             <div
                 className="w-full rounded-sm max-w-[1280px] shadow-md h-[720px] flex flex-col aspect-video bg-stone-100 relative z-20 mx-auto overflow-hidden"
                 style={{
@@ -139,11 +137,11 @@ const TextIconListSlideLayout: React.FC<TextIconListSlideLayoutProps> = ({ data:
             >
                 {/* Glass overlay background */}
                 <div className="absolute inset-0 bg-white/20 backdrop-blur-sm rounded-sm border border-slate-200"></div>
-                
+
                 <div className="relative z-10 flex flex-col w-full h-full p-4 sm:p-6 lg:p-8">
                     {/* Header section */}
                     <div className="flex-shrink-0 h-12 sm:h-16 flex items-center justify-center">
-                        <h1 
+                        <h1
                             className="text-3xl font-bold text-gray-900 leading-tight text-center"
                             style={{
                                 fontFamily: 'Space Grotesk, sans-serif'
@@ -159,8 +157,8 @@ const TextIconListSlideLayout: React.FC<TextIconListSlideLayoutProps> = ({ data:
                             <div className="w-full max-w-5xl">
                                 <div className={`grid ${getGridLayout()} gap-6 content-center`}>
                                     {items.map((item, index) => (
-                                        <div 
-                                            key={index} 
+                                        <div
+                                            key={index}
                                             className={`backdrop-blur-sm rounded-xl border shadow-md p-4 sm:p-6 ${getBackgroundColor(item.status)}`}
                                         >
                                             <div className="flex items-start gap-4">
@@ -168,11 +166,11 @@ const TextIconListSlideLayout: React.FC<TextIconListSlideLayoutProps> = ({ data:
                                                 <div className="flex-shrink-0 mt-1">
                                                     {renderSVGIcon(item.icon)}
                                                 </div>
-                                                
+
                                                 {/* Content */}
                                                 <div className="flex-1">
                                                     {/* Heading */}
-                                                    <h3 
+                                                    <h3
                                                         className={`text-lg font-semibold leading-tight mb-2 ${getStatusColor(item.status)}`}
                                                         style={{
                                                             fontFamily: 'Space Grotesk, sans-serif'
@@ -180,9 +178,9 @@ const TextIconListSlideLayout: React.FC<TextIconListSlideLayoutProps> = ({ data:
                                                     >
                                                         {item.heading}
                                                     </h3>
-                                                    
+
                                                     {/* Description */}
-                                                    <p 
+                                                    <p
                                                         className="text-sm text-gray-500 leading-relaxed"
                                                         style={{
                                                             fontFamily: 'Nunito, sans-serif'
@@ -201,7 +199,7 @@ const TextIconListSlideLayout: React.FC<TextIconListSlideLayoutProps> = ({ data:
 
                     {/* Bottom Description section */}
                     <div className="flex-shrink-0 h-16 sm:h-20 flex items-center justify-center">
-                        <p 
+                        <p
                             className="text-sm sm:text-base text-center text-gray-700 leading-relaxed max-w-4xl px-4"
                             style={{
                                 fontFamily: 'Nunito, sans-serif'

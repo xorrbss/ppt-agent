@@ -30,21 +30,17 @@ interface BasicInfoSlideLayoutProps {
 }
 
 const BasicInfoSlideLayout: React.FC<BasicInfoSlideLayoutProps> = ({ data: slideData }) => {
-    // Generate initials from presenter name
-    const getInitials = (name: string) => {
-        return name.split(' ').map(word => word.charAt(0).toUpperCase()).join('');
-    };
 
-    const presenterInitials = getInitials(slideData?.presenterName || 'John Doe');
+
     return (
         <>
             {/* Import Google Fonts */}
-            <link 
-                href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" 
+            <link
+                href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
                 rel="stylesheet"
             />
-            
-            <div 
+
+            <div
                 className="w-full rounded-sm max-w-[1280px] shadow-lg max-h-[720px] aspect-video bg-white relative z-20 mx-auto overflow-hidden"
                 style={{
                     fontFamily: 'Poppins, sans-serif'
@@ -80,7 +76,7 @@ const BasicInfoSlideLayout: React.FC<BasicInfoSlideLayoutProps> = ({ data: slide
                             {slideData?.description || 'Our product offers customizable dashboards for real-time reporting and data-driven decisions. It integrates with third-party tools to enhance operations and scales with business growth for improved efficiency.'}
                         </p>
 
-                        
+
                     </div>
                 </div>
             </div>
