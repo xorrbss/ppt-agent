@@ -233,6 +233,7 @@ function convertToPictureBox(element: ElementAttributes): PptxPictureBoxModel {
     fit: element.objectFit ? (element.objectFit as PptxObjectFitEnum) : PptxObjectFitEnum.CONTAIN
   };
 
+
   // Extract image path from element attributes
   const picture: PptxPictureModel = {
     is_network: element.imageSrc ? element.imageSrc.startsWith('http') : false,
