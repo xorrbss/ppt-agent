@@ -13,25 +13,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing Presentation ID" }, { status: 400 });
   }
   const browser = await puppeteer.launch({
-    headless: false,
+    headless: true,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
       '--disable-web-security',
-      '--window-size=1920,1080'
     ]
   });
   const page = await browser.newPage();
-  await page.goto(`http://localhost/pdf-maker?id=${id}`, { waitUntil: 'networkidle0',timeout: 80000 });
+  await page.goto(`http://localhost/pdf-maker?id=${id}`, { waitUntil: 'networkidle0', timeout: 80000 });
 
   const pdfBuffer = await page.pdf({
     printBackground: true,
     width: "1280px",
     height: "720px",
     margin: { top: 0, right: 0, bottom: 0, left: 0 }
-    
+
   });
   browser.close();
   const sanitizedTitle = sanitizeFilename(title);
