@@ -7,7 +7,6 @@ from utils.llm_provider import (
     get_google_llm_client,
     get_llm_client,
     get_nano_model,
-    get_small_model,
     is_google_selected,
 )
 from utils.schema_utils import remove_fields_from_schema
@@ -20,10 +19,12 @@ system_prompt = """
     2. Generate structured slide based on the outline and title.
 
     # Notes
-    - **Strictly follow the max and min character limit for each property in the slide.**
     - Slide body should not use words like "This slide", "This presentation".
     - Rephrase the slide body to make it flow naturally.
+    - Provide prompt to generate image on "__image_prompt__" property.
+    - Provide query to search icon on "__icon_query__" property.
     - Do not use markdown formatting in slide body.
+    - **Strictly follow the max and min character limit for every property in the slide.**
 """
 
 

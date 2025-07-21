@@ -50,8 +50,6 @@ You are an expert presentation creator. Generate structured presentations based 
 - Generate **exactly** the number of slides requested
 - Distribute content **evenly** across slides
 - Create **balanced information flow**
-
-
 """
 
 
