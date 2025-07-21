@@ -41,7 +41,7 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
     );
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 font-roboto">
             <div className="flex items-center justify-between">
                 <h5 className="text-lg font-medium">
                     Presentation Outline
@@ -53,11 +53,10 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
                     </div>
                 )}
             </div>
-
             {/* Skeleton loading state */}
             {isLoading && (
                 <div className="space-y-4">
-                    {[...Array(5)].map((_, index) => (
+                    {[...Array(6)].map((_, index) => (
                         <div key={index} className="animate-pulse">
                             <div className="flex items-start space-x-3 p-4 border rounded-lg bg-white">
                                 <div className="w-6 h-6 bg-gray-200 rounded-full flex-shrink-0"></div>

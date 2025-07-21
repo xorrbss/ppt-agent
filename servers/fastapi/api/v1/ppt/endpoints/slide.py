@@ -7,13 +7,17 @@ from services.database import get_sql_session
 from utils.llm_calls.edit_slide import get_edited_slide_content
 from utils.llm_calls.select_slide_type_on_edit import get_slide_layout_from_prompt
 from utils.process_slides import process_old_and_new_slides_and_fetch_assets
+from utils.randomizers import get_random_uuid
 
 
 SLIDE_ROUTER = APIRouter(prefix="/slide", tags=["Slide"])
 
 
 @SLIDE_ROUTER.post("/edit")
-async def edit_slide(id: Annotated[str, Body()], prompt: Annotated[str, Body()]):
+async def edit_slide(
+    id: Annotated[str, Body()],
+    prompt: Annotated[str, Body()]
+):
 
     with get_sql_session() as sql_session:
         slide = sql_session.get(SlideModel, id)
@@ -36,6 +40,9 @@ async def edit_slide(id: Annotated[str, Body()], prompt: Annotated[str, Body()])
     new_assets = await process_old_and_new_slides_and_fetch_assets(
         slide.content, edited_slide_content
     )
+
+    # Always assign a new unique id to the slide
+    slide.id = get_random_uuid()
 
     with get_sql_session() as sql_session:
         sql_session.add(slide)

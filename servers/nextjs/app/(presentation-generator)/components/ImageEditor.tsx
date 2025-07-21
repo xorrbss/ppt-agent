@@ -16,7 +16,8 @@ import {
 import { cn } from "@/lib/utils";
 import { PresentationGenerationApi } from "../services/api/presentation-generation";
 import { Skeleton } from "@/components/ui/skeleton";
-
+import { toast } from "sonner";
+import { PreviousGeneratedImagesResponse } from "../services/api/params";
 interface ImageEditorProps {
   initialImage: string | null;
   imageIdx?: number;
@@ -32,7 +33,6 @@ interface ImageEditorProps {
 const ImageEditor = ({
   initialImage,
   imageIdx = 0,
-  slideIndex,
   promptContent,
   properties,
   onClose,
@@ -41,6 +41,7 @@ const ImageEditor = ({
 }: ImageEditorProps) => {
   // State management
   const [previewImages, setPreviewImages] = useState(initialImage);
+  const [previousGeneratedImages, setPreviousGeneratedImages] = useState<PreviousGeneratedImagesResponse[]>([]);
   const [prompt, setPrompt] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +66,6 @@ const ImageEditor = ({
       properties[imageIdx].initialObjectFit) ||
     "cover"
   );
-  console.log("previewImages", previewImages);
 
   // Refs
   const imageRef = useRef<HTMLImageElement>(null);
@@ -77,6 +77,13 @@ const ImageEditor = ({
     setPreviewImages(initialImage);
   }, [initialImage]);
 
+
+  useEffect(() => {
+    if (isOpen && !previousGeneratedImages.length) {
+      getPreviousGeneratedImage();
+    }
+  }, [isOpen, previousGeneratedImages]);
+
   // Handle close with animation
   const handleClose = () => {
     setIsOpen(false);
@@ -85,6 +92,18 @@ const ImageEditor = ({
       onClose?.();
     }, 300); // Match the Sheet animation duration
   };
+
+
+  const getPreviousGeneratedImage = async () => {
+    try {
+      const response = await PresentationGenerationApi.getPreviousGeneratedImages();
+      setPreviousGeneratedImages(response);
+    } catch (error) {
+      toast.error("Failed to get previous generated images. Please try again.");
+      console.error("error in getting previous generated images", error);
+      setError("Failed to get previous generated images. Please try again.");
+    }
+  }
 
   // Close toolbar when clicking outside
   useEffect(() => {
@@ -331,6 +350,18 @@ const ImageEditor = ({
                       </div>
                     }
                   </div>
+                  {previousGeneratedImages.length > 0 && (
+                    <div className="mt-4">
+                      <h3 className="text-sm font-medium mb-2">Previous Generated Images</h3>
+                      <div className="grid grid-cols-2 gap-4">
+                        {previousGeneratedImages.map((image) => (
+                          <div onClick={() => handleImageChange(image.path)} key={image.id} className="aspect-[4/3] w-full overflow-hidden rounded-lg border cursor-pointer hover:border-blue-500 transition-colors" >
+                            <img src={image.path} alt={image.extras.prompt} className="w-full h-full object-cover" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </TabsContent>
 

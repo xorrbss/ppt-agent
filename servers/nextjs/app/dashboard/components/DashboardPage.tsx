@@ -26,6 +26,7 @@ const DashboardPage: React.FC = () => {
       setIsLoading(true);
       setError(null);
       const data = await DashboardApi.getPresentations();
+      data.sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
       setPresentations(data);
     } catch (err) {
       setError(null);

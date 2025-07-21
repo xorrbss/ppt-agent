@@ -19,7 +19,6 @@ interface TiptapTextProps {
     className?: string;
     placeholder?: string;
     tag?: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6' | 'p' | 'span' | 'div';
-    disabled?: boolean;
 }
 
 const TiptapText: React.FC<TiptapTextProps> = ({
@@ -28,7 +27,6 @@ const TiptapText: React.FC<TiptapTextProps> = ({
     className = "",
     placeholder = "Enter text...",
     tag = 'div',
-    disabled = false
 }) => {
     const editor = useEditor({
         extensions: [StarterKit, Markdown, Underline],
@@ -45,7 +43,7 @@ const TiptapText: React.FC<TiptapTextProps> = ({
                 onContentChange(markdown);
             }
         },
-        editable: !disabled,
+        editable: true,
         immediatelyRender: false,
     });
 
@@ -62,56 +60,54 @@ const TiptapText: React.FC<TiptapTextProps> = ({
 
     return (
         <div className="relative z-50 w-full">
-            {!disabled && (
-                <BubbleMenu editor={editor} tippyOptions={{ duration: 100 }}>
-                    <div className="flex bg-white  rounded-lg shadow-lg p-2 gap-1 border border-gray-200 z-50">
-                        <button
-                            onClick={() => editor?.chain().focus().toggleBold().run()}
-                            className={`p-1 rounded hover:bg-gray-100 transition-colors ${editor?.isActive("bold") ? "bg-blue-100 text-blue-600" : ""
-                                }`}
-                            title="Bold"
-                        >
-                            <Bold className="h-4 w-4" />
-                        </button>
-                        <button
-                            onClick={() => editor?.chain().focus().toggleItalic().run()}
-                            className={`p-1 rounded hover:bg-gray-100 transition-colors ${editor?.isActive("italic") ? "bg-blue-100 text-blue-600" : ""
-                                }`}
-                            title="Italic"
-                        >
-                            <Italic className="h-4 w-4" />
-                        </button>
-                        <button
-                            onClick={() => editor?.chain().focus().toggleUnderline().run()}
-                            className={`p-1 rounded hover:bg-gray-100 transition-colors ${editor?.isActive("underline") ? "bg-blue-100 text-blue-600" : ""
-                                }`}
-                            title="Underline"
-                        >
-                            <UnderlinedIcon className="h-4 w-4" />
-                        </button>
-                        <button
-                            onClick={() => editor?.chain().focus().toggleStrike().run()}
-                            className={`p-1 rounded hover:bg-gray-100 transition-colors ${editor?.isActive("strike") ? "bg-blue-100 text-blue-600" : ""
-                                }`}
-                            title="Strikethrough"
-                        >
-                            <Strikethrough className="h-4 w-4" />
-                        </button>
-                        <button
-                            onClick={() => editor?.chain().focus().toggleCode().run()}
-                            className={`p-1 rounded hover:bg-gray-100 transition-colors ${editor?.isActive("code") ? "bg-blue-100 text-blue-600" : ""
-                                }`}
-                            title="Code"
-                        >
-                            <Code className="h-4 w-4" />
-                        </button>
-                    </div>
-                </BubbleMenu>
-            )}
+            <BubbleMenu editor={editor} tippyOptions={{ duration: 100 }}>
+                <div className="flex bg-white  rounded-lg shadow-lg p-2 gap-1 border border-gray-200 z-50">
+                    <button
+                        onClick={() => editor?.chain().focus().toggleBold().run()}
+                        className={`p-1 rounded hover:bg-gray-100 transition-colors ${editor?.isActive("bold") ? "bg-blue-100 text-blue-600" : ""
+                            }`}
+                        title="Bold"
+                    >
+                        <Bold className="h-4 w-4" />
+                    </button>
+                    <button
+                        onClick={() => editor?.chain().focus().toggleItalic().run()}
+                        className={`p-1 rounded hover:bg-gray-100 transition-colors ${editor?.isActive("italic") ? "bg-blue-100 text-blue-600" : ""
+                            }`}
+                        title="Italic"
+                    >
+                        <Italic className="h-4 w-4" />
+                    </button>
+                    <button
+                        onClick={() => editor?.chain().focus().toggleUnderline().run()}
+                        className={`p-1 rounded hover:bg-gray-100 transition-colors ${editor?.isActive("underline") ? "bg-blue-100 text-blue-600" : ""
+                            }`}
+                        title="Underline"
+                    >
+                        <UnderlinedIcon className="h-4 w-4" />
+                    </button>
+                    <button
+                        onClick={() => editor?.chain().focus().toggleStrike().run()}
+                        className={`p-1 rounded hover:bg-gray-100 transition-colors ${editor?.isActive("strike") ? "bg-blue-100 text-blue-600" : ""
+                            }`}
+                        title="Strikethrough"
+                    >
+                        <Strikethrough className="h-4 w-4" />
+                    </button>
+                    <button
+                        onClick={() => editor?.chain().focus().toggleCode().run()}
+                        className={`p-1 rounded hover:bg-gray-100 transition-colors ${editor?.isActive("code") ? "bg-blue-100 text-blue-600" : ""
+                            }`}
+                        title="Code"
+                    >
+                        <Code className="h-4 w-4" />
+                    </button>
+                </div>
+            </BubbleMenu>
 
             <EditorContent
                 editor={editor}
-                className={`tiptap-text-editor w-full ${!disabled ? 'min-h-[1.5em]' : ''}`}
+                className={`tiptap-text-editor w-full`}
                 style={{
                     // Ensure the editor maintains the same visual appearance
                     lineHeight: 'inherit',

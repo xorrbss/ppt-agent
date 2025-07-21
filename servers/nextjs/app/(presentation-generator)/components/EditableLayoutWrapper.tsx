@@ -26,7 +26,6 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
     children,
     slideIndex,
     slideData,
-    isEditMode = true,
 }) => {
     const dispatch = useDispatch();
     const containerRef = useRef<HTMLDivElement>(null);
@@ -109,8 +108,6 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
      * Checks if two URLs match using various comparison strategies
      */
     const isMatchingUrl = (url1: string, url2: string): boolean => {
-        console.log('url1', url1);
-        console.log('url2', url2);
         if (!url1 || !url2) return false;
 
         // Direct match
@@ -154,7 +151,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
      * Finds and processes images in the DOM, making them editable
      */
     const findAndProcessImages = () => {
-        if (!containerRef.current || !isEditMode) return;
+        if (!containerRef.current) return;
 
         const imgElements = containerRef.current.querySelectorAll('img:not([data-editable-processed])');
         const newEditableElements: EditableElement[] = [];

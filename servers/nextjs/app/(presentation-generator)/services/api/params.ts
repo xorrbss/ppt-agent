@@ -17,3 +17,14 @@ export interface IconSearch {
 
   limit: number;
 }
+
+export interface PreviousGeneratedImagesResponse {
+
+    extras: {
+      prompt: string;
+      theme_prompt: string | null;
+    },
+    created_at: string;
+    id: string;
+    path: string;
+}

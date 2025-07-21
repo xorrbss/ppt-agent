@@ -8,6 +8,7 @@ export interface PresentationResponse {
   id: string;
   title: string;
   created_at: string;
+  updated_at: string;
   data: any | null;
   file: string;
   n_slides: number;

@@ -1,6 +1,5 @@
 import { getHeader, getHeaderForFormData } from "./header";
-import { IconSearch, ImageGenerate, ImageSearch } from "./params";
-
+import { IconSearch, ImageGenerate, ImageSearch, PreviousGeneratedImagesResponse } from "./params";
 export class PresentationGenerationApi {
 
 
@@ -70,6 +69,7 @@ export class PresentationGenerationApi {
     prompt: string
   ) {
     try {
+    
       const response = await fetch(
         `/api/v1/ppt/slide/edit`,
         {
@@ -78,6 +78,7 @@ export class PresentationGenerationApi {
           body: JSON.stringify({
             id: slide_id,
             prompt,
+           
           }),
           cache: "no-cache",
         }
@@ -186,6 +187,27 @@ export class PresentationGenerationApi {
       }
     } catch (error) {
       console.error("error in image generation", error);
+      throw error;
+    }
+  }
+
+  static  getPreviousGeneratedImages = async():Promise<PreviousGeneratedImagesResponse[]>=>{
+    try {
+      const response = await fetch(
+        `/api/v1/ppt/images/generated`,
+        {
+          method: "GET",
+          headers: getHeader(),
+        }
+      );
+      if (response.ok) {
+        const data = await response.json();
+        return data;
+      } else {
+        throw new Error(`Failed to get previous generated images: ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error("error in getting previous generated images", error);
       throw error;
     }
   }
