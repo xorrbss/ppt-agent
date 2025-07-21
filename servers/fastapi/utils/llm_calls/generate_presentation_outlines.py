@@ -8,6 +8,7 @@ from utils.llm_provider import (
     get_google_llm_client,
     get_large_model,
     get_llm_client,
+    get_nano_model,
     is_google_selected,
 )
 
@@ -49,8 +50,6 @@ You are an expert presentation creator. Generate structured presentations based 
 - Generate **exactly** the number of slides requested
 - Distribute content **evenly** across slides
 - Create **balanced information flow**
-
-
 """
 
 
@@ -83,7 +82,7 @@ async def generate_ppt_outline(
     language: Optional[str] = None,
     content: Optional[str] = None,
 ):
-    model = get_large_model()
+    model = get_nano_model()
     response_model = get_presentation_outline_model_with_n_slides(n_slides)
 
     if not is_google_selected():

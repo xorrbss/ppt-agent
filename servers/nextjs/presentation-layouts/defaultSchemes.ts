@@ -6,7 +6,7 @@ export const ImageSchema = z.object({
     }),
     __image_prompt__: z.string().meta({
         description: "Prompt used to generate the image",
-    }),
+    }).min(10).max(50),
 })
 
 export const IconSchema = z.object({
@@ -15,5 +15,5 @@ export const IconSchema = z.object({
     }),
     __icon_query__: z.string().meta({
         description: "Query used to search the icon",
-    }),
+    }).min(5).max(20),
 })

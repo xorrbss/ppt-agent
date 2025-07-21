@@ -53,6 +53,11 @@ def round_image_corners(image: Image.Image, radii: List[int]) -> Image.Image:
         )
 
     w, h = image.size
+
+    # Clamp border radius to not exceed half the width or height
+    max_radius = min(w // 2, h // 2)
+    clamped_radii = [min(radius, max_radius) for radius in radii]
+
     # Ensure the image has an alpha channel (RGBA)
     if image.mode != "RGBA":
         image = image.convert("RGBA")
@@ -64,7 +69,7 @@ def round_image_corners(image: Image.Image, radii: List[int]) -> Image.Image:
     rectangular_mask = Image.new("L", image.size, 255)
 
     # Process each corner
-    for i, radius in enumerate(radii):
+    for i, radius in enumerate(clamped_radii):
         if radius > 0:  # Only process if radius is positive
             # Create a circle for this radius
             circle = Image.new("L", (radius * 2, radius * 2), 0)

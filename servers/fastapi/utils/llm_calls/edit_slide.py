@@ -85,7 +85,13 @@ async def get_edited_slide_content(
                 slide.content,
                 language,
             ),
-            response_format=response_schema,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "slide_content",
+                    "schema": response_schema,
+                },
+            },
         )
         slide_content_json = json.loads(response.choices[0].message.content)
 

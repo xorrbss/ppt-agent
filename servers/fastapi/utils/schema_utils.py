@@ -1,7 +1,7 @@
 from copy import deepcopy
 from typing import List
 
-from utils.dict_utils import get_dict_paths_with_key, get_dict_at_path, set_dict_at_path
+from utils.dict_utils import get_dict_paths_with_key, get_dict_at_path
 
 
 def resolve_refs(schema, defs):
@@ -50,70 +50,93 @@ def remove_fields_from_schema(schema: dict, fields_to_remove: List[str]):
     return schema
 
 
+# ? Not used
 def generate_constraint_sentences(schema: dict) -> str:
     """
     Generate human-readable constraint sentences from a JSON schema.
-    
+
     Args:
         schema: JSON schema dictionary
-        
+
     Returns:
         String containing constraint sentences separated by newlines
     """
     constraints = []
-    
+
     def extract_constraints_recursive(obj, prefix=""):
         if isinstance(obj, dict):
             if "properties" in obj:
                 properties = obj["properties"]
                 for prop_name, prop_def in properties.items():
                     current_path = f"{prefix}.{prop_name}" if prefix else prop_name
-                    
+
                     if isinstance(prop_def, dict):
                         prop_type = prop_def.get("type")
-                        
+
                         # Handle string constraints
                         if prop_type == "string":
                             min_length = prop_def.get("minLength")
                             max_length = prop_def.get("maxLength")
-                            
+
                             if min_length is not None and max_length is not None:
-                                constraints.append(f"    - {current_path} should be less than {max_length} characters and greater than {min_length} characters")
+                                constraints.append(
+                                    f"    - {current_path} should be less than {max_length} characters and greater than {min_length} characters"
+                                )
                             elif max_length is not None:
-                                constraints.append(f"    - {current_path} should be less than {max_length} characters")
+                                constraints.append(
+                                    f"    - {current_path} should be less than {max_length} characters"
+                                )
                             elif min_length is not None:
-                                constraints.append(f"    - {current_path} should be greater than {min_length} characters")
-                        
+                                constraints.append(
+                                    f"    - {current_path} should be greater than {min_length} characters"
+                                )
+
                         # Handle array constraints
                         elif prop_type == "array":
                             min_items = prop_def.get("minItems")
                             max_items = prop_def.get("maxItems")
-                            
+
                             if min_items is not None and max_items is not None:
-                                constraints.append(f"    - {current_path} should have more than {min_items} items and less than {max_items} items")
+                                constraints.append(
+                                    f"    - {current_path} should have more than {min_items} items and less than {max_items} items"
+                                )
                             elif max_items is not None:
-                                constraints.append(f"    - {current_path} should have less than {max_items} items")
+                                constraints.append(
+                                    f"    - {current_path} should have less than {max_items} items"
+                                )
                             elif min_items is not None:
-                                constraints.append(f"    - {current_path} should have more than {min_items} items")
-                        
+                                constraints.append(
+                                    f"    - {current_path} should have more than {min_items} items"
+                                )
+
                         # Recurse into nested objects
                         if prop_type == "object" or "properties" in prop_def:
                             extract_constraints_recursive(prop_def, current_path)
-                        
+
                         # Handle array items if they have properties
                         if prop_type == "array" and "items" in prop_def:
                             items_def = prop_def["items"]
-                            if isinstance(items_def, dict) and ("properties" in items_def or items_def.get("type") == "object"):
-                                extract_constraints_recursive(items_def, f"{current_path}[*]")
-            
+                            if isinstance(items_def, dict) and (
+                                "properties" in items_def
+                                or items_def.get("type") == "object"
+                            ):
+                                extract_constraints_recursive(
+                                    items_def, f"{current_path}[*]"
+                                )
+
             # Also recurse into other nested structures
             for key, value in obj.items():
-                if key not in ["properties", "type", "minLength", "maxLength", "minItems", "maxItems"] and isinstance(value, dict):
+                if key not in [
+                    "properties",
+                    "type",
+                    "minLength",
+                    "maxLength",
+                    "minItems",
+                    "maxItems",
+                ] and isinstance(value, dict):
                     extract_constraints_recursive(value, prefix)
-    
+
     # Start extraction from the root schema
     extract_constraints_recursive(schema)
-    
+
     return "\n".join(constraints)
-
-

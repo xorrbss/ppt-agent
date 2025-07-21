@@ -17,8 +17,8 @@ class ContactInfoModel(BaseModel):
 
 
 class ImageModel(BaseModel):
-    image_url__: str = Field(description="Image URL")
-    image_prompt__: str = Field(description="Image prompt")
+    __image_url__: str = Field(description="Image URL")
+    __image_prompt__: str = Field(description="Image prompt")
 
 
 # First Slide Layout
@@ -415,11 +415,5 @@ presentation_layout = PresentationLayoutModel(
     ],
 )
 
-# print(json.dumps(FirstSlideModel.model_json_schema()))
 
-slide_schema = FirstSlideModel.model_json_schema()
-
-slide_schema = remove_fields_from_schema(slide_schema, ["image_url__"])
-print(slide_schema)
-
-# print(PresentationOutlineModel.model_json_schema())
+print(json.dumps(StatisticsSlideModel.model_json_schema()))

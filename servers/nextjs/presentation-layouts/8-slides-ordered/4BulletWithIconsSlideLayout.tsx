@@ -7,7 +7,7 @@ export const layoutName = 'Bullet with Icons'
 export const layoutDescription = 'A bullets style slide with main content, supporting image, and bullet points with icons and descriptions.'
 
 const bulletWithIconsSlideSchema = z.object({
-    title: z.string().min(3).max(40).default('Problem').meta({
+    title: z.string().min(3).max(50).default('Problem').meta({
         description: "Main title of the slide",
     }),
     description: z.string().max(150).default('Businesses face challenges with outdated technology and rising costs, limiting efficiency and growth in competitive markets.').meta({
