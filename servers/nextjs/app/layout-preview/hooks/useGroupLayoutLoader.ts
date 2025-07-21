@@ -76,8 +76,9 @@ export const useGroupLayoutLoader = (groupSlug: string): UseGroupLayoutLoaderRet
                         toast.error(`${layoutName} has no default export`, {
                             description: 'Please ensure the layout file exports a default component',
                         })
+
                         console.warn(`${layoutName} has no default export`)
-                        continue
+                        return;
                     }
 
                     if (!module.Schema) {
@@ -85,7 +86,7 @@ export const useGroupLayoutLoader = (groupSlug: string): UseGroupLayoutLoaderRet
                             description: 'Please ensure the layout file exports a Schema',
                         })
                         console.error(`${layoutName} is missing required Schema export`)
-                        continue
+                        return;
                     }
 
                     // Use empty object to let schema apply its default values
@@ -114,6 +115,7 @@ export const useGroupLayoutLoader = (groupSlug: string): UseGroupLayoutLoaderRet
 
                         if (module.default && module.Schema) {
                             const sampleData = module.Schema.parse({})
+                            // if layoutId is not provided, use the layoutName
                             const layoutId = module.layoutId || layoutName.toLowerCase().replace(/layout$/, '')
                             const layoutInfo: LayoutInfo = {
                                 name: layoutName,

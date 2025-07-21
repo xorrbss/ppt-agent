@@ -47,8 +47,10 @@ export async function GET() {
                         ordered: false,
                         isDefault: false
                     }
+                    // write the settings to the file
+                    fs.writeFile(settingsPath, JSON.stringify(settings, null, 2))
                 }
-                
+
                 if (layoutFiles.length > 0) {
                     allLayouts.push({
                         groupName: groupName,

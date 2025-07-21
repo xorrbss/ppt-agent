@@ -53,7 +53,7 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
                                 description: 'Please ensure the layout file exports a default component',
                             })
                             console.warn(`${layoutName} has no default export`)
-                            continue
+                            throw new Error(`${layoutName} has no default export`)
                         }
 
                         if (!module.Schema) {
@@ -61,7 +61,7 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
                                 description: 'Please ensure the layout file exports a Schema',
                             })
                             console.error(`${layoutName} is missing required Schema export`)
-                            continue
+                            throw new Error(`${layoutName} is missing required Schema export`)
                         }
 
                         // Use empty object to let schema apply its default values
@@ -93,7 +93,9 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
                             if (module.default && module.Schema) {
                                 // Use empty object to let schema apply its default values
                                 const sampleData = module.Schema.parse({})
+                                // if layoutId is not provided, use the layoutName
                                 const layoutId = module.layoutId || layoutName.toLowerCase().replace(/layout$/, '')
+
                                 const layoutInfo: LayoutInfo = {
                                     name: layoutName,
                                     component: module.default,
