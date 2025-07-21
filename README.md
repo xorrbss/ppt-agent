@@ -19,6 +19,11 @@
 
 ![Demo](readme_assets/demo.gif)
 
+
+> [!NOTE]
+> **Enterprise Inquiries:**  
+> For enterprise use, custom deployments, or partnership opportunities, contact us at **[suraj@presenton.ai](mailto:suraj@presenton.ai)**.
+
 > [!IMPORTANT]
 > Like Presenton? A ⭐ star shows your support and encourages us to keep building!
 
