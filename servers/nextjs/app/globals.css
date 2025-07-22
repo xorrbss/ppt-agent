@@ -147,21 +147,33 @@ thead {
 
 
 .custom_scrollbar::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 
 .custom_scrollbar::-webkit-scrollbar-thumb {
-  background-color: #4A90E2;
-  border-radius: 6px;
+  background-color: #d1d5db;
+  border-radius: 8px;
   cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.custom_scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #9ca3af;
 }
 
 .custom_scrollbar::-webkit-scrollbar-track {
-  background-color: #F0F0F0;
+  background-color: #f9fafb;
+  border-radius: 8px;
 }
 
 .custom_scrollbar::-webkit-scrollbar-corner {
   background-color: transparent;
+}
+
+/* Firefox scrollbar styling */
+.custom_scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db #f9fafb;
 }
 
 
