@@ -5,7 +5,6 @@ export const handleSaveLLMConfig = async (llmConfig: LLMConfig) => {
   if (!hasValidLLMConfig(llmConfig)) {
     throw new Error("Provided configuration is not valid");
   }
-  console.log("StoreHelperLLMConfig: Saving LLM config", llmConfig);
   await fetch("/api/user-config", {
     method: "POST",
     body: JSON.stringify(llmConfig),
@@ -54,17 +53,17 @@ export const hasValidLLMConfig = (llmConfig: LLMConfig) => {
   const isLLMConfigValid =
     llmConfig.LLM === "openai"
       ? OPENAI_API_KEY !== "" &&
-        OPENAI_API_KEY !== null &&
-        OPENAI_API_KEY !== undefined
+      OPENAI_API_KEY !== null &&
+      OPENAI_API_KEY !== undefined
       : llmConfig.LLM === "google"
-      ? GOOGLE_API_KEY !== "" &&
+        ? GOOGLE_API_KEY !== "" &&
         GOOGLE_API_KEY !== null &&
         GOOGLE_API_KEY !== undefined
-      : llmConfig.LLM === "ollama"
-      ? isOllamaConfigValid
-      : llmConfig.LLM === "custom"
-      ? isCustomConfigValid
-      : false;
+        : llmConfig.LLM === "ollama"
+          ? isOllamaConfigValid
+          : llmConfig.LLM === "custom"
+            ? isCustomConfigValid
+            : false;
 
   return isLLMConfigValid && isImageConfigValid();
 };

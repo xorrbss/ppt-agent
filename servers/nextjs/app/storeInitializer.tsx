@@ -6,6 +6,7 @@ import { Loader2 } from 'lucide-react';
 import { hasValidLLMConfig } from '@/utils/storeHelpers';
 import { usePathname, useRouter } from 'next/navigation';
 import { useDispatch } from 'react-redux';
+import { checkIfSelectedOllamaModelIsPulled } from '@/utils/providerUtils';
 
 export function StoreInitializer({ children }: { children: React.ReactNode }) {
   const dispatch = useDispatch();
@@ -82,17 +83,6 @@ export function StoreInitializer({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const checkIfSelectedOllamaModelIsPulled = async (ollamaModel: string) => {
-    try {
-      const response = await fetch('/api/v1/ppt/ollama/models/available');
-      const models = await response.json();
-      const pulledModels = models.map((model: any) => model.name);
-      return pulledModels.includes(ollamaModel);
-    } catch (error) {
-      console.error('Error checking if selected Ollama model is pulled:', error);
-      return false;
-    }
-  }
 
   const checkIfSelectedCustomModelIsAvailable = async (customModel: string) => {
     try {
