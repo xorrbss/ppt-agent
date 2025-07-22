@@ -1,26 +1,11 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
-import { Fraunces, Montserrat, Inria_Serif, Roboto, Instrument_Sans } from "next/font/google";
+import { Roboto, Instrument_Sans } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import { LayoutProvider } from "./(presentation-generator)/context/LayoutContext";
 import { Toaster } from "sonner";
 
-const fraunces = Fraunces({
-  subsets: ["latin"],
-  weight: ["400"],
-  variable: "--font-fraunces",
-});
-const montserrat = Montserrat({
-  subsets: ["latin"],
-  weight: ["400"],
-  variable: "--font-montserrat",
-});
-const inria_serif = Inria_Serif({
-  subsets: ["latin"],
-  weight: ["400"],
-  variable: "--font-inria-serif",
-});
 
 const inter = localFont({
   src: [
@@ -33,26 +18,26 @@ const inter = localFont({
   variable: "--font-inter",
 });
 
-const roboto = Roboto({
-  subsets: ["latin"],
-  weight: ["400"],
-  variable: "--font-roboto",
-});
-
 const instrument_sans = Instrument_Sans({
   subsets: ["latin"],
   weight: ["400"],
   variable: "--font-instrument-sans",
 });
 
+const roboto = Roboto({
+  subsets: ["latin"],
+  weight: ["400"],
+  variable: "--font-roboto",
+});
+
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://presenton.ai"),
-  title: "Presenton.ai - AI Presentation Maker for Data Storytelling",
+  title: "Presenton - Open Source AI presentation generator",
   description:
-    "Turn complex data into stunning, interactive presentations with Presenton.ai. Create professional slides from reports and analytics in minutes. Try now!",
+    "Open-source AI presentation generator with custom layouts, multi-model support (OpenAI, Gemini, Ollama), and PDF/PPTX export. A free Gamma alternative.",
   keywords: [
-    "AI presentation maker",
+    "AI presentation generator",
     "data storytelling",
     "data visualization tool",
     "AI data presentation",
@@ -62,17 +47,17 @@ export const metadata: Metadata = {
     "professional slides",
   ],
   openGraph: {
-    title: "Presenton.ai - AI-Powered Data Presentations",
+    title: "Presenton - Open Source AI presentation generator",
     description:
-      "Transform data into engaging presentations effortlessly with Presenton.ai, your go-to AI tool for stunning slides and data storytelling.",
+      "Open-source AI presentation generator with custom layouts, multi-model support (OpenAI, Gemini, Ollama), and PDF/PPTX export. A free Gamma alternative.",
     url: "https://presenton.ai",
-    siteName: "Presenton.ai",
+    siteName: "Presenton",
     images: [
       {
         url: "https://presenton.ai/presenton-feature-graphics.png",
         width: 1200,
         height: 630,
-        alt: "Presenton.ai Logo",
+        alt: "Presenton Logo",
       },
     ],
     type: "website",
@@ -83,9 +68,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Presenton.ai - AI Presentation Maker for Data Storytelling",
+    title: "Presenton - Open Source AI presentation generator",
     description:
-      "Create stunning presentations from data with Presenton.ai. Simplify reports and analytics into interactive slides fast!",
+      "Open-source AI presentation generator with custom layouts, multi-model support (OpenAI, Gemini, Ollama), and PDF/PPTX export. A free Gamma alternative.",
     images: ["https://presenton.ai/presenton-feature-graphics.png"],
   },
 };
@@ -99,13 +84,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`$ ${inter.variable} ${fraunces.variable} ${montserrat.variable} ${inria_serif.variable} ${roboto.variable} ${instrument_sans.variable} antialiased`}
+        className={`${inter.variable} ${roboto.variable} ${instrument_sans.variable} antialiased`}
       >
         <Providers>
           <LayoutProvider>
-
             {children}
-
           </LayoutProvider>
         </Providers>
         <Toaster position="top-center" richColors={true} />

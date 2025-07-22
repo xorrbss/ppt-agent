@@ -221,9 +221,7 @@ const SupportingDoc = ({ files, onFilesChange }: SupportingDocProps) => {
                         </div>
                     </div>
                 )}
-                {files.filter(file => file.type === 'text/csv').length > 0 && (
-                    <p className="text-sm text-gray-500 font-roboto text-center pb-1">Analyzing CSV file may take some time... Be Patient!</p>
-                )}
+
             </div>
         </div>
     )
