@@ -134,11 +134,6 @@ async def prepare_presentation(
 
     with get_sql_session() as sql_session:
         presentation = sql_session.get(PresentationModel, presentation_id)
-        presentation.outlines = [each.model_dump() for each in outlines]
-        presentation.title = title or presentation.title
-        presentation.layout = layout.model_dump()
-        sql_session.commit()
-        sql_session.refresh(presentation)
 
     total_slide_layouts = len(layout.slides)
     total_outlines = len(outlines)
@@ -164,6 +159,9 @@ async def prepare_presentation(
 
     with get_sql_session() as sql_session:
         sql_session.add(presentation)
+        presentation.outlines = [each.model_dump() for each in outlines]
+        presentation.title = title or presentation.title
+        presentation.set_layout(layout)
         presentation.set_structure(presentation_structure)
         sql_session.commit()
         sql_session.refresh(presentation)
