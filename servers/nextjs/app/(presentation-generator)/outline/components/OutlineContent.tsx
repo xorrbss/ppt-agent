@@ -41,7 +41,7 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
     );
 
     return (
-        <div className="space-y-6 font-roboto">
+        <div className="space-y-6 font-instrument_sans">
             <div className="flex items-center justify-between">
                 <h5 className="text-lg font-medium">
                     Presentation Outline

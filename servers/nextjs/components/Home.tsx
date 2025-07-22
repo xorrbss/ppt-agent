@@ -481,7 +481,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b font-instrument_sans from-gray-50 to-white">
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white font-instrument_sans ">
       <main className="container mx-auto px-4 py-12 max-w-3xl">
         {/* Branding Header */}
         <div className="text-center mb-12">
@@ -505,7 +505,7 @@ export default function Home() {
                 <button
                   key={provider}
                   onClick={() => changeProvider(provider)}
-                  className={`relative p-4 rounded-lg border-2 transition-all duration-200 ${llmConfig.LLM === provider
+                  className={`relative font-roboto p-4 rounded-lg border-2 transition-all duration-200 ${llmConfig.LLM === provider
                     ? "border-blue-500 bg-blue-50"
                     : "border-gray-200 hover:border-blue-200 hover:bg-gray-50"
                     }`}
@@ -538,6 +538,7 @@ export default function Home() {
               <div className="relative">
                 <input
                   type="text"
+
                   value={
                     llmConfig.LLM === "openai"
                       ? llmConfig.OPENAI_API_KEY || ""
@@ -551,7 +552,7 @@ export default function Home() {
                         : "google_api_key"
                     )
                   }
-                  className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                  className="w-full font-roboto px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
                   placeholder="Enter your API key"
                 />
               </div>
@@ -580,7 +581,7 @@ export default function Home() {
                           aria-expanded={openModelSelect}
                           className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
                         >
-                          <div className="flex gap-3 items-center">
+                          <div className="flex gap-3 font-roboto items-center">
                             {llmConfig.OLLAMA_MODEL && (
                               <div className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0">
                                 <img

@@ -49,11 +49,11 @@ const Type1SlideLayout: React.FC<Type1SlideLayoutProps> = ({ data: slideData }) 
                 </div>
 
                 {/* Image */}
-                <div className="w-full h-full min-h-[200px] lg:min-h-[300px]">
+                <div className="w-full  max-h-[600px]">
                     <img
                         src={slideData?.image?.__image_url__ || ''}
                         alt={slideData?.image?.__image_prompt__ || slideData?.title || ''}
-                        className="w-full h-full object-cover rounded-lg shadow-md"
+                        className="w-full max-h-full object-cover rounded-lg shadow-md"
                     />
                 </div>
             </div>

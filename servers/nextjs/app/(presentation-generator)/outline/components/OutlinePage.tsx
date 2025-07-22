@@ -48,7 +48,7 @@ const OutlinePage: React.FC = () => {
         duration={loadingState.duration}
       />
 
-      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 pb-6">
+      <div className="max-w-[1200px] font-instrument_sans mx-auto px-4 sm:px-6 pb-6">
         <div className="mt-4 sm:mt-8">
           <PageHeader />
 
