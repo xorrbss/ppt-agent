@@ -82,7 +82,7 @@ async def generate_ppt_outline(
     language: Optional[str] = None,
     content: Optional[str] = None,
 ):
-    model = get_nano_model()
+    model = get_large_model()
     response_model = get_presentation_outline_model_with_n_slides(n_slides)
 
     if not is_google_selected():
