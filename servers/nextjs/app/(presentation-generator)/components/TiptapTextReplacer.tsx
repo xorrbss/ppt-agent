@@ -99,8 +99,7 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
                 const root = ReactDOM.createRoot(tiptapContainer);
                 root.render(
                     <TiptapText
-                        key={JSON.stringify(slideData)}
-                        content={dataPath.originalText}
+                        content={trimmedText}
                         onContentChange={(content: string) => {
                             if (dataPath && onContentChange) {
                                 onContentChange(content, dataPath.path, slideIndex);

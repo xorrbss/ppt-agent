@@ -21,7 +21,7 @@ export function SortableSlide({ slide, index, selectedSlide, onSlideClick, rende
         transform,
         transition,
         isDragging
-    } = useSortable({ id: slide.id! });
+    } = useSortable({ id: slide.id || `${slide.index}` });
 
     const style = {
         transform: CSS.Transform.toString(transform),
@@ -30,15 +30,19 @@ export function SortableSlide({ slide, index, selectedSlide, onSlideClick, rende
     };
 
     const handleMouseDown = () => {
+        console.log("mouse down");
         setMouseDownTime(Date.now());
     };
 
     const handleMouseUp = () => {
+        console.log("mouse up");
         const mouseUpTime = Date.now();
         const timeDiff = mouseUpTime - mouseDownTime;
+        console.log("timeDiff", timeDiff);
 
-        // If the mouse was down for less than 200ms, consider it a click
-        if (timeDiff < 200 && !isDragging) {
+        // If the mouse was down for less than 300ms, consider it a click
+        if (timeDiff < 300 && !isDragging) {
+            console.log("clicked");
             onSlideClick(slide.index);
         }
     };
@@ -51,12 +55,13 @@ export function SortableSlide({ slide, index, selectedSlide, onSlideClick, rende
             {...listeners}
             onMouseDown={handleMouseDown}
             onMouseUp={handleMouseUp}
-            className={` cursor-pointer border-[3px]  p-1 shadow-lg   rounded-md transition-all duration-200 ${selectedSlide === index ? ' border-[#5141e5]' : 'border-gray-300'
+
+            className={` cursor-pointer border-[3px] relative  p-1 shadow-lg   rounded-md transition-all duration-200 ${selectedSlide === index ? ' border-[#5141e5]' : 'border-gray-300'
                 }`}
         >
-            <div className=" slide-box relative overflow-hidden aspect-video">
-                <div className="absolute bg-transparent z-40 top-0 left-0 w-full h-full" />
-                <div className="transform scale-[0.2] flex justify-center items-center origin-top-left  w-[500%] h-[500%]">
+            <div className=" slide-box relative z-50  overflow-hidden aspect-video">
+                <div className="absolute bg-transparent z-50 top-0 left-0 w-full h-full" />
+                <div className="transform scale-[0.2] flex  pointer-events-none justify-center items-center origin-top-left  w-[500%] h-[500%]">
                     {renderSlideContent(slide, false)}
                 </div>
             </div>

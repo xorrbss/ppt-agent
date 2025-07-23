@@ -5,72 +5,76 @@ import { ImageSchema, IconSchema } from "../defaultSchemes";
 // Schema definition
 export const Schema = z.object({
 
-    mainTitle: z.string()
-        .min(5)
-        .max(15)
-        .default("SOLUTIONS")
-        .meta({
-            description: "Main title for the solutions section",
-        }),
-
-    subtitle: z.string()
-        .min(10)
+    sectionTitle: z.string()
+        .min(3)
         .max(25)
-        .default("SOLUTIONS OF THE PROBLEMS")
+        .default("OUR SOLUTIONS")
         .meta({
-            description: "Subtitle describing the section",
+            description: "Main section heading - can be 'Solutions', 'Our Approach', 'How We Help', or similar",
         }),
 
-    solutions: z.array(z.object({
-        number: z.string().min(1).max(3),
-        title: z.string().min(5).max(40),
-        description: z.string().min(20).max(300)
-    })).min(2).max(3).default([
+    sectionSubtitle: z.string()
+        .min(10)
+        .max(50)
+        .default("COMPREHENSIVE SOLUTIONS FOR YOUR NEEDS")
+        .meta({
+            description: "Supporting subtitle that frames the solution discussion",
+        }),
+
+    solutionItems: z.array(z.object({
+        itemNumber: z.string().min(1).max(3),
+        solutionTitle: z.string().min(5).max(40),
+        solutionDescription: z.string().min(20).max(200)
+    })).min(2).max(4).default([
         {
-            number: "01",
-            title: "Lack of Brand Visibility",
-            description: "By defining your unique value proposition and creating a consistent brand identity, we ensure your business stands out and remains memorable in the minds of your target audience."
+            itemNumber: "01",
+            solutionTitle: "Process Optimization",
+            solutionDescription: "Streamline workflows and implement efficient systems that reduce waste, improve productivity, and maximize resource utilization across all operational areas."
         },
         {
-            number: "02",
-            title: "Ineffective Digital Presence",
-            description: "Through data-driven insights, we tailor strategies to maximize online visibility, engage your audience, and drive meaningful interactions, converting online engagements into tangible business outcomes."
+            itemNumber: "02",
+            solutionTitle: "Scalable Infrastructure",
+            solutionDescription: "Build robust, flexible systems and methodologies that can grow with your organization, eliminating bottlenecks and supporting expansion efforts."
         },
         {
-            number: "03",
-            title: "Lack of Targeted Lead Generation",
-            description: "By leveraging strategic content, paid advertising, and personalized engagement tactics, we ensure that your marketing efforts are focused on reaching and converting the right audience."
+            itemNumber: "03",
+            solutionTitle: "Resource Management",
+            solutionDescription: "Strategic allocation and optimization of available resources including time, budget, and personnel to achieve maximum impact and desired outcomes."
         }
     ]).meta({
-        description: "List of solutions with numbers, titles and descriptions",
+        description: "List of key solutions or approaches with numbered identification and detailed descriptions",
     }),
 
-    workspaceImages: ImageSchema.default({
-        __image_url__: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-        __image_prompt__: "Business person working on laptop with charts and analytics"
+    primaryVisual: ImageSchema.default({
+        __image_url__: "https://images.unsplash.com/photo-1560472354-b33ff0c44a43?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+        __image_prompt__: "Modern workspace with team collaboration and strategic planning"
     }).meta({
-        description: "Two workspace images for left side",
+        description: "Primary visual representing teamwork, strategy, or solution implementation",
     }),
 
-    companyLogo: ImageSchema.default({
-        __image_url__: "https://via.placeholder.com/40x40/1D9A8A/FFFFFF?text=C",
-        __image_prompt__: "Clean modern company logo icon"
+    brandingVisual: ImageSchema.default({
+        __image_url__: "https://via.placeholder.com/150x80/22C55E/FFFFFF?text=LOGO",
+        __image_prompt__: "Organization logo or brand mark"
     }).meta({
-        description: "Company logo icon",
+        description: "Logo or branding element to maintain visual identity",
     }),
-
-    companyName: z.string()
-        .min(2)
-        .max(25)
-        .default("Company Name")
-        .meta({
-            description: "Company name for branding",
-        }),
 
     showYellowUnderline: z.boolean()
         .default(true)
         .meta({
-            description: "Show yellow decorative underline",
+            description: "Whether to display the decorative yellow underline accent",
+        }),
+
+    showVisualAccents: z.boolean()
+        .default(true)
+        .meta({
+            description: "Whether to display decorative visual accent elements",
+        }),
+
+    showColorBlocks: z.boolean()
+        .default(true)
+        .meta({
+            description: "Whether to show colored background blocks for visual hierarchy",
         }),
 })
 
@@ -80,25 +84,50 @@ type SchemaType = z.infer<typeof Schema>;
 // Component definition
 const SolutionsSlide = ({ data }: { data: Partial<SchemaType> }) => {
 
-    const { mainTitle, subtitle, solutions, workspaceImages, companyLogo, companyName, showYellowUnderline } = data;
+    const { sectionTitle, sectionSubtitle, solutionItems, primaryVisual, brandingVisual, showYellowUnderline, showVisualAccents, showColorBlocks } = data;
 
     return (
         <div className="aspect-video max-w-[1280px] w-full bg-white relative overflow-hidden">
             {/* Main Content Area */}
             <div className="h-full flex">
                 {/* Left Side - Images and Branding */}
-                <div className="w-1/2 relative bg-gray-100 px-16 py-12 flex flex-col">
+                <div className="w-2/5 relative bg-gray-100 flex flex-col">
+                    {/* Top Image Area */}
+                    {primaryVisual?.__image_url__ && (
+                        <div className="flex-1 relative">
+                            <img
+                                src={primaryVisual.__image_url__}
+                                alt={primaryVisual.__image_prompt__}
+                                className="w-full h-full object-cover"
+                            />
+                        </div>
+                    )}
+
+                    {/* Bottom Branding Area */}
+                    <div className="h-24 bg-white flex items-center justify-center px-8">
+                        {brandingVisual?.__image_url__ && (
+                            <img
+                                src={brandingVisual.__image_url__}
+                                alt={brandingVisual.__image_prompt__}
+                                className="h-12 object-contain"
+                            />
+                        )}
+                    </div>
+                </div>
+
+                {/* Right Side - Content */}
+                <div className="w-3/5 relative bg-teal-600 px-16 py-12 flex flex-col justify-start">
                     {/* Title Section */}
                     <div className="mb-8">
-                        {mainTitle && (
-                            <h1 className="text-4xl lg:text-5xl font-black text-teal-700 leading-tight mb-4">
-                                {mainTitle}
+                        {sectionTitle && (
+                            <h1 className="text-3xl lg:text-4xl font-black text-white leading-tight mb-4">
+                                {sectionTitle}
                             </h1>
                         )}
 
-                        {subtitle && (
-                            <p className="text-base font-semibold text-gray-800 tracking-wide mb-4">
-                                {subtitle}
+                        {sectionSubtitle && (
+                            <p className="text-base font-semibold text-gray-100 tracking-wide mb-4">
+                                {sectionSubtitle}
                             </p>
                         )}
 
@@ -108,70 +137,52 @@ const SolutionsSlide = ({ data }: { data: Partial<SchemaType> }) => {
                         )}
                     </div>
 
-                    {/* Images */}
-                    {workspaceImages && (
-                        <div className="flex-1 space-y-6">
-
-
-
-                            <div className="h-full w-full">
-                                <img
-                                    src={workspaceImages.__image_url__}
-                                    alt={workspaceImages.__image_prompt__}
-                                    className="w-full h-full object-cover rounded-lg shadow-md"
-                                />
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Company Branding */}
-                    <div className="mt-8 flex items-center space-x-3">
-                        {companyLogo?.__image_url__ && (
-                            <div className="w-10 h-10">
-                                <img
-                                    src={companyLogo.__image_url__}
-                                    alt={companyLogo.__image_prompt__}
-                                    className="w-full h-full object-contain"
-                                />
-                            </div>
-                        )}
-                        {companyName && (
-                            <span className="text-xl font-bold text-teal-700">
-                                {companyName}
-                            </span>
-                        )}
-                    </div>
-                </div>
-
-                {/* Right Side - Teal Background with Solutions */}
-                <div className="w-1/2 relative bg-teal-600 px-16 py-12 flex flex-col justify-center">
-                    {/* Solutions List */}
-                    {solutions && solutions.length > 0 && (
+                    {/* Solution Items List */}
+                    {solutionItems && solutionItems.length > 0 && (
                         <div className="space-y-8">
-                            {solutions.map((solution, index) => (
-                                <div key={index} className="flex items-start space-x-4">
+                            {solutionItems.map((item, index) => (
+                                <div key={index} className="flex items-start space-x-6">
                                     {/* Number Circle */}
-                                    <div className="w-12 h-12 bg-yellow-200 rounded-full flex items-center justify-center flex-shrink-0">
-                                        <span className="text-teal-700 font-bold text-lg">
-                                            {solution.number}
+                                    <div className="w-16 h-16 bg-yellow-300 rounded-full flex items-center justify-center flex-shrink-0">
+                                        <span className="text-teal-700 font-bold text-xl">
+                                            {item.itemNumber}
                                         </span>
                                     </div>
 
                                     {/* Content */}
                                     <div className="flex-1">
                                         <h3 className="text-xl font-bold text-white mb-3">
-                                            {solution.title}
+                                            {item.solutionTitle}
                                         </h3>
-                                        <p className="text-base leading-relaxed text-white">
-                                            {solution.description}
+                                        <p className="text-base leading-relaxed text-gray-100">
+                                            {item.solutionDescription}
                                         </p>
                                     </div>
                                 </div>
                             ))}
                         </div>
                     )}
+
+                    {/* Visual Accents */}
+                    {showVisualAccents && (
+                        <>
+                            {/* Decorative circles */}
+                            <div className="absolute top-8 right-8 w-4 h-4 bg-yellow-300 rounded-full"></div>
+                            <div className="absolute bottom-16 right-12 w-3 h-3 bg-yellow-200 rounded-full"></div>
+                        </>
+                    )}
                 </div>
             </div>
+
+            {/* Color blocks for visual hierarchy */}
+            {showColorBlocks && (
+                <>
+                    {/* Bottom accent strip */}
+                    <div className="absolute bottom-0 left-0 right-0 h-3 bg-yellow-300"></div>
+                    {/* Side accent */}
+                    <div className="absolute top-0 left-0 bottom-0 w-1 bg-yellow-400"></div>
+                </>
+            )}
         </div>
     );
 };
