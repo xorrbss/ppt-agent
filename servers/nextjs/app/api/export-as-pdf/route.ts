@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
             }
         }
         
-        return (loadedElements / totalElements) >= 0.95;
+        return (loadedElements / totalElements) >= 0.99;
       }
       `,
       { timeout: 10000 }

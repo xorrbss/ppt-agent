@@ -404,43 +404,76 @@ class PptxPresentationCreator:
         # # Remove existing shadow effects if present
         effect_list = sp_pr.find("a:effectLst", namespaces=nsmap)
         if effect_list:
-            old_shadow = effect_list.find("a:outerShdw")
-            if old_shadow:
+            old_outer_shadow = effect_list.find("a:outerShdw")
+            if old_outer_shadow:
                 effect_list.remove(
-                    old_shadow, namespaces=nsmap
+                    old_outer_shadow, namespaces=nsmap
                 )  # Remove the old shadow
-
-        if not shadow:
-            return
+            old_inner_shadow = effect_list.find("a:innerShdw")
+            if old_inner_shadow:
+                effect_list.remove(
+                    old_inner_shadow, namespaces=nsmap
+                )  # Remove the old shadow
+            old_prst_shadow = effect_list.find("a:prstShdw")
+            if old_prst_shadow:
+                effect_list.remove(
+                    old_prst_shadow, namespaces=nsmap
+                )  # Remove the old shadow
 
         if not effect_list:
             effect_list = etree.SubElement(
                 sp_pr, f"{{{nsmap['a']}}}effectLst", nsmap=nsmap
             )
 
-        outer_shadow = etree.SubElement(
-            effect_list,
-            f"{{{nsmap['a']}}}outerShdw",
-            {
-                "blurRad": f"{Pt(shadow.radius)}",
-                "dir": f"{shadow.angle * 1000}",
-                "dist": f"{Pt(shadow.offset)}",
-                "rotWithShape": "0",
-            },
-            nsmap=nsmap,
-        )
-        color_element = etree.SubElement(
-            outer_shadow,
-            f"{{{nsmap['a']}}}srgbClr",
-            {"val": f"{shadow.color}"},
-            nsmap=nsmap,
-        )
-        etree.SubElement(
-            color_element,
-            f"{{{nsmap['a']}}}alpha",
-            {"val": f"{int(shadow.opacity * 100000)}"},
-            nsmap=nsmap,
-        )
+        if shadow is None:
+            # Apply shadow with zero values when shadow is None
+            outer_shadow = etree.SubElement(
+                effect_list,
+                f"{{{nsmap['a']}}}outerShdw",
+                {
+                    "blurRad": "0",
+                    "dist": "0",
+                    "dir": "0",
+                },
+                nsmap=nsmap,
+            )
+            color_element = etree.SubElement(
+                outer_shadow,
+                f"{{{nsmap['a']}}}srgbClr",
+                {"val": "000000"},
+                nsmap=nsmap,
+            )
+            etree.SubElement(
+                color_element,
+                f"{{{nsmap['a']}}}alpha",
+                {"val": "0"},
+                nsmap=nsmap,
+            )
+        else:
+            # Apply the provided shadow
+            outer_shadow = etree.SubElement(
+                effect_list,
+                f"{{{nsmap['a']}}}outerShdw",
+                {
+                    "blurRad": f"{Pt(shadow.radius)}",
+                    "dir": f"{shadow.angle * 1000}",
+                    "dist": f"{Pt(shadow.offset)}",
+                    "rotWithShape": "0",
+                },
+                nsmap=nsmap,
+            )
+            color_element = etree.SubElement(
+                outer_shadow,
+                f"{{{nsmap['a']}}}srgbClr",
+                {"val": f"{shadow.color}"},
+                nsmap=nsmap,
+            )
+            etree.SubElement(
+                color_element,
+                f"{{{nsmap['a']}}}alpha",
+                {"val": f"{int(shadow.opacity * 100000)}"},
+                nsmap=nsmap,
+            )
 
     def set_fill_opacity(self, fill, opacity):
         if opacity is None or opacity >= 1.0:

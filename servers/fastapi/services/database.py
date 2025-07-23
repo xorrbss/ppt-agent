@@ -7,7 +7,7 @@ from utils.get_env import get_app_data_directory_env, get_database_url_env
 
 
 database_url = get_database_url_env() or "sqlite:///" + os.path.join(
-    get_app_data_directory_env(), "fastapi.db"
+    get_app_data_directory_env() or "/tmp/presenton", "fastapi.db"
 )
 connect_args = {}
 if "sqlite" in database_url:
