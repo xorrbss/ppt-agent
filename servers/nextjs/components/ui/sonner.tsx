@@ -25,7 +25,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
         }
         [data-sonner-toast][data-type="success"] [data-title] {
           color: rgb(15 23 42) !important; /* slate-900 */
-          font-weight: 600 !important;
+          font-weight: 500 !important;
         }
         [data-sonner-toast][data-type="success"] [data-description] {
           color: rgb(71 85 105) !important; /* slate-600 */
@@ -39,7 +39,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
         }
         [data-sonner-toast][data-type="error"] [data-title] {
           color: rgb(15 23 42) !important; /* slate-900 */
-          font-weight: 600 !important;
+          font-weight: 500 !important;
         }
         [data-sonner-toast][data-type="error"] [data-description] {
           color: rgb(71 85 105) !important; /* slate-600 */
@@ -53,7 +53,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
         }
         [data-sonner-toast][data-type="info"] [data-title] {
           color: rgb(15 23 42) !important; /* slate-900 */
-          font-weight: 600 !important;
+          font-weight: 500 !important;
         }
         [data-sonner-toast][data-type="info"] [data-description] {
           color: rgb(71 85 105) !important; /* slate-600 */
@@ -67,7 +67,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
         }
         [data-sonner-toast][data-type="warning"] [data-title] {
           color: rgb(15 23 42) !important; /* slate-900 */
-          font-weight: 600 !important;
+          font-weight: 500 !important;
         }
         [data-sonner-toast][data-type="warning"] [data-description] {
           color: rgb(71 85 105) !important; /* slate-600 */
@@ -81,7 +81,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
         }
         [data-sonner-toast][data-type="loading"] [data-title] {
           color: rgb(15 23 42) !important; /* slate-900 */
-          font-weight: 600 !important;
+          font-weight: 500 !important;
         }
         [data-sonner-toast][data-type="loading"] [data-description] {
           color: rgb(71 85 105) !important; /* slate-600 */
