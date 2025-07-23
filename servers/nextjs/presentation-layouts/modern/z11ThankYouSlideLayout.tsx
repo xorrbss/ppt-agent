@@ -106,25 +106,25 @@ const ThankYouSlideLayout: React.FC<ThankYouSlideLayoutProps> = ({ data }) => {
                 <span role="img" aria-label="address">
                   📍
                 </span>
-                {data?.address}
+                <span>{data?.address}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span role="img" aria-label="phone">
                   📞
                 </span>
-                {data?.phone}
+                <span>{data?.phone}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span role="img" aria-label="website">
                   🌐
                 </span>
-                {data?.website}
+                <span>{data?.website}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span role="img" aria-label="email">
                   ✉️
                 </span>
-                {data?.email}
+                <span>{data?.email}</span>
               </div>
             </div>
           </div>

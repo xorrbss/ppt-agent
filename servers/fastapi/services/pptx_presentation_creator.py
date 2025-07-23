@@ -166,8 +166,7 @@ class PptxPresentationCreator:
         )
         connector_shape.line.width = Pt(connector_model.thickness)
         connector_shape.line.color.rgb = RGBColor.from_string(connector_model.color)
-        # Set line opacity using XML manipulation for better reliability
-        self.set_line_opacity(connector_shape, connector_model.opacity)
+        self.set_fill_opacity(connector_shape, connector_model.opacity)
 
     def add_picture(self, slide: Slide, picture_model: PptxPictureBoxModel):
         image_path = picture_model.picture.path

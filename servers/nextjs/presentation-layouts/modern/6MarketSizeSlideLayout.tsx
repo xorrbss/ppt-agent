@@ -131,7 +131,7 @@ const MarketSizeSlideLayout: React.FC<MarketSizeSlideProps> = ({
                 <div key={index}>
                   <div className="space-y-2">
                     <div className="bg-[#1E4CD9] text-white text-sm font-semibold px-3 py-1 inline-block rounded-sm">
-                      {stat.label}
+                      <span className="text-sm">{stat.label}</span>
                     </div>
                     <div className="text-2xl font-bold text-[#1E4CD9]">
                       {stat.value}

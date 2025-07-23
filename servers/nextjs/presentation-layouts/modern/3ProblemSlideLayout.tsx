@@ -115,7 +115,7 @@ const ProblemStatementSlideLayout: React.FC<
       />
 
       <div
-        className="w-full rounded-sm max-w-[1280px] shadow-lg max-h-[720px] aspect-video bg-gradient-to-br from-blue-600 to-blue-700 relative z-20 mx-auto overflow-hidden text-white"
+        className="w-full rounded-sm max-w-[1280px] shadow-lg max-h-[720px] aspect-video bg-blue-600 relative z-20 mx-auto overflow-hidden text-white"
         style={{
           fontFamily: "Montserrat, sans-serif",
         }}

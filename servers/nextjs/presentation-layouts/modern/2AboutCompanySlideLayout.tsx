@@ -77,9 +77,9 @@ const AboutCompanySlideLayout: React.FC<AboutCompanySlideLayoutProps> = ({
                 />
               ) : (
                 /* Default building facade */
-                <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-300 relative">
+                <div className="w-full h-full bg-gray-200 relative">
                   {/* Building structure simulation */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-gray-300 to-gray-200"></div>
+                  <div className="absolute inset-0 bg-gray-300"></div>
 
                   {/* Horizontal lines (building floors) */}
                   <div className="absolute inset-0">

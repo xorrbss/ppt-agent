@@ -116,7 +116,7 @@ const ProductOverviewSlideLayout: React.FC<ProductOverviewSlideLayoutProps> = ({
           <span>{slideData?.companyName}</span>
           <span>{slideData?.date}</span>
         </div>
-        6+
+
         {/* Main Content */}
         <div className="flex h-full px-16 pb-16">
           {/* Title and Description on the left */}

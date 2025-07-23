@@ -72,12 +72,13 @@ const IntroPitchDeckSlide: React.FC<IntroSlideLayoutProps> = ({
             transform: "translateY(-50%)",
           }}
         >
-          {title && <h1
-            className="text-7xl font-bold text-[#1E4CD9] leading-none inline-block relative"
-            id="pitchdeck-title"
-            style={{ display: "inline-block" }}
-          >
-            {title}
+          {title && <div className="relative inline-block">
+            <h1
+              className="text-7xl font-bold text-[#1E4CD9] leading-none"
+              id="pitchdeck-title"
+            >
+              {title}
+            </h1>
             {/* Blue underline */}
             <span
               className="block bg-[#1E4CD9] h-[4px] absolute left-0"
@@ -87,7 +88,7 @@ const IntroPitchDeckSlide: React.FC<IntroSlideLayoutProps> = ({
                 transition: "width 0.3s",
               }}
             />
-          </h1>}
+          </div>}
         </div>
 
         {/* Bottom Contact Row */}

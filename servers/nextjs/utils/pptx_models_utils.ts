@@ -87,10 +87,14 @@ function convertElementToPptxShape(
   }
 
   if (element.innerText && element.innerText.trim().length > 0) {
+    // Use AutoShape model if there's background color and border radius
+    if (element.background?.color && element.borderRadius && element.borderRadius.some(radius => radius > 0)) {
+      return convertToAutoShapeBox(element);
+    }
     return convertToTextBox(element);
   }
 
-  if (element.tagName === 'hr' || (element.className && typeof element.className === 'string' && (element.className.includes('connector') || element.className.includes('line')))) {
+  if (element.tagName === 'hr') {
     return convertToConnector(element);
   }
 
@@ -177,6 +181,13 @@ function convertToAutoShapeBox(element: ElementAttributes): PptxAutoShapeBoxMode
 
   const shapeType = element.borderRadius ? PptxShapeType.ROUNDED_RECTANGLE : PptxShapeType.RECTANGLE;
 
+  let borderRadius = undefined;
+  for (const eachCornerRadius of element.borderRadius ?? []) {
+    if (eachCornerRadius > 0) {
+      borderRadius = Math.max(borderRadius ?? 0, eachCornerRadius);
+    }
+  }
+
   return {
     type: shapeType,
     margin: undefined,
@@ -185,7 +196,7 @@ function convertToAutoShapeBox(element: ElementAttributes): PptxAutoShapeBoxMode
     shadow,
     position,
     text_wrap: element.textWrap ?? true,
-    border_radius: element.borderRadius ? Math.round(element.borderRadius[0]) : undefined,
+    border_radius: borderRadius || undefined,
     paragraphs
   };
 }

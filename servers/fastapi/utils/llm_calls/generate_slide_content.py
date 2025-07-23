@@ -5,8 +5,8 @@ from models.presentation_layout import SlideLayoutModel
 from models.presentation_outline_model import SlideOutlineModel
 from utils.llm_provider import (
     get_google_llm_client,
+    get_large_model,
     get_llm_client,
-    get_nano_model,
     is_google_selected,
 )
 from utils.schema_utils import remove_fields_from_schema
@@ -55,7 +55,7 @@ def get_prompt_to_generate_slide_content(title: str, outline: str):
 async def get_slide_content_from_type_and_outline(
     slide_layout: SlideLayoutModel, outline: SlideOutlineModel
 ):
-    model = get_nano_model()
+    model = get_large_model()
 
     response_schema = remove_fields_from_schema(
         slide_layout.json_schema, ["__image_url__", "__icon_url__"]
