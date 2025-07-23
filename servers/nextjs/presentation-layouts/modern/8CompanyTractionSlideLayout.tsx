@@ -16,6 +16,12 @@ export const layoutName = "Company Traction Slide";
 export const layoutDescription =
   "A slide layout designed to present company traction data, including growth statistics over the years, a chart visualization, and key metrics in a visually appealing format.";
 
+
+const growthStatsSchema = z.object({
+  year: z.string(),
+})
+  .catchall(z.number());
+
 // growthStats: list of dicts, each dict is { year: string, <metric1>: number, <metric2>: number, ... }
 const tractionSchema = z.object({
   companyName: z.string().default("presention"),
@@ -30,64 +36,58 @@ const tractionSchema = z.object({
     ),
   // growthStats is a list of objects, each with a 'year' and any number of metric keys (all numbers)
   growthStats: z
-    .array(
-      z
-        .object({
-          year: z.string(),
-        })
-        .catchall(z.number()),
-    )
+    .array(growthStatsSchema)
     .min(1)
     .max(20)
     .default([
-      {
+      growthStatsSchema.parse({
         year: "2020",
         artificialIntelligence: 5,
         internetOfThings: 10,
         others: 8,
-      },
-      {
+      }),
+      growthStatsSchema.parse({
         year: "2021",
         artificialIntelligence: 10,
         internetOfThings: 20,
         others: 15,
-      },
-      {
+      }),
+      growthStatsSchema.parse({
         year: "2022",
         artificialIntelligence: 20,
         internetOfThings: 30,
         others: 22,
-      },
-      {
+      }),
+      growthStatsSchema.parse({
         year: "2023",
         artificialIntelligence: 28,
         internetOfThings: 38,
         others: 29,
-      },
-      {
+      }),
+      growthStatsSchema.parse({
         year: "2024",
         artificialIntelligence: 35,
         internetOfThings: 45,
         others: 34,
-      },
-      {
+      }),
+      growthStatsSchema.parse({
         year: "2025",
         artificialIntelligence: 45,
         internetOfThings: 53,
         others: 42,
-      },
-      {
+      }),
+      growthStatsSchema.parse({
         year: "2026",
         artificialIntelligence: 55,
         internetOfThings: 65,
         others: 52,
-      },
-      {
+      }),
+      growthStatsSchema.parse({
         year: "2029",
         artificialIntelligence: 55,
         internetOfThings: 65,
         others: 52,
-      },
+      }),
     ]),
 });
 
