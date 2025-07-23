@@ -116,7 +116,7 @@ const ThynkTitleSlide = ({ data }: { data: Partial<SchemaType> }) => {
             )}
 
             {/* Main Content */}
-            <div className="relative z-15 h-full flex flex-col justify-center px-16">
+            <div className="relative  h-full flex flex-col justify-center px-16">
                 <div className="">
                     {/* Main Title */}
                     {primaryTitle && (

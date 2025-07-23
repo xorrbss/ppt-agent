@@ -125,12 +125,12 @@ const AboutUsSlide = ({ data }: { data: Partial<SchemaType> }) => {
                 <div className="w-2/5 relative">
                     {/* Yellow Square - Top Right */}
                     {showAccentSquare && (
-                        <div className="absolute bottom-0 right-0 w-24 h-24 bg-yellow-300 z-20"></div>
+                        <div className="absolute bottom-0 right-0 w-24 h-24 bg-yellow-300 z-10"></div>
                     )}
 
                     {/* Decorative Circle - On Yellow Square */}
                     {showVisualAccents && (
-                        <div className="absolute top-6 right-6 w-6 h-6 border-2 border-teal-600 rounded-full z-30"></div>
+                        <div className="absolute top-6 right-6 w-6 h-6 border-2 border-teal-600 rounded-full z-20"></div>
                     )}
 
                     {/* Business Image - Left positioned */}

@@ -74,7 +74,7 @@ const WhatWeBelieveSlide = ({ data }: { data: Partial<SchemaType> }) => {
                 {/* Left Side - Image */}
                 <div className="w-2/5 relative">
                     {supportingVisual?.__image_url__ && (
-                        <div className="absolute inset-8 z-15 shadow-lg">
+                        <div className="absolute inset-8 shadow-lg">
                             <img
                                 src={supportingVisual.__image_url__}
                                 alt={supportingVisual.__image_prompt__}

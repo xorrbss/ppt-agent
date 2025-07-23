@@ -136,7 +136,7 @@ const MarketSizeSlide = ({ data }: { data: Partial<SchemaType> }) => {
 
                     {/* Visual Representation */}
                     {visualRepresentation?.__image_url__ && (
-                        <div className="absolute inset-8 z-15 shadow-lg">
+                        <div className="absolute inset-8  shadow-lg">
                             <img
                                 src={visualRepresentation.__image_url__}
                                 alt={visualRepresentation.__image_prompt__}

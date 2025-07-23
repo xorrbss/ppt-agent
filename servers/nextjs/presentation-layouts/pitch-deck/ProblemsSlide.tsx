@@ -130,7 +130,7 @@ const ProblemsSlide = ({ data }: { data: Partial<SchemaType> }) => {
 
                     {/* Supporting Visual */}
                     {supportingVisual?.__image_url__ && (
-                        <div className="absolute top-8 right-8 bottom-20 left-4 z-15 shadow-lg">
+                        <div className="absolute top-8 right-8 bottom-20 left-4  shadow-lg">
                             <img
                                 src={supportingVisual.__image_url__}
                                 alt={supportingVisual.__image_prompt__}

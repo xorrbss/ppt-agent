@@ -122,7 +122,7 @@ const HelloFriendsSlide = ({ data }: { data: Partial<SchemaType> }) => {
 
             {/* Overlapping Circular Office Image */}
             {speakerImage?.__image_url__ && (
-                <div className="absolute top-1/2 left-72 transform -translate-x-1/2 -translate-y-1/2 z-30">
+                <div className="absolute top-1/2 left-72 transform -translate-x-1/2 -translate-y-1/2 ">
                     <div className="w-96 h-96 rounded-full overflow-hidden bg-white p-2 shadow-2xl">
                         <img
                             src={speakerImage.__image_url__}
