@@ -97,17 +97,11 @@ export const Schema = type9SlideSchema
 export type Type9SlideData = z.infer<typeof type9SlideSchema>
 
 interface Type9SlideLayoutProps {
-    data?: Partial<Type9SlideData>
+    data: Partial<Type9SlideData>
 }
 
 const Type9SlideLayout: React.FC<Type9SlideLayoutProps> = ({ data: slideData }) => {
-    const chartData = slideData?.data || [];
-    const chartType = slideData?.chartType || 'line';
-    const color = slideData?.color || '#3b82f6';
-    const dataKey = slideData?.dataKey || 'value';
-    const categoryKey = slideData?.categoryKey || 'name';
-    const showLegend = slideData?.showLegend || false;
-    const showTooltip = slideData?.showTooltip || true;
+    const { title, items, chartData, chartType = 'line', color = '#3b82f6', dataKey = 'value', categoryKey = 'name', showLegend = false, showTooltip = true } = slideData;
     const renderChart = () => {
         const commonProps = {
             data: chartData,
@@ -177,7 +171,7 @@ const Type9SlideLayout: React.FC<Type9SlideLayoutProps> = ({ data: slideData }) 
                             dataKey={dataKey}
                             label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                         >
-                            {chartData.map((entry, index) => (
+                            {chartData.map((entry: any, index: number) => (
                                 <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                             ))}
                         </Pie>
@@ -206,9 +200,9 @@ const Type9SlideLayout: React.FC<Type9SlideLayoutProps> = ({ data: slideData }) 
             className=" rounded-sm w-full max-w-[1280px] px-3 py-[10px] sm:px-12 lg:px-20 sm:py-[40px] lg:py-[86px] shadow-lg max-h-[720px] flex flex-col items-center justify-center aspect-video bg-white relative z-20 mx-auto"
 
         >
-            <h1 className="text-2xl text-start sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-gray-900 leading-tight mb-4 lg:mb-8">
-                {slideData?.title || 'Chart Analysis'}
-            </h1>
+            {title && <h1 className="text-2xl text-start sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-gray-900 leading-tight mb-4 lg:mb-8">
+                {title}
+            </h1>}
 
             <div className={`flex gap-6 w-full  items-center  `}>
                 <div className="w-1/2">
@@ -220,7 +214,7 @@ const Type9SlideLayout: React.FC<Type9SlideLayoutProps> = ({ data: slideData }) 
                 </div>
                 <div className="lg:w-1/2 relative">
                     <div className="space-y-3 lg:space-y-6">
-                        {slideData?.items?.map((item, index) => (
+                        {items && items.map((item, index) => (
                             <div
                                 key={index}
                                 style={{
@@ -233,12 +227,12 @@ const Type9SlideLayout: React.FC<Type9SlideLayoutProps> = ({ data: slideData }) 
                                         {`0${index + 1}`}
                                     </div>
                                     <div className="space-y-1">
-                                        <h3 className="text-gray-900 text-base sm:text-lg lg:text-[24px] leading-[26px] lg:leading-[32px] font-bold">
+                                        {item.heading && <h3 className="text-gray-900 text-base sm:text-lg lg:text-[24px] leading-[26px] lg:leading-[32px] font-bold">
                                             {item.heading}
-                                        </h3>
-                                        <p className="text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal">
+                                        </h3>}
+                                        {item.description && <p className="text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal">
                                             {item.description}
-                                        </p>
+                                        </p>}
                                     </div>
                                 </div>
                             </div>

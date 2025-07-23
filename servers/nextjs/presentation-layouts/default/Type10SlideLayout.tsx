@@ -108,17 +108,12 @@ export const Schema = type10SlideSchema
 export type Type10SlideData = z.infer<typeof type10SlideSchema>
 
 interface Type10SlideLayoutProps {
-    data?: Partial<Type10SlideData>
+    data: Partial<Type10SlideData>
 }
 
 const Type10SlideLayout: React.FC<Type10SlideLayoutProps> = ({ data: slideData }) => {
-    const chartData = slideData?.data || [];
-    const chartType = slideData?.chartType || 'line';
-    const color = slideData?.color || '#3b82f6';
-    const dataKey = slideData?.dataKey || 'value';
-    const categoryKey = slideData?.categoryKey || 'name';
-    const showLegend = slideData?.showLegend || false;
-    const showTooltip = slideData?.showTooltip || true;
+    const { title, items, chartData, chartType = 'line', color = '#3b82f6', dataKey = 'value', categoryKey = 'name', showLegend = false, showTooltip = true } = slideData;
+
     const renderChart = () => {
         const commonProps = {
             data: chartData,
@@ -188,7 +183,7 @@ const Type10SlideLayout: React.FC<Type10SlideLayoutProps> = ({ data: slideData }
                             dataKey={dataKey}
                             label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                         >
-                            {chartData.map((entry, index) => (
+                            {chartData.map((entry: any, index: number) => (
                                 <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                             ))}
                         </Pie>
@@ -219,9 +214,9 @@ const Type10SlideLayout: React.FC<Type10SlideLayoutProps> = ({ data: slideData }
         >
             <div className='w-full flex flex-col items-start justify-start'>
 
-                <h1 className="text-2xl text-start sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-gray-900 leading-tight mb-4 lg:mb-8">
-                    {slideData?.title || 'Chart Analysis'}
-                </h1>
+                {title && <h1 className="text-2xl text-start sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-gray-900 leading-tight mb-4 lg:mb-8">
+                    {title || 'Chart Analysis'}
+                </h1>}
 
             </div>
             <div className={`flex gap-6 w-full  items-center  `}>
@@ -234,7 +229,7 @@ const Type10SlideLayout: React.FC<Type10SlideLayoutProps> = ({ data: slideData }
                 </div>
                 <div className="lg:w-1/2 relative">
                     <div className="space-y-3 lg:space-y-6">
-                        {slideData?.items?.map((item, index) => (
+                        {items && items.map((item, index) => (
                             <div
                                 key={index}
                                 style={{
@@ -245,20 +240,20 @@ const Type10SlideLayout: React.FC<Type10SlideLayoutProps> = ({ data: slideData }
                                 <div className="flex gap-6">
                                     <div className="w-[48px] h-[48px]">
                                         <div className="w-full h-full bg-blue-600 rounded-lg flex items-center justify-center overflow-hidden">
-                                            <img
+                                            {item.icon?.__icon_url__ && <img
                                                 src={item.icon?.__icon_url__ || ''}
                                                 alt={item.icon?.__icon_query__ || item.heading}
                                                 className="w-full h-full object-cover"
-                                            />
+                                            />}
                                         </div>
                                     </div>
                                     <div className="w-[calc(100%-55px)] space-y-1">
-                                        <h3 className="text-gray-900 text-base sm:text-lg lg:text-[24px] leading-[26px] lg:leading-[32px] font-bold">
+                                        {item.heading && <h3 className="text-gray-900 text-base sm:text-lg lg:text-[24px] leading-[26px] lg:leading-[32px] font-bold">
                                             {item.heading}
-                                        </h3>
-                                        <p className="text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal">
+                                        </h3>}
+                                        {item.description && <p className="text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal">
                                             {item.description}
-                                        </p>
+                                        </p>}
                                     </div>
                                 </div>
                             </div>

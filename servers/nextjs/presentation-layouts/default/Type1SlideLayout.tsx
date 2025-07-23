@@ -26,10 +26,11 @@ export const Schema = type1SlideSchema
 export type Type1SlideData = z.infer<typeof type1SlideSchema>
 
 interface Type1SlideLayoutProps {
-    data?: Partial<Type1SlideData>
+    data: Partial<Type1SlideData>
 }
 
 const Type1SlideLayout: React.FC<Type1SlideLayoutProps> = ({ data: slideData }) => {
+    const { title, description, image } = slideData;
     return (
         <div
             className=" w-full rounded-sm max-w-[1280px] shadow-lg px-3 sm:px-12 lg:px-20 py-[10px] sm:py-[40px] lg:py-[86px] max-h-[720px] flex items-center aspect-video bg-white relative z-20 mx-auto"
@@ -38,23 +39,23 @@ const Type1SlideLayout: React.FC<Type1SlideLayoutProps> = ({ data: slideData }) 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-8 md:gap-12 lg:gap-16 w-full">
                 <div className="flex flex-col w-full items-start justify-center space-y-1 md:space-y-2 lg:space-y-6">
                     {/* Title */}
-                    <h1 className=" text-xl sm:text-2xl lg:text-[40px] leading-[36px] lg:leading-[48px] font-bold">
-                        {slideData?.title || ' This is the title of slide'}
-                    </h1>
+                    {title && <h1 className=" text-xl sm:text-2xl lg:text-[40px] leading-[36px] lg:leading-[48px] font-bold">
+                        {title}
+                    </h1>}
 
                     {/* Description */}
-                    <p className="text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal">
-                        {slideData?.description || 'This is a test of the hot reload system! If you can see this text, hot reload is working perfectly. Changes should appear instantly without page refresh.'}
-                    </p>
+                    {description && <p className="text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal">
+                        {description}
+                    </p>}
                 </div>
 
                 {/* Image */}
                 <div className="w-full  max-h-[600px]">
-                    <img
-                        src={slideData?.image?.__image_url__ || ''}
-                        alt={slideData?.image?.__image_prompt__ || slideData?.title || ''}
+                    {image && <img
+                        src={image?.__image_url__ || ''}
+                        alt={image?.__image_prompt__ || title || ''}
                         className="w-full max-h-full object-cover rounded-lg shadow-md"
-                    />
+                    />}
                 </div>
             </div>
         </div>

@@ -61,18 +61,18 @@ export const Schema = type8SlideSchema
 export type Type8SlideData = z.infer<typeof type8SlideSchema>
 
 interface Type8SlideLayoutProps {
-    data?: Partial<Type8SlideData>
+    data: Partial<Type8SlideData>
 }
 
 const Type8SlideLayout: React.FC<Type8SlideLayoutProps> = ({ data: slideData }) => {
-    const items = slideData?.items || []
+    const { title, description, items } = slideData;
 
     const renderItems = () => {
-        if (items.length === 2) {
+        if (items && items.length === 2) {
             // Vertical stacked layout for 2 items
             return (
                 <div className="space-y-4 lg:space-y-8">
-                    {items.map((item, index) => (
+                    {items && items.map((item, index) => (
                         <div
                             key={index}
                             style={{
@@ -82,20 +82,20 @@ const Type8SlideLayout: React.FC<Type8SlideLayoutProps> = ({ data: slideData }) 
                         >
                             <div className="text-center mb-4">
                                 <div className="w-16 h-16 lg:w-20 lg:h-20 bg-blue-600 rounded-lg flex items-center justify-center mx-auto mb-4 overflow-hidden">
-                                    <img
+                                    {item.icon?.__icon_url__ && <img
                                         src={item.icon?.__icon_url__ || ''}
                                         alt={item.icon?.__icon_query__ || item.heading}
                                         className="w-full h-full object-cover"
-                                    />
+                                    />}
                                 </div>
                             </div>
                             <div className="space-y-1 lg:space-y-3">
-                                <h3 className="text-gray-900 text-base sm:text-lg lg:text-[24px] leading-[26px] lg:leading-[32px] font-bold text-center">
+                                {item.heading && <h3 className="text-gray-900 text-base sm:text-lg lg:text-[24px] leading-[26px] lg:leading-[32px] font-bold text-center">
                                     {item.heading}
-                                </h3>
-                                <p className="text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal text-center">
+                                </h3>}
+                                {item.description && <p className="text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal text-center">
                                     {item.description}
-                                </p>
+                                </p>}
                             </div>
                         </div>
                     ))}
@@ -105,7 +105,7 @@ const Type8SlideLayout: React.FC<Type8SlideLayoutProps> = ({ data: slideData }) 
             // Horizontal layout with side icons for 3+ items
             return (
                 <div className="space-y-4 lg:space-y-8">
-                    {items.map((item, index) => (
+                    {items && items.map((item, index) => (
                         <div
                             key={index}
                             style={{
@@ -116,20 +116,20 @@ const Type8SlideLayout: React.FC<Type8SlideLayoutProps> = ({ data: slideData }) 
                             <div className="flex items-start gap-4">
                                 <div className="w-[64px] h-[64px]">
                                     <div className="w-full h-full bg-blue-600 rounded-lg flex items-center justify-center overflow-hidden">
-                                        <img
+                                        {item.icon?.__icon_url__ && <img
                                             src={item.icon?.__icon_url__ || ''}
                                             alt={item.icon?.__icon_query__ || item.heading}
                                             className="w-full h-full object-cover"
-                                        />
+                                        />}
                                     </div>
                                 </div>
                                 <div className="w-[calc(100%-70px)] lg:space-y-3">
-                                    <h3 className="text-gray-900 text-base sm:text-lg lg:text-[24px] leading-[26px] lg:leading-[32px] font-bold">
+                                    {item.heading && <h3 className="text-gray-900 text-base sm:text-lg lg:text-[24px] leading-[26px] lg:leading-[32px] font-bold">
                                         {item.heading}
-                                    </h3>
-                                    <p className="text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal">
+                                    </h3>}
+                                    {item.description && <p className="text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal">
                                         {item.description}
-                                    </p>
+                                    </p>}
                                 </div>
                             </div>
                         </div>
@@ -146,13 +146,13 @@ const Type8SlideLayout: React.FC<Type8SlideLayoutProps> = ({ data: slideData }) 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8 lg:gap-16 items-center w-full">
                 {/* Left section - Title and Description */}
                 <div className="space-y-2 lg:space-y-6">
-                    <h1 className="text-gray-900 text-xl sm:text-2xl lg:text-[40px] leading-[36px] lg:leading-[48px] font-bold">
-                        {slideData?.title || 'Key Features'}
-                    </h1>
+                    {title && <h1 className="text-gray-900 text-xl sm:text-2xl lg:text-[40px] leading-[36px] lg:leading-[48px] font-bold">
+                        {title}
+                    </h1>}
 
-                    <p className="text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal">
-                        {slideData?.description || 'Here is the main description that provides context and introduces the key features outlined on the right side.'}
-                    </p>
+                    {description && <p className="text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal">
+                        {description}
+                    </p>}
                 </div>
 
                 {/* Right section - Items */}

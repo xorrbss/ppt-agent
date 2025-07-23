@@ -39,18 +39,18 @@ export const Schema = type2NumberedSlideSchema
 export type Type2NumberedSlideData = z.infer<typeof type2NumberedSlideSchema>
 
 interface Type2NumberedSlideLayoutProps {
-    data?: Partial<Type2NumberedSlideData>
+    data: Partial<Type2NumberedSlideData>
 }
 
 const Type2NumberedSlideLayout: React.FC<Type2NumberedSlideLayoutProps> = ({ data: slideData }) => {
-    const items = slideData?.items || []
-    const isGridLayout = items.length >= 4
+    const { title, items } = slideData;
+    const isGridLayout = items?.length && items?.length >= 4
     const numberTranslations: string[] = ['01', '02', '03', '04', '05', '06']
 
     const renderGridContent = () => {
         return (
             <div className="grid grid-cols-1 bg-white lg:grid-cols-2 relative gap-4 lg:gap-8 mt-4 lg:mt-12">
-                {items.map((item, index) => (
+                {items?.map((item, index) => (
                     <div
                         key={index}
                         style={{
@@ -63,12 +63,12 @@ const Type2NumberedSlideLayout: React.FC<Type2NumberedSlideLayoutProps> = ({ dat
                                 {numberTranslations[index] || `0${index + 1}`}
                             </div>
                             <div className="space-y-2">
-                                <h3 className="text-gray-900 text-base sm:text-lg lg:text-[24px] leading-[26px] lg:leading-[32px] font-bold">
+                                {item.heading && <h3 className="text-gray-900 text-base sm:text-lg lg:text-[24px] leading-[26px] lg:leading-[32px] font-bold">
                                     {item.heading}
-                                </h3>
-                                <p className="text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal">
+                                </h3>}
+                                {item.description && <p className="text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal">
                                     {item.description}
-                                </p>
+                                </p>}
                             </div>
                         </div>
                     </div>
@@ -80,7 +80,7 @@ const Type2NumberedSlideLayout: React.FC<Type2NumberedSlideLayoutProps> = ({ dat
     const renderHorizontalContent = () => {
         return (
             <div className="flex flex-col lg:flex-row bg-white mt-4 lg:mt-12 w-full relative gap-4 lg:gap-8">
-                {items.map((item, index) => (
+                {items?.map((item, index) => (
                     <div
                         key={index}
                         style={{
@@ -92,12 +92,12 @@ const Type2NumberedSlideLayout: React.FC<Type2NumberedSlideLayoutProps> = ({ dat
                             {numberTranslations[index] || `0${index + 1}`}
                         </div>
                         <div className="space-y-2 lg:space-y-4">
-                            <h3 className=" text-gray-900 text-base sm:text-lg lg:text-[24px] leading-[26px] lg:leading-[32px] font-bold">
+                            {item.heading && <h3 className=" text-gray-900 text-base sm:text-lg lg:text-[24px] leading-[26px] lg:leading-[32px] font-bold">
                                 {item.heading}
-                            </h3>
-                            <p className=" text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal">
+                            </h3>}
+                            {item.description && <p className=" text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal">
                                 {item.description}
-                            </p>
+                            </p>}
                         </div>
                     </div>
                 ))}
@@ -111,9 +111,9 @@ const Type2NumberedSlideLayout: React.FC<Type2NumberedSlideLayoutProps> = ({ dat
 
         >
             <div className="text-center lg:pb-8 w-full">
-                <h1 className="text-gray-900 text-xl sm:text-2xl lg:text-[40px] leading-[36px] lg:leading-[48px] font-bold">
-                    {slideData?.title || 'Main Title'}
-                </h1>
+                {title && <h1 className="text-gray-900 text-xl sm:text-2xl lg:text-[40px] leading-[36px] lg:leading-[48px] font-bold">
+                    {title}
+                </h1>}
             </div>
 
             {isGridLayout ? renderGridContent() : renderHorizontalContent()}

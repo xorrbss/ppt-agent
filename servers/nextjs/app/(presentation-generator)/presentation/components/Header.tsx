@@ -162,15 +162,15 @@ const Header = ({
 
       {/* Desktop Export Button with Popover */}
 
-      <div className="hidden lg:block">
-        <Popover open={open} onOpenChange={setOpen}>
+      <div className="hidden lg:block relative z-10">
+        <Popover open={open} onOpenChange={setOpen} >
           <PopoverTrigger asChild>
             <Button className={`border py-5 text-[#5146E5] font-bold rounded-[32px] transition-all duration-500 hover:border hover:bg-[#5146E5] hover:text-white w-full ${mobile ? "" : "bg-white"}`}>
               <SquareArrowOutUpRight className="w-4 h-4 mr-1" />
               Export
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="end" className="w-[250px] space-y-2 py-3 px-2">
+          <PopoverContent align="end" className="w-[250px] space-y-2 py-3 px-2 z-50">
             <ExportOptions mobile={false} />
           </PopoverContent>
         </Popover>
@@ -186,7 +186,7 @@ const Header = ({
   return (
     <div style={{
       zIndex: 1000,
-    }} className="bg-[#5146E5] w-full shadow-lg sticky top-0 z-50">
+    }} className="bg-[#5146E5] w-full shadow-lg sticky top-0">
       <OverlayLoader
         show={false}
         text="Exporting presentation..."

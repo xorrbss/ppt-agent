@@ -74,7 +74,7 @@ export const Schema = z.object({
 // Type inference
 type SchemaType = z.infer<typeof Schema>;
 
-// Component definition
+// Component definitionz
 const AboutUsSlide = ({ data }: { data: Partial<SchemaType> }) => {
 
     const { sectionTitle, sectionSubtitle, organizationDescription, additionalContext, featuredImage, showVisualAccents, showColorBlocks, showAccentSquare } = data;

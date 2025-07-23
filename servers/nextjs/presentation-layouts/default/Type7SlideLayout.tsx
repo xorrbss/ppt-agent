@@ -66,12 +66,12 @@ export const Schema = type7SlideSchema
 export type Type7SlideData = z.infer<typeof type7SlideSchema>
 
 interface Type7SlideLayoutProps {
-    data?: Partial<Type7SlideData>
+    data: Partial<Type7SlideData>
 }
 
 const Type7SlideLayout: React.FC<Type7SlideLayoutProps> = ({ data: slideData }) => {
-    const items = slideData?.items || []
-    const isGridLayout = items.length >= 4
+    const { title, items } = slideData;
+    const isGridLayout = items && items.length >= 4
 
     const getGridCols = (length: number) => {
         switch (length) {
@@ -87,8 +87,8 @@ const Type7SlideLayout: React.FC<Type7SlideLayoutProps> = ({ data: slideData }) 
 
     const renderGridContent = () => {
         return (
-            <div className={`grid grid-cols-1 ${items.length > 4 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4 sm:gap-6 lg:gap-8 mt-4 lg:mt-12 w-full`}>
-                {items.map((item, index) => (
+            <div className={`grid grid-cols-1 ${items && items.length > 4 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4 sm:gap-6 lg:gap-8 mt-4 lg:mt-12 w-full`}>
+                {items && items.map((item, index) => (
                     <div
                         key={index}
                         style={{
@@ -107,12 +107,12 @@ const Type7SlideLayout: React.FC<Type7SlideLayoutProps> = ({ data: slideData }) 
                                 </div>
                             </div>
                             <div>
-                                <h3 className="text-gray-900 text-base sm:text-lg lg:text-[24px] leading-[26px] lg:leading-[32px] font-bold mb-2">
+                                {item.heading && <h3 className="text-gray-900 text-base sm:text-lg lg:text-[24px] leading-[26px] lg:leading-[32px] font-bold mb-2">
                                     {item.heading}
-                                </h3>
-                                <p className="text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal">
+                                </h3>}
+                                {item.description && <p className="text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal">
                                     {item.description}
-                                </p>
+                                </p>}
                             </div>
                         </div>
                     </div>
@@ -123,8 +123,8 @@ const Type7SlideLayout: React.FC<Type7SlideLayoutProps> = ({ data: slideData }) 
 
     const renderHorizontalContent = () => {
         return (
-            <div className={`grid grid-cols-1 sm:grid-cols-2 ${getGridCols(items.length)} w-full gap-3 lg:gap-8 mt-4 lg:mt-12`}>
-                {items.map((item, index) => (
+            <div className={`grid grid-cols-1 sm:grid-cols-2 ${getGridCols(items?.length || 0)} w-full gap-3 lg:gap-8 mt-4 lg:mt-12`}>
+                {items && items.map((item, index) => (
                     <div
                         key={index}
                         style={{
@@ -134,20 +134,20 @@ const Type7SlideLayout: React.FC<Type7SlideLayoutProps> = ({ data: slideData }) 
                     >
                         <div className="text-center mb-4">
                             <div className="w-16 h-16 lg:w-20 lg:h-20 bg-blue-600 rounded-lg flex items-center justify-center mx-auto mb-4 overflow-hidden">
-                                <img
+                                {item.icon?.__icon_url__ && <img
                                     src={item.icon?.__icon_url__ || ''}
                                     alt={item.icon?.__icon_query__ || item.heading}
                                     className="w-full h-full object-cover"
-                                />
+                                />}
                             </div>
                         </div>
                         <div className="lg:space-y-4 mt-2 lg:mt-4">
-                            <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 leading-tight text-center">
+                            {item.heading && <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 leading-tight text-center">
                                 {item.heading}
-                            </h3>
-                            <p className="text-sm sm:text-base lg:text-lg text-gray-700 leading-relaxed text-center">
+                            </h3>}
+                            {item.description && <p className="text-sm sm:text-base lg:text-lg text-gray-700 leading-relaxed text-center">
                                 {item.description}
-                            </p>
+                            </p>}
                         </div>
                     </div>
                 ))}
@@ -160,9 +160,9 @@ const Type7SlideLayout: React.FC<Type7SlideLayoutProps> = ({ data: slideData }) 
             className=" rounded-sm w-full max-w-[1280px] font-inter shadow-lg px-3 sm:px-12 lg:px-20 py-[10px] sm:py-[40px] lg:py-[86px] flex flex-col items-center justify-center max-h-[720px] aspect-video bg-white relative z-20 mx-auto"
         >
             <div className="text-center sm:pb-2 lg:pb-8 w-full">
-                <h1 className="text-gray-900 text-xl sm:text-2xl lg:text-[40px] leading-[36px] lg:leading-[48px] font-bold">
-                    {slideData?.title || 'Our Services'}
-                </h1>
+                {title && <h1 className="text-gray-900 text-xl sm:text-2xl lg:text-[40px] leading-[36px] lg:leading-[48px] font-bold">
+                    {title}
+                </h1>}
             </div>
 
             {isGridLayout ? renderGridContent() : renderHorizontalContent()}

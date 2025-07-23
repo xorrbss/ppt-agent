@@ -66,8 +66,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({ presentation_id }) 
   );
 
 
-
-
   const onSlideChange = (newSlide: number) => {
     handleSlideChange(newSlide, presentationData);
   };
