@@ -22,7 +22,7 @@ const solutionSlideSchema = z.object({
     .min(20)
     .max(300)
     .default(
-      "Show that we offer a solution that solves the problems previously described and identified. Make sure that the solutions we offer uphold the values of effectiveness, efficiency, and are highly relevant to the market situation and societyshiva raj badu is here and what is hsd sdksdf klfdslkf lkflkfsldkf.",
+      "Show that we offer a solution that solves the problems previously described and identified. Make sure that the solutions we offer uphold the values of effectiveness, efficiency, and are highly relevant to the market situation and society is here and what is hsd sdksdf klfdslkf lkflkfsldkf.",
     )
     .meta({
       description: "Main content text describing the solution",
@@ -42,7 +42,7 @@ const solutionSlideSchema = z.object({
       }),
     )
     .min(2)
-    .max(4)
+    .max(3)
     .default([
       {
         title: "Market",

@@ -20,7 +20,7 @@ const type3SlideSchema = z.object({
         image: ImageSchema.meta({
             description: "Item image",
         })
-    })).min(2).max(4).default([
+    })).min(2).max(3).default([
         {
             heading: 'First Feature',
             description: 'Description for the first featured item with detailed information',

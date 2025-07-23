@@ -36,7 +36,7 @@ const problemStatementSlideSchema = z.object({
       }),
     )
     .min(2)
-    .max(4)
+    .max(3)
     .default([
       {
         title: "Inefficiency",

@@ -25,7 +25,7 @@ export const Schema = z.object({
         marketType: z.string().min(3).max(30),
         marketDescription: z.string().min(20).max(150),
         marketValue: z.string().min(3).max(25).optional()
-    })).min(2).max(4).default([
+    })).min(2).max(3).default([
         {
             marketType: "Total Addressable Market (TAM)",
             marketDescription: "The overall revenue opportunity available if we achieved 100% market share across all segments and geographies.",

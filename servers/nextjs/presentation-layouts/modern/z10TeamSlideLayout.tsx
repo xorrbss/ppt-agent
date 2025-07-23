@@ -33,7 +33,7 @@ const modernTeamSlideSchema = z.object({
   teamMembers: z
     .array(teamMemberSchema)
     .min(2)
-    .max(4)
+    .max(3)
     .default([
       {
         name: "Sarah Johnson",

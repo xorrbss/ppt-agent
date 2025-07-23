@@ -24,7 +24,7 @@ const bulletIconsOnlySlideSchema = z.object({
             description: "Optional short subtitle or brief explanation",
         }),
         icon: IconSchema,
-    })).min(2).max(4).default([
+    })).min(2).max(3).default([
         {
             title: 'Custom Software',
             subtitle: 'We create tailored software to optimize processes and boost efficiency.',

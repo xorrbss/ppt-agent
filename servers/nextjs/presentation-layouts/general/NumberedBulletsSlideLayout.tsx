@@ -23,7 +23,7 @@ const numberedBulletsSlideSchema = z.object({
         description: z.string().min(10).max(150).meta({
             description: "Bullet point description",
         }),
-    })).min(1).max(4).default([
+    })).min(1).max(3).default([
         {
             title: 'Customer Insights',
             description: 'Surveys reveal that 78% of businesses are planning to invest in digital solutions, with 85% preferring customized approaches.'

@@ -26,7 +26,7 @@ const teamSlideSchema = z.object({
     companyDescription: z.string().min(10).max(150).default('Ginyard International Co. is a leading provider of innovative digital solutions tailored for businesses. Our mission is to empower organizations to achieve their goals through cutting-edge technology and strategic partnerships.').meta({
         description: "Company description or team introduction text",
     }),
-    teamMembers: z.array(teamMemberSchema).min(2).max(4).default([
+    teamMembers: z.array(teamMemberSchema).min(2).max(3).default([
         {
             name: 'Juliana Silva',
             position: 'CEO',

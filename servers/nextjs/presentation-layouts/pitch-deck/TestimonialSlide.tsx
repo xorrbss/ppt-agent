@@ -35,7 +35,7 @@ export const Schema = z.object({
         testimonialText: z.string().min(50).max(300),
         rating: z.number().min(1).max(5),
         clientPhoto: ImageSchema
-    })).min(2).max(4).default([
+    })).min(2).max(3).default([
         {
             clientName: "Sarah Johnson",
             clientTitle: "Chief Executive Officer",

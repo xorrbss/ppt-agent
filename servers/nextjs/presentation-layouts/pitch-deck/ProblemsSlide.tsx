@@ -25,7 +25,7 @@ export const Schema = z.object({
         itemNumber: z.string().min(1).max(3),
         challengeTitle: z.string().min(5).max(40),
         challengeDescription: z.string().min(20).max(200)
-    })).min(2).max(4).default([
+    })).min(2).max(3).default([
         {
             itemNumber: "01",
             challengeTitle: "Inefficient Processes",

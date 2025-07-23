@@ -16,7 +16,7 @@ const type2NumberedSlideSchema = z.object({
         description: z.string().min(10).max(130).meta({
             description: "Item description",
         })
-    })).min(2).max(4).default([
+    })).min(2).max(3).default([
         {
             heading: 'First Point',
             description: 'Description for the first key point that explains important details'

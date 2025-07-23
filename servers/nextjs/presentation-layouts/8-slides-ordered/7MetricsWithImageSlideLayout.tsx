@@ -26,7 +26,7 @@ const metricsWithImageSlideSchema = z.object({
         value: z.string().min(1).max(20).meta({
             description: "Metric value (e.g., 200+, 95%, 50%)"
         }),
-    })).min(1).max(4).default([
+    })).min(1).max(3).default([
         {
             label: 'Satisfied Clients',
             value: '200+'
