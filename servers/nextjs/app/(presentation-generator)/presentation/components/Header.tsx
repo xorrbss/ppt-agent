@@ -184,9 +184,11 @@ const Header = ({
   );
 
   return (
-    <div className="bg-[#5146E5] w-full shadow-lg sticky top-0 z-50">
+    <div style={{
+      zIndex: 1000,
+    }} className="bg-[#5146E5] w-full shadow-lg sticky top-0 z-50">
       <OverlayLoader
-        show={showLoader}
+        show={false}
         text="Exporting presentation..."
         showProgress={true}
         duration={40}
