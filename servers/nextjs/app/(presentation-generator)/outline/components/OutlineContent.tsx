@@ -42,7 +42,7 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
 
     return (
         <div className="space-y-6 font-instrument_sans">
-            <div className="flex items-center justify-between">
+            {/* <div className="flex items-center justify-between">
                 <h5 className="text-lg font-medium">
                     Presentation Outline
                 </h5>
@@ -52,7 +52,7 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
                         Generating outlines...
                     </div>
                 )}
-            </div>
+            </div> */}
             {/* Skeleton loading state */}
             {isLoading && (
                 <div className="space-y-4">
@@ -77,7 +77,7 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
 
             {/* Outlines content */}
             {outlines && outlines.length > 0 && (
-                <div className="border rounded-lg p-4 bg-white">
+                <div>
                     <DndContext
                         sensors={sensors}
                         collisionDetection={closestCenter}
@@ -102,7 +102,7 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
                         variant="outline"
                         onClick={onAddSlide}
                         disabled={isLoading || isStreaming}
-                        className="w-full mt-4 text-blue-600 border-blue-200"
+                        className="w-full my-4 text-blue-600 border-blue-200"
                     >
                         + Add Slide
                     </Button>

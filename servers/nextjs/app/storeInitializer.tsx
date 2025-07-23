@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { setCanChangeKeys, setLLMConfig } from '@/store/slices/userConfig';
-import { Loader2 } from 'lucide-react';
 import { hasValidLLMConfig } from '@/utils/storeHelpers';
 import { usePathname, useRouter } from 'next/navigation';
 import { useDispatch } from 'react-redux';
@@ -103,10 +102,47 @@ export function StoreInitializer({ children }: { children: React.ReactNode }) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#E9E8F8] flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
-          <p className="text-gray-600">Loading configuration...</p>
+      <div className="min-h-screen bg-gradient-to-br from-[#E9E8F8] via-[#F5F4FF] to-[#E0DFF7] flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-8 text-center">
+            {/* Logo/Branding */}
+            <div className="mb-6">
+              <img 
+                src="/Logo.png" 
+                alt="PresentOn" 
+                className="h-12 mx-auto mb-4 opacity-90"
+              />
+              <div className="w-16 h-1 bg-gradient-to-r from-blue-500 to-purple-600 mx-auto rounded-full"></div>
+            </div>
+
+            {/* Loading Animation */}
+            <div className="mb-6">
+              <img 
+                src="/loading.gif" 
+                alt="Loading" 
+                className="w-24 h-24 mx-auto rounded-lg shadow-lg"
+              />
+            </div>
+
+            {/* Loading Text */}
+            <div className="space-y-2">
+              <h3 className="text-lg font-semibold text-gray-800 font-inter">
+                Initializing Application
+              </h3>
+              <p className="text-sm text-gray-600 font-inter">
+                Loading configuration and checking model availability...
+              </p>
+            </div>
+
+            {/* Progress Indicator */}
+            <div className="mt-6">
+              <div className="flex space-x-1 justify-center">
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );

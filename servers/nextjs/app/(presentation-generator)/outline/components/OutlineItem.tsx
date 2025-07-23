@@ -72,26 +72,26 @@ export function OutlineItem({
 
     }
     return (
-        <div className="mb-2 bg-[#F9F9F9]">
+        <div className="mb-2">
             {/* Main Title Row */}
             <div
                 ref={setNodeRef}
                 style={style}
-                className={`flex items-start gap-2 md:gap-4 p-2 sm:pr-4 bg-[#F9F9F9] rounded-[8px] ${isDragging ? "opacity-50" : ""}`}
+                className={`flex items-start gap-2 md:gap-4 p-2 sm:pr-4 border border-black/10 bg-purple-100/10 rounded-[8px] ${isDragging ? "opacity-50" : ""}`}
             >
                 {/* Drag Handle with Number - Make it smaller on mobile */}
                 <div
                     {...attributes}
                     {...listeners}
-                    className="min-w-8 sm:min-w-10 w-10 sm:w-14 h-10 sm:h-14 bg-[#E9E8F8] rounded-[8px] flex items-center justify-center relative cursor-grab"
+                    className="min-w-8 sm:min-w-10 w-10 sm:w-14 h-10 sm:h-14 bg-blue-400/10 rounded-[8px] flex items-center justify-center relative cursor-grab"
                 >
                     <div className="grid grid-cols-2 gap-[2px]">
-                        <div className="w-[3px] h-[3px] bg-[#5146E5] rounded-full" />
-                        <div className="w-[3px] h-[3px] bg-[#5146E5] rounded-full" />
-                        <div className="w-[3px] h-[3px] bg-[#5146E5] rounded-full" />
-                        <div className="w-[3px] h-[3px] bg-[#5146E5] rounded-full" />
+                        <div className="w-[3px] h-[3px] bg-black/80 rounded-full" />
+                        <div className="w-[3px] h-[3px] bg-black/80 rounded-full" />
+                        <div className="w-[3px] h-[3px] bg-black/80 rounded-full" />
+                        <div className="w-[3px] h-[3px] bg-black/80 rounded-full" />
                     </div>
-                    <span className="text-[#5146E5] text-sm sm:text-base font-medium ml-1">{index}</span>
+                    <span className="text-black/80 text-md sm:text-lg font-medium ml-1">{index}</span>
                 </div>
 
                 {/* Main Title Input - Add onFocus handler */}
@@ -100,7 +100,7 @@ export function OutlineItem({
                         type="text"
                         defaultValue={slideOutline.title || ''}
                         onBlur={(e) => handleSlideChange({ ...slideOutline, title: e.target.value })}
-                        className="text-md sm:text-lg flex-1 font-semibold bg-transparent outline-none"
+                        className="text-lg mt-4 sm:text-xl flex-1 font-semibold bg-transparent outline-none"
                         placeholder="Title goes here"
                     />
 
@@ -124,9 +124,9 @@ export function OutlineItem({
                     <ToolTip content="Delete Slide">
                         <button
                             onClick={handleSlideDelete}
-                            className="p-1.5 sm:p-2 bg-[#EDEDED] hover:bg-[#E9E8F8] rounded-lg transition-colors"
+                            className="p-1.5 sm:p-2 bg-gray-200/50 hover:bg-gray-200 rounded-lg transition-colors"
                         >
-                            <Trash2 className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />
+                            <Trash2 className="w-4 h-4 sm:w-5 sm:h-5 text-black/70" />
                         </button>
                     </ToolTip>
                 </div>
