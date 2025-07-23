@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/popover";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import { OverlayLoader } from "@/components/ui/overlay-loader";
-import { useDispatch, useSelector } from "react-redux";
+import { useSelector } from "react-redux";
 
 import Link from "next/link";
 
@@ -24,7 +24,6 @@ import { toast } from "sonner";
 
 
 import Announcement from "@/components/Announcement";
-import { getStaticFileUrl } from "../../utils/others";
 import { PptxPresentationModel } from "@/types/pptx_models";
 import HeaderNav from "../../components/HeaderNab";
 
@@ -64,7 +63,8 @@ const Header = ({
       }
       const pptx_path = await PresentationGenerationApi.exportAsPPTX(pptx_model);
       if (pptx_path) {
-        window.open(pptx_path, '_self');
+        // window.open(pptx_path, '_self');
+        downloadLink(pptx_path);
       } else {
         throw new Error("No path returned from export");
       }
@@ -97,7 +97,8 @@ const Header = ({
 
       if (response.ok) {
         const { path: pdfPath } = await response.json();
-        window.open(pdfPath, '_blank');
+        // window.open(pdfPath, '_blank');
+        downloadLink(pdfPath);
       } else {
         throw new Error("Failed to export PDF");
       }
@@ -110,6 +111,18 @@ const Header = ({
       });
     } finally {
       setShowLoader(false);
+    }
+  };
+  const downloadLink = (path: string) => {
+    // if we have popup access give direct download if not redirect to the path
+    if (window.opener) {
+      window.open(path, '_blank');
+    } else {
+      const link = document.createElement('a');
+      link.href = path;
+      link.download = path.split('/').pop() || 'download';
+      document.body.appendChild(link);
+      link.click();
     }
   };
 

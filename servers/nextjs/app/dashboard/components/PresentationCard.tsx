@@ -39,9 +39,7 @@ export const PresentationCard = ({
     e.preventDefault();
     e.stopPropagation();
 
-    toast.loading("Deleting presentation", {
-      description: "Please wait while we delete the presentation",
-    });
+
     const response = await DashboardApi.deletePresentation(id);
 
     if (response) {

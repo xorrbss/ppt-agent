@@ -36,6 +36,9 @@ export const OverlayLoader = ({
 
     return (
         <div
+            style={{
+                zIndex: 1000
+            }}
             className={cn(
                 "fixed inset-0 bg-black/70 z-50 flex items-center justify-center transition-opacity duration-300",
                 isVisible ? "opacity-100" : "opacity-0"
