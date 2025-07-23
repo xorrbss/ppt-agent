@@ -40,7 +40,7 @@ const OutlinePage: React.FC = () => {
 
 
   return (
-    <Wrapper>
+    <div className="h-[calc(100vh-72px)]">
       <OverlayLoader
         show={loadingState.isLoading}
         text={loadingState.message}
@@ -48,44 +48,53 @@ const OutlinePage: React.FC = () => {
         duration={loadingState.duration}
       />
 
-      <div className="max-w-[1200px] font-instrument_sans mx-auto px-4 sm:px-6 pb-6">
-        <div className="mt-4 sm:mt-8">
-          <PageHeader />
-
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-[50%] mx-auto grid-cols-2">
+      <Wrapper className="h-full flex flex-col w-full">
+        <div className="flex-grow overflow-y-hidden w-[1200px] mx-auto">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
+            <TabsList className="grid w-[50%] mx-auto my-4 grid-cols-2">
               <TabsTrigger value={TABS.OUTLINE}>Outline & Content</TabsTrigger>
               <TabsTrigger value={TABS.LAYOUTS}>Layout Style</TabsTrigger>
             </TabsList>
 
-            <TabsContent value={TABS.OUTLINE} className="mt-6">
-              <OutlineContent
-                outlines={outlines}
-                isLoading={streamState.isLoading}
-                isStreaming={streamState.isStreaming}
-                onDragEnd={handleDragEnd}
-                onAddSlide={handleAddSlide}
-              />
-            </TabsContent>
+            <div className="flex-grow w-full overflow-y-auto custom_scrollbar">
+              <TabsContent value={TABS.OUTLINE}>
+                <div>
+                  <OutlineContent
+                    outlines={outlines}
+                    isLoading={streamState.isLoading}
+                    isStreaming={streamState.isStreaming}
+                    onDragEnd={handleDragEnd}
+                    onAddSlide={handleAddSlide}
+                  />
+                </div>
+              </TabsContent>
 
-            <TabsContent value={TABS.LAYOUTS} className="mt-6">
-              <LayoutSelection
-                selectedLayoutGroup={selectedLayoutGroup}
-                onSelectLayoutGroup={setSelectedLayoutGroup}
-              />
-            </TabsContent>
+              <TabsContent value={TABS.LAYOUTS}>
+                <div>
+                  <LayoutSelection
+                    selectedLayoutGroup={selectedLayoutGroup}
+                    onSelectLayoutGroup={setSelectedLayoutGroup}
+                  />
+                </div>
+              </TabsContent>
+            </div>
           </Tabs>
-
-          <GenerateButton
-            loadingState={loadingState}
-            streamState={streamState}
-            outlines={outlines}
-            selectedLayoutGroup={selectedLayoutGroup}
-            onSubmit={handleSubmit}
-          />
         </div>
-      </div>
-    </Wrapper>
+
+        {/* Fixed Button */}
+        <div className="py-4 border-t border-gray-200">
+          <div className="max-w-[1200px] mx-auto">
+            <GenerateButton
+              loadingState={loadingState}
+              streamState={streamState}
+              outlines={outlines}
+              selectedLayoutGroup={selectedLayoutGroup}
+              onSubmit={handleSubmit}
+            />
+          </div>
+        </div>
+      </Wrapper>
+    </div>
   );
 };
 
