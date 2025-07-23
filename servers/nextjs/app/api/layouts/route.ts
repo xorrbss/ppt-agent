@@ -40,6 +40,7 @@ export async function GET() {
                     const settingsContent = await fs.readFile(settingsPath, 'utf-8')
                     settings = JSON.parse(settingsContent) as GroupSetting
                 } catch (settingsError) {
+                    
                     console.warn(`No settings.json found for group ${groupName} or invalid JSON`)
                     // Provide default settings if setting.json is missing or invalid
                     settings = {
@@ -47,8 +48,7 @@ export async function GET() {
                         ordered: false,
                         isDefault: false
                     }
-                    // write the settings to the file
-                    fs.writeFile(settingsPath, JSON.stringify(settings, null, 2))
+                   
                 }
 
                 if (layoutFiles.length > 0) {

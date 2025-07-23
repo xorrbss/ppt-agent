@@ -91,7 +91,6 @@ const chartWithBulletsSlideSchema = z.object({
 
 export const Schema = chartWithBulletsSlideSchema
 
-console.log(z.toJSONSchema(chartWithBulletsSlideSchema))
 
 export type ChartWithBulletsSlideData = z.infer<typeof chartWithBulletsSlideSchema>
 
