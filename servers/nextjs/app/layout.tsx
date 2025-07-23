@@ -4,7 +4,7 @@ import { Roboto, Instrument_Sans } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import { LayoutProvider } from "./(presentation-generator)/context/LayoutContext";
-import { Toaster } from "sonner";
+import { Toaster } from "@/components/ui/sonner";
 
 
 const inter = localFont({
@@ -91,7 +91,7 @@ export default function RootLayout({
             {children}
           </LayoutProvider>
         </Providers>
-        <Toaster position="top-center" richColors={true} />
+        <Toaster position="top-center" />
       </body>
     </html>
   );

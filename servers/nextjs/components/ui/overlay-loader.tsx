@@ -76,13 +76,7 @@ export const OverlayLoader = ({
                         </p>
                         {extra_info && <p className="text-white/80 text-xs text-center font-semibold font-inter">{extra_info}</p>}
                     </>
-                    // <div className="flex flex-col items-center gap-4">
-                    //     <div className="relative">
-                    //         <div className="absolute inset-0 bg-gradient-to-r from-[#9034EA] to-[#5146E5] blur-xl opacity-20" />
-                    //         <Loader text={text} />
-                    //     </div>
 
-                    // </div>
                 )}
             </div>
         </div>
