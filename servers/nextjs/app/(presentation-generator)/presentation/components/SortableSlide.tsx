@@ -1,7 +1,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Slide } from '../../types/slide';
-import { useState } from 'react';
+import { useRef } from 'react';
 
 interface SortableSlideProps {
     slide: Slide;
@@ -12,7 +12,7 @@ interface SortableSlideProps {
 }
 
 export function SortableSlide({ slide, index, selectedSlide, onSlideClick, renderSlideContent }: SortableSlideProps) {
-    const [mouseDownTime, setMouseDownTime] = useState(0);
+    const lastClickTime = useRef(0);
 
     const {
         attributes,
@@ -29,20 +29,17 @@ export function SortableSlide({ slide, index, selectedSlide, onSlideClick, rende
         opacity: isDragging ? 0.5 : 1
     };
 
-    const handleMouseDown = () => {
-        console.log("mouse down");
-        setMouseDownTime(Date.now());
-    };
+    const handleClick = (e: React.MouseEvent) => {
+        const now = Date.now();
 
-    const handleMouseUp = () => {
-        console.log("mouse up");
-        const mouseUpTime = Date.now();
-        const timeDiff = mouseUpTime - mouseDownTime;
-        console.log("timeDiff", timeDiff);
+        // Debounce clicks - only allow one click every 300ms
+        if (now - lastClickTime.current < 300) {
+            return;
+        }
 
-        // If the mouse was down for less than 300ms, consider it a click
-        if (timeDiff < 300 && !isDragging) {
-            console.log("clicked");
+        // Only trigger click if not dragging
+        if (!isDragging) {
+            lastClickTime.current = now;
             onSlideClick(slide.index);
         }
     };
@@ -53,9 +50,7 @@ export function SortableSlide({ slide, index, selectedSlide, onSlideClick, rende
             style={style}
             {...attributes}
             {...listeners}
-            onMouseDown={handleMouseDown}
-            onMouseUp={handleMouseUp}
-
+            onClick={handleClick}
             className={` cursor-pointer border-[3px] relative  p-1 shadow-lg   rounded-md transition-all duration-200 ${selectedSlide === index ? ' border-[#5141e5]' : 'border-gray-300'
                 }`}
         >

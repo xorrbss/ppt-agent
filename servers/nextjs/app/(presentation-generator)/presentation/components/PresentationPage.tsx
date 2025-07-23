@@ -18,13 +18,9 @@ import {
 } from "../hooks";
 import { PresentationPageProps } from "../types";
 import LoadingState from "./LoadingState";
-import { useRouter, useSearchParams } from "next/navigation";
 
 const PresentationPage: React.FC<PresentationPageProps> = ({ presentation_id }) => {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const isPresentMode = searchParams.get("mode") === "present";
-  const stream = searchParams.get("stream");
+
   // State management
   const [loading, setLoading] = useState(true);
   const [selectedSlide, setSelectedSlide] = useState(0);
@@ -51,6 +47,14 @@ const PresentationPage: React.FC<PresentationPageProps> = ({ presentation_id }) 
     setError
   );
 
+  const {
+    isPresentMode,
+    stream,
+    handleSlideClick,
+    toggleFullscreen,
+    handlePresentExit,
+    handleSlideChange,
+  } = usePresentationNavigation(presentation_id, selectedSlide, setSelectedSlide, setIsFullscreen);
 
   // Initialize streaming
   usePresentationStreaming(
@@ -63,46 +67,12 @@ const PresentationPage: React.FC<PresentationPageProps> = ({ presentation_id }) 
 
 
 
+
   const onSlideChange = (newSlide: number) => {
     handleSlideChange(newSlide, presentationData);
   };
 
-  const handleSlideClick = useCallback((index: number) => {
-    console.log("handleSlideClick", index);
-    const slideElement = document.getElementById(`slide-${index}`);
-    if (slideElement) {
-      slideElement.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-      setSelectedSlide(index);
-    }
-  }, [setSelectedSlide]);
 
-  const toggleFullscreen = useCallback(() => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen();
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen();
-      setIsFullscreen(false);
-    }
-  }, [setIsFullscreen]);
-
-  const handlePresentExit = useCallback(() => {
-    setIsFullscreen(false);
-    router.push(`/presentation?id=${presentation_id}`);
-  }, [router, presentation_id, setIsFullscreen]);
-
-  const handleSlideChange = useCallback((newSlide: number, presentationData: any) => {
-    if (newSlide >= 0 && newSlide < presentationData?.slides.length!) {
-      setSelectedSlide(newSlide);
-      router.push(
-        `/presentation?id=${presentation_id}&mode=present&slide=${newSlide}`,
-        { scroll: false }
-      );
-    }
-  }, [router, presentation_id, setSelectedSlide]);
 
   // Presentation Mode View
   if (isPresentMode) {
@@ -110,7 +80,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({ presentation_id }) 
       <PresentationMode
         slides={presentationData?.slides!}
         currentSlide={selectedSlide}
-
         isFullscreen={isFullscreen}
         onFullscreenToggle={toggleFullscreen}
         onExit={handlePresentExit}
