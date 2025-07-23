@@ -55,11 +55,11 @@ export const Schema = type3SlideSchema
 export type Type3SlideData = z.infer<typeof type3SlideSchema>
 
 interface Type3SlideLayoutProps {
-    data?: Partial<Type3SlideData>
+    data: Partial<Type3SlideData>
 }
 
 const Type3SlideLayout: React.FC<Type3SlideLayoutProps> = ({ data: slideData }) => {
-    const items = slideData?.items || []
+    const { title, items } = slideData;
 
     const getGridCols = (length: number) => {
         switch (length) {
@@ -77,13 +77,13 @@ const Type3SlideLayout: React.FC<Type3SlideLayoutProps> = ({ data: slideData }) 
 
         >
             <div className="text-center mb-4 lg:mb-16 w-full">
-                <h1 className="text-gray-900 text-xl sm:text-2xl lg:text-[40px] leading-[36px] lg:leading-[48px] font-bold">
-                    {slideData?.title || 'Featured Content'}
-                </h1>
+                {title && <h1 className="text-gray-900 text-xl sm:text-2xl lg:text-[40px] leading-[36px] lg:leading-[48px] font-bold">
+                    {title}
+                </h1>}
             </div>
 
-            <div className={`grid grid-cols-1 lg:grid-cols-2 ${getGridCols(items.length)} gap-3 lg:gap-6 w-full`}>
-                {items.map((item, index) => (
+            <div className={`grid grid-cols-1 lg:grid-cols-2 ${getGridCols(items?.length || 0)} gap-3 lg:gap-6 w-full`}>
+                {items && items.map((item, index) => (
                     <div
                         key={index}
                         style={{
@@ -102,12 +102,12 @@ const Type3SlideLayout: React.FC<Type3SlideLayoutProps> = ({ data: slideData }) 
 
                         {/* Content */}
                         <div className="space-y-2 p-3 lg:p-6">
-                            <h3 className="text-gray-900 text-base sm:text-lg lg:text-[24px] leading-[26px] lg:leading-[32px] font-bold">
+                            {item.heading && <h3 className="text-gray-900 text-base sm:text-lg lg:text-[24px] leading-[26px] lg:leading-[32px] font-bold">
                                 {item.heading}
-                            </h3>
-                            <p className="text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal">
+                            </h3>}
+                            {item.description && <p className="text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal">
                                 {item.description}
-                            </p>
+                            </p>}
                         </div>
                     </div>
                 ))}

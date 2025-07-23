@@ -73,6 +73,25 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
                     paddingBottom: computedStyles.paddingBottom,
                     paddingLeft: computedStyles.paddingLeft,
                     paddingRight: computedStyles.paddingRight,
+                    borderRadius: computedStyles.borderRadius,
+                    border: computedStyles.border,
+                    backgroundColor: computedStyles.backgroundColor,
+                    opacity: computedStyles.opacity,
+                    zIndex: computedStyles.zIndex,
+                    cursor: computedStyles.cursor,
+                    boxShadow: computedStyles.boxShadow,
+                    textShadow: computedStyles.textShadow,
+                    textDecoration: computedStyles.textDecoration,
+                    textTransform: computedStyles.textTransform,
+                    letterSpacing: computedStyles.letterSpacing,
+                    wordSpacing: computedStyles.wordSpacing,
+                    textOverflow: computedStyles.textOverflow,
+                    whiteSpace: computedStyles.whiteSpace,
+                    wordBreak: computedStyles.wordBreak,
+                    overflow: computedStyles.overflow,
+                    textAlignLast: computedStyles.textAlignLast,
+
+
                 };
 
                 // Try to find matching data path
@@ -99,8 +118,7 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
                 const root = ReactDOM.createRoot(tiptapContainer);
                 root.render(
                     <TiptapText
-                        key={JSON.stringify(slideData)}
-                        content={dataPath.originalText}
+                        content={trimmedText}
                         onContentChange={(content: string) => {
                             if (dataPath && onContentChange) {
                                 onContentChange(content, dataPath.path, slideIndex);

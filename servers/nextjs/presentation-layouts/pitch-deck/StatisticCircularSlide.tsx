@@ -4,31 +4,38 @@ import { ImageSchema, IconSchema } from "../defaultSchemes";
 // Schema definition
 export const Schema = z.object({
 
-    mainTitle: z.string()
-        .min(5)
-        .max(15)
-        .default("STATISTIC")
+    sectionTitle: z.string()
+        .min(3)
+        .max(20)
+        .default("CLIENT SATISFACTION")
         .meta({
-            description: "Main title for the statistic section",
+            description: "Main section heading - adapt to presentation topic (e.g., 'Climate Progress', 'Treatment Success', 'Learning Achievement', 'Project Completion')",
         }),
 
-    subtitle: z.string()
+    sectionSubtitle: z.string()
         .min(10)
-        .max(25)
-        .default("CLIENT'S SATISFACTION")
+        .max(35)
+        .default("MEASURING OUR IMPACT AND SUCCESS")
         .meta({
-            description: "Subtitle describing the statistic focus",
+            description: "Supporting subtitle that provides context - adapt to topic (e.g., 'Tracking Climate Action Progress', 'Monitoring Patient Recovery Rates', 'Assessing Educational Outcomes')",
         }),
 
     description: z.string()
-        .min(100)
-        .max(400)
+        .min(2)
+        .max(230)
         .default("At the heart of our success lies the unwavering satisfaction of our clients. We take pride in fostering lasting partnerships, consistently exceeding expectations, and delivering results that not only meet but surpass the unique objectives of each client we serve.")
         .meta({
-            description: "Description of client satisfaction approach",
+            description: "Name of the organization or entity being measured",
         }),
 
-    circularMetric: z.object({
+    brandLogo: ImageSchema.default({
+        __image_url__: "https://via.placeholder.com/40x40/22C55E/FFFFFF?text=L",
+        __image_prompt__: "Professional organization logo - clean and modern design"
+    }).meta({
+        description: "Logo or brand mark representing the organization",
+    }),
+
+    satisfactionRate: z.object({
         value: z.number().min(0).max(100),
         label: z.string().min(5).max(30),
         percentage: z.string().min(2).max(5)
@@ -37,7 +44,7 @@ export const Schema = z.object({
         label: "CLIENT'S REPEAT ORDER",
         percentage: "90%"
     }).meta({
-        description: "Main circular chart metric",
+        description: "CRITICAL: Provide topic-specific circular progress metric. For global warming: {value: 33, label: 'CO2 REDUCTION ACHIEVED', percentage: '33%'} or {value: 78, label: 'RENEWABLE ENERGY ADOPTION', percentage: '78%'}. For healthcare: {value: 95, label: 'PATIENT RECOVERY RATE', percentage: '95%'} or {value: 87, label: 'TREATMENT SUCCESS RATE', percentage: '87%'}. For education: {value: 92, label: 'GRADUATION SUCCESS RATE', percentage: '92%'}. Use realistic percentages and meaningful labels.",
     }),
 
     statisticBlocks: z.array(z.object({
@@ -56,7 +63,7 @@ export const Schema = z.object({
             backgroundColor: "beige"
         }
     ]).meta({
-        description: "Two statistic blocks with percentages and descriptions",
+        description: "ESSENTIAL: Provide two topic-relevant supporting statistics. For global warming: [{percentage: '1.1°C', description: 'Global temperature increase since pre-industrial times represents urgent need for climate action', backgroundColor: 'teal'}, {percentage: '410ppm', description: 'Current atmospheric CO2 levels are the highest in human history requiring immediate intervention', backgroundColor: 'beige'}]. For healthcare: [{percentage: '85%', description: 'Early detection rates have improved significantly with advanced screening technologies', backgroundColor: 'teal'}, {percentage: '72h', description: 'Average patient response time demonstrates our commitment to rapid care delivery', backgroundColor: 'beige'}]. Always provide factual, impactful statistics.",
     }),
 
     companyLogo: ImageSchema.default({
@@ -69,7 +76,7 @@ export const Schema = z.object({
     companyName: z.string()
         .min(2)
         .max(25)
-        .default("Company Name")
+        .default("Deskpro")
         .meta({
             description: "Company name for branding",
         }),
@@ -81,7 +88,7 @@ type SchemaType = z.infer<typeof Schema>;
 // Component definition
 const StatisticCircularSlide = ({ data }: { data: Partial<SchemaType> }) => {
 
-    const { mainTitle, subtitle, description, circularMetric, statisticBlocks, companyLogo, companyName } = data;
+    const { sectionTitle, sectionSubtitle, description, brandLogo, satisfactionRate, statisticBlocks, companyLogo, companyName } = data;
 
     const getBackgroundClass = (bg: string) => {
         switch (bg) {
@@ -95,7 +102,7 @@ const StatisticCircularSlide = ({ data }: { data: Partial<SchemaType> }) => {
     const radius = 150;
     const circumference = 2 * Math.PI * radius;
     const strokeDasharray = circumference;
-    const strokeDashoffset = circumference - (circumference * (circularMetric?.value || 90) / 100);
+    const strokeDashoffset = circumference - (circumference * (satisfactionRate?.value || 90) / 100);
 
     return (
         <div className="aspect-video max-w-[1280px] w-full bg-white relative overflow-hidden">
@@ -105,15 +112,15 @@ const StatisticCircularSlide = ({ data }: { data: Partial<SchemaType> }) => {
                 <div className="flex h-32">
                     {/* Left - Title */}
                     <div className="w-1/2 px-16 py-8 bg-gray-100 flex flex-col justify-center">
-                        {mainTitle && (
+                        {sectionTitle && (
                             <h1 className="text-4xl lg:text-5xl font-black text-teal-700 leading-tight mb-2">
-                                {mainTitle}
+                                {sectionTitle}
                             </h1>
                         )}
 
-                        {subtitle && (
+                        {sectionSubtitle && (
                             <p className="text-base font-semibold text-gray-800 tracking-wide">
-                                {subtitle}
+                                {sectionSubtitle}
                             </p>
                         )}
                     </div>
@@ -172,14 +179,14 @@ const StatisticCircularSlide = ({ data }: { data: Partial<SchemaType> }) => {
 
                             {/* Center Content */}
                             <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                {circularMetric?.label && (
+                                {satisfactionRate?.label && (
                                     <p className="text-sm font-semibold text-gray-800 mb-4 text-center max-w-32 leading-tight">
-                                        {circularMetric.label}
+                                        {satisfactionRate.label}
                                     </p>
                                 )}
-                                {circularMetric?.percentage && (
+                                {satisfactionRate?.percentage && (
                                     <span className="text-7xl font-black text-teal-700">
-                                        {circularMetric.percentage}
+                                        {satisfactionRate.percentage}
                                     </span>
                                 )}
                             </div>

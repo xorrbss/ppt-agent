@@ -5,65 +5,63 @@ import { ImageSchema, IconSchema } from "../defaultSchemes";
 // Schema definition
 export const Schema = z.object({
 
-    mainTitle: z.string()
-        .min(5)
-        .max(15)
-        .default("MARKET SIZE")
+    sectionTitle: z.string()
+        .min(3)
+        .max(30)
+        .default("MARKET ANALYSIS")
         .meta({
-            description: "Main title for the market size section",
+            description: "Main section heading - can be 'Market Size', 'Market Opportunity', 'Industry Overview', or similar",
         }),
 
-    subtitle: z.string()
+    sectionSubtitle: z.string()
         .min(10)
-        .max(25)
-        .default("OUR CLIENTS COME FROM EVERYWHERE")
+        .max(60)
+        .default("UNDERSTANDING THE OPPORTUNITY LANDSCAPE")
         .meta({
-            description: "Subtitle describing global reach",
+            description: "Supporting subtitle that frames the market discussion and opportunity scope",
         }),
-
-    globalDescription: z.string()
-        .min(50)
-        .max(200)
-        .default("With a global perspective, our marketing agency has proudly served multinational clients, delivering tailored strategies that transcend borders and cultures, ensuring consistent brand success on a worldwide scale.")
-        .meta({
-            description: "Description of global market presence",
-        }),
-
-    worldMapImage: ImageSchema.default({
-        __image_url__: "https://images.unsplash.com/photo-1516245834210-c4c142787335?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80",
-        __image_prompt__: "World map with location pins showing global business presence"
-    }).meta({
-        description: "World map image showing global reach",
-    }),
 
     marketDefinitions: z.array(z.object({
-        acronym: z.string().min(2).max(10),
-        fullName: z.string().min(10).max(50),
-        description: z.string().min(50).max(300)
-    })).min(3).max(3).default([
+        marketType: z.string().min(3).max(30),
+        marketDescription: z.string().min(20).max(150),
+        marketValue: z.string().min(3).max(25).optional()
+    })).min(2).max(4).default([
         {
-            acronym: "TAM",
-            fullName: "Total Available Market (TAM)",
-            description: "The Total Available Market (TAM) represents the entire potential demand for our product or service, reflecting the vast landscape of opportunities awaiting exploration and market capture."
+            marketType: "Total Addressable Market (TAM)",
+            marketDescription: "The overall revenue opportunity available if we achieved 100% market share across all segments and geographies.",
+            marketValue: "$50B"
         },
         {
-            acronym: "SAM",
-            fullName: "Serviceable Available Market (SAM)",
-            description: "The Serviceable Available Market (SAM) represents the specific segment of the Total Available Market where our product or service can be realistically and effectively offered, defining the target audience for our strategic market approach."
+            marketType: "Serviceable Addressable Market (SAM)",
+            marketDescription: "The portion of TAM targeted by our products and services within our geographic reach.",
+            marketValue: "$15B"
         },
         {
-            acronym: "SOM",
-            fullName: "Serviceable Obtainable Market (SOM)",
-            description: "The Serviceable Obtainable Market (SOM) signifies the realistic and achievable portion of the Serviceable Available Market where our business aims to capture market share, emphasizing our practical and strategic approach to market penetration."
+            marketType: "Serviceable Obtainable Market (SOM)",
+            marketDescription: "The portion of SAM that we can realistically capture based on our resources and market conditions.",
+            marketValue: "$3B"
         }
     ]).meta({
-        description: "Market size definitions for TAM, SAM, and SOM",
+        description: "List of market definitions and opportunities with descriptions and potential values",
+    }),
+
+    visualRepresentation: ImageSchema.default({
+        __image_url__: "https://images.unsplash.com/photo-1597149962419-0d900ac2b46c?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+        __image_prompt__: "World map showing global market reach and geographic distribution"
+    }).meta({
+        description: "Visual that represents market scope - could be a world map, chart, or geographic visualization",
     }),
 
     showYellowUnderline: z.boolean()
         .default(true)
         .meta({
-            description: "Show yellow decorative underline",
+            description: "Whether to display the decorative yellow underline accent",
+        }),
+
+    showVisualAccents: z.boolean()
+        .default(true)
+        .meta({
+            description: "Whether to display decorative visual accent elements",
         }),
 })
 
@@ -73,81 +71,84 @@ type SchemaType = z.infer<typeof Schema>;
 // Component definition
 const MarketSizeSlide = ({ data }: { data: Partial<SchemaType> }) => {
 
-    const { mainTitle, subtitle, globalDescription, worldMapImage, marketDefinitions, showYellowUnderline } = data;
+    const { sectionTitle, sectionSubtitle, marketDefinitions, visualRepresentation, showYellowUnderline, showVisualAccents } = data;
 
     return (
         <div className="aspect-video max-w-[1280px] w-full bg-white relative overflow-hidden">
             {/* Main Content Area */}
             <div className="h-full flex">
-                {/* Left Side - Teal Background with Map */}
-                <div className="w-1/2 relative bg-teal-600 px-16 py-12 flex flex-col text-white">
+                {/* Left Side - Content */}
+                <div className="w-3/5 relative bg-white px-16 py-12 flex flex-col justify-start">
                     {/* Title Section */}
                     <div className="mb-8">
-                        {mainTitle && (
-                            <h1 className="text-5xl lg:text-6xl font-black leading-tight mb-4">
-                                {mainTitle}
+                        {sectionTitle && (
+                            <h1 className="text-3xl lg:text-4xl font-black leading-tight mb-4">
+                                {sectionTitle}
                             </h1>
                         )}
 
-                        {subtitle && (
+                        {sectionSubtitle && (
                             <p className="text-base font-semibold tracking-wide mb-4">
-                                {subtitle}
+                                {sectionSubtitle}
                             </p>
                         )}
 
                         {/* Yellow Decorative Underline */}
                         {showYellowUnderline && (
-                            <div className="w-24 h-1 bg-yellow-300 "></div>
+                            <div className="w-24 h-1 bg-yellow-300 mb-8"></div>
                         )}
                     </div>
 
-                    {/* World Map Image */}
-                    {worldMapImage?.__image_url__ && (
-                        <div className="flex-1 flex items-center justify-center">
-                            <div className="w-full max-w-md">
-                                <img
-                                    src={worldMapImage.__image_url__}
-                                    alt={worldMapImage.__image_prompt__}
-                                    className="w-full h-auto object-contain opacity-90"
-                                />
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Global Description */}
-                    {globalDescription && (
-                        <div>
-                            <p className="text-base leading-relaxed">
-                                {globalDescription}
-                            </p>
-                        </div>
-                    )}
-                </div>
-
-                {/* Right Side - White Background with Market Definitions */}
-                <div className="w-1/2 relative bg-white px-16 py-12 flex flex-col justify-center">
-                    {/* Market Definitions */}
-                    {marketDefinitions && marketDefinitions.length >= 3 && (
-                        <div className="space-y-8">
-                            {marketDefinitions.slice(0, 3).map((definition, index) => (
-                                <div key={index} className="mb-8">
-                                    {/* Header with rounded background */}
-                                    <div className="bg-teal-600 text-white px-6 py-3 rounded-full mb-4">
-                                        <h3 className="text-lg font-bold text-center">
-                                            {definition.fullName}
+                    {/* Market Definitions List */}
+                    {marketDefinitions && marketDefinitions.length > 0 && (
+                        <div className="space-y-6">
+                            {marketDefinitions.map((market, index) => (
+                                <div key={index} className="border-l-4 border-teal-600 pl-6">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h3 className="text-lg font-bold text-gray-900">
+                                            {market.marketType}
                                         </h3>
+                                        {market.marketValue && (
+                                            <span className="text-xl font-bold text-teal-600">
+                                                {market.marketValue}
+                                            </span>
+                                        )}
                                     </div>
-
-                                    {/* Description */}
-                                    <p className="text-base leading-relaxed text-gray-700 px-2">
-                                        {definition.description}
+                                    <p className="text-base leading-relaxed text-gray-700">
+                                        {market.marketDescription}
                                     </p>
                                 </div>
                             ))}
                         </div>
                     )}
                 </div>
+
+                {/* Right Side - Visual Representation */}
+                <div className="w-2/5 relative bg-gray-50">
+                    {/* Visual Accents */}
+                    {showVisualAccents && (
+                        <>
+                            {/* Decorative circles */}
+                            <div className="absolute top-8 right-8 w-6 h-6 bg-teal-600 rounded-full opacity-60 z-20"></div>
+                            <div className="absolute bottom-12 left-8 w-4 h-4 bg-yellow-300 rounded-full z-20"></div>
+                        </>
+                    )}
+
+                    {/* Visual Representation */}
+                    {visualRepresentation?.__image_url__ && (
+                        <div className="absolute inset-8  shadow-lg">
+                            <img
+                                src={visualRepresentation.__image_url__}
+                                alt={visualRepresentation.__image_prompt__}
+                                className="w-full h-full object-cover rounded-lg"
+                            />
+                        </div>
+                    )}
+                </div>
             </div>
+
+            {/* Bottom accent strip */}
+            <div className="absolute bottom-0 left-0 right-0 h-3 bg-teal-600"></div>
         </div>
     );
 };

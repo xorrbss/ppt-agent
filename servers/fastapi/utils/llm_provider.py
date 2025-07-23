@@ -92,7 +92,7 @@ def get_google_llm_client():
 def get_large_model():
     selected_llm = get_llm_provider()
     if selected_llm == LLMProvider.OPENAI:
-        return "o3"
+        return "gpt-4.1"
     elif selected_llm == LLMProvider.GOOGLE:
         return "gemini-2.0-flash"
     elif selected_llm == LLMProvider.OLLAMA:

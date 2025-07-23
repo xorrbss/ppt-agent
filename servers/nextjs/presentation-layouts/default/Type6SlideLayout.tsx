@@ -61,12 +61,12 @@ export const Schema = type6SlideSchema
 export type Type6SlideData = z.infer<typeof type6SlideSchema>
 
 interface Type6SlideLayoutProps {
-    data?: Partial<Type6SlideData>
+    data: Partial<Type6SlideData>
 }
 
 const Type6SlideLayout: React.FC<Type6SlideLayoutProps> = ({ data: slideData }) => {
-    const items = slideData?.items || []
-    const isGridLayout = items.length >= 4
+    const { title, items } = slideData;
+    const isGridLayout = items && items.length >= 4
 
     const getGridCols = (length: number) => {
         switch (length) {
@@ -82,8 +82,8 @@ const Type6SlideLayout: React.FC<Type6SlideLayoutProps> = ({ data: slideData }) 
 
     const renderGridContent = () => {
         return (
-            <div className={`grid grid-cols-1 ${items.length > 4 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4 sm:gap-6 lg:gap-8 mt-4 lg:mt-12 w-full`}>
-                {items.map((item, index) => (
+            <div className={`grid grid-cols-1 ${items && items.length > 4 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4 sm:gap-6 lg:gap-8 mt-4 lg:mt-12 w-full`}>
+                {items && items.map((item, index) => (
                     <div
                         key={index}
                         style={{
@@ -114,8 +114,8 @@ const Type6SlideLayout: React.FC<Type6SlideLayoutProps> = ({ data: slideData }) 
 
     const renderHorizontalContent = () => {
         return (
-            <div className={`grid grid-cols-1 sm:grid-cols-2 ${getGridCols(items.length)} w-full gap-3 lg:gap-8 mt-4 lg:mt-12`}>
-                {items.map((item, index) => (
+            <div className={`grid grid-cols-1 sm:grid-cols-2 ${getGridCols(items?.length || 0)} w-full gap-3 lg:gap-8 mt-4 lg:mt-12`}>
+                {items && items.map((item, index) => (
                     <div
                         key={index}
                         style={{
@@ -129,12 +129,12 @@ const Type6SlideLayout: React.FC<Type6SlideLayoutProps> = ({ data: slideData }) 
                             </div>
                         </div>
                         <div className="lg:space-y-4 mt-2 lg:mt-4">
-                            <h3 className="text-gray-900 text-base sm:text-lg lg:text-[24px] leading-[26px] lg:leading-[32px] font-bold text-center">
+                            {item.heading && <h3 className="text-gray-900 text-base sm:text-lg lg:text-[24px] leading-[26px] lg:leading-[32px] font-bold text-center">
                                 {item.heading}
-                            </h3>
-                            <p className="text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal text-center">
+                            </h3>}
+                            {item.description && <p className="text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal text-center">
                                 {item.description}
-                            </p>
+                            </p>}
                         </div>
                     </div>
                 ))}
@@ -148,9 +148,9 @@ const Type6SlideLayout: React.FC<Type6SlideLayoutProps> = ({ data: slideData }) 
 
         >
             <div className="text-center sm:pb-2 lg:pb-8 w-full">
-                <h1 className="text-gray-900 text-xl sm:text-2xl lg:text-[40px] leading-[36px] lg:leading-[48px] font-bold">
-                    {slideData?.title || 'Our Services'}
-                </h1>
+                {title && <h1 className="text-gray-900 text-xl sm:text-2xl lg:text-[40px] leading-[36px] lg:leading-[48px] font-bold">
+                    {title}
+                </h1>}
             </div>
 
             {isGridLayout ? renderGridContent() : renderHorizontalContent()}

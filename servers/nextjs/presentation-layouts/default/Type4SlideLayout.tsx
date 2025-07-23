@@ -1,6 +1,6 @@
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import React from 'react'
-import { BarChart, Bar, LineChart, Line, PieChart, Pie, AreaChart, Area, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Cell, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, LineChart, Line, PieChart, Pie, AreaChart, Area, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Cell } from "recharts";
 import * as z from "zod";
 
 export const layoutId = 'type4-slide'
@@ -77,17 +77,14 @@ export const Schema = type4SlideSchema
 export type Type4SlideData = z.infer<typeof type4SlideSchema>
 
 interface Type4SlideLayoutProps {
-    data?: Partial<Type4SlideData>
+    data: Partial<Type4SlideData>
 }
 
 const Type4SlideLayout: React.FC<Type4SlideLayoutProps> = ({ data: slideData }) => {
-    const chartData = slideData?.data || [];
-    const chartType = slideData?.chartType || 'line';
-    const color = slideData?.color || '#3b82f6';
-    const dataKey = slideData?.dataKey || 'value';
-    const categoryKey = slideData?.categoryKey || 'name';
-    const showLegend = slideData?.showLegend || false;
-    const showTooltip = slideData?.showTooltip || true;
+
+    const { title, description, data, dataKey, categoryKey, color, showLegend = false, showTooltip = true, chartType = 'bar' } = slideData;
+
+    const chartData = data || [];
     const renderChart = () => {
         const commonProps = {
             data: chartData,
@@ -103,7 +100,7 @@ const Type4SlideLayout: React.FC<Type4SlideLayoutProps> = ({ data: slideData }) 
                         <YAxis />
                         {showTooltip && <ChartTooltip content={<ChartTooltipContent />} />}
                         {showLegend && <ChartLegend content={<ChartLegendContent />} />}
-                        <Bar dataKey={dataKey} fill={color} radius={[4, 4, 0, 0]} />
+                        <Bar dataKey={dataKey || 'value'} fill={color} radius={[4, 4, 0, 0]} />
                     </BarChart>
                 );
 
@@ -117,7 +114,7 @@ const Type4SlideLayout: React.FC<Type4SlideLayoutProps> = ({ data: slideData }) 
                         {showLegend && <ChartLegend content={<ChartLegendContent />} />}
                         <Line
                             type="monotone"
-                            dataKey={dataKey}
+                            dataKey={dataKey || 'value'}
                             stroke={color}
                             strokeWidth={3}
                             dot={{ fill: color, strokeWidth: 2, r: 4 }}
@@ -135,7 +132,7 @@ const Type4SlideLayout: React.FC<Type4SlideLayoutProps> = ({ data: slideData }) 
                         {showLegend && <ChartLegend content={<ChartLegendContent />} />}
                         <Area
                             type="monotone"
-                            dataKey={dataKey}
+                            dataKey={dataKey || 'value'}
                             stroke={color}
                             fill={color}
                             fillOpacity={0.6}
@@ -154,7 +151,7 @@ const Type4SlideLayout: React.FC<Type4SlideLayoutProps> = ({ data: slideData }) 
                             cy="40%"
                             outerRadius={70}
                             fill={color}
-                            dataKey={dataKey}
+                            dataKey={dataKey || 'value'}
                             label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                         >
                             {chartData.map((entry, index) => (
@@ -172,7 +169,7 @@ const Type4SlideLayout: React.FC<Type4SlideLayoutProps> = ({ data: slideData }) 
                         <YAxis dataKey="y" type="number" />
                         {showTooltip && <ChartTooltip content={<ChartTooltipContent />} />}
                         {showLegend && <ChartLegend content={<ChartLegendContent />} />}
-                        <Scatter dataKey="value" fill={color} />
+                        <Scatter dataKey={dataKey || 'value'} fill={color} />
                     </ScatterChart>
                 );
 
@@ -186,9 +183,9 @@ const Type4SlideLayout: React.FC<Type4SlideLayoutProps> = ({ data: slideData }) 
             className=" rounded-sm w-full max-w-[1280px] px-3 py-[10px] sm:px-12 lg:px-20 sm:py-[40px] lg:py-[86px] shadow-lg max-h-[720px] flex flex-col items-center justify-center aspect-video bg-white relative z-20 mx-auto"
 
         >
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-gray-900 leading-tight mb-4 lg:mb-8">
-                {slideData?.title || 'Chart Analysis'}
-            </h1>
+            {title && <h1 className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-gray-900 leading-tight mb-4 lg:mb-8">
+                {title}
+            </h1>}
 
             <div className={`flex w-full  items-center  `}>
                 <div className="w-full">
@@ -199,9 +196,9 @@ const Type4SlideLayout: React.FC<Type4SlideLayoutProps> = ({ data: slideData }) 
                     </div>
                 </div>
                 <div className="w-full text-center">
-                    <p className={`text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal`}>
-                        {slideData?.description || 'This chart shows important data trends and insights that help understand the current situation and make informed decisions.'}
-                    </p>
+                    {description && <p className={`text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal`}>
+                        {description}
+                    </p>}
                 </div>
             </div>
         </div>

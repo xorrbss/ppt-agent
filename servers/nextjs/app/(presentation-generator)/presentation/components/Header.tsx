@@ -162,15 +162,17 @@ const Header = ({
 
       {/* Desktop Export Button with Popover */}
 
-      <div className="hidden lg:block">
-        <Popover open={open} onOpenChange={setOpen}>
+      <div style={{
+        zIndex: 100
+      }} className="hidden lg:block relative ">
+        <Popover open={open} onOpenChange={setOpen} >
           <PopoverTrigger asChild>
             <Button className={`border py-5 text-[#5146E5] font-bold rounded-[32px] transition-all duration-500 hover:border hover:bg-[#5146E5] hover:text-white w-full ${mobile ? "" : "bg-white"}`}>
               <SquareArrowOutUpRight className="w-4 h-4 mr-1" />
               Export
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="end" className="w-[250px] space-y-2 py-3 px-2">
+          <PopoverContent align="end" className="w-[250px] space-y-2 py-3 px-2 ">
             <ExportOptions mobile={false} />
           </PopoverContent>
         </Popover>
@@ -184,42 +186,47 @@ const Header = ({
   );
 
   return (
-    <div className="bg-[#5146E5] w-full shadow-lg sticky top-0 z-50">
+    <>
       <OverlayLoader
         show={showLoader}
         text="Exporting presentation..."
         showProgress={true}
         duration={40}
       />
-      <Announcement />
-      <Wrapper className="flex items-center justify-between py-1">
-        <Link href="/dashboard" className="min-w-[162px]">
-          <img
-            className="h-16"
-            src="/logo-white.png"
-            alt="Presentation logo"
-          />
-        </Link>
+      <div
 
-        {/* Desktop Menu */}
-        <div className="hidden lg:flex items-center gap-4 2xl:gap-6">
-          {isStreaming && (
-            <Loader2 className="animate-spin text-white font-bold w-6 h-6" />
-          )}
+        className="bg-[#5146E5] w-full shadow-lg sticky top-0 ">
+
+        <Announcement />
+        <Wrapper className="flex items-center justify-between py-1">
+          <Link href="/dashboard" className="min-w-[162px]">
+            <img
+              className="h-16"
+              src="/logo-white.png"
+              alt="Presentation logo"
+            />
+          </Link>
+
+          {/* Desktop Menu */}
+          <div className="hidden lg:flex items-center gap-4 2xl:gap-6">
+            {isStreaming && (
+              <Loader2 className="animate-spin text-white font-bold w-6 h-6" />
+            )}
 
 
-          <MenuItems mobile={false} />
-          <HeaderNav />
-        </div>
+            <MenuItems mobile={false} />
+            <HeaderNav />
+          </div>
 
-        {/* Mobile Menu */}
-        <div className="lg:hidden flex items-center gap-4">
-          <HeaderNav />
+          {/* Mobile Menu */}
+          <div className="lg:hidden flex items-center gap-4">
+            <HeaderNav />
 
-        </div>
-      </Wrapper>
+          </div>
+        </Wrapper>
 
-    </div>
+      </div>
+    </>
   );
 };
 

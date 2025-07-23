@@ -58,7 +58,11 @@ const SidePanel = ({
   }, [isMobilePanelOpen]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // Start drag after moving 8px
+      },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -263,8 +267,8 @@ const SidePanel = ({
                       className={` cursor-pointer ring-2 p-1  rounded-md transition-all duration-200 ${selectedSlide === index ? ' ring-[#5141e5]' : 'ring-gray-200'
                         }`}
                     >
-                      <div className=" bg-white  relative overflow-hidden aspect-video">
-                        <div className="absolute bg-gray-100/5 z-40 top-0 left-0 w-full h-full" />
+                      <div className=" bg-white pointer-events-none  relative overflow-hidden aspect-video">
+                        <div className="absolute bg-gray-100/5 z-50  top-0 left-0 w-full h-full" />
                         <div className="transform scale-[0.2] flex justify-center items-center origin-top-left  w-[500%] h-[500%]">
                           {renderSlideContent(slide, false)}
                         </div>
@@ -274,7 +278,7 @@ const SidePanel = ({
                 ) : (
                   <SortableContext
                     items={
-                      presentationData?.slides.map((slide: any) => slide.id!) || []
+                      presentationData?.slides.map((slide: any) => slide.id || `${slide.index}`) || []
                     }
                     strategy={verticalListSortingStrategy}
                   >

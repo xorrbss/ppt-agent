@@ -42,11 +42,12 @@ export const Schema = type5SlideSchema
 export type Type5SlideData = z.infer<typeof type5SlideSchema>
 
 interface Type5SlideLayoutProps {
-    data?: Partial<Type5SlideData>
+    data: Partial<Type5SlideData>
 }
 
 const Type5SlideLayout: React.FC<Type5SlideLayoutProps> = ({ data: slideData }) => {
 
+    const { title, description, items } = slideData;
     return (
         <div
             className="rounded-sm w-full max-w-[1280px] font-inter shadow-lg px-3 sm:px-12 lg:px-20 py-[10px] sm:py-[40px] lg:py-[86px] flex flex-col items-center justify-center max-h-[720px] aspect-video bg-white relative z-20 mx-auto"
@@ -55,13 +56,13 @@ const Type5SlideLayout: React.FC<Type5SlideLayoutProps> = ({ data: slideData }) 
             <div className="flex flex-col lg:flex-row gap-4 sm:gap-18 md:gap-16 items-center w-full">
                 {/* Left section - Title and Description */}
                 <div className="lg:w-1/2 lg:space-y-8 ">
-                    <h1 className="text-gray-900 text-xl sm:text-2xl lg:text-[40px] leading-[36px] lg:leading-[48px] font-bold">
-                        {slideData?.title || 'Key Points'}
-                    </h1>
+                    {title && <h1 className="text-gray-900 text-xl sm:text-2xl lg:text-[40px] leading-[36px] lg:leading-[48px] font-bold">
+                        {title}
+                    </h1>}
 
-                    <p className="text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal">
-                        {slideData?.description || 'Here is the main description that provides context and introduction to the numbered points on the right side.'}
-                    </p>
+                    {description && <p className="text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal">
+                        {description}
+                    </p>}
                 </div>
 
                 {/* Right section - Numbered items */}
@@ -80,12 +81,12 @@ const Type5SlideLayout: React.FC<Type5SlideLayoutProps> = ({ data: slideData }) 
                                         {`0${index + 1}`}
                                     </div>
                                     <div className="space-y-1">
-                                        <h3 className="text-gray-900 text-base sm:text-lg lg:text-[24px] leading-[26px] lg:leading-[32px] font-bold">
+                                        {item.heading && <h3 className="text-gray-900 text-base sm:text-lg lg:text-[24px] leading-[26px] lg:leading-[32px] font-bold">
                                             {item.heading}
-                                        </h3>
-                                        <p className="text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal">
+                                        </h3>}
+                                        {item.description && <p className="text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal">
                                             {item.description}
-                                        </p>
+                                        </p>}
                                     </div>
                                 </div>
                             </div>

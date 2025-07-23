@@ -39,12 +39,11 @@ export const Schema = type2TimelineSlideSchema
 export type Type2TimelineSlideData = z.infer<typeof type2TimelineSlideSchema>
 
 interface Type2TimelineSlideLayoutProps {
-    data?: Partial<Type2TimelineSlideData>
+    data: Partial<Type2TimelineSlideData>
 }
 
 const Type2TimelineSlideLayout: React.FC<Type2TimelineSlideLayoutProps> = ({ data: slideData }) => {
-    const items = slideData?.items || []
-    const numberTranslations: string[] = ['01', '02', '03', '04', '05', '06']
+    const { title, items } = slideData;
 
     const renderTimelineContent = () => {
         return (
@@ -55,27 +54,27 @@ const Type2TimelineSlideLayout: React.FC<Type2TimelineSlideLayoutProps> = ({ dat
                     <div className="absolute z-10 top-1/2 w-[87%] left-1/2 -translate-x-1/2 h-[2px] bg-blue-600" />
 
                     {/* Timeline Numbers */}
-                    {items.map((_, index) => (
+                    {items && items.map((_, index) => (
                         <div
                             key={`timeline-${index}`}
                             className="relative z-10 w-12 h-12 rounded-full bg-blue-600 px-1 text-white flex items-center justify-center font-bold text-lg"
                         >
-                            <span>{numberTranslations[index] || `0${index + 1}`}</span>
+                            <span> `0${index + 1}`</span>
                         </div>
                     ))}
                 </div>
 
                 {/* Timeline Content */}
                 <div className="flex justify-between gap-8">
-                    {items.map((item, index) => (
+                    {items && items.map((item, index) => (
                         <div key={index} className="flex-1 text-center relative">
                             <div className="space-y-4">
-                                <h3 className="text-gray-900 text-base sm:text-lg lg:text-[24px] leading-[26px] lg:leading-[32px] font-bold">
+                                {item.heading && <h3 className="text-gray-900 text-base sm:text-lg lg:text-[24px] leading-[26px] lg:leading-[32px] font-bold">
                                     {item.heading}
-                                </h3>
-                                <p className="text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal">
+                                </h3>}
+                                {item.description && <p className="text-gray-700 text-sm sm:text-base lg:text-[20px] leading-[20px] lg:leading-[30px] font-normal">
                                     {item.description}
-                                </p>
+                                </p>}
                             </div>
                         </div>
                     ))}
@@ -89,9 +88,9 @@ const Type2TimelineSlideLayout: React.FC<Type2TimelineSlideLayoutProps> = ({ dat
             className=" rounded-sm max-w-[1280px] w-full shadow-lg px-3 sm:px-12 lg:px-20 py-[10px] sm:py-[40px] flex flex-col items-center justify-center max-h-[720px] aspect-video bg-white relative z-20 mx-auto"
         >
             <div className="text-center lg:pb-8 w-full">
-                <h1 className="text-gray-900 text-xl sm:text-2xl lg:text-[40px] leading-[36px] lg:leading-[48px] font-bold">
-                    {slideData?.title || 'Main Title'}
-                </h1>
+                {title && <h1 className="text-gray-900 text-xl sm:text-2xl lg:text-[40px] leading-[36px] lg:leading-[48px] font-bold">
+                    {title}
+                </h1>}
             </div>
 
             {renderTimelineContent()}

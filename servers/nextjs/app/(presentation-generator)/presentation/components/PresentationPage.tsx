@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,6 +20,7 @@ import { PresentationPageProps } from "../types";
 import LoadingState from "./LoadingState";
 
 const PresentationPage: React.FC<PresentationPageProps> = ({ presentation_id }) => {
+
   // State management
   const [loading, setLoading] = useState(true);
   const [selectedSlide, setSelectedSlide] = useState(0);
@@ -45,20 +46,15 @@ const PresentationPage: React.FC<PresentationPageProps> = ({ presentation_id }) 
     setLoading,
     setError
   );
+
   const {
     isPresentMode,
     stream,
-    currentSlide,
     handleSlideClick,
     toggleFullscreen,
     handlePresentExit,
     handleSlideChange,
-  } = usePresentationNavigation(
-    presentation_id,
-    selectedSlide,
-    setSelectedSlide,
-    setIsFullscreen
-  );
+  } = usePresentationNavigation(presentation_id, selectedSlide, setSelectedSlide, setIsFullscreen);
 
   // Initialize streaming
   usePresentationStreaming(
@@ -70,18 +66,18 @@ const PresentationPage: React.FC<PresentationPageProps> = ({ presentation_id }) 
   );
 
 
-
   const onSlideChange = (newSlide: number) => {
     handleSlideChange(newSlide, presentationData);
   };
+
+
 
   // Presentation Mode View
   if (isPresentMode) {
     return (
       <PresentationMode
         slides={presentationData?.slides!}
-        currentSlide={currentSlide}
-
+        currentSlide={selectedSlide}
         isFullscreen={isFullscreen}
         onFullscreenToggle={toggleFullscreen}
         onExit={handlePresentExit}
@@ -122,7 +118,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({ presentation_id }) 
 
       </div>
 
-      <Header presentation_id={presentation_id} currentSlide={currentSlide} />
+      <Header presentation_id={presentation_id} currentSlide={selectedSlide} />
       <Help />
 
       <div
