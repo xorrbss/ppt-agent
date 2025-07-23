@@ -15,6 +15,7 @@ interface GetAllChildElementsAttributesArgs {
   inheritedFont?: ElementAttributes['font'];
   inheritedBackground?: ElementAttributes['background'];
   inheritedBorderRadius?: number[];
+  inheritedZIndex?: number;
   screenshotsDir: string;
 }
 
@@ -181,16 +182,20 @@ async function getSlidesWrapper(page: Page): Promise<ElementHandle<Element>> {
   return slides_wrapper;
 }
 
-async function getAllChildElementsAttributes({ element, rootRect = null, depth = 0, inheritedFont, inheritedBackground, inheritedBorderRadius, screenshotsDir }: GetAllChildElementsAttributesArgs): Promise<SlideAttributesResult> {
-  const currentRootRect = rootRect || await element.evaluate((el) => {
-    const rect = el.getBoundingClientRect();
-    return {
-      left: isFinite(rect.left) ? rect.left : 0,
-      top: isFinite(rect.top) ? rect.top : 0,
-      width: isFinite(rect.width) ? rect.width : 0,
-      height: isFinite(rect.height) ? rect.height : 0,
+async function getAllChildElementsAttributes({ element, rootRect = null, depth = 0, inheritedFont, inheritedBackground, inheritedBorderRadius, inheritedZIndex, screenshotsDir }: GetAllChildElementsAttributesArgs): Promise<SlideAttributesResult> {
+  if (!rootRect) {
+    const rootAttributes = await getElementAttributes(element);
+    inheritedFont = rootAttributes.font;
+    inheritedBackground = rootAttributes.background;
+    inheritedZIndex = rootAttributes.zIndex;
+    rootRect = {
+      left: rootAttributes.position?.left ?? 0,
+      top: rootAttributes.position?.top ?? 0,
+      width: rootAttributes.position?.width ?? 1280,
+      height: rootAttributes.position?.height ?? 720,
     };
-  });
+  }
+
 
   const directChildElementHandles = await element.$$(':scope > *');
 
@@ -198,6 +203,10 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
 
   for (const childElementHandle of directChildElementHandles) {
     const attributes = await getElementAttributes(childElementHandle);
+
+    if (attributes.tagName === "style") {
+      continue;
+    }
 
     if (inheritedFont && !attributes.font && attributes.innerText && attributes.innerText.trim().length > 0) {
       attributes.font = inheritedFont;
@@ -208,11 +217,14 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
     if (inheritedBorderRadius && !attributes.borderRadius) {
       attributes.borderRadius = inheritedBorderRadius;
     }
+    if (inheritedZIndex !== undefined && attributes.zIndex === 0) {
+      attributes.zIndex = inheritedZIndex;
+    }
 
     if (attributes.position && attributes.position.left !== undefined && attributes.position.top !== undefined) {
       attributes.position = {
-        left: attributes.position.left - currentRootRect.left,
-        top: attributes.position.top - currentRootRect.top,
+        left: attributes.position.left - rootRect!.left,
+        top: attributes.position.top - rootRect!.top,
         width: attributes.position.width,
         height: attributes.position.height,
       };
@@ -227,30 +239,31 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
 
     //? If the element is a svg, canvas, or table, we don't need to go deeper
     if (attributes.should_screenshot) {
-      break;
+      continue;
     }
 
 
     const childResults = await getAllChildElementsAttributes({
       element: childElementHandle,
-      rootRect: currentRootRect,
+      rootRect: rootRect,
       depth: depth + 1,
       inheritedFont: attributes.font || inheritedFont,
       inheritedBackground: attributes.background || inheritedBackground,
       inheritedBorderRadius: attributes.borderRadius || inheritedBorderRadius,
+      inheritedZIndex: attributes.zIndex || inheritedZIndex,
       screenshotsDir,
     });
     allResults.push(...childResults.elements.map(attr => ({ attributes: attr, depth: depth + 1 })));
   }
 
-  let backgroundColor: string | undefined;
-  if (!rootRect) {
+  let backgroundColor = inheritedBackground?.color;
+  if (depth === 0) {
     const elementsWithRootPosition = allResults.filter(({ attributes }) => {
       return attributes.position &&
         attributes.position.left === 0 &&
         attributes.position.top === 0 &&
-        attributes.position.width === currentRootRect.width &&
-        attributes.position.height === currentRootRect.height;
+        attributes.position.width === rootRect!.width &&
+        attributes.position.height === rootRect!.height;
     });
 
     for (const { attributes } of elementsWithRootPosition) {
@@ -261,7 +274,7 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
     }
   }
 
-  const filteredResults = !rootRect ? allResults.filter(({ attributes }) => {
+  const filteredResults = depth === 0 ? allResults.filter(({ attributes }) => {
     const hasBackground = attributes.background && attributes.background.color;
     const hasBorder = attributes.border && attributes.border.color;
     const hasShadow = attributes.shadow && attributes.shadow.color;
@@ -274,21 +287,21 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
     const isRootPosition = attributes.position &&
       attributes.position.left === 0 &&
       attributes.position.top === 0 &&
-      attributes.position.width === currentRootRect.width &&
-      attributes.position.height === currentRootRect.height;
+      attributes.position.width === rootRect!.width &&
+      attributes.position.height === rootRect!.height;
 
     const hasOtherProperties = hasBackground || hasBorder || hasShadow || hasText || hasImage || isSvg || isCanvas || isTable;
     return hasOtherProperties && !isRootPosition;
   }) : allResults;
 
-  if (!rootRect) {
+  if (depth === 0) {
     const sortedElements = filteredResults
       .sort((a, b) => {
         const zIndexA = a.attributes.zIndex || 0;
         const zIndexB = b.attributes.zIndex || 0;
 
         if (zIndexA === zIndexB) {
-          return b.depth - a.depth;
+          return a.depth - b.depth;
         }
 
         return zIndexB - zIndexA;
@@ -404,20 +417,39 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
     function parseBackground(computedStyles: CSSStyleDeclaration) {
       const backgroundColorResult = colorToHex(computedStyles.backgroundColor);
 
-      return {
+      const background = {
         color: backgroundColorResult.hex,
         opacity: backgroundColorResult.opacity
       };
+
+      // Return undefined if background has no meaningful values
+      if (!background.color && background.opacity === undefined) {
+        return undefined;
+      }
+
+      return background;
     }
 
     function parseBorder(computedStyles: CSSStyleDeclaration) {
       const borderColorResult = colorToHex(computedStyles.borderColor);
       const borderWidth = parseFloat(computedStyles.borderWidth);
-      return borderWidth === 0 ? undefined : {
+
+      if (borderWidth === 0) {
+        return undefined;
+      }
+
+      const border = {
         color: borderColorResult.hex,
         width: isNaN(borderWidth) ? undefined : borderWidth,
         opacity: borderColorResult.opacity,
       };
+
+      // Return undefined if border has no meaningful values
+      if (!border.color && border.width === undefined && border.opacity === undefined) {
+        return undefined;
+      }
+
+      return border;
     }
 
     function parseShadow(computedStyles: CSSStyleDeclaration) {
@@ -590,29 +622,30 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
             const blurRadius = numericParts.length >= 3 ? numericParts[2] : 0;
             const spreadRadius = numericParts.length >= 4 ? numericParts[3] : 0;
 
-            let shadowColor = 'rgba(0, 0, 0, 0.3)'; // default color
+            // Only create shadow if color is present
             if (colorParts.length > 0) {
-              shadowColor = colorParts.join(' ');
-            }
+              const shadowColor = colorParts.join(' ');
+              const shadowColorResult = colorToHex(shadowColor);
 
-            const shadowColorResult = colorToHex(shadowColor);
-
-            const hasValidValues = offsetX !== 0 || offsetY !== 0 || blurRadius > 0 || spreadRadius !== 0 ||
-              (shadowColorResult.hex && shadowColorResult.hex !== '000000' && shadowColorResult.opacity !== 0);
-
-            if (hasValidValues) {
-              shadow = {
-                offset: [offsetX, offsetY],
-                color: shadowColorResult.hex || '000000',
-                opacity: shadowColorResult.opacity,
-                radius: blurRadius,
-                spread: spreadRadius,
-                inset: isInset,
-                angle: Math.atan2(offsetY, offsetX) * (180 / Math.PI),
-              };
+              if (shadowColorResult.hex) {
+                shadow = {
+                  offset: [offsetX, offsetY],
+                  color: shadowColorResult.hex,
+                  opacity: shadowColorResult.opacity,
+                  radius: blurRadius,
+                  spread: spreadRadius,
+                  inset: isInset,
+                  angle: Math.atan2(offsetY, offsetX) * (180 / Math.PI),
+                };
+              }
             }
           }
         }
+      }
+
+      // Return undefined if shadow is empty (no meaningful values)
+      if (Object.keys(shadow).length === 0) {
+        return undefined;
       }
 
       return shadow;
@@ -631,13 +664,20 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
         fontName = firstFont;
       }
 
-      return {
+      const font = {
         name: fontName,
         size: isNaN(fontSize) ? undefined : fontSize,
         weight: isNaN(fontWeight) ? undefined : fontWeight,
         color: fontColorResult.hex,
         italic: fontStyle === 'italic',
       };
+
+      // Return undefined if font has no meaningful values
+      if (!font.name && font.size === undefined && font.weight === undefined && !font.color && !font.italic) {
+        return undefined;
+      }
+
+      return font;
     }
 
     function parseLineHeight(computedStyles: CSSStyleDeclaration, el: Element) {
@@ -722,7 +762,7 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
           const rect = el.getBoundingClientRect();
           const maxRadiusX = rect.width / 2;
           const maxRadiusY = rect.height / 2;
-          
+
           borderRadiusValue = borderRadiusValue.map((radius, index) => {
             // For top-left and bottom-right corners, use maxRadiusX
             // For top-right and bottom-left corners, use maxRadiusY
@@ -779,27 +819,29 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
 
       return {
         tagName: el.tagName.toLowerCase(),
-        id: el.id || undefined,
+        id: el.id,
         className: (el.className && typeof el.className === 'string') ? el.className : (el.className ? el.className.toString() : undefined),
-        innerText,
-        background,
-        border,
-        shadow,
-        font,
-        position,
-        margin,
-        padding,
+        innerText: innerText,
+        background: background,
+        border: border,
+        shadow: shadow,
+        font: font,
+        position: position,
+        margin: margin,
+        padding: padding,
         zIndex: zIndexValue,
         textAlign: textAlign !== 'left' ? textAlign : undefined,
-        lineHeight,
+        lineHeight: lineHeight,
         borderRadius: borderRadiusValue,
-        imageSrc: imageSrc || undefined,
-        objectFit,
+        imageSrc: imageSrc,
+        objectFit: objectFit,
         clip: false,
         overlay: undefined,
-        shape,
+        shape: shape,
         connectorType: undefined,
-        textWrap,
+        textWrap: textWrap,
+        should_screenshot: false,
+        element: undefined,
       };
     }
 

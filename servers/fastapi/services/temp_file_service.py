@@ -8,7 +8,7 @@ from utils.get_env import get_temp_directory_env
 class TempFileService:
 
     def __init__(self):
-        self.base_dir = get_temp_directory_env()
+        self.base_dir = get_temp_directory_env() or "/tmp/presenton"
         # TODO: Uncomment this when we want to cleanup the base dir on startup
         # self.cleanup_base_dir()
         os.makedirs(self.base_dir, exist_ok=True)
