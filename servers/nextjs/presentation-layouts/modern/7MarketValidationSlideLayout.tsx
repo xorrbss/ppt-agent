@@ -19,7 +19,7 @@ const marketValidationSchema = z.object({
   date: z.string().min(5).max(50).default("June 13, 2038").meta({
     description: "Date in header",
   }),
-  title: z.string().min(3).max(40).default("Market Validation").meta({
+  title: z.string().min(3).max(20).default("Market Validation").meta({
     description: "Title of the slide",
   }),
   description: z
@@ -108,7 +108,7 @@ const MarketValidationSlideLayout: React.FC<
         <div className="px-16 py-16 flex h-full gap-8">
           {/* Left Column */}
           <div className="flex-1 pr-12 flex flex-col justify-center">
-            <h1 className="text-7xl font-bold text-blue-600 mb-8 leading-tight text-left">
+            <h1 className="text-6xl font-bold text-blue-600 mb-8 leading-tight text-left">
               {slideData?.title}
             </h1>
             <p className="text-blue-600 text-sm leading-relaxed font-normal mb-12 max-w-lg text-left">

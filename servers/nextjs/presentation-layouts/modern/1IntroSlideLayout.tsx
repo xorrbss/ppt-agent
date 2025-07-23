@@ -6,7 +6,7 @@ export const layoutName = "Intro Pitch Deck Slide";
 export const layoutDescription =
   "A visually appealing introduction slide for a pitch deck, featuring a large title, company name, date, and contact information with a modern design.";
 const introPitchDeckSchema = z.object({
-  title: z.string().min(2).max(15).default("Pitch Deck").meta({
+  title: z.string().min(2).max(15).default("Pitch Deck and badu").meta({
     description: "Main title of the slide",
   }),
   description: z.string().default("").meta({
@@ -36,12 +36,13 @@ export const Schema = introPitchDeckSchema;
 export type IntroPitchDeckData = z.infer<typeof introPitchDeckSchema>;
 
 interface IntroSlideLayoutProps {
-  data?: Partial<IntroPitchDeckData>;
+  data: Partial<IntroPitchDeckData>;
 }
 
 const IntroPitchDeckSlide: React.FC<IntroSlideLayoutProps> = ({
   data: slideData,
 }) => {
+  const { title, description, contactNumber, contactAddress, contactWebsite, companyName, date } = slideData;
   return (
     <>
       {/* Montserrat Font */}
@@ -50,7 +51,7 @@ const IntroPitchDeckSlide: React.FC<IntroSlideLayoutProps> = ({
         rel="stylesheet"
       />
       <div
-        className="w-full max-w-[1280px] aspect-video mx-auto relative overflow-hidden rounded-md"
+        className="w-full max-w-[1280px] bg-white aspect-video mx-auto relative overflow-hidden rounded-md"
         style={{
           fontFamily: "Montserrat, sans-serif",
           backgroundSize: "cover",
@@ -71,12 +72,12 @@ const IntroPitchDeckSlide: React.FC<IntroSlideLayoutProps> = ({
             transform: "translateY(-50%)",
           }}
         >
-          <h1
-            className="text-[9.5rem] font-bold text-[#1E4CD9] leading-none inline-block relative"
+          {title && <h1
+            className="text-7xl font-bold text-[#1E4CD9] leading-none inline-block relative"
             id="pitchdeck-title"
             style={{ display: "inline-block" }}
           >
-            {slideData?.title}
+            {title}
             {/* Blue underline */}
             <span
               className="block bg-[#1E4CD9] h-[4px] absolute left-0"
@@ -86,23 +87,27 @@ const IntroPitchDeckSlide: React.FC<IntroSlideLayoutProps> = ({
                 transition: "width 0.3s",
               }}
             />
-          </h1>
+          </h1>}
         </div>
 
         {/* Bottom Contact Row */}
         <div className="absolute bottom-8 left-10 right-10 flex flex-wrap items-center gap-10 text-[#1E4CD9] text-sm font-medium">
-          <div className="flex items-center gap-2">
+          {contactNumber && <div className="flex items-center gap-2">
             <span className="text-lg">📞</span>
-            <span>{slideData?.contactNumber}</span>
-          </div>
-          <div className="flex items-center gap-2">
+            <span>{contactNumber}</span>
+          </div>}
+          {contactAddress && <div className="flex items-center gap-2">
             <span className="text-lg">📍</span>
-            <span>{slideData?.contactAddress}</span>
-          </div>
-          <div className="flex items-center gap-2">
+            <span>{contactAddress}</span>
+          </div>}
+          {contactWebsite && <div className="flex items-center gap-2">
             <span className="text-lg">🌐</span>
-            <span>{slideData?.contactWebsite}</span>
-          </div>
+            <span>{contactWebsite}</span>
+          </div>}
+          {description && <div className="flex items-center gap-2">
+            <span className="text-lg">💬</span>
+            <span>{description}</span>
+          </div>}
         </div>
       </div>
     </>

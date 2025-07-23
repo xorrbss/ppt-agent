@@ -24,7 +24,7 @@ const teamMemberSchema = z.object({
 });
 
 const modernTeamSlideSchema = z.object({
-  title: z.string().min(3).max(40).default("Our Team").meta({
+  title: z.string().min(3).max(20).default("Our Team").meta({
     description: "Main title of the slide",
   }),
   subtitle: z.string().min(10).max(120).optional().meta({

@@ -8,10 +8,10 @@ export const layoutDescription =
   "A professional slide layout designed to present market size statistics, including TAM, SAM, and SOM, with a world map and key metrics.";
 
 const marketSizeSlideSchema = z.object({
-  title: z.string().default("Market Size").meta({
+  title: z.string().min(3).max(15).default("Market Size").meta({
     description: "Main slide title",
   }),
-  companyName: z.string().default("Rimberio").meta({
+  companyName: z.string().min(3).max(30).default("Rimberio").meta({
     description: "Presenter's name",
   }),
   date: z.string().default("June 13, 2038").meta({
@@ -25,9 +25,9 @@ const marketSizeSlideSchema = z.object({
   marketStats: z
     .array(
       z.object({
-        label: z.string(),
-        value: z.string(),
-        description: z.string(),
+        label: z.string().min(3).max(30),
+        value: z.string().min(3).max(30),
+        description: z.string().min(3).max(130),
       }),
     )
     .min(1)
@@ -101,7 +101,7 @@ const MarketSizeSlideLayout: React.FC<MarketSizeSlideProps> = ({
             <div className="flex flex-col items-left justify-center h-full w-full">
               {/* Move the title down to align with the top of the market stats */}
               <h1
-                className="text-7xl font-bold text-blue-600 mb-8 leading-tight text-left"
+                className="text-6xl font-bold text-blue-600 mb-8 leading-tight text-left"
                 style={{ marginTop: "112px" }} // 112px matches top-36 (9rem) of stats
               >
                 {slideData?.title || "Market Size"}

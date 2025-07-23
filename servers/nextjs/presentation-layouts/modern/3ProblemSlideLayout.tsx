@@ -8,13 +8,13 @@ export const layoutDescription =
   "A slide layout designed to present a clear problem statement, including categories of problems, company information, and an optional image.";
 
 const problemStatementSlideSchema = z.object({
-  title: z.string().min(3).max(40).default("Problem").meta({
+  title: z.string().min(3).max(20).default("Problem").meta({
     description: "Main title of the problem statement slide",
   }),
   description: z
     .string()
     .min(50)
-    .max(500)
+    .max(200)
     .default(
       "A problem needs to be discussed further and in detail because this problem is the main foundation in the initial development of a product, service, and decision making. Without a well-defined problem, it will have an impact on a job that is unfocused, unmanaged, and less relevant.",
     )
@@ -27,7 +27,7 @@ const problemStatementSlideSchema = z.object({
         title: z.string().min(3).max(30).meta({
           description: "Title of the problem category",
         }),
-        description: z.string().min(20).max(200).meta({
+        description: z.string().min(20).max(100).meta({
           description: "Description of the problem category",
         }),
         icon: IconSchema.optional().meta({
@@ -56,6 +56,26 @@ const problemStatementSlideSchema = z.object({
           __icon_url__:
             "https://cdn.jsdelivr.net/npm/lucide@latest/dist/esm/icons/trending-up.js",
           __icon_query__: "trending up costs chart",
+        },
+      },
+      {
+        title: "Inefficiency",
+        description:
+          "Businesses struggle to find digital tools that meet their needs, causing operational slowdowns.",
+        icon: {
+          __icon_url__:
+            "https://cdn.jsdelivr.net/npm/lucide@latest/dist/esm/icons/alert-triangle.js",
+          __icon_query__: "warning alert inefficiency",
+        },
+      },
+      {
+        title: "Inefficiency",
+        description:
+          "Businesses struggle to find digital tools that meet their needs, causing operational slowdowns.",
+        icon: {
+          __icon_url__:
+            "https://cdn.jsdelivr.net/npm/lucide@latest/dist/esm/icons/alert-triangle.js",
+          __icon_query__: "warning alert inefficiency",
         },
       },
     ])
@@ -111,7 +131,7 @@ const ProblemStatementSlideLayout: React.FC<
           {/* Left side - Main Problem */}
           <div className="flex-1 pr-16 flex flex-col justify-center">
             <div className="flex flex-col items-start justify-center h-full">
-              <h2 className="text-7xl font-bold text-white mb-8 leading-tight text-left">
+              <h2 className="text-5xl font-bold text-white mb-8 leading-tight text-left">
                 {slideData?.title}
               </h2>
 

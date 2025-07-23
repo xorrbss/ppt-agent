@@ -13,7 +13,7 @@ const thankYouSlideSchema = z.object({
   subtitle: z.string().min(0).max(100).default("").meta({
     description: "Optional subtitle or closing remark",
   }),
-  companyName: z.string().min(2).max(50).default("Rimberio").meta({
+  companyName: z.string().min(2).max(30).default("Rimberio").meta({
     description: "Company name displayed in header",
   }),
   date: z.string().min(5).max(30).default("June 13, 2038").meta({
@@ -73,11 +73,8 @@ const ThankYouSlideLayout: React.FC<ThankYouSlideLayoutProps> = ({ data }) => {
           {/* Thank You and description */}
           <div className="flex flex-col items-start w-full pt-16">
             <h1
-              className="font-bold text-white mb-6 mt-8 text-left w-full"
-              style={{
-                fontSize: "8.5rem", // Increase size beyond text-7xl
-                lineHeight: 1.05,
-              }}
+              className="font-bold text-8xl text-white mb-6 mt-8 text-left w-full"
+
             >
               {data?.title || "Thank You!"}
             </h1>
@@ -86,11 +83,7 @@ const ThankYouSlideLayout: React.FC<ThankYouSlideLayoutProps> = ({ data }) => {
                 {data.subtitle}
               </div>
             )}
-            <div className="text-xl text-white text-left w-full max-w-3xl mb-0">
-              Write down your hopes for the future of your company. Don't forget
-              to thank the company for the opportunity and convince related
-              parties to support your company.
-            </div>
+
           </div>
 
           {/* Footer area */}

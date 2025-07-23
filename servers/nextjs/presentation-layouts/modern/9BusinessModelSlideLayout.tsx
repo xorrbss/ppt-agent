@@ -19,7 +19,7 @@ export const layoutDescription =
 const businessModelSchema = z.object({
   companyName: z.string().default("presenton"),
   date: z.string().default("June 13, 2038"),
-  title: z.string().default("Business Model"),
+  title: z.string().min(3).max(20).default("Business Model"),
   description: z
     .string()
     .default(
@@ -28,8 +28,8 @@ const businessModelSchema = z.object({
   cacChart: z
     .array(
       z.object({
-        label: z.string(),
-        percentage: z.number(),
+        label: z.string().min(3).max(20),
+        percentage: z.number().min(0).max(100),
       }),
     )
     .default([
@@ -50,9 +50,9 @@ const BusinessModelSlide: React.FC<Props> = ({ data }) => {
     data?.cacChart && Array.isArray(data.cacChart) && data.cacChart.length > 0
       ? data.cacChart
       : [
-          { label: "Internet of Things", percentage: 70 },
-          { label: "Artificial Intelligence", percentage: 60 },
-        ];
+        { label: "Internet of Things", percentage: 70 },
+        { label: "Artificial Intelligence", percentage: 60 },
+      ];
 
   return (
     <>
@@ -76,7 +76,7 @@ const BusinessModelSlide: React.FC<Props> = ({ data }) => {
         <div className="px-16 py-16 flex h-full gap-8">
           {/* Left Column - Chart with Title Below */}
           <div className="flex-1 pr-12 flex flex-col justify-center">
-            <h1 className="text-7xl font-bold text-blue-600 mb-4 leading-tight text-left">
+            <h1 className="text-6xl font-bold text-blue-600 mb-4 leading-tight text-left">
               {data?.title}
             </h1>
             <div className="bg-white rounded-lg shadow p-4 mb-8">

@@ -8,7 +8,7 @@ export const layoutDescription =
   "A slide layout providing an overview of the company, its background, and key information.";
 
 const aboutCompanySlideSchema = z.object({
-  title: z.string().min(3).max(60).default("About Our Company").meta({
+  title: z.string().min(3).max(30).default("About Our Company").meta({
     description: "Main title of the slide",
   }),
   content: z

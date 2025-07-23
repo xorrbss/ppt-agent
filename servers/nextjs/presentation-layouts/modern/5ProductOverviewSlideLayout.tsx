@@ -33,7 +33,7 @@ const productOverviewSlideSchema = z.object({
         title: z.string().min(3).max(50).meta({
           description: "Product title",
         }),
-        description: z.string().min(30).max(200).meta({
+        description: z.string().min(30).max(140).meta({
           description: "Product description",
         }),
         image: ImageSchema.meta({
@@ -45,7 +45,7 @@ const productOverviewSlideSchema = z.object({
       }),
     )
     .min(2)
-    .max(4)
+    .max(2)
     .default([
       {
         title: "Internet of Things",
@@ -121,7 +121,7 @@ const ProductOverviewSlideLayout: React.FC<ProductOverviewSlideLayoutProps> = ({
         <div className="flex h-full px-16 pb-16">
           {/* Title and Description on the left */}
           <div className="flex flex-col items-start justify-center w-[48%] pr-8">
-            <h1 className="text-7xl font-bold text-blue-600 mb-8 leading-tight text-left">
+            <h1 className="text-6xl font-bold text-blue-600 mb-8 leading-tight text-left">
               {slideData?.title}
             </h1>
             <p className="text-blue-600 text-lg leading-relaxed font-normal mb-12 max-w-lg text-left">

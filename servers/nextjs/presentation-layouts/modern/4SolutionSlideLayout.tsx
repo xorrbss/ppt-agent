@@ -14,7 +14,7 @@ const solutionSlideSchema = z.object({
   date: z.string().min(5).max(50).default("June 13, 2038").meta({
     description: "Date displayed in header",
   }),
-  title: z.string().min(3).max(40).default("Solution").meta({
+  title: z.string().min(3).max(25).default("Businesses struggle").meta({
     description: "Main title of the slide",
   }),
   mainDescription: z
@@ -22,7 +22,7 @@ const solutionSlideSchema = z.object({
     .min(20)
     .max(300)
     .default(
-      "Show that we offer a solution that solves the problems previously described and identified. Make sure that the solutions we offer uphold the values of effectiveness, efficiency, and are highly relevant to the market situation and society.",
+      "Show that we offer a solution that solves the problems previously described and identified. Make sure that the solutions we offer uphold the values of effectiveness, efficiency, and are highly relevant to the market situation and societyshiva raj badu is here and what is hsd sdksdf klfdslkf lkflkfsldkf.",
     )
     .meta({
       description: "Main content text describing the solution",
@@ -124,7 +124,7 @@ const SolutionSlideLayout: React.FC<SolutionSlideLayoutProps> = ({
         <div className="flex justify-center items-center h-full px-16 pb-16 gap-4">
           {/* Title and Description */}
           <div className="w-full flex flex-col items-start mb-4">
-            <h1 className="text-7xl font-bold text-blue-600 mb-8 leading-tight text-left">
+            <h1 className="text-6xl font-bold text-blue-600 mb-8 leading-tight text-left">
               {slideData?.title}
             </h1>
             <p className="text-blue-600 text-lg leading-relaxed font-normal mb-12 max-w-lg text-left">
