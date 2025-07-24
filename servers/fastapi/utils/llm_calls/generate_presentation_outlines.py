@@ -87,14 +87,13 @@ async def generate_ppt_outline(
 
     if not is_google_selected():
         client = get_llm_client()
-        async with client.beta.chat.completions.stream(
+        async for response in await client.chat.completions.create(
             model=model,
             messages=get_prompt_template(prompt, n_slides, language, content),
+            stream=True,
             response_format=response_model,
-        ) as stream:
-            async for event in stream:
-                if isinstance(event, ContentDeltaEvent):
-                    yield event.delta
+        ):
+            yield response.choices[0].delta
 
     else:
         client = get_google_llm_client()
