@@ -82,7 +82,7 @@ const OurServiceSlide = ({ data }: { data: Partial<SchemaType> }) => {
                         {bulletPoints && bulletPoints.map((point, index) => (
                             <div key={index} className="text-base font-semibold  text-gray-800 tracking-wide">
                                 <div className="flex gap-3 items-center">
-                                    <div className="w-8 h-8 bg-teal-700 rounded-full "></div>
+                                    <div className="min-w-8 min-h-8 bg-teal-700 rounded-full "></div>
                                     <p className="text-lg font-medium text-gray-800 tracking-wide">{point}</p>
                                 </div>
                             </div>
