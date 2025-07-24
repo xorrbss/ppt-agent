@@ -1,3 +1,4 @@
+import React from "react";
 import * as z from "zod";
 import { ImageSchema, IconSchema } from "../defaultSchemes";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';

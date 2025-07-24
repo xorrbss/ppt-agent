@@ -1,8 +1,6 @@
 import { getHeader, getHeaderForFormData } from "./header";
 import { IconSearch, ImageGenerate, ImageSearch, PreviousGeneratedImagesResponse } from "./params";
 export class PresentationGenerationApi {
-
-
   static async uploadDoc(documents: File[]) {
     const formData = new FormData();
 

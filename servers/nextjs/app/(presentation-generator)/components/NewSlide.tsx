@@ -1,10 +1,9 @@
 import { Trash2 } from 'lucide-react';
 import React from 'react'
-import { useGroupLayoutLoader } from '@/app/layout-preview/hooks/useGroupLayoutLoader';
 import { useDispatch } from 'react-redux';
 import { addNewSlide } from '@/store/slices/presentationGeneration';
 import { Loader2 } from 'lucide-react';
-
+import { useGroupLayoutLoader } from '@/app/layout-preview/hooks/useGroupLayoutLoader';
 interface NewSlideProps {
     setShowNewSlideSelection: (show: boolean) => void;
     group: string;
