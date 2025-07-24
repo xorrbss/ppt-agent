@@ -47,7 +47,7 @@ export const Schema = z.object({
 
 type SchemaType = z.infer<typeof Schema>;
 
-export default function ExampleComponent({ data }: { data: SchemaType }) {
+export default function ExampleSlideLayout({ data }: { data: SchemaType }) {
     const { title, subtitle, metrics, chartImage, trendIcon } = data;
     return (
         <div className="aspect-video max-w-[1280px] w-full bg-white">
