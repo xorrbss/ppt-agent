@@ -46,7 +46,7 @@ export async function GET() {
                     settings = {
                         description: `${groupName} presentation layouts`,
                         ordered: false,
-                        isDefault: false
+                        default: false
                     }
                    
                 }

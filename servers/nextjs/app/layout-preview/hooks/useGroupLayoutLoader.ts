@@ -65,7 +65,7 @@ export const useGroupLayoutLoader = (groupSlug: string): UseGroupLayoutLoaderRet
             const groupSettings: GroupSetting = targetGroupData.settings ? targetGroupData.settings : {
                 description: `${targetGroupData.groupName} presentation layouts`,
                 ordered: false,
-                isDefault: false
+                default: false
             }
             for (const fileName of targetGroupData.files) {
                 try {

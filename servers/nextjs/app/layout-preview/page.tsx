@@ -68,7 +68,7 @@ const LayoutPreview = () => {
                                             <span className="text-xs text-gray-500">
                                                 {group.layouts.length} layout{group.layouts.length !== 1 ? 's' : ''}
                                             </span>
-                                            {group.settings.isDefault && (
+                                            {group.settings.default && (
                                                 <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                                                     Default
                                                 </span>

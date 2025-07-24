@@ -6,7 +6,7 @@ export const layoutName = "Intro Pitch Deck Slide";
 export const layoutDescription =
   "A visually appealing introduction slide for a pitch deck, featuring a large title, company name, date, and contact information with a modern design.";
 const introPitchDeckSchema = z.object({
-  title: z.string().min(2).max(15).default("Pitch Deck and badu").meta({
+  title: z.string().min(2).max(15).default("Pitch Deck").meta({
     description: "Main title of the slide",
   }),
   description: z.string().default("").meta({
