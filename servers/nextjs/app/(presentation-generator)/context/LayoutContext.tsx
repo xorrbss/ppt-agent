@@ -16,7 +16,7 @@ export interface LayoutInfo {
 export interface GroupSetting {
     description: string;
     ordered: boolean;
-    isDefault?: boolean;
+    default?: boolean;
 }
 
 export interface GroupedLayoutsResponse {
@@ -87,7 +87,7 @@ export const LayoutProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 const settings = groupData.settings || {
                     description: `${groupData.groupName} presentation layouts`,
                     ordered: false,
-                    isDefault: false
+                    default: false
                 };
 
                 groupSettingsMap.set(groupData.groupName, settings);
