@@ -101,7 +101,8 @@ interface Type9SlideLayoutProps {
 }
 
 const Type9SlideLayout: React.FC<Type9SlideLayoutProps> = ({ data: slideData }) => {
-    const { title, items, chartData, chartType = 'line', color = '#3b82f6', dataKey = 'value', categoryKey = 'name', showLegend = false, showTooltip = true } = slideData;
+    const { title, items, data, chartType = 'line', color = '#3b82f6', dataKey = 'value', categoryKey = 'name', showLegend = false, showTooltip = true } = slideData;
+    const chartData = data || [];
     const renderChart = () => {
         const commonProps = {
             data: chartData,
@@ -159,23 +160,27 @@ const Type9SlideLayout: React.FC<Type9SlideLayoutProps> = ({ data: slideData }) 
 
             case 'pie':
                 return (
-                    <PieChart margin={{ top: 20, right: 30, left: 40, bottom: 60 }}>
-                        {showTooltip && <ChartTooltip content={<ChartTooltipContent />} />}
-                        {showLegend && <ChartLegend content={<ChartLegendContent />} />}
-                        <Pie
-                            data={chartData}
-                            cx="50%"
-                            cy="40%"
-                            outerRadius={70}
-                            fill={color}
-                            dataKey={dataKey}
-                            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                        >
-                            {chartData.map((entry: any, index: number) => (
-                                <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                            ))}
-                        </Pie>
-                    </PieChart>
+                    <ResponsiveContainer >
+                        <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                            {showTooltip && <ChartTooltip content={<ChartTooltipContent />} />}
+                            {showLegend && <ChartLegend content={<ChartLegendContent />} />}
+                            <Pie
+                                isAnimationActive={false}
+                                data={chartData}
+                                cx="50%"
+                                cy="40%"
+                                outerRadius={80}
+                                fill={color}
+                                dataKey={dataKey}
+
+                                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                            >
+                                {chartData && chartData.map((entry: any, index: number) => (
+                                    <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                                ))}
+                            </Pie>
+                        </PieChart>
+                    </ResponsiveContainer>
                 );
 
             case 'scatter':

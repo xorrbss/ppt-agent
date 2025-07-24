@@ -62,9 +62,9 @@ const SettingsPage = () => {
         isDisabled: true,
         text: "Saving Configuration..."
       }));
-      
+
       await handleSaveLLMConfig(llmConfig);
-      
+
       if (llmConfig.LLM === "ollama" && llmConfig.OLLAMA_MODEL) {
         const isPulled = await checkIfSelectedOllamaModelIsPulled(llmConfig.OLLAMA_MODEL);
         if (!isPulled) {
@@ -72,7 +72,7 @@ const SettingsPage = () => {
           await handleModelDownload();
         }
       }
-      
+
       toast.info("Configuration saved successfully");
       setIsLoading(false);
       setButtonState(prev => ({

@@ -1,17 +1,10 @@
 import * as z from "zod";
-// Note:
-// If you want to use Image and Icon Must Use these Schemas.
-// Image and icons are only media support for PDF and PPTX.
+
 import { ImageSchema, IconSchema } from "../defaultSchemes";
 
 // Schema definition
 export const Schema = z.object({
-    // Note:
-    // Schema fields
-    // Each fields must have a default value (this is important for Layout-preview)
-    // Each fields must have a meta description
-    // Each fields must have a min and max length, length must support the layout design.
-    // Each Array fields must have a min and max length
+
 
     sectionTitle: z.string()
         .min(3)

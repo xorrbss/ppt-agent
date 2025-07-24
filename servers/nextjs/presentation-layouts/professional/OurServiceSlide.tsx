@@ -21,6 +21,16 @@ export const Schema = z.object({
             description: "Supporting subtitle that describes the service approach or value proposition",
         }),
 
+    bulletPoints: z.array(z.string().min(10).max(40)).min(4).max(6)
+        .default([
+            "Customized solutions for your business",
+            "Expert guidance and support",
+            "Innovative technology solutions",
+            "Comprehensive service portfolio"
+        ]).meta({
+            description: "Bullet points to describe the services offered",
+        }),
+
     serviceHighlight: ImageSchema.default({
         __image_url__: "https://images.unsplash.com/photo-1556761175-b413da4baf72?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
         __image_prompt__: "Professional service delivery or team working on client solutions"
@@ -47,7 +57,7 @@ type SchemaType = z.infer<typeof Schema>;
 // Component definition
 const OurServiceSlide = ({ data }: { data: Partial<SchemaType> }) => {
 
-    const { sectionTitle, sectionSubtitle, serviceHighlight, showVisualAccents, showColorBlocks } = data;
+    const { sectionTitle, sectionSubtitle, serviceHighlight, showVisualAccents, showColorBlocks, bulletPoints } = data;
 
     return (
         <div className="aspect-video max-w-[1280px] w-full bg-white relative overflow-hidden">
@@ -66,6 +76,18 @@ const OurServiceSlide = ({ data }: { data: Partial<SchemaType> }) => {
                             {sectionSubtitle}
                         </p>
                     )}
+
+                    <div className="mt-16 space-y-4">
+
+                        {bulletPoints && bulletPoints.map((point, index) => (
+                            <div key={index} className="text-base font-semibold  text-gray-800 tracking-wide">
+                                <div className="flex gap-3 items-center">
+                                    <div className="w-8 h-8 bg-teal-700 rounded-full "></div>
+                                    <p className="text-lg font-medium text-gray-800 tracking-wide">{point}</p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
 
                     {/* Visual Accents */}
                     {showVisualAccents && (

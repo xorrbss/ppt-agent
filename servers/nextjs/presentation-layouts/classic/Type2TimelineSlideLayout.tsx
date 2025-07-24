@@ -59,7 +59,7 @@ const Type2TimelineSlideLayout: React.FC<Type2TimelineSlideLayoutProps> = ({ dat
                             key={`timeline-${index}`}
                             className="relative z-10 w-12 h-12 rounded-full bg-blue-600 px-1 text-white flex items-center justify-center font-bold text-lg"
                         >
-                            <span> `0${index + 1}`</span>
+                            <span> {index + 1}</span>
                         </div>
                     ))}
                 </div>

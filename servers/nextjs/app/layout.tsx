@@ -87,6 +87,7 @@ export default function RootLayout({
         className={`${inter.variable} ${roboto.variable} ${instrument_sans.variable} antialiased`}
       >
         <Providers>
+
           <LayoutProvider>
             {children}
           </LayoutProvider>

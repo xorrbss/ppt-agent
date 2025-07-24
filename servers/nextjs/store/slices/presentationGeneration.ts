@@ -30,12 +30,14 @@ interface PresentationGenerationState {
   error: string | null;
   presentationData: PresentationData | null;
   isSlidesRendered: boolean;
+  isLayoutLoading: boolean;
 }
 
 const initialState: PresentationGenerationState = {
   presentation_id: null,
   outlines: [],
   isSlidesRendered: false,
+  isLayoutLoading: false,
   isLoading: false,
   isStreaming: null,
   error: null,
@@ -52,6 +54,9 @@ const presentationGenerationSlice = createSlice({
     // Loading
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.isLoading = action.payload;
+    },
+    setLayoutLoading: (state, action: PayloadAction<boolean>) => {
+      state.isLayoutLoading = action.payload;
     },
     // Presentation ID
     setPresentationId: (state, action: PayloadAction<string>) => {
@@ -365,6 +370,7 @@ const presentationGenerationSlice = createSlice({
 export const {
   setStreaming,
   setLoading,
+  setLayoutLoading,
   setPresentationId,
   setSlidesRendered,
   setError,

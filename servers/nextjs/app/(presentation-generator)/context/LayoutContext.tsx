@@ -3,7 +3,8 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import dynamic from 'next/dynamic';
 import { toast } from "sonner";
 import * as z from 'zod';
-
+import { useDispatch } from 'react-redux';
+import { setLayoutLoading } from '@/store/slices/presentationGeneration';
 export interface LayoutInfo {
     id: string;
     name?: string;
@@ -60,6 +61,7 @@ export const LayoutProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isPreloading, setIsPreloading] = useState(false);
+    const dispatch = useDispatch();
 
     const buildData = async (groupedLayoutsData: GroupedLayoutsResponse[]) => {
         const layouts: LayoutInfo[] = [];
@@ -171,6 +173,7 @@ export const LayoutProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         try {
             setLoading(true);
             setError(null);
+            dispatch(setLayoutLoading(true));
 
 
             const layoutResponse = await fetch('/api/layouts');
@@ -197,6 +200,7 @@ export const LayoutProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             setError(errorMessage);
             console.error('💥 Error loading layouts:', err);
         } finally {
+            dispatch(setLayoutLoading(false));
             setLoading(false);
         }
     };

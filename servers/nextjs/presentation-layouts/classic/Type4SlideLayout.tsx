@@ -142,7 +142,7 @@ const Type4SlideLayout: React.FC<Type4SlideLayoutProps> = ({ data: slideData }) 
 
             case 'pie':
                 return (
-                    <PieChart margin={{ top: 20, right: 30, left: 40, bottom: 60 }}>
+                    <PieChart margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
                         {showTooltip && <ChartTooltip content={<ChartTooltipContent />} />}
                         {showLegend && <ChartLegend content={<ChartLegendContent />} />}
                         <Pie

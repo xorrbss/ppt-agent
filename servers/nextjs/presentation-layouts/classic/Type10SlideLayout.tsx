@@ -112,8 +112,8 @@ interface Type10SlideLayoutProps {
 }
 
 const Type10SlideLayout: React.FC<Type10SlideLayoutProps> = ({ data: slideData }) => {
-    const { title, items, chartData, chartType = 'line', color = '#3b82f6', dataKey = 'value', categoryKey = 'name', showLegend = false, showTooltip = true } = slideData;
-
+    const { title, items, data, chartType = 'line', color = '#3b82f6', dataKey = 'value', categoryKey = 'name', showLegend = false, showTooltip = true } = slideData;
+    const chartData = data || [];
     const renderChart = () => {
         const commonProps = {
             data: chartData,
@@ -171,7 +171,7 @@ const Type10SlideLayout: React.FC<Type10SlideLayoutProps> = ({ data: slideData }
 
             case 'pie':
                 return (
-                    <PieChart margin={{ top: 20, right: 30, left: 40, bottom: 60 }}>
+                    <PieChart margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
                         {showTooltip && <ChartTooltip content={<ChartTooltipContent />} />}
                         {showLegend && <ChartLegend content={<ChartLegendContent />} />}
                         <Pie
