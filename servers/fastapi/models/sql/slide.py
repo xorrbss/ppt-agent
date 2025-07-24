@@ -1,3 +1,4 @@
+from typing import Optional
 from sqlmodel import SQLModel, Field, Column, JSON
 
 from utils.randomizers import get_random_uuid
@@ -10,3 +11,4 @@ class SlideModel(SQLModel, table=True):
     layout: str
     index: int
     content: dict = Field(sa_column=Column(JSON))
+    html_content: Optional[str]
