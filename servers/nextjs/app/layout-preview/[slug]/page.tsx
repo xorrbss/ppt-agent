@@ -100,7 +100,7 @@ const GroupLayoutPreview = () => {
                                 </div>
 
                                 {/* Layout Content */}
-                                <div className="bg-gray-50">
+                                <div className="bg-gray-50 aspect-video max-w-[1280px] w-full">
                                     <LayoutComponent data={sampleData} />
                                 </div>
                             </Card>
