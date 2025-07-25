@@ -42,7 +42,15 @@ interface IntroSlideLayoutProps {
 const IntroPitchDeckSlide: React.FC<IntroSlideLayoutProps> = ({
   data: slideData,
 }) => {
-  const { title, description, contactNumber, contactAddress, contactWebsite, companyName, date } = slideData;
+  const {
+    title,
+    description,
+    contactNumber,
+    contactAddress,
+    contactWebsite,
+    companyName,
+    date,
+  } = slideData;
   return (
     <>
       {/* Montserrat Font */}
@@ -72,43 +80,53 @@ const IntroPitchDeckSlide: React.FC<IntroSlideLayoutProps> = ({
             transform: "translateY(-50%)",
           }}
         >
-          {title && <div className="relative inline-block">
-            <h1
-              className="text-7xl font-bold text-[#1E4CD9] leading-none"
-              id="pitchdeck-title"
-            >
-              {title}
-            </h1>
-            {/* Blue underline */}
-            <span
-              className="block bg-[#1E4CD9] h-[4px] absolute left-0"
-              style={{
-                width: "100%",
-                bottom: "-0.5em",
-                transition: "width 0.3s",
-              }}
-            />
-          </div>}
+          {title && (
+            <div className="relative inline-block">
+              <h1
+                className="text-7xl font-bold text-[#1E4CD9] leading-none"
+                id="pitchdeck-title"
+              >
+                {title}
+              </h1>
+              {/* Blue underline */}
+              <span
+                className="block bg-[#1E4CD9] h-[4px] absolute left-0"
+                style={{
+                  width: "50%",
+                  bottom: "-0.5em",
+                  transition: "width 0.3s",
+                }}
+              />
+            </div>
+          )}
         </div>
 
         {/* Bottom Contact Row */}
         <div className="absolute bottom-8 left-10 right-10 flex flex-wrap items-center gap-10 text-[#1E4CD9] text-sm font-medium">
-          {contactNumber && <div className="flex items-center gap-2">
-            <span className="text-lg">📞</span>
-            <span>{contactNumber}</span>
-          </div>}
-          {contactAddress && <div className="flex items-center gap-2">
-            <span className="text-lg">📍</span>
-            <span>{contactAddress}</span>
-          </div>}
-          {contactWebsite && <div className="flex items-center gap-2">
-            <span className="text-lg">🌐</span>
-            <span>{contactWebsite}</span>
-          </div>}
-          {description && <div className="flex items-center gap-2">
-            <span className="text-lg">💬</span>
-            <span>{description}</span>
-          </div>}
+          {contactNumber && (
+            <div className="flex items-center gap-2">
+              <span className="text-lg">📞</span>
+              <span>{contactNumber}</span>
+            </div>
+          )}
+          {contactAddress && (
+            <div className="flex items-center gap-2">
+              <span className="text-lg">📍</span>
+              <span>{contactAddress}</span>
+            </div>
+          )}
+          {contactWebsite && (
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🌐</span>
+              <span>{contactWebsite}</span>
+            </div>
+          )}
+          {description && (
+            <div className="flex items-center gap-2">
+              <span className="text-lg">💬</span>
+              <span>{description}</span>
+            </div>
+          )}
         </div>
       </div>
     </>
