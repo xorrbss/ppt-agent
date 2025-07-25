@@ -92,7 +92,7 @@ const IntroPitchDeckSlide: React.FC<IntroSlideLayoutProps> = ({
               <span
                 className="block bg-[#1E4CD9] h-[4px] absolute left-0"
                 style={{
-                  width: "100%",
+                  width: "50%",
                   bottom: "-0.5em",
                   transition: "width 0.3s",
                 }}
