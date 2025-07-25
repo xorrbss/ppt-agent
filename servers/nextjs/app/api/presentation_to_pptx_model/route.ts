@@ -77,6 +77,9 @@ async function getBrowserAndPage(id: string): Promise<[Browser, Page]> {
     waitUntil: "networkidle0",
     timeout: 60000,
   });
+  page.on('console', (msg) => {
+    console.log('console', msg.text());
+  });
   return [browser, page];
 }
 
@@ -284,14 +287,14 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
     const isCanvas = attributes.tagName === 'canvas';
     const isTable = attributes.tagName === 'table';
 
-    const isRootPosition = attributes.position &&
+    const occupiesRoot = attributes.position &&
       attributes.position.left === 0 &&
       attributes.position.top === 0 &&
       attributes.position.width === rootRect!.width &&
       attributes.position.height === rootRect!.height;
 
     const hasOtherProperties = hasBackground || hasBorder || hasShadow || hasText || hasImage || isSvg || isCanvas || isTable;
-    return hasOtherProperties && !isRootPosition;
+    return hasOtherProperties && (!occupiesRoot || hasImage);
   }) : allResults;
 
   if (depth === 0) {
@@ -428,6 +431,23 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
       }
 
       return background;
+    }
+
+    function parseBackgroundImage(computedStyles: CSSStyleDeclaration) {
+      const backgroundImage = computedStyles.backgroundImage;
+
+
+      if (!backgroundImage || backgroundImage === 'none') {
+        return undefined;
+      }
+
+      // Extract URL from background-image style
+      const urlMatch = backgroundImage.match(/url\(['"]?([^'"]+)['"]?\)/);
+      if (urlMatch && urlMatch[1]) {
+        return urlMatch[1];
+      }
+
+      return undefined;
     }
 
     function parseBorder(computedStyles: CSSStyleDeclaration) {
@@ -809,7 +829,7 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
           if (match) {
             const filterType = match[1];
             const value = parseFloat(match[2]);
-            
+
             if (!isNaN(value)) {
               switch (filterType) {
                 case 'invert':
@@ -850,6 +870,8 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
     }
 
     function parseElementAttributes(el: Element) {
+      let tagName = el.tagName.toLowerCase();
+
       const computedStyles = window.getComputedStyle(el);
 
       const position = parsePosition(el);
@@ -875,7 +897,9 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
 
       const textAlign = computedStyles.textAlign as 'left' | 'center' | 'right' | 'justify';
       const objectFit = computedStyles.objectFit as 'contain' | 'cover' | 'fill' | undefined;
-      const imageSrc = (el as HTMLImageElement).src;
+
+      const parsedBackgroundImage = parseBackgroundImage(computedStyles);
+      const imageSrc = (el as HTMLImageElement).src || parsedBackgroundImage;
 
       const borderRadiusValue = parseBorderRadius(computedStyles, el);
 
@@ -886,7 +910,7 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
       const filters = parseFilters(computedStyles);
 
       return {
-        tagName: el.tagName.toLowerCase(),
+        tagName: tagName,
         id: el.id,
         className: (el.className && typeof el.className === 'string') ? el.className : (el.className ? el.className.toString() : undefined),
         innerText: innerText,

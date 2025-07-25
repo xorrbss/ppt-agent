@@ -78,6 +78,7 @@ export function convertElementAttributesToPptxSlides(
 function convertElementToPptxShape(
   element: ElementAttributes
 ): PptxTextBoxModel | PptxAutoShapeBoxModel | PptxConnectorModel | PptxPictureBoxModel | null {
+
   if (!element.position) {
     return null;
   }
