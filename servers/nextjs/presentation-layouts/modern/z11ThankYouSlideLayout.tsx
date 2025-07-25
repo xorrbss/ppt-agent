@@ -7,7 +7,7 @@ export const layoutDescription =
   "A simple, plain thank you slide for closing presentations.";
 
 const thankYouSlideSchema = z.object({
-  title: z.string().min(3).max(40).default("Thank You!").meta({
+  title: z.string().min(3).max(30).default("Thank You!").meta({
     description: "Main thank you message",
   }),
   subtitle: z.string().min(0).max(100).default("").meta({

@@ -13,8 +13,8 @@ const aboutCompanySlideSchema = z.object({
   }),
   content: z
     .string()
-    .min(50)
-    .max(500)
+    .min(25)
+    .max(400)
     .default(
       "In the presentation session, the background/introduction can be filled with information that is arranged systematically and effectively with respect to an interesting topic to be used as material for discussion at the opening of the presentation session. The introduction can provide a general overview for those who are listening to your presentation so that the key words on the topic of discussion are emphasized during this background/introductory presentation session.",
     )
@@ -53,7 +53,7 @@ const AboutCompanySlideLayout: React.FC<AboutCompanySlideLayoutProps> = ({
       />
 
       <div
-        className="w-full rounded-sm max-w-[1280px] shadow-lg max-h-[720px] aspect-video bg-white relative z-20 mx-auto overflow-hidden"
+        className="w-full rounded-sm max-w-[1280px] shadow-lg  aspect-video bg-white relative z-20 mx-auto overflow-hidden"
         style={{
           fontFamily: "Montserrat, sans-serif",
         }}
