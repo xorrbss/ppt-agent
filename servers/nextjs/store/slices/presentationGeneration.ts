@@ -289,6 +289,29 @@ const presentationGenerationSlice = createSlice({
       }
     },
 
+    updateImageProperties: (
+      state,
+      action: PayloadAction<{
+        slideIndex: number;
+        itemIndex: number;
+        properties: any;
+      }>
+    ) => {  
+      if (
+        state.presentationData &&
+        state.presentationData.slides &&
+        state.presentationData.slides[action.payload.slideIndex]
+      ) {
+        const slide = state.presentationData.slides[action.payload.slideIndex];
+        const { itemIndex, properties } = action.payload;
+        slide['properties'] = {
+          ...slide.properties,
+          [itemIndex]: properties
+        };
+        
+      } 
+    },
+
     // Update slide icon at specific data path
     updateSlideIcon: (
       state,
@@ -385,6 +408,7 @@ export const {
   deletePresentationSlide,
   updateSlideContent,
   updateSlideImage,
+  updateImageProperties,
   updateSlideIcon,
   addNewSlide,
 } = presentationGenerationSlice.actions;

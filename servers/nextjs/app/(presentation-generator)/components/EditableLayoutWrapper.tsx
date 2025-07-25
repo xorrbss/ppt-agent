@@ -2,7 +2,7 @@
 
 import React, { ReactNode, useRef, useEffect, useState } from 'react';
 import { useDispatch } from 'react-redux';
-import { updateSlideImage, updateSlideIcon } from '@/store/slices/presentationGeneration';
+import { updateSlideImage, updateSlideIcon, updateImageProperties } from '@/store/slices/presentationGeneration';
 import ImageEditor from './ImageEditor';
 import IconsEditor from './IconsEditor';
 
@@ -170,10 +170,10 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                     htmlImg.setAttribute('data-editable-processed', 'true');
 
                     // Add a unique identifier to help with debugging
-                    htmlImg.setAttribute('data-editable-id', `${type}-${dataPath}-${index}`);
+                    htmlImg.setAttribute('data-editable-id', `${slideIndex}-${type}-${dataPath}-${index}`);
 
                     const editableElement: EditableElement = {
-                        id: `${type}-${dataPath}-${index}`,
+                        id: `${slideIndex}-${type}-${dataPath}-${index}`,
                         type,
                         src,
                         dataPath,
@@ -192,9 +192,14 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
 
                     htmlImg.addEventListener('click', clickHandler);
 
+                    const itemIndex = parseInt(`${slideIndex}-${type}-${dataPath}-${index}`.split('-').pop() || '0');
+                    const properties = slideData.properties?.[itemIndex];
+
                     // Add hover effects without changing layout
                     htmlImg.style.cursor = 'pointer';
                     htmlImg.style.transition = 'opacity 0.2s, transform 0.2s';
+                    htmlImg.style.objectFit = properties?.objectFit;
+                    htmlImg.style.objectPosition = `${properties?.focusPoint?.x}% ${properties?.focusPoint?.y}%`;
 
                     const mouseEnterHandler = () => {
                         htmlImg.style.opacity = '0.8';
@@ -327,15 +332,21 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
         }
     };
     const handleFocusPointClick = (propertiesData: any) => {
-        console.log('activeEditor', activeEditor);
+
         const id = activeEditor?.id;
         const editableId = document.querySelector(`[data-editable-id="${id}"]`);
-        console.log('editableId', editableId);
+
         if (editableId) {
             const editableElement = editableId as HTMLImageElement;
-            editableElement.style.objectPosition = `${propertiesData.initialFocusPoint.x}px ${propertiesData.initialFocusPoint.y}px`;
             editableElement.style.objectFit = propertiesData.initialObjectFit;
+            editableElement.style.objectPosition = `${propertiesData.initialFocusPoint.x}% ${propertiesData.initialFocusPoint.y}%`;
         }
+
+        dispatch(updateImageProperties({
+            slideIndex,
+            itemIndex: parseInt(activeEditor?.id.split('-').pop() || '0'),
+            properties: propertiesData
+        }));
 
     };
 
@@ -374,47 +385,3 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
 
 export default EditableLayoutWrapper;
 
-
-
-
-const setNestedImageValue = (obj: any, path: string, url: string, promptText?: string) => {
-    const keys = path.split(/[.\[\]]+/).filter(Boolean);
-    let current = obj;
-
-    // Navigate to the parent object
-    for (let i = 0; i < keys.length - 1; i++) {
-        const key = keys[i];
-        if (isNaN(Number(key))) {
-            if (!current[key]) {
-                current[key] = {};
-            }
-            current = current[key];
-        } else {
-            const index = Number(key);
-            if (!current[index]) {
-                current[index] = {};
-            }
-            current = current[index];
-        }
-    }
-
-    // Set the image properties
-    const finalKey = keys[keys.length - 1];
-    const target = isNaN(Number(finalKey)) ? current[finalKey] : current[Number(finalKey)];
-
-    // Preserve existing properties if the target already exists
-    const updatedValue = {
-        ...(target && typeof target === 'object' ? target : {}),
-        __image_url__: url,
-        __image_prompt__: promptText || (target?.__image_prompt__) || ''
-    };
-
-    if (isNaN(Number(finalKey))) {
-        current[finalKey] = updatedValue;
-    } else {
-        current[Number(finalKey)] = updatedValue;
-    }
-
-    // Add debugging
-    console.log('Redux: Updated slide image at path:', path, 'with URL:', url);
-};

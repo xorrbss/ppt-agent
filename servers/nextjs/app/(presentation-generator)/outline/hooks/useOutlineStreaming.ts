@@ -32,7 +32,7 @@ export const useOutlineStreaming = (presentationId: string | null) => {
 
         eventSource.addEventListener("response", (event) => {
           const data = JSON.parse(event.data);
-
+          console.log('data', data);
           switch (data.type) {
             case "chunk":
               accumulatedChunks += data.chunk;
@@ -65,6 +65,15 @@ export const useOutlineStreaming = (presentationId: string | null) => {
             case "closing":
               setStreamState({ isStreaming: false, isLoading: false });
               eventSource.close();
+              break;
+            case "error":
+              setStreamState({ isStreaming: false, isLoading: false });
+              eventSource.close();
+              toast.error('Error in outline streaming',
+                {
+                  description: data.detail || 'Failed to connect to the server. Please try again.',
+                }
+              );
               break;
           }
         });

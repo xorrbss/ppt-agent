@@ -269,14 +269,14 @@ const ImageEditor = ({
 
           <div className="mt-6">
             <Tabs defaultValue="generate" className="w-full">
-              <TabsList className="grid bg-blue-100 border border-blue-300 w-full grid-cols-2 mx-auto">
+              <TabsList className="grid bg-blue-100 border border-blue-300 w-full grid-cols-3 mx-auto">
                 <TabsTrigger className="font-medium" value="generate">
                   AI Generate
                 </TabsTrigger>
                 <TabsTrigger className="font-medium" value="upload">
                   Upload
                 </TabsTrigger>
-                {/* <TabsTrigger className="font-medium" value="edit">Edit</TabsTrigger> */}
+                <TabsTrigger className="font-medium" value="edit">Edit</TabsTrigger>
               </TabsList>
               {/* Generate Tab */}
               <TabsContent value="generate" className="mt-4 space-y-4">
