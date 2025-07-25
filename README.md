@@ -29,6 +29,7 @@
 * ✅ **API Presentation Generation** — Host as API to generate presentations over requests
 * ✅ **Ollama Support** — Run open-source models locally with Ollama integration
 * ✅ **OpenAI API Compatibility** — Use any OpenAI-compatible API endpoint with your own models
+* ✅ **Versatile Image Generation** — Choose from DALL-E 3, Gemini Flash, Pexels, or Pixabay for your visuals
 * ✅ **Runs Locally** — All code runs on your device
 * ✅ **Privacy-First** — No tracking, no data stored by us
 * ✅ **Flexible** — Generate presentations from prompts or outlines
@@ -74,7 +75,7 @@ You may want to directly provide your API KEYS as environment variables and keep
 You can also set the following environment variables to customize the image generation provider and API keys:
 
 - **IMAGE_PROVIDER=[pexels/pixabay/gemini_flash/dall-e-3]**: Select the image provider of your choice.
-  - Defaults to **dall-e-3** for OpenAI models and **gemini_flash** for Google models if not set.
+  - Defaults to **dall-e-3** for OpenAI models, **gemini_flash** for Google models if not set.
 - **PEXELS_API_KEY=[Your Pexels API Key]**: Required if using **pexels** as the image provider.
 - **PIXABAY_API_KEY=[Your Pixabay API Key]**: Required if using **pixabay** as the image provider.
 - **GOOGLE_API_KEY=[Your Google API Key]**: Required if using **gemini_flash** as the image provider.
