@@ -5,6 +5,7 @@ export interface ElementAttributes {
   id?: string;
   className?: string;
   innerText?: string;
+  opacity?: number;
   background?: {
     color?: string;
     opacity?: number;

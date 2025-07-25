@@ -39,6 +39,7 @@ from utils.image_utils import (
     create_circle_image,
     fit_image,
     round_image_corners,
+    set_image_opacity,
 )
 
 BLANK_SLIDE_LAYOUT = 6
@@ -174,6 +175,7 @@ class PptxPresentationCreator:
             picture_model.clip
             or picture_model.border_radius
             or picture_model.overlay
+            or picture_model.opacity
             or picture_model.object_fit
             or picture_model.shape
         ):
@@ -206,6 +208,8 @@ class PptxPresentationCreator:
                 image = create_circle_image(image)
             if picture_model.overlay:
                 image = change_image_color(image, picture_model.overlay)
+            if picture_model.opacity:
+                image = set_image_opacity(image, picture_model.opacity)
             image_path = os.path.join(self._temp_dir, f"{str(uuid.uuid4())}.png")
             image.save(image_path)
 
