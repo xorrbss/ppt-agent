@@ -24,7 +24,7 @@ const teamMemberSchema = z.object({
 });
 
 const modernTeamSlideSchema = z.object({
-  title: z.string().min(3).max(20).default("Our Team").meta({
+  title: z.string().min(3).max(15).default("Our Team").meta({
     description: "Main title of the slide",
   }),
   subtitle: z.string().min(10).max(120).optional().meta({
@@ -83,11 +83,11 @@ const modernTeamSlideSchema = z.object({
     .meta({
       description: "List of team members with their information",
     }),
-  companyName: z.string().default("presenton").meta({
-    description: "Company name to display in the header",
+  companyName: z.string().min(2).max(50).default("presenton").meta({
+    description: "Company name displayed in header",
   }),
-  date: z.string().default("June 13, 2038").meta({
-    description: "Date to display in the header",
+  date: z.string().min(5).max(50).default("June 13, 2038").meta({
+    description: "Today Date displayed in header",
   }),
 });
 

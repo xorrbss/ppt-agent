@@ -4,13 +4,13 @@ import * as z from "zod";
 export const layoutId = "intro-pitchdeck-slide";
 export const layoutName = "Intro Pitch Deck Slide";
 export const layoutDescription =
-  "A visually appealing introduction slide for a pitch deck, featuring a large title, company name, date, and contact information with a modern design.";
+  "A visually appealing introduction slide for a pitch deck, featuring a large title, company name, date, and contact information with a modern design. This Slide is always the first slide in a pitch deck, setting the tone for the presentation with a clean and professional look.";
 const introPitchDeckSchema = z.object({
-  title: z.string().min(2).max(15).default("Pitch Deck and badu").meta({
+  title: z.string().min(2).max(15).default("Pitch Deck").meta({
     description: "Main title of the slide",
   }),
   description: z.string().default("").meta({
-    description: "Empty description as per the design",
+    description: "Description as per the design",
   }),
   contactNumber: z.string().default("+123-456-7890").meta({
     description: "Contact phone number displayed in footer",
@@ -42,7 +42,15 @@ interface IntroSlideLayoutProps {
 const IntroPitchDeckSlide: React.FC<IntroSlideLayoutProps> = ({
   data: slideData,
 }) => {
-  const { title, description, contactNumber, contactAddress, contactWebsite, companyName, date } = slideData;
+  const {
+    title,
+    description,
+    contactNumber,
+    contactAddress,
+    contactWebsite,
+    companyName,
+    date,
+  } = slideData;
   return (
     <>
       {/* Montserrat Font */}
@@ -72,43 +80,53 @@ const IntroPitchDeckSlide: React.FC<IntroSlideLayoutProps> = ({
             transform: "translateY(-50%)",
           }}
         >
-          {title && <div className="relative inline-block">
-            <h1
-              className="text-7xl font-bold text-[#1E4CD9] leading-none"
-              id="pitchdeck-title"
-            >
-              {title}
-            </h1>
-            {/* Blue underline */}
-            <span
-              className="block bg-[#1E4CD9] h-[4px] absolute left-0"
-              style={{
-                width: "100%",
-                bottom: "-0.5em",
-                transition: "width 0.3s",
-              }}
-            />
-          </div>}
+          {title && (
+            <div className="relative inline-block">
+              <h1
+                className="text-7xl font-bold text-[#1E4CD9] leading-none"
+                id="pitchdeck-title"
+              >
+                {title}
+              </h1>
+              {/* Blue underline */}
+              <span
+                className="block bg-[#1E4CD9] h-[4px] absolute left-0"
+                style={{
+                  width: "50%",
+                  bottom: "-0.5em",
+                  transition: "width 0.3s",
+                }}
+              />
+            </div>
+          )}
         </div>
 
         {/* Bottom Contact Row */}
         <div className="absolute bottom-8 left-10 right-10 flex flex-wrap items-center gap-10 text-[#1E4CD9] text-sm font-medium">
-          {contactNumber && <div className="flex items-center gap-2">
-            <span className="text-lg">📞</span>
-            <span>{contactNumber}</span>
-          </div>}
-          {contactAddress && <div className="flex items-center gap-2">
-            <span className="text-lg">📍</span>
-            <span>{contactAddress}</span>
-          </div>}
-          {contactWebsite && <div className="flex items-center gap-2">
-            <span className="text-lg">🌐</span>
-            <span>{contactWebsite}</span>
-          </div>}
-          {description && <div className="flex items-center gap-2">
-            <span className="text-lg">💬</span>
-            <span>{description}</span>
-          </div>}
+          {contactNumber && (
+            <div className="flex items-center gap-2">
+              <span className="text-lg">📞</span>
+              <span>{contactNumber}</span>
+            </div>
+          )}
+          {contactAddress && (
+            <div className="flex items-center gap-2">
+              <span className="text-lg">📍</span>
+              <span>{contactAddress}</span>
+            </div>
+          )}
+          {contactWebsite && (
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🌐</span>
+              <span>{contactWebsite}</span>
+            </div>
+          )}
+          {description && (
+            <div className="flex items-center gap-2">
+              <span className="text-lg">💬</span>
+              <span>{description}</span>
+            </div>
+          )}
         </div>
       </div>
     </>

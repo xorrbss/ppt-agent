@@ -11,8 +11,8 @@ const solutionSlideSchema = z.object({
   companyName: z.string().min(2).max(50).default("presenton").meta({
     description: "Company name displayed in header",
   }),
-  date: z.string().min(5).max(50).default("June 13, 2038").meta({
-    description: "Date displayed in header",
+  date: z.string().min(5).max(30).default("June 13, 2038").meta({
+    description: "Today Date displayed in header",
   }),
   title: z.string().min(3).max(25).default("Businesses struggle").meta({
     description: "Main title of the slide",
@@ -33,7 +33,7 @@ const solutionSlideSchema = z.object({
         title: z.string().min(3).max(30).meta({
           description: "Section title",
         }),
-        description: z.string().min(5).max(80).meta({
+        description: z.string().min(5).max(70).meta({
           description: "Section description",
         }),
         icon: IconSchema.optional().meta({
@@ -46,7 +46,8 @@ const solutionSlideSchema = z.object({
     .default([
       {
         title: "Market",
-        description: "Innovative and widely accepted.",
+        description:
+          "Innovative and widely accepted. Innovative and widely accepted. Innovative and widely accepted.",
         icon: {
           __icon_query__: "market innovation",
           __icon_url__:
@@ -109,7 +110,7 @@ const SolutionSlideLayout: React.FC<SolutionSlideLayoutProps> = ({
       />
 
       <div
-        className="w-full rounded-sm max-w-[1280px] shadow-lg max-h-[720px] aspect-video bg-white relative z-20 mx-auto overflow-hidden border-2 border-gray-800"
+        className="w-full rounded-sm max-w-[1280px] shadow-lg  aspect-video bg-white relative z-20 mx-auto overflow-hidden border-2 border-gray-800"
         style={{
           fontFamily: "Montserrat, sans-serif",
         }}
@@ -132,11 +133,11 @@ const SolutionSlideLayout: React.FC<SolutionSlideLayoutProps> = ({
             </p>
           </div>
           {/* Four Small Boxes in a Row */}
-          <div className="grid grid-cols-2 gap-4 w-full max-w-5xl">
+          <div className="grid grid-cols-2 gap-4 w-full ">
             {sections.map((section, idx) => (
               <div
                 key={idx}
-                className="flex flex-col items-center text-center bg-[#F5F8FE] rounded-lg shadow px-3 py-4 min-h-[140px] max-h-[160px]"
+                className="flex flex-col items-center text-center bg-[#F5F8FE] rounded-lg shadow px-3 py-4 "
               >
                 <div className="mb-2">
                   {section?.icon?.__icon_url__ && (

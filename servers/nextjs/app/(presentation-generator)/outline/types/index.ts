@@ -3,7 +3,7 @@ export interface LayoutGroup {
   name: string;
   description: string;
   ordered: boolean;
-  isDefault?: boolean;
+  default?: boolean;
   slides?: any
 }
 

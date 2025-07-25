@@ -40,7 +40,7 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
                 const groupSettings: GroupSetting = groupData.settings ? groupData.settings : {
                     description: `${groupData.groupName} presentation layouts`,
                     ordered: false,
-                    isDefault: false
+                    default: false
                 }
 
                 for (const fileName of groupData.files) {

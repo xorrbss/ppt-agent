@@ -12,7 +12,7 @@ export interface LayoutInfo {
 export interface GroupSetting {
     description: string;
     ordered: boolean;
-    isDefault?: boolean;
+    default?: boolean;
 }
 
 export interface LayoutGroup {

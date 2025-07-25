@@ -7,8 +7,8 @@ from models.sql.slide import SlideModel
 from google.genai.types import GenerateContentConfig
 from utils.llm_provider import (
     get_google_llm_client,
+    get_large_model,
     get_llm_client,
-    get_small_model,
     is_google_selected,
 )
 from utils.schema_utils import remove_fields_from_schema
@@ -58,7 +58,7 @@ async def get_edited_slide_content(
     slide: SlideModel,
     language: Optional[str] = None,
 ):
-    model = get_small_model()
+    model = get_large_model()
     response_schema = remove_fields_from_schema(
         slide_layout.json_schema, ["__image_url__", "__icon_url__"]
     )

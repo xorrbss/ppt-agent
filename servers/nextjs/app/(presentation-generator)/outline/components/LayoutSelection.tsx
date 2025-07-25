@@ -32,14 +32,14 @@ const LayoutSelection: React.FC<LayoutSelectionProps> = ({
                 name: groupName,
                 description: settings?.description || `${groupName} presentation layouts`,
                 ordered: settings?.ordered || false,
-                isDefault: settings?.isDefault || false,
+                default: settings?.default || false,
             };
         });
 
         // Sort groups to put default first, then by name
         return Groups.sort((a, b) => {
-            if (a.isDefault && !b.isDefault) return -1;
-            if (!a.isDefault && b.isDefault) return 1;
+            if (a.default && !b.default) return -1;
+            if (!a.default && b.default) return 1;
             return a.name.localeCompare(b.name);
         });
     }, [getAllGroups, getLayoutsByGroup, getGroupSetting]);
@@ -47,7 +47,7 @@ const LayoutSelection: React.FC<LayoutSelectionProps> = ({
     // Auto-select first group when groups are loaded
     useEffect(() => {
         if (layoutGroups.length > 0 && !selectedLayoutGroup) {
-            const defaultGroup = layoutGroups.find(g => g.isDefault) || layoutGroups[0];
+            const defaultGroup = layoutGroups.find(g => g.default) || layoutGroups[0];
             const slides = getLayoutsByGroup(defaultGroup.id);
 
             onSelectLayoutGroup({
