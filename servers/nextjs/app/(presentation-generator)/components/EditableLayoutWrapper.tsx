@@ -11,6 +11,7 @@ interface EditableLayoutWrapperProps {
     slideIndex: number;
     slideData: any;
     isEditMode?: boolean;
+    properties?: any;
 }
 
 interface EditableElement {
@@ -26,6 +27,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
     children,
     slideIndex,
     slideData,
+    properties
 }) => {
     const dispatch = useDispatch();
     const containerRef = useRef<HTMLDivElement>(null);
@@ -193,13 +195,14 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                     htmlImg.addEventListener('click', clickHandler);
 
                     const itemIndex = parseInt(`${slideIndex}-${type}-${dataPath}-${index}`.split('-').pop() || '0');
-                    const properties = slideData.properties?.[itemIndex];
+                    const propertiesData = properties?.[itemIndex];
+                    console.log('propertiesData', propertiesData);
 
                     // Add hover effects without changing layout
                     htmlImg.style.cursor = 'pointer';
                     htmlImg.style.transition = 'opacity 0.2s, transform 0.2s';
-                    htmlImg.style.objectFit = properties?.objectFit;
-                    htmlImg.style.objectPosition = `${properties?.focusPoint?.x}% ${properties?.focusPoint?.y}%`;
+                    htmlImg.style.objectFit = propertiesData?.initialObjectFit;
+                    htmlImg.style.objectPosition = `${propertiesData?.initialFocusPoint?.x}% ${propertiesData?.initialFocusPoint?.y}%`;
 
                     const mouseEnterHandler = () => {
                         htmlImg.style.opacity = '0.8';

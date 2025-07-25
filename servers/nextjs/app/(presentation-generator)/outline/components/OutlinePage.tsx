@@ -9,7 +9,6 @@ import Wrapper from "@/components/Wrapper";
 import OutlineContent from "./OutlineContent";
 import LayoutSelection from "./LayoutSelection";
 import EmptyStateView from "./EmptyStateView";
-import PageHeader from "./PageHeader";
 import GenerateButton from "./GenerateButton";
 
 import { TABS, LayoutGroup } from "../types/index";
