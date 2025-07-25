@@ -182,6 +182,28 @@ def create_circle_image(
     return result
 
 
+def set_image_opacity(image: Image.Image, opacity: float) -> Image.Image:
+    # Clamp opacity to valid range
+    opacity = max(0.0, min(1.0, opacity))
+
+    # Convert to RGBA if not already
+    if image.mode != "RGBA":
+        image = image.convert("RGBA")
+
+    # Get the original alpha channel
+    original_alpha = image.getchannel("A")
+
+    # Create new alpha channel with adjusted opacity
+    new_alpha = original_alpha.point(lambda x: int(x * opacity))
+
+    # Create new image with modified alpha channel
+    result = Image.new("RGBA", image.size)
+    result.paste(image.convert("RGB"), (0, 0))
+    result.putalpha(new_alpha)
+
+    return result
+
+
 def fit_image(
     image: Image.Image, width: int, height: int, object_fit: PptxObjectFitModel
 ) -> Image.Image:

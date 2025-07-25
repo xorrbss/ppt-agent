@@ -305,6 +305,7 @@ export interface PptxPictureBoxModel extends PptxShapeModel {
   margin?: PptxSpacingModel;
   clip: boolean;
   overlay?: string;
+  opacity?: number;
   border_radius?: number[];
   shape?: PptxBoxShapeEnum;
   object_fit?: PptxObjectFitModel;

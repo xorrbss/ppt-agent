@@ -230,6 +230,7 @@ function convertToPictureBox(element: ElementAttributes): PptxPictureBoxModel {
     margin: undefined,
     clip: element.clip ?? true,
     overlay,
+    opacity: element.opacity,
     border_radius: element.borderRadius ? element.borderRadius.map(r => Math.round(r)) : undefined,
     shape: element.shape ? (element.shape as PptxBoxShapeEnum) : PptxBoxShapeEnum.RECTANGLE,
     object_fit: objectFit,
