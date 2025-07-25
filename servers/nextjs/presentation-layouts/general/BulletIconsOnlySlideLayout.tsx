@@ -29,7 +29,7 @@ const bulletIconsOnlySlideSchema = z.object({
             title: 'Custom Software',
             subtitle: 'We create tailored software to optimize processes and boost efficiency.',
             icon: {
-                __icon_url__: 'https://cdn.jsdelivr.net/npm/lucide@latest/dist/esm/icons/code.js',
+                __icon_url__: '/static/icons/placeholder.png',
                 __icon_query__: 'code software development'
             }
         },
@@ -37,7 +37,7 @@ const bulletIconsOnlySlideSchema = z.object({
             title: 'Digital Consulting',
             subtitle: 'Our consultants guide organizations in leveraging the latest technologies.',
             icon: {
-                __icon_url__: 'https://cdn.jsdelivr.net/npm/lucide@latest/dist/esm/icons/users.js',
+                __icon_url__: '/static/icons/placeholder.png',
                 __icon_query__: 'users consulting team'
             }
         },
@@ -45,7 +45,7 @@ const bulletIconsOnlySlideSchema = z.object({
             title: 'Support Services',
             subtitle: 'We provide ongoing support to help businesses adapt and maintain performance.',
             icon: {
-                __icon_url__: 'https://cdn.jsdelivr.net/npm/lucide@latest/dist/esm/icons/headphones.js',
+                __icon_url__: '/static/icons/placeholder.png',
                 __icon_query__: 'headphones support service'
             }
         },
@@ -53,7 +53,7 @@ const bulletIconsOnlySlideSchema = z.object({
             title: 'Scalable Marketing',
             subtitle: 'Our data-driven strategies help businesses expand their reach and engagement.',
             icon: {
-                __icon_url__: 'https://cdn.jsdelivr.net/npm/lucide@latest/dist/esm/icons/trending-up.js',
+                __icon_url__: '/static/icons/placeholder.png',
                 __icon_query__: 'trending up marketing growth'
             }
         }

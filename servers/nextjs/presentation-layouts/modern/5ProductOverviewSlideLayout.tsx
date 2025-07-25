@@ -162,13 +162,15 @@ const ProductOverviewSlideLayout: React.FC<ProductOverviewSlideLayoutProps> = ({
                     className="rounded-b-md overflow-hidden"
                     style={{ height: `${IMAGE_SECTION_HEIGHT + 28}px` }}
                   >
-                    <img
-                      src={products[0].image.__image_url__}
-                      alt={
-                        products[0].image.__image_prompt__ || products[0].title
-                      }
-                      className="w-full h-full object-cover"
-                    />
+                    {products[0].image.__image_url__ && (
+                      <img
+                        src={products[0].image.__image_url__}
+                        alt={
+                          products[0].image.__image_prompt__ || products[0].title
+                        }
+                        className="w-full h-full object-cover"
+                      />
+                    )}
                   </div>
                 </div>
               )}
@@ -199,13 +201,15 @@ const ProductOverviewSlideLayout: React.FC<ProductOverviewSlideLayoutProps> = ({
                     className="rounded-b-md overflow-hidden"
                     style={{ height: `${IMAGE_SECTION_HEIGHT + 28}px` }}
                   >
-                    <img
-                      src={products[2].image.__image_url__}
-                      alt={
-                        products[2].image.__image_prompt__ || products[2].title
-                      }
-                      className="w-full h-full object-cover"
-                    />
+                    {products[2].image.__image_url__ && (
+                      <img
+                        src={products[2].image.__image_url__}
+                        alt={
+                          products[2].image.__image_prompt__ || products[2].title
+                        }
+                        className="w-full h-full object-cover"
+                      />
+                    )}
                   </div>
                 </div>
               )}
@@ -225,13 +229,15 @@ const ProductOverviewSlideLayout: React.FC<ProductOverviewSlideLayoutProps> = ({
                     className="rounded-t-md overflow-hidden"
                     style={{ height: `${IMAGE_SECTION_HEIGHT + 28}px` }}
                   >
-                    <img
-                      src={products[1].image.__image_url__}
-                      alt={
-                        products[1].image.__image_prompt__ || products[1].title
-                      }
-                      className="w-full h-full object-cover"
-                    />
+                    {products[1].image.__image_url__ && (
+                      <img
+                        src={products[1].image.__image_url__}
+                        alt={
+                          products[1].image.__image_prompt__ || products[1].title
+                        }
+                        className="w-full h-full object-cover"
+                      />
+                    )}
                   </div>
                   {/* Bottom Section - Blue background with text */}
                   <div
@@ -263,13 +269,15 @@ const ProductOverviewSlideLayout: React.FC<ProductOverviewSlideLayoutProps> = ({
                     className="rounded-t-md overflow-hidden"
                     style={{ height: `${IMAGE_SECTION_HEIGHT + 28}px` }}
                   >
-                    <img
-                      src={products[3].image.__image_url__}
-                      alt={
-                        products[3].image.__image_prompt__ || products[3].title
-                      }
-                      className="w-full h-full object-cover"
-                    />
+                    {products[3].image.__image_url__ && (
+                      <img
+                        src={products[3].image.__image_url__}
+                        alt={
+                          products[3].image.__image_prompt__ || products[3].title
+                        }
+                        className="w-full h-full object-cover"
+                      />
+                    )}
                   </div>
                   <div
                     className={`${products[3].isBlueBackground ? "bg-blue-600" : "bg-gray-100"} p-5 flex flex-col justify-center text-center rounded-b-md`}

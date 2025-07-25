@@ -150,12 +150,14 @@ const ProblemStatementSlideLayout: React.FC<
                   className="flex items-start gap-5 bg-white bg-opacity-5 rounded-lg p-5"
                 >
                   <div className="flex-shrink-0">
-                    <img
-                      src={category.icon?.__icon_url__}
-                      alt={category.icon?.__icon_query__}
-                      className="w-12 h-12"
-                      style={{ filter: "invert(1)" }}
-                    />
+                    {category.icon?.__icon_url__ && (
+                      <img
+                        src={category.icon?.__icon_url__}
+                        alt={category.icon?.__icon_query__}
+                        className="w-12 h-12"
+                        style={{ filter: "invert(1)" }}
+                      />
+                    )}
                   </div>
                   <div>
                     <h3 className="text-xl font-semibold text-white mb-1">

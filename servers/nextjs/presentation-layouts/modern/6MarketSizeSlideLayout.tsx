@@ -107,20 +107,20 @@ const MarketSizeSlideLayout: React.FC<MarketSizeSlideProps> = ({
                 {slideData?.title || "Market Size"}
               </h1>
               <div className="w-full bg-[#CBE3CC] rounded-md mb-8 flex items-center justify-center">
-                <img
-                  src={
-                    slideData?.mapImage?.__image_url__ ||
-                    "https://upload.wikimedia.org/wikipedia/commons/8/80/World_map_-_low_resolution.svg"
-                  }
-                  alt="Market World Map with Points"
-                  className="w-full object-contain rounded-md"
-                  style={{ maxHeight: 220 }}
-                />
+                {slideData?.mapImage?.__image_url__ && (
+                  <img
+                    src={slideData?.mapImage?.__image_url__}
+                    alt="Market World Map with Points"
+                    className="w-full object-contain rounded-md"
+                    style={{ maxHeight: 220 }}
+                  />
+                )}
               </div>
-              <p className="text-blue-600 text-sm leading-relaxed font-normal mb-12 max-w-lg text-left">
-                {slideData?.description ||
-                  "Market size is the total amount of all sales and customers that can be seen directly by stakeholders. This technique is usually calculated at the end of the year, the market size can be used by companies to determine the potential of their market and business in the future."}
-              </p>
+              {slideData?.description && (
+                <p className="text-blue-600 text-sm leading-relaxed font-normal mb-12 max-w-lg text-left">
+                  {slideData?.description}
+                </p>
+              )}
             </div>
           </div>
 
