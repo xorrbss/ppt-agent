@@ -60,9 +60,11 @@ const SlideContent = ({
         dispatch(updateSlide({ index: slide.index, slide: response }));
         toast.success("Slide updated successfully");
       }
-    } catch (error) {
-      console.error("Error updating slide:", error);
-      toast.error("Failed to update slide. Please try again.");
+    } catch (error: any) {
+      console.error("Error in slide editing:", error);
+      toast.error("Error in slide editing.", {
+        description: error.message || "Error in slide editing.",
+      });
     } finally {
       setIsUpdating(false);
     }
@@ -70,8 +72,11 @@ const SlideContent = ({
   const onDeleteSlide = async () => {
     try {
       dispatch(deletePresentationSlide(slide.index));
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error deleting slide:", error);
+      toast.error("Error deleting slide.", {
+        description: error.message || "Error deleting slide.",
+      });
     }
   };
   // Scroll to the new slide when streaming and new slides are being generated

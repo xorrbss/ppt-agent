@@ -17,14 +17,22 @@ export const layoutDescription =
   "A business model presentation slide displaying CAC metrics and monetization strategy.";
 
 const businessModelSchema = z.object({
-  companyName: z.string().default("presenton"),
-  date: z.string().default("June 13, 2038"),
+  companyName: z.string().min(2).max(50).default("presenton").meta({
+    description: "Company name displayed in header",
+  }),
+  date: z.string().min(5).max(50).default("June 13, 2038").meta({
+    description: "Today Date displayed in header",
+  }),
   title: z.string().min(3).max(20).default("Business Model"),
   description: z
     .string()
     .default(
       "Describe how you monetize, who your customers are, your distribution channels or fee structure. The goal is to give an idea of how this business will sustain your product or service and explain how your company will make money and achieve its goals. This can be shown with graphs, statistics, or charts. Use the Lifetime Value (LTV) and Customer Acquisition Cost (CAC) metrics to provide a clearer picture.",
-    ),
+    )
+    .meta({
+      description:
+        "Description of the business model, monetization strategy, and customer acquisition costs.",
+    }),
   cacChart: z
     .array(
       z.object({
@@ -32,10 +40,19 @@ const businessModelSchema = z.object({
         percentage: z.number().min(0).max(100),
       }),
     )
+    .min(2)
+    .max(5)
     .default([
       { label: "Internet of Things", percentage: 70 },
       { label: "Artificial Intelligence", percentage: 60 },
-    ]),
+      { label: "Blockchain", percentage: 50 },
+      { label: "Cloud Computing", percentage: 40 },
+      { label: "Cybersecurity", percentage: 30 },
+    ])
+    .meta({
+      description:
+        "Array of objects representing Customer Acquisition Cost (CAC) metrics for different business segments or channels. Each object should include a 'label' (the name of the segment or channel) and a 'percentage' (the CAC as a percentage value, from 0 to 100). This data is visualized in the bar chart to illustrate the distribution of CAC across various categories.",
+    }),
 });
 
 export const Schema = businessModelSchema;
@@ -50,9 +67,9 @@ const BusinessModelSlide: React.FC<Props> = ({ data }) => {
     data?.cacChart && Array.isArray(data.cacChart) && data.cacChart.length > 0
       ? data.cacChart
       : [
-        { label: "Internet of Things", percentage: 70 },
-        { label: "Artificial Intelligence", percentage: 60 },
-      ];
+          { label: "Internet of Things", percentage: 70 },
+          { label: "Artificial Intelligence", percentage: 60 },
+        ];
 
   return (
     <>

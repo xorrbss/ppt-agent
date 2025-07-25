@@ -98,10 +98,10 @@ const ImageEditor = ({
     try {
       const response = await PresentationGenerationApi.getPreviousGeneratedImages();
       setPreviousGeneratedImages(response);
-    } catch (error) {
+    } catch (error: any) {
       toast.error("Failed to get previous generated images. Please try again.");
       console.error("error in getting previous generated images", error);
-      setError("Failed to get previous generated images. Please try again.");
+      setError(error.message || "Failed to get previous generated images. Please try again.");
     }
   }
 
@@ -218,9 +218,9 @@ const ImageEditor = ({
       });
 
       setPreviewImages(response);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error in image generation", err);
-      setError("Failed to generate image. Please try again.");
+      setError(err.message || "Failed to generate image. Please try again.");
     } finally {
       setIsGenerating(false);
     }

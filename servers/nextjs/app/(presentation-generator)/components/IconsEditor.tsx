@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { PresentationGenerationApi } from "../services/api/presentation-generation";
 import { getStaticFileUrl } from "../utils/others";
-
+import { toast } from "sonner";
 interface IconsEditorProps {
   icon_prompt?: string[] | null;
   onClose?: () => void;
@@ -53,8 +53,9 @@ const IconsEditor = ({
         limit: 40,
       });
       setIcons(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching icons:", error);
+      toast.error(error.message || "Failed to fetch icons. Please try again.");
       setIcons([]);
     } finally {
       setLoading(false);

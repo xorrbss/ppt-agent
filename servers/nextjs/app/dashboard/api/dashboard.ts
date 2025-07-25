@@ -1,8 +1,7 @@
 import {
   getHeader,
 } from "@/app/(presentation-generator)/services/api/header";
-
-
+import { ApiResponseHandler } from "@/app/(presentation-generator)/services/api/api-error-handler";
 
 export interface PresentationResponse {
   id: string;
@@ -33,38 +32,36 @@ export class DashboardApi {
           method: "GET",
         }
       );
-      if (response.status === 200) {
-        const data = await response.json();
-        return data;
-      } else if (response.status === 404) {
+      
+      // Handle the special case where 404 means "no presentations found"
+      if (response.status === 404) {
         console.log("No presentations found");
         return [];
       }
-      return [];
+      
+      return await ApiResponseHandler.handleResponse(response, "Failed to fetch presentations");
     } catch (error) {
       console.error("Error fetching presentations:", error);
       throw error;
     }
   }
+  
   static async getPresentation(id: string) {
     try {
       const response = await fetch(
         `/api/v1/ppt/presentation/?id=${id}`,
         {
           method: "GET",
-
         }
       );
-      if (response.status === 200) {
-        const data = await response.json();
-        return data;
-      }
-      throw new Error("Presentation not found");
+      
+      return await ApiResponseHandler.handleResponse(response, "Presentation not found");
     } catch (error) {
-      console.error("Error fetching presentations:", error);
+      console.error("Error fetching presentation:", error);
       throw error;
     }
   }
+  
   static async deletePresentation(presentation_id: string) {
     try {
       const response = await fetch(
@@ -74,17 +71,8 @@ export class DashboardApi {
           headers: getHeader(),
         }
       );
-      const data = await response.json();
 
-      if (response.status === 204) {
-        return {
-          success: true,
-        };
-      }
-      return {
-        success: false,
-        message:  data.detail || "Failed to delete presentation",
-      };
+      return await ApiResponseHandler.handleResponseWithResult(response, "Failed to delete presentation");
     } catch (error) {
       console.error("Error deleting presentation:", error);
       return {
@@ -93,5 +81,4 @@ export class DashboardApi {
       };
     }
   }
-  
 }

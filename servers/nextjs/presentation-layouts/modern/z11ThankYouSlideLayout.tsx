@@ -4,20 +4,20 @@ import * as z from "zod";
 export const layoutId = "thank-you-slide";
 export const layoutName = "Thank You Slide";
 export const layoutDescription =
-  "A simple, plain thank you slide for closing presentations.";
+  "A simple, plain thank you slide for closing presentations. This is always the last slide in a presentation, providing a clean and professional closing message with company contact information.";
 
 const thankYouSlideSchema = z.object({
-  title: z.string().min(3).max(40).default("Thank You!").meta({
+  title: z.string().min(3).max(30).default("Thank You!").meta({
     description: "Main thank you message",
   }),
   subtitle: z.string().min(0).max(100).default("").meta({
     description: "Optional subtitle or closing remark",
   }),
-  companyName: z.string().min(2).max(30).default("Rimberio").meta({
+  companyName: z.string().min(2).max(50).default("presenton").meta({
     description: "Company name displayed in header",
   }),
-  date: z.string().min(5).max(30).default("June 13, 2038").meta({
-    description: "Date displayed in header",
+  date: z.string().min(5).max(50).default("June 13, 2038").meta({
+    description: "Today Date displayed in header",
   }),
   address: z
     .string()
@@ -72,10 +72,7 @@ const ThankYouSlideLayout: React.FC<ThankYouSlideLayoutProps> = ({ data }) => {
         <div className="flex flex-1 flex-col px-16 pb-16 justify-between">
           {/* Thank You and description */}
           <div className="flex flex-col items-start w-full pt-16">
-            <h1
-              className="font-bold text-8xl text-white mb-6 mt-8 text-left w-full"
-
-            >
+            <h1 className="font-bold text-8xl text-white mb-6 mt-8 text-left w-full">
               {data?.title || "Thank You!"}
             </h1>
             {data?.subtitle && (
@@ -83,7 +80,6 @@ const ThankYouSlideLayout: React.FC<ThankYouSlideLayoutProps> = ({ data }) => {
                 {data.subtitle}
               </div>
             )}
-
           </div>
 
           {/* Footer area */}
