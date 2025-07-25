@@ -52,7 +52,7 @@ export const useGroupLayouts = () => {
                     <EditableLayoutWrapper
                         slideIndex={slide.index}
                         slideData={slide.content}
-
+                        properties={slide.properties}
                     >
                         <TiptapTextReplacer
                             key={slide.id}
