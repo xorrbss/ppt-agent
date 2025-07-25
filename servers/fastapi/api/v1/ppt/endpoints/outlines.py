@@ -60,7 +60,7 @@ async def stream_outlines(presentation_id: str):
             sql_session.refresh(presentation)
 
         yield SSECompleteResponse(
-            key="presentation", value=presentation.model_dump_json()
+            key="presentation", value=presentation.model_dump(mode="json")
         ).to_string()
 
     return StreamingResponse(inner(), media_type="text/event-stream")
