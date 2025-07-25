@@ -56,7 +56,7 @@ export async function GET(request: Request) {
     const response = {
       name: groupName,
       ordered: groupSettings?.ordered ?? false,
-      slides: slides.map((slide) => ({
+      slides: slides.map((slide: any) => ({
         id: slide.id,
         name: slide.name,
         description: slide.description,
