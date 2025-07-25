@@ -7,6 +7,7 @@ import { PptxPresentationModel } from "@/types/pptx_models";
 import fs from "fs";
 import path from "path";
 import { v4 as uuidv4 } from 'uuid';
+import sharp from "sharp";
 
 interface GetAllChildElementsAttributesArgs {
   element: ElementHandle<Element>;
@@ -16,6 +17,7 @@ interface GetAllChildElementsAttributesArgs {
   inheritedBackground?: ElementAttributes['background'];
   inheritedBorderRadius?: number[];
   inheritedZIndex?: number;
+  inheritedOpacity?: number;
   screenshotsDir: string;
 }
 
@@ -118,6 +120,13 @@ async function postProcessSlidesAttributes(slidesAttributes: SlideAttributesResu
 async function screenshotElement(element: ElementAttributes, screenshotsDir: string) {
   const screenshotPath = path.join(screenshotsDir, `${uuidv4()}.png`) as `${string}.png`;
 
+  // For SVG elements, use convertSvgToPng
+  if (element.tagName === 'svg') {
+    const pngBuffer = await convertSvgToPng(element);
+    fs.writeFileSync(screenshotPath, pngBuffer);
+    return screenshotPath;
+  }
+
   // Hide all elements except the target element and its ancestors
   await element.element?.evaluate((el) => {
     const originalOpacities = new Map();
@@ -140,12 +149,12 @@ async function screenshotElement(element: ElementAttributes, screenshotsDir: str
 
     hideAllExcept(el);
 
-    (el as any).__restoreOpacities = () => {
+    (el as any).__restoreStyles = () => {
       originalOpacities.forEach((opacity, elem) => {
         (elem as HTMLElement).style.opacity = opacity;
       });
     };
-  });
+  }, element.opacity, element.font?.color);
 
   const screenshot = await element.element?.screenshot({ path: screenshotPath });
   if (!screenshot) {
@@ -153,12 +162,30 @@ async function screenshotElement(element: ElementAttributes, screenshotsDir: str
   }
 
   await element.element?.evaluate((el) => {
-    if ((el as any).__restoreOpacities) {
-      (el as any).__restoreOpacities();
+    if ((el as any).__restoreStyles) {
+      (el as any).__restoreStyles();
     }
   });
 
   return screenshotPath;
+}
+
+const convertSvgToPng = async (element_attibutes: ElementAttributes) => {
+  const svgHtml = await element_attibutes.element?.evaluate((el) => {
+
+    // Apply font color
+    const fontColor = window.getComputedStyle(el).color;
+    (el as HTMLElement).style.color = fontColor;
+
+    return el.outerHTML;
+  }) || '';
+
+  const svgBuffer = Buffer.from(svgHtml);
+  const pngBuffer = await sharp(svgBuffer)
+    .resize(element_attibutes.position?.width, element_attibutes.position?.height)
+    .toFormat('png')
+    .toBuffer();
+  return pngBuffer;
 }
 
 
@@ -185,12 +212,13 @@ async function getSlidesWrapper(page: Page): Promise<ElementHandle<Element>> {
   return slides_wrapper;
 }
 
-async function getAllChildElementsAttributes({ element, rootRect = null, depth = 0, inheritedFont, inheritedBackground, inheritedBorderRadius, inheritedZIndex, screenshotsDir }: GetAllChildElementsAttributesArgs): Promise<SlideAttributesResult> {
+async function getAllChildElementsAttributes({ element, rootRect = null, depth = 0, inheritedFont, inheritedBackground, inheritedBorderRadius, inheritedZIndex, inheritedOpacity, screenshotsDir }: GetAllChildElementsAttributesArgs): Promise<SlideAttributesResult> {
   if (!rootRect) {
     const rootAttributes = await getElementAttributes(element);
     inheritedFont = rootAttributes.font;
     inheritedBackground = rootAttributes.background;
     inheritedZIndex = rootAttributes.zIndex;
+    inheritedOpacity = rootAttributes.opacity;
     rootRect = {
       left: rootAttributes.position?.left ?? 0,
       top: rootAttributes.position?.top ?? 0,
@@ -223,6 +251,9 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
     if (inheritedZIndex !== undefined && attributes.zIndex === 0) {
       attributes.zIndex = inheritedZIndex;
     }
+    if (inheritedOpacity !== undefined && (attributes.opacity === undefined || attributes.opacity === 1)) {
+      attributes.opacity = inheritedOpacity;
+    }
 
     if (attributes.position && attributes.position.left !== undefined && attributes.position.top !== undefined) {
       attributes.position = {
@@ -254,6 +285,7 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
       inheritedBackground: attributes.background || inheritedBackground,
       inheritedBorderRadius: attributes.borderRadius || inheritedBorderRadius,
       inheritedZIndex: attributes.zIndex || inheritedZIndex,
+      inheritedOpacity: attributes.opacity || inheritedOpacity,
       screenshotsDir,
     });
     allResults.push(...childResults.elements.map(attr => ({ attributes: attr, depth: depth + 1 })));
@@ -293,8 +325,10 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
       attributes.position.width === rootRect!.width &&
       attributes.position.height === rootRect!.height;
 
-    const hasOtherProperties = hasBackground || hasBorder || hasShadow || hasText || hasImage || isSvg || isCanvas || isTable;
-    return hasOtherProperties && (!occupiesRoot || hasImage);
+    const hasVisualProperties = hasBackground || hasBorder || hasShadow || hasText;
+    const hasSpecialContent = hasImage || isSvg || isCanvas || isTable;
+
+    return (hasVisualProperties && !occupiesRoot) || hasSpecialContent;
   }) : allResults;
 
   if (depth === 0) {
@@ -909,11 +943,15 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
 
       const filters = parseFilters(computedStyles);
 
+      const opacity = parseFloat(computedStyles.opacity);
+      const elementOpacity = isNaN(opacity) ? undefined : opacity;
+
       return {
         tagName: tagName,
         id: el.id,
         className: (el.className && typeof el.className === 'string') ? el.className : (el.className ? el.className.toString() : undefined),
         innerText: innerText,
+        opacity: elementOpacity,
         background: background,
         border: border,
         shadow: shadow,
