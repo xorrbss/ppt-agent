@@ -5,6 +5,7 @@ export interface ElementAttributes {
   id?: string;
   className?: string;
   innerText?: string;
+  opacity?: number;
   background?: {
     color?: string;
     opacity?: number;
@@ -61,6 +62,17 @@ export interface ElementAttributes {
   textWrap?: boolean;
   should_screenshot?: boolean;
   element?: ElementHandle<Element>;
+  filters?: {
+    invert?: number;
+    brightness?: number;
+    contrast?: number;
+    saturate?: number;
+    hueRotate?: number;
+    blur?: number;
+    grayscale?: number;
+    sepia?: number;
+    opacity?: number;
+  };
 }
 
 export interface SlideAttributesResult {

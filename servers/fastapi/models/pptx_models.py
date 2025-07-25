@@ -132,6 +132,7 @@ class PptxPictureBoxModel(PptxShapeModel):
     position: PptxPositionModel
     margin: Optional[PptxSpacingModel] = None
     clip: bool = True
+    opacity: Optional[float] = None
     overlay: Optional[str] = None
     border_radius: Optional[List[int]] = None
     shape: Optional[PptxBoxShapeEnum] = None

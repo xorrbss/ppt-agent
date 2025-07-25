@@ -78,6 +78,7 @@ export function convertElementAttributesToPptxSlides(
 function convertElementToPptxShape(
   element: ElementAttributes
 ): PptxTextBoxModel | PptxAutoShapeBoxModel | PptxConnectorModel | PptxPictureBoxModel | null {
+
   if (!element.position) {
     return null;
   }
@@ -218,11 +219,18 @@ function convertToPictureBox(element: ElementAttributes): PptxPictureBoxModel {
     path: element.imageSrc || ''
   };
 
+  // Set overlay to white if invert is 1 and brightness is 0
+  let overlay = element.overlay;
+  if (element.filters?.invert === 1 && element.filters?.brightness === 0) {
+    overlay = 'FFFFFF';
+  }
+
   return {
     position,
     margin: undefined,
     clip: element.clip ?? true,
-    overlay: element.overlay,
+    overlay,
+    opacity: element.opacity,
     border_radius: element.borderRadius ? element.borderRadius.map(r => Math.round(r)) : undefined,
     shape: element.shape ? (element.shape as PptxBoxShapeEnum) : PptxBoxShapeEnum.RECTANGLE,
     object_fit: objectFit,

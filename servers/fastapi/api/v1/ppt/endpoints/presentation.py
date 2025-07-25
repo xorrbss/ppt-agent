@@ -8,7 +8,10 @@ from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy import delete
 from sqlmodel import select
-from models.presentation_outline_model import PresentationOutlineModel, SlideOutlineModel
+from models.presentation_outline_model import (
+    PresentationOutlineModel,
+    SlideOutlineModel,
+)
 from models.pptx_models import PptxPresentationModel
 from models.presentation_layout import PresentationLayoutModel
 from models.presentation_structure_model import PresentationStructureModel
@@ -304,8 +307,11 @@ async def create_pptx(pptx_model: Annotated[PptxPresentationModel, Body()]):
 
     return pptx_path
 
+
 @PRESENTATION_ROUTER.post("/generate")
-async def generate_presentation_api(data: Annotated[GeneratePresentationRequest, Body()]):
+async def generate_presentation_api(
+    data: Annotated[GeneratePresentationRequest, Body()],
+):
     presentation_id = str(uuid.uuid4())
     print("**" * 40)
     print(f"Generating presentation with ID: {presentation_id}")
@@ -341,7 +347,7 @@ async def generate_presentation_api(data: Annotated[GeneratePresentationRequest,
 
     presentation_content_json = json.loads(presentation_content_text)
     presentation_content = PresentationOutlineModel(**presentation_content_json)
-    outlines = presentation_content.slides[:data.n_slides]
+    outlines = presentation_content.slides[: data.n_slides]
     total_outlines = len(outlines)
 
     print("-" * 40)
@@ -441,7 +447,10 @@ async def generate_presentation_api(data: Annotated[GeneratePresentationRequest,
                 if response.status != 200:
                     error_text = await response.text()
                     print(f"Failed to get PPTX model: {error_text}")
-                    raise HTTPException(status_code=500, detail="Failed to convert presentation to PPTX model")
+                    raise HTTPException(
+                        status_code=500,
+                        detail="Failed to convert presentation to PPTX model",
+                    )
                 pptx_model_data = await response.json()
         print(f"Received PPTX model data: {json.dumps(pptx_model_data, indent=2)}")
 
@@ -453,9 +462,7 @@ async def generate_presentation_api(data: Annotated[GeneratePresentationRequest,
         await pptx_creator.create_ppt()
 
         export_directory = get_exports_directory()
-        pptx_path = os.path.join(
-            export_directory, f"{presentation_content.title}.pptx"
-        )
+        pptx_path = os.path.join(export_directory, f"{presentation_content.title}.pptx")
         pptx_creator.save(pptx_path)
 
         presentation_and_path = PresentationAndPath(

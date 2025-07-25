@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   const page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 720 });
 
-  await page.goto(`http://localhost/pdf-maker?id=${id}`, { waitUntil: 'networkidle0', timeout: 80000 });
+  await page.goto(`http://localhost/pdf-maker?id=${id}`, { waitUntil: 'networkidle0', timeout: 180000 });
 
   await page.waitForFunction('() => document.readyState === "complete"')
 
