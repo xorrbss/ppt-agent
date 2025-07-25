@@ -783,6 +783,72 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
       return undefined;
     }
 
+    function parseFilters(computedStyles: CSSStyleDeclaration) {
+      const filter = computedStyles.filter;
+      if (!filter || filter === 'none') {
+        return undefined;
+      }
+
+      const filters: {
+        invert?: number;
+        brightness?: number;
+        contrast?: number;
+        saturate?: number;
+        hueRotate?: number;
+        blur?: number;
+        grayscale?: number;
+        sepia?: number;
+        opacity?: number;
+      } = {};
+
+      // Parse filter functions
+      const filterFunctions = filter.match(/[a-zA-Z]+\([^)]*\)/g);
+      if (filterFunctions) {
+        filterFunctions.forEach(func => {
+          const match = func.match(/([a-zA-Z]+)\(([^)]*)\)/);
+          if (match) {
+            const filterType = match[1];
+            const value = parseFloat(match[2]);
+            
+            if (!isNaN(value)) {
+              switch (filterType) {
+                case 'invert':
+                  filters.invert = value;
+                  break;
+                case 'brightness':
+                  filters.brightness = value;
+                  break;
+                case 'contrast':
+                  filters.contrast = value;
+                  break;
+                case 'saturate':
+                  filters.saturate = value;
+                  break;
+                case 'hue-rotate':
+                  filters.hueRotate = value;
+                  break;
+                case 'blur':
+                  filters.blur = value;
+                  break;
+                case 'grayscale':
+                  filters.grayscale = value;
+                  break;
+                case 'sepia':
+                  filters.sepia = value;
+                  break;
+                case 'opacity':
+                  filters.opacity = value;
+                  break;
+              }
+            }
+          }
+        });
+      }
+
+      // Return undefined if no filters were parsed
+      return Object.keys(filters).length > 0 ? filters : undefined;
+    }
+
     function parseElementAttributes(el: Element) {
       const computedStyles = window.getComputedStyle(el);
 
@@ -817,6 +883,8 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
 
       const textWrap = computedStyles.whiteSpace !== 'nowrap';
 
+      const filters = parseFilters(computedStyles);
+
       return {
         tagName: el.tagName.toLowerCase(),
         id: el.id,
@@ -842,6 +910,7 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
         textWrap: textWrap,
         should_screenshot: false,
         element: undefined,
+        filters: filters,
       };
     }
 

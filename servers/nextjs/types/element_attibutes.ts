@@ -61,6 +61,17 @@ export interface ElementAttributes {
   textWrap?: boolean;
   should_screenshot?: boolean;
   element?: ElementHandle<Element>;
+  filters?: {
+    invert?: number;
+    brightness?: number;
+    contrast?: number;
+    saturate?: number;
+    hueRotate?: number;
+    blur?: number;
+    grayscale?: number;
+    sepia?: number;
+    opacity?: number;
+  };
 }
 
 export interface SlideAttributesResult {
