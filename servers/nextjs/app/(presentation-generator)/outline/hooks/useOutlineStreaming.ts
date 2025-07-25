@@ -13,7 +13,7 @@ const DEFAULT_STREAM_STATE: StreamState = {
 
 export const useOutlineStreaming = (presentationId: string | null) => {
   const dispatch = useDispatch();
-  const {outlines} = useSelector((state: RootState) => state.presentationGeneration);
+  const { outlines } = useSelector((state: RootState) => state.presentationGeneration);
   const [streamState, setStreamState] = useState<StreamState>(DEFAULT_STREAM_STATE);
 
   useEffect(() => {
@@ -32,7 +32,6 @@ export const useOutlineStreaming = (presentationId: string | null) => {
 
         eventSource.addEventListener("response", (event) => {
           const data = JSON.parse(event.data);
-          console.log('data', data);
           switch (data.type) {
             case "chunk":
               accumulatedChunks += data.chunk;
@@ -50,7 +49,7 @@ export const useOutlineStreaming = (presentationId: string | null) => {
 
             case "complete":
               try {
-                const outlinesData: SlideOutline[] = JSON.parse(data.presentation).outlines;
+                const outlinesData: SlideOutline[] = data.presentation.outlines;
                 dispatch(setOutlines(outlinesData));
                 setStreamState({ isStreaming: false, isLoading: false });
                 eventSource.close();
