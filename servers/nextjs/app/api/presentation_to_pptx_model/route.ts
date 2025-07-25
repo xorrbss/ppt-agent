@@ -77,10 +77,7 @@ async function getBrowserAndPage(id: string): Promise<[Browser, Page]> {
   await page.setViewport({ width: 1280, height: 720, deviceScaleFactor: 1 });
   await page.goto(`http://localhost/pdf-maker?id=${id}`, {
     waitUntil: "networkidle0",
-    timeout: 60000,
-  });
-  page.on('console', (msg) => {
-    console.log('console', msg.text());
+    timeout: 180000,
   });
   return [browser, page];
 }
@@ -182,7 +179,7 @@ const convertSvgToPng = async (element_attibutes: ElementAttributes) => {
 
   const svgBuffer = Buffer.from(svgHtml);
   const pngBuffer = await sharp(svgBuffer)
-    .resize(element_attibutes.position?.width, element_attibutes.position?.height)
+    .resize(element_attibutes.position?.width ?? 10, element_attibutes.position?.height ?? 10)
     .toFormat('png')
     .toBuffer();
   return pngBuffer;
