@@ -11,11 +11,11 @@ const marketSizeSlideSchema = z.object({
   title: z.string().min(3).max(15).default("Market Size").meta({
     description: "Main slide title",
   }),
-  companyName: z.string().min(3).max(30).default("Rimberio").meta({
-    description: "Presenter's name",
+  companyName: z.string().min(2).max(50).default("presenton").meta({
+    description: "Company name displayed in header",
   }),
-  date: z.string().default("June 13, 2038").meta({
-    description: "Presentation date",
+  date: z.string().min(5).max(50).default("June 13, 2038").meta({
+    description: "Today Date displayed in header",
   }),
   mapImage: ImageSchema.default({
     __image_url__:
@@ -51,7 +51,11 @@ const marketSizeSlideSchema = z.object({
         description:
           "The SOM is a smaller fraction of the SAM that is the target of a serviceable and realistically achievable market in the short to medium term.",
       },
-    ]),
+    ])
+    .meta({
+      description:
+        "Market statistics including TAM, SAM, and SOM with labels, values, and descriptions.",
+    }),
   description: z
     .string()
     .default(

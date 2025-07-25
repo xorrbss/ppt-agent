@@ -11,8 +11,8 @@ const solutionSlideSchema = z.object({
   companyName: z.string().min(2).max(50).default("presenton").meta({
     description: "Company name displayed in header",
   }),
-  date: z.string().min(5).max(50).default("June 13, 2038").meta({
-    description: "Date displayed in header",
+  date: z.string().min(5).max(30).default("June 13, 2038").meta({
+    description: "Today Date displayed in header",
   }),
   title: z.string().min(3).max(25).default("Businesses struggle").meta({
     description: "Main title of the slide",
@@ -46,7 +46,8 @@ const solutionSlideSchema = z.object({
     .default([
       {
         title: "Market",
-        description: "Innovative and widely accepted. Innovative and widely accepted. Innovative and widely accepted.",
+        description:
+          "Innovative and widely accepted. Innovative and widely accepted. Innovative and widely accepted.",
         icon: {
           __icon_query__: "market innovation",
           __icon_url__:
