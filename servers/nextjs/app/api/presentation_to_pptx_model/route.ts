@@ -179,7 +179,7 @@ const convertSvgToPng = async (element_attibutes: ElementAttributes) => {
 
   const svgBuffer = Buffer.from(svgHtml);
   const pngBuffer = await sharp(svgBuffer)
-    .resize(element_attibutes.position?.width ?? 10, element_attibutes.position?.height ?? 10)
+    .resize(Math.round(element_attibutes.position?.width ?? 10), Math.round(element_attibutes.position?.height ?? 10))
     .toFormat('png')
     .toBuffer();
   return pngBuffer;
