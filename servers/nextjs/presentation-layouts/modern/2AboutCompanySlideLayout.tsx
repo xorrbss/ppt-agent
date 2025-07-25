@@ -25,7 +25,7 @@ const aboutCompanySlideSchema = z.object({
     description: "Company name displayed in header",
   }),
   date: z.string().min(5).max(30).default("June 13, 2038").meta({
-    description: "Date displayed in header",
+    description: "Today Date displayed in header",
   }),
   image: ImageSchema.optional().meta({
     description:

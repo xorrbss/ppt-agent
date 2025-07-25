@@ -16,24 +16,38 @@ export const layoutName = "Company Traction Slide";
 export const layoutDescription =
   "A slide layout designed to present company traction data, including growth statistics over the years, a chart visualization, and key metrics in a visually appealing format.";
 
-
-const growthStatsSchema = z.object({
-  year: z.string(),
-})
-  .catchall(z.number());
+const growthStatsSchema = z
+  .object({
+    year: z.string(),
+  })
+  .catchall(z.number())
+  .meta({
+    description:
+      "Growth statistics for a specific year, with any number of metrics as key-value pairs where keys are metric names and values are numbers.",
+  });
 
 // growthStats: list of dicts, each dict is { year: string, <metric1>: number, <metric2>: number, ... }
 const tractionSchema = z.object({
-  companyName: z.string().default("presention"),
-  date: z.string().default("June 13, 2038"),
-  title: z.string().default("Company Traction"),
+  companyName: z.string().min(2).max(50).default("presenton").meta({
+    description: "Company name displayed in header",
+  }),
+  date: z.string().min(5).max(50).default("June 13, 2038").meta({
+    description: "Today Date displayed in header",
+  }),
+  title: z.string().default("Company Traction").meta({
+    description: "Main title of the slide",
+  }),
   description: z
     .string()
     .min(3)
     .max(200)
     .default(
       "Traction is a period where the company is feeling momentum during its development period. If traction momentum is not harnessed, sales figures can decline and the customer base can shrink. In general, companies will judge success by the amount of revenue and new customers they receive.",
-    ),
+    )
+    .meta({
+      description:
+        "Main content text describing the company's traction and growth momentum.",
+    }),
   // growthStats is a list of objects, each with a 'year' and any number of metric keys (all numbers)
   growthStats: z
     .array(growthStatsSchema)
@@ -88,7 +102,11 @@ const tractionSchema = z.object({
         internetOfThings: 65,
         others: 52,
       }),
-    ]),
+    ])
+    .meta({
+      description:
+        "Growth statistics for the company, used for chart visualization. Each entry is an object representing a specific year, with the 'year' key as a string (e.g., '2020'), and additional keys for each metric (such as 'artificialIntelligence', 'internetOfThings', 'others'), where the values are numbers representing the metric's value for that year. Example:\n\n[\n  { year: '2020', artificialIntelligence: 5, internetOfThings: 10, others: 8 },\n  { year: '2021', artificialIntelligence: 10, internetOfThings: 20, others: 15 },\n  ...\n]\nThis structure allows the chart to dynamically render multiple series over time, with each metric visualized as a separate line.",
+    }),
 });
 
 export const Schema = tractionSchema;

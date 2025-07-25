@@ -12,7 +12,7 @@ const productOverviewSlideSchema = z.object({
     description: "Company name displayed in header",
   }),
   date: z.string().min(5).max(50).default("June 13, 2038").meta({
-    description: "Date displayed in header",
+    description: "Today Date displayed in header",
   }),
   title: z.string().min(3).max(40).default("Product Overview").meta({
     description: "Main title of the slide",
