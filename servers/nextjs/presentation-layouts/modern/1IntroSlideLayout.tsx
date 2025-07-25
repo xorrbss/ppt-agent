@@ -68,8 +68,8 @@ const IntroPitchDeckSlide: React.FC<IntroSlideLayoutProps> = ({
       >
         {/* Top Header */}
         <div className="absolute top-8 left-10 right-10 flex justify-between items-center text-[#1E4CD9] text-sm font-semibold">
-          <span>{slideData?.companyName}</span>
-          <span>{slideData?.date}</span>
+          <p>{slideData?.companyName}</p>
+          <p>{slideData?.date}</p>
         </div>
 
         {/* Main Title */}

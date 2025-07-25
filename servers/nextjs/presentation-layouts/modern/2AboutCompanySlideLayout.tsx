@@ -122,14 +122,17 @@ const AboutCompanySlideLayout: React.FC<AboutCompanySlideLayoutProps> = ({
 
           {/* Right side - Content */}
           <div className="flex-1 pl-16 flex flex-col justify-center">
-            <h2 className="text-6xl font-bold text-blue-600 mb-12 leading-tight">
-              {slideData?.title || "About Our Company"}
-            </h2>
+            {slideData?.title && (
+              <h2 className="text-6xl font-bold text-blue-600 mb-12 leading-tight">
+                {slideData?.title}
+              </h2>
+            )}
 
-            <div className="text-lg text-blue-600 leading-relaxed font-normal max-w-lg">
-              {slideData?.content ||
-                "In the presentation session, the background/introduction can be filled with information that is arranged systematically and effectively with respect to an interesting topic to be used as material for discussion at the opening of the presentation session. The introduction can provide a general overview for those who are listening to your presentation so that the key words on the topic of discussion are emphasized during this background/introductory presentation session."}
-            </div>
+            {slideData?.content && (
+              <div className="text-lg text-blue-600 leading-relaxed font-normal max-w-lg">
+                {slideData?.content}
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -26,7 +26,7 @@ const SlideComponent = ({ data }: { data: Partial<SchemaType> }) => {
     // Validate each data field before rendering using && operator or optional chaining.
     // These layouts are exported as PDF and PPTX so they must be optimized for both formats.
     // Content must properly fit in the container, specify min and max constraints in the schema.
-    // You can check out ExampleComponent.tsx for more details.
+    // You can check out ExampleSlideLayout.tsx for more details.
 };
 
 export default SlideComponent;

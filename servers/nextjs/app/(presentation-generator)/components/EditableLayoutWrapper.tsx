@@ -194,15 +194,15 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
 
                     // Add hover effects without changing layout
                     htmlImg.style.cursor = 'pointer';
-                    htmlImg.style.transition = 'filter 0.2s, transform 0.2s';
+                    htmlImg.style.transition = 'opacity 0.2s, transform 0.2s';
 
                     const mouseEnterHandler = () => {
-                        htmlImg.style.filter = 'brightness(0.9)';
+                        htmlImg.style.opacity = '0.8';
 
                     };
 
                     const mouseLeaveHandler = () => {
-                        htmlImg.style.filter = 'brightness(1)';
+                        htmlImg.style.opacity = '1';
 
                     };
 
@@ -216,7 +216,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                         htmlImg.removeEventListener('mouseleave', mouseLeaveHandler);
                         htmlImg.style.cursor = '';
                         htmlImg.style.transition = '';
-                        htmlImg.style.filter = '';
+                        htmlImg.style.opacity = '';
                         htmlImg.style.transform = '';
                         htmlImg.removeAttribute('data-editable-processed');
                     };
@@ -326,6 +326,18 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
 
         }
     };
+    const handleFocusPointClick = (propertiesData: any) => {
+        console.log('activeEditor', activeEditor);
+        const id = activeEditor?.id;
+        const editableId = document.querySelector(`[data-editable-id="${id}"]`);
+        console.log('editableId', editableId);
+        if (editableId) {
+            const editableElement = editableId as HTMLImageElement;
+            editableElement.style.objectPosition = `${propertiesData.initialFocusPoint.x}px ${propertiesData.initialFocusPoint.y}px`;
+            editableElement.style.objectFit = propertiesData.initialObjectFit;
+        }
+
+    };
 
     return (
         <div ref={containerRef} className="editable-layout-wrapper">
@@ -341,6 +353,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                     properties={null}
                     onClose={handleEditorClose}
                     onImageChange={handleImageChange}
+                    onFocusPointClick={handleFocusPointClick}
                 >
                 </ImageEditor>
             )}
@@ -359,4 +372,49 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
     );
 };
 
-export default EditableLayoutWrapper; 
+export default EditableLayoutWrapper;
+
+
+
+
+const setNestedImageValue = (obj: any, path: string, url: string, promptText?: string) => {
+    const keys = path.split(/[.\[\]]+/).filter(Boolean);
+    let current = obj;
+
+    // Navigate to the parent object
+    for (let i = 0; i < keys.length - 1; i++) {
+        const key = keys[i];
+        if (isNaN(Number(key))) {
+            if (!current[key]) {
+                current[key] = {};
+            }
+            current = current[key];
+        } else {
+            const index = Number(key);
+            if (!current[index]) {
+                current[index] = {};
+            }
+            current = current[index];
+        }
+    }
+
+    // Set the image properties
+    const finalKey = keys[keys.length - 1];
+    const target = isNaN(Number(finalKey)) ? current[finalKey] : current[Number(finalKey)];
+
+    // Preserve existing properties if the target already exists
+    const updatedValue = {
+        ...(target && typeof target === 'object' ? target : {}),
+        __image_url__: url,
+        __image_prompt__: promptText || (target?.__image_prompt__) || ''
+    };
+
+    if (isNaN(Number(finalKey))) {
+        current[finalKey] = updatedValue;
+    } else {
+        current[Number(finalKey)] = updatedValue;
+    }
+
+    // Add debugging
+    console.log('Redux: Updated slide image at path:', path, 'with URL:', url);
+};

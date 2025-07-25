@@ -27,7 +27,7 @@ interface ImageEditorProps {
   properties?: null | any;
   onClose?: () => void;
   onImageChange?: (newImageUrl: string, prompt?: string) => void;
-
+  onFocusPointClick?: (propertiesData: any) => void;
 }
 
 const ImageEditor = ({
@@ -36,6 +36,7 @@ const ImageEditor = ({
   promptContent,
   properties,
   onClose,
+  onFocusPointClick,
   onImageChange,
 
 }: ImageEditorProps) => {
@@ -69,9 +70,6 @@ const ImageEditor = ({
 
   // Refs
   const imageRef = useRef<HTMLImageElement>(null);
-  const imageContainerRef = useRef<HTMLDivElement>(null);
-  const toolbarRef = useRef<HTMLDivElement>(null);
-  const popoverContentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setPreviewImages(initialImage);
@@ -105,28 +103,7 @@ const ImageEditor = ({
     }
   }
 
-  // Close toolbar when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        imageContainerRef.current &&
-        !imageContainerRef.current.contains(event.target as Node) &&
-        toolbarRef.current &&
-        !toolbarRef.current.contains(event.target as Node) &&
-        !popoverContentRef.current
-      ) {
-        if (isFocusPointMode) {
-          saveImageProperties(objectFit, focusPoint);
-        }
-        setIsFocusPointMode(false);
-      }
-    };
 
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isFocusPointMode, focusPoint, objectFit]);
 
   /**
    * Handles image selection and calls the parent callback
@@ -200,6 +177,7 @@ const ImageEditor = ({
       initialFocusPoint: focusPoint,
     };
     // TODO: Save to Redux store if needed
+    onFocusPointClick?.(propertiesData);
   };
 
   /**
@@ -298,6 +276,7 @@ const ImageEditor = ({
                 <TabsTrigger className="font-medium" value="upload">
                   Upload
                 </TabsTrigger>
+                {/* <TabsTrigger className="font-medium" value="edit">Edit</TabsTrigger> */}
               </TabsList>
               {/* Generate Tab */}
               <TabsContent value="generate" className="mt-4 space-y-4">
@@ -453,6 +432,79 @@ const ImageEditor = ({
                       </div>
                     </div>
                   )}
+                </div>
+              </TabsContent>
+              <TabsContent value="edit" className="mt-4 space-y-4">
+                <div className="space-y-4">
+                  <h3 className="text-sm font-medium mb-2">Current Image</h3>
+                  <div onClick={(e) => {
+
+                    if (isFocusPointMode) {
+                      handleFocusPointClick(e);
+                    } else {
+
+                    }
+
+                  }}
+
+                    className="aspect-[4/3] group  rounded-lg overflow-hidden relative border border-gray-200">
+                    <p className="group-hover:opacity-100 opacity-0 transition-opacity absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-sm text-center font-medium bg-black/50 text-white px-2 py-1 rounded">Click to Change Focus Point</p>
+                    {previewImages && <img ref={imageRef} onClick={
+                      () => {
+
+                        setIsFocusPointMode(true);
+
+                      }
+                    } src={previewImages} style={{ objectFit: objectFit, objectPosition: `${focusPoint.x}% ${focusPoint.y}%`, }} alt={`Preview`} className="w-full h-full " />}
+                    {isFocusPointMode && <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                      <div className="text-white text-center p-2 bg-black/50 rounded">
+                        <p className="text-sm font-medium pointer-events-none">
+                          Click anywhere to set focus point
+                        </p>
+                        <button
+                          className="mt-2 px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFocusPointMode();
+                          }}
+                        >
+                          Done
+                        </button>
+                      </div>
+
+                      <div
+                        className="absolute w-8 h-8 border-2 border-white rounded-full transform -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+                        style={{
+                          left: `${focusPoint.x}%`,
+                          top: `${focusPoint.y}%`,
+                          boxShadow: "0 0 0 2px rgba(0,0,0,0.5)",
+                        }}
+                      >
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-2 h-2 bg-white rounded-full"></div>
+                        </div>
+                        <div className="absolute w-16 h-0.5 bg-white/70 left-1/2 -translate-x-1/2"></div>
+                        <div className="absolute w-0.5 h-16 bg-white/70 top-1/2 -translate-y-1/2"></div>
+                      </div>
+                    </div>}
+                  </div>
+                  {/* Edit Image  */}
+                  {/* Object Fit */}
+                  {
+                    <div>
+                      <h3 className="text-sm font-medium mb-2">Object Fit</h3>
+                      <div className="flex gap-4">
+                        <Button variant="outline" className={cn(objectFit === "cover" && "bg-blue-50 border-blue-500")} onClick={() => handleFitChange("cover")}>Cover</Button>
+                        <Button variant="outline" className={cn(objectFit === "contain" && "bg-blue-50 border-blue-500")} onClick={() => handleFitChange("contain")}>Contain</Button>
+                        <Button variant="outline" className={cn(objectFit === "fill" && "bg-blue-50 border-blue-500")} onClick={() => handleFitChange("fill")}>Fill</Button>
+                      </div>
+                    </div>
+
+                  }
+                  {/* Focus Point */}
+                  {
+
+                  }
                 </div>
               </TabsContent>
             </Tabs>
