@@ -2,10 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-@import '../app/(presentation-generator)/styles/themes.css';
 
 body {
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), var(--font-roboto), sans-serif;
 }
 
 @layer utilities {
@@ -79,6 +78,9 @@ body {
 strong{
   @apply font-black ;
 }
+
+
+
 ::selection {
   background-color: hsl(var(--chart-1));
   color: white;
@@ -145,21 +147,33 @@ thead {
 
 
 .custom_scrollbar::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 
 .custom_scrollbar::-webkit-scrollbar-thumb {
-  background-color: #4A90E2;
-  border-radius: 6px;
+  background-color: #d1d5db;
+  border-radius: 8px;
   cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.custom_scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #9ca3af;
 }
 
 .custom_scrollbar::-webkit-scrollbar-track {
-  background-color: #F0F0F0;
+  background-color: #f9fafb;
+  border-radius: 8px;
 }
 
 .custom_scrollbar::-webkit-scrollbar-corner {
   background-color: transparent;
+}
+
+/* Firefox scrollbar styling */
+.custom_scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db #f9fafb;
 }
 
 
@@ -235,15 +249,27 @@ thead {
 }
 
 .markdown-content h1 {
-  @apply text-3xl font-bold mb-6 text-gray-900;
+  @apply text-xl font-bold mb-4 text-gray-900;
 }
 
 .markdown-content h2 {
-  @apply text-2xl font-bold mb-4 text-gray-900;
+  @apply text-lg font-bold mb-3 text-gray-900;
 }
 
 .markdown-content h3 {
-  @apply text-xl font-bold mb-3 text-gray-900;
+  @apply text-base font-bold mb-2 text-gray-900;
+}
+
+.markdown-content h4 {
+  @apply text-sm font-bold mb-2 text-gray-900;
+}
+
+.markdown-content h5 {
+  @apply text-xs font-bold mb-1 text-gray-900;
+}
+
+.markdown-content h6 {
+  @apply text-xs font-semibold mb-1 text-gray-900;
 }
 
 .markdown-content p {
@@ -297,6 +323,49 @@ thead {
 
 .markdown-content td {
   @apply border border-gray-300 px-4 py-2;
+}
+
+/* Override Tailwind Typography prose heading sizes for markdown editor */
+.prose h1 {
+  font-size: 18px !important;
+  font-weight: bold !important;
+  margin-bottom: 1rem !important;
+  color: rgb(17 24 39) !important;
+}
+
+.prose h2 {
+  font-size: 16px !important;
+  font-weight: bold !important;
+  margin-bottom: 0.75rem !important;
+  color: rgb(17 24 39) !important;
+}
+
+.prose h3 {
+  font-size: 14px !important;
+  font-weight: bold !important;
+  margin-bottom: 0.5rem !important;
+  color: rgb(17 24 39) !important;
+}
+
+.prose h4 {
+  font-size: 12px !important;
+  font-weight: bold !important;
+  margin-bottom: 0.5rem !important;
+  color: rgb(17 24 39) !important;
+}
+
+.prose h5 {
+  font-size: 11px !important;
+  font-weight: bold !important;
+  margin-bottom: 0.25rem !important;
+  color: rgb(17 24 39) !important;
+}
+
+.prose h6 {
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  margin-bottom: 0.25rem !important;
+  color: rgb(17 24 39) !important;
 }
 
 /* MDXEditor styles */

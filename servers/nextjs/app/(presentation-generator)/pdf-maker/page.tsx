@@ -1,6 +1,5 @@
 'use client'
 import React from "react";
-import { FooterProvider } from "../context/footerContext";
 
 import { Button } from "@/components/ui/button";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -20,9 +19,7 @@ const page = () => {
         );
     }
     return (
-        <FooterProvider>
-            <PdfMakerPage presentation_id={queryId} />
-        </FooterProvider>
+        <PdfMakerPage presentation_id={queryId} />
     );
 };
 export default page;

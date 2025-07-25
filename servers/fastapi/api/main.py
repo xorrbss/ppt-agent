@@ -1,83 +1,38 @@
-import asyncio
-import os
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlmodel import SQLModel
-from contextlib import asynccontextmanager
+from fastapi.staticfiles import StaticFiles
+from api.lifespan import app_lifespan
+from api.middlewares import UserConfigEnvUpdateMiddleware
+from api.v1.ppt.router import API_V1_PPT_ROUTER
+from utils.asset_directory_utils import get_exports_directory, get_images_directory, get_uploads_directory
 
-from api.models import SelectedLLMProvider
-from api.routers.presentation.router import presentation_router
-from api.services.database import sql_engine
-from api.utils.supported_ollama_models import SUPPORTED_OLLAMA_MODELS
-from api.utils.utils import update_env_with_user_config
-from api.utils.model_utils import (
-    get_selected_llm_provider,
-    is_custom_llm_selected,
-    is_ollama_selected,
-    list_available_custom_models,
-    pull_ollama_model,
+
+app = FastAPI(lifespan=app_lifespan)
+
+
+# Routers
+app.include_router(API_V1_PPT_ROUTER)
+
+# Static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount(
+    "/app_data/images",
+    StaticFiles(directory=get_images_directory()),
+    name="app_data/images",
+)
+app.mount(
+    "/app_data/exports",
+    StaticFiles(directory=get_exports_directory()),
+    name="app_data/exports",
+)
+app.mount(
+    "/app_data/uploads",
+    StaticFiles(directory=get_uploads_directory()),
+    name="app_data/uploads",
 )
 
-can_change_keys = os.getenv("CAN_CHANGE_KEYS") != "false"
 
-
-async def check_llm_model_availability():
-    if not can_change_keys:
-        if get_selected_llm_provider() == SelectedLLMProvider.OPENAI:
-            openai_api_key = os.getenv("OPENAI_API_KEY")
-            if not openai_api_key:
-                raise Exception("OPENAI_API_KEY must be provided")
-
-        elif get_selected_llm_provider() == SelectedLLMProvider.GOOGLE:
-            google_api_key = os.getenv("GOOGLE_API_KEY")
-            if not google_api_key:
-                raise Exception("GOOGLE_API_KEY must be provided")
-
-        elif is_ollama_selected():
-            ollama_model = os.getenv("OLLAMA_MODEL")
-            if not ollama_model:
-                raise Exception("OLLAMA_MODEL must be provided")
-
-            if ollama_model not in SUPPORTED_OLLAMA_MODELS:
-                raise Exception(f"Model {ollama_model} is not supported")
-
-            print("-" * 50)
-            print("Pulling model: ", ollama_model)
-            async for event in pull_ollama_model(ollama_model):
-                print(event)
-            print("Pulled model: ", ollama_model)
-            print("-" * 50)
-
-        elif is_custom_llm_selected():
-            custom_model = os.getenv("CUSTOM_MODEL")
-            custom_llm_url = os.getenv("CUSTOM_LLM_URL")
-            custom_llm_api_key = os.getenv("CUSTOM_LLM_API_KEY")
-            if not custom_model:
-                raise Exception("CUSTOM_MODEL must be provided")
-            if not custom_llm_url:
-                raise Exception("CUSTOM_LLM_URL must be provided")
-            if not custom_llm_api_key:
-                raise Exception("CUSTOM_LLM_API_KEY must be provided")
-            print("-" * 50)
-            print("Selecting model: ", custom_model)
-            models = await list_available_custom_models(
-                custom_llm_url, custom_llm_api_key
-            )
-            print("Available models: ", models)
-            print("-" * 50)
-            if custom_model not in models:
-                raise Exception(f"Model {custom_model} is not available")
-
-
-@asynccontextmanager
-async def lifespan(_: FastAPI):
-    os.makedirs(os.getenv("APP_DATA_DIRECTORY"), exist_ok=True)
-    SQLModel.metadata.create_all(sql_engine)
-    await check_llm_model_availability()
-    yield
-
-
-app = FastAPI(lifespan=lifespan)
+# Middlewares
 origins = ["*"]
 app.add_middleware(
     CORSMiddleware,
@@ -87,12 +42,4 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-@app.middleware("http")
-async def update_env_middleware(request: Request, call_next):
-    if can_change_keys:
-        update_env_with_user_config()
-    return await call_next(request)
-
-
-app.include_router(presentation_router)
+app.add_middleware(UserConfigEnvUpdateMiddleware)

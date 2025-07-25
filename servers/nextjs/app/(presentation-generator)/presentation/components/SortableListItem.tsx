@@ -1,17 +1,17 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Slide } from '../../types/slide';
-import { useState } from 'react';
+import { useRef } from 'react';
 
 interface SortableListItemProps {
     slide: Slide;
     index: number;
     selectedSlide: number;
-    onSlideClick: (index: number) => void;
+    onSlideClick: (index: any) => void;
 }
 
 export function SortableListItem({ slide, index, selectedSlide, onSlideClick }: SortableListItemProps) {
-    const [mouseDownTime, setMouseDownTime] = useState(0);
+    const lastClickTime = useRef(0);
 
     const {
         attributes,
@@ -28,16 +28,17 @@ export function SortableListItem({ slide, index, selectedSlide, onSlideClick }: 
         opacity: isDragging ? 0.5 : 1
     };
 
-    const handleMouseDown = () => {
-        setMouseDownTime(Date.now());
-    };
+    const handleClick = (e: React.MouseEvent) => {
+        const now = Date.now();
 
-    const handleMouseUp = () => {
-        const mouseUpTime = Date.now();
-        const timeDiff = mouseUpTime - mouseDownTime;
+        // Debounce clicks - only allow one click every 300ms
+        if (now - lastClickTime.current < 300) {
+            return;
+        }
 
-        // If the mouse was down for less than 200ms, consider it a click
-        if (timeDiff < 200 && !isDragging) {
+        // Only trigger click if not dragging
+        if (!isDragging) {
+            lastClickTime.current = now;
             onSlideClick(slide.index);
         }
     };
@@ -48,12 +49,11 @@ export function SortableListItem({ slide, index, selectedSlide, onSlideClick }: 
             style={style}
             {...attributes}
             {...listeners}
-            onMouseDown={handleMouseDown}
-            onMouseUp={handleMouseUp}
-            className={`p-3 cursor-pointer rounded-lg slide-box
+            onClick={handleClick}
+            className={`p-3 cursor-pointer ring-0 border-[3px] rounded-lg slide-box
                 ${selectedSlide === index
-                    ? 'ring-2 ring-[#5141e5] text-white'
-                    : 'hover:slide-box/40'
+                    ? ' border-[#5141e5] '
+                    : 'hover:slide-box/40 border-gray-300'
                 }`}
         >
             <span className="font-medium slide-title">Slide {index + 1}</span>

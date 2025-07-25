@@ -1,6 +1,5 @@
 'use client'
 import React, { useEffect, useState, useRef } from 'react';
-import anime from 'animejs';
 
 interface ProgressBarProps {
     duration: number;
@@ -11,22 +10,8 @@ export const ProgressBar = ({ duration, onComplete }: ProgressBarProps) => {
     const [progress, setProgress] = useState(0);
     const progressInterval = useRef<NodeJS.Timeout | null>(null);
     const startTime = useRef<number>(Date.now());
-    const progressBarRef = useRef<HTMLDivElement>(null);
-    const gradientRef = useRef<anime.AnimeInstance | null>(null);
 
     useEffect(() => {
-        // Animate gradient
-        if (progressBarRef.current) {
-            gradientRef.current = anime({
-                targets: progressBarRef.current,
-                backgroundPosition: ['0% 50%', '100% 50%'],
-                duration: 2000,
-                loop: true,
-                direction: 'alternate',
-                easing: 'linear'
-            });
-        }
-
         const updateProgress = () => {
             const currentTime = Date.now();
             const elapsedTime = currentTime - startTime.current;
@@ -56,9 +41,6 @@ export const ProgressBar = ({ duration, onComplete }: ProgressBarProps) => {
             if (progressInterval.current) {
                 clearInterval(progressInterval.current);
             }
-            if (gradientRef.current) {
-                gradientRef.current.pause();
-            }
         };
     }, [duration, onComplete]);
 
@@ -70,16 +52,29 @@ export const ProgressBar = ({ duration, onComplete }: ProgressBarProps) => {
             </div>
             <div className="w-full bg-white rounded-full h-2 overflow-hidden">
                 <div
-                    ref={progressBarRef}
-                    className="h-full bg-gradient-to-r from-[#9034EA] via-[#5146E5] to-[#9034EA] rounded-full"
+                    className="h-full bg-gradient-to-r from-[#9034EA] via-[#5146E5] to-[#9034EA] rounded-full animate-gradient transition-all duration-300 ease-out"
                     style={{
                         width: `${progress}%`,
                         backgroundSize: '200% 100%',
-                        transition: 'width 0.3s ease-out'
                     }}
                 />
             </div>
-
+            <style jsx>{`
+                @keyframes gradient {
+                    0% {
+                        background-position: 0% 50%;
+                    }
+                    50% {
+                        background-position: 100% 50%;
+                    }
+                    100% {
+                        background-position: 0% 50%;
+                    }
+                }
+                .animate-gradient {
+                    animation: gradient 2s linear infinite;
+                }
+            `}</style>
         </div>
     );
 }; 

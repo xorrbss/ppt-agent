@@ -26,6 +26,7 @@ const DashboardPage: React.FC = () => {
       setIsLoading(true);
       setError(null);
       const data = await DashboardApi.getPresentations();
+      data.sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
       setPresentations(data);
     } catch (err) {
       setError(null);
@@ -35,6 +36,11 @@ const DashboardPage: React.FC = () => {
     }
   };
 
+  const removePresentation = (presentationId: string) => {
+    setPresentations((prev: any) =>
+      prev ? prev.filter((p: any) => p.id !== presentationId) : []
+    );
+  };
 
   return (
     <div className="min-h-screen bg-[#E9E8F8]">
@@ -50,6 +56,7 @@ const DashboardPage: React.FC = () => {
               type="slide"
               isLoading={isLoading}
               error={error}
+              onPresentationDeleted={removePresentation}
             />
           </section>
         </main>

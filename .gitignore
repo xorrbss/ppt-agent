@@ -7,6 +7,8 @@ __pycache__
 node_modules
 out
 user_data
+app_data
 tmp
 debug
 .fastembed_cache
+my-doc.txt

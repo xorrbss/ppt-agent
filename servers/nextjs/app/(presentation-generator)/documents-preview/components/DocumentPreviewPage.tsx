@@ -4,9 +4,8 @@
  * A component that displays and manages document previews for presentation generation.
  * Features:
  * - Document content preview with markdown support
- * - Sidebar navigation for documents, reports, and images
+ * - Sidebar navigation for documents
  * - Document content editing and saving
- * - Tables and charts display
  * - Presentation generation workflow
  * 
  * @component
@@ -14,19 +13,18 @@
 
 "use client";
 
-import styles from "../styles/main.module.css";
 import { useEffect, useState, useRef, useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OverlayLoader } from "@/components/ui/overlay-loader";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
-import { setOutlines, setPresentationId } from "@/store/slices/presentationGeneration";
+import { setPresentationId } from "@/store/slices/presentationGeneration";
 import { useDispatch, useSelector } from "react-redux";
 import { useRouter } from "next/navigation";
 import { RootState } from "@/store/store";
 import { Button } from "@/components/ui/button";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import MarkdownRenderer from "./MarkdownRenderer";
-import { getIconFromFile, removeUUID } from "../../utils/others";
+import { getIconFromFile } from "../../utils/others";
 import { ChevronRight, PanelRightOpen, X } from "lucide-react";
 import ToolTip from "@/components/ToolTip";
 import Header from "@/app/dashboard/components/Header";
@@ -43,6 +41,10 @@ interface TextContents {
   [key: string]: string;
 }
 
+interface FileItem {
+  name: string;
+  file_path: string;
+}
 
 const DocumentsPreviewPage: React.FC = () => {
   // Hooks
@@ -51,7 +53,7 @@ const DocumentsPreviewPage: React.FC = () => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Redux state
-  const { config, documents, images, charts, tables } = useSelector(
+  const { config, files } = useSelector(
     (state: RootState) => state.pptGenUpload
   );
 
@@ -67,12 +69,15 @@ const DocumentsPreviewPage: React.FC = () => {
     progress: false,
   });
 
-  // Memoized values
-  const documentKeys = useMemo(() => Object.keys(documents), [documents]);
-  const imageKeys = useMemo(() => Object.keys(images), [images]);
-  const allSources = useMemo(() => [...documentKeys, ...imageKeys], [documentKeys, imageKeys]);
+  // Memoized computed values
+  const fileItems: FileItem[] = useMemo(() => {
+    if (!files || !Array.isArray(files) || files.length === 0) return [];
+    return files.flat().filter((item: any) => item && item.name && item.file_path);
+  }, [files]);
 
-
+  const documentKeys = useMemo(() => {
+    return fileItems.map(file => file.name);
+  }, [fileItems]);
 
   const updateSelectedDocument = (value: string) => {
     setSelectedDocument(value);
@@ -80,7 +85,6 @@ const DocumentsPreviewPage: React.FC = () => {
       textareaRef.current.value = textContents[value] || '';
     }
   };
-
 
   const readFile = async (filePath: string) => {
     const res = await fetch(`/api/read-file`, {
@@ -95,15 +99,15 @@ const DocumentsPreviewPage: React.FC = () => {
     const promises: Promise<{ content: string }>[] = [];
 
     // Process documents
-    documentKeys.forEach(key => {
+    documentKeys.forEach((key: string) => {
       if (!(key in textContents)) {
         newDocuments.push(key);
-        // @ts-ignore
-        promises.push(readFile(documents[key]));
+        const fileItem = fileItems.find(item => item.name === key);
+        if (fileItem) {
+          promises.push(readFile(fileItem.file_path));
+        }
       }
     });
-
-
 
     if (promises.length > 0) {
       setDownloadingDocuments(newDocuments);
@@ -118,28 +122,15 @@ const DocumentsPreviewPage: React.FC = () => {
         });
       } catch (error) {
         console.error('Error reading files:', error);
-        toast({
-          title: "Error",
-          description: "Failed to read document content",
-          variant: "destructive",
-        });
+        toast.error("Failed to read document content");
       }
       setDownloadingDocuments([]);
     }
   };
 
-
-
-  const documentTablesAndCharts = () => {
-    if (!selectedDocument) return [];
-
-    const tablesList = tables[selectedDocument] || [];
-    const chartsList = charts[selectedDocument] || [];
-    return [...tablesList, ...chartsList];
-  };
-
   const handleCreatePresentation = async () => {
     try {
+
       setShowLoading({
         message: "Generating presentation outline...",
         show: true,
@@ -147,49 +138,24 @@ const DocumentsPreviewPage: React.FC = () => {
         progress: true,
       });
 
-      const documentPaths = documentKeys.map(key => documents[key]);
-      const createResponse = await PresentationGenerationApi.getQuestions({
+      const documentPaths = fileItems.map((fileItem: FileItem) => fileItem.file_path);
+      const createResponse = await PresentationGenerationApi.createPresentation({
         prompt: config?.prompt ?? "",
         n_slides: config?.slides ? parseInt(config.slides) : null,
-        documents: documentPaths,
-        images: imageKeys,
+        file_paths: documentPaths,
         language: config?.language ?? "",
 
       });
 
-      try {
-        const presentationWithOutlines = await PresentationGenerationApi.titleGeneration({
-          presentation_id: createResponse.id,
-        });
-
-        dispatch(setPresentationId(presentationWithOutlines.id));
-        dispatch(setOutlines(presentationWithOutlines.outlines));
-
-        setShowLoading({
-          message: "",
-          show: false,
-          duration: 0,
-          progress: false,
-        });
-
-        router.push("/theme");
-      } catch (error) {
-        console.error("Error in title generation:", error);
-        toast({
-          title: "Error in title generation.",
-          description: "Please try again.",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      console.error("Error in presentation creation:", error);
-      toast({
-        title: "Error in presentation creation.",
-        description: "Please try again.",
-        variant: "destructive",
+      dispatch(setPresentationId(createResponse.id));
+      router.push("/outline");
+    } catch (error: any) {
+      console.error("Error in radar presentation creation:", error);
+      toast.error('Error', {
+        description: error.message || "Error in radar presentation creation.",
       });
       setShowLoading({
-        message: "Error in presentation creation.",
+        message: "Error in radar presentation creation.",
         show: true,
         duration: 10,
         progress: false,
@@ -206,25 +172,23 @@ const DocumentsPreviewPage: React.FC = () => {
 
   // Effects
   useEffect(() => {
-    if (allSources.length > 0) {
-      setSelectedDocument(allSources[0]);
+    if (documentKeys.length > 0) {
+      setSelectedDocument(documentKeys[0]);
       maintainDocumentTexts();
     }
-  }, [allSources]);
+  }, [documentKeys]);
 
   // Render helpers
   const renderDocumentContent = () => {
     if (!selectedDocument) return null;
 
     const isDocument = documentKeys.includes(selectedDocument);
-    const hasTablesAndCharts = documentTablesAndCharts().length > 0;
 
     if (!isDocument) return null;
 
     return (
       <div className="h-full mr-4">
-        <div className={`overflow-y-auto custom_scrollbar ${hasTablesAndCharts ? "h-[calc(100vh-300px)]" : "h-full"
-          }`}>
+        <div className="overflow-y-auto custom_scrollbar h-full">
           <div className="h-full w-full max-w-full flex flex-col mb-5">
             <h1 className="text-2xl font-medium mb-5">Content:</h1>
             {downloadingDocuments.includes(selectedDocument) ? (
@@ -234,24 +198,6 @@ const DocumentsPreviewPage: React.FC = () => {
             )}
           </div>
         </div>
-        {hasTablesAndCharts && (
-          <div className="py-4">
-            <h1 className="text-2xl font-medium mb-5">Tables And Charts</h1>
-            {documentTablesAndCharts().map((item, index) => (
-              <div
-                key={index}
-                className="w-full border rounded-lg p-4 my-4 bg-white shadow-sm"
-              >
-                {item.markdown && (
-                  <MarkdownRenderer
-                    key={selectedDocument}
-                    content={item.markdown}
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     );
   };
@@ -260,7 +206,7 @@ const DocumentsPreviewPage: React.FC = () => {
     if (!isOpen) return null;
 
     return (
-      <div className={`${styles.sidebar} fixed xl:relative w-full z-50 xl:z-auto
+      <div className={`border-r border-gray-200 fixed xl:relative w-full z-50 xl:z-auto
         transition-all duration-300 ease-in-out max-w-[200px] md:max-w-[300px] h-[85vh] rounded-md p-5`}>
         <X
           onClick={() => setIsOpen(false)}
@@ -268,17 +214,15 @@ const DocumentsPreviewPage: React.FC = () => {
           size={20}
         />
 
-
-
         {documentKeys.length > 0 && (
           <div className="mt-8">
             <p className="text-xs mt-2 text-[#2E2E2E] opacity-70">DOCUMENTS</p>
             <div className="flex flex-col gap-2 mt-6">
-              {documentKeys.map((key) => (
+              {documentKeys.map((key: string) => (
                 <div
                   key={key}
                   onClick={() => updateSelectedDocument(key)}
-                  className={`${selectedDocument === key ? styles.selected_border : ""
+                  className={`${selectedDocument === key ? 'border border-blue-500' : ""
                     } flex p-2 rounded-sm gap-2 items-center cursor-pointer`}
                 >
                   <img
@@ -294,36 +238,12 @@ const DocumentsPreviewPage: React.FC = () => {
             </div>
           </div>
         )}
-
-        {imageKeys.length > 0 && (
-          <div className="mt-8">
-            <p className="text-xs mt-2 text-[#2E2E2E] opacity-70">IMAGES</p>
-            <div className="flex flex-col gap-2 mt-6">
-              {imageKeys.map((key) => (
-                <div
-                  key={key}
-                  onClick={() => updateSelectedDocument(key)}
-                  className="cursor-pointer"
-                >
-                  <img
-                    className={`${selectedDocument === key
-                      ? styles.selected_border
-                      : styles.unselected_border
-                      } ${styles.uploaded_images} rounded-lg h-24 w-full border border-gray-200`}
-                    src={images[key]}
-                    alt="Uploaded image"
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     );
   };
 
   return (
-    <div className={`${styles.wrapper} min-h-screen flex flex-col w-full`}>
+    <div className={`bg-white/90 min-h-screen flex flex-col w-full`}>
       <OverlayLoader
         show={showLoading.show}
         text={showLoading.message}

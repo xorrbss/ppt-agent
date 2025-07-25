@@ -12,7 +12,7 @@
 # Open-Source AI Presentation Generator and API (Gamma Alternative)
 
 
-**Presenton** is an open-source application for generating presentations with AI — all running locally on your device. Stay in control of your data and privacy while using models like OpenAI and Gemini, or use your own hosted models through Ollama. 
+**Presenton** is an open-source application for generating presentations with AI — all running locally on your device. Stay in control of your data and privacy while using models like OpenAI and Gemini, or use your own hosted models through Ollama.
 
 ![Demo](readme_assets/demo.gif)
 
@@ -29,6 +29,7 @@
 * ✅ **API Presentation Generation** — Host as API to generate presentations over requests
 * ✅ **Ollama Support** — Run open-source models locally with Ollama integration
 * ✅ **OpenAI API Compatibility** — Use any OpenAI-compatible API endpoint with your own models
+* ✅ **Versatile Image Generation** — Choose from DALL-E 3, Gemini Flash, Pexels, or Pixabay for your visuals
 * ✅ **Runs Locally** — All code runs on your device
 * ✅ **Privacy-First** — No tracking, no data stored by us
 * ✅ **Flexible** — Generate presentations from prompts or outlines
@@ -70,7 +71,17 @@ You may want to directly provide your API KEYS as environment variables and keep
 - **CUSTOM_LLM_URL=[Custom OpenAI Compatible URL]**: Provide this if **LLM** is set to **custom**
 - **CUSTOM_LLM_API_KEY=[Custom OpenAI Compatible API KEY]**: Provide this if **LLM** is set to **custom**
 - **CUSTOM_MODEL=[Custom Model ID]**: Provide this if **LLM** is set to **custom**
-- **PEXELS_API_KEY=[Your Pexels API Key]**: Provide this to generate images if **LLM** is set to **ollama** or **custom**
+
+You can also set the following environment variables to customize the image generation provider and API keys:
+
+- **IMAGE_PROVIDER=[pexels/pixabay/gemini_flash/dall-e-3]**: Select the image provider of your choice.
+  - Defaults to **dall-e-3** for OpenAI models, **gemini_flash** for Google models if not set.
+- **PEXELS_API_KEY=[Your Pexels API Key]**: Required if using **pexels** as the image provider.
+- **PIXABAY_API_KEY=[Your Pixabay API Key]**: Required if using **pixabay** as the image provider.
+- **GOOGLE_API_KEY=[Your Google API Key]**: Required if using **gemini_flash** as the image provider.
+- **OPENAI_API_KEY=[Your OpenAI API Key]**: Required if using **dall-e-3** as the image provider.
+
+> **Note:** You can freely choose both the LLM (text generation) and the image provider. Supported image providers: **pexels**, **pixabay**, **gemini_flash** (Google), and **dall-e-3** (OpenAI).
 
 ### Using OpenAI
 ```bash
@@ -199,4 +210,3 @@ For detailed info checkout [API documentation](https://docs.presenton.ai/using-p
 ## License
 
 Apache 2.0
-

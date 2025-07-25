@@ -17,7 +17,7 @@ WORKDIR /app
 RUN ls -a
 
 # Set environment variables
-ENV APP_DATA_DIRECTORY=/app/user_data
+ENV APP_DATA_DIRECTORY=/app_data
 ENV TEMP_DIRECTORY=/tmp/presenton
 
 # Install ollama
@@ -30,10 +30,10 @@ RUN pip install -r requirements.txt
 # Install dependencies for Next.js
 WORKDIR /node_dependencies
 COPY servers/nextjs/package.json servers/nextjs/package-lock.json ./
-RUN npm install
+RUN npm install 
 
 # Install chrome for puppeteer
-RUN npx puppeteer browsers install chrome@136.0.7103.92 --install-deps
+RUN npx puppeteer browsers install chrome@138.0.7204.94 --install-deps
 
 RUN chmod -R 777 /node_dependencies
 
@@ -41,7 +41,7 @@ RUN chmod -R 777 /node_dependencies
 COPY nginx.conf /etc/nginx/nginx.conf
 
 # Expose the port
-EXPOSE 80 3000 8000
+EXPOSE 80
 
 # Start the servers
 CMD ["/bin/bash", "/app/docker-dev-start.sh"]

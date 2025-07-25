@@ -22,7 +22,7 @@ import {
 import { setPresentationData } from "@/store/slices/presentationGeneration";
 import { SortableSlide } from "./SortableSlide";
 import { SortableListItem } from "./SortableListItem";
-import { renderSlideContent } from "../../components/slide_config";
+import { useGroupLayouts } from "../../hooks/useGroupLayouts";
 
 interface SidePanelProps {
   selectedSlide: number;
@@ -45,10 +45,11 @@ const SidePanel = ({
   const { presentationData, isStreaming } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
-  const { currentTheme, currentColors } = useSelector(
-    (state: RootState) => state.theme
-  );
+
   const dispatch = useDispatch();
+
+  // Use the centralized group layouts hook
+  const { renderSlideContent } = useGroupLayouts();
 
   useEffect(() => {
     if (window.innerWidth < 768) {
@@ -56,9 +57,12 @@ const SidePanel = ({
     }
   }, [isMobilePanelOpen]);
 
-
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // Start drag after moving 8px
+      },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -71,7 +75,6 @@ const SidePanel = ({
     }
   };
 
-
   const handleDragEnd = (event: any) => {
     const { active, over } = event;
 
@@ -80,10 +83,10 @@ const SidePanel = ({
     if (active.id !== over.id) {
       // Find the indices of the dragged and target items
       const oldIndex = presentationData?.slides.findIndex(
-        (item) => item.id === active.id
+        (item: any) => item.id === active.id
       );
       const newIndex = presentationData?.slides.findIndex(
-        (item) => item.id === over.id
+        (item: any) => item.id === over.id
       );
 
       // Reorder the array
@@ -94,7 +97,7 @@ const SidePanel = ({
       );
 
       // Update indices of all slides
-      const updatedArray = reorderedArray.map((slide, index) => ({
+      const updatedArray = reorderedArray.map((slide: any, index: number) => ({
         ...slide,
         index: index,
       }));
@@ -114,7 +117,6 @@ const SidePanel = ({
     presentationData?.slides.length === 0
   ) {
     return null;
-
   }
 
   return (
@@ -147,7 +149,6 @@ const SidePanel = ({
         </div>
       )}
 
-      {/* Side Panel */}
       <div
         className={`
           fixed xl:relative h-full z-50 xl:z-auto
@@ -160,16 +161,10 @@ const SidePanel = ({
         `}
       >
         <div
-          data-theme={currentTheme}
-          style={{
-            backgroundColor: currentColors.slideBg,
-          }}
-          className="min-w-[300px] max-w-[300px] h-[calc(100vh-120px)]  rounded-[20px] hide-scrollbar overflow-hidden slide-theme shadow-xl"
+
+          className="min-w-[300px] bg-white max-w-[300px] h-[calc(100vh-120px)]  rounded-[20px] hide-scrollbar overflow-hidden slide-theme shadow-xl"
         >
           <div
-            style={{
-              backgroundColor: currentColors.slideBg,
-            }}
             className="sticky top-0 z-40  px-6 py-4"
           >
             <div className="flex items-center justify-between gap-4">
@@ -212,6 +207,7 @@ const SidePanel = ({
               />
             </div>
           </div>
+
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -222,7 +218,7 @@ const SidePanel = ({
               <div className="p-4 overflow-y-auto hide-scrollbar h-[calc(100%-100px)]">
                 {isStreaming ? (
                   presentationData &&
-                  presentationData?.slides.map((slide, index) => (
+                  presentationData?.slides.map((slide: any, index: number) => (
                     <div
                       key={`${index}-${slide.type}-${slide.id}`}
                       className={`p-3 cursor-pointer rounded-lg slide-box`}
@@ -238,13 +234,13 @@ const SidePanel = ({
                 ) : (
                   <SortableContext
                     items={
-                      presentationData?.slides.map((slide) => slide.id!) || []
+                      presentationData?.slides.map((slide: any) => slide.id!) || []
                     }
                     strategy={verticalListSortingStrategy}
                   >
                     <div className="space-y-2" id={`slide-${selectedSlide}`}>
                       {presentationData &&
-                        presentationData?.slides.map((slide, index) => (
+                        presentationData?.slides.map((slide: any, index: number) => (
                           <SortableListItem
                             key={`${slide.id}-${index}`}
                             slide={slide}
@@ -264,17 +260,17 @@ const SidePanel = ({
               <div className="p-4 overflow-y-auto hide-scrollbar h-[calc(100%-100px)] space-y-4">
                 {isStreaming ? (
                   presentationData &&
-                  presentationData?.slides.map((slide, index) => (
+                  presentationData?.slides.map((slide: any, index: number) => (
                     <div
                       key={`${slide.id}-${index}`}
                       onClick={() => onSlideClick(index)}
                       className={` cursor-pointer ring-2 p-1  rounded-md transition-all duration-200 ${selectedSlide === index ? ' ring-[#5141e5]' : 'ring-gray-200'
                         }`}
                     >
-                      <div className=" bg-white  relative overflow-hidden aspect-video">
-                        <div className="absolute bg-gray-100/5 z-40 top-0 left-0 w-full h-full" />
+                      <div className=" bg-white pointer-events-none  relative overflow-hidden aspect-video">
+                        <div className="absolute bg-gray-100/5 z-50  top-0 left-0 w-full h-full" />
                         <div className="transform scale-[0.2] flex justify-center items-center origin-top-left  w-[500%] h-[500%]">
-                          {renderSlideContent(slide, 'English')}
+                          {renderSlideContent(slide, false)}
                         </div>
                       </div>
                     </div>
@@ -282,18 +278,19 @@ const SidePanel = ({
                 ) : (
                   <SortableContext
                     items={
-                      presentationData?.slides.map((slide) => slide.id!) || []
+                      presentationData?.slides.map((slide: any) => slide.id || `${slide.index}`) || []
                     }
                     strategy={verticalListSortingStrategy}
                   >
                     {presentationData &&
-                      presentationData?.slides.map((slide, index) => (
+                      presentationData?.slides.map((slide: any, index: number) => (
                         <SortableSlide
                           key={`${slide.id}-${index}`}
                           slide={slide}
                           index={index}
                           selectedSlide={selectedSlide}
                           onSlideClick={onSlideClick}
+                          renderSlideContent={(slide) => renderSlideContent(slide, false)}
                         />
                       ))}
                   </SortableContext>

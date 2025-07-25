@@ -2,7 +2,7 @@
 
 import React, { useRef, useState } from 'react'
 import { File, X, Upload } from 'lucide-react'
-import { useToast } from '@/hooks/use-toast'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
 interface FileWithId extends File {
@@ -17,7 +17,6 @@ interface SupportingDocProps {
 const SupportingDoc = ({ files, onFilesChange }: SupportingDocProps) => {
     const [isDragging, setIsDragging] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
-    const { toast } = useToast()
 
     // Convert Files to FileWithId with proper type checking
     const filesWithIds: FileWithId[] = files.map(file => {
@@ -57,19 +56,15 @@ const SupportingDoc = ({ files, onFilesChange }: SupportingDocProps) => {
 
         const invalidFiles = droppedFiles.filter(file => !validTypes.includes(file.type));
         if (invalidFiles.length > 0) {
-            toast({
-                title: 'Invalid file type',
+            toast.error('Invalid file type', {
                 description: 'Please upload only PDF, TXT, PPTX, or DOCX files',
-                variant: 'destructive',
             });
             return;
         }
 
         if (hasPdf && droppedFiles.some(file => file.type === 'application/pdf')) {
-            toast({
-                title: 'Multiple PDF files are not allowed',
+            toast.error('Multiple PDF files are not allowed', {
                 description: 'Please select only one PDF file',
-                variant: 'destructive',
             });
             return;
         }
@@ -82,8 +77,7 @@ const SupportingDoc = ({ files, onFilesChange }: SupportingDocProps) => {
             const updatedFiles = [...files, ...validFiles]
             onFilesChange(updatedFiles)
 
-            toast({
-                title: 'Files selected',
+            toast.success('Files selected', {
                 description: `${validFiles.length} file(s) have been added`,
             })
         }
@@ -102,8 +96,7 @@ const SupportingDoc = ({ files, onFilesChange }: SupportingDocProps) => {
             const updatedFiles = [...files, ...validFiles]
             onFilesChange(updatedFiles)
 
-            toast({
-                title: 'Files selected',
+            toast.success('Files selected', {
                 description: `${validFiles.length} file(s) have been added`,
             })
         }
@@ -228,9 +221,7 @@ const SupportingDoc = ({ files, onFilesChange }: SupportingDocProps) => {
                         </div>
                     </div>
                 )}
-                {files.filter(file => file.type === 'text/csv').length > 0 && (
-                    <p className="text-sm text-gray-500 font-roboto text-center pb-1">Analyzing CSV file may take some time... Be Patient!</p>
-                )}
+
             </div>
         </div>
     )

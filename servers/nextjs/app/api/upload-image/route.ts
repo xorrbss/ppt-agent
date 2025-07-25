@@ -24,6 +24,7 @@ export async function POST(request: NextRequest) {
     // Create uploads directory if it doesn't exist
     const uploadsDir = path.join(userDataDir, "uploads");
     fs.mkdirSync(uploadsDir, { recursive: true });
+ 
 
     // Generate unique filename
     const filename = `${crypto.randomBytes(16).toString("hex")}.png`;
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
     // Return the relative path that can be used in the frontend
     return NextResponse.json({
       success: true,
-      filePath: `/app/user_data/uploads/${filename}`
+      filePath: `${uploadsDir}/${filename}`
     });
   } catch (error) {
     console.error("Error saving image:", error);

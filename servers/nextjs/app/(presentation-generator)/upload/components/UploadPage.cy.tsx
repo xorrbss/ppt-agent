@@ -4,7 +4,6 @@ import { mount } from 'cypress/react'
 import { store } from '@/store/store'
 import { Provider } from 'react-redux'
 import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime'
-import { Toaster } from '@/components/ui/toaster'
 
 // Import global styles
 import '@/app/globals.css'
@@ -34,7 +33,6 @@ Cypress.Commands.add('mount', (component, options = {}) => {
     <AppRouterContext.Provider value={router}>
       <Provider store={store}>
         {children}
-        <Toaster />
       </Provider>
     </AppRouterContext.Provider>
   )

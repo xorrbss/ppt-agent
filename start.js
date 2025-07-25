@@ -1,3 +1,5 @@
+/* This script starts the FastAPI and Next.js servers, setting up user configuration if necessary. It reads environment variables to configure API keys and other settings, ensuring that the user configuration file is created if it doesn't exist. The script also handles the starting of both servers and keeps the Node.js process alive until one of the servers exits. */
+
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -43,17 +45,18 @@ const setupUserConfigFromEnv = () => {
     CUSTOM_LLM_API_KEY: process.env.CUSTOM_LLM_API_KEY || existingConfig.CUSTOM_LLM_API_KEY,
     CUSTOM_MODEL: process.env.CUSTOM_MODEL || existingConfig.CUSTOM_MODEL,
     PEXELS_API_KEY: process.env.PEXELS_API_KEY || existingConfig.PEXELS_API_KEY,
+    PIXABAY_API_KEY: process.env.PIXABAY_API_KEY || existingConfig.PIXABAY_API_KEY,
+    IMAGE_PROVIDER: process.env.IMAGE_PROVIDER || existingConfig.IMAGE_PROVIDER,
     USE_CUSTOM_URL: process.env.USE_CUSTOM_URL || existingConfig.USE_CUSTOM_URL,
   };
 
   fs.writeFileSync(userConfigPath, JSON.stringify(userConfig));
 }
-
 const startServers = async () => {
 
   const fastApiProcess = spawn(
     "python",
-    [isDev ? "server_autoreload.py" : "server.py", "--port", fastapiPort.toString()],
+    ["server.py", "--port", fastapiPort.toString(), "--reload", isDev],
     {
       cwd: fastapiDir,
       stdio: "inherit",

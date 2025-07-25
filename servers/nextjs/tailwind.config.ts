@@ -9,6 +9,7 @@ const config: Config = {
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
 	"!./app/privacy-policy/**/*.{js,ts,jsx,tsx,mdx}",
+	"./presentation-layouts/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
   	extend: {
@@ -82,12 +83,10 @@ const config: Config = {
   			'accordion-up': 'accordion-up 0.2s ease-out'
   		},
   		fontFamily: {
-			'instrument_sans':['var(--font-instrument-sans)'],	
+			'instrument_sans':['var(--font-instrument-sans)'],
 			'inter':['var(--font-inter)'],
 			'roboto':['var(--font-roboto)'],
-			'fraunces':['var(--font-fraunces)'],
-			'montserrat':['var(--font-montserrat)'],
-			'inria_serif':['var(--font-inria-serif)']
+
   		},
   	}
   },

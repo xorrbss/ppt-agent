@@ -1,6 +1,14 @@
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: false,
+  
+
 
   images: {
     remotePatterns: [
@@ -42,12 +50,7 @@ const nextConfig = {
       },
     ],
   },
-  rewrites: async () => [
-    {
-      source: "/static/:path*",
-      destination: "/api/static/:path*",
-    },
-  ],
+  
 };
 
 export default nextConfig;

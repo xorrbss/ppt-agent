@@ -1,6 +1,5 @@
 'use client'
 import React from "react";
-import { FooterProvider } from "../context/footerContext";
 import PresentationPage from "./components/PresentationPage";
 import { Button } from "@/components/ui/button";
 import { useRouter, useSearchParams } from "next/navigation";

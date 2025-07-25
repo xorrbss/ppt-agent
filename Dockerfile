@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app  
 
 # Set environment variables
-ENV APP_DATA_DIRECTORY=/app/user_data
+ENV APP_DATA_DIRECTORY=/app_data
 ENV TEMP_DIRECTORY=/tmp/presenton
 
 # Install ollama

@@ -8,32 +8,32 @@ import {
   Maximize2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { renderSlideContent } from "./slide_config";
 import { Slide } from "../types/slide";
+import { useGroupLayouts } from "../hooks/useGroupLayouts";
 
 
 interface PresentationModeProps {
   slides: Slide[];
   currentSlide: number;
-  currentTheme: string;
+
   isFullscreen: boolean;
   onFullscreenToggle: () => void;
   onExit: () => void;
   onSlideChange: (slideNumber: number) => void;
-  language: string;
 }
 
 const PresentationMode: React.FC<PresentationModeProps> = ({
 
   slides,
   currentSlide,
-  currentTheme,
+
   isFullscreen,
   onFullscreenToggle,
   onExit,
   onSlideChange,
-  language,
+
 }) => {
+  const { renderSlideContent } = useGroupLayouts();
   // Modify the handleKeyPress to prevent default behavior
   const handleKeyPress = useCallback(
     (event: KeyboardEvent) => {
@@ -190,10 +190,9 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
       <div className="flex-1 flex items-center justify-center p-8">
         <div
           className={`w-full max-w-[1280px] scale-110 aspect-video slide-theme slide-container border rounded-sm font-inter shadow-lg bg-white`}
-          data-theme={currentTheme}
         >
           {slides[currentSlide] &&
-            renderSlideContent(slides[currentSlide], language)}
+            renderSlideContent(slides[currentSlide], false)}
         </div>
       </div>
     </div>

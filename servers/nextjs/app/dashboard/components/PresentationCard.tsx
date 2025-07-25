@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 
 import { Card } from "@/components/ui/card";
 import { DashboardApi } from "../api/dashboard";
@@ -9,25 +9,26 @@ import {
   PopoverContent,
 } from "@/components/ui/popover";
 import { useRouter } from "next/navigation";
-import { toast } from "@/hooks/use-toast";
-import { renderSlideContent } from "@/app/(presentation-generator)/components/slide_config";
+import { toast } from "sonner";
+import { useGroupLayouts } from "@/app/(presentation-generator)/hooks/useGroupLayouts";
 
 export const PresentationCard = ({
   id,
   title,
   created_at,
-  thumbnail,
-  theme,
-  slide
+  slide,
+  onDeleted
 }: {
   id: string;
   title: string;
   created_at: string;
-  thumbnail: string;
-  theme: any;
-  slide: any
+  slide: any;
+  onDeleted?: (presentationId: string) => void;
 }) => {
   const router = useRouter();
+  const { renderSlideContent } = useGroupLayouts();
+
+
 
   const handlePreview = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -38,48 +39,26 @@ export const PresentationCard = ({
     e.preventDefault();
     e.stopPropagation();
 
-    toast({
-      title: "Deleting presentation",
-      description: "Please wait while we delete the presentation",
-      variant: "default",
-    });
+
     const response = await DashboardApi.deletePresentation(id);
 
     if (response) {
-      toast({
-        title: "Presentation deleted",
+      toast.success("Presentation deleted", {
         description: "The presentation has been deleted successfully",
-        variant: "default",
       });
+      if (onDeleted) {
+        onDeleted(id);
+      }
     } else {
-      toast({
-        title: "Error",
-        description: "Failed to delete presentation",
-        variant: "destructive",
-      });
+      toast.error("Error deleting presentation");
     }
-    window.location.reload();
   };
-
-  const themeName = theme.name;
-  // Create CSS variables object
-  const cssVariables = {
-    '--slide-bg': theme.colors.slideBg,
-    '--slide-title': theme.colors.slideTitle,
-    '--slide-heading': theme.colors.slideHeading,
-    '--slide-description': theme.colors.slideDescription,
-    '--slide-box': theme.colors.slideBox,
-    '--icon-bg': theme.colors.iconBg,
-    '--background': theme.colors.background,
-    '--font-family': theme.colors.fontFamily,
-  } as React.CSSProperties;
-
   return (
     <Card
       onClick={handlePreview}
-      data-theme={themeName}
+
       className="bg-white rounded-[8px] slide-theme cursor-pointer overflow-hidden p-4"
-      style={cssVariables}
+
     >
       <div className="space-y-4">
         {/* Date */}
@@ -88,8 +67,11 @@ export const PresentationCard = ({
             {new Date(created_at).toLocaleDateString()}
           </p>
           <Popover>
-            <PopoverTrigger onClick={(e) => e.stopPropagation()}>
+            <PopoverTrigger className="w-6 h-6 rounded-full flex items-center justify-center text-gray-500 hover:text-gray-700" onClick={(e) => e.stopPropagation()}>
+
+
               <DotsVerticalIcon className="w-4 h-4 text-gray-500" />
+
             </PopoverTrigger>
             <PopoverContent align="end" className="bg-white w-[200px]">
               <button
@@ -103,25 +85,6 @@ export const PresentationCard = ({
           </Popover>
         </div>
 
-        {/* Thumbnail */}
-        {/* <div className="relative border-2 border-gray-200 aspect-[16/9] rounded-[8px] overflow-hidden">
-          {thumbnail ? (
-            <img
-              src={getStaticFileUrl(thumbnail)}
-              alt={title}
-              className="object-cover h-full w-full"
-            />
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full w-full">
-              <p className="text-gray-500 text-sm font-roboto">
-                No thumbnail yet
-              </p>
-              <p className="text-gray-500 text-sm font-roboto">
-                Will be added shortly
-              </p>
-            </div>
-          )}
-        </div> */}
         <div className=" slide-box relative overflow-hidden border aspect-video"
           style={{
 
@@ -129,7 +92,7 @@ export const PresentationCard = ({
         >
           <div className="absolute bg-transparent z-40 top-0 left-0 w-full h-full" />
           <div className="transform scale-[0.2] flex justify-center items-center origin-top-left  w-[500%] h-[500%]">
-            {renderSlideContent(slide, 'English')}
+            {renderSlideContent(slide, false)}
           </div>
         </div>
 
