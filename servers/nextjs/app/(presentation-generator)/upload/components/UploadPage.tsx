@@ -162,7 +162,7 @@ const UploadPage = () => {
    * Handles errors during presentation generation
    */
   const handleGenerationError = (error: any) => {
-    console.error("Error in presentation generation:", error);
+    console.error("Error in upload page", error);
     setLoadingState({
       isLoading: false,
       message: "",
@@ -170,7 +170,7 @@ const UploadPage = () => {
       showProgress: false,
     });
     toast.error("Error", {
-      description: "Failed to generate presentation. Please try again.",
+      description: error.message || "Error in upload page.",
     });
   };
 

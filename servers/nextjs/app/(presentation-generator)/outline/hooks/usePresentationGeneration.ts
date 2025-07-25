@@ -86,10 +86,10 @@ export const usePresentationGeneration = (
         dispatch(clearPresentationData());
           router.push(`/presentation?id=${presentationId}&stream=true`);
       }
-    } catch (error) {
-      console.error("Error in data generation", error);
+    } catch (error: any) {
+      console.error('Error In Presentation Generation(prepare).', error);
       toast.error("Generation Error", {
-        description: "Failed to generate presentation. Please try again.",
+        description: error.message || "Error In Presentation Generation(prepare).",
       });
     } finally {
       setLoadingState(DEFAULT_LOADING_STATE);

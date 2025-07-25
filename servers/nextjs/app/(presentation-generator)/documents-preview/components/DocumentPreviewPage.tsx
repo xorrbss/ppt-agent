@@ -149,11 +149,13 @@ const DocumentsPreviewPage: React.FC = () => {
 
       dispatch(setPresentationId(createResponse.id));
       router.push("/outline");
-    } catch (error) {
-      console.error("Error in presentation creation:", error);
-      toast.error("Error in presentation creation. Please try again.");
+    } catch (error: any) {
+      console.error("Error in radar presentation creation:", error);
+      toast.error('Error', {
+        description: error.message || "Error in radar presentation creation.",
+      });
       setShowLoading({
-        message: "Error in presentation creation.",
+        message: "Error in radar presentation creation.",
         show: true,
         duration: 10,
         progress: false,
