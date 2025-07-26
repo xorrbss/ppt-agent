@@ -61,7 +61,6 @@ export default function Home() {
         isDisabled: true,
         text: "Saving Configuration..."
       }));
-      console.log("llmConfig", llmConfig);
       await handleSaveLLMConfig(llmConfig);
       if (llmConfig.LLM === "ollama" && llmConfig.OLLAMA_MODEL) {
         const isPulled = await checkIfSelectedOllamaModelIsPulled(llmConfig.OLLAMA_MODEL);

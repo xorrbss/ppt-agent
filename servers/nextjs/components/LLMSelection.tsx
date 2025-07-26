@@ -139,6 +139,7 @@ export default function LLMProviderSelection({
 
   useEffect(() => {
     if (llmConfig.LLM === "ollama") {
+      setOllamaConfigHandler();
       fetchOllamaModels();
     }
   }, [llmConfig.LLM]);
