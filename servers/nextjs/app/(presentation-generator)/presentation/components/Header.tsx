@@ -56,6 +56,9 @@ const Header = ({
     try {
       setOpen(false);
       setShowLoader(true);
+      // Save the presentation data before exporting
+      await PresentationGenerationApi.updatePresentationContent(presentationData);
+
 
       const pptx_model = await get_presentation_pptx_model(presentation_id);
       if (!pptx_model) {
@@ -86,6 +89,8 @@ const Header = ({
     try {
       setOpen(false);
       setShowLoader(true);
+      // Save the presentation data before exporting
+      await PresentationGenerationApi.updatePresentationContent(presentationData);
 
       const response = await fetch('/api/export-as-pdf', {
         method: 'POST',
