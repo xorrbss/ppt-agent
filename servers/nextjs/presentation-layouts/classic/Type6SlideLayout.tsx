@@ -23,7 +23,7 @@ const type6SlideSchema = z.object({
             heading: 'Professional Service',
             description: 'High-quality professional services tailored to your specific needs and requirements',
             icon: {
-                __icon_url__: 'https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css',
+                __icon_url__: '/static/icons/placeholder.png',
                 __icon_query__: 'Professional Service'
             }
         },
@@ -31,7 +31,7 @@ const type6SlideSchema = z.object({
             heading: 'Expert Consultation',
             description: 'Expert advice and consultation from experienced professionals in the field',
             icon: {
-                __icon_url__: 'https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css',
+                __icon_url__: '/static/icons/placeholder.png',
                 __icon_query__: 'Expert Consultation'
             }
         },
@@ -39,7 +39,7 @@ const type6SlideSchema = z.object({
             heading: 'Quality Assurance',
             description: 'Comprehensive quality assurance processes to ensure excellent results',
             icon: {
-                __icon_url__: 'https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css',
+                __icon_url__: '/static/icons/placeholder.png',
                 __icon_query__: 'Quality Assurance'
             }
         },
@@ -47,7 +47,7 @@ const type6SlideSchema = z.object({
             heading: 'Customer Support',
             description: 'Dedicated customer support available to assist you throughout the process',
             icon: {
-                __icon_url__: 'https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css',
+                __icon_url__: '/static/icons/placeholder.png',
                 __icon_query__: 'Customer Support'
             }
         }

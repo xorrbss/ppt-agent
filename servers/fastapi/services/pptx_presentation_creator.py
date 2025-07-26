@@ -34,10 +34,10 @@ from models.pptx_models import (
 )
 from utils.download_helpers import download_files
 from utils.image_utils import (
-    change_image_color,
     clip_image,
     create_circle_image,
     fit_image,
+    invert_image,
     round_image_corners,
     set_image_opacity,
 )
@@ -174,7 +174,7 @@ class PptxPresentationCreator:
         if (
             picture_model.clip
             or picture_model.border_radius
-            or picture_model.overlay
+            or picture_model.invert
             or picture_model.opacity
             or picture_model.object_fit
             or picture_model.shape
@@ -206,8 +206,8 @@ class PptxPresentationCreator:
                 image = round_image_corners(image, picture_model.border_radius)
             if picture_model.shape == PptxBoxShapeEnum.CIRCLE:
                 image = create_circle_image(image)
-            if picture_model.overlay:
-                image = change_image_color(image, picture_model.overlay)
+            if picture_model.invert:
+                image = invert_image(image)
             if picture_model.opacity:
                 image = set_image_opacity(image, picture_model.opacity)
             image_path = os.path.join(self._temp_dir, f"{str(uuid.uuid4())}.png")

@@ -18,7 +18,7 @@ const type7SlideSchema = z.object({
             description: "Item description",
         }),
         icon: IconSchema.default({
-            __icon_url__: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
+            __icon_url__: '/static/icons/placeholder.png',
             __icon_query__: 'Default icon'
         }).meta({
             description: "Icon for the item",
@@ -28,7 +28,7 @@ const type7SlideSchema = z.object({
             heading: 'Professional Service',
             description: 'High-quality professional services tailored to your specific needs and requirements',
             icon: {
-                __icon_url__: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
+                __icon_url__: '/static/icons/placeholder.png',
                 __icon_query__: 'Professional service icon'
             }
         },
@@ -36,7 +36,7 @@ const type7SlideSchema = z.object({
             heading: 'Expert Consultation',
             description: 'Expert advice and consultation from experienced professionals in the field',
             icon: {
-                __icon_url__: 'https://cdn.pixabay.com/photo/2016/02/19/11/19/office-1209640_1280.jpg',
+                __icon_url__: '/static/icons/placeholder.png',
                 __icon_query__: 'Expert consultation icon'
             }
         },
@@ -44,7 +44,7 @@ const type7SlideSchema = z.object({
             heading: 'Quality Assurance',
             description: 'Comprehensive quality assurance processes to ensure excellent results',
             icon: {
-                __icon_url__: 'https://cdn.pixabay.com/photo/2017/08/10/08/47/laptop-2619235_1280.jpg',
+                __icon_url__: '/static/icons/placeholder.png',
                 __icon_query__: 'Quality assurance icon'
             }
         },
@@ -52,7 +52,7 @@ const type7SlideSchema = z.object({
             heading: 'Customer Support',
             description: 'Dedicated customer support available to assist you throughout the process',
             icon: {
-                __icon_url__: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
+                __icon_url__: '/static/icons/placeholder.png',
                 __icon_query__: 'Customer support icon'
             }
         }
