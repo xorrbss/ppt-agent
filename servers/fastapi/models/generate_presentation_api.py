@@ -4,9 +4,9 @@ from fastapi import UploadFile
 
 class GeneratePresentationRequest(BaseModel):
     prompt: str
-    n_slides: int = Field(default=8, ge=5, le=15)
+    n_slides: int = Field(default=8, ge=5, le=20)
     language: str = Field(default="English")
-    layout: str = Field(default="default")
+    layout: str = Field(default="general")
     documents: Optional[List[UploadFile]] = None
     export_as: Literal["pptx", "pdf"] = Field(default="pptx")
 
