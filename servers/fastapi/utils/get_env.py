@@ -30,7 +30,7 @@ def get_ollama_url_env():
 
 
 def get_custom_llm_url_env():
-    return os.getenv("CUSTOM_URL")
+    return os.getenv("CUSTOM_LLM_URL")
 
 
 def get_openai_api_key_env():
