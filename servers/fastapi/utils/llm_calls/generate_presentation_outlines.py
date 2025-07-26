@@ -1,5 +1,6 @@
 from typing import Optional
 from google.genai.types import GenerateContentConfig
+from openai.types.chat.chat_completion_chunk import ChoiceDelta
 
 from utils.async_iterator import iterator_to_async
 from utils.get_dynamic_models import get_presentation_outline_model_with_n_slides
@@ -7,7 +8,6 @@ from utils.llm_provider import (
     get_google_llm_client,
     get_large_model,
     get_llm_client,
-    get_nano_model,
     is_google_selected,
 )
 from pydantic import BaseModel
@@ -74,14 +74,17 @@ def get_prompt_template(prompt: str, n_slides: int, language: str, content: str)
         },
     ]
 
+
 def get_response_format(response_model: BaseModel):
     return {
-            "type": "json_schema",
-            "json_schema": {
-                "name": "PresentationOutlineModel",
-                "schema": response_model.model_json_schema(),
-            },
-        }
+        "type": "json_schema",
+        "json_schema": {
+            "name": "PresentationOutlineModel",
+            "schema": response_model.model_json_schema(),
+        },
+    }
+
+
 async def generate_ppt_outline(
     prompt: Optional[str],
     n_slides: int,
@@ -89,9 +92,7 @@ async def generate_ppt_outline(
     content: Optional[str] = None,
 ):
     model = get_large_model()
-    print(f"Using model: {model}")
     response_model = get_presentation_outline_model_with_n_slides(n_slides)
-    print(response_model.model_json_schema())
 
     if not is_google_selected():
         client = get_llm_client()
@@ -99,16 +100,11 @@ async def generate_ppt_outline(
             model=model,
             messages=get_prompt_template(prompt, n_slides, language, content),
             stream=True,
-            response_format = get_response_format(response_model)
+            response_format=get_response_format(response_model),
         ):
-            delta = response.choices[0].delta
-            content = None
-            if isinstance(delta, dict):
-                content = delta.get("content")
-            else:
-                content = getattr(delta, "content", None)
-            if content:
-                yield content
+            delta: ChoiceDelta = response.choices[0].delta
+            if delta.content:
+                yield delta.content
 
     else:
         client = get_google_llm_client()
@@ -122,4 +118,5 @@ async def generate_ppt_outline(
                 response_json_schema=response_model.model_json_schema(),
             ),
         ):
-            yield event.text
+            if event.text:
+                yield event.text
