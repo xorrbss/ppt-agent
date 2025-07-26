@@ -116,17 +116,7 @@ def round_image_corners(image: Image.Image, radii: List[int]) -> Image.Image:
     return result
 
 
-def change_image_color(img: Image.Image, color: str) -> Image.Image:
-    # r, g, b, alpha = img.split()
-
-    # color_overlay = Image.new("RGBA", img.size, color=f"#{color}")
-    # return Image.composite(color_overlay, img, alpha)
-    if color.startswith("#"):
-        color = color[1:]
-    r_new = int(color[:2], 16)
-    g_new = int(color[2:4], 16)
-    b_new = int(color[4:], 16)
-
+def invert_image(img: Image.Image) -> Image.Image:
     # Get image data
     data = img.getdata()
 
@@ -136,9 +126,9 @@ def change_image_color(img: Image.Image, color: str) -> Image.Image:
         # Get current pixel values
         r, g, b, a = item
 
-        # Apply new color while preserving transparency
+        # Invert RGB values while preserving transparency
         if a != 0:  # Skip fully transparent pixels
-            new_data.append((r_new, g_new, b_new, a))
+            new_data.append((255 - r, 255 - g, 255 - b, a))
         else:
             new_data.append((0, 0, 0, 0))
 
