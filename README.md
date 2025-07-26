@@ -21,7 +21,7 @@
 
 
 > [!NOTE]
-> **Enterprise Inquiries:**  
+> **Enterprise Inquiries:**
 > For enterprise use, custom deployments, or partnership opportunities, contact us at **[suraj@presenton.ai](mailto:suraj@presenton.ai)**.
 
 > [!IMPORTANT]
@@ -138,7 +138,7 @@ Content-Type: `multipart/form-data`
 | prompt | string | Yes | The main topic or prompt for generating the presentation |
 | n_slides | integer | No | Number of slides to generate (default: 8, min: 5, max: 15) |
 | language | string | No | Language for the presentation (default: "English") |
-| theme | string | No | Presentation theme (default: "light"). Available options: "light", "dark", "cream", "royal_blue", "faint_yellow", "light_red", "dark_pink" |
+| layout | string | No | Presentation theme (default: "classic"). Available options: "classic", "general", "modern", "professional" |
 | documents | File[] | No | Optional list of document files to include in the presentation. Supported file types: PDF, TXT, PPTX, DOCX |
 | export_as | string | No | Export format ("pptx" or "pdf", default: "pptx") |
 

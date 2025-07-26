@@ -63,13 +63,9 @@ interface Props {
 }
 
 const BusinessModelSlide: React.FC<Props> = ({ data }) => {
-  const cacChartData =
-    data?.cacChart && Array.isArray(data.cacChart) && data.cacChart.length > 0
-      ? data.cacChart
-      : [
-          { label: "Internet of Things", percentage: 70 },
-          { label: "Artificial Intelligence", percentage: 60 },
-        ];
+  const hasChart =
+    data?.cacChart && Array.isArray(data.cacChart) && data.cacChart.length > 0;
+  const cacChartData = hasChart ? data.cacChart : [];
 
   return (
     <>
@@ -96,49 +92,51 @@ const BusinessModelSlide: React.FC<Props> = ({ data }) => {
             <h1 className="text-6xl font-bold text-blue-600 mb-4 leading-tight text-left">
               {data?.title}
             </h1>
-            <div className="bg-white rounded-lg shadow p-4 mb-8">
-              <div className="w-full h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={cacChartData}
-                    margin={{ top: 20, right: 30, left: 10, bottom: 20 }}
-                    barCategoryGap="30%"
-                  >
-                    <CartesianGrid stroke="#e5eafe" />
-                    <XAxis
-                      dataKey="label"
-                      tick={{ fill: "#1E4CD9", fontWeight: 600 }}
-                    />
-                    <YAxis
-                      tick={{ fill: "#1E4CD9", fontWeight: 600 }}
-                      domain={[0, 100]}
-                      ticks={[0, 20, 40, 60, 80, 100]}
-                      width={40}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#1E4CD9",
-                        border: "none",
-                        color: "#fff",
-                      }}
-                      labelStyle={{ color: "#fff" }}
-                      itemStyle={{ color: "#fff" }}
-                    />
-                    <Legend
-                      wrapperStyle={{ color: "#1E4CD9", fontWeight: 600 }}
-                      iconType="circle"
-                    />
-                    <Bar
-                      dataKey="percentage"
-                      fill="#3b82f6"
-                      name="CAC %"
-                      maxBarSize={48}
-                      radius={[8, 8, 0, 0]}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
+            {hasChart && (
+              <div className="bg-white rounded-lg shadow p-4 mb-8">
+                <div className="w-full h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={cacChartData}
+                      margin={{ top: 20, right: 30, left: 10, bottom: 20 }}
+                      barCategoryGap="30%"
+                    >
+                      <CartesianGrid stroke="#e5eafe" />
+                      <XAxis
+                        dataKey="label"
+                        tick={{ fill: "#1E4CD9", fontWeight: 600 }}
+                      />
+                      <YAxis
+                        tick={{ fill: "#1E4CD9", fontWeight: 600 }}
+                        domain={[0, 100]}
+                        ticks={[0, 20, 40, 60, 80, 100]}
+                        width={40}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#1E4CD9",
+                          border: "none",
+                          color: "#fff",
+                        }}
+                        labelStyle={{ color: "#fff" }}
+                        itemStyle={{ color: "#fff" }}
+                      />
+                      <Legend
+                        wrapperStyle={{ color: "#1E4CD9", fontWeight: 600 }}
+                        iconType="circle"
+                      />
+                      <Bar
+                        dataKey="percentage"
+                        fill="#3b82f6"
+                        name="CAC %"
+                        maxBarSize={48}
+                        radius={[8, 8, 0, 0]}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Right Column - Description and Optional Image */}

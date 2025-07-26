@@ -162,54 +162,13 @@ const ProductOverviewSlideLayout: React.FC<ProductOverviewSlideLayoutProps> = ({
                     className="rounded-b-md overflow-hidden"
                     style={{ height: `${IMAGE_SECTION_HEIGHT + 28}px` }}
                   >
-                    {products[0].image.__image_url__ && (
-                      <img
-                        src={products[0].image.__image_url__}
-                        alt={
-                          products[0].image.__image_prompt__ || products[0].title
-                        }
-                        className="w-full h-full object-cover"
-                      />
-                    )}
-                  </div>
-                </div>
-              )}
-              {products[2] && (
-                <div
-                  className="flex flex-col items-stretch"
-                  style={{
-                    width: `${PRODUCT_BOX_WIDTH + 40}px`,
-                    height: `${PRODUCT_BOX_HEIGHT + 60}px`,
-                  }}
-                >
-                  <div
-                    className={`${products[2].isBlueBackground ? "bg-blue-600" : "bg-gray-100"} p-5 flex flex-col justify-center text-center rounded-t-md`}
-                    style={{ height: `${TEXT_SECTION_HEIGHT + 32}px` }}
-                  >
-                    <h2
-                      className={`text-xl font-semibold mb-3 ${products[2].isBlueBackground ? "text-white" : "text-blue-600"}`}
-                    >
-                      {products[2].title}
-                    </h2>
-                    <p
-                      className={`text-sm leading-relaxed ${products[2].isBlueBackground ? "text-white" : "text-blue-600"}`}
-                    >
-                      {products[2].description}
-                    </p>
-                  </div>
-                  <div
-                    className="rounded-b-md overflow-hidden"
-                    style={{ height: `${IMAGE_SECTION_HEIGHT + 28}px` }}
-                  >
-                    {products[2].image.__image_url__ && (
-                      <img
-                        src={products[2].image.__image_url__}
-                        alt={
-                          products[2].image.__image_prompt__ || products[2].title
-                        }
-                        className="w-full h-full object-cover"
-                      />
-                    )}
+                    <img
+                      src={products[0].image.__image_url__}
+                      alt={
+                        products[0].image.__image_prompt__ || products[0].title
+                      }
+                      className="w-full h-full object-cover"
+                    />
                   </div>
                 </div>
               )}
@@ -229,15 +188,13 @@ const ProductOverviewSlideLayout: React.FC<ProductOverviewSlideLayoutProps> = ({
                     className="rounded-t-md overflow-hidden"
                     style={{ height: `${IMAGE_SECTION_HEIGHT + 28}px` }}
                   >
-                    {products[1].image.__image_url__ && (
-                      <img
-                        src={products[1].image.__image_url__}
-                        alt={
-                          products[1].image.__image_prompt__ || products[1].title
-                        }
-                        className="w-full h-full object-cover"
-                      />
-                    )}
+                    <img
+                      src={products[1].image.__image_url__}
+                      alt={
+                        products[1].image.__image_prompt__ || products[1].title
+                      }
+                      className="w-full h-full object-cover"
+                    />
                   </div>
                   {/* Bottom Section - Blue background with text */}
                   <div
@@ -253,45 +210,6 @@ const ProductOverviewSlideLayout: React.FC<ProductOverviewSlideLayoutProps> = ({
                       className={`text-sm leading-relaxed ${products[1].isBlueBackground ? "text-white" : "text-blue-600"}`}
                     >
                       {products[1].description}
-                    </p>
-                  </div>
-                </div>
-              )}
-              {products[3] && (
-                <div
-                  className="flex flex-col items-stretch"
-                  style={{
-                    width: `${PRODUCT_BOX_WIDTH + 40}px`,
-                    height: `${PRODUCT_BOX_HEIGHT + 60}px`,
-                  }}
-                >
-                  <div
-                    className="rounded-t-md overflow-hidden"
-                    style={{ height: `${IMAGE_SECTION_HEIGHT + 28}px` }}
-                  >
-                    {products[3].image.__image_url__ && (
-                      <img
-                        src={products[3].image.__image_url__}
-                        alt={
-                          products[3].image.__image_prompt__ || products[3].title
-                        }
-                        className="w-full h-full object-cover"
-                      />
-                    )}
-                  </div>
-                  <div
-                    className={`${products[3].isBlueBackground ? "bg-blue-600" : "bg-gray-100"} p-5 flex flex-col justify-center text-center rounded-b-md`}
-                    style={{ height: `${TEXT_SECTION_HEIGHT + 32}px` }}
-                  >
-                    <h2
-                      className={`text-xl font-semibold mb-3 ${products[3].isBlueBackground ? "text-white" : "text-blue-600"}`}
-                    >
-                      {products[3].title}
-                    </h2>
-                    <p
-                      className={`text-sm leading-relaxed ${products[3].isBlueBackground ? "text-white" : "text-blue-600"}`}
-                    >
-                      {products[3].description}
                     </p>
                   </div>
                 </div>
