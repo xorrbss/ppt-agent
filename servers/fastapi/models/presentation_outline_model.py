@@ -15,7 +15,7 @@ class PresentationOutlineModel(BaseModel):
     title: str = Field(
         description="Title of the presentation in about 3 to 8 words",
     )
-    notes: Optional[List[str]] = Field(description="Notes for the presentation")
+    notes: Optional[List[str]] = Field(default=None, description="Notes for the presentation")
     slides: List[SlideOutlineModel] = Field(description="List of slides")
 
     def to_string(self):
