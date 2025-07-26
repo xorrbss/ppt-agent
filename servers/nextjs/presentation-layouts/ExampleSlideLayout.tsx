@@ -38,7 +38,7 @@ export const Schema = z.object({
     }),
 
     trendIcon: IconSchema.default({
-        __icon_url__: "https://example.com/trend-up.svg",
+        __icon_url__: "/static/icons/placeholder.png",
         __icon_query__: "upward trend arrow icon"
     }).meta({
         description: "Trend indicator icon",

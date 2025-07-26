@@ -21,7 +21,7 @@ const type8SlideSchema = z.object({
             description: "Item description",
         }),
         icon: IconSchema.default({
-            __icon_url__: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
+            __icon_url__: '/static/icons/placeholder.png',
             __icon_query__: 'Default icon'
         }).meta({
             description: "Icon for the item",
@@ -31,7 +31,7 @@ const type8SlideSchema = z.object({
             heading: 'Advanced Features',
             description: 'Cutting-edge functionality designed to enhance productivity and user experience',
             icon: {
-                __icon_url__: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
+                __icon_url__: '/static/icons/placeholder.png',
                 __icon_query__: 'Advanced features icon'
             }
         },
@@ -39,7 +39,7 @@ const type8SlideSchema = z.object({
             heading: 'Reliable Performance',
             description: 'Consistent and dependable performance across all platforms and devices',
             icon: {
-                __icon_url__: 'https://cdn.pixabay.com/photo/2016/02/19/11/19/office-1209640_1280.jpg',
+                __icon_url__: '/static/icons/placeholder.png',
                 __icon_query__: 'Reliable performance icon'
             }
         },
@@ -47,7 +47,7 @@ const type8SlideSchema = z.object({
             heading: 'Secure Environment',
             description: 'Enterprise-grade security measures to protect your data and privacy',
             icon: {
-                __icon_url__: 'https://cdn.pixabay.com/photo/2017/08/10/08/47/laptop-2619235_1280.jpg',
+                __icon_url__: '/static/icons/placeholder.png',
                 __icon_query__: 'Secure environment icon'
             }
         }

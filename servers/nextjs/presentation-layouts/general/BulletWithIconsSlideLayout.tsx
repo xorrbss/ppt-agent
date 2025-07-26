@@ -32,7 +32,7 @@ const bulletWithIconsSlideSchema = z.object({
             title: 'Inefficiency',
             description: 'Businesses struggle to find digital tools that meet their needs, causing operational slowdowns.',
             icon: {
-                __icon_url__: 'https://cdn.jsdelivr.net/npm/lucide@latest/dist/esm/icons/alert-triangle.js',
+                __icon_url__: '/static/icons/placeholder.png',
                 __icon_query__: 'warning alert inefficiency'
             }
         },
@@ -40,7 +40,7 @@ const bulletWithIconsSlideSchema = z.object({
             title: 'High Costs',
             description: 'Outdated systems increase expenses, while small businesses struggle to expand their market reach.',
             icon: {
-                __icon_url__: 'https://cdn.jsdelivr.net/npm/lucide@latest/dist/esm/icons/trending-up.js',
+                __icon_url__: '/static/icons/placeholder.png',
                 __icon_query__: 'trending up costs chart'
             }
         }

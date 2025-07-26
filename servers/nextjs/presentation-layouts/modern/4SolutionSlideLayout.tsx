@@ -51,7 +51,7 @@ const solutionSlideSchema = z.object({
         icon: {
           __icon_query__: "market innovation",
           __icon_url__:
-            "https://cdn.jsdelivr.net/npm/lucide@latest/dist/esm/icons/globe.js",
+            "/static/icons/placeholder.png",
         },
       },
       {
@@ -60,7 +60,7 @@ const solutionSlideSchema = z.object({
         icon: {
           __icon_query__: "industry building",
           __icon_url__:
-            "https://cdn.jsdelivr.net/npm/lucide@latest/dist/esm/icons/building.js",
+            "/static/icons/placeholder.png",
         },
       },
       {
@@ -69,7 +69,7 @@ const solutionSlideSchema = z.object({
         icon: {
           __icon_query__: "SEM data analysis",
           __icon_url__:
-            "https://cdn.jsdelivr.net/npm/lucide@latest/dist/esm/icons/chart-bar.js",
+            "/static/icons/placeholder.png",
         },
       },
       {
@@ -78,7 +78,7 @@ const solutionSlideSchema = z.object({
         icon: {
           __icon_query__: "end user impact",
           __icon_url__:
-            "https://cdn.jsdelivr.net/npm/lucide@latest/dist/esm/icons/user.js",
+            "/static/icons/placeholder.png",
         },
       },
     ])

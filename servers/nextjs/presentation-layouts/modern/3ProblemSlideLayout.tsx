@@ -44,7 +44,7 @@ const problemStatementSlideSchema = z.object({
           "Businesses struggle to find digital tools that meet their needs, causing operational slowdowns.",
         icon: {
           __icon_url__:
-            "https://cdn.jsdelivr.net/npm/lucide@latest/dist/esm/icons/alert-triangle.js",
+            "/static/icons/placeholder.png",
           __icon_query__: "warning alert inefficiency",
         },
       },
@@ -54,7 +54,7 @@ const problemStatementSlideSchema = z.object({
           "Outdated systems increase expenses, while small businesses struggle to expand their market reach.",
         icon: {
           __icon_url__:
-            "https://cdn.jsdelivr.net/npm/lucide@latest/dist/esm/icons/trending-up.js",
+            "/static/icons/placeholder.png",
           __icon_query__: "trending up costs chart",
         },
       },
@@ -64,7 +64,7 @@ const problemStatementSlideSchema = z.object({
           "Businesses struggle to find digital tools that meet their needs, causing operational slowdowns.",
         icon: {
           __icon_url__:
-            "https://cdn.jsdelivr.net/npm/lucide@latest/dist/esm/icons/alert-triangle.js",
+            "/static/icons/placeholder.png",
           __icon_query__: "warning alert inefficiency",
         },
       },
@@ -74,7 +74,7 @@ const problemStatementSlideSchema = z.object({
           "Businesses struggle to find digital tools that meet their needs, causing operational slowdowns.",
         icon: {
           __icon_url__:
-            "https://cdn.jsdelivr.net/npm/lucide@latest/dist/esm/icons/alert-triangle.js",
+            "/static/icons/placeholder.png",
           __icon_query__: "warning alert inefficiency",
         },
       },

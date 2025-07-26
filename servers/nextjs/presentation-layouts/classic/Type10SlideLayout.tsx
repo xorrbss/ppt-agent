@@ -37,7 +37,7 @@ const type10SlideSchema = z.object({
     })).min(2).max(3).default(() => [
         {
             icon: {
-                __icon_url__: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
+                __icon_url__: '/static/icons/placeholder.png',
                 __icon_query__: 'A beautiful road in the mountains'
             },
             heading: 'First Key Point',
@@ -45,7 +45,7 @@ const type10SlideSchema = z.object({
         },
         {
             icon: {
-                __icon_url__: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
+                __icon_url__: '/static/icons/placeholder.png',
                 __icon_query__: 'A beautiful road in the mountains'
             },
             heading: 'Second Key Point',
