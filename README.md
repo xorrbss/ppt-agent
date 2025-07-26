@@ -12,7 +12,7 @@
   </a>
 </p>
 
-# Open-Source AI Presentation Generator and API (Gamma Alternative)
+# Open-Source AI Presentation Generator and API (Gamma, Beautiful AI, Decktopus Alternative)
 
 
 **Presenton** is an open-source application for generating presentations with AI — all running locally on your device. Stay in control of your data and privacy while using models like OpenAI and Gemini, or use your own hosted models through Ollama.
@@ -33,6 +33,7 @@
 
 ## ✨ More Freedom with AI Presentations
 
+* ✅ **Custom layouts/templates/themes** — Create custom layouts with HTML and Tailwind, support any presentation design
 * ✅ **Bring Your Own Key** — Only pay for what you use. OpenAI, Gemini (More coming soon...)
 * ✅ **API Presentation Generation** — Host as API to generate presentations over requests
 * ✅ **Ollama Support** — Run open-source models locally with Ollama integration
