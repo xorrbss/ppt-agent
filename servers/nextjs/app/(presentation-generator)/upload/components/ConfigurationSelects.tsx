@@ -30,10 +30,10 @@ interface ConfigurationSelectsProps {
   onConfigChange: (key: keyof PresentationConfig, value: string) => void;
 }
 
-type SlideOption = "5" | "8" | "10" | "12" | "15" | "18" | "20";
+type SlideOption = "5" | "8" | "9" | "10" | "11" | "12" | "13" | "14" | "15" | "16" | "17" | "18" | "19" | "20";
 
 // Constants
-const SLIDE_OPTIONS: SlideOption[] = ["5", "8", "10", "12", "15", "18", "20"];
+const SLIDE_OPTIONS: SlideOption[] = ["5", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20"];
 
 /**
  * Renders a select component for slide count

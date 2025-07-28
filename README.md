@@ -184,8 +184,8 @@ For detailed info checkout [API documentation](https://docs.presenton.ai/using-p
 - [Create Data Reports Using AI](https://docs.presenton.ai/tutorial/create-data-reports-using-ai)
 
 ## Roadmap
-- [ ] Support for custom HTML templates by developers
-- [ ] Support for accessing custom templates over API
+- [x] Support for custom HTML templates by developers
+- [x] Support for accessing custom templates over API
 - [ ] Implement MCP server
 - [ ] Ability for users to change system prompt
 - [X] Support external SQL database

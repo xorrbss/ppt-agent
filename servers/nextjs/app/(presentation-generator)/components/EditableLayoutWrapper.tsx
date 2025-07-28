@@ -196,7 +196,6 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
 
                     const itemIndex = parseInt(`${slideIndex}-${type}-${dataPath}-${index}`.split('-').pop() || '0');
                     const propertiesData = properties?.[itemIndex];
-                    console.log('propertiesData', propertiesData);
 
                     // Add hover effects without changing layout
                     htmlImg.style.cursor = 'pointer';
