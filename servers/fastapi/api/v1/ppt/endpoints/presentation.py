@@ -8,6 +8,7 @@ from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy import delete
 from sqlmodel import select
+from models.presentation_from_template import GetPresentationUsingTemplateRequest
 from models.presentation_outline_model import (
     PresentationOutlineModel,
     SlideOutlineModel,
@@ -24,6 +25,8 @@ from models.generate_presentation_api import (
 from services.get_layout_by_name import get_layout_by_name
 from services.icon_finder_service import IconFinderService
 from services.image_generation_service import ImageGenerationService
+from utils.dict_utils import deep_update
+from utils.export_utils import export_presentation
 from utils.llm_calls.generate_presentation_outlines import generate_ppt_outline
 from models.sql.slide import SlideModel
 from models.sse_response import SSECompleteResponse, SSEResponse
@@ -46,7 +49,7 @@ from utils.randomizers import get_random_uuid
 PRESENTATION_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
 
 
-@PRESENTATION_ROUTER.get("/", response_model=PresentationWithSlides)
+@PRESENTATION_ROUTER.get("", response_model=PresentationWithSlides)
 def get_presentation(id: str):
     with get_sql_session() as sql_session:
         presentation = sql_session.get(PresentationModel, id)
@@ -63,7 +66,7 @@ def get_presentation(id: str):
         )
 
 
-@PRESENTATION_ROUTER.delete("/", status_code=204)
+@PRESENTATION_ROUTER.delete("", status_code=204)
 def delete_presentation(id: str):
     with get_sql_session() as sql_session:
         presentation = sql_session.get(PresentationModel, id)
@@ -317,7 +320,7 @@ async def create_pptx(pptx_model: Annotated[PptxPresentationModel, Body()]):
     return pptx_path
 
 
-@PRESENTATION_ROUTER.post("/generate")
+@PRESENTATION_ROUTER.post("/generate", response_model=PresentationPathAndEditPath)
 async def generate_presentation_api(
     data: Annotated[GeneratePresentationRequest, Body()],
 ):
@@ -447,63 +450,52 @@ async def generate_presentation_api(
         sql_session.add_all(slides)
         sql_session.commit()
 
-    # 8. Export as PPTX
-    if data.export_as == "pptx":
-        print("-" * 40)
-        print("Exporting Presentation as PPTX")
-
-        # Get the converted PPTX model from your existing Next.js service
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"http://localhost/api/presentation_to_pptx_model?id={presentation_id}"
-            ) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    print(f"Failed to get PPTX model: {error_text}")
-                    raise HTTPException(
-                        status_code=500,
-                        detail="Failed to convert presentation to PPTX model",
-                    )
-                pptx_model_data = await response.json()
-        print(f"Received PPTX model data: {json.dumps(pptx_model_data, indent=2)}")
-
-        # Create PPTX file using the converted model
-        pptx_model = PptxPresentationModel(**pptx_model_data)
-        print(f"Creating PPTX with model: {pptx_model.model_dump_json(indent=2)}")
-        temp_dir = TEMP_FILE_SERVICE.create_temp_dir()
-        pptx_creator = PptxPresentationCreator(pptx_model, temp_dir)
-        await pptx_creator.create_ppt()
-
-        export_directory = get_exports_directory()
-        pptx_path = os.path.join(export_directory, f"{presentation_content.title}.pptx")
-        pptx_creator.save(pptx_path)
-
-        presentation_and_path = PresentationAndPath(
-            presentation_id=presentation_id,
-            path=pptx_path,
-        )
-    else:
-        print("-" * 40)
-        print("Exporting Presentation as PDF")
-
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "http://localhost/api/export-as-pdf",
-                json={
-                    "id": presentation_id,
-                    "title": presentation_content.title,
-                },
-            ) as response:
-                response_json = await response.json()
-
-        print(f"Received PDF export response: {json.dumps(response_json, indent=2)}")
-
-        presentation_and_path = PresentationAndPath(
-            presentation_id=presentation_id,
-            path=response_json["path"],
-        )
+    # 8. Export
+    presentation_and_path = await export_presentation(
+        presentation_id, presentation_content.title, data.export_as
+    )
 
     return PresentationPathAndEditPath(
         **presentation_and_path.model_dump(),
         edit_path=f"/presentation?id={presentation_id}",
+    )
+
+
+@PRESENTATION_ROUTER.post("/from-template", response_model=PresentationPathAndEditPath)
+async def from_template(
+    data: Annotated[GetPresentationUsingTemplateRequest, Body()],
+):
+    with get_sql_session() as sql_session:
+        presentation = sql_session.get(PresentationModel, data.presentation_id)
+        if not presentation:
+            raise HTTPException(status_code=404, detail="Presentation not found")
+        slides = sql_session.exec(
+            select(SlideModel).where(SlideModel.presentation == data.presentation_id)
+        ).all()
+
+    new_presentation = presentation.get_new_presentation()
+    new_slides = []
+    for each_slide in slides:
+        updated_content = None
+        new_slide_data = list(filter(lambda x: x.index == each_slide.index, data.data))
+        if new_slide_data:
+            updated_content = deep_update(each_slide.content, new_slide_data[0].content)
+            print(f"Updated content for slide {each_slide.index}: {updated_content}")
+        new_slides.append(
+            each_slide.get_new_slide(new_presentation.id, updated_content)
+        )
+
+    with get_sql_session() as sql_session:
+        sql_session.add(new_presentation)
+        sql_session.add_all(new_slides)
+        sql_session.commit()
+        sql_session.refresh(new_presentation)
+
+    presentation_and_path = await export_presentation(
+        new_presentation.id, new_presentation.title, data.export_as
+    )
+
+    return PresentationPathAndEditPath(
+        **presentation_and_path.model_dump(),
+        edit_path=f"/presentation?id={new_presentation.id}",
     )

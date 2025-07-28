@@ -73,10 +73,10 @@ class PptxPresentationCreator:
                 if isinstance(each_shape, PptxPictureBoxModel):
                     image_path = each_shape.picture.path
                     if image_path.startswith("http"):
-                        if "app_data/images" in image_path:
-                            relative_path = image_path.split("/app_data/images/")[1]
+                        if "app_data/" in image_path:
+                            relative_path = image_path.split("/app_data/")[1]
                             each_shape.picture.path = os.path.join(
-                                "app_data/images", relative_path
+                                "app_data", relative_path
                             )
                             each_shape.picture.is_network = False
                             continue
@@ -88,10 +88,10 @@ class PptxPresentationCreator:
                 if isinstance(each_shape, PptxPictureBoxModel):
                     image_path = each_shape.picture.path
                     if image_path.startswith("http"):
-                        if "app_data/images" in image_path:
-                            relative_path = image_path.split("/app_data/images/")[1]
+                        if "app_data" in image_path:
+                            relative_path = image_path.split("/app_data/")[1]
                             each_shape.picture.path = os.path.join(
-                                "app_data/images", relative_path
+                                "app_data", relative_path
                             )
                             each_shape.picture.is_network = False
                             continue
