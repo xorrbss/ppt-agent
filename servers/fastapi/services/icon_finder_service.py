@@ -1,48 +1,51 @@
 import asyncio
 import json
-from qdrant_client import QdrantClient
+import chromadb
+from chromadb.config import Settings
+from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2
 
 
 class IconFinderService:
     def __init__(self):
         self.collection_name = "icons"
-        self.client = QdrantClient(path="qdrant")
-        print("Initializing icons collection...")
-        self.client.set_model("BAAI/bge-small-en-v1.5")
+        self.client = chromadb.PersistentClient(
+            path="chroma", settings=Settings(anonymized_telemetry=False)
+        )
         self._initialize_icons_collection()
-        print("Icons collection initialized")
 
     def _initialize_icons_collection(self):
+        self.embedding_function = ONNXMiniLM_L6_V2()
+        self.embedding_function.DOWNLOAD_PATH = "chroma/models"
+        self.embedding_function._download_model_if_not_exists()
         try:
-            self.client.get_collection(self.collection_name)
-        except Exception:
-            self._populate_icons_collection()
-
-    def _populate_icons_collection(self):
-        with open("assets/icons.json", "r") as f:
-            icons = json.load(f)
-
-        documents = []
-        metadata = []
-
-        for each in icons["icons"]:
-            if each["name"].split("-")[-1] == "bold":
-                doc_text = f"{each['name']} {each['tags']}"
-                documents.append(doc_text)
-                metadata.append({"name": each["name"]})
-
-        if documents:
-            self.client.add(
-                collection_name=self.collection_name,
-                documents=documents,
-                metadata=metadata,
+            self.collection = self.client.get_collection(
+                self.collection_name, embedding_function=self.embedding_function
             )
+        except Exception:
+            with open("assets/icons.json", "r") as f:
+                icons = json.load(f)
+
+            documents = []
+            ids = []
+
+            for i, each in enumerate(icons["icons"]):
+                if each["name"].split("-")[-1] == "bold":
+                    doc_text = f"{each['name']} {each['tags']}"
+                    documents.append(doc_text)
+                    ids.append(each["name"])
+
+            if documents:
+                self.collection = self.client.create_collection(
+                    name=self.collection_name,
+                    embedding_function=self.embedding_function,
+                    metadata={"hnsw:space": "cosine"},
+                )
+                self.collection.add(documents=documents, ids=ids)
 
     async def search_icons(self, query: str, k: int = 1):
         result = await asyncio.to_thread(
-            self.client.query,
-            collection_name=self.collection_name,
-            query_text=query,
-            limit=k,
+            self.collection.query,
+            query_texts=[query],
+            n_results=k,
         )
-        return [f"/static/icons/bold/{each.metadata['name']}.png" for each in result]
+        return [f"/static/icons/bold/{each}.png" for each in result["ids"][0]]
