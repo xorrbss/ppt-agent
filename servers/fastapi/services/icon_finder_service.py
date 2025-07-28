@@ -1,35 +1,48 @@
 import asyncio
 import json
-import os
-from fastembed_vectorstore import FastembedVectorstore, FastembedEmbeddingModel
+from qdrant_client import QdrantClient
 
 
 class IconFinderService:
     def __init__(self):
-        self.vector_store = self.get_icons_vectorstore()
+        self.collection_name = "icons"
+        self.client = QdrantClient(path="qdrant")
+        print("Initializing icons collection...")
+        self.client.set_model("BAAI/bge-small-en-v1.5")
+        self._initialize_icons_collection()
+        print("Icons collection initialized")
 
-    def get_icons_vectorstore(self):
-        vector_store_path = "assets/icons_vectorstore.json"
-        embedding_model = FastembedEmbeddingModel.BGESmallENV15
+    def _initialize_icons_collection(self):
+        try:
+            self.client.get_collection(self.collection_name)
+        except Exception:
+            self._populate_icons_collection()
 
-        if os.path.exists(vector_store_path):
-            return FastembedVectorstore.load(embedding_model, vector_store_path)
-
-        vector_store = FastembedVectorstore(embedding_model)
+    def _populate_icons_collection(self):
         with open("assets/icons.json", "r") as f:
             icons = json.load(f)
+
         documents = []
+        metadata = []
+
         for each in icons["icons"]:
             if each["name"].split("-")[-1] == "bold":
-                documents.append(f"{each['name']}||{each['tags']}")
+                doc_text = f"{each['name']} {each['tags']}"
+                documents.append(doc_text)
+                metadata.append({"name": each["name"]})
 
-        vector_store.embed_documents(documents)
-        vector_store.save(vector_store_path)
-
-        return vector_store
+        if documents:
+            self.client.add(
+                collection_name=self.collection_name,
+                documents=documents,
+                metadata=metadata,
+            )
 
     async def search_icons(self, query: str, k: int = 1):
-        result = await asyncio.to_thread(self.vector_store.search, query, k)
-        return [
-            f"/static/icons/bold/{result[0].split('||')[0]}.png" for result in result
-        ]
+        result = await asyncio.to_thread(
+            self.client.query,
+            collection_name=self.collection_name,
+            query_text=query,
+            limit=k,
+        )
+        return [f"/static/icons/bold/{each.metadata['name']}.png" for each in result]

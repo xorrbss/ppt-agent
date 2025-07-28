@@ -4,6 +4,9 @@ from fastapi import APIRouter, Body, HTTPException
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from services.database import get_sql_session
+from services.icon_finder_service import IconFinderService
+from services.image_generation_service import ImageGenerationService
+from utils.asset_directory_utils import get_images_directory
 from utils.llm_calls.edit_slide import get_edited_slide_content
 from utils.llm_calls.edit_slide_html import get_edited_slide_html
 from utils.llm_calls.select_slide_type_on_edit import get_slide_layout_from_prompt
@@ -34,9 +37,15 @@ async def edit_slide(id: Annotated[str, Body()], prompt: Annotated[str, Body()])
         prompt, slide_layout, slide, presentation.language
     )
 
+    image_generation_service = ImageGenerationService(get_images_directory())
+    icon_finder_service = IconFinderService()
+
     # This will mutate edited_slide_content
     new_assets = await process_old_and_new_slides_and_fetch_assets(
-        slide.content, edited_slide_content
+        image_generation_service,
+        icon_finder_service,
+        slide.content,
+        edited_slide_content,
     )
 
     # Always assign a new unique id to the slide

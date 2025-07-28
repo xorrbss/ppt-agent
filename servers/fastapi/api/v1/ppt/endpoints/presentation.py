@@ -22,6 +22,8 @@ from models.generate_presentation_api import (
     PresentationPathAndEditPath,
 )
 from services.get_layout_by_name import get_layout_by_name
+from services.icon_finder_service import IconFinderService
+from services.image_generation_service import ImageGenerationService
 from utils.llm_calls.generate_presentation_outlines import generate_ppt_outline
 from models.sql.slide import SlideModel
 from models.sse_response import SSECompleteResponse, SSEResponse
@@ -30,7 +32,7 @@ from services.database import get_sql_session
 from services.documents_loader import DocumentsLoader
 from models.sql.presentation import PresentationModel
 from services.pptx_presentation_creator import PptxPresentationCreator
-from utils.asset_directory_utils import get_exports_directory
+from utils.asset_directory_utils import get_exports_directory, get_images_directory
 from utils.llm_calls.generate_document_summary import generate_document_summary
 from utils.llm_calls.generate_presentation_structure import (
     generate_presentation_structure,
@@ -195,6 +197,9 @@ async def stream_presentation(presentation_id: str):
                 detail="Outlines can not be empty",
             )
 
+    image_generation_service = ImageGenerationService(get_images_directory())
+    icon_finder_service = IconFinderService()
+
     async def inner():
         structure = presentation.get_structure()
         layout = presentation.get_layout()
@@ -223,7 +228,11 @@ async def stream_presentation(presentation_id: str):
             slides.append(slide)
 
             # This will mutate slide
-            async_assets_generation_tasks.append(process_slide_and_fetch_assets(slide))
+            async_assets_generation_tasks.append(
+                process_slide_and_fetch_assets(
+                    image_generation_service, icon_finder_service, slide
+                )
+            )
 
             # Give control to the event loop
             await asyncio.sleep(0)
@@ -423,9 +432,13 @@ async def generate_presentation_api(
 
     # Process slides to fetch assets (images, icons, etc.)
     print("Processing slides to fetch assets")
+    image_generation_service = ImageGenerationService(get_images_directory())
+    icon_finder_service = IconFinderService()
     for slide in slides:
         try:
-            await process_slide_and_fetch_assets(slide)
+            await process_slide_and_fetch_assets(
+                image_generation_service, icon_finder_service, slide
+            )
             print(f"Processed slide {slide.index} successfully")
         except Exception as e:
             print(f"Error processing slide {slide.index}: {e}")

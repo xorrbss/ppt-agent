@@ -10,12 +10,10 @@ from utils.dict_utils import get_dict_at_path, get_dict_paths_with_key, set_dict
 
 
 async def process_slide_and_fetch_assets(
+    image_generation_service: ImageGenerationService,
+    icon_finder_service: IconFinderService,
     slide: SlideModel,
 ) -> List[ImageAsset]:
-    image_directory = get_images_directory()
-
-    image_generation_service = ImageGenerationService(image_directory)
-    icon_finder_service = IconFinderService()
 
     async_tasks = []
 
@@ -61,6 +59,8 @@ async def process_slide_and_fetch_assets(
 
 
 async def process_old_and_new_slides_and_fetch_assets(
+    image_generation_service: ImageGenerationService,
+    icon_finder_service: IconFinderService,
     old_slide_content: dict,
     new_slide_content: dict,
 ) -> List[ImageAsset]:
@@ -97,10 +97,6 @@ async def process_old_and_new_slides_and_fetch_assets(
     new_icon_dicts = [
         get_dict_at_path(new_slide_content, path) for path in new_icon_dict_paths
     ]
-
-    # Creates services
-    image_generation_service = ImageGenerationService(get_images_directory())
-    icon_finder_service = IconFinderService()
 
     # Creates async tasks for fetching new images
     async_image_fetch_tasks = []
