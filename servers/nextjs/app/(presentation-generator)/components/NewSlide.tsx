@@ -4,6 +4,8 @@ import { useDispatch } from 'react-redux';
 import { addNewSlide } from '@/store/slices/presentationGeneration';
 import { Loader2 } from 'lucide-react';
 import { useGroupLayoutLoader } from '@/app/layout-preview/hooks/useGroupLayoutLoader';
+import { v4 as uuidv4 } from 'uuid';
+import { toast } from 'sonner';
 interface NewSlideProps {
     setShowNewSlideSelection: (show: boolean) => void;
     group: string;
@@ -13,16 +15,21 @@ interface NewSlideProps {
 const NewSlide = ({ setShowNewSlideSelection, group, index, presentationId }: NewSlideProps) => {
     const dispatch = useDispatch();
     const handleNewSlide = (sampleData: any, id: string) => {
-        const newSlide = {
-            id: crypto.randomUUID(),
-            index: index,
-            content: sampleData,
-            layout_group: group,
-            layout: `${group}:${id}`,
-            presentation: presentationId
+        try {
+            const newSlide = {
+                id: uuidv4(),
+                index: index,
+                content: sampleData,
+                layout_group: group,
+                layout: `${group}:${id}`,
+                presentation: presentationId
+            }
+            dispatch(addNewSlide({ slideData: newSlide, index }));
+            setShowNewSlideSelection(false);
+        } catch (error: any) {
+            console.error(error)
+            toast.error('Error adding new slide')
         }
-        dispatch(addNewSlide({ slideData: newSlide, index }));
-        setShowNewSlideSelection(false);
     }
     const { layoutGroup, loading } = useGroupLayoutLoader(group)
 
