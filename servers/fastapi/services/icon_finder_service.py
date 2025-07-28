@@ -7,7 +7,10 @@ class IconFinderService:
     def __init__(self):
         self.collection_name = "icons"
         self.client = QdrantClient(path="qdrant")
+        print("Initializing icons collection...")
+        self.client.set_model("BAAI/bge-small-en-v1.5")
         self._initialize_icons_collection()
+        print("Icons collection initialized")
 
     def _initialize_icons_collection(self):
         try:

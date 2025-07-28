@@ -14,6 +14,9 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    # Initialize the Icons Collection
+    IconFinderService()
+
     uvicorn.run(
         "api.main:app",
         host="0.0.0.0",
