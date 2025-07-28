@@ -49,7 +49,7 @@ export class DashboardApi {
   static async getPresentation(id: string) {
     try {
       const response = await fetch(
-        `/api/v1/ppt/presentation/?id=${id}`,
+        `/api/v1/ppt/presentation?id=${id}`,
         {
           method: "GET",
         }
@@ -65,7 +65,7 @@ export class DashboardApi {
   static async deletePresentation(presentation_id: string) {
     try {
       const response = await fetch(
-        `/api/v1/ppt/presentation/?id=${presentation_id}`,
+        `/api/v1/ppt/presentation?id=${presentation_id}`,
         {
           method: "DELETE",
           headers: getHeader(),

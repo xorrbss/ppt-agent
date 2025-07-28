@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import List, Optional
+import uuid
 from sqlalchemy import JSON, Column, DateTime
 from sqlmodel import SQLModel, Field
 
@@ -9,6 +10,7 @@ from models.presentation_outline_model import (
     SlideOutlineModel,
 )
 from models.presentation_structure_model import PresentationStructureModel
+from utils.randomizers import get_random_uuid
 
 
 class PresentationModel(SQLModel, table=True):
@@ -24,6 +26,20 @@ class PresentationModel(SQLModel, table=True):
     updated_at: datetime = Field(sa_column=Column(DateTime, default=datetime.now))
     layout: Optional[dict] = Field(sa_column=Column(JSON), default=None)
     structure: Optional[dict] = Field(sa_column=Column(JSON), default=None)
+
+    def get_new_presentation(self):
+        return PresentationModel(
+            id=get_random_uuid(),
+            prompt=self.prompt,
+            n_slides=self.n_slides,
+            language=self.language,
+            title=self.title,
+            notes=self.notes,
+            outlines=self.outlines,
+            summary=self.summary,
+            layout=self.layout,
+            structure=self.structure,
+        )
 
     def get_presentation_outline(self):
         if not self.outlines:
