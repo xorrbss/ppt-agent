@@ -21,7 +21,7 @@ const scatterChartDataSchema = z.object({
     data: z.array(z.object({
         x: z.number().meta({ description: "X coordinate" }),
         y: z.number().meta({ description: "Y coordinate" }),
-    })).min(2).max(100)
+    })).min(2).max(20)
 })
 
 const chartWithBulletsSlideSchema = z.object({
