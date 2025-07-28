@@ -1,6 +1,8 @@
 import uvicorn
 import argparse
 
+from services.icon_finder_service import IconFinderService
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the FastAPI server")
