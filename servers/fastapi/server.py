@@ -1,8 +1,6 @@
 import uvicorn
 import argparse
 
-from services.icon_finder_service import IconFinderService
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the FastAPI server")
@@ -13,9 +11,6 @@ if __name__ == "__main__":
         "--reload", type=bool, default=False, help="Reload the server on code changes"
     )
     args = parser.parse_args()
-
-    # Initialize the Icons Collection
-    IconFinderService()
 
     uvicorn.run(
         "api.main:app",

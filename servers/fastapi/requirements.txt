@@ -12,6 +12,7 @@ cachetools==5.5.2
 certifi==2025.7.14
 cffi==1.17.1
 charset-normalizer==3.4.2
+chromadb==1.0.15
 click==8.2.1
 coloredlogs==15.0.1
 cryptography==45.0.5
@@ -99,7 +100,6 @@ python-dotenv==1.1.1
 python-multipart==0.0.20
 python-pptx==1.0.2
 PyYAML==6.0.2
-qdrant-client==1.15.0
 redis==6.2.0
 referencing==0.36.2
 requests==2.32.4
