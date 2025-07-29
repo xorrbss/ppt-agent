@@ -2,12 +2,15 @@ import asyncio
 import json
 import os
 import random
-from typing import Annotated, List, Optional
-import uuid, aiohttp
-from fastapi import APIRouter, Body, HTTPException
+from typing import Annotated, List, Literal, Optional
+import uuid
+from annotated_types import Len
+from fastapi import APIRouter, Body, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy import delete
 from sqlmodel import select
+from constants.documents import UPLOAD_ACCEPTED_FILE_TYPES
+from models.presentation_and_path import PresentationPathAndEditPath
 from models.presentation_from_template import GetPresentationUsingTemplateRequest
 from models.presentation_outline_model import (
     PresentationOutlineModel,
@@ -17,11 +20,6 @@ from models.pptx_models import PptxPresentationModel
 from models.presentation_layout import PresentationLayoutModel
 from models.presentation_structure_model import PresentationStructureModel
 from models.presentation_with_slides import PresentationWithSlides
-from models.generate_presentation_api import (
-    GeneratePresentationRequest,
-    PresentationAndPath,
-    PresentationPathAndEditPath,
-)
 from services.get_layout_by_name import get_layout_by_name
 from services.icon_finder_service import IconFinderService
 from services.image_generation_service import ImageGenerationService
@@ -45,6 +43,7 @@ from utils.llm_calls.generate_slide_content import (
 )
 from utils.process_slides import process_slide_and_fetch_assets
 from utils.randomizers import get_random_uuid
+from utils.validators import validate_files
 
 PRESENTATION_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
 
@@ -322,18 +321,22 @@ async def create_pptx(pptx_model: Annotated[PptxPresentationModel, Body()]):
 
 @PRESENTATION_ROUTER.post("/generate", response_model=PresentationPathAndEditPath)
 async def generate_presentation_api(
-    data: Annotated[GeneratePresentationRequest, Body()],
+    prompt: Annotated[str, Body()],
+    n_slides: Annotated[int, Body()] = 8,
+    language: Annotated[str, Body()] = "English",
+    layout: Annotated[str, Body()] = "general",
+    files: Annotated[Optional[List[UploadFile]], File()] = None,
+    export_as: Annotated[Literal["pptx", "pdf"], Body()] = "pptx",
 ):
-    presentation_id = str(uuid.uuid4())
-    print("**" * 40)
-    print(f"Generating presentation with ID: {presentation_id}")
-    print(f"Received Body as JSON: {data.model_dump_json(indent=2)}")
+    validate_files(files, True, True, 50, UPLOAD_ACCEPTED_FILE_TYPES)
+
+    presentation_id = get_random_uuid()
 
     # 1. Save uploaded files
     file_paths = []
-    if data.documents:
+    if files:
         temp_dir = TEMP_FILE_SERVICE.create_temp_dir()
-        for upload in data.documents:
+        for upload in files:
             file_path = os.path.join(temp_dir, upload.filename)
             with open(file_path, "wb") as f:
                 f.write(await upload.read())
@@ -350,25 +353,23 @@ async def generate_presentation_api(
     # 3. Generate Outlines
     presentation_content_text = ""
     async for chunk in generate_ppt_outline(
-        data.prompt,
-        data.n_slides,
-        data.language,
+        prompt,
+        n_slides,
+        language,
         summary,
     ):
         presentation_content_text += chunk
 
     presentation_content_json = json.loads(presentation_content_text)
     presentation_content = PresentationOutlineModel(**presentation_content_json)
-    outlines = presentation_content.slides[: data.n_slides]
+    outlines = presentation_content.slides[:n_slides]
     total_outlines = len(outlines)
 
     print("-" * 40)
-    print("Generated Presentation Content:", presentation_content_text)
     print(f"Generated {total_outlines} outlines for the presentation")
-    print(f"Presentation Title: {presentation_content.title}")
 
     # 4. Parse Layouts
-    layout = await get_layout_by_name(data.layout)
+    layout = await get_layout_by_name(layout)
     total_slide_layouts = len(layout.slides)
 
     # 5. Generate Structure
@@ -395,12 +396,12 @@ async def generate_presentation_api(
         if presentation_structure.slides[index] >= total_slide_layouts:
             presentation_structure.slides[index] = random_slide_index
 
-    # 6. Create and Save PresentationModel
+    # 6. Create PresentationModel
     presentation = PresentationModel(
         id=presentation_id,
-        prompt=data.prompt,
-        n_slides=data.n_slides,
-        language=data.language,
+        prompt=prompt,
+        n_slides=n_slides,
+        language=language,
         title=presentation_content.title,
         summary=summary,
         outlines=[each.model_dump() for each in outlines],
@@ -408,10 +409,10 @@ async def generate_presentation_api(
         layout=layout.model_dump(),
         structure=presentation_structure.model_dump(),
     )
-    with get_sql_session() as sql_session:
-        sql_session.add(presentation)
-        sql_session.commit()
-        sql_session.refresh(presentation)
+
+    image_generation_service = ImageGenerationService(get_images_directory())
+    icon_finder_service = IconFinderService()
+    async_asset_generation_tasks = []
 
     # 7. Generate slide content and save slides
     slides: List[SlideModel] = []
@@ -422,7 +423,6 @@ async def generate_presentation_api(
         slide_content = await get_slide_content_from_type_and_outline(
             slide_layout, outlines[i]
         )
-        print(f"Generated content for slide {i}: {json.dumps(slide_content, indent=2)}")
         slide = SlideModel(
             presentation=presentation_id,
             layout_group=layout.name,
@@ -430,29 +430,29 @@ async def generate_presentation_api(
             index=i,
             content=slide_content,
         )
+        async_asset_generation_tasks.append(
+            process_slide_and_fetch_assets(
+                image_generation_service, icon_finder_service, slide
+            )
+        )
         slides.append(slide)
         slide_contents.append(slide_content)
 
-    # Process slides to fetch assets (images, icons, etc.)
-    print("Processing slides to fetch assets")
-    image_generation_service = ImageGenerationService(get_images_directory())
-    icon_finder_service = IconFinderService()
-    for slide in slides:
-        try:
-            await process_slide_and_fetch_assets(
-                image_generation_service, icon_finder_service, slide
-            )
-            print(f"Processed slide {slide.index} successfully")
-        except Exception as e:
-            print(f"Error processing slide {slide.index}: {e}")
+    generated_assets_lists = await asyncio.gather(*async_asset_generation_tasks)
+    generated_assets = []
+    for assets_list in generated_assets_lists:
+        generated_assets.extend(assets_list)
 
+    # 8. Save PresentationModel and Slides
     with get_sql_session() as sql_session:
+        sql_session.add(presentation)
         sql_session.add_all(slides)
+        sql_session.add_all(generated_assets)
         sql_session.commit()
 
-    # 8. Export
+    # 9. Export
     presentation_and_path = await export_presentation(
-        presentation_id, presentation_content.title, data.export_as
+        presentation_id, presentation_content.title, export_as
     )
 
     return PresentationPathAndEditPath(

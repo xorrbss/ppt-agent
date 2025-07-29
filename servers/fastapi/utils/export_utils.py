@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from pathvalidate import sanitize_filename
 
 from models.pptx_models import PptxPresentationModel
-from models.generate_presentation_api import PresentationAndPath
+from models.presentation_and_path import PresentationAndPath
 from services.pptx_presentation_creator import PptxPresentationCreator
 from services import TEMP_FILE_SERVICE
 from utils.asset_directory_utils import get_exports_directory
