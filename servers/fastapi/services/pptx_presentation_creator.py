@@ -74,9 +74,9 @@ class PptxPresentationCreator:
                     image_path = each_shape.picture.path
                     if image_path.startswith("http"):
                         if "app_data/" in image_path:
-                            relative_path = image_path.split("/app_data/")[1]
+                            relative_path = image_path.split("app_data/")[1]
                             each_shape.picture.path = os.path.join(
-                                "app_data", relative_path
+                                "/app_data", relative_path
                             )
                             each_shape.picture.is_network = False
                             continue
@@ -89,9 +89,9 @@ class PptxPresentationCreator:
                     image_path = each_shape.picture.path
                     if image_path.startswith("http"):
                         if "app_data" in image_path:
-                            relative_path = image_path.split("/app_data/")[1]
+                            relative_path = image_path.split("app_data/")[1]
                             each_shape.picture.path = os.path.join(
-                                "app_data", relative_path
+                                "/app_data", relative_path
                             )
                             each_shape.picture.is_network = False
                             continue
