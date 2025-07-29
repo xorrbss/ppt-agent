@@ -1,5 +1,5 @@
-from http.client import HTTPException
 from typing import List
+from fastapi import HTTPException
 
 from fastapi import UploadFile
 
@@ -18,10 +18,13 @@ def validate_files(
             if (max_size * 1024 * 1024) < each_file.size:
                 raise HTTPException(
                     400,
-                    f"File '{each_file.filename}' exceeded max upload size of {max_size} MB",
+                    detail=f"File '{each_file.filename}' exceeded max upload size of {max_size} MB",
                 )
             elif each_file.content_type not in accepted_types:
-                raise HTTPException(400, f"File '{each_file.filename}' not accepted.")
+                raise HTTPException(
+                    400,
+                    detail=f"File '{each_file.filename}' not accepted. Accepted types: {accepted_types}",
+                )
 
     elif not (field or nullable):
-        raise HTTPException(400, "File must be provided.")
+        raise HTTPException(400, detail="File must be provided.")
