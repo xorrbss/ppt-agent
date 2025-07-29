@@ -151,7 +151,7 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
                 'menu', 'dropdown', 'tooltip',      // UI components
                 'editor', 'wysiwyg',                // Editor components
                 'calendar', 'datepicker',           // Date picker components
-                'slider', 'carousel',               // Interactive components
+                'slider', 'carousel', 'flowchart', 'mermaid', 'diagram',
             ];
 
             // Check if current element or any parent is in ignored list
@@ -165,6 +165,9 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
                 // Check class patterns
                 const className = currentElement.className.length > 0 ? currentElement.className.toLowerCase() : '';
                 if (ignoredClassPatterns.some(pattern => className.includes(pattern))) {
+                    return true;
+                }
+                if (currentElement.id.includes('mermaid')) {
                     return true;
                 }
 

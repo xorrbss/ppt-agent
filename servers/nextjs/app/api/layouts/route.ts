@@ -30,19 +30,19 @@ export async function GET() {
                     !file.startsWith('.') && 
                     !file.includes('.test.') &&
                     !file.includes('.spec.') &&
-                    file !== 'setting.json'
+                    file !== 'settings.json'
                 )
                 
                 // Read settings.json if it exists
                 let settings: GroupSetting | null = null
-                const settingsPath = path.join(groupPath, 'setting.json')
+                const settingsPath = path.join(groupPath, 'settings.json')
                 try {
                     const settingsContent = await fs.readFile(settingsPath, 'utf-8')
                     settings = JSON.parse(settingsContent) as GroupSetting
                 } catch (settingsError) {
                     
                     console.warn(`No settings.json found for group ${groupName} or invalid JSON`)
-                    // Provide default settings if setting.json is missing or invalid
+                    // Provide default settings if settings.json is missing or invalid
                     settings = {
                         description: `${groupName} presentation layouts`,
                         ordered: false,
