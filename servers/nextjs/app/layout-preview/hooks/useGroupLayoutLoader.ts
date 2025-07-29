@@ -61,7 +61,7 @@ export const useGroupLayoutLoader = (groupSlug: string): UseGroupLayoutLoaderRet
 
             const groupLayouts: LayoutInfo[] = []
 
-            // Use settings from setting.json or provide defaults
+            // Use settings from settings.json or provide defaults
             const groupSettings: GroupSetting = targetGroupData.settings ? targetGroupData.settings : {
                 description: `${targetGroupData.groupName} presentation layouts`,
                 ordered: false,
