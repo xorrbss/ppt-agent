@@ -123,7 +123,7 @@ docker run -it --name presenton --gpus=all -p 5000:80 -e LLM="ollama" -e OLLAMA_
 
 ### Generate Presentation
 
-Endpoint: `/api/v1/ppt/generate/presentation`
+Endpoint: `/api/v1/ppt/presentation/generate`
 
 Method: `POST`
 
