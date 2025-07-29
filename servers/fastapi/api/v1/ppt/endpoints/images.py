@@ -24,8 +24,9 @@ async def generate_image(prompt: str):
     with get_sql_session() as sql_session:
         sql_session.add(image)
         sql_session.commit()
+        image_path = image.path
 
-    return image.path
+    return image_path
 
 
 @IMAGES_ROUTER.get("/generated", response_model=List[ImageAsset])
