@@ -1,5 +1,6 @@
 import os
 from constants.supported_ollama_models import SUPPORTED_OLLAMA_MODELS
+from enums.image_provider import ImageProvider
 from enums.llm_provider import LLMProvider
 from utils.custom_llm_provider import list_available_custom_models
 from utils.get_env import (
@@ -20,6 +21,7 @@ from utils.llm_provider import (
 )
 from utils.ollama import pull_ollama_model
 from utils.image_provider import (
+    get_selected_image_provider,
     is_pixels_selected,
     is_pixabay_selected,
     is_gemini_flash_selected,
@@ -74,7 +76,13 @@ async def check_llm_and_image_provider_api_or_model_availability():
             print("-" * 50)
             if custom_model not in models:
                 raise Exception(f"Model {custom_model} is not available")
-        elif is_pixels_selected():
+
+        # Check for Image Provider and API keys
+        selected_image_provider = get_selected_image_provider()
+        if not selected_image_provider:
+            raise Exception("IMAGE_PROVIDER must be provided")
+
+        if selected_image_provider == ImageProvider.PEXELS:
             pexels_api_key = get_pexels_api_key_env()
             if not pexels_api_key:
                 raise Exception("PEXELS_API_KEY must be provided")
