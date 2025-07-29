@@ -9,7 +9,16 @@ RUN apt-get update && apt-get install -y \
   redis-server \
   default-libmysqlclient-dev \
   build-essential \
-  pkg-config
+  pkg-config \
+  libreoffice \
+  fontconfig \
+  imagemagick
+
+RUN sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /etc/ImageMagick-6/policy.xml
+
+# Create fonts directory and set permissions
+RUN mkdir -p /usr/share/fonts/truetype && \
+    chmod 755 /usr/share/fonts/truetype
 
 # Change working directory
 WORKDIR /app
