@@ -1,5 +1,4 @@
 from typing import Optional
-import uuid
 from sqlmodel import SQLModel, Field, Column, JSON
 
 from utils.randomizers import get_random_uuid

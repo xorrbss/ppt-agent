@@ -1,21 +1,23 @@
 import asyncio
 import json
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.presentation_outline_model import PresentationOutlineModel
 from models.sql.presentation import PresentationModel
 from models.sse_response import SSECompleteResponse, SSEResponse, SSEStatusResponse
-from services.database import get_sql_session
+from services.database import get_async_session
 from utils.llm_calls.generate_presentation_outlines import generate_ppt_outline
 
 OUTLINES_ROUTER = APIRouter(prefix="/outlines", tags=["Outlines"])
 
 
 @OUTLINES_ROUTER.get("/stream")
-async def stream_outlines(presentation_id: str):
-    with get_sql_session() as sql_session:
-        presentation = sql_session.get(PresentationModel, presentation_id)
+async def stream_outlines(
+    presentation_id: str, sql_session: AsyncSession = Depends(get_async_session)
+):
+    presentation = await sql_session.get(PresentationModel, presentation_id)
 
     if not presentation:
         raise HTTPException(status_code=404, detail="Presentation not found")
@@ -54,10 +56,8 @@ async def stream_outlines(presentation_id: str):
         ]
         presentation.notes = presentation_content.notes
 
-        with get_sql_session() as sql_session:
-            sql_session.add(presentation)
-            sql_session.commit()
-            sql_session.refresh(presentation)
+        sql_session.add(presentation)
+        await sql_session.commit()
 
         yield SSECompleteResponse(
             key="presentation", value=presentation.model_dump(mode="json")

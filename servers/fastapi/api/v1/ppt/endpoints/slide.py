@@ -1,9 +1,10 @@
 from typing import Annotated, Optional
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
-from services.database import get_sql_session
+from services.database import get_async_session
 from services.icon_finder_service import IconFinderService
 from services.image_generation_service import ImageGenerationService
 from utils.asset_directory_utils import get_images_directory
@@ -18,15 +19,17 @@ SLIDE_ROUTER = APIRouter(prefix="/slide", tags=["Slide"])
 
 
 @SLIDE_ROUTER.post("/edit")
-async def edit_slide(id: Annotated[str, Body()], prompt: Annotated[str, Body()]):
-
-    with get_sql_session() as sql_session:
-        slide = sql_session.get(SlideModel, id)
-        if not slide:
-            raise HTTPException(status_code=404, detail="Slide not found")
-        presentation = sql_session.get(PresentationModel, slide.presentation)
-        if not presentation:
-            raise HTTPException(status_code=404, detail="Presentation not found")
+async def edit_slide(
+    id: Annotated[str, Body()],
+    prompt: Annotated[str, Body()],
+    sql_session: AsyncSession = Depends(get_async_session),
+):
+    slide = await sql_session.get(SlideModel, id)
+    if not slide:
+        raise HTTPException(status_code=404, detail="Slide not found")
+    presentation = await sql_session.get(PresentationModel, slide.presentation)
+    if not presentation:
+        raise HTTPException(status_code=404, detail="Presentation not found")
 
     presentation_layout = presentation.get_layout()
 
@@ -51,13 +54,11 @@ async def edit_slide(id: Annotated[str, Body()], prompt: Annotated[str, Body()])
     # Always assign a new unique id to the slide
     slide.id = get_random_uuid()
 
-    with get_sql_session() as sql_session:
-        sql_session.add(slide)
-        slide.content = edited_slide_content
-        slide.layout = slide_layout.id
-        sql_session.add_all(new_assets)
-        sql_session.commit()
-        sql_session.refresh(slide)
+    sql_session.add(slide)
+    slide.content = edited_slide_content
+    slide.layout = slide_layout.id
+    sql_session.add_all(new_assets)
+    await sql_session.commit()
 
     return slide
 
@@ -67,11 +68,11 @@ async def edit_slide_html(
     id: Annotated[str, Body()],
     prompt: Annotated[str, Body()],
     html: Annotated[Optional[str], Body()] = None,
+    sql_session: AsyncSession = Depends(get_async_session),
 ):
-    with get_sql_session() as sql_session:
-        slide = sql_session.get(SlideModel, id)
-        if not slide:
-            raise HTTPException(status_code=404, detail="Slide not found")
+    slide = await sql_session.get(SlideModel, id)
+    if not slide:
+        raise HTTPException(status_code=404, detail="Slide not found")
 
     html_to_edit = html or slide.html_content
     if not html_to_edit:
@@ -83,10 +84,8 @@ async def edit_slide_html(
     # This is to ensure that the nextjs can track slide updates
     slide.id = get_random_uuid()
 
-    with get_sql_session() as sql_session:
-        sql_session.add(slide)
-        slide.html_content = edited_slide_html
-        sql_session.commit()
-        sql_session.refresh(slide)
+    sql_session.add(slide)
+    slide.html_content = edited_slide_html
+    await sql_session.commit()
 
     return slide
