@@ -155,12 +155,11 @@ Content-Type: `multipart/form-data`
 #### Example Request
 
 ```bash
-curl -X POST http://localhost:5000/api/v1/ppt/generate/presentation \
+curl -X POST http://localhost:5000/api/v1/ppt/presentation/generate \
   -F "prompt=Introduction to Machine Learning" \
   -F "n_slides=5" \
   -F "language=English" \
   -F "layout=general" \
-  -F "theme=light" \
   -F "export_as=pptx"
 ```
 
