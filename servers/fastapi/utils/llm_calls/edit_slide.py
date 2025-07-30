@@ -1,6 +1,5 @@
 import asyncio
 import json
-from typing import Optional
 
 from models.presentation_layout import SlideLayoutModel
 from models.sql.slide import SlideModel
@@ -21,24 +20,32 @@ system_prompt = """
     - The goal is to change Slide data based on the provided prompt.
     - Do not change **Image prompts** and **Icon queries** if not asked for in prompt.
     - Generate **Image prompts** and **Icon queries** if asked to generate or change in prompt.
+    - Make sure to follow language guidelines.
 
     **Go through all notes and steps and make sure they are followed, including mentioned constraints**
 """
 
 
-def get_user_prompt(prompt: str, slide_data: dict, language: Optional[str] = None):
+def get_user_prompt(prompt: str, slide_data: dict, language: str):
     return f"""
-        - Prompt: {prompt}
-        - Output Language: {language}
-        - Image Prompts and Icon Queries Language: English
-        - Slide data: {slide_data}
+        ## Icon Query And Image Prompt Language
+        English
+
+        ## Slide Content Language
+        {language}
+
+        ## Prompt
+        {prompt}
+
+        ## Slide data
+        {slide_data}
     """
 
 
 def get_prompt_to_edit_slide_content(
     prompt: str,
     slide_data: dict,
-    language: Optional[str] = None,
+    language: str,
 ):
     return [
         {
@@ -56,7 +63,7 @@ async def get_edited_slide_content(
     prompt: str,
     slide_layout: SlideLayoutModel,
     slide: SlideModel,
-    language: Optional[str] = None,
+    language: str,
 ):
     model = get_large_model()
     response_schema = remove_fields_from_schema(
