@@ -5,7 +5,7 @@ import random
 from typing import Annotated, List, Literal, Optional
 from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
-from sqlalchemy import String, cast, delete, text
+from sqlalchemy import String, cast, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from constants.documents import UPLOAD_ACCEPTED_FILE_TYPES
@@ -81,23 +81,19 @@ async def delete_presentation(
 @PRESENTATION_ROUTER.get("/all", response_model=List[PresentationWithSlides])
 async def get_all_presentations(sql_session: AsyncSession = Depends(get_async_session)):
     presentations_with_slides = []
-    presentations = await sql_session.scalars(
-        select(PresentationModel).where(
-            cast(PresentationModel.layout, String) != "null"
-        )
-    )
+    presentations = await sql_session.scalars(select(PresentationModel))
 
     async def inner(presentation: PresentationModel, sql_session: AsyncSession):
-        slides = await sql_session.scalars(
+        first_slide = await sql_session.scalar(
             select(SlideModel)
             .where(SlideModel.presentation == presentation.id)
             .where(SlideModel.index == 0)
         )
-        if not slides:
+        if not first_slide:
             return None
         return PresentationWithSlides(
             **presentation.model_dump(),
-            slides=slides,
+            slides=[first_slide],
         )
 
     tasks = [inner(p, sql_session) for p in presentations]
