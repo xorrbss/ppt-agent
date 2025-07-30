@@ -20,6 +20,8 @@ export interface LLMConfig {
   LLM?: string;
   OPENAI_API_KEY?: string;
   GOOGLE_API_KEY?: string;
+  ANTHROPIC_API_KEY?: string;
+  ANTHROPIC_MODEL?: string;
   OLLAMA_URL?: string;
   OLLAMA_MODEL?: string;
   CUSTOM_LLM_URL?: string;
@@ -28,6 +30,7 @@ export interface LLMConfig {
   PEXELS_API_KEY?: string;
   PIXABAY_API_KEY?: string;
   IMAGE_PROVIDER?: string;
+  EXTENDED_REASONING?: boolean;
   USE_CUSTOM_URL?: boolean;
 }
 
@@ -42,11 +45,13 @@ export interface OllamaModelsResult {
 export const updateLLMConfig = (
   currentConfig: LLMConfig,
   field: string,
-  value: string
+  value: string | boolean
 ): LLMConfig => {
   const fieldMappings: Record<string, keyof LLMConfig> = {
     openai_api_key: "OPENAI_API_KEY",
     google_api_key: "GOOGLE_API_KEY",
+    anthropic_api_key: "ANTHROPIC_API_KEY",
+    anthropic_model: "ANTHROPIC_MODEL",
     ollama_url: "OLLAMA_URL",
     ollama_model: "OLLAMA_MODEL",
     custom_llm_url: "CUSTOM_LLM_URL",
@@ -55,6 +60,7 @@ export const updateLLMConfig = (
     pexels_api_key: "PEXELS_API_KEY",
     pixabay_api_key: "PIXABAY_API_KEY",
     image_provider: "IMAGE_PROVIDER",
+    extended_reasoning: "EXTENDED_REASONING",
   };
 
   const configKey = fieldMappings[field];

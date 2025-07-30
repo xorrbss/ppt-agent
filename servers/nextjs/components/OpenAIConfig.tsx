@@ -5,7 +5,7 @@ interface OpenAIConfigProps {
 
 export default function OpenAIConfig({ openaiApiKey, onInputChange }: OpenAIConfigProps) {
   return (
-    <div className="mb-8">
+    <div>
       <label className="block text-sm font-medium text-gray-700 mb-2">
         OpenAI API Key
       </label>

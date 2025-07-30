@@ -78,6 +78,11 @@ export const LLM_PROVIDERS: Record<string, LLMProviderOption> = {
     model_value: "gemini-2.0-flash",
     model_label: "Gemini 2.0 Flash"
   },
+  anthropic: {
+    value: "anthropic",
+    label: "Anthropic",
+    description: "Anthropic's Claude models",
+  },
   ollama: {
     value: "ollama",
     label: "Ollama",

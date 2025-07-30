@@ -19,6 +19,14 @@ export const hasValidLLMConfig = (llmConfig: LLMConfig) => {
   const OPENAI_API_KEY = llmConfig.OPENAI_API_KEY;
   const GOOGLE_API_KEY = llmConfig.GOOGLE_API_KEY;
 
+  const isAnthropicConfigValid =
+    llmConfig.ANTHROPIC_MODEL !== "" &&
+    llmConfig.ANTHROPIC_MODEL !== null &&
+    llmConfig.ANTHROPIC_MODEL !== undefined &&
+    llmConfig.ANTHROPIC_API_KEY !== "" &&
+    llmConfig.ANTHROPIC_API_KEY !== null &&
+    llmConfig.ANTHROPIC_API_KEY !== undefined;
+
   const isOllamaConfigValid =
     llmConfig.OLLAMA_MODEL !== "" &&
     llmConfig.OLLAMA_MODEL !== null &&
@@ -59,11 +67,13 @@ export const hasValidLLMConfig = (llmConfig: LLMConfig) => {
         ? GOOGLE_API_KEY !== "" &&
         GOOGLE_API_KEY !== null &&
         GOOGLE_API_KEY !== undefined
-        : llmConfig.LLM === "ollama"
-          ? isOllamaConfigValid
-          : llmConfig.LLM === "custom"
-            ? isCustomConfigValid
-            : false;
+        : llmConfig.LLM === "anthropic"
+          ? isAnthropicConfigValid
+          : llmConfig.LLM === "ollama"
+            ? isOllamaConfigValid
+            : llmConfig.LLM === "custom"
+              ? isCustomConfigValid
+              : false;
 
   return isLLMConfigValid && isImageConfigValid();
 };

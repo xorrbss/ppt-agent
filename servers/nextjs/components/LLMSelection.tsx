@@ -15,6 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { cn } from "@/lib/utils";
 import OpenAIConfig from "./OpenAIConfig";
 import GoogleConfig from "./GoogleConfig";
+import AnthropicConfig from "./AnthropicConfig";
 import OllamaConfig from "./OllamaConfig";
 import CustomConfig from "./CustomConfig";
 import {
@@ -69,11 +70,13 @@ export default function LLMProviderSelection({
   useEffect(() => {
     const needsModelSelection =
       (llmConfig.LLM === "ollama" && !llmConfig.OLLAMA_MODEL) ||
-      (llmConfig.LLM === "custom" && !llmConfig.CUSTOM_MODEL);
+      (llmConfig.LLM === "custom" && !llmConfig.CUSTOM_MODEL) ||
+      (llmConfig.LLM === "anthropic" && !llmConfig.ANTHROPIC_MODEL);
 
     const needsApiKey =
       ((llmConfig.IMAGE_PROVIDER === "dall-e-3" || llmConfig.LLM === "openai") && !llmConfig.OPENAI_API_KEY) ||
       ((llmConfig.IMAGE_PROVIDER === "gemini_flash" || llmConfig.LLM === "google") && !llmConfig.GOOGLE_API_KEY) ||
+      (llmConfig.LLM === "anthropic" && !llmConfig.ANTHROPIC_API_KEY) ||
       (llmConfig.IMAGE_PROVIDER === "pexels" && !llmConfig.PEXELS_API_KEY) ||
       (llmConfig.IMAGE_PROVIDER === "pixabay" && !llmConfig.PIXABAY_API_KEY);
 
@@ -86,7 +89,7 @@ export default function LLMProviderSelection({
 
   }, [llmConfig]);
 
-  const input_field_changed = (new_value: string, field: string) => {
+  const input_field_changed = (new_value: string | boolean, field: string) => {
     const updatedConfig = updateLLMConfig(llmConfig, field, new_value);
     setLlmConfig(updatedConfig);
   };
@@ -177,9 +180,10 @@ export default function LLMProviderSelection({
           onValueChange={handleProviderChange}
           className="w-full"
         >
-          <TabsList className="grid w-full grid-cols-4 bg-transparent h-10">
+          <TabsList className="grid w-full grid-cols-5 bg-transparent h-10">
             <TabsTrigger value="openai">OpenAI</TabsTrigger>
             <TabsTrigger value="google">Google</TabsTrigger>
+            <TabsTrigger value="anthropic">Anthropic</TabsTrigger>
             <TabsTrigger value="ollama">Ollama</TabsTrigger>
             <TabsTrigger value="custom">Custom</TabsTrigger>
           </TabsList>
@@ -206,6 +210,16 @@ export default function LLMProviderSelection({
           <TabsContent value="google" className="mt-6">
             <GoogleConfig
               googleApiKey={llmConfig.GOOGLE_API_KEY || ""}
+              onInputChange={input_field_changed}
+            />
+          </TabsContent>
+
+          {/* Anthropic Content */}
+          <TabsContent value="anthropic" className="mt-6">
+            <AnthropicConfig
+              anthropicApiKey={llmConfig.ANTHROPIC_API_KEY || ""}
+              anthropicModel={llmConfig.ANTHROPIC_MODEL || ""}
+              extendedReasoning={llmConfig.EXTENDED_REASONING || false}
               onInputChange={input_field_changed}
             />
           </TabsContent>
@@ -246,7 +260,7 @@ export default function LLMProviderSelection({
         </Tabs>
 
         {/* Image Provider Selection */}
-        <div className="mb-8">
+        <div className="my-8">
           <label className="block text-sm font-medium text-gray-700 mb-3">
             Select Image Provider
           </label>
@@ -388,7 +402,9 @@ export default function LLMProviderSelection({
                   ? llmConfig.OLLAMA_MODEL ?? "xxxxx"
                   : llmConfig.LLM === "custom"
                     ? llmConfig.CUSTOM_MODEL ?? "xxxxx"
-                    : LLM_PROVIDERS[llmConfig.LLM!]?.model_label || "xxxxx"}{" "}
+                    : llmConfig.LLM === "anthropic"
+                      ? llmConfig.ANTHROPIC_MODEL ?? "xxxxx"
+                      : LLM_PROVIDERS[llmConfig.LLM!]?.model_label || "xxxxx"}{" "}
                 for text generation and{" "}
                 {llmConfig.IMAGE_PROVIDER &&
                   IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]

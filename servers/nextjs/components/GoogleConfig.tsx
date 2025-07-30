@@ -5,7 +5,7 @@ interface GoogleConfigProps {
 
 export default function GoogleConfig({ googleApiKey, onInputChange }: GoogleConfigProps) {
   return (
-    <div className="mb-8">
+    <div>
       <label className="block text-sm font-medium text-gray-700 mb-2">
         Google API Key
       </label>

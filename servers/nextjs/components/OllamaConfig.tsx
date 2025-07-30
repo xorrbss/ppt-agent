@@ -49,7 +49,7 @@ export default function OllamaConfig({
 }: OllamaConfigProps) {
   return (
     <>
-      <div className="mb-8">
+      <div className="mb-4">
         <label className="block text-sm font-medium text-gray-700 mb-3">
           Choose a supported model
         </label>
@@ -185,7 +185,7 @@ export default function OllamaConfig({
           </p>
         )}
       </div>
-      <div className="mb-8">
+      <div>
         <div className="flex items-center justify-between mb-4 bg-green-50 p-2 rounded-sm">
           <label className="text-sm font-medium text-gray-700">
             Use custom Ollama URL

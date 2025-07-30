@@ -36,6 +36,8 @@ export async function POST(request: Request) {
     LLM: userConfig.LLM || existingConfig.LLM,
     OPENAI_API_KEY: userConfig.OPENAI_API_KEY || existingConfig.OPENAI_API_KEY,
     GOOGLE_API_KEY: userConfig.GOOGLE_API_KEY || existingConfig.GOOGLE_API_KEY,
+    ANTHROPIC_API_KEY: userConfig.ANTHROPIC_API_KEY || existingConfig.ANTHROPIC_API_KEY,
+    ANTHROPIC_MODEL: userConfig.ANTHROPIC_MODEL || existingConfig.ANTHROPIC_MODEL,
     OLLAMA_URL: userConfig.OLLAMA_URL || existingConfig.OLLAMA_URL,
     OLLAMA_MODEL: userConfig.OLLAMA_MODEL || existingConfig.OLLAMA_MODEL,
     CUSTOM_LLM_URL: userConfig.CUSTOM_LLM_URL || existingConfig.CUSTOM_LLM_URL,
@@ -50,6 +52,10 @@ export async function POST(request: Request) {
       userConfig.USE_CUSTOM_URL === undefined
         ? existingConfig.USE_CUSTOM_URL
         : userConfig.USE_CUSTOM_URL,
+    EXTENDED_REASONING:
+      userConfig.EXTENDED_REASONING === undefined
+        ? existingConfig.EXTENDED_REASONING
+        : userConfig.EXTENDED_REASONING,
   };
   fs.writeFileSync(userConfigPath, JSON.stringify(mergedConfig));
   return NextResponse.json(mergedConfig);
