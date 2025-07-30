@@ -417,7 +417,7 @@ async def generate_presentation_api(
         slide_layout = layout_model.slides[slide_layout_index]
         print(f"Generating content for slide {i} with layout {slide_layout.id}")
         slide_content = await get_slide_content_from_type_and_outline(
-            slide_layout, outlines[i]
+            slide_layout, outlines[i], language
         )
         slide = SlideModel(
             presentation=presentation_id,
