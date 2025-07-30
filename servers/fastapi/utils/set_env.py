@@ -18,7 +18,7 @@ def set_ollama_url_env(value):
 
 
 def set_custom_llm_url_env(value):
-    os.environ["CUSTOM_URL"] = value
+    os.environ["CUSTOM_LLM_URL"] = value
 
 
 def set_openai_api_key_env(value):
@@ -43,6 +43,7 @@ def set_custom_model_env(value):
 
 def set_pexels_api_key_env(value):
     os.environ["PEXELS_API_KEY"] = value
+
 
 def set_image_provider_env(value):
     os.environ["IMAGE_PROVIDER"] = value
