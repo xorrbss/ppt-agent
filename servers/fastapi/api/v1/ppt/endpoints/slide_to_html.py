@@ -1,7 +1,7 @@
 import os
 import base64
 from typing import Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, File, UploadFile, Form
 from pydantic import BaseModel
 import anthropic
 from utils.asset_directory_utils import get_images_directory
@@ -9,6 +9,7 @@ from utils.asset_directory_utils import get_images_directory
 # Create separate routers for each functionality
 SLIDE_TO_HTML_ROUTER = APIRouter(prefix="/slide-to-html", tags=["slide-to-html"])
 HTML_TO_REACT_ROUTER = APIRouter(prefix="/html-to-react", tags=["html-to-react"])
+HTML_EDIT_ROUTER = APIRouter(prefix="/html-edit", tags=["html-edit"])
 
 
 # Request/Response models for slide-to-html endpoint
@@ -20,6 +21,13 @@ class SlideToHtmlRequest(BaseModel):
 class SlideToHtmlResponse(BaseModel):
     success: bool
     html: str
+    message: Optional[str] = None
+
+
+# Request/Response models for html-edit endpoint
+class HtmlEditResponse(BaseModel):
+    success: bool
+    edited_html: str
     message: Optional[str] = None
 
 
@@ -227,6 +235,10 @@ const BulletWithIconsSlideLayout: React.FC<BulletWithIconsSlideLayoutProps> = ({
 export default BulletWithIconsSlideLayout 
 """
 
+HTML_EDIT_SYSTEM_PROMPT = """
+You need to edit given html with respect to the indication and sketch in the given UI. You'll be given the code for current UI which is in presentation size, along with its visualization in image form. Over that you'll also be given another image which has indications of what might change in form of sketch in the UI. You will have to return the edited html with tailwind with the changes as indicated on the image and through prompt. Make sure you think through the design before making the change and also make sure you don't change the non-indicated part. Try to follow the design style of current content for generated content. Only give out code and nothing else.
+"""
+
 
 async def generate_html_from_slide(base64_image: str, media_type: str, xml_content: str, api_key: str) -> str:
     """
@@ -425,6 +437,119 @@ async def generate_react_component_from_html(html_content: str, api_key: str) ->
         )
 
 
+async def edit_html_with_images(current_ui_base64: str, sketch_base64: str, media_type: str, html_content: str, prompt: str, api_key: str) -> str:
+    """
+    Edit HTML content based on two images and a text prompt using Anthropic Claude API.
+    
+    Args:
+        current_ui_base64: Base64 encoded current UI image data
+        sketch_base64: Base64 encoded sketch/indication image data
+        media_type: MIME type of the images (e.g., 'image/png')
+        html_content: Current HTML content to edit
+        prompt: Text prompt describing the changes
+        api_key: Anthropic API key
+    
+    Returns:
+        Edited HTML content as string
+    
+    Raises:
+        HTTPException: If API call fails or no content is generated
+    """
+    try:
+        # Initialize Anthropic client
+        client = anthropic.Anthropic(api_key=api_key)
+        
+        print("Starting streaming request to Claude for HTML editing...")
+        
+        edited_html = ""
+        thinking_content = ""
+        
+        with client.messages.stream(
+            model="claude-sonnet-4-20250514",
+            max_tokens=64000,
+            temperature=1,
+            system=HTML_EDIT_SYSTEM_PROMPT,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"Current HTML to edit:\n\n{html_content}\n\nText prompt for changes: {prompt}"
+                        },
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": media_type,
+                                "data": current_ui_base64
+                            }
+                        },
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": media_type,
+                                "data": sketch_base64
+                            }
+                        }
+                    ]
+                }
+            ],
+            thinking={
+                "type": "enabled",
+                "budget_tokens": 16000
+            }
+        ) as stream:
+            print("Streaming started, collecting edited HTML response...")
+            
+            # Collect all streamed content
+            for event in stream:
+                if event.type == "content_block_delta":
+                    if event.delta.type == "thinking_delta":
+                        thinking_content += event.delta.thinking
+                        print(f"[HTML EDIT THINKING] {event.delta.thinking}", end="", flush=True)
+                    elif event.delta.type == "text_delta":
+                        edited_html += event.delta.text
+                        print(f"[HTML EDIT] {event.delta.text}", end="", flush=True)
+                elif event.type == "content_block_start":
+                    if hasattr(event.content_block, 'type'):
+                        print(f"\n[HTML EDIT BLOCK START] {event.content_block.type}")
+                elif event.type == "content_block_stop":
+                    print(f"\n[HTML EDIT BLOCK STOP] Index: {event.index}")
+                elif event.type == "message_start":
+                    print("[HTML EDIT MESSAGE START]")
+                elif event.type == "message_stop":
+                    print("\n[HTML EDIT MESSAGE STOP] - Streaming complete")
+        
+        print(f"\nCollected edited HTML content length: {len(edited_html)}")
+        print(f"Collected HTML edit thinking content length: {len(thinking_content)}")
+        
+        if not edited_html:
+            raise HTTPException(
+                status_code=500,
+                detail="No edited HTML content generated by Claude API"
+            )
+        
+        return edited_html
+        
+    except anthropic.APITimeoutError as e:
+        raise HTTPException(
+            status_code=408,
+            detail=f"Claude API timeout during HTML editing: {str(e)}"
+        )
+    except anthropic.APIConnectionError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Claude API connection error during HTML editing: {str(e)}"
+        )
+    except anthropic.APIError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Anthropic API error during HTML editing: {str(e)}"
+        )
+
+
 # ENDPOINT 1: Slide to HTML conversion
 @SLIDE_TO_HTML_ROUTER.post("/", response_model=SlideToHtmlResponse)
 async def convert_slide_to_html(request: SlideToHtmlRequest):
@@ -494,7 +619,7 @@ async def convert_slide_to_html(request: SlideToHtmlRequest):
             media_type=media_type,
             xml_content=request.xml,
             api_key=api_key
-        )
+            )
         
         return SlideToHtmlResponse(
             success=True,
@@ -565,3 +690,96 @@ async def convert_html_to_react(request: HtmlToReactRequest):
             status_code=500,
             detail=f"Error processing HTML to React: {str(e)}"
         )
+
+
+# ENDPOINT 3: HTML editing with images
+@HTML_EDIT_ROUTER.post("/", response_model=HtmlEditResponse)
+async def edit_html_with_images_endpoint(
+    current_ui_image: UploadFile = File(..., description="Current UI image file"),
+    sketch_image: UploadFile = File(..., description="Sketch/indication image file"),
+    html: str = Form(..., description="Current HTML content to edit"),
+    prompt: str = Form(..., description="Text prompt describing the changes")
+):
+    """
+    Edit HTML content based on two uploaded images and a text prompt using Anthropic Claude API.
+    
+    Args:
+        current_ui_image: Uploaded current UI image file
+        sketch_image: Uploaded sketch/indication image file
+        html: Current HTML content to edit (form data)
+        prompt: Text prompt describing the changes (form data)
+    
+    Returns:
+        HtmlEditResponse with edited HTML
+    """
+    try:
+        # Get Anthropic API key from environment
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise HTTPException(
+                status_code=500, 
+                detail="ANTHROPIC_API_KEY environment variable not set"
+            )
+        
+        # Validate inputs
+        if not html or not html.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="HTML content cannot be empty"
+            )
+        
+        if not prompt or not prompt.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Text prompt cannot be empty"
+            )
+        
+        # Validate image files
+        if not current_ui_image.content_type or not current_ui_image.content_type.startswith("image/"):
+            raise HTTPException(
+                status_code=400,
+                detail="Current UI file must be an image"
+            )
+        
+        if not sketch_image.content_type or not sketch_image.content_type.startswith("image/"):
+            raise HTTPException(
+                status_code=400,
+                detail="Sketch file must be an image"
+            )
+        
+        # Read and encode both images to base64
+        current_ui_content = await current_ui_image.read()
+        current_ui_base64 = base64.b64encode(current_ui_content).decode('utf-8')
+        
+        sketch_content = await sketch_image.read()
+        sketch_base64 = base64.b64encode(sketch_content).decode('utf-8')
+        
+        # Use the content type from the uploaded files
+        media_type = current_ui_image.content_type
+        
+        # Edit HTML using the function
+        edited_html = await edit_html_with_images(
+            current_ui_base64=current_ui_base64,
+            sketch_base64=sketch_base64,
+            media_type=media_type,
+            html_content=html,
+            prompt=prompt,
+            api_key=api_key
+        )
+        
+        return HtmlEditResponse(
+            success=True,
+            edited_html=edited_html,
+            message="HTML edited successfully"
+        )
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except Exception as e:
+        # Log the full error for debugging
+        print(f"Unexpected error during HTML editing: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing HTML editing: {str(e)}"
+        ) 
