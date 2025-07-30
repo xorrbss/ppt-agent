@@ -11,9 +11,19 @@ from sqlmodel import SQLModel
 from utils.get_env import get_app_data_directory_env, get_database_url_env
 
 
-database_url = get_database_url_env() or "sqlite+aiosqlite:///" + os.path.join(
+raw_database_url = get_database_url_env() or "sqlite:///" + os.path.join(
     get_app_data_directory_env() or "/tmp/presenton", "fastapi.db"
 )
+
+if raw_database_url.startswith("sqlite://"):
+    database_url = raw_database_url.replace("sqlite://", "sqlite+aiosqlite://", 1)
+elif raw_database_url.startswith("postgresql://"):
+    database_url = raw_database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+elif raw_database_url.startswith("mysql://"):
+    database_url = raw_database_url.replace("mysql://", "mysql+aiomysql://", 1)
+else:
+    database_url = raw_database_url
+
 connect_args = {}
 if "sqlite" in database_url:
     connect_args["check_same_thread"] = False
