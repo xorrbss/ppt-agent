@@ -1,13 +1,13 @@
-services:  
+services:
   production:
     # image: ghcr.io/presenton/presenton:latest
     build:
       context: .
       dockerfile: Dockerfile
-    ports:  
+    ports:
       # You can replace 5000 with any other port number of your choice to run Presenton on a different port number.
       - "5000:80"
-    volumes:  
+    volumes:
       - ./app_data:/app_data
     environment:
       - CAN_CHANGE_KEYS=${CAN_CHANGE_KEYS}
@@ -34,10 +34,10 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-    ports:  
+    ports:
       # You can replace 5000 with any other port number of your choice to run Presenton on a different port number.
       - "5000:80"
-    volumes:  
+    volumes:
       - ./app_data:/app_data
     environment:
       - CAN_CHANGE_KEYS=${CAN_CHANGE_KEYS}
@@ -57,7 +57,7 @@ services:
       context: .
       dockerfile: Dockerfile.dev
     ports:
-      - "5000:80" 
+      - "5000:80"
     volumes:
       - .:/app
       - ./app_data:/app_data
@@ -74,6 +74,7 @@ services:
       - CUSTOM_MODEL=${CUSTOM_MODEL}
       - PEXELS_API_KEY=${PEXELS_API_KEY}
       - DATABASE_URL=${DATABASE_URL}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
 
   development-gpu:
     build:
@@ -87,7 +88,7 @@ services:
               count: 1
               capabilities: [gpu]
     ports:
-      - "5000:80" 
+      - "5000:80"
     volumes:
       - .:/app
       - ./app_data:/app_data
@@ -104,3 +105,4 @@ services:
       - CUSTOM_MODEL=${CUSTOM_MODEL}
       - PEXELS_API_KEY=${PEXELS_API_KEY}
       - DATABASE_URL=${DATABASE_URL}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
