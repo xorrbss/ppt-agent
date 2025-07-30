@@ -218,7 +218,7 @@ async def stream_presentation(
         for i, slide_layout_index in enumerate(structure.slides):
             slide_layout = layout.slides[slide_layout_index]
             slide_content = await get_slide_content_from_type_and_outline(
-                slide_layout, outline.slides[i]
+                slide_layout, outline.slides[i], presentation.language
             )
             slide = SlideModel(
                 presentation=presentation_id,
