@@ -2,8 +2,10 @@ import asyncio
 from typing import Optional
 from google.genai.types import GenerateContentConfig
 from utils.llm_provider import (
+    get_anthropic_llm_client,
     get_google_llm_client,
     get_large_model,
+    is_anthropic_selected,
     is_google_selected,
     get_llm_client,
 )
@@ -54,7 +56,19 @@ def get_user_prompt(prompt: str, html: str):
 async def get_edited_slide_html(prompt: str, html: str):
     model = get_large_model()
     llm_response = None
-    if is_google_selected():
+
+    if is_anthropic_selected():
+        client = get_anthropic_llm_client()
+        response = await client.messages.create(
+            model=model,
+            messages=[get_user_prompt(prompt, html)],
+        )
+        for each in response.content:
+            if each.type == "text":
+                llm_response = each.text
+                break
+
+    elif is_google_selected():
         client = get_google_llm_client()
         response = await asyncio.to_thread(
             client.models.generate_content,
@@ -66,6 +80,7 @@ async def get_edited_slide_html(prompt: str, html: str):
             ),
         )
         llm_response = response.text
+
     else:
         client = get_llm_client()
         response = await client.chat.completions.create(

@@ -6,6 +6,8 @@ class UserConfig(BaseModel):
     LLM: Optional[str] = None
     OPENAI_API_KEY: Optional[str] = None
     GOOGLE_API_KEY: Optional[str] = None
+    ANTHROPIC_API_KEY: Optional[str] = None
+    ANTHROPIC_MODEL: Optional[str] = None
     OLLAMA_URL: Optional[str] = None
     OLLAMA_MODEL: Optional[str] = None
     CUSTOM_LLM_URL: Optional[str] = None
@@ -14,3 +16,4 @@ class UserConfig(BaseModel):
     PEXELS_API_KEY: Optional[str] = None
     IMAGE_PROVIDER: Optional[str] = None
     PIXABAY_API_KEY: Optional[str] = None
+    EXTENDED_REASONING: Optional[bool] = None

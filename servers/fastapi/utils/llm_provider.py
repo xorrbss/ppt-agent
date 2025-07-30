@@ -1,10 +1,13 @@
 import os
+import anthropic
 from fastapi import HTTPException
 from openai import AsyncOpenAI
 from google import genai
 
 from enums.llm_provider import LLMProvider
 from utils.get_env import (
+    get_anthropic_api_key_env,
+    get_anthropic_model_env,
     get_custom_llm_api_key_env,
     get_custom_llm_url_env,
     get_custom_model_env,
@@ -14,7 +17,6 @@ from utils.get_env import (
     get_ollama_url_env,
     get_openai_api_key_env,
 )
-
 
 
 def get_llm_provider():
@@ -39,6 +41,10 @@ def is_google_selected():
     return get_llm_provider() == LLMProvider.GOOGLE
 
 
+def is_anthropic_selected():
+    return get_llm_provider() == LLMProvider.ANTHROPIC
+
+
 def is_ollama_selected():
     return get_llm_provider() == LLMProvider.OLLAMA
 
@@ -54,6 +60,8 @@ def get_model_base_url():
         return "https://api.openai.com/v1"
     elif selected_llm == LLMProvider.GOOGLE:
         return "https://generativelanguage.googleapis.com/v1beta/openai"
+    elif selected_llm == LLMProvider.ANTHROPIC:
+        return "https://api.anthropic.com/v1"
     elif selected_llm == LLMProvider.OLLAMA:
         return os.path.join(get_ollama_url(), "v1")
     elif selected_llm == LLMProvider.CUSTOM:
@@ -68,6 +76,8 @@ def get_llm_api_key():
         return get_openai_api_key_env()
     elif selected_llm == LLMProvider.GOOGLE:
         return get_google_api_key_env()
+    elif selected_llm == LLMProvider.ANTHROPIC:
+        return get_anthropic_api_key_env()
     elif selected_llm == LLMProvider.OLLAMA:
         return "ollama"
     elif selected_llm == LLMProvider.CUSTOM:
@@ -78,14 +88,19 @@ def get_llm_api_key():
 
 def get_llm_client():
     client = AsyncOpenAI(
-            base_url=get_model_base_url(),
-            api_key=get_llm_api_key(),
-        )
+        base_url=get_model_base_url(),
+        api_key=get_llm_api_key(),
+    )
     return client
 
 
 def get_google_llm_client():
-    client = genai.Client(api_key=get_llm_api_key())
+    client = genai.Client(api_key=get_google_api_key_env())
+    return client
+
+
+def get_anthropic_llm_client():
+    client = anthropic.AsyncAnthropic(api_key=get_anthropic_api_key_env())
     return client
 
 
@@ -95,6 +110,8 @@ def get_large_model():
         return "gpt-4.1"
     elif selected_llm == LLMProvider.GOOGLE:
         return "gemini-2.0-flash"
+    elif selected_llm == LLMProvider.ANTHROPIC:
+        return get_anthropic_model_env()
     elif selected_llm == LLMProvider.OLLAMA:
         return get_ollama_model_env()
     elif selected_llm == LLMProvider.CUSTOM:
@@ -109,6 +126,8 @@ def get_small_model():
         return "gpt-4.1-mini"
     elif selected_llm == LLMProvider.GOOGLE:
         return "gemini-2.0-flash"
+    elif selected_llm == LLMProvider.ANTHROPIC:
+        return get_anthropic_model_env()
     elif selected_llm == LLMProvider.OLLAMA:
         return get_ollama_model_env()
     elif selected_llm == LLMProvider.CUSTOM:
@@ -123,6 +142,8 @@ def get_nano_model():
         return "gpt-4.1-nano"
     elif selected_llm == LLMProvider.GOOGLE:
         return "gemini-2.0-flash"
+    elif selected_llm == LLMProvider.ANTHROPIC:
+        return get_anthropic_model_env()
     elif selected_llm == LLMProvider.OLLAMA:
         return get_ollama_model_env()
     elif selected_llm == LLMProvider.CUSTOM:

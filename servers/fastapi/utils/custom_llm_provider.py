@@ -13,6 +13,5 @@ async def list_available_custom_models(
         client = AsyncOpenAI(api_key=api_key or "null", base_url=url)
     models = []
     async for model in client.models.list():
-        print(model)
         models.append(model.id)
     return models

@@ -5,9 +5,11 @@ from models.presentation_layout import SlideLayoutModel
 from models.sql.slide import SlideModel
 from google.genai.types import GenerateContentConfig
 from utils.llm_provider import (
+    get_anthropic_llm_client,
     get_google_llm_client,
     get_large_model,
     get_llm_client,
+    is_anthropic_selected,
     is_google_selected,
 )
 from utils.schema_utils import remove_fields_from_schema
@@ -83,6 +85,7 @@ async def get_edited_slide_content(
             ),
         )
         slide_content_json = json.loads(response.text)
+
     else:
         client = get_llm_client()
         response = await client.beta.chat.completions.parse(

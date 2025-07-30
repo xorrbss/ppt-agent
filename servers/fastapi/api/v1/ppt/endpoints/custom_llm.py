@@ -1,5 +1,5 @@
 from typing import Annotated, List, Optional
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, Body, HTTPException
 
 from utils.custom_llm_provider import list_available_custom_models
 
@@ -11,4 +11,8 @@ async def get_available_models(
     url: Annotated[Optional[str], Body()] = None,
     api_key: Annotated[Optional[str], Body()] = None,
 ):
-    return await list_available_custom_models(url, api_key)
+    try:
+        return await list_available_custom_models(url, api_key)
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=500, detail=str(e))

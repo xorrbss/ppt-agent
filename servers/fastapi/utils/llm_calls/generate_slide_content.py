@@ -4,9 +4,11 @@ from google.genai.types import GenerateContentConfig
 from models.presentation_layout import SlideLayoutModel
 from models.presentation_outline_model import SlideOutlineModel
 from utils.llm_provider import (
+    get_anthropic_llm_client,
     get_google_llm_client,
     get_large_model,
     get_llm_client,
+    is_anthropic_selected,
     is_google_selected,
 )
 from utils.schema_utils import remove_fields_from_schema
@@ -68,7 +70,21 @@ async def get_slide_content_from_type_and_outline(
         slide_layout.json_schema, ["__image_url__", "__icon_url__"]
     )
 
-    if not is_google_selected():
+    if is_google_selected():
+        client = get_google_llm_client()
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model=model,
+            contents=[get_user_prompt(outline.title, outline.body, language)],
+            config=GenerateContentConfig(
+                system_instruction=system_prompt,
+                response_mime_type="application/json",
+                response_json_schema=response_schema,
+            ),
+        )
+        return json.loads(response.text)
+
+    else:
         client = get_llm_client()
         response = await client.beta.chat.completions.parse(
             model=model,
@@ -86,16 +102,3 @@ async def get_slide_content_from_type_and_outline(
             },
         )
         return json.loads(response.choices[0].message.content)
-    else:
-        client = get_google_llm_client()
-        response = await asyncio.to_thread(
-            client.models.generate_content,
-            model=model,
-            contents=[get_user_prompt(outline.title, outline.body, language)],
-            config=GenerateContentConfig(
-                system_instruction=system_prompt,
-                response_mime_type="application/json",
-                response_json_schema=response_schema,
-            ),
-        )
-        return json.loads(response.text)

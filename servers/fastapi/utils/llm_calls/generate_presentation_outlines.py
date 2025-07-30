@@ -5,9 +5,11 @@ from openai.types.chat.chat_completion_chunk import ChoiceDelta
 from utils.async_iterator import iterator_to_async
 from utils.get_dynamic_models import get_presentation_outline_model_with_n_slides
 from utils.llm_provider import (
+    get_anthropic_llm_client,
     get_google_llm_client,
     get_large_model,
     get_llm_client,
+    is_anthropic_selected,
     is_google_selected,
 )
 from pydantic import BaseModel
@@ -94,19 +96,7 @@ async def generate_ppt_outline(
     model = get_large_model()
     response_model = get_presentation_outline_model_with_n_slides(n_slides)
 
-    if not is_google_selected():
-        client = get_llm_client()
-        async for response in await client.chat.completions.create(
-            model=model,
-            messages=get_prompt_template(prompt, n_slides, language, content),
-            stream=True,
-            response_format=get_response_format(response_model),
-        ):
-            delta: ChoiceDelta = response.choices[0].delta
-            if delta.content:
-                yield delta.content
-
-    else:
+    if is_google_selected():
         client = get_google_llm_client()
         generate_stream = iterator_to_async(client.models.generate_content_stream)
         async for event in generate_stream(
@@ -120,3 +110,15 @@ async def generate_ppt_outline(
         ):
             if event.text:
                 yield event.text
+
+    else:
+        client = get_llm_client()
+        async for response in await client.chat.completions.create(
+            model=model,
+            messages=get_prompt_template(prompt, n_slides, language, content),
+            stream=True,
+            response_format=get_response_format(response_model),
+        ):
+            delta: ChoiceDelta = response.choices[0].delta
+            if delta.content:
+                yield delta.content

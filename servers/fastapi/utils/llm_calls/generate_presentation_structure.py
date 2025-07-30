@@ -3,8 +3,6 @@ from models.presentation_outline_model import PresentationOutlineModel
 from utils.llm_provider import (
     get_large_model,
     get_llm_client,
-    get_nano_model,
-    get_small_model,
 )
 from utils.get_dynamic_models import (
     get_presentation_structure_model_with_n_slides,
@@ -81,5 +79,4 @@ async def generate_presentation_structure(
         ),
         response_format=response_model,
     )
-    print(response.choices[0].message.parsed)
     return response.choices[0].message.parsed
