@@ -30,8 +30,8 @@ export const Schema = z.object({
         }),
 
     brandLogo: ImageSchema.default({
-        __image_url__: "https://via.placeholder.com/40x40/22C55E/FFFFFF?text=L",
-        __image_prompt__: "Professional organization logo - clean and modern design"
+        image_url_: "https://via.placeholder.com/40x40/22C55E/FFFFFF?text=L",
+        image_prompt_: "Professional organization logo - clean and modern design"
     }).meta({
         description: "Logo or brand mark representing the presenting organization",
     }),
@@ -84,11 +84,11 @@ const ThynkTitleSlide = ({ data }: { data: Partial<SchemaType> }) => {
             <div className="absolute top-0 left-0 right-0 px-16 py-8 flex justify-between items-center z-20">
                 {/* Company Logo and Name */}
                 <div className="flex items-center space-x-3">
-                    {brandLogo?.__image_url__ && (
+                    {brandLogo?.image_url_ && (
                         <div className="w-10 h-10">
                             <img
-                                src={brandLogo.__image_url__}
-                                alt={brandLogo.__image_prompt__}
+                                src={brandLogo.image_url_}
+                                alt={brandLogo.image_prompt_}
                                 className="w-full h-full object-contain"
                             />
                         </div>

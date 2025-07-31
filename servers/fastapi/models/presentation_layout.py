@@ -12,7 +12,7 @@ class SlideLayoutModel(BaseModel):
 
 
 class PresentationLayoutModel(BaseModel):
-    name: Optional[str] = None
+    name: str
     ordered: bool = Field(default=False)
     slides: List[SlideLayoutModel]
 

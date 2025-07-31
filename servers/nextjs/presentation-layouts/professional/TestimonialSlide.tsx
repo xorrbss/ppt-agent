@@ -22,8 +22,8 @@ export const Schema = z.object({
         }),
 
     brandLogo: ImageSchema.default({
-        __image_url__: "https://via.placeholder.com/40x40/22C55E/FFFFFF?text=L",
-        __image_prompt__: "Professional organization logo - clean and modern design"
+        image_url_: "https://via.placeholder.com/40x40/22C55E/FFFFFF?text=L",
+        image_prompt_: "Professional organization logo - clean and modern design"
     }).meta({
         description: "Logo or brand mark representing the organization",
     }),
@@ -43,8 +43,8 @@ export const Schema = z.object({
             testimonialText: "Working with this team has been transformative for our business. Their expertise, dedication, and innovative approach exceeded our expectations and delivered remarkable results.",
             rating: 5,
             clientPhoto: {
-                __image_url__: "https://images.unsplash.com/photo-1494790108755-2616b612b830?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80",
-                __image_prompt__: "Professional businesswoman headshot"
+                image_url_: "https://images.unsplash.com/photo-1494790108755-2616b612b830?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80",
+                image_prompt_: "Professional businesswoman headshot"
             }
         },
         {
@@ -54,8 +54,8 @@ export const Schema = z.object({
             testimonialText: "The level of professionalism and quality of service provided was outstanding. They understood our needs perfectly and delivered solutions that truly made a difference.",
             rating: 5,
             clientPhoto: {
-                __image_url__: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80",
-                __image_prompt__: "Professional businessman headshot"
+                image_url_: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80",
+                image_prompt_: "Professional businessman headshot"
             }
         },
         {
@@ -65,8 +65,8 @@ export const Schema = z.object({
             testimonialText: "Exceptional service and results that spoke for themselves. The team's attention to detail and commitment to excellence made our collaboration highly successful.",
             rating: 5,
             clientPhoto: {
-                __image_url__: "https://images.unsplash.com/photo-1580489944761-15a19d654956?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80",
-                __image_prompt__: "Professional woman headshot"
+                image_url_: "https://images.unsplash.com/photo-1580489944761-15a19d654956?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80",
+                image_prompt_: "Professional woman headshot"
             }
         }
     ]).meta({
@@ -121,11 +121,11 @@ const TestimonialSlide = ({ data }: { data: Partial<SchemaType> }) => {
 
                 {/* Company Branding */}
                 <div className="flex items-center space-x-3">
-                    {brandLogo?.__image_url__ && (
+                    {brandLogo?.image_url_ && (
                         <div className="w-8 h-8">
                             <img
-                                src={brandLogo.__image_url__}
-                                alt={brandLogo.__image_prompt__}
+                                src={brandLogo.image_url_}
+                                alt={brandLogo.image_prompt_}
                                 className="w-full h-full object-contain"
                             />
                         </div>
@@ -164,11 +164,11 @@ const TestimonialSlide = ({ data }: { data: Partial<SchemaType> }) => {
                                     {/* Client Info */}
                                     <div className="flex items-center space-x-4">
                                         {/* Client Photo */}
-                                        {showClientPhotos && item.clientPhoto?.__image_url__ && (
+                                        {showClientPhotos && item.clientPhoto?.image_url_ && (
                                             <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0">
                                                 <img
-                                                    src={item.clientPhoto.__image_url__}
-                                                    alt={item.clientPhoto.__image_prompt__}
+                                                    src={item.clientPhoto.image_url_}
+                                                    alt={item.clientPhoto.image_prompt_}
                                                     className="w-full h-full object-cover"
                                                 />
                                             </div>

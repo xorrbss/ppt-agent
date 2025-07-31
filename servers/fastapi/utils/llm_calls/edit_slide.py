@@ -1,3 +1,4 @@
+from pydantic import BaseModel
 from models.llm_message import LLMMessage
 from models.presentation_layout import SlideLayoutModel
 from models.sql.slide import SlideModel
@@ -54,19 +55,16 @@ def get_messages(
 
 async def get_edited_slide_content(
     prompt: str,
-    slide_layout: SlideLayoutModel,
     slide: SlideModel,
     language: str,
+    response_model: BaseModel,
 ):
     model = get_large_model()
-    response_schema = remove_fields_from_schema(
-        slide_layout.json_schema, ["__image_url__", "__icon_url__"]
-    )
 
     client = LLMClient()
     response = await client.generate_structured(
         model=model,
         messages=get_messages(prompt, slide.content, language),
-        response_format=response_schema,
+        response_format=response_model,
     )
     return response

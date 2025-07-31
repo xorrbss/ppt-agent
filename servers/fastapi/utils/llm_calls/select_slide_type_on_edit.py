@@ -48,7 +48,7 @@ async def get_slide_layout_from_prompt(
 
     slide_layout_ids = list(map(lambda x: x.id, layout.slides))
 
-    response: SlideLayoutIndex = await client.generate_structured(
+    response = await client.generate_structured(
         model=model,
         messages=get_messages(
             prompt,
@@ -58,5 +58,5 @@ async def get_slide_layout_from_prompt(
         ),
         response_format=SlideLayoutIndex,
     )
-    index = response.index
+    index = SlideLayoutIndex(**response).index
     return layout.slides[index]

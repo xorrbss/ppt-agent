@@ -76,4 +76,4 @@ async def generate_presentation_structure(
         ),
         response_format=response_model,
     )
-    return response
+    return PresentationStructureModel(**response)

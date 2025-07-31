@@ -41,9 +41,9 @@ const modernTeamSlideSchema = z.object({
         description:
           "Strategic leader with 15+ years experience in technology and business development. Former VP at Fortune 500 company.",
         image: {
-          __image_url__:
+          image_url_:
             "https://plus.unsplash.com/premium_photo-1661589856899-6dd0871f9db6?fm=jpg&q=60&w=3000&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8NXx8YnVzaW5lc3N3b21lbnxlbnwwfHwwfHx8MA%3D%3D",
-          __image_prompt__: "Professional businesswoman CEO headshot",
+          image_prompt_: "Professional businesswoman CEO headshot",
         },
       },
       {
@@ -52,9 +52,9 @@ const modernTeamSlideSchema = z.object({
         description:
           "Technology expert specializing in scalable architecture and AI solutions. PhD in Computer Science from MIT.",
         image: {
-          __image_url__:
+          image_url_:
             "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80",
-          __image_prompt__: "Professional businessman CTO headshot",
+          image_prompt_: "Professional businessman CTO headshot",
         },
       },
       {
@@ -63,9 +63,9 @@ const modernTeamSlideSchema = z.object({
         description:
           "Sales leader with proven track record of building high-performing teams and driving revenue growth in B2B markets.",
         image: {
-          __image_url__:
+          image_url_:
             "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80",
-          __image_prompt__: "Professional businesswoman VP headshot",
+          image_prompt_: "Professional businesswoman VP headshot",
         },
       },
       {
@@ -74,9 +74,9 @@ const modernTeamSlideSchema = z.object({
         description:
           "Product strategist focused on user experience and market-driven solutions. Former product manager at leading tech companies.",
         image: {
-          __image_url__:
+          image_url_:
             "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80",
-          __image_prompt__: "Professional businessman product manager headshot",
+          image_prompt_: "Professional businessman product manager headshot",
         },
       },
     ])
@@ -145,10 +145,10 @@ const ModernTeamSlideLayout: React.FC<ModernTeamSlideLayoutProps> = ({
               >
                 {/* Photo */}
                 <div className="relative w-28 h-28 mb-4 rounded overflow-hidden bg-white border-2 border-blue-100 flex items-center justify-center">
-                  {member.image.__image_url__ && (
+                  {member.image.image_url_ && (
                     <img
-                      src={member.image.__image_url__}
-                      alt={member.image.__image_prompt__ || member.name}
+                      src={member.image.image_url_}
+                      alt={member.image.image_prompt_ || member.name}
                       className="w-full h-full object-cover"
                     />
                   )}

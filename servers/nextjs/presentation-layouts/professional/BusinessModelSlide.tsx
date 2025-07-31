@@ -33,8 +33,8 @@ export const Schema = z.object({
         }),
 
     headerVisual: ImageSchema.default({
-        __image_url__: "https://images.unsplash.com/photo-1559136555-9303baea8ebd?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-        __image_prompt__: "Business strategy meeting with charts, graphs and team collaboration"
+        image_url_: "https://images.unsplash.com/photo-1559136555-9303baea8ebd?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+        image_prompt_: "Business strategy meeting with charts, graphs and team collaboration"
     }).meta({
         description: "Header visual representing the topic area - ADAPT the image prompt to match presentation topic (e.g., 'Climate scientists analyzing global warming data', 'Medical team reviewing patient care protocols', 'Teachers planning educational curriculum')",
     }),
@@ -92,11 +92,11 @@ const BusinessModelSlide = ({ data }: { data: Partial<SchemaType> }) => {
     return (
         <div className="aspect-video max-w-[1280px] w-full bg-white relative overflow-hidden">
             {/* Header Image Section */}
-            {headerVisual?.__image_url__ && (
+            {headerVisual?.image_url_ && (
                 <div className="h-32 w-full relative">
                     <img
-                        src={headerVisual.__image_url__}
-                        alt={headerVisual.__image_prompt__}
+                        src={headerVisual.image_url_}
+                        alt={headerVisual.image_prompt_}
                         className="w-full h-full object-cover"
                     />
                     <div className="absolute inset-0 bg-black bg-opacity-40"></div>

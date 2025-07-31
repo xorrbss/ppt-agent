@@ -71,8 +71,8 @@ const AboutCompanySlideLayout: React.FC<AboutCompanySlideLayoutProps> = ({
             <div className="w-full h-96 overflow-hidden">
               {slideData?.image ? (
                 <img
-                  src={slideData.image.__image_url__}
-                  alt={slideData.image.__image_prompt__}
+                  src={slideData.image.image_url_}
+                  alt={slideData.image.image_prompt_}
                   className="w-full h-full object-cover"
                 />
               ) : (

@@ -18,8 +18,8 @@ const type7SlideSchema = z.object({
             description: "Item description",
         }),
         icon: IconSchema.default({
-            __icon_url__: '/static/icons/placeholder.png',
-            __icon_query__: 'Default icon'
+            icon_url_: '/static/icons/placeholder.png',
+            icon_query_: 'Default icon'
         }).meta({
             description: "Icon for the item",
         })
@@ -28,32 +28,32 @@ const type7SlideSchema = z.object({
             heading: 'Professional Service',
             description: 'High-quality professional services tailored to your specific needs and requirements',
             icon: {
-                __icon_url__: '/static/icons/placeholder.png',
-                __icon_query__: 'Professional service icon'
+                icon_url_: '/static/icons/placeholder.png',
+                icon_query_: 'Professional service icon'
             }
         },
         {
             heading: 'Expert Consultation',
             description: 'Expert advice and consultation from experienced professionals in the field',
             icon: {
-                __icon_url__: '/static/icons/placeholder.png',
-                __icon_query__: 'Expert consultation icon'
+                icon_url_: '/static/icons/placeholder.png',
+                icon_query_: 'Expert consultation icon'
             }
         },
         {
             heading: 'Quality Assurance',
             description: 'Comprehensive quality assurance processes to ensure excellent results',
             icon: {
-                __icon_url__: '/static/icons/placeholder.png',
-                __icon_query__: 'Quality assurance icon'
+                icon_url_: '/static/icons/placeholder.png',
+                icon_query_: 'Quality assurance icon'
             }
         },
         {
             heading: 'Customer Support',
             description: 'Dedicated customer support available to assist you throughout the process',
             icon: {
-                __icon_url__: '/static/icons/placeholder.png',
-                __icon_query__: 'Customer support icon'
+                icon_url_: '/static/icons/placeholder.png',
+                icon_query_: 'Customer support icon'
             }
         }
     ]).meta({
@@ -100,8 +100,8 @@ const Type7SlideLayout: React.FC<Type7SlideLayoutProps> = ({ data: slideData }) 
                             <div className="flex-shrink-0 lg:w-16">
                                 <div className="w-12 h-12 lg:w-16 lg:h-16 bg-blue-600 rounded-lg flex items-center justify-center overflow-hidden">
                                     <img
-                                        src={item.icon?.__icon_url__ || ''}
-                                        alt={item.icon?.__icon_query__ || item.heading}
+                                        src={item.icon?.icon_url_ || ''}
+                                        alt={item.icon?.icon_query_ || item.heading}
                                         className="w-full h-full object-cover"
                                     />
                                 </div>
@@ -134,9 +134,9 @@ const Type7SlideLayout: React.FC<Type7SlideLayoutProps> = ({ data: slideData }) 
                     >
                         <div className="text-center mb-4">
                             <div className="w-16 h-16 lg:w-20 lg:h-20 bg-blue-600 rounded-lg flex items-center justify-center mx-auto mb-4 overflow-hidden">
-                                {item.icon?.__icon_url__ && <img
-                                    src={item.icon?.__icon_url__ || ''}
-                                    alt={item.icon?.__icon_query__ || item.heading}
+                                {item.icon?.icon_url_ && <img
+                                    src={item.icon?.icon_url_ || ''}
+                                    alt={item.icon?.icon_query_ || item.heading}
                                     className="w-full h-full object-cover"
                                 />}
                             </div>

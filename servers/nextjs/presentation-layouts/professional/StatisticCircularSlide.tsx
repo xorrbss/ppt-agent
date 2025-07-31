@@ -29,8 +29,8 @@ export const Schema = z.object({
         }),
 
     brandLogo: ImageSchema.default({
-        __image_url__: "https://via.placeholder.com/40x40/22C55E/FFFFFF?text=L",
-        __image_prompt__: "Professional organization logo - clean and modern design"
+        image_url_: "https://via.placeholder.com/40x40/22C55E/FFFFFF?text=L",
+        image_prompt_: "Professional organization logo - clean and modern design"
     }).meta({
         description: "Logo or brand mark representing the organization",
     }),
@@ -67,8 +67,8 @@ export const Schema = z.object({
     }),
 
     companyLogo: ImageSchema.default({
-        __image_url__: "https://via.placeholder.com/40x40/FFFFFF/1D9A8A?text=C",
-        __image_prompt__: "Clean modern company logo icon in white"
+        image_url_: "https://via.placeholder.com/40x40/FFFFFF/1D9A8A?text=C",
+        image_prompt_: "Clean modern company logo icon in white"
     }).meta({
         description: "Company logo icon",
     }),
@@ -128,11 +128,11 @@ const StatisticCircularSlide = ({ data }: { data: Partial<SchemaType> }) => {
                     {/* Right - Company Branding */}
                     <div className="w-1/2 bg-teal-600 px-16 py-8 flex items-center justify-end">
                         <div className="flex items-center space-x-3">
-                            {companyLogo?.__image_url__ && (
+                            {companyLogo?.image_url_ && (
                                 <div className="w-10 h-10">
                                     <img
-                                        src={companyLogo.__image_url__}
-                                        alt={companyLogo.__image_prompt__}
+                                        src={companyLogo.image_url_}
+                                        alt={companyLogo.image_prompt_}
                                         className="w-full h-full object-contain"
                                     />
                                 </div>

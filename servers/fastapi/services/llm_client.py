@@ -205,14 +205,13 @@ class LLMClient:
             )
             content = response.choices[0].message.parsed
             if content:
-                return content
+                return content.model_dump(mode="json")
             return None
 
     async def _generate_google_structured(
         self, model: str, messages: List[LLMMessage], response_format: BaseModel | dict
     ):
         client: genai.Client = self._client
-        is_response_format_dict = isinstance(response_format, dict)
         response = await asyncio.to_thread(
             client.models.generate_content,
             model=model,
@@ -228,9 +227,6 @@ class LLMClient:
         if response.text:
             content = json.loads(response.text)
 
-        # If response format is Pydantic model, return the model instance
-        if content and not is_response_format_dict:
-            return response_format(**content)
         return content
 
     async def _generate_anthropic_structured(
@@ -263,9 +259,6 @@ class LLMClient:
             if content_block.type == "tool_use":
                 content = content_block.input
 
-        # If response format is Pydantic model, return the model instance
-        if content and not is_response_format_dict:
-            return response_format(**content)
         return content
 
     async def _generate_ollama_structured(
@@ -280,7 +273,7 @@ class LLMClient:
 
     async def generate_structured(
         self, model: str, messages: List[LLMMessage], response_format: BaseModel | dict
-    ):
+    ) -> dict:
         content = None
         match self.llm_provider:
             case LLMProvider.OPENAI:

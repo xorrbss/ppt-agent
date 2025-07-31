@@ -14,8 +14,8 @@ const type1SlideSchema = z.object({
         description: "Main description text",
     }),
     image: ImageSchema.default({
-        __image_url__: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
-        __image_prompt__: 'A beautiful road in the mountains'
+        image_url_: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
+        image_prompt_: 'A beautiful road in the mountains'
     }).meta({
         description: "Main slide image",
     })
@@ -52,8 +52,8 @@ const Type1SlideLayout: React.FC<Type1SlideLayoutProps> = ({ data: slideData }) 
                 {/* Image */}
                 <div className="w-full  max-h-[600px]">
                     {image && <img
-                        src={image?.__image_url__ || ''}
-                        alt={image?.__image_prompt__ || title || ''}
+                        src={image?.image_url_ || ''}
+                        alt={image?.image_prompt_ || title || ''}
                         className="w-full max-h-full object-cover rounded-lg shadow-md"
                     />}
                 </div>

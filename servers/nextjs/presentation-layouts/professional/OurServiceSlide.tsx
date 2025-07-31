@@ -32,8 +32,8 @@ export const Schema = z.object({
         }),
 
     serviceHighlight: ImageSchema.default({
-        __image_url__: "https://images.unsplash.com/photo-1556761175-b413da4baf72?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-        __image_prompt__: "Professional service delivery or team working on client solutions"
+        image_url_: "https://images.unsplash.com/photo-1556761175-b413da4baf72?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+        image_prompt_: "Professional service delivery or team working on client solutions"
     }).meta({
         description: "Visual that represents service delivery, expertise, or client collaboration",
     }),
@@ -102,11 +102,11 @@ const OurServiceSlide = ({ data }: { data: Partial<SchemaType> }) => {
                 {/* Right - Service Highlight */}
                 <div className="w-1/2 relative">
                     {/* Service Highlight Image */}
-                    {serviceHighlight?.__image_url__ && (
+                    {serviceHighlight?.image_url_ && (
                         <div className="h-full w-full">
                             <img
-                                src={serviceHighlight.__image_url__}
-                                alt={serviceHighlight.__image_prompt__}
+                                src={serviceHighlight.image_url_}
+                                alt={serviceHighlight.image_prompt_}
                                 className="w-full h-full object-cover"
                             />
                         </div>

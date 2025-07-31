@@ -18,9 +18,9 @@ const marketSizeSlideSchema = z.object({
     description: "Today Date displayed in header",
   }),
   mapImage: ImageSchema.default({
-    __image_url__:
+    image_url_:
       "https://upload.wikimedia.org/wikipedia/commons/8/80/World_map_-_low_resolution.svg", // You can quickly find a world map image via a Google search or use a free resource like Wikimedia Commons
-    __image_prompt__: "World map with location pins or points",
+    image_prompt_: "World map with location pins or points",
   }),
   marketStats: z
     .array(
@@ -111,9 +111,9 @@ const MarketSizeSlideLayout: React.FC<MarketSizeSlideProps> = ({
                 {slideData?.title || "Market Size"}
               </h1>
               <div className="w-full bg-[#CBE3CC] rounded-md mb-8 flex items-center justify-center">
-                {slideData?.mapImage?.__image_url__ && (
+                {slideData?.mapImage?.image_url_ && (
                   <img
-                    src={slideData?.mapImage?.__image_url__}
+                    src={slideData?.mapImage?.image_url_}
                     alt="Market World Map with Points"
                     className="w-full object-contain rounded-md"
                     style={{ maxHeight: 220 }}

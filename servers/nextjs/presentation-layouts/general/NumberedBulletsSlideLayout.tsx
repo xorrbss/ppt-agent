@@ -11,8 +11,8 @@ const numberedBulletsSlideSchema = z.object({
         description: "Main title of the slide",
     }),
     image: ImageSchema.default({
-        __image_url__: 'https://images.unsplash.com/photo-1552664730-d307ca884978?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80',
-        __image_prompt__: 'Business people analyzing charts and data on wall'
+        image_url_: 'https://images.unsplash.com/photo-1552664730-d307ca884978?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80',
+        image_prompt_: 'Business people analyzing charts and data on wall'
     }).meta({
         description: "Supporting image for the slide",
     }),
@@ -87,8 +87,8 @@ const NumberedBulletsSlideLayout: React.FC<NumberedBulletsSlideLayoutProps> = ({
                         {/* Image Section */}
                         <div className="flex-shrink-0 w-80 h-48">
                             <img
-                                src={slideData?.image?.__image_url__ || ''}
-                                alt={slideData?.image?.__image_prompt__ || slideData?.title || ''}
+                                src={slideData?.image?.image_url_ || ''}
+                                alt={slideData?.image?.image_prompt_ || slideData?.title || ''}
                                 className="w-full h-full object-cover rounded-lg shadow-md"
                             />
                         </div>

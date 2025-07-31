@@ -52,9 +52,9 @@ const productOverviewSlideSchema = z.object({
         description:
           "Detail and explain each product. Our examination of community and market issues increases with additional products/services.",
         image: {
-          __image_url__:
+          image_url_:
             "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=300&h=200&fit=crop",
-          __image_prompt__: "Person working on electronics with headphones",
+          image_prompt_: "Person working on electronics with headphones",
         },
         isBlueBackground: true,
       },
@@ -63,9 +63,9 @@ const productOverviewSlideSchema = z.object({
         description:
           "Our alternate product category is available. Our products must work together to solve social and economic issues.",
         image: {
-          __image_url__:
+          image_url_:
             "https://images.unsplash.com/photo-1573164713988-8665fc963095?w=300&h=200&fit=crop",
-          __image_prompt__:
+          image_prompt_:
             "Woman working at computer with technical equipment",
         },
         isBlueBackground: true,
@@ -163,9 +163,9 @@ const ProductOverviewSlideLayout: React.FC<ProductOverviewSlideLayoutProps> = ({
                     style={{ height: `${IMAGE_SECTION_HEIGHT + 28}px` }}
                   >
                     <img
-                      src={products[0].image.__image_url__}
+                      src={products[0].image.image_url_}
                       alt={
-                        products[0].image.__image_prompt__ || products[0].title
+                        products[0].image.image_prompt_ || products[0].title
                       }
                       className="w-full h-full object-cover"
                     />
@@ -189,9 +189,9 @@ const ProductOverviewSlideLayout: React.FC<ProductOverviewSlideLayoutProps> = ({
                     style={{ height: `${IMAGE_SECTION_HEIGHT + 28}px` }}
                   >
                     <img
-                      src={products[1].image.__image_url__}
+                      src={products[1].image.image_url_}
                       alt={
-                        products[1].image.__image_prompt__ || products[1].title
+                        products[1].image.image_prompt_ || products[1].title
                       }
                       className="w-full h-full object-cover"
                     />

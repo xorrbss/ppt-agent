@@ -61,8 +61,8 @@ export const Schema = z.object({
     }),
 
     brandingVisual: ImageSchema.default({
-        __image_url__: "https://via.placeholder.com/200x100/22C55E/FFFFFF?text=BRAND",
-        __image_prompt__: "Organization logo or brand visual element"
+        image_url_: "https://via.placeholder.com/200x100/22C55E/FFFFFF?text=BRAND",
+        image_prompt_: "Organization logo or brand visual element"
     }).meta({
         description: "Logo or branding element displayed prominently for visual identity",
     }),
@@ -146,11 +146,11 @@ const TableOfContentsSlide = ({ data }: { data: Partial<SchemaType> }) => {
                 {/* Right Side - Branding and Visual Elements */}
                 <div className="w-2/5 relative bg-gray-50 flex items-center justify-center">
                     {/* Branding Visual */}
-                    {brandingVisual?.__image_url__ && (
+                    {brandingVisual?.image_url_ && (
                         <div className="text-center">
                             <img
-                                src={brandingVisual.__image_url__}
-                                alt={brandingVisual.__image_prompt__}
+                                src={brandingVisual.image_url_}
+                                alt={brandingVisual.image_prompt_}
                                 className="max-w-64 max-h-32 object-contain mx-auto"
                             />
                         </div>

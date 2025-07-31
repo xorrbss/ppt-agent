@@ -21,8 +21,8 @@ const type8SlideSchema = z.object({
             description: "Item description",
         }),
         icon: IconSchema.default({
-            __icon_url__: '/static/icons/placeholder.png',
-            __icon_query__: 'Default icon'
+            icon_url_: '/static/icons/placeholder.png',
+            icon_query_: 'Default icon'
         }).meta({
             description: "Icon for the item",
         })
@@ -31,24 +31,24 @@ const type8SlideSchema = z.object({
             heading: 'Advanced Features',
             description: 'Cutting-edge functionality designed to enhance productivity and user experience',
             icon: {
-                __icon_url__: '/static/icons/placeholder.png',
-                __icon_query__: 'Advanced features icon'
+                icon_url_: '/static/icons/placeholder.png',
+                icon_query_: 'Advanced features icon'
             }
         },
         {
             heading: 'Reliable Performance',
             description: 'Consistent and dependable performance across all platforms and devices',
             icon: {
-                __icon_url__: '/static/icons/placeholder.png',
-                __icon_query__: 'Reliable performance icon'
+                icon_url_: '/static/icons/placeholder.png',
+                icon_query_: 'Reliable performance icon'
             }
         },
         {
             heading: 'Secure Environment',
             description: 'Enterprise-grade security measures to protect your data and privacy',
             icon: {
-                __icon_url__: '/static/icons/placeholder.png',
-                __icon_query__: 'Secure environment icon'
+                icon_url_: '/static/icons/placeholder.png',
+                icon_query_: 'Secure environment icon'
             }
         }
     ]).meta({
@@ -82,9 +82,9 @@ const Type8SlideLayout: React.FC<Type8SlideLayoutProps> = ({ data: slideData }) 
                         >
                             <div className="text-center mb-4">
                                 <div className="w-16 h-16 lg:w-20 lg:h-20 bg-blue-600 rounded-lg flex items-center justify-center mx-auto mb-4 overflow-hidden">
-                                    {item.icon?.__icon_url__ && <img
-                                        src={item.icon?.__icon_url__ || ''}
-                                        alt={item.icon?.__icon_query__ || item.heading}
+                                    {item.icon?.icon_url_ && <img
+                                        src={item.icon?.icon_url_ || ''}
+                                        alt={item.icon?.icon_query_ || item.heading}
                                         className="w-full h-full object-cover"
                                     />}
                                 </div>
@@ -116,9 +116,9 @@ const Type8SlideLayout: React.FC<Type8SlideLayoutProps> = ({ data: slideData }) 
                             <div className="flex items-start gap-4">
                                 <div className="w-[64px] h-[64px]">
                                     <div className="w-full h-full bg-blue-600 rounded-lg flex items-center justify-center overflow-hidden">
-                                        {item.icon?.__icon_url__ && <img
-                                            src={item.icon?.__icon_url__ || ''}
-                                            alt={item.icon?.__icon_query__ || item.heading}
+                                        {item.icon?.icon_url_ && <img
+                                            src={item.icon?.icon_url_ || ''}
+                                            alt={item.icon?.icon_query_ || item.heading}
                                             className="w-full h-full object-cover"
                                         />}
                                     </div>

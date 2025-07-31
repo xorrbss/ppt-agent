@@ -46,15 +46,15 @@ export const Schema = z.object({
     }),
 
     primaryVisual: ImageSchema.default({
-        __image_url__: "https://images.unsplash.com/photo-1560472354-b33ff0c44a43?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-        __image_prompt__: "Modern workspace with team collaboration and strategic planning"
+        image_url_: "https://images.unsplash.com/photo-1560472354-b33ff0c44a43?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+        image_prompt_: "Modern workspace with team collaboration and strategic planning"
     }).meta({
         description: "Primary visual representing teamwork, strategy, or solution implementation",
     }),
 
     brandingVisual: ImageSchema.default({
-        __image_url__: "https://via.placeholder.com/150x80/22C55E/FFFFFF?text=LOGO",
-        __image_prompt__: "Organization logo or brand mark"
+        image_url_: "https://via.placeholder.com/150x80/22C55E/FFFFFF?text=LOGO",
+        image_prompt_: "Organization logo or brand mark"
     }).meta({
         description: "Logo or branding element to maintain visual identity",
     }),
@@ -93,11 +93,11 @@ const SolutionsSlide = ({ data }: { data: Partial<SchemaType> }) => {
                 {/* Left Side - Images and Branding */}
                 <div className="w-2/5 relative bg-gray-100 flex flex-col">
                     {/* Top Image Area */}
-                    {primaryVisual?.__image_url__ && (
+                    {primaryVisual?.image_url_ && (
                         <div className="flex-1 relative">
                             <img
-                                src={primaryVisual.__image_url__}
-                                alt={primaryVisual.__image_prompt__}
+                                src={primaryVisual.image_url_}
+                                alt={primaryVisual.image_prompt_}
                                 className="w-full h-full object-cover"
                             />
                         </div>
@@ -105,10 +105,10 @@ const SolutionsSlide = ({ data }: { data: Partial<SchemaType> }) => {
 
                     {/* Bottom Branding Area */}
                     <div className="h-24 bg-white flex items-center justify-center px-8">
-                        {brandingVisual?.__image_url__ && (
+                        {brandingVisual?.image_url_ && (
                             <img
-                                src={brandingVisual.__image_url__}
-                                alt={brandingVisual.__image_prompt__}
+                                src={brandingVisual.image_url_}
+                                alt={brandingVisual.image_prompt_}
                                 className="h-12 object-contain"
                             />
                         )}

@@ -11,8 +11,8 @@ const bulletIconsOnlySlideSchema = z.object({
         description: "Main title of the slide",
     }),
     image: ImageSchema.default({
-        __image_url__: 'https://images.unsplash.com/photo-1552664730-d307ca884978?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80',
-        __image_prompt__: 'Business professionals collaborating and discussing solutions'
+        image_url_: 'https://images.unsplash.com/photo-1552664730-d307ca884978?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80',
+        image_prompt_: 'Business professionals collaborating and discussing solutions'
     }).meta({
         description: "Supporting image for the slide",
     }),
@@ -29,32 +29,32 @@ const bulletIconsOnlySlideSchema = z.object({
             title: 'Custom Software',
             subtitle: 'We create tailored software to optimize processes and boost efficiency.',
             icon: {
-                __icon_url__: '/static/icons/placeholder.png',
-                __icon_query__: 'code software development'
+                icon_url_: '/static/icons/placeholder.png',
+                icon_query_: 'code software development'
             }
         },
         {
             title: 'Digital Consulting',
             subtitle: 'Our consultants guide organizations in leveraging the latest technologies.',
             icon: {
-                __icon_url__: '/static/icons/placeholder.png',
-                __icon_query__: 'users consulting team'
+                icon_url_: '/static/icons/placeholder.png',
+                icon_query_: 'users consulting team'
             }
         },
         {
             title: 'Support Services',
             subtitle: 'We provide ongoing support to help businesses adapt and maintain performance.',
             icon: {
-                __icon_url__: '/static/icons/placeholder.png',
-                __icon_query__: 'headphones support service'
+                icon_url_: '/static/icons/placeholder.png',
+                icon_query_: 'headphones support service'
             }
         },
         {
             title: 'Scalable Marketing',
             subtitle: 'Our data-driven strategies help businesses expand their reach and engagement.',
             icon: {
-                __icon_url__: '/static/icons/placeholder.png',
-                __icon_query__: 'trending up marketing growth'
+                icon_url_: '/static/icons/placeholder.png',
+                icon_query_: 'trending up marketing growth'
             }
         }
     ]).meta({
@@ -131,8 +131,8 @@ const BulletIconsOnlySlideLayout: React.FC<BulletIconsOnlySlideLayoutProps> = ({
                                     {/* Icon */}
                                     <div className="flex-shrink-0 w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center">
                                         <img
-                                            src={bullet.icon.__icon_url__}
-                                            alt={bullet.icon.__icon_query__}
+                                            src={bullet.icon.icon_url_}
+                                            alt={bullet.icon.icon_query_}
                                             className="w-6 h-6 object-contain brightness-0 invert"
                                         />
                                     </div>
@@ -176,8 +176,8 @@ const BulletIconsOnlySlideLayout: React.FC<BulletIconsOnlySlideLayoutProps> = ({
                         {/* Main Image */}
                         <div className="w-full h-80 rounded-2xl overflow-hidden shadow-lg">
                             <img
-                                src={slideData?.image?.__image_url__ || ''}
-                                alt={slideData?.image?.__image_prompt__ || slideData?.title || ''}
+                                src={slideData?.image?.image_url_ || ''}
+                                alt={slideData?.image?.image_prompt_ || slideData?.title || ''}
                                 className="w-full h-full object-cover"
                             />
                         </div>

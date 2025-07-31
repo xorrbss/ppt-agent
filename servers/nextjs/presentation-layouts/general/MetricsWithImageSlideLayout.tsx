@@ -14,8 +14,8 @@ const metricsWithImageSlideSchema = z.object({
         description: "Description text below the title",
     }),
     image: ImageSchema.default({
-        __image_url__: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80',
-        __image_prompt__: 'Person holding tablet with analytics dashboard and charts'
+        image_url_: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80',
+        image_prompt_: 'Person holding tablet with analytics dashboard and charts'
     }).meta({
         description: "Supporting image for the slide",
     }),
@@ -86,8 +86,8 @@ const MetricsWithImageSlideLayout: React.FC<MetricsWithImageSlideLayoutProps> = 
                     <div className="flex-1 flex items-center justify-center pr-8">
                         <div className="w-full max-w-lg h-96 rounded-2xl overflow-hidden shadow-lg">
                             <img
-                                src={slideData?.image?.__image_url__ || ''}
-                                alt={slideData?.image?.__image_prompt__ || slideData?.title || ''}
+                                src={slideData?.image?.image_url_ || ''}
+                                alt={slideData?.image?.image_prompt_ || slideData?.title || ''}
                                 className="w-full h-full object-cover"
                             />
                         </div>
