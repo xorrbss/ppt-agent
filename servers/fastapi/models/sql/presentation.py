@@ -1,6 +1,5 @@
 from datetime import datetime
 from typing import List, Optional
-import uuid
 from sqlalchemy import JSON, Column, DateTime
 from sqlmodel import SQLModel, Field
 

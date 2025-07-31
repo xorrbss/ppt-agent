@@ -24,12 +24,19 @@ system_prompt = """
     - Provide prompt to generate image on "__image_prompt__" property.
     - Provide query to search icon on "__icon_query__" property.
     - Do not use markdown formatting in slide body.
-    - **Strictly follow the max and min character limit for every property in the slide.**
+    - Make sure to follow language guidelines.
+    **Strictly follow the max and min character limit for every property in the slide.**
 """
 
 
-def get_user_prompt(title: str, outline: str):
+def get_user_prompt(title: str, outline: str, language: str):
     return f"""
+        ## Icon Query And Image Prompt Language
+        English
+
+        ## Slide Content Language
+        {language}
+
         ## Slide Title
         {title}
 
@@ -38,7 +45,7 @@ def get_user_prompt(title: str, outline: str):
     """
 
 
-def get_prompt_to_generate_slide_content(title: str, outline: str):
+def get_prompt_to_generate_slide_content(title: str, outline: str, language: str):
 
     return [
         {
@@ -47,13 +54,13 @@ def get_prompt_to_generate_slide_content(title: str, outline: str):
         },
         {
             "role": "user",
-            "content": get_user_prompt(title, outline),
+            "content": get_user_prompt(title, outline, language),
         },
     ]
 
 
 async def get_slide_content_from_type_and_outline(
-    slide_layout: SlideLayoutModel, outline: SlideOutlineModel
+    slide_layout: SlideLayoutModel, outline: SlideOutlineModel, language: str
 ):
     model = get_large_model()
 
@@ -68,6 +75,7 @@ async def get_slide_content_from_type_and_outline(
             messages=get_prompt_to_generate_slide_content(
                 outline.title,
                 outline.body,
+                language,
             ),
             response_format={
                 "type": "json_schema",
@@ -83,7 +91,7 @@ async def get_slide_content_from_type_and_outline(
         response = await asyncio.to_thread(
             client.models.generate_content,
             model=model,
-            contents=[get_user_prompt(outline.title, outline.body)],
+            contents=[get_user_prompt(outline.title, outline.body, language)],
             config=GenerateContentConfig(
                 system_instruction=system_prompt,
                 response_mime_type="application/json",

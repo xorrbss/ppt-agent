@@ -232,7 +232,7 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
   for (const childElementHandle of directChildElementHandles) {
     const attributes = await getElementAttributes(childElementHandle);
 
-    if (attributes.tagName === "style") {
+    if (['style', 'script', 'link', 'meta', 'path'].includes(attributes.tagName)) {
       continue;
     }
 
@@ -268,8 +268,8 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
 
     allResults.push({ attributes, depth });
 
-    //? If the element is a svg, canvas, or table, we don't need to go deeper
-    if (attributes.should_screenshot) {
+    //? If the element is a canvas, or table, we don't need to go deeper
+    if (attributes.should_screenshot && attributes.tagName !== 'svg') {
       continue;
     }
 

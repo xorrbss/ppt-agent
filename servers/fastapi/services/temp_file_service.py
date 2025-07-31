@@ -1,8 +1,8 @@
 import os
-import uuid
 from typing import Optional, Union
 
 from utils.get_env import get_temp_directory_env
+from utils.randomizers import get_random_uuid
 
 
 class TempFileService:
@@ -14,7 +14,7 @@ class TempFileService:
         os.makedirs(self.base_dir, exist_ok=True)
 
     def create_dir_in_dir(self, base_dir: str, dir_name: Optional[str] = None) -> str:
-        temp_dir = os.path.join(base_dir, dir_name if dir_name else str(uuid.uuid4()))
+        temp_dir = os.path.join(base_dir, dir_name if dir_name else get_random_uuid())
         os.makedirs(temp_dir, exist_ok=True)
         return temp_dir
 

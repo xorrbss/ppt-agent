@@ -3,11 +3,10 @@ import json
 import os
 import random
 from typing import Annotated, List, Literal, Optional
-import uuid
-from annotated_types import Len
-from fastapi import APIRouter, Body, File, HTTPException, UploadFile
+from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
-from sqlalchemy import delete
+from sqlalchemy import String, cast, delete
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from constants.documents import UPLOAD_ACCEPTED_FILE_TYPES
 from models.presentation_and_path import PresentationPathAndEditPath
@@ -29,7 +28,7 @@ from utils.llm_calls.generate_presentation_outlines import generate_ppt_outline
 from models.sql.slide import SlideModel
 from models.sse_response import SSECompleteResponse, SSEResponse
 from services import TEMP_FILE_SERVICE
-from services.database import get_sql_session
+from services.database import get_async_session
 from services.documents_loader import DocumentsLoader
 from models.sql.presentation import PresentationModel
 from services.pptx_presentation_creator import PptxPresentationCreator
@@ -49,57 +48,58 @@ PRESENTATION_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
 
 
 @PRESENTATION_ROUTER.get("", response_model=PresentationWithSlides)
-def get_presentation(id: str):
-    with get_sql_session() as sql_session:
-        presentation = sql_session.get(PresentationModel, id)
-        if not presentation:
-            raise HTTPException(404, "Presentation not found")
-        slides = sql_session.exec(
-            select(SlideModel)
-            .where(SlideModel.presentation == id)
-            .order_by(SlideModel.index)
-        )
-        return PresentationWithSlides(
-            **presentation.model_dump(),
-            slides=slides,
-        )
+async def get_presentation(
+    id: str, sql_session: AsyncSession = Depends(get_async_session)
+):
+    presentation = await sql_session.get(PresentationModel, id)
+    if not presentation:
+        raise HTTPException(404, "Presentation not found")
+    slides = await sql_session.scalars(
+        select(SlideModel)
+        .where(SlideModel.presentation == id)
+        .order_by(SlideModel.index)
+    )
+    return PresentationWithSlides(
+        **presentation.model_dump(),
+        slides=slides,
+    )
 
 
 @PRESENTATION_ROUTER.delete("", status_code=204)
-def delete_presentation(id: str):
-    with get_sql_session() as sql_session:
-        presentation = sql_session.get(PresentationModel, id)
-        if not presentation:
-            raise HTTPException(404, "Presentation not found")
-        slides = sql_session.exec(
-            select(SlideModel).where(SlideModel.presentation == id)
-        ).all()
-        for slide in slides:
-            sql_session.delete(slide)
-        sql_session.delete(presentation)
-        sql_session.commit()
+async def delete_presentation(
+    id: str, sql_session: AsyncSession = Depends(get_async_session)
+):
+    presentation = await sql_session.get(PresentationModel, id)
+    if not presentation:
+        raise HTTPException(404, "Presentation not found")
+
+    await sql_session.execute(delete(SlideModel).where(SlideModel.presentation == id))
+    await sql_session.delete(presentation)
+    await sql_session.commit()
 
 
 @PRESENTATION_ROUTER.get("/all", response_model=List[PresentationWithSlides])
-def get_all_presentations():
-    with get_sql_session() as sql_session:
-        presentations_with_slides = []
-        presentations = sql_session.exec(select(PresentationModel))
-        for presentation in presentations:
-            slides = sql_session.exec(
-                select(SlideModel)
-                .where(SlideModel.presentation == presentation.id)
-                .where(SlideModel.index == 0)
-            ).all()
-            if not slides:
-                continue
-            presentations_with_slides.append(
-                PresentationWithSlides(
-                    **presentation.model_dump(),
-                    slides=slides,
-                )
-            )
-        return presentations_with_slides
+async def get_all_presentations(sql_session: AsyncSession = Depends(get_async_session)):
+    presentations_with_slides = []
+    presentations = await sql_session.scalars(select(PresentationModel))
+
+    async def inner(presentation: PresentationModel, sql_session: AsyncSession):
+        first_slide = await sql_session.scalar(
+            select(SlideModel)
+            .where(SlideModel.presentation == presentation.id)
+            .where(SlideModel.index == 0)
+        )
+        if not first_slide:
+            return None
+        return PresentationWithSlides(
+            **presentation.model_dump(),
+            slides=[first_slide],
+        )
+
+    tasks = [inner(p, sql_session) for p in presentations]
+    results = await asyncio.gather(*tasks)
+    presentations_with_slides = [r for r in results if r is not None]
+    return presentations_with_slides
 
 
 @PRESENTATION_ROUTER.post("/create", response_model=PresentationModel)
@@ -108,8 +108,9 @@ async def create_presentation(
     n_slides: Annotated[int, Body()],
     language: Annotated[str, Body()],
     file_paths: Annotated[Optional[List[str]], Body()] = None,
+    sql_session: AsyncSession = Depends(get_async_session),
 ):
-    presentation_id = str(uuid.uuid4())
+    presentation_id = get_random_uuid()
 
     summary = None
     if file_paths:
@@ -127,10 +128,8 @@ async def create_presentation(
         summary=summary,
     )
 
-    with get_sql_session() as sql_session:
-        sql_session.add(presentation)
-        sql_session.commit()
-        sql_session.refresh(presentation)
+    sql_session.add(presentation)
+    await sql_session.commit()
 
     return presentation
 
@@ -141,12 +140,14 @@ async def prepare_presentation(
     outlines: Annotated[List[SlideOutlineModel], Body()],
     layout: Annotated[PresentationLayoutModel, Body()],
     title: Annotated[Optional[str], Body()] = None,
+    sql_session: AsyncSession = Depends(get_async_session),
 ):
     if not outlines:
         raise HTTPException(status_code=400, detail="Outlines are required")
 
-    with get_sql_session() as sql_session:
-        presentation = sql_session.get(PresentationModel, presentation_id)
+    presentation = await sql_session.get(PresentationModel, presentation_id)
+    if not presentation:
+        raise HTTPException(status_code=404, detail="Presentation not found")
 
     total_slide_layouts = len(layout.slides)
     total_outlines = len(outlines)
@@ -170,34 +171,33 @@ async def prepare_presentation(
         if presentation_structure.slides[index] >= total_slide_layouts:
             presentation_structure.slides[index] = random_slide_index
 
-    with get_sql_session() as sql_session:
-        sql_session.add(presentation)
-        presentation.outlines = [each.model_dump() for each in outlines]
-        presentation.title = title or presentation.title
-        presentation.set_layout(layout)
-        presentation.set_structure(presentation_structure)
-        sql_session.commit()
-        sql_session.refresh(presentation)
+    sql_session.add(presentation)
+    presentation.outlines = [each.model_dump() for each in outlines]
+    presentation.title = title or presentation.title
+    presentation.set_layout(layout)
+    presentation.set_structure(presentation_structure)
+    await sql_session.commit()
 
     return presentation
 
 
 @PRESENTATION_ROUTER.get("/stream", response_model=PresentationWithSlides)
-async def stream_presentation(presentation_id: str):
-    with get_sql_session() as sql_session:
-        presentation = sql_session.get(PresentationModel, presentation_id)
-        if not presentation:
-            raise HTTPException(status_code=404, detail="Presentation not found")
-        if not presentation.structure:
-            raise HTTPException(
-                status_code=400,
-                detail="Presentation not prepared for stream",
-            )
-        if not presentation.outlines:
-            raise HTTPException(
-                status_code=400,
-                detail="Outlines can not be empty",
-            )
+async def stream_presentation(
+    presentation_id: str, sql_session: AsyncSession = Depends(get_async_session)
+):
+    presentation = await sql_session.get(PresentationModel, presentation_id)
+    if not presentation:
+        raise HTTPException(status_code=404, detail="Presentation not found")
+    if not presentation.structure:
+        raise HTTPException(
+            status_code=400,
+            detail="Presentation not prepared for stream",
+        )
+    if not presentation.outlines:
+        raise HTTPException(
+            status_code=400,
+            detail="Outlines can not be empty",
+        )
 
     image_generation_service = ImageGenerationService(get_images_directory())
     icon_finder_service = IconFinderService()
@@ -218,7 +218,7 @@ async def stream_presentation(presentation_id: str):
         for i, slide_layout_index in enumerate(structure.slides):
             slide_layout = layout.slides[slide_layout_index]
             slide_content = await get_slide_content_from_type_and_outline(
-                slide_layout, outline.slides[i]
+                slide_layout, outline.slides[i], presentation.language
             )
             slide = SlideModel(
                 presentation=presentation_id,
@@ -254,14 +254,10 @@ async def stream_presentation(presentation_id: str):
         for assets_list in generated_assets_lists:
             generated_assets.extend(assets_list)
 
-        with get_sql_session() as sql_session:
-            sql_session.add(presentation)
-            sql_session.add_all(slides)
-            sql_session.add_all(generated_assets)
-            sql_session.commit()
-            sql_session.refresh(presentation)
-            for each_slide in slides:
-                sql_session.refresh(each_slide)
+        sql_session.add(presentation)
+        sql_session.add_all(slides)
+        sql_session.add_all(generated_assets)
+        await sql_session.commit()
 
         response = PresentationWithSlides(
             **presentation.model_dump(),
@@ -277,25 +273,22 @@ async def stream_presentation(presentation_id: str):
 
 
 @PRESENTATION_ROUTER.put("/update", response_model=PresentationWithSlides)
-def update_presentation(
+async def update_presentation(
     presentation_with_slides: Annotated[PresentationWithSlides, Body()],
+    sql_session: AsyncSession = Depends(get_async_session),
 ):
     updated_presentation = presentation_with_slides.to_presentation_model()
     updated_slides = presentation_with_slides.slides
-    with get_sql_session() as sql_session:
-        presentation = sql_session.get(PresentationModel, updated_presentation.id)
-        if not presentation:
-            raise HTTPException(status_code=404, detail="Presentation not found")
-        presentation.sqlmodel_update(updated_presentation)
+    presentation = await sql_session.get(PresentationModel, updated_presentation.id)
+    if not presentation:
+        raise HTTPException(status_code=404, detail="Presentation not found")
+    presentation.sqlmodel_update(updated_presentation)
 
-        sql_session.exec(
-            delete(SlideModel).where(SlideModel.presentation == updated_presentation.id)
-        )
-        sql_session.add_all(updated_slides)
-        sql_session.commit()
-        sql_session.refresh(presentation)
-        for slide in updated_slides:
-            sql_session.refresh(slide)
+    await sql_session.execute(
+        delete(SlideModel).where(SlideModel.presentation == updated_presentation.id)
+    )
+    sql_session.add_all(updated_slides)
+    await sql_session.commit()
 
     return PresentationWithSlides(
         **presentation.model_dump(),
@@ -304,7 +297,9 @@ def update_presentation(
 
 
 @PRESENTATION_ROUTER.post("/export/pptx", response_model=str)
-async def create_pptx(pptx_model: Annotated[PptxPresentationModel, Body()]):
+async def create_pptx(
+    pptx_model: Annotated[PptxPresentationModel, Body()],
+):
     temp_dir = TEMP_FILE_SERVICE.create_temp_dir()
 
     pptx_creator = PptxPresentationCreator(pptx_model, temp_dir)
@@ -327,6 +322,7 @@ async def generate_presentation_api(
     layout: Annotated[str, Body()] = "general",
     files: Annotated[Optional[List[UploadFile]], File()] = None,
     export_as: Annotated[Literal["pptx", "pdf"], Body()] = "pptx",
+    sql_session: AsyncSession = Depends(get_async_session),
 ):
     validate_files(files, True, True, 50, UPLOAD_ACCEPTED_FILE_TYPES)
 
@@ -369,12 +365,12 @@ async def generate_presentation_api(
     print(f"Generated {total_outlines} outlines for the presentation")
 
     # 4. Parse Layouts
-    layout = await get_layout_by_name(layout)
-    total_slide_layouts = len(layout.slides)
+    layout_model = await get_layout_by_name(layout)
+    total_slide_layouts = len(layout_model.slides)
 
     # 5. Generate Structure
-    if layout.ordered:
-        presentation_structure = layout.to_presentation_structure()
+    if layout_model.ordered:
+        presentation_structure = layout_model.to_presentation_structure()
     else:
         presentation_structure: PresentationStructureModel = (
             await generate_presentation_structure(
@@ -383,7 +379,7 @@ async def generate_presentation_api(
                     slides=outlines,
                     notes=presentation_content.notes,
                 ),
-                presentation_layout=layout,
+                presentation_layout=layout_model,
             )
         )
 
@@ -406,7 +402,7 @@ async def generate_presentation_api(
         summary=summary,
         outlines=[each.model_dump() for each in outlines],
         notes=presentation_content.notes,
-        layout=layout.model_dump(),
+        layout=layout_model.model_dump(),
         structure=presentation_structure.model_dump(),
     )
 
@@ -418,14 +414,14 @@ async def generate_presentation_api(
     slides: List[SlideModel] = []
     slide_contents: List[dict] = []
     for i, slide_layout_index in enumerate(presentation_structure.slides):
-        slide_layout = layout.slides[slide_layout_index]
+        slide_layout = layout_model.slides[slide_layout_index]
         print(f"Generating content for slide {i} with layout {slide_layout.id}")
         slide_content = await get_slide_content_from_type_and_outline(
-            slide_layout, outlines[i]
+            slide_layout, outlines[i], language
         )
         slide = SlideModel(
             presentation=presentation_id,
-            layout_group=layout.name,
+            layout_group=layout_model.name,
             layout=slide_layout.id,
             index=i,
             content=slide_content,
@@ -444,11 +440,10 @@ async def generate_presentation_api(
         generated_assets.extend(assets_list)
 
     # 8. Save PresentationModel and Slides
-    with get_sql_session() as sql_session:
-        sql_session.add(presentation)
-        sql_session.add_all(slides)
-        sql_session.add_all(generated_assets)
-        sql_session.commit()
+    sql_session.add(presentation)
+    sql_session.add_all(slides)
+    sql_session.add_all(generated_assets)
+    await sql_session.commit()
 
     # 9. Export
     presentation_and_path = await export_presentation(
@@ -464,14 +459,14 @@ async def generate_presentation_api(
 @PRESENTATION_ROUTER.post("/from-template", response_model=PresentationPathAndEditPath)
 async def from_template(
     data: Annotated[GetPresentationUsingTemplateRequest, Body()],
+    sql_session: AsyncSession = Depends(get_async_session),
 ):
-    with get_sql_session() as sql_session:
-        presentation = sql_session.get(PresentationModel, data.presentation_id)
-        if not presentation:
-            raise HTTPException(status_code=404, detail="Presentation not found")
-        slides = sql_session.exec(
-            select(SlideModel).where(SlideModel.presentation == data.presentation_id)
-        ).all()
+    presentation = await sql_session.get(PresentationModel, data.presentation_id)
+    if not presentation:
+        raise HTTPException(status_code=404, detail="Presentation not found")
+    slides = await sql_session.scalars(
+        select(SlideModel).where(SlideModel.presentation == data.presentation_id)
+    )
 
     new_presentation = presentation.get_new_presentation()
     new_slides = []
@@ -485,11 +480,9 @@ async def from_template(
             each_slide.get_new_slide(new_presentation.id, updated_content)
         )
 
-    with get_sql_session() as sql_session:
-        sql_session.add(new_presentation)
-        sql_session.add_all(new_slides)
-        sql_session.commit()
-        sql_session.refresh(new_presentation)
+    sql_session.add(new_presentation)
+    sql_session.add_all(new_slides)
+    await sql_session.commit()
 
     presentation_and_path = await export_presentation(
         new_presentation.id, new_presentation.title, data.export_as

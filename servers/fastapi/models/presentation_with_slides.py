@@ -21,7 +21,7 @@ class PresentationWithSlides(BaseModel):
     summary: Optional[str]
     created_at: datetime
     updated_at: datetime
-    layout: PresentationLayoutModel
+    layout: Optional[PresentationLayoutModel]
     structure: Optional[PresentationStructureModel]
     slides: List[SlideModel]
 

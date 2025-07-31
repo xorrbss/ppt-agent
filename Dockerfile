@@ -2,24 +2,15 @@ FROM python:3.11-slim-bookworm
 
 # Install Node.js and npm
 RUN apt-get update && apt-get install -y \
-    nodejs \  
-    npm \
+   
     nginx \
     curl \
-    redis-server \
-    default-libmysqlclient-dev \
-    build-essential \
-    pkg-config \
-    libreoffice \
-    fontconfig \
-    imagemagick
+    redis-server
 
+    # Install Node.js 20 using NodeSource repository
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs
 
-    RUN sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /etc/ImageMagick-6/policy.xml
-
-# Create fonts directory and set permissions
-RUN mkdir -p /usr/share/fonts/truetype && \
-    chmod 755 /usr/share/fonts/truetype
 
 # Create a working directory
 WORKDIR /app  

@@ -1,6 +1,5 @@
 import os
 from typing import List, Optional
-import uuid
 from lxml import etree
 
 from pptx import Presentation
@@ -41,6 +40,7 @@ from utils.image_utils import (
     round_image_corners,
     set_image_opacity,
 )
+from utils.randomizers import get_random_uuid
 
 BLANK_SLIDE_LAYOUT = 6
 
@@ -74,9 +74,9 @@ class PptxPresentationCreator:
                     image_path = each_shape.picture.path
                     if image_path.startswith("http"):
                         if "app_data/" in image_path:
-                            relative_path = image_path.split("/app_data/")[1]
+                            relative_path = image_path.split("app_data/")[1]
                             each_shape.picture.path = os.path.join(
-                                "app_data", relative_path
+                                "/app_data", relative_path
                             )
                             each_shape.picture.is_network = False
                             continue
@@ -89,9 +89,9 @@ class PptxPresentationCreator:
                     image_path = each_shape.picture.path
                     if image_path.startswith("http"):
                         if "app_data" in image_path:
-                            relative_path = image_path.split("/app_data/")[1]
+                            relative_path = image_path.split("app_data/")[1]
                             each_shape.picture.path = os.path.join(
-                                "app_data", relative_path
+                                "/app_data", relative_path
                             )
                             each_shape.picture.is_network = False
                             continue
@@ -210,7 +210,7 @@ class PptxPresentationCreator:
                 image = invert_image(image)
             if picture_model.opacity:
                 image = set_image_opacity(image, picture_model.opacity)
-            image_path = os.path.join(self._temp_dir, f"{str(uuid.uuid4())}.png")
+            image_path = os.path.join(self._temp_dir, f"{get_random_uuid()}.png")
             image.save(image_path)
 
         margined_position = self.get_margined_position(
