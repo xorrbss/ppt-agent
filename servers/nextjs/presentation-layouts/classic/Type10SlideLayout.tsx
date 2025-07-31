@@ -37,16 +37,16 @@ const type10SlideSchema = z.object({
     })).min(2).max(3).default(() => [
         {
             icon: {
-                icon_url_: '/static/icons/placeholder.png',
-                icon_query_: 'A beautiful road in the mountains'
+                __icon_url__: '/static/icons/placeholder.png',
+                __icon_query__: 'A beautiful road in the mountains'
             },
             heading: 'First Key Point',
             description: 'Detailed explanation of the first important point that supports the main topic'
         },
         {
             icon: {
-                icon_url_: '/static/icons/placeholder.png',
-                icon_query_: 'A beautiful road in the mountains'
+                __icon_url__: '/static/icons/placeholder.png',
+                __icon_query__: 'A beautiful road in the mountains'
             },
             heading: 'Second Key Point',
             description: 'Detailed explanation of the second important point with relevant information'
@@ -240,9 +240,9 @@ const Type10SlideLayout: React.FC<Type10SlideLayoutProps> = ({ data: slideData }
                                 <div className="flex gap-6">
                                     <div className="w-[48px] h-[48px]">
                                         <div className="w-full h-full bg-blue-600 rounded-lg flex items-center justify-center overflow-hidden">
-                                            {item.icon?.icon_url_ && <img
-                                                src={item.icon?.icon_url_ || ''}
-                                                alt={item.icon?.icon_query_ || item.heading}
+                                            {item.icon?.__icon_url__ && <img
+                                                src={item.icon?.__icon_url__ || ''}
+                                                alt={item.icon?.__icon_query__ || item.heading}
                                                 className="w-full h-full object-cover"
                                             />}
                                         </div>

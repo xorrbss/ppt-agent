@@ -40,8 +40,8 @@ export const Schema = z.object({
         }),
 
     supportingVisual: ImageSchema.default({
-        image_url_: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-        image_prompt_: "Business analytics dashboard with charts and data visualization"
+        __image_url__: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+        __image_prompt__: "Business analytics dashboard with charts and data visualization"
     }).meta({
         description: "ADAPT the image prompt to match the presentation topic: For global warming: 'Climate monitoring station with temperature sensors and weather equipment', 'Scientists analyzing ice core data in Arctic research facility'. For healthcare: 'Medical monitoring equipment displaying patient vital signs', 'Healthcare analytics dashboard showing treatment outcomes'. For education: 'Educational assessment data on computer screens', 'Students using digital learning platforms'.",
     }),
@@ -148,12 +148,12 @@ const StatisticSlide = ({ data }: { data: Partial<SchemaType> }) => {
                     </div>
 
                     {/* Business Image */}
-                    {supportingVisual?.image_url_ && (
+                    {supportingVisual?.__image_url__ && (
                         <div className="flex-1 flex items-end">
                             <div className="w-full h-48">
                                 <img
-                                    src={supportingVisual.image_url_}
-                                    alt={supportingVisual.image_prompt_}
+                                    src={supportingVisual.__image_url__}
+                                    alt={supportingVisual.__image_prompt__}
                                     className="w-full h-full object-cover rounded-lg"
                                 />
                             </div>

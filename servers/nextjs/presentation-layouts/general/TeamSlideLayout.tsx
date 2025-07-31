@@ -32,8 +32,8 @@ const teamSlideSchema = z.object({
             position: 'CEO',
             description: 'Strategic leader with 15+ years experience in digital transformation and business growth.',
             image: {
-                image_url_: 'https://images.unsplash.com/photo-1494790108755-2616b612994a?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
-                image_prompt_: 'Professional businesswoman CEO headshot'
+                __image_url__: 'https://images.unsplash.com/photo-1494790108755-2616b612994a?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
+                __image_prompt__: 'Professional businesswoman CEO headshot'
             }
         },
         {
@@ -41,8 +41,8 @@ const teamSlideSchema = z.object({
             position: 'CTO',
             description: 'Technology expert specializing in scalable solutions and innovative software architecture.',
             image: {
-                image_url_: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
-                image_prompt_: 'Professional businessman CTO headshot'
+                __image_url__: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
+                __image_prompt__: 'Professional businessman CTO headshot'
             }
         },
         {
@@ -50,8 +50,8 @@ const teamSlideSchema = z.object({
             position: 'COO',
             description: 'Operations leader focused on efficiency, process optimization, and team development.',
             image: {
-                image_url_: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
-                image_prompt_: 'Professional businessman COO headshot'
+                __image_url__: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
+                __image_prompt__: 'Professional businessman COO headshot'
             }
         },
         {
@@ -59,8 +59,8 @@ const teamSlideSchema = z.object({
             position: 'CMO',
             description: 'Marketing strategist with expertise in brand development and customer engagement.',
             image: {
-                image_url_: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
-                image_prompt_: 'Professional businesswoman CMO headshot'
+                __image_url__: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
+                __image_prompt__: 'Professional businesswoman CMO headshot'
             }
         }
     ]).meta({
@@ -138,8 +138,8 @@ const TeamSlideLayout: React.FC<TeamSlideLayoutProps> = ({ data: slideData }) =>
                                     {/* Member Photo */}
                                     <div className="w-32 h-32 mx-auto rounded-lg overflow-hidden shadow-md">
                                         <img
-                                            src={member.image.image_url_ || ''}
-                                            alt={member.image.image_prompt_ || member.name}
+                                            src={member.image.__image_url__ || ''}
+                                            alt={member.image.__image_prompt__ || member.name}
                                             className="w-full h-full object-cover"
                                         />
                                     </div>

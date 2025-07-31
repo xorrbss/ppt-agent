@@ -31,15 +31,15 @@ export const Schema = z.object({
     }),
 
     chartImage: ImageSchema.default({
-        image_url_: "https://example.com/quarterly-chart.png",
-        image_prompt_: "Quarterly performance chart showing upward trend"
+        __image_url__: "https://example.com/quarterly-chart.png",
+        __image_prompt__: "Quarterly performance chart showing upward trend"
     }).meta({
         description: "Main performance chart",
     }),
 
     trendIcon: IconSchema.default({
-        icon_url_: "/static/icons/placeholder.png",
-        icon_query_: "upward trend arrow icon"
+        __icon_url__: "/static/icons/placeholder.png",
+        __icon_query__: "upward trend arrow icon"
     }).meta({
         description: "Trend indicator icon",
     }),
@@ -57,11 +57,11 @@ export default function ExampleSlideLayout({ data }: { data: SchemaType }) {
             </header>
 
             <main className="slide-content flex-1 flex">
-                {chartImage?.image_url_ && (
+                {chartImage?.__image_url__ && (
                     <div className="chart-section flex-1">
                         <img
-                            src={chartImage.image_url_}
-                            alt={chartImage.image_prompt_}
+                            src={chartImage.__image_url__}
+                            alt={chartImage.__image_prompt__}
                             className="w-full h-auto max-h-96 object-contain"
                         />
                     </div>
@@ -74,9 +74,9 @@ export default function ExampleSlideLayout({ data }: { data: SchemaType }) {
                             <div key={index} className="metric-item mb-4 p-3 bg-gray-50 rounded">
                                 <div className="flex items-center justify-between">
                                     <span className="font-medium">{metric.label}</span>
-                                    {trendIcon?.icon_url_ && (
+                                    {trendIcon?.__icon_url__ && (
                                         <img
-                                            src={trendIcon.icon_url_}
+                                            src={trendIcon.__icon_url__}
                                             alt={metric.trend}
                                             className="w-6 h-6"
                                         />

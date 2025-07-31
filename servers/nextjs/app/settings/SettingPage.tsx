@@ -29,7 +29,6 @@ const SettingsPage = () => {
   const userConfigState = useSelector((state: RootState) => state.userConfig);
   const [llmConfig, setLlmConfig] = useState<LLMConfig>(userConfigState.llm_config);
   const canChangeKeys = userConfigState.can_change_keys;
-  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [buttonState, setButtonState] = useState<ButtonState>({
     isLoading: false,
     isDisabled: false,
@@ -55,16 +54,13 @@ const SettingsPage = () => {
 
   const handleSaveConfig = async () => {
     try {
-      setIsLoading(true);
       setButtonState(prev => ({
         ...prev,
         isLoading: true,
         isDisabled: true,
         text: "Saving Configuration..."
       }));
-
       await handleSaveLLMConfig(llmConfig);
-
       if (llmConfig.LLM === "ollama" && llmConfig.OLLAMA_MODEL) {
         const isPulled = await checkIfSelectedOllamaModelIsPulled(llmConfig.OLLAMA_MODEL);
         if (!isPulled) {
@@ -72,24 +68,16 @@ const SettingsPage = () => {
           await handleModelDownload();
         }
       }
-
       toast.info("Configuration saved successfully");
-      setIsLoading(false);
       setButtonState(prev => ({
         ...prev,
         isLoading: false,
         isDisabled: false,
         text: "Save Configuration"
       }));
-      router.back();
+      router.push("/upload");
     } catch (error) {
-      console.error("Error:", error);
-      toast.info(
-        error instanceof Error
-          ? error.message
-          : "Failed to save configuration"
-      );
-      setIsLoading(false);
+      toast.info(error instanceof Error ? error.message : "Failed to save configuration");
       setButtonState(prev => ({
         ...prev,
         isLoading: false,
@@ -102,8 +90,8 @@ const SettingsPage = () => {
   const handleModelDownload = async () => {
     try {
       await pullOllamaModel(llmConfig.OLLAMA_MODEL!, setDownloadingModel);
-    } catch (error) {
-      console.error("Error downloading model:", error);
+    }
+    finally {
       setDownloadingModel(null);
       setShowDownloadModal(false);
     }

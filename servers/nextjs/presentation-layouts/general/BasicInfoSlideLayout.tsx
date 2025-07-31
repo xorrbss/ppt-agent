@@ -14,8 +14,8 @@ const basicInfoSlideSchema = z.object({
         description: "Main description text content",
     }),
     image: ImageSchema.default({
-        image_url_: 'https://images.unsplash.com/photo-1552664730-d307ca884978?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80',
-        image_prompt_: 'Business team in meeting room discussing product features and solutions'
+        __image_url__: 'https://images.unsplash.com/photo-1552664730-d307ca884978?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80',
+        __image_prompt__: 'Business team in meeting room discussing product features and solutions'
     }).meta({
         description: "Supporting image for the slide",
     })
@@ -54,8 +54,8 @@ const BasicInfoSlideLayout: React.FC<BasicInfoSlideLayoutProps> = ({ data: slide
                     <div className="flex-1 flex items-center justify-center pr-8">
                         <div className="w-full max-w-lg h-80 rounded-2xl overflow-hidden shadow-lg">
                             <img
-                                src={slideData?.image?.image_url_ || ''}
-                                alt={slideData?.image?.image_prompt_ || slideData?.title || ''}
+                                src={slideData?.image?.__image_url__ || ''}
+                                alt={slideData?.image?.__image_prompt__ || slideData?.title || ''}
                                 className="w-full h-full object-cover"
                             />
                         </div>

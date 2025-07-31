@@ -25,24 +25,24 @@ const type3SlideSchema = z.object({
             heading: 'First Feature',
             description: 'Description for the first featured item with detailed information',
             image: {
-                image_url_: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
-                image_prompt_: 'A beautiful road in the mountains'
+                __image_url__: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/road-1072823_1280.jpg',
+                __image_prompt__: 'A beautiful road in the mountains'
             }
         },
         {
             heading: 'Second Feature',
             description: 'Description for the second featured item with relevant details',
             image: {
-                image_url_: 'https://cdn.pixabay.com/photo/2016/02/19/11/19/office-1209640_1280.jpg',
-                image_prompt_: 'Modern office workspace'
+                __image_url__: 'https://cdn.pixabay.com/photo/2016/02/19/11/19/office-1209640_1280.jpg',
+                __image_prompt__: 'Modern office workspace'
             }
         },
         {
             heading: 'Third Feature',
             description: 'Description for the third featured item with important points',
             image: {
-                image_url_: 'https://cdn.pixabay.com/photo/2017/08/10/08/47/laptop-2619235_1280.jpg',
-                image_prompt_: 'Laptop with code on screen'
+                __image_url__: 'https://cdn.pixabay.com/photo/2017/08/10/08/47/laptop-2619235_1280.jpg',
+                __image_prompt__: 'Laptop with code on screen'
             }
         }
     ]).meta({
@@ -94,8 +94,8 @@ const Type3SlideLayout: React.FC<Type3SlideLayoutProps> = ({ data: slideData }) 
                         {/* Image */}
                         <div className="max-md:h-[140px] max-lg:h-[180px] h-48 w-full">
                             <img
-                                src={item.image?.image_url_ || ''}
-                                alt={item.image?.image_prompt_ || item.heading}
+                                src={item.image?.__image_url__ || ''}
+                                alt={item.image?.__image_prompt__ || item.heading}
                                 className="w-full h-full object-cover"
                             />
                         </div>

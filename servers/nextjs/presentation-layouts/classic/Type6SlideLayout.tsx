@@ -23,32 +23,32 @@ const type6SlideSchema = z.object({
             heading: 'Professional Service',
             description: 'High-quality professional services tailored to your specific needs and requirements',
             icon: {
-                icon_url_: '/static/icons/placeholder.png',
-                icon_query_: 'Professional Service'
+                __icon_url__: '/static/icons/placeholder.png',
+                __icon_query__: 'Professional Service'
             }
         },
         {
             heading: 'Expert Consultation',
             description: 'Expert advice and consultation from experienced professionals in the field',
             icon: {
-                icon_url_: '/static/icons/placeholder.png',
-                icon_query_: 'Expert Consultation'
+                __icon_url__: '/static/icons/placeholder.png',
+                __icon_query__: 'Expert Consultation'
             }
         },
         {
             heading: 'Quality Assurance',
             description: 'Comprehensive quality assurance processes to ensure excellent results',
             icon: {
-                icon_url_: '/static/icons/placeholder.png',
-                icon_query_: 'Quality Assurance'
+                __icon_url__: '/static/icons/placeholder.png',
+                __icon_query__: 'Quality Assurance'
             }
         },
         {
             heading: 'Customer Support',
             description: 'Dedicated customer support available to assist you throughout the process',
             icon: {
-                icon_url_: '/static/icons/placeholder.png',
-                icon_query_: 'Customer Support'
+                __icon_url__: '/static/icons/placeholder.png',
+                __icon_query__: 'Customer Support'
             }
         }
     ]).meta({
@@ -94,7 +94,7 @@ const Type6SlideLayout: React.FC<Type6SlideLayoutProps> = ({ data: slideData }) 
                         <div className="flex items-start gap-2 mg:gap-4">
                             <div className="flex-shrink-0 lg:w-16">
                                 <div className="w-12 h-12 lg:w-16 lg:h-16 bg-blue-600 rounded-lg flex items-center justify-center text-white text-xl lg:text-2xl">
-                                    <img src={item.icon.icon_url_} className='w-full h-full object-contain' alt={item.icon.icon_query_} />
+                                    <img src={item.icon.__icon_url__} className='w-full h-full object-contain' alt={item.icon.__icon_query__} />
                                 </div>
                             </div>
                             <div>
@@ -125,7 +125,7 @@ const Type6SlideLayout: React.FC<Type6SlideLayoutProps> = ({ data: slideData }) 
                     >
                         <div className="text-center mb-4">
                             <div className="w-16 h-16 lg:w-20 lg:h-20 bg-blue-600 rounded-lg flex items-center justify-center text-white text-2xl lg:text-3xl mx-auto mb-4">
-                                <img src={item.icon.icon_url_} className='w-full h-full object-contain' alt={item.icon.icon_query_} />
+                                <img src={item.icon.__icon_url__} className='w-full h-full object-contain' alt={item.icon.__icon_query__} />
                             </div>
                         </div>
                         <div className="lg:space-y-4 mt-2 lg:mt-4">

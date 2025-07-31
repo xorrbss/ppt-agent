@@ -40,8 +40,8 @@ export const Schema = z.object({
     }),
 
     supportingVisual: ImageSchema.default({
-        image_url_: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-        image_prompt_: "Diverse team collaborating and planning together in modern workspace"
+        __image_url__: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+        __image_prompt__: "Diverse team collaborating and planning together in modern workspace"
     }).meta({
         description: "Visual that represents collaboration, vision, or organizational culture",
     }),
@@ -73,11 +73,11 @@ const WhatWeBelieveSlide = ({ data }: { data: Partial<SchemaType> }) => {
             <div className="h-full flex">
                 {/* Left Side - Image */}
                 <div className="w-2/5 relative">
-                    {supportingVisual?.image_url_ && (
+                    {supportingVisual?.__image_url__ && (
                         <div className="absolute inset-8 shadow-lg">
                             <img
-                                src={supportingVisual.image_url_}
-                                alt={supportingVisual.image_prompt_}
+                                src={supportingVisual.__image_url__}
+                                alt={supportingVisual.__image_prompt__}
                                 className="w-full h-full object-cover rounded-lg"
                             />
                         </div>

@@ -260,8 +260,8 @@ const presentationGenerationSlice = createSlice({
           // Preserve existing properties if the target already exists
           const updatedValue = {
             ...(target && typeof target === 'object' ? target : {}),
-            image_url_: url,
-            image_prompt_: promptText || (target?.image_prompt_) || ''
+            __image_url__: url,
+            __image_prompt__: promptText || (target?.__image_prompt__) || ''
           };
           
           if (isNaN(Number(finalKey))) {
@@ -359,8 +359,8 @@ const presentationGenerationSlice = createSlice({
           // Preserve existing properties if the target already exists
           const updatedValue = {
             ...(target && typeof target === 'object' ? target : {}),
-            icon_url_: url,
-            icon_query_: queryText || (target?.icon_query_) || ''
+            __icon_url__: url,
+            __icon_query__: queryText || (target?.__icon_query__) || ''
           };
           
           if (isNaN(Number(finalKey))) {

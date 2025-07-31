@@ -43,9 +43,9 @@ const problemStatementSlideSchema = z.object({
         description:
           "Businesses struggle to find digital tools that meet their needs, causing operational slowdowns.",
         icon: {
-          icon_url_:
+          __icon_url__:
             "/static/icons/placeholder.png",
-          icon_query_: "warning alert inefficiency",
+          __icon_query__: "warning alert inefficiency",
         },
       },
       {
@@ -53,9 +53,9 @@ const problemStatementSlideSchema = z.object({
         description:
           "Outdated systems increase expenses, while small businesses struggle to expand their market reach.",
         icon: {
-          icon_url_:
+          __icon_url__:
             "/static/icons/placeholder.png",
-          icon_query_: "trending up costs chart",
+          __icon_query__: "trending up costs chart",
         },
       },
       {
@@ -63,9 +63,9 @@ const problemStatementSlideSchema = z.object({
         description:
           "Businesses struggle to find digital tools that meet their needs, causing operational slowdowns.",
         icon: {
-          icon_url_:
+          __icon_url__:
             "/static/icons/placeholder.png",
-          icon_query_: "warning alert inefficiency",
+          __icon_query__: "warning alert inefficiency",
         },
       },
       {
@@ -73,9 +73,9 @@ const problemStatementSlideSchema = z.object({
         description:
           "Businesses struggle to find digital tools that meet their needs, causing operational slowdowns.",
         icon: {
-          icon_url_:
+          __icon_url__:
             "/static/icons/placeholder.png",
-          icon_query_: "warning alert inefficiency",
+          __icon_query__: "warning alert inefficiency",
         },
       },
     ])
@@ -150,10 +150,10 @@ const ProblemStatementSlideLayout: React.FC<
                   className="flex items-start gap-5 bg-white bg-opacity-5 rounded-lg p-5"
                 >
                   <div className="flex-shrink-0">
-                    {category.icon?.icon_url_ && (
+                    {category.icon?.__icon_url__ && (
                       <img
-                        src={category.icon?.icon_url_}
-                        alt={category.icon?.icon_query_}
+                        src={category.icon?.__icon_url__}
+                        alt={category.icon?.__icon_query__}
                         className="w-12 h-12"
                         style={{ filter: "invert(1)" }}
                       />

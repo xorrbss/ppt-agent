@@ -46,8 +46,8 @@ export const Schema = z.object({
     }),
 
     supportingVisual: ImageSchema.default({
-        image_url_: "https://images.unsplash.com/photo-1542744173-8e7e53415bb0?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-        image_prompt_: "Professional workspace showing analysis and problem-solving activities"
+        __image_url__: "https://images.unsplash.com/photo-1542744173-8e7e53415bb0?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+        __image_prompt__: "Professional workspace showing analysis and problem-solving activities"
     }).meta({
         description: "Visual that supports the problem discussion - could show analysis, challenges, or work environment",
     }),
@@ -129,11 +129,11 @@ const ProblemsSlide = ({ data }: { data: Partial<SchemaType> }) => {
                     )}
 
                     {/* Supporting Visual */}
-                    {supportingVisual?.image_url_ && (
+                    {supportingVisual?.__image_url__ && (
                         <div className="absolute top-8 right-8 bottom-20 left-4  shadow-lg">
                             <img
-                                src={supportingVisual.image_url_}
-                                alt={supportingVisual.image_prompt_}
+                                src={supportingVisual.__image_url__}
+                                alt={supportingVisual.__image_prompt__}
                                 className="w-full h-full object-cover rounded-lg"
                             />
                         </div>

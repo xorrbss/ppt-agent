@@ -64,24 +64,24 @@ const chartWithBulletsSlideSchema = z.object({
             title: 'Total Addressable Market',
             description: 'Companies can use TAM to plan future expansion and investment.',
             icon: {
-                icon_url_: '/static/icons/placeholder.png',
-                icon_query_: 'target market scope'
+                __icon_url__: '/static/icons/placeholder.png',
+                __icon_query__: 'target market scope'
             }
         },
         {
             title: 'Serviceable Available Market',
             description: 'Indicates more measurable market segments for sales efforts.',
             icon: {
-                icon_url_: '/static/icons/placeholder.png',
-                icon_query_: 'pie chart analysis'
+                __icon_url__: '/static/icons/placeholder.png',
+                __icon_query__: 'pie chart analysis'
             }
         },
         {
             title: 'Serviceable Obtainable Market',
             description: 'Help companies plan development strategies according to the market.',
             icon: {
-                icon_url_: '/static/icons/placeholder.png',
-                icon_query_: 'trending up growth'
+                __icon_url__: '/static/icons/placeholder.png',
+                __icon_query__: 'trending up growth'
             }
         }
     ]).meta({
@@ -270,8 +270,8 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
                                 <div className="flex items-center space-x-3 mb-3">
                                     <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
                                         <img
-                                            src={bullet.icon.icon_url_}
-                                            alt={bullet.icon.icon_query_}
+                                            src={bullet.icon.__icon_url__}
+                                            alt={bullet.icon.__icon_query__}
                                             className="w-5 h-5 object-contain brightness-0 invert"
                                         />
                                     </div>

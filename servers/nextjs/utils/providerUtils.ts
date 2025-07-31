@@ -1,5 +1,3 @@
-import { toast } from "sonner";
-
 export interface OllamaModel {
   label: string;
   value: string;
@@ -18,19 +16,37 @@ export interface DownloadingModel {
 
 export interface LLMConfig {
   LLM?: string;
+
+  // OpenAI
   OPENAI_API_KEY?: string;
+  OPENAI_MODEL?: string;
+
+  // Google
   GOOGLE_API_KEY?: string;
+  GOOGLE_MODEL?: string;
+
+  // Anthropic
   ANTHROPIC_API_KEY?: string;
   ANTHROPIC_MODEL?: string;
+
+  // Ollama
   OLLAMA_URL?: string;
   OLLAMA_MODEL?: string;
+
+  // Custom LLM
   CUSTOM_LLM_URL?: string;
   CUSTOM_LLM_API_KEY?: string;
   CUSTOM_MODEL?: string;
+
+  // Image providers
+  IMAGE_PROVIDER?: string;
   PEXELS_API_KEY?: string;
   PIXABAY_API_KEY?: string;
-  IMAGE_PROVIDER?: string;
+
+  // Extended reasoning
   EXTENDED_REASONING?: boolean;
+
+  // Only used in UI settings
   USE_CUSTOM_URL?: boolean;
 }
 
@@ -49,7 +65,9 @@ export const updateLLMConfig = (
 ): LLMConfig => {
   const fieldMappings: Record<string, keyof LLMConfig> = {
     openai_api_key: "OPENAI_API_KEY",
+    openai_model: "OPENAI_MODEL",
     google_api_key: "GOOGLE_API_KEY",
+    google_model: "GOOGLE_MODEL",
     anthropic_api_key: "ANTHROPIC_API_KEY",
     anthropic_model: "ANTHROPIC_MODEL",
     ollama_url: "OLLAMA_URL",
@@ -61,6 +79,7 @@ export const updateLLMConfig = (
     pixabay_api_key: "PIXABAY_API_KEY",
     image_provider: "IMAGE_PROVIDER",
     extended_reasoning: "EXTENDED_REASONING",
+    use_custom_url: "USE_CUSTOM_URL",
   };
 
   const configKey = fieldMappings[field];
@@ -92,53 +111,6 @@ export const changeProvider = (
   return newConfig;
 };
 
-/**
- * Fetches supported Ollama models
- */
-export const fetchOllamaModels = async (): Promise<OllamaModel[]> => {
-  try {
-    const response = await fetch("/api/v1/ppt/ollama/models/supported");
-    const models = await response.json();
-    return models || [];
-  } catch (error) {
-    console.error("Error fetching ollama models:", error);
-    return []; // Ensure we always return an empty array on error
-  }
-};
-
-/**
- * Fetches Ollama models and validates current selection
- * Returns models and updated config if needed
- */
-export const fetchOllamaModelsWithConfig = async (
-  config: LLMConfig
-): Promise<OllamaModelsResult> => {
-  try {
-    const models = await fetchOllamaModels();
-
-    // Check if currently selected model is still available
-    let updatedConfig: LLMConfig | undefined;
-    if (config.OLLAMA_MODEL && models && models.length > 0) {
-      const isModelAvailable = models.some(
-        (model: OllamaModel) => model.value === config.OLLAMA_MODEL
-      );
-      if (!isModelAvailable) {
-        updatedConfig = { ...config, OLLAMA_MODEL: "" };
-      }
-    }
-
-    return {
-      models,
-      updatedConfig
-    };
-  } catch (error) {
-    console.error("Error fetching ollama models:", error);
-    return {
-      models: [],
-      updatedConfig: { ...config, OLLAMA_MODEL: "" }
-    };
-  }
-};
 
 export const checkIfSelectedOllamaModelIsPulled = async (ollamaModel: string) => {
   try {
@@ -152,37 +124,6 @@ export const checkIfSelectedOllamaModelIsPulled = async (ollamaModel: string) =>
   }
 }
 
-/**
- * Fetches available custom models
- */
-export const fetchCustomModels = async (
-  url: string,
-  apiKey: string
-): Promise<string[]> => {
-  try {
-    const response = await fetch("/api/v1/ppt/custom_llm/models/available", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        url: url || "",
-        api_key: apiKey || "",
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    toast.info("Could not fetch custom models");
-    console.error("Error fetching custom models:", error);
-    throw error;
-  }
-};
 
 /**
  * Resets downloading model state
@@ -241,50 +182,3 @@ export const pullOllamaModel = async (
     }, 1000);
   });
 };
-
-/**
- * Sets Ollama configuration based on custom URL preference
- */
-export const setOllamaConfig = (
-  currentConfig: LLMConfig,
-  useCustomUrl: boolean
-): LLMConfig => {
-  let customUrl = "http://localhost:11434";
-  if (!useCustomUrl) {
-    return {
-      ...currentConfig,
-      OLLAMA_URL: customUrl,
-      USE_CUSTOM_URL: false,
-    };
-  } else {
-    return { ...currentConfig, USE_CUSTOM_URL: true, OLLAMA_URL: customUrl };
-  }
-};
-
-/**
- * Handles saving configuration with error handling
- */
-export const handleSaveConfiguration = async (
-  llmConfig: LLMConfig,
-  handleSaveLLMConfig: (config: LLMConfig) => Promise<void>,
-  pullOllamaModels?: () => Promise<void>
-): Promise<void> => {
-  try {
-    await handleSaveLLMConfig(llmConfig);
-    if (llmConfig.LLM === "ollama" && pullOllamaModels) {
-      await pullOllamaModels();
-    }
-    toast.success("Configuration saved successfully");
-  } catch (error) {
-    console.error("Error:", error);
-    toast.error(
-      error instanceof Error
-        ? error.message
-        : "Failed to save configuration",
-      {
-        description: "Failed to save configuration",
-      }
-    );
-    throw error;
-  }
-}; 

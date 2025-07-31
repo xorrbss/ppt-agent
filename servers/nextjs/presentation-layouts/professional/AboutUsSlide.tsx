@@ -39,8 +39,8 @@ export const Schema = z.object({
         }),
 
     featuredImage: ImageSchema.default({
-        image_url_: "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-        image_prompt_: "Professional business team analyzing data and working collaboratively"
+        __image_url__: "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+        __image_prompt__: "Professional business team analyzing data and working collaboratively"
     }).meta({
         description: "Primary visual that represents the organization's work or environment",
     }),
@@ -127,11 +127,11 @@ const AboutUsSlide = ({ data }: { data: Partial<SchemaType> }) => {
                     )}
 
                     {/* Business Image - Left positioned */}
-                    {featuredImage?.image_url_ && (
+                    {featuredImage?.__image_url__ && (
                         <div className="absolute right-36 top-1/2 -translate-y-1/2 h-[500px] w-[350px] z-20 shadow-lg">
                             <img
-                                src={featuredImage.image_url_}
-                                alt={featuredImage.image_prompt_}
+                                src={featuredImage.__image_url__}
+                                alt={featuredImage.__image_prompt__}
                                 className="w-full h-full object-cover"
                             />
                         </div>

@@ -42,12 +42,12 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
 
         const matches: { path: string; type: 'image' | 'icon'; data: any }[] = [];
 
-        // Check current level for image_url_ or icon_url_
-        if (data.image_url_ && targetUrl.includes(data.image_url_)) {
+        // Check current level for __image_url__ or __icon_url__
+        if (data.__image_url__ && targetUrl.includes(data.__image_url__)) {
             matches.push({ path, type: 'image', data });
         }
 
-        if (data.icon_url_ && targetUrl.includes(data.icon_url_)) {
+        if (data.__icon_url__ && targetUrl.includes(data.__icon_url__)) {
             matches.push({ path, type: 'icon', data });
         }
 
@@ -308,7 +308,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                 slideIndex,
                 dataPath: activeEditor.dataPath,
                 imageUrl: newImageUrl,
-                prompt: prompt || activeEditor.data?.image_prompt_ || ''
+                prompt: prompt || activeEditor.data?.__image_prompt__ || ''
             }));
             setActiveEditor(null);
         }
@@ -326,7 +326,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                 slideIndex,
                 dataPath: activeEditor.dataPath,
                 iconUrl: newIconUrl,
-                query: query || activeEditor.data?.icon_query_ || ''
+                query: query || activeEditor.data?.__icon_query__ || ''
             }));
 
 
@@ -361,7 +361,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                 <ImageEditor
                     initialImage={activeEditor.src}
                     slideIndex={slideIndex}
-                    promptContent={activeEditor.data?.image_prompt_ || ''}
+                    promptContent={activeEditor.data?.__image_prompt__ || ''}
                     imageIdx={0}
                     properties={null}
                     onClose={handleEditorClose}
@@ -374,7 +374,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
             {/* Render IconsEditor when an icon is being edited */}
             {activeEditor && activeEditor.type === 'icon' && (
                 <IconsEditor
-                    icon_prompt={activeEditor.data?.icon_query_ ? [activeEditor.data.icon_query_] : []}
+                    icon_prompt={activeEditor.data?.__icon_query__ ? [activeEditor.data.__icon_query__] : []}
                     onClose={handleEditorClose}
                     onIconChange={handleIconChange}
                 >

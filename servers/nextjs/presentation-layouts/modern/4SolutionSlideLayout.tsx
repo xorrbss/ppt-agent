@@ -49,8 +49,8 @@ const solutionSlideSchema = z.object({
         description:
           "Innovative and widely accepted. Innovative and widely accepted. Innovative and widely accepted.",
         icon: {
-          icon_query_: "market innovation",
-          icon_url_:
+          __icon_query__: "market innovation",
+          __icon_url__:
             "/static/icons/placeholder.png",
         },
       },
@@ -58,8 +58,8 @@ const solutionSlideSchema = z.object({
         title: "Industry",
         description: "Based on sound market decisions.",
         icon: {
-          icon_query_: "industry building",
-          icon_url_:
+          __icon_query__: "industry building",
+          __icon_url__:
             "/static/icons/placeholder.png",
         },
       },
@@ -67,8 +67,8 @@ const solutionSlideSchema = z.object({
         title: "SEM",
         description: "Driven by precise data and analysis.",
         icon: {
-          icon_query_: "SEM data analysis",
-          icon_url_:
+          __icon_query__: "SEM data analysis",
+          __icon_url__:
             "/static/icons/placeholder.png",
         },
       },
@@ -76,8 +76,8 @@ const solutionSlideSchema = z.object({
         title: "End User",
         description: "Focused on real user impact.",
         icon: {
-          icon_query_: "end user impact",
-          icon_url_:
+          __icon_query__: "end user impact",
+          __icon_url__:
             "/static/icons/placeholder.png",
         },
       },
@@ -140,10 +140,10 @@ const SolutionSlideLayout: React.FC<SolutionSlideLayoutProps> = ({
                 className="flex flex-col items-center text-center bg-[#F5F8FE] rounded-lg shadow px-3 py-4 "
               >
                 <div className="mb-2">
-                  {section?.icon?.icon_url_ && (
+                  {section?.icon?.__icon_url__ && (
                     <img
-                      src={section.icon.icon_url_}
-                      alt={section.icon.icon_query_}
+                      src={section.icon.__icon_url__}
+                      alt={section.icon.__icon_query__}
                       className="w-12 h-12 mb-2"
                     />
                   )}

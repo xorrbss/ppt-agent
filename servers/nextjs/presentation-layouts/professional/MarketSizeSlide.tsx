@@ -46,8 +46,8 @@ export const Schema = z.object({
     }),
 
     visualRepresentation: ImageSchema.default({
-        image_url_: "https://images.unsplash.com/photo-1597149962419-0d900ac2b46c?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-        image_prompt_: "World map showing global market reach and geographic distribution"
+        __image_url__: "https://images.unsplash.com/photo-1597149962419-0d900ac2b46c?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+        __image_prompt__: "World map showing global market reach and geographic distribution"
     }).meta({
         description: "Visual that represents market scope - could be a world map, chart, or geographic visualization",
     }),
@@ -135,11 +135,11 @@ const MarketSizeSlide = ({ data }: { data: Partial<SchemaType> }) => {
                     )}
 
                     {/* Visual Representation */}
-                    {visualRepresentation?.image_url_ && (
+                    {visualRepresentation?.__image_url__ && (
                         <div className="absolute inset-8  shadow-lg">
                             <img
-                                src={visualRepresentation.image_url_}
-                                alt={visualRepresentation.image_prompt_}
+                                src={visualRepresentation.__image_url__}
+                                alt={visualRepresentation.__image_prompt__}
                                 className="w-full h-full object-cover rounded-lg"
                             />
                         </div>

@@ -14,8 +14,8 @@ const bulletWithIconsSlideSchema = z.object({
         description: "Main description text explaining the problem or topic",
     }),
     image: ImageSchema.default({
-        image_url_: 'https://images.unsplash.com/photo-1552664730-d307ca884978?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80',
-        image_prompt_: 'Business people analyzing documents and charts in office'
+        __image_url__: 'https://images.unsplash.com/photo-1552664730-d307ca884978?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80',
+        __image_prompt__: 'Business people analyzing documents and charts in office'
     }).meta({
         description: "Supporting image for the slide",
     }),
@@ -32,16 +32,16 @@ const bulletWithIconsSlideSchema = z.object({
             title: 'Inefficiency',
             description: 'Businesses struggle to find digital tools that meet their needs, causing operational slowdowns.',
             icon: {
-                icon_url_: '/static/icons/placeholder.png',
-                icon_query_: 'warning alert inefficiency'
+                __icon_url__: '/static/icons/placeholder.png',
+                __icon_query__: 'warning alert inefficiency'
             }
         },
         {
             title: 'High Costs',
             description: 'Outdated systems increase expenses, while small businesses struggle to expand their market reach.',
             icon: {
-                icon_url_: '/static/icons/placeholder.png',
-                icon_query_: 'trending up costs chart'
+                __icon_url__: '/static/icons/placeholder.png',
+                __icon_query__: 'trending up costs chart'
             }
         }
     ]).meta({
@@ -105,8 +105,8 @@ const BulletWithIconsSlideLayout: React.FC<BulletWithIconsSlideLayoutProps> = ({
                         <div className="relative z-10 h-full flex items-center justify-center p-4">
                             <div className="w-full max-w-md h-80 rounded-2xl overflow-hidden shadow-lg">
                                 <img
-                                    src={slideData?.image?.image_url_ || ''}
-                                    alt={slideData?.image?.image_prompt_ || slideData?.title || ''}
+                                    src={slideData?.image?.__image_url__ || ''}
+                                    alt={slideData?.image?.__image_prompt__ || slideData?.title || ''}
                                     className="w-full h-full object-cover"
                                 />
                             </div>
@@ -134,8 +134,8 @@ const BulletWithIconsSlideLayout: React.FC<BulletWithIconsSlideLayoutProps> = ({
                                     {/* Icon */}
                                     <div className="flex-shrink-0 w-12 h-12 bg-white rounded-lg shadow-md flex items-center justify-center">
                                         <img 
-                                            src={bullet.icon.icon_url_} 
-                                            alt={bullet.icon.icon_query_}
+                                            src={bullet.icon.__icon_url__} 
+                                            alt={bullet.icon.__icon_query__}
                                             className="w-6 h-6 object-contain text-gray-700"
                                         />
                                     </div>
