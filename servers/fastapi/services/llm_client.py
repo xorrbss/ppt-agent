@@ -26,7 +26,7 @@ from utils.llm_provider import get_llm_provider
 class LLMClient:
     def __init__(self):
         self.llm_provider = get_llm_provider()
-        self.client = self._get_client()
+        self._client = self._get_client()
 
     # ? Clients
     def _get_client(self):
@@ -100,7 +100,7 @@ class LLMClient:
 
     # ? Generate Unstructured Content
     async def _generate_openai(self, model: str, messages: List[LLMMessage]):
-        client: AsyncOpenAI = self.client
+        client: AsyncOpenAI = self._client
         response = await client.chat.completions.create(
             model=model,
             messages=[message.model_dump() for message in messages],
@@ -108,7 +108,7 @@ class LLMClient:
         return response.choices[0].message.content
 
     async def _generate_google(self, model: str, messages: List[LLMMessage]):
-        client: genai.Client = self.client
+        client: genai.Client = self._client
         response = await asyncio.to_thread(
             client.models.generate_content,
             model=model,
@@ -121,7 +121,7 @@ class LLMClient:
         return response.text
 
     async def _generate_anthropic(self, model: str, messages: List[LLMMessage]):
-        client: AsyncAnthropic = self.client
+        client: AsyncAnthropic = self._client
         response: AnthropicMessage = await client.messages.create(
             model=model,
             messages=[message.model_dump() for message in messages],
@@ -153,11 +153,6 @@ class LLMClient:
                 content = await self._generate_ollama(model, messages)
             case LLMProvider.CUSTOM:
                 content = await self._generate_custom(model, messages)
-            case _:
-                raise HTTPException(
-                    status_code=400,
-                    detail="LLM Provider must be either openai, google, anthropic, ollama, or custom",
-                )
         if content is None:
             raise HTTPException(
                 status_code=400,
@@ -169,7 +164,7 @@ class LLMClient:
     async def _generate_openai_structured(
         self, model: str, messages: List[LLMMessage], response_format: BaseModel | dict
     ):
-        client: AsyncOpenAI = self.client
+        client: AsyncOpenAI = self._client
         is_response_format_dict = isinstance(response_format, dict)
         if is_response_format_dict:
             response = await client.chat.completions.create(
@@ -203,7 +198,7 @@ class LLMClient:
     async def _generate_google_structured(
         self, model: str, messages: List[LLMMessage], response_format: BaseModel | dict
     ):
-        client: genai.Client = self.client
+        client: genai.Client = self._client
         response = await asyncio.to_thread(
             client.models.generate_content,
             model=model,
@@ -221,7 +216,7 @@ class LLMClient:
     async def _generate_anthropic_structured(
         self, model: str, messages: List[LLMMessage], response_format: BaseModel | dict
     ):
-        client: AsyncAnthropic = self.client
+        client: AsyncAnthropic = self._client
         is_response_format_dict = isinstance(response_format, dict)
         response: AnthropicMessage = await client.messages.create(
             model=model,
@@ -279,11 +274,6 @@ class LLMClient:
                 content = await self._generate_custom_structured(
                     model, messages, response_format
                 )
-            case _:
-                raise HTTPException(
-                    status_code=400,
-                    detail="LLM Provider must be either openai, google, anthropic, ollama, or custom",
-                )
         if content is None:
             raise HTTPException(
                 status_code=400,
@@ -293,7 +283,7 @@ class LLMClient:
 
     # ? Stream Unstructured Content
     async def _stream_openai(self, model: str, messages: List[LLMMessage]):
-        client: AsyncOpenAI = self.client
+        client: AsyncOpenAI = self._client
         async with client.chat.completions.stream(
             model=model,
             messages=[message.model_dump() for message in messages],
@@ -303,7 +293,7 @@ class LLMClient:
                     yield event.delta
 
     async def _stream_google(self, model: str, messages: List[LLMMessage]):
-        client: genai.Client = self.client
+        client: genai.Client = self._client
         async for event in iterator_to_async(client.models.generate_content_stream)(
             model=model,
             contents=self._get_user_prompts(messages),
@@ -316,7 +306,7 @@ class LLMClient:
                 yield event.text
 
     async def _stream_anthropic(self, model: str, messages: List[LLMMessage]):
-        client: AsyncAnthropic = self.client
+        client: AsyncAnthropic = self._client
         async with client.messages.stream(
             model=model,
             messages=[message.model_dump() for message in messages],
@@ -332,7 +322,7 @@ class LLMClient:
     def _stream_custom(self, model: str, messages: List[LLMMessage]):
         return self._stream_openai(model, messages)
 
-    async def stream(self, model: str, messages: List[LLMMessage]):
+    def stream(self, model: str, messages: List[LLMMessage]):
         match self.llm_provider:
             case LLMProvider.OPENAI:
                 return self._stream_openai(model, messages)
@@ -344,17 +334,12 @@ class LLMClient:
                 return self._stream_ollama(model, messages)
             case LLMProvider.CUSTOM:
                 return self._stream_custom(model, messages)
-            case _:
-                raise HTTPException(
-                    status_code=400,
-                    detail="LLM Provider must be either openai, google, anthropic, ollama, or custom",
-                )
 
     # ? Stream Structured Content
     async def _stream_openai_structured(
         self, model: str, messages: List[LLMMessage], response_format: BaseModel | dict
     ):
-        client: AsyncOpenAI = self.client
+        client: AsyncOpenAI = self._client
         is_response_format_dict = isinstance(response_format, dict)
         async with client.chat.completions.stream(
             model=model,
@@ -378,7 +363,7 @@ class LLMClient:
     async def _stream_google_structured(
         self, model: str, messages: List[LLMMessage], response_format: BaseModel | dict
     ):
-        client: genai.Client = self.client
+        client: genai.Client = self._client
         async for event in iterator_to_async(client.models.generate_content_stream)(
             model=model,
             contents=self._get_user_prompts(messages),
@@ -394,7 +379,7 @@ class LLMClient:
     async def _stream_anthropic_structured(
         self, model: str, messages: List[LLMMessage], response_format: BaseModel | dict
     ):
-        client: AsyncAnthropic = self.client
+        client: AsyncAnthropic = self._client
         is_response_format_dict = isinstance(response_format, dict)
         async with client.messages.stream(
             model=model,
@@ -426,7 +411,7 @@ class LLMClient:
     ):
         return self._stream_openai_structured(model, messages, response_format)
 
-    async def stream_structured(
+    def stream_structured(
         self, model: str, messages: List[LLMMessage], response_format: BaseModel | dict
     ):
         match self.llm_provider:
@@ -442,8 +427,3 @@ class LLMClient:
                 return self._stream_ollama_structured(model, messages, response_format)
             case LLMProvider.CUSTOM:
                 return self._stream_custom_structured(model, messages, response_format)
-            case _:
-                raise HTTPException(
-                    status_code=400,
-                    detail="LLM Provider must be either openai, google, anthropic, ollama, or custom",
-                )

@@ -1,18 +1,9 @@
 from typing import Optional
-from google.genai.types import GenerateContentConfig
-from openai.types.chat.chat_completion_chunk import ChoiceDelta
 
-from utils.async_iterator import iterator_to_async
+from models.llm_message import LLMMessage
+from services.llm_client import LLMClient
 from utils.get_dynamic_models import get_presentation_outline_model_with_n_slides
-from utils.llm_provider import (
-    get_anthropic_llm_client,
-    get_google_llm_client,
-    get_large_model,
-    get_llm_client,
-    is_anthropic_selected,
-    is_google_selected,
-)
-from pydantic import BaseModel
+from utils.llm_provider import get_large_model
 
 system_prompt = """
 You are an expert presentation creator. Generate structured presentations based on user requirements and format them according to the specified JSON schema with markdown content.
@@ -64,27 +55,17 @@ def get_user_prompt(prompt: str, n_slides: int, language: str, content: str):
     """
 
 
-def get_prompt_template(prompt: str, n_slides: int, language: str, content: str):
+def get_messages(prompt: str, n_slides: int, language: str, content: str):
     return [
-        {
-            "role": "system",
-            "content": system_prompt,
-        },
-        {
-            "role": "user",
-            "content": get_user_prompt(prompt, n_slides, language, content),
-        },
+        LLMMessage(
+            role="system",
+            content=system_prompt,
+        ),
+        LLMMessage(
+            role="user",
+            content=get_user_prompt(prompt, n_slides, language, content),
+        ),
     ]
-
-
-def get_response_format(response_model: BaseModel):
-    return {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "PresentationOutlineModel",
-            "schema": response_model.model_json_schema(),
-        },
-    }
 
 
 async def generate_ppt_outline(
@@ -96,29 +77,11 @@ async def generate_ppt_outline(
     model = get_large_model()
     response_model = get_presentation_outline_model_with_n_slides(n_slides)
 
-    if is_google_selected():
-        client = get_google_llm_client()
-        generate_stream = iterator_to_async(client.models.generate_content_stream)
-        async for event in generate_stream(
-            model=model,
-            contents=[get_user_prompt(prompt, n_slides, language, content)],
-            config=GenerateContentConfig(
-                system_instruction=system_prompt,
-                response_mime_type="application/json",
-                response_json_schema=response_model.model_json_schema(),
-            ),
-        ):
-            if event.text:
-                yield event.text
+    client = LLMClient()
 
-    else:
-        client = get_llm_client()
-        async for response in await client.chat.completions.create(
-            model=model,
-            messages=get_prompt_template(prompt, n_slides, language, content),
-            stream=True,
-            response_format=get_response_format(response_model),
-        ):
-            delta: ChoiceDelta = response.choices[0].delta
-            if delta.content:
-                yield delta.content
+    async for chunk in client.stream_structured(
+        model,
+        get_messages(prompt, n_slides, language, content),
+        response_model,
+    ):
+        yield chunk

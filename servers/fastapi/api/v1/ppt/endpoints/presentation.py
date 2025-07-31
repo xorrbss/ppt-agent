@@ -19,7 +19,7 @@ from models.pptx_models import PptxPresentationModel
 from models.presentation_layout import PresentationLayoutModel
 from models.presentation_structure_model import PresentationStructureModel
 from models.presentation_with_slides import PresentationWithSlides
-from services.get_layout_by_name import get_layout_by_name
+from utils.get_layout_by_name import get_layout_by_name
 from services.icon_finder_service import IconFinderService
 from services.image_generation_service import ImageGenerationService
 from utils.dict_utils import deep_update
