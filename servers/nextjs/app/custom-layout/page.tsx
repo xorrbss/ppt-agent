@@ -39,6 +39,7 @@ const CustomLayoutPage = () => {
   const [isProcessingPptx, setIsProcessingPptx] = useState(false);
   const [slides, setSlides] = useState<ProcessedSlide[]>([]);
   const [isSavingLayout, setIsSavingLayout] = useState(false);
+  const [isLayoutSaved, setIsLayoutSaved] = useState(false);
 
   // Warning before page unload
   useEffect(() => {
@@ -46,10 +47,11 @@ const CustomLayoutPage = () => {
       e.preventDefault();
       return "You have unsaved changes. Are you sure you want to leave?";
     };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
+    if (slides.length > 0 && !isLayoutSaved) {
+      window.addEventListener("beforeunload", handleBeforeUnload);
+    }
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, []);
+  }, [slides, isLayoutSaved]);
 
   // Save layout functionality
   const saveLayout = useCallback(async () => {
@@ -134,6 +136,7 @@ const CustomLayoutPage = () => {
       );
 
       toast.success(`Layout saved successfully`);
+      setIsLayoutSaved(true);
     } catch (error) {
       console.error("Error saving layout:", error);
       toast.error("Failed to save layout", {
@@ -181,6 +184,7 @@ const CustomLayoutPage = () => {
   // Process individual slide to HTML
   const processSlideToHtml = useCallback(
     async (slide: SlideData, index: number) => {
+      setIsLayoutSaved(false);
       console.log(
         `Starting to process slide ${slide.slide_number} at index ${index}`
       );
@@ -354,6 +358,7 @@ const CustomLayoutPage = () => {
   // Retry failed slide
   const retrySlide = useCallback(
     (index: number) => {
+      setIsLayoutSaved(false);
       const slide = slides[index];
       if (slide) {
         processSlideToHtml(slide, index);
@@ -365,6 +370,7 @@ const CustomLayoutPage = () => {
   // Mark slide as modified when it's updated
   const handleSlideUpdate = useCallback(
     (index: number, updatedSlideData: any) => {
+      setIsLayoutSaved(false);
       setSlides((prevSlides) =>
         prevSlides.map((s, i) =>
           i === index
@@ -389,9 +395,9 @@ const CustomLayoutPage = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4">
-      <div className="max-w-[1440px] aspect-video mx-auto px-6 py-8">
+      <div className="max-w-[1440px] aspect-video mx-auto px-6 ">
         {/* Header */}
-        <div className="text-center space-y-2">
+        <div className="text-center space-y-2 mb-6">
           <h1 className="text-4xl font-bold text-gray-900">
             Custom Layout Processor
           </h1>
@@ -415,18 +421,18 @@ const CustomLayoutPage = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             {!selectedFile ? (
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
+              <div className="border-2 relative border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
                 <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <Label htmlFor="file-upload" className="cursor-pointer">
                   <span className="text-lg font-medium text-gray-700">
                     Click to upload a PPTX file
                   </span>
-                  <Input
+                  <input
                     id="file-upload"
                     type="file"
                     accept=".pptx"
                     onChange={handleFileSelect}
-                    className="hidden"
+                    className="opacity-0 w-full h-full cursor-pointer absolute top-0 left-0 z-10"
                   />
                 </Label>
                 <p className="text-sm text-gray-500 mt-2">
@@ -520,11 +526,11 @@ const CustomLayoutPage = () => {
 
         {/* Floating Save Layout Button */}
         {slides.length > 0 && slides.some((s) => s.processed) && (
-          <div className="fixed bottom-6 right-6 z-50">
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
             <Button
               onClick={saveLayout}
               disabled={isSavingLayout}
-              className="bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3 text-lg"
+              className="bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 px-10 py-3 text-lg"
               size="lg"
             >
               {isSavingLayout ? (

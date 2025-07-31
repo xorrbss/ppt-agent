@@ -11,6 +11,7 @@ import {
   RotateCcw,
   SendHorizontal,
   X,
+  Repeat2,
 } from "lucide-react";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import ToolTip from "@/components/ToolTip";
@@ -391,32 +392,63 @@ const EachSlide = ({
   const strokeWidths = [1, 3, 5, 8, 12];
 
   return (
-    <Card key={slide.slide_number} className="border-2 w-full relative">
-      <CardHeader className="pb-4">
+    <Card
+      key={slide.slide_number}
+      className="border-2 font-instrument_sans w-full relative"
+    >
+      <CardHeader className=" max-w-[1280px] mx-auto px-0 py-6">
         <CardTitle className="text-xl flex items-center justify-between">
-          {slide.processing ? (
-            <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
-          ) : slide.processed ? (
-            <CheckCircle className="w-6 h-6 text-green-600" />
-          ) : slide.error ? (
-            <AlertCircle className="w-6 h-6 text-red-600" />
-          ) : (
-            <div className="w-6 h-6 border-2 border-gray-300 rounded-full" />
-          )}
+          <div className="flex items-center w-full justify-between gap-2">
+            <div>
+              {slide.processing ? (
+                <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+              ) : slide.processed ? (
+                <CheckCircle className="w-6 h-6 text-green-600" />
+              ) : slide.error ? (
+                <AlertCircle className="w-6 h-6 text-red-600" />
+              ) : (
+                <div className="w-6 h-6 border-2 border-gray-300 rounded-full" />
+              )}
+            </div>
+
+            <div className="flex  gap-6">
+              {slide.processed && slide.html && !isEditMode && (
+                <div className=" ">
+                  <ToolTip content="Edit slide">
+                    <button
+                      onClick={handleEditClick}
+                      className={`px-6 py-2 flex gap-2 text-sm items-center group-hover:scale-105 rounded-lg bg-[#5141e5] hover:shadow-md transition-all duration-300 cursor-pointer shadow-md `}
+                    >
+                      <Edit className="w-4 sm:w-5 h-4 sm:h-5 text-white" />
+                      <span className="text-white">Edit Slide</span>
+                    </button>
+                  </ToolTip>
+                </div>
+              )}
+              <div>
+                <ToolTip content="Retry fetch">
+                  <button
+                    onClick={() => retrySlide(index)}
+                    disabled={slide.processing}
+                    className="px-6 py-2 flex gap-2 text-sm items-center group-hover:scale-105 rounded-lg bg-[#5141e5] hover:shadow-md transition-all duration-300 cursor-pointer shadow-md"
+                  >
+                    <Repeat2 className="w-4 sm:w-5 h-4 sm:h-5 text-white" />
+                    <span className="text-white">Retry Fetch</span>
+                  </button>
+                </ToolTip>
+              </div>
+            </div>
+          </div>
         </CardTitle>
       </CardHeader>
 
       <CardContent className="space-y-4">
         {/* Edit Mode Controls */}
         {isEditMode && slide.processed && slide.html && (
-          <div className="border-2 border-blue-200 rounded-lg p-4 bg-blue-50 space-y-4">
+          <div className="border-2 max-w-[1280px] mx-auto border-blue-200 rounded-lg p-4 bg-blue-50 space-y-4">
             {/* Drawing Tools */}
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div className="flex items-center gap-4 flex-wrap">
-                <h4 className="text-sm font-semibold text-blue-800">
-                  Edit Mode
-                </h4>
-
                 {/* Drawing Tools */}
                 <div className="flex items-center gap-2">
                   <Button
@@ -504,10 +536,10 @@ const EachSlide = ({
             </div>
 
             {/* Prompt Section */}
-            <div className="space-y-2">
+            <div className="space-y-2 mt-2">
               <label
                 htmlFor="edit-prompt"
-                className="text-sm font-medium text-gray-700"
+                className="text-sm font-medium font-inter text-gray-700"
               >
                 Describe the changes you want to make:
               </label>
@@ -517,23 +549,25 @@ const EachSlide = ({
                   placeholder="Enter your prompt here... (e.g., 'Change the title color to blue', 'Add a border to the image', etc.)"
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
-                  className="flex-1 min-h-[60px] max-h-[60px] resize-none"
+                  className="flex-1 font-inter duration-300 h-[70px] border-blue-200 border-2 rounded-lg outline-none focus:border-blue-500 focus:ring-0 max-h-[70px] resize-none "
                   disabled={isUpdating}
                 />
-                <Button
-                  onClick={handleSave}
-                  disabled={isUpdating || !prompt.trim()}
-                  className="flex items-center gap-1 bg-green-600 hover:bg-green-700 px-4"
-                >
-                  {isUpdating ? (
-                    "Updating..."
-                  ) : (
-                    <>
-                      <SendHorizontal size={14} />
-                      Update
-                    </>
-                  )}
-                </Button>
+                <div>
+                  <Button
+                    onClick={handleSave}
+                    disabled={isUpdating || !prompt.trim()}
+                    className="flex flex-col w-28 font-inter font-semibold items-center gap-1 h-full bg-green-600 hover:bg-green-700 px-4"
+                  >
+                    {isUpdating ? (
+                      "Updating..."
+                    ) : (
+                      <>
+                        <SendHorizontal size={14} />
+                        Update
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
@@ -662,19 +696,6 @@ const EachSlide = ({
         >
           Open in new tab
         </Button>
-
-        {slide.processed && slide.html && !isEditMode && (
-          <div className="absolute top-2 z-20 sm:top-4 hidden md:block right-2 transition-transform">
-            <ToolTip content="Edit slide">
-              <div
-                onClick={handleEditClick}
-                className={`px-4 py-2 group-hover:scale-105 rounded-lg bg-[#5141e5] hover:shadow-md transition-all duration-300 cursor-pointer shadow-md `}
-              >
-                <Edit className="w-4 sm:w-5 h-4 sm:h-5 text-white" />
-              </div>
-            </ToolTip>
-          </div>
-        )}
       </div>
     </Card>
   );
