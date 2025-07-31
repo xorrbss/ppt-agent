@@ -1,6 +1,6 @@
 import asyncio
 import json
-from typing import List
+from typing import List, Optional
 from fastapi import HTTPException
 from openai import AsyncOpenAI
 from google import genai
@@ -24,9 +24,10 @@ from utils.llm_provider import get_llm_provider
 
 
 class LLMClient:
-    def __init__(self):
+    def __init__(self, max_tokens: int = 4000):
         self.llm_provider = get_llm_provider()
         self._client = self._get_client()
+        self.max_tokens = max_tokens
 
     # ? Clients
     def _get_client(self):
@@ -98,12 +99,16 @@ class LLMClient:
     def _get_user_prompts(self, messages: List[LLMMessage]) -> List[str]:
         return [message.content for message in messages if message.role == "user"]
 
+    def _get_user_llm_messages(self, messages: List[LLMMessage]) -> List[LLMMessage]:
+        return [message for message in messages if message.role == "user"]
+
     # ? Generate Unstructured Content
     async def _generate_openai(self, model: str, messages: List[LLMMessage]):
         client: AsyncOpenAI = self._client
         response = await client.chat.completions.create(
             model=model,
             messages=[message.model_dump() for message in messages],
+            max_completion_tokens=self.max_tokens,
         )
         return response.choices[0].message.content
 
@@ -116,6 +121,7 @@ class LLMClient:
             config=GenerateContentConfig(
                 system_instruction=self._get_system_prompt(messages),
                 response_mime_type="text/plain",
+                max_output_tokens=self.max_tokens,
             ),
         )
         return response.text
@@ -124,7 +130,12 @@ class LLMClient:
         client: AsyncAnthropic = self._client
         response: AnthropicMessage = await client.messages.create(
             model=model,
-            messages=[message.model_dump() for message in messages],
+            system=self._get_system_prompt(messages),
+            messages=[
+                message.model_dump()
+                for message in self._get_user_llm_messages(messages)
+            ],
+            max_tokens=self.max_tokens,
         )
         text = ""
         for content in response.content:
@@ -179,6 +190,7 @@ class LLMClient:
                         }
                     ),
                 },
+                max_completion_tokens=self.max_tokens,
             )
             content = response.choices[0].message.content
             if content:
@@ -189,6 +201,7 @@ class LLMClient:
                 model=model,
                 messages=[message.model_dump() for message in messages],
                 response_format=response_format,
+                max_completion_tokens=self.max_tokens,
             )
             content = response.choices[0].message.parsed
             if content:
@@ -199,6 +212,7 @@ class LLMClient:
         self, model: str, messages: List[LLMMessage], response_format: BaseModel | dict
     ):
         client: genai.Client = self._client
+        is_response_format_dict = isinstance(response_format, dict)
         response = await asyncio.to_thread(
             client.models.generate_content,
             model=model,
@@ -207,11 +221,17 @@ class LLMClient:
                 system_instruction=self._get_system_prompt(messages),
                 response_mime_type="application/json",
                 response_schema=response_format,
+                max_output_tokens=self.max_tokens,
             ),
         )
+        content = None
         if response.text:
-            return json.loads(response.text)
-        return None
+            content = json.loads(response.text)
+
+        # If response format is Pydantic model, return the model instance
+        if content and not is_response_format_dict:
+            return response_format(**content)
+        return content
 
     async def _generate_anthropic_structured(
         self, model: str, messages: List[LLMMessage], response_format: BaseModel | dict
@@ -220,7 +240,12 @@ class LLMClient:
         is_response_format_dict = isinstance(response_format, dict)
         response: AnthropicMessage = await client.messages.create(
             model=model,
-            messages=[message.model_dump() for message in messages],
+            system=self._get_system_prompt(messages),
+            messages=[
+                message.model_dump()
+                for message in self._get_user_llm_messages(messages)
+            ],
+            max_tokens=self.max_tokens,
             tools=[
                 {
                     "name": "ResponseSchema",
@@ -237,6 +262,10 @@ class LLMClient:
         for content_block in response.content:
             if content_block.type == "tool_use":
                 content = content_block.input
+
+        # If response format is Pydantic model, return the model instance
+        if content and not is_response_format_dict:
+            return response_format(**content)
         return content
 
     async def _generate_ollama_structured(
@@ -287,6 +316,7 @@ class LLMClient:
         async with client.chat.completions.stream(
             model=model,
             messages=[message.model_dump() for message in messages],
+            max_completion_tokens=self.max_tokens,
         ) as stream:
             async for event in stream:
                 if event.type == "content.delta":
@@ -300,6 +330,7 @@ class LLMClient:
             config=GenerateContentConfig(
                 system_instruction=self._get_system_prompt(messages),
                 response_mime_type="text/plain",
+                max_output_tokens=self.max_tokens,
             ),
         ):
             if event.text:
@@ -309,7 +340,12 @@ class LLMClient:
         client: AsyncAnthropic = self._client
         async with client.messages.stream(
             model=model,
-            messages=[message.model_dump() for message in messages],
+            system=self._get_system_prompt(messages),
+            messages=[
+                message.model_dump()
+                for message in self._get_user_llm_messages(messages)
+            ],
+            max_tokens=self.max_tokens,
         ) as stream:
             async for event in stream:
                 event: AnthropicMessageStreamEvent = event
@@ -344,17 +380,18 @@ class LLMClient:
         async with client.chat.completions.stream(
             model=model,
             messages=[message.model_dump() for message in messages],
-            response_format={
-                "type": "json_schema",
-                "json_schema": (
-                    {
+            max_completion_tokens=self.max_tokens,
+            response_format=(
+                {
+                    "type": "json_schema",
+                    "json_schema": {
                         "name": "ResponseSchema",
                         "schema": response_format,
-                    }
-                    if is_response_format_dict
-                    else response_format
-                ),
-            },
+                    },
+                }
+                if is_response_format_dict
+                else response_format
+            ),
         ) as stream:
             async for event in stream:
                 if event.type == "content.delta":
@@ -371,6 +408,7 @@ class LLMClient:
                 system_instruction=self._get_system_prompt(messages),
                 response_mime_type="application/json",
                 response_schema=response_format,
+                max_output_tokens=self.max_tokens,
             ),
         ):
             if event.text:
@@ -383,7 +421,12 @@ class LLMClient:
         is_response_format_dict = isinstance(response_format, dict)
         async with client.messages.stream(
             model=model,
-            messages=[message.model_dump() for message in messages],
+            system=self._get_system_prompt(messages),
+            messages=[
+                message.model_dump()
+                for message in self._get_user_llm_messages(messages)
+            ],
+            max_tokens=self.max_tokens,
             tools=[
                 {
                     "name": "ResponseSchema",

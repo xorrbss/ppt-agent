@@ -1,19 +1,21 @@
+from models.llm_message import LLMMessage
 from models.presentation_layout import PresentationLayoutModel, SlideLayoutModel
 from models.slide_layout_index import SlideLayoutIndex
 from models.sql.slide import SlideModel
-from utils.llm_provider import get_large_model, get_llm_client
+from services.llm_client import LLMClient
+from utils.llm_provider import get_large_model
 
 
-def get_prompt_to_select_slide_layout(
+def get_messages(
     prompt: str,
     slide_data: dict,
     layout: PresentationLayoutModel,
     current_slide_layout: int,
 ):
     return [
-        {
-            "role": "system",
-            "content": f"""
+        LLMMessage(
+            role="system",
+            content=f"""
                 Select a Slide Layout index based on provided user prompt and current slide data.
                 {layout.to_string()}
 
@@ -23,15 +25,15 @@ def get_prompt_to_select_slide_layout(
                 - If user prompt is not clear, select the layout that is most relevant to the slide data.
                 **Go through all notes and steps and make sure they are followed, including mentioned constraints**
             """,
-        },
-        {
-            "role": "user",
-            "content": f"""
+        ),
+        LLMMessage(
+            role="user",
+            content=f"""
                 - User Prompt: {prompt}
                 - Current Slide Data: {slide_data}
                 - Current Slide Layout: {current_slide_layout}
             """,
-        },
+        ),
     ]
 
 
@@ -41,15 +43,14 @@ async def get_slide_layout_from_prompt(
     slide: SlideModel,
 ) -> SlideLayoutModel:
 
-    client = get_llm_client()
+    client = LLMClient()
     model = get_large_model()
 
     slide_layout_ids = list(map(lambda x: x.id, layout.slides))
 
-    response = await client.beta.chat.completions.parse(
+    response: SlideLayoutIndex = await client.generate_structured(
         model=model,
-        temperature=0.2,
-        messages=get_prompt_to_select_slide_layout(
+        messages=get_messages(
             prompt,
             slide.content,
             layout,
@@ -57,5 +58,5 @@ async def get_slide_layout_from_prompt(
         ),
         response_format=SlideLayoutIndex,
     )
-    index = response.choices[0].message.parsed.index
+    index = response.index
     return layout.slides[index]

@@ -54,7 +54,6 @@ async def stream_outlines(
         presentation.outlines = [
             each.model_dump() for each in presentation_content.slides
         ]
-        presentation.notes = presentation_content.notes
 
         sql_session.add(presentation)
         await sql_session.commit()

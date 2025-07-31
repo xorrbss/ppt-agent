@@ -1,22 +1,19 @@
+from models.llm_message import LLMMessage
 from models.presentation_layout import PresentationLayoutModel
 from models.presentation_outline_model import PresentationOutlineModel
-from utils.llm_provider import (
-    get_large_model,
-    get_llm_client,
-)
-from utils.get_dynamic_models import (
-    get_presentation_structure_model_with_n_slides,
-)
-from models.presentation_structure_model import (
-    PresentationStructureModel,
-)
+from services.llm_client import LLMClient
+from utils.llm_provider import get_large_model
+from utils.get_dynamic_models import get_presentation_structure_model_with_n_slides
+from models.presentation_structure_model import PresentationStructureModel
 
 
-def get_prompt(presentation_layout: PresentationLayoutModel, n_slides: int, data: str):
+def get_messages(
+    presentation_layout: PresentationLayoutModel, n_slides: int, data: str
+):
     return [
-        {
-            "role": "system",
-            "content": f"""
+        LLMMessage(
+            role="system",
+            content=f"""
                 You're a professional presentation designer with creative freedom to design engaging presentations.
 
                 {presentation_layout.to_string()}
@@ -49,13 +46,13 @@ def get_prompt(presentation_layout: PresentationLayoutModel, n_slides: int, data
 
                 Select layout index for each of the {n_slides} slides based on what will best serve the presentation's goals.
             """,
-        },
-        {
-            "role": "user",
-            "content": f"""
+        ),
+        LLMMessage(
+            role="user",
+            content=f"""
                 {data}
             """,
-        },
+        ),
     ]
 
 
@@ -64,19 +61,19 @@ async def generate_presentation_structure(
     presentation_layout: PresentationLayoutModel,
 ) -> PresentationStructureModel:
 
-    client = get_llm_client()
+    client = LLMClient()
     model = get_large_model()
     response_model = get_presentation_structure_model_with_n_slides(
         len(presentation_outline.slides)
     )
 
-    response = await client.beta.chat.completions.parse(
+    response = await client.generate_structured(
         model=model,
-        messages=get_prompt(
+        messages=get_messages(
             presentation_layout,
             len(presentation_outline.slides),
             presentation_outline.to_string(),
         ),
         response_format=response_model,
     )
-    return response.choices[0].message.parsed
+    return response

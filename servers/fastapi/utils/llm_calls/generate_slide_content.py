@@ -1,8 +1,10 @@
 import asyncio
 import json
 from google.genai.types import GenerateContentConfig
+from models.llm_message import LLMMessage
 from models.presentation_layout import SlideLayoutModel
 from models.presentation_outline_model import SlideOutlineModel
+from services.llm_client import LLMClient
 from utils.llm_provider import (
     get_anthropic_llm_client,
     get_google_llm_client,
@@ -47,58 +49,37 @@ def get_user_prompt(title: str, outline: str, language: str):
     """
 
 
-def get_prompt_to_generate_slide_content(title: str, outline: str, language: str):
+def get_messages(title: str, outline: str, language: str):
 
     return [
-        {
-            "role": "system",
-            "content": system_prompt,
-        },
-        {
-            "role": "user",
-            "content": get_user_prompt(title, outline, language),
-        },
+        LLMMessage(
+            role="system",
+            content=system_prompt,
+        ),
+        LLMMessage(
+            role="user",
+            content=get_user_prompt(title, outline, language),
+        ),
     ]
 
 
 async def get_slide_content_from_type_and_outline(
     slide_layout: SlideLayoutModel, outline: SlideOutlineModel, language: str
 ):
+    client = LLMClient()
     model = get_large_model()
 
     response_schema = remove_fields_from_schema(
         slide_layout.json_schema, ["__image_url__", "__icon_url__"]
     )
 
-    if is_google_selected():
-        client = get_google_llm_client()
-        response = await asyncio.to_thread(
-            client.models.generate_content,
-            model=model,
-            contents=[get_user_prompt(outline.title, outline.body, language)],
-            config=GenerateContentConfig(
-                system_instruction=system_prompt,
-                response_mime_type="application/json",
-                response_json_schema=response_schema,
-            ),
-        )
-        return json.loads(response.text)
-
-    else:
-        client = get_llm_client()
-        response = await client.beta.chat.completions.parse(
-            model=model,
-            messages=get_prompt_to_generate_slide_content(
-                outline.title,
-                outline.body,
-                language,
-            ),
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "SlideContent",
-                    "schema": response_schema,
-                },
-            },
-        )
-        return json.loads(response.choices[0].message.content)
+    response = await client.generate_structured(
+        model=model,
+        messages=get_messages(
+            outline.title,
+            outline.body,
+            language,
+        ),
+        response_format=response_schema,
+    )
+    return response
