@@ -17,8 +17,8 @@ class ContactInfoModel(BaseModel):
 
 
 class ImageModel(BaseModel):
-    image_url_: str = Field(description="Image URL")
-    image_prompt_: str = Field(description="Image prompt")
+    __image_url__: str = Field(description="Image URL")
+    __image_prompt__: str = Field(description="Image prompt")
 
 
 # First Slide Layout

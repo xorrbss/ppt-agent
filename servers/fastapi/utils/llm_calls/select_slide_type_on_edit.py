@@ -3,7 +3,7 @@ from models.presentation_layout import PresentationLayoutModel, SlideLayoutModel
 from models.slide_layout_index import SlideLayoutIndex
 from models.sql.slide import SlideModel
 from services.llm_client import LLMClient
-from utils.llm_provider import get_large_model
+from utils.llm_provider import get_model
 
 
 def get_messages(
@@ -44,9 +44,9 @@ async def get_slide_layout_from_prompt(
 ) -> SlideLayoutModel:
 
     client = LLMClient()
-    model = get_large_model()
+    model = get_model()
 
-    slide_layout_ids = list(map(lambda x: x.id, layout.slides))
+    slide_layout_index = layout.get_slide_layout_index(slide.layout)
 
     response = await client.generate_structured(
         model=model,
@@ -54,9 +54,10 @@ async def get_slide_layout_from_prompt(
             prompt,
             slide.content,
             layout,
-            slide_layout_ids.index(slide.layout),
+            slide_layout_index,
         ),
-        response_format=SlideLayoutIndex,
+        response_format=SlideLayoutIndex.model_json_schema(),
+        strict=True,
     )
     index = SlideLayoutIndex(**response).index
     return layout.slides[index]

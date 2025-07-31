@@ -2,7 +2,7 @@ from models.llm_message import LLMMessage
 from models.presentation_layout import PresentationLayoutModel
 from models.presentation_outline_model import PresentationOutlineModel
 from services.llm_client import LLMClient
-from utils.llm_provider import get_large_model
+from utils.llm_provider import get_model
 from utils.get_dynamic_models import get_presentation_structure_model_with_n_slides
 from models.presentation_structure_model import PresentationStructureModel
 
@@ -62,7 +62,7 @@ async def generate_presentation_structure(
 ) -> PresentationStructureModel:
 
     client = LLMClient()
-    model = get_large_model()
+    model = get_model()
     response_model = get_presentation_structure_model_with_n_slides(
         len(presentation_outline.slides)
     )
@@ -74,6 +74,7 @@ async def generate_presentation_structure(
             len(presentation_outline.slides),
             presentation_outline.to_string(),
         ),
-        response_format=response_model,
+        response_format=response_model.model_json_schema(),
+        strict=True,
     )
     return PresentationStructureModel(**response)

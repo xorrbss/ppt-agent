@@ -1,8 +1,9 @@
-from pydantic import BaseModel
 from models.llm_message import LLMMessage
+from models.presentation_layout import SlideLayoutModel
 from models.presentation_outline_model import SlideOutlineModel
 from services.llm_client import LLMClient
-from utils.llm_provider import get_large_model
+from utils.llm_provider import get_model
+from utils.schema_utils import remove_fields_from_schema
 
 system_prompt = """
     Generate structured slide based on provided title and outline, follow mentioned steps and notes and provide structured output.
@@ -14,8 +15,8 @@ system_prompt = """
     # Notes
     - Slide body should not use words like "This slide", "This presentation".
     - Rephrase the slide body to make it flow naturally.
-    - Provide prompt to generate image on "image_prompt_" property.
-    - Provide query to search icon on "icon_query_" property.
+    - Provide prompt to generate image on "__image_prompt__" property.
+    - Provide query to search icon on "__icon_query__" property.
     - Do not use markdown formatting in slide body.
     - Make sure to follow language guidelines.
     **Strictly follow the max and min character limit for every property in the slide.**
@@ -53,10 +54,14 @@ def get_messages(title: str, outline: str, language: str):
 
 
 async def get_slide_content_from_type_and_outline(
-    response_model: BaseModel, outline: SlideOutlineModel, language: str
+    slide_layout: SlideLayoutModel, outline: SlideOutlineModel, language: str
 ):
     client = LLMClient()
-    model = get_large_model()
+    model = get_model()
+
+    response_schema = remove_fields_from_schema(
+        slide_layout.json_schema, ["__image_url__", "__icon_url__"]
+    )
 
     response = await client.generate_structured(
         model=model,
@@ -65,6 +70,7 @@ async def get_slide_content_from_type_and_outline(
             outline.body,
             language,
         ),
-        response_format=response_model,
+        response_format=response_schema,
+        strict=False,
     )
     return response

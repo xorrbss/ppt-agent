@@ -17,23 +17,23 @@ async def process_slide_and_fetch_assets(
 
     async_tasks = []
 
-    image_paths = get_dict_paths_with_key(slide.content, "image_prompt_")
-    icon_paths = get_dict_paths_with_key(slide.content, "icon_query_")
+    image_paths = get_dict_paths_with_key(slide.content, "__image_prompt__")
+    icon_paths = get_dict_paths_with_key(slide.content, "__icon_query__")
 
     for image_path in image_paths:
-        image_prompt_parent = get_dict_at_path(slide.content, image_path)
+        __image_prompt__parent = get_dict_at_path(slide.content, image_path)
         async_tasks.append(
             image_generation_service.generate_image(
                 ImagePrompt(
-                    prompt=image_prompt_parent["image_prompt_"],
+                    prompt=__image_prompt__parent["__image_prompt__"],
                 )
             )
         )
 
     for icon_path in icon_paths:
-        icon_query_parent = get_dict_at_path(slide.content, icon_path)
+        __icon_query__parent = get_dict_at_path(slide.content, icon_path)
         async_tasks.append(
-            icon_finder_service.search_icons(icon_query_parent["icon_query_"])
+            icon_finder_service.search_icons(__icon_query__parent["__icon_query__"])
         )
 
     results = await asyncio.gather(*async_tasks)
@@ -45,14 +45,14 @@ async def process_slide_and_fetch_assets(
         result = results.pop()
         if isinstance(result, ImageAsset):
             return_assets.append(result)
-            image_dict["image_url_"] = result.path
+            image_dict["__image_url__"] = result.path
         else:
-            image_dict["image_url_"] = result
+            image_dict["__image_url__"] = result
         set_dict_at_path(slide.content, image_path, image_dict)
 
     for icon_path in icon_paths:
         icon_dict = get_dict_at_path(slide.content, icon_path)
-        icon_dict["icon_url_"] = results.pop()[0]
+        icon_dict["__icon_url__"] = results.pop()[0]
         set_dict_at_path(slide.content, icon_path, icon_dict)
 
     return return_assets
@@ -66,34 +66,34 @@ async def process_old_and_new_slides_and_fetch_assets(
 ) -> List[ImageAsset]:
     # Finds all old images
     old_image_dict_paths = get_dict_paths_with_key(
-        old_slide_content, "image_prompt_"
+        old_slide_content, "__image_prompt__"
     )
     old_image_dicts = [
         get_dict_at_path(old_slide_content, path) for path in old_image_dict_paths
     ]
     old_image_prompts = [
-        old_image_dict["image_prompt_"] for old_image_dict in old_image_dicts
+        old_image_dict["__image_prompt__"] for old_image_dict in old_image_dicts
     ]
 
     # Finds all old icons
-    old_icon_dict_paths = get_dict_paths_with_key(old_slide_content, "icon_query_")
+    old_icon_dict_paths = get_dict_paths_with_key(old_slide_content, "__icon_query__")
     old_icon_dicts = [
         get_dict_at_path(old_slide_content, path) for path in old_icon_dict_paths
     ]
     old_icon_queries = [
-        old_icon_dict["icon_query_"] for old_icon_dict in old_icon_dicts
+        old_icon_dict["__icon_query__"] for old_icon_dict in old_icon_dicts
     ]
 
     # Finds all new images
     new_image_dict_paths = get_dict_paths_with_key(
-        new_slide_content, "image_prompt_"
+        new_slide_content, "__image_prompt__"
     )
     new_image_dicts = [
         get_dict_at_path(new_slide_content, path) for path in new_image_dict_paths
     ]
 
     # Finds all new icons
-    new_icon_dict_paths = get_dict_paths_with_key(new_slide_content, "icon_query_")
+    new_icon_dict_paths = get_dict_paths_with_key(new_slide_content, "__icon_query__")
     new_icon_dicts = [
         get_dict_at_path(new_slide_content, path) for path in new_icon_dict_paths
     ]
@@ -109,18 +109,18 @@ async def process_old_and_new_slides_and_fetch_assets(
     # Creates async tasks for fetching new images
     # Use old image url if prompt is same
     for new_image in new_image_dicts:
-        if new_image["image_prompt_"] in old_image_prompts:
+        if new_image["__image_prompt__"] in old_image_prompts:
             old_image_url = old_image_dicts[
-                old_image_prompts.index(new_image["image_prompt_"])
-            ]["image_url_"]
-            new_image["image_url_"] = old_image_url
+                old_image_prompts.index(new_image["__image_prompt__"])
+            ]["__image_url__"]
+            new_image["__image_url__"] = old_image_url
             new_images_fetch_status.append(False)
             continue
 
         async_image_fetch_tasks.append(
             image_generation_service.generate_image(
                 ImagePrompt(
-                    prompt=new_image["image_prompt_"],
+                    prompt=new_image["__image_prompt__"],
                 )
             )
         )
@@ -129,16 +129,16 @@ async def process_old_and_new_slides_and_fetch_assets(
     # Creates async tasks for fetching new icons
     # Use old icon url if query is same
     for new_icon in new_icon_dicts:
-        if new_icon["icon_query_"] in old_icon_queries:
+        if new_icon["__icon_query__"] in old_icon_queries:
             old_icon_url = old_icon_dicts[
-                old_icon_queries.index(new_icon["icon_query_"])
-            ]["icon_url_"]
-            new_icon["icon_url_"] = old_icon_url
+                old_icon_queries.index(new_icon["__icon_query__"])
+            ]["__icon_url__"]
+            new_icon["__icon_url__"] = old_icon_url
             new_icons_fetch_status.append(False)
             continue
 
         async_icon_fetch_tasks.append(
-            icon_finder_service.search_icons(new_icon["icon_query_"])
+            icon_finder_service.search_icons(new_icon["__icon_query__"])
         )
         new_icons_fetch_status.append(True)
 
@@ -157,11 +157,11 @@ async def process_old_and_new_slides_and_fetch_assets(
                 image_url = fetched_image.path
             else:
                 image_url = fetched_image
-            new_image_dicts[i]["image_url_"] = image_url
+            new_image_dicts[i]["__image_url__"] = image_url
 
     for i, new_icon in enumerate(new_icons):
         if new_icons_fetch_status[i]:
-            new_icon_dicts[i]["icon_url_"] = new_icons[i][0]
+            new_icon_dicts[i]["__icon_url__"] = new_icons[i][0]
 
     for i, new_image_dict in enumerate(new_image_dicts):
         set_dict_at_path(new_slide_content, new_image_dict_paths[i], new_image_dict)

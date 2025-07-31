@@ -28,7 +28,7 @@ from utils.export_utils import export_presentation
 from utils.llm_calls.generate_presentation_outlines import generate_ppt_outline
 from models.sql.slide import SlideModel
 from models.sse_response import SSECompleteResponse, SSEResponse
-from services import SCHEMA_TO_MODEL_SERVICE, TEMP_FILE_SERVICE
+from services import TEMP_FILE_SERVICE
 from services.database import get_async_session
 from services.documents_loader import DocumentsLoader
 from models.sql.presentation import PresentationModel
@@ -43,7 +43,6 @@ from utils.llm_calls.generate_slide_content import (
 )
 from utils.process_slides import process_slide_and_fetch_assets
 from utils.randomizers import get_random_uuid
-from utils.schema_utils import remove_fields_from_schema
 from utils.validators import validate_files
 
 PRESENTATION_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
@@ -220,20 +219,8 @@ async def stream_presentation(
         for i, slide_layout_index in enumerate(structure.slides):
             slide_layout = layout.slides[slide_layout_index]
 
-            # Generate Pydantic model from slide layout schema
-            schema_model_id = f"{layout.name}/{slide_layout.id}"
-            response_schema = remove_fields_from_schema(
-                slide_layout.json_schema, ["image_url_", "icon_url_"]
-            )
-            schema_model_path = (
-                await SCHEMA_TO_MODEL_SERVICE.get_pydantic_model_path_from_schema(
-                    schema_model_id, response_schema
-                )
-            )
-            module = importlib.import_module(schema_model_path)
-            response_model = module.GeneratedModel
             slide_content = await get_slide_content_from_type_and_outline(
-                response_model, outline.slides[i], presentation.language
+                slide_layout, outline.slides[i], presentation.language
             )
 
             slide = SlideModel(
@@ -251,9 +238,6 @@ async def stream_presentation(
                     image_generation_service, icon_finder_service, slide
                 )
             )
-
-            # Give control to the event loop
-            await asyncio.sleep(0)
 
             yield SSEResponse(
                 event="response",
@@ -491,7 +475,6 @@ async def from_template(
         new_slide_data = list(filter(lambda x: x.index == each_slide.index, data.data))
         if new_slide_data:
             updated_content = deep_update(each_slide.content, new_slide_data[0].content)
-            print(f"Updated content for slide {each_slide.index}: {updated_content}")
         new_slides.append(
             each_slide.get_new_slide(new_presentation.id, updated_content)
         )

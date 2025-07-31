@@ -1,6 +1,6 @@
 import asyncio
 import json
-from typing import List, Optional
+from typing import List
 from fastapi import HTTPException
 from openai import AsyncOpenAI
 from google import genai
@@ -8,7 +8,6 @@ from google.genai.types import GenerateContentConfig
 from anthropic import AsyncAnthropic
 from anthropic.types import Message as AnthropicMessage
 from anthropic import MessageStreamEvent as AnthropicMessageStreamEvent
-from pydantic import BaseModel
 from enums.llm_provider import LLMProvider
 from models.llm_message import LLMMessage
 from utils.async_iterator import iterator_to_async
@@ -21,6 +20,7 @@ from utils.get_env import (
     get_openai_api_key_env,
 )
 from utils.llm_provider import get_llm_provider
+from utils.schema_utils import ensure_strict_json_schema
 
 
 class LLMClient:
@@ -173,43 +173,45 @@ class LLMClient:
 
     # ? Generate Structured Content
     async def _generate_openai_structured(
-        self, model: str, messages: List[LLMMessage], response_format: BaseModel | dict
+        self,
+        model: str,
+        messages: List[LLMMessage],
+        response_format: dict,
+        strict: bool = False,
     ):
         client: AsyncOpenAI = self._client
-        is_response_format_dict = isinstance(response_format, dict)
-        if is_response_format_dict:
-            response = await client.chat.completions.create(
-                model=model,
-                messages=[message.model_dump() for message in messages],
-                response_format={
-                    "type": "json_schema",
-                    "json_schema": (
-                        {
-                            "name": "ResponseSchema",
-                            "schema": response_format,
-                        }
-                    ),
-                },
-                max_completion_tokens=self.max_tokens,
+        response_schema = response_format
+        if strict:
+            response_schema = ensure_strict_json_schema(
+                response_schema,
+                path=(),
+                root=response_schema,
             )
-            content = response.choices[0].message.content
-            if content:
-                return json.loads(content)
-            return None
-        else:
-            response = await client.chat.completions.parse(
-                model=model,
-                messages=[message.model_dump() for message in messages],
-                response_format=response_format,
-                max_completion_tokens=self.max_tokens,
-            )
-            content = response.choices[0].message.parsed
-            if content:
-                return content.model_dump(mode="json")
-            return None
+        response = await client.chat.completions.create(
+            model=model,
+            messages=[message.model_dump() for message in messages],
+            response_format={
+                "type": "json_schema",
+                "json_schema": (
+                    {
+                        "name": "ResponseSchema",
+                        "strict": strict,
+                        "schema": response_schema,
+                    }
+                ),
+            },
+            max_completion_tokens=self.max_tokens,
+        )
+        content = response.choices[0].message.content
+        if content:
+            return json.loads(content)
+        return None
 
     async def _generate_google_structured(
-        self, model: str, messages: List[LLMMessage], response_format: BaseModel | dict
+        self,
+        model: str,
+        messages: List[LLMMessage],
+        response_format: dict,
     ):
         client: genai.Client = self._client
         response = await asyncio.to_thread(
@@ -219,7 +221,7 @@ class LLMClient:
             config=GenerateContentConfig(
                 system_instruction=self._get_system_prompt(messages),
                 response_mime_type="application/json",
-                response_schema=response_format,
+                response_json_schema=response_format,
                 max_output_tokens=self.max_tokens,
             ),
         )
@@ -230,10 +232,12 @@ class LLMClient:
         return content
 
     async def _generate_anthropic_structured(
-        self, model: str, messages: List[LLMMessage], response_format: BaseModel | dict
+        self,
+        model: str,
+        messages: List[LLMMessage],
+        response_format: dict,
     ):
         client: AsyncAnthropic = self._client
-        is_response_format_dict = isinstance(response_format, dict)
         response: AnthropicMessage = await client.messages.create(
             model=model,
             system=self._get_system_prompt(messages),
@@ -246,11 +250,7 @@ class LLMClient:
                 {
                     "name": "ResponseSchema",
                     "description": "A response to the user's message",
-                    "input_schema": (
-                        response_format
-                        if is_response_format_dict
-                        else response_format.model_json_schema()
-                    ),
+                    "input_schema": response_format,
                 }
             ],
         )
@@ -262,23 +262,39 @@ class LLMClient:
         return content
 
     async def _generate_ollama_structured(
-        self, model: str, messages: List[LLMMessage], response_format: BaseModel | dict
+        self,
+        model: str,
+        messages: List[LLMMessage],
+        response_format: dict,
+        strict: bool = False,
     ):
-        return await self._generate_openai_structured(model, messages, response_format)
+        return await self._generate_openai_structured(
+            model, messages, response_format, strict
+        )
 
     async def _generate_custom_structured(
-        self, model: str, messages: List[LLMMessage], response_format: BaseModel | dict
+        self,
+        model: str,
+        messages: List[LLMMessage],
+        response_format: dict,
+        strict: bool = False,
     ):
-        return await self._generate_openai_structured(model, messages, response_format)
+        return await self._generate_openai_structured(
+            model, messages, response_format, strict
+        )
 
     async def generate_structured(
-        self, model: str, messages: List[LLMMessage], response_format: BaseModel | dict
+        self,
+        model: str,
+        messages: List[LLMMessage],
+        response_format: dict,
+        strict: bool = False,
     ) -> dict:
         content = None
         match self.llm_provider:
             case LLMProvider.OPENAI:
                 content = await self._generate_openai_structured(
-                    model, messages, response_format
+                    model, messages, response_format, strict
                 )
             case LLMProvider.GOOGLE:
                 content = await self._generate_google_structured(
@@ -290,11 +306,11 @@ class LLMClient:
                 )
             case LLMProvider.OLLAMA:
                 content = await self._generate_ollama_structured(
-                    model, messages, response_format
+                    model, messages, response_format, strict
                 )
             case LLMProvider.CUSTOM:
                 content = await self._generate_custom_structured(
-                    model, messages, response_format
+                    model, messages, response_format, strict
                 )
         if content is None:
             raise HTTPException(
@@ -366,10 +382,20 @@ class LLMClient:
 
     # ? Stream Structured Content
     async def _stream_openai_structured(
-        self, model: str, messages: List[LLMMessage], response_format: BaseModel | dict
+        self,
+        model: str,
+        messages: List[LLMMessage],
+        response_format: dict,
+        strict: bool = False,
     ):
         client: AsyncOpenAI = self._client
-        is_response_format_dict = isinstance(response_format, dict)
+        response_schema = response_format
+        if strict:
+            response_schema = ensure_strict_json_schema(
+                response_schema,
+                path=(),
+                root=response_schema,
+            )
         async with client.chat.completions.stream(
             model=model,
             messages=[message.model_dump() for message in messages],
@@ -379,11 +405,10 @@ class LLMClient:
                     "type": "json_schema",
                     "json_schema": {
                         "name": "ResponseSchema",
-                        "schema": response_format,
+                        "strict": strict,
+                        "schema": response_schema,
                     },
                 }
-                if is_response_format_dict
-                else response_format
             ),
         ) as stream:
             async for event in stream:
@@ -391,7 +416,10 @@ class LLMClient:
                     yield event.delta
 
     async def _stream_google_structured(
-        self, model: str, messages: List[LLMMessage], response_format: BaseModel | dict
+        self,
+        model: str,
+        messages: List[LLMMessage],
+        response_format: dict,
     ):
         client: genai.Client = self._client
         async for event in iterator_to_async(client.models.generate_content_stream)(
@@ -400,7 +428,7 @@ class LLMClient:
             config=GenerateContentConfig(
                 system_instruction=self._get_system_prompt(messages),
                 response_mime_type="application/json",
-                response_schema=response_format,
+                response_json_schema=response_format,
                 max_output_tokens=self.max_tokens,
             ),
         ):
@@ -408,10 +436,12 @@ class LLMClient:
                 yield event.text
 
     async def _stream_anthropic_structured(
-        self, model: str, messages: List[LLMMessage], response_format: BaseModel | dict
+        self,
+        model: str,
+        messages: List[LLMMessage],
+        response_format: dict,
     ):
         client: AsyncAnthropic = self._client
-        is_response_format_dict = isinstance(response_format, dict)
         async with client.messages.stream(
             model=model,
             system=self._get_system_prompt(messages),
@@ -424,11 +454,7 @@ class LLMClient:
                 {
                     "name": "ResponseSchema",
                     "description": "A response to the user's message",
-                    "input_schema": (
-                        response_format
-                        if is_response_format_dict
-                        else response_format.model_json_schema()
-                    ),
+                    "input_schema": response_format,
                 }
             ],
         ) as stream:
@@ -438,21 +464,35 @@ class LLMClient:
                     yield event.partial_json
 
     def _stream_ollama_structured(
-        self, model: str, messages: List[LLMMessage], response_format: BaseModel | dict
+        self,
+        model: str,
+        messages: List[LLMMessage],
+        response_format: dict,
+        strict: bool = False,
     ):
-        return self._stream_openai_structured(model, messages, response_format)
+        return self._stream_openai_structured(model, messages, response_format, strict)
 
     def _stream_custom_structured(
-        self, model: str, messages: List[LLMMessage], response_format: BaseModel | dict
+        self,
+        model: str,
+        messages: List[LLMMessage],
+        response_format: dict,
+        strict: bool = False,
     ):
-        return self._stream_openai_structured(model, messages, response_format)
+        return self._stream_openai_structured(model, messages, response_format, strict)
 
     def stream_structured(
-        self, model: str, messages: List[LLMMessage], response_format: BaseModel | dict
+        self,
+        model: str,
+        messages: List[LLMMessage],
+        response_format: dict,
+        strict: bool = False,
     ):
         match self.llm_provider:
             case LLMProvider.OPENAI:
-                return self._stream_openai_structured(model, messages, response_format)
+                return self._stream_openai_structured(
+                    model, messages, response_format, strict
+                )
             case LLMProvider.GOOGLE:
                 return self._stream_google_structured(model, messages, response_format)
             case LLMProvider.ANTHROPIC:
@@ -460,6 +500,10 @@ class LLMClient:
                     model, messages, response_format
                 )
             case LLMProvider.OLLAMA:
-                return self._stream_ollama_structured(model, messages, response_format)
+                return self._stream_ollama_structured(
+                    model, messages, response_format, strict
+                )
             case LLMProvider.CUSTOM:
-                return self._stream_custom_structured(model, messages, response_format)
+                return self._stream_custom_structured(
+                    model, messages, response_format, strict
+                )

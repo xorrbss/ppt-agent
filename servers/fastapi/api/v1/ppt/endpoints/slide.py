@@ -5,7 +5,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
-from services import SCHEMA_TO_MODEL_SERVICE
 from services.database import get_async_session
 from services.icon_finder_service import IconFinderService
 from services.image_generation_service import ImageGenerationService
@@ -35,25 +34,12 @@ async def edit_slide(
         raise HTTPException(status_code=404, detail="Presentation not found")
 
     presentation_layout = presentation.get_layout()
-
     slide_layout = await get_slide_layout_from_prompt(
         prompt, presentation_layout, slide
     )
 
-    # Generate Pydantic model from slide layout schema
-    schema_model_id = f"{presentation_layout.name}/{slide_layout.id}"
-    response_schema = remove_fields_from_schema(
-        slide_layout.json_schema, ["image_url_", "icon_url_"]
-    )
-    schema_model_path = (
-        await SCHEMA_TO_MODEL_SERVICE.get_pydantic_model_path_from_schema(
-            schema_model_id, response_schema
-        )
-    )
-    module = importlib.import_module(schema_model_path)
-    response_model = module.GeneratedModel
     edited_slide_content = await get_edited_slide_content(
-        prompt, slide, presentation.language, response_model
+        prompt, slide, presentation.language, slide_layout
     )
 
     image_generation_service = ImageGenerationService(get_images_directory())

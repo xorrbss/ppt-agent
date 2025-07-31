@@ -3,7 +3,7 @@ from typing import List
 
 from models.llm_message import LLMMessage
 from services.llm_client import LLMClient
-from utils.llm_provider import get_nano_model
+from utils.llm_provider import get_model
 
 
 sysmte_prompt = """
@@ -25,7 +25,7 @@ Maintain as much information as possible.
 
 async def generate_document_summary(documents: List[str]):
     client = LLMClient()
-    model = get_nano_model()
+    model = get_model()
 
     coroutines = []
     for document in documents:

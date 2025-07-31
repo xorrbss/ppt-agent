@@ -45,8 +45,16 @@ def get_openai_api_key_env():
     return os.getenv("OPENAI_API_KEY")
 
 
+def get_openai_model_env():
+    return os.getenv("OPENAI_MODEL")
+
+
 def get_google_api_key_env():
     return os.getenv("GOOGLE_API_KEY")
+
+
+def get_google_model_env():
+    return os.getenv("GOOGLE_MODEL")
 
 
 def get_custom_llm_api_key_env():

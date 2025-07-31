@@ -9,10 +9,12 @@ from utils.get_env import (
     get_custom_llm_url_env,
     get_custom_model_env,
     get_google_api_key_env,
+    get_google_model_env,
     get_llm_provider_env,
     get_ollama_model_env,
     get_ollama_url_env,
     get_openai_api_key_env,
+    get_openai_model_env,
     get_pexels_api_key_env,
     get_user_config_path_env,
     get_image_provider_env,
@@ -27,10 +29,12 @@ from utils.set_env import (
     set_custom_model_env,
     set_extended_reasoning_env,
     set_google_api_key_env,
+    set_google_model_env,
     set_llm_provider_env,
     set_ollama_model_env,
     set_ollama_url_env,
     set_openai_api_key_env,
+    set_openai_model_env,
     set_pexels_api_key_env,
     set_image_provider_env,
     set_pixabay_api_key_env,
@@ -58,7 +62,9 @@ def get_user_config():
     return UserConfig(
         LLM=existing_config.LLM or get_llm_provider_env(),
         OPENAI_API_KEY=existing_config.OPENAI_API_KEY or get_openai_api_key_env(),
+        OPENAI_MODEL=existing_config.OPENAI_MODEL or get_openai_model_env(),
         GOOGLE_API_KEY=existing_config.GOOGLE_API_KEY or get_google_api_key_env(),
+        GOOGLE_MODEL=existing_config.GOOGLE_MODEL or get_google_model_env(),
         ANTHROPIC_API_KEY=existing_config.ANTHROPIC_API_KEY
         or get_anthropic_api_key_env(),
         ANTHROPIC_MODEL=existing_config.ANTHROPIC_MODEL or get_anthropic_model_env(),
@@ -81,8 +87,12 @@ def update_env_with_user_config():
         set_llm_provider_env(user_config.LLM)
     if user_config.OPENAI_API_KEY:
         set_openai_api_key_env(user_config.OPENAI_API_KEY)
+    if user_config.OPENAI_MODEL:
+        set_openai_model_env(user_config.OPENAI_MODEL)
     if user_config.GOOGLE_API_KEY:
         set_google_api_key_env(user_config.GOOGLE_API_KEY)
+    if user_config.GOOGLE_MODEL:
+        set_google_model_env(user_config.GOOGLE_MODEL)
     if user_config.ANTHROPIC_API_KEY:
         set_anthropic_api_key_env(user_config.ANTHROPIC_API_KEY)
     if user_config.ANTHROPIC_MODEL:
