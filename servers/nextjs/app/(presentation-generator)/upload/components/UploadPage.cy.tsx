@@ -92,10 +92,15 @@ describe('<UploadPage />', () => {
     it('should allow selecting language', () => {
       // Force click to handle any overlay issues
       cy.get('[data-testid="language-select"]').click({ force: true })
-      // Wait for content to be visible and click
-      cy.get('[role="option"]').contains('Chinese').should('be.visible').click()
+      // Wait for content to be visible and click Simplified Chinese
+      cy.get('[role="option"]').contains('Chinese (Simplified - 中文, 汉语)').should('be.visible').click()
       // Verify selection
-      cy.get('[data-testid="language-select"]').should('contain', 'Chinese')
+      cy.get('[data-testid="language-select"]').should('contain', 'Chinese (Simplified - 中文, 汉语)')
+
+      // Now test Traditional Chinese as well
+      cy.get('[data-testid="language-select"]').click({ force: true })
+      cy.get('[role="option"]').contains('Chinese (Traditional - 中文, 漢語)').should('be.visible').click()
+      cy.get('[data-testid="language-select"]').should('contain', 'Chinese (Traditional - 中文, 漢語)')
     })
   })
 
