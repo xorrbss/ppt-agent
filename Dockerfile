@@ -2,12 +2,11 @@ FROM python:3.11-slim-bookworm
 
 # Install Node.js and npm
 RUN apt-get update && apt-get install -y \
-   
     nginx \
     curl \
     redis-server
 
-    # Install Node.js 20 using NodeSource repository
+# Install Node.js 20 using NodeSource repository
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y nodejs
 
@@ -43,7 +42,7 @@ RUN npm run build
 
 WORKDIR /app
 
-# Copy FastAPI and start script
+# Copy FastAPI
 COPY servers/fastapi/ ./servers/fastapi/
 COPY start.js LICENSE NOTICE ./
 

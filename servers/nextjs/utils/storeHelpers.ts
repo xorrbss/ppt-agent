@@ -16,8 +16,30 @@ export const handleSaveLLMConfig = async (llmConfig: LLMConfig) => {
 export const hasValidLLMConfig = (llmConfig: LLMConfig) => {
   if (!llmConfig.LLM) return false;
   if (!llmConfig.IMAGE_PROVIDER) return false;
-  const OPENAI_API_KEY = llmConfig.OPENAI_API_KEY;
-  const GOOGLE_API_KEY = llmConfig.GOOGLE_API_KEY;
+
+  const isOpenAIConfigValid =
+    llmConfig.OPENAI_MODEL !== "" &&
+    llmConfig.OPENAI_MODEL !== null &&
+    llmConfig.OPENAI_MODEL !== undefined &&
+    llmConfig.OPENAI_API_KEY !== "" &&
+    llmConfig.OPENAI_API_KEY !== null &&
+    llmConfig.OPENAI_API_KEY !== undefined;
+
+  const isGoogleConfigValid =
+    llmConfig.GOOGLE_MODEL !== "" &&
+    llmConfig.GOOGLE_MODEL !== null &&
+    llmConfig.GOOGLE_MODEL !== undefined &&
+    llmConfig.GOOGLE_API_KEY !== "" &&
+    llmConfig.GOOGLE_API_KEY !== null &&
+    llmConfig.GOOGLE_API_KEY !== undefined;
+
+  const isAnthropicConfigValid =
+    llmConfig.ANTHROPIC_MODEL !== "" &&
+    llmConfig.ANTHROPIC_MODEL !== null &&
+    llmConfig.ANTHROPIC_MODEL !== undefined &&
+    llmConfig.ANTHROPIC_API_KEY !== "" &&
+    llmConfig.ANTHROPIC_API_KEY !== null &&
+    llmConfig.ANTHROPIC_API_KEY !== undefined;
 
   const isOllamaConfigValid =
     llmConfig.OLLAMA_MODEL !== "" &&
@@ -42,9 +64,9 @@ export const hasValidLLMConfig = (llmConfig: LLMConfig) => {
       case "pixabay":
         return llmConfig.PIXABAY_API_KEY && llmConfig.PIXABAY_API_KEY !== "";
       case "dall-e-3":
-        return OPENAI_API_KEY && OPENAI_API_KEY !== "";
+        return llmConfig.OPENAI_API_KEY && llmConfig.OPENAI_API_KEY !== "";
       case "gemini_flash":
-        return GOOGLE_API_KEY && GOOGLE_API_KEY !== "";
+        return llmConfig.GOOGLE_API_KEY && llmConfig.GOOGLE_API_KEY !== "";
       default:
         return false;
     }
@@ -52,18 +74,16 @@ export const hasValidLLMConfig = (llmConfig: LLMConfig) => {
 
   const isLLMConfigValid =
     llmConfig.LLM === "openai"
-      ? OPENAI_API_KEY !== "" &&
-      OPENAI_API_KEY !== null &&
-      OPENAI_API_KEY !== undefined
+      ? isOpenAIConfigValid
       : llmConfig.LLM === "google"
-        ? GOOGLE_API_KEY !== "" &&
-        GOOGLE_API_KEY !== null &&
-        GOOGLE_API_KEY !== undefined
-        : llmConfig.LLM === "ollama"
-          ? isOllamaConfigValid
-          : llmConfig.LLM === "custom"
-            ? isCustomConfigValid
-            : false;
+        ? isGoogleConfigValid
+        : llmConfig.LLM === "anthropic"
+          ? isAnthropicConfigValid
+          : llmConfig.LLM === "ollama"
+            ? isOllamaConfigValid
+            : llmConfig.LLM === "custom"
+              ? isCustomConfigValid
+              : false;
 
   return isLLMConfigValid && isImageConfigValid();
 };

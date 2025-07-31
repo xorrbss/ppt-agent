@@ -46,7 +46,7 @@ class PresentationModel(SQLModel, table=True):
         return PresentationOutlineModel(
             title=self.title,
             slides=[SlideOutlineModel(**each) for each in self.outlines],
-            notes=self.notes,
+            # notes=self.notes,
         )
 
     def get_layout(self):

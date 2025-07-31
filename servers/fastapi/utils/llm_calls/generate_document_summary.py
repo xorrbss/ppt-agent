@@ -1,8 +1,9 @@
 import asyncio
 from typing import List
-from openai.types.chat.chat_completion import ChatCompletion
 
-from utils.llm_provider import get_llm_client, get_nano_model
+from models.llm_message import LLMMessage
+from services.llm_client import LLMClient
+from utils.llm_provider import get_model
 
 
 sysmte_prompt = """
@@ -23,23 +24,21 @@ Maintain as much information as possible.
 
 
 async def generate_document_summary(documents: List[str]):
-    client = get_llm_client()
-    model = get_nano_model()
+    client = LLMClient()
+    model = get_model()
 
     coroutines = []
     for document in documents:
         truncated_text = document[:200000]
-        coroutine = client.chat.completions.create(
+        coroutine = client.generate(
             model=model,
             messages=[
-                {"role": "system", "content": sysmte_prompt},
-                {"role": "user", "content": truncated_text},
+                LLMMessage(role="system", content=sysmte_prompt),
+                LLMMessage(role="user", content=truncated_text),
             ],
         )
         coroutines.append(coroutine)
 
-    completions: List[ChatCompletion] = await asyncio.gather(*coroutines)
-    combined = "\n\n\n\n".join(
-        [completion.choices[0].message.content for completion in completions]
-    )
+    completions: List[str] = await asyncio.gather(*coroutines)
+    combined = "\n\n\n\n".join(completions)
     return combined

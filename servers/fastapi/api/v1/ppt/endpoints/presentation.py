@@ -2,10 +2,11 @@ import asyncio
 import json
 import os
 import random
+import importlib
 from typing import Annotated, List, Literal, Optional
 from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
-from sqlalchemy import String, cast, delete
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from constants.documents import UPLOAD_ACCEPTED_FILE_TYPES
@@ -19,7 +20,7 @@ from models.pptx_models import PptxPresentationModel
 from models.presentation_layout import PresentationLayoutModel
 from models.presentation_structure_model import PresentationStructureModel
 from models.presentation_with_slides import PresentationWithSlides
-from services.get_layout_by_name import get_layout_by_name
+from utils.get_layout_by_name import get_layout_by_name
 from services.icon_finder_service import IconFinderService
 from services.image_generation_service import ImageGenerationService
 from utils.dict_utils import deep_update
@@ -217,9 +218,11 @@ async def stream_presentation(
         ).to_string()
         for i, slide_layout_index in enumerate(structure.slides):
             slide_layout = layout.slides[slide_layout_index]
+
             slide_content = await get_slide_content_from_type_and_outline(
                 slide_layout, outline.slides[i], presentation.language
             )
+
             slide = SlideModel(
                 presentation=presentation_id,
                 layout_group=layout.name,
@@ -235,9 +238,6 @@ async def stream_presentation(
                     image_generation_service, icon_finder_service, slide
                 )
             )
-
-            # Give control to the event loop
-            await asyncio.sleep(0)
 
             yield SSEResponse(
                 event="response",
@@ -475,7 +475,6 @@ async def from_template(
         new_slide_data = list(filter(lambda x: x.index == each_slide.index, data.data))
         if new_slide_data:
             updated_content = deep_update(each_slide.content, new_slide_data[0].content)
-            print(f"Updated content for slide {each_slide.index}: {updated_content}")
         new_slides.append(
             each_slide.get_new_slide(new_presentation.id, updated_content)
         )

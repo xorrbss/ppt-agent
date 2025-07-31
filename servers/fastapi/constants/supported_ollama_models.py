@@ -7,7 +7,6 @@ SUPPORTED_OLLAMA_MODELS = {
         value="llama3:8b",
         description="❌ Graphs not supported.",
         size="4.7GB",
-        supports_graph=False,
         icon="/static/icons/meta.png",
     ),
     "llama3:70b": OllamaModelMetadata(
@@ -15,7 +14,6 @@ SUPPORTED_OLLAMA_MODELS = {
         value="llama3:70b",
         description="✅ Graphs supported.",
         size="40GB",
-        supports_graph=True,
         icon="/static/icons/meta.png",
     ),
     "llama3.1:8b": OllamaModelMetadata(
@@ -23,7 +21,6 @@ SUPPORTED_OLLAMA_MODELS = {
         value="llama3.1:8b",
         description="❌ Graphs not supported.",
         size="4.9GB",
-        supports_graph=False,
         icon="/static/icons/meta.png",
     ),
     "llama3.1:70b": OllamaModelMetadata(
@@ -31,7 +28,6 @@ SUPPORTED_OLLAMA_MODELS = {
         value="llama3.1:70b",
         description="✅ Graphs supported.",
         size="43GB",
-        supports_graph=True,
         icon="/static/icons/meta.png",
     ),
     "llama3.1:405b": OllamaModelMetadata(
@@ -39,7 +35,6 @@ SUPPORTED_OLLAMA_MODELS = {
         value="llama3.1:405b",
         description="✅ Graphs supported.",
         size="243GB",
-        supports_graph=True,
         icon="/static/icons/meta.png",
     ),
     "llama3.2:1b": OllamaModelMetadata(
@@ -47,7 +42,6 @@ SUPPORTED_OLLAMA_MODELS = {
         value="llama3.2:1b",
         description="❌ Graphs not supported.",
         size="1.3GB",
-        supports_graph=False,
         icon="/static/icons/meta.png",
     ),
     "llama3.2:3b": OllamaModelMetadata(
@@ -55,7 +49,6 @@ SUPPORTED_OLLAMA_MODELS = {
         value="llama3.2:3b",
         description="❌ Graphs not supported.",
         size="2GB",
-        supports_graph=False,
         icon="/static/icons/meta.png",
     ),
     "llama3.3:70b": OllamaModelMetadata(
@@ -63,7 +56,6 @@ SUPPORTED_OLLAMA_MODELS = {
         value="llama3.3:70b",
         description="✅ Graphs supported.",
         size="43GB",
-        supports_graph=True,
         icon="/static/icons/meta.png",
     ),
     "llama4:16x17b": OllamaModelMetadata(
@@ -71,7 +63,6 @@ SUPPORTED_OLLAMA_MODELS = {
         value="llama4:16x17b",
         description="✅ Graphs supported.",
         size="67GB",
-        supports_graph=True,
         icon="/static/icons/meta.png",
     ),
     "llama4:128x17b": OllamaModelMetadata(
@@ -79,7 +70,6 @@ SUPPORTED_OLLAMA_MODELS = {
         value="llama4:128x17b",
         description="✅ Graphs supported.",
         size="245GB",
-        supports_graph=True,
         icon="/static/icons/meta.png",
     ),
 }
@@ -90,7 +80,6 @@ SUPPORTED_GEMMA_MODELS = {
         value="gemma3:1b",
         description="❌ Graphs not supported.",
         size="815MB",
-        supports_graph=False,
         icon="/static/icons/gemma.png",
     ),
     "gemma3:4b": OllamaModelMetadata(
@@ -98,7 +87,6 @@ SUPPORTED_GEMMA_MODELS = {
         value="gemma3:4b",
         description="❌ Graphs not supported.",
         size="3.3GB",
-        supports_graph=False,
         icon="/static/icons/gemma.png",
     ),
     "gemma3:12b": OllamaModelMetadata(
@@ -106,7 +94,6 @@ SUPPORTED_GEMMA_MODELS = {
         value="gemma3:12b",
         description="❌ Graphs not supported.",
         size="8.1GB",
-        supports_graph=False,
         icon="/static/icons/gemma.png",
     ),
     "gemma3:27b": OllamaModelMetadata(
@@ -114,7 +101,6 @@ SUPPORTED_GEMMA_MODELS = {
         value="gemma3:27b",
         description="✅ Graphs supported.",
         size="17GB",
-        supports_graph=True,
         icon="/static/icons/gemma.png",
     ),
 }
@@ -125,7 +111,6 @@ SUPPORTED_DEEPSEEK_MODELS = {
         value="deepseek-r1:1.5b",
         description="❌ Graphs not supported.",
         size="1.1GB",
-        supports_graph=False,
         icon="/static/icons/deepseek.png",
     ),
     "deepseek-r1:7b": OllamaModelMetadata(
@@ -133,7 +118,6 @@ SUPPORTED_DEEPSEEK_MODELS = {
         value="deepseek-r1:7b",
         description="❌ Graphs not supported.",
         size="4.7GB",
-        supports_graph=False,
         icon="/static/icons/deepseek.png",
     ),
     "deepseek-r1:8b": OllamaModelMetadata(
@@ -141,7 +125,6 @@ SUPPORTED_DEEPSEEK_MODELS = {
         value="deepseek-r1:8b",
         description="❌ Graphs not supported.",
         size="5.2GB",
-        supports_graph=False,
         icon="/static/icons/deepseek.png",
     ),
     "deepseek-r1:14b": OllamaModelMetadata(
@@ -149,7 +132,6 @@ SUPPORTED_DEEPSEEK_MODELS = {
         value="deepseek-r1:14b",
         description="❌ Graphs not supported.",
         size="9GB",
-        supports_graph=False,
         icon="/static/icons/deepseek.png",
     ),
     "deepseek-r1:32b": OllamaModelMetadata(
@@ -157,7 +139,6 @@ SUPPORTED_DEEPSEEK_MODELS = {
         value="deepseek-r1:32b",
         description="✅ Graphs supported.",
         size="20GB",
-        supports_graph=True,
         icon="/static/icons/deepseek.png",
     ),
     "deepseek-r1:70b": OllamaModelMetadata(
@@ -165,7 +146,6 @@ SUPPORTED_DEEPSEEK_MODELS = {
         value="deepseek-r1:70b",
         description="✅ Graphs supported.",
         size="43GB",
-        supports_graph=True,
         icon="/static/icons/deepseek.png",
     ),
     "deepseek-r1:671b": OllamaModelMetadata(
@@ -173,7 +153,6 @@ SUPPORTED_DEEPSEEK_MODELS = {
         value="deepseek-r1:671b",
         description="✅ Graphs supported.",
         size="404GB",
-        supports_graph=True,
         icon="/static/icons/deepseek.png",
     ),
 }
@@ -184,7 +163,6 @@ SUPPORTED_QWEN_MODELS = {
         value="qwen3:0.6b",
         description="❌ Graphs not supported.",
         size="523MB",
-        supports_graph=False,
         icon="/static/icons/qwen.png",
     ),
     "qwen3:1.7b": OllamaModelMetadata(
@@ -192,7 +170,6 @@ SUPPORTED_QWEN_MODELS = {
         value="qwen3:1.7b",
         description="❌ Graphs not supported.",
         size="1.4GB",
-        supports_graph=False,
         icon="/static/icons/qwen.png",
     ),
     "qwen3:4b": OllamaModelMetadata(
@@ -200,7 +177,6 @@ SUPPORTED_QWEN_MODELS = {
         value="qwen3:4b",
         description="❌ Graphs not supported.",
         size="2.6GB",
-        supports_graph=False,
         icon="/static/icons/qwen.png",
     ),
     "qwen3:8b": OllamaModelMetadata(
@@ -208,7 +184,6 @@ SUPPORTED_QWEN_MODELS = {
         value="qwen3:8b",
         description="❌ Graphs not supported.",
         size="5.2GB",
-        supports_graph=False,
         icon="/static/icons/qwen.png",
     ),
     "qwen3:14b": OllamaModelMetadata(
@@ -216,7 +191,6 @@ SUPPORTED_QWEN_MODELS = {
         value="qwen3:14b",
         description="❌ Graphs not supported.",
         size="9.3GB",
-        supports_graph=False,
         icon="/static/icons/qwen.png",
     ),
     "qwen3:30b": OllamaModelMetadata(
@@ -224,7 +198,6 @@ SUPPORTED_QWEN_MODELS = {
         value="qwen3:30b",
         description="✅ Graphs supported.",
         size="19GB",
-        supports_graph=True,
         icon="/static/icons/qwen.png",
     ),
     "qwen3:32b": OllamaModelMetadata(
@@ -232,7 +205,6 @@ SUPPORTED_QWEN_MODELS = {
         value="qwen3:32b",
         description="✅ Graphs supported.",
         size="20GB",
-        supports_graph=True,
         icon="/static/icons/qwen.png",
     ),
     "qwen3:235b": OllamaModelMetadata(
@@ -240,7 +212,6 @@ SUPPORTED_QWEN_MODELS = {
         value="qwen3:235b",
         description="✅ Graphs supported.",
         size="142GB",
-        supports_graph=True,
         icon="/static/icons/qwen.png",
     ),
 }

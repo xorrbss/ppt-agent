@@ -25,6 +25,14 @@ def get_llm_provider_env():
     return os.getenv("LLM")
 
 
+def get_anthropic_api_key_env():
+    return os.getenv("ANTHROPIC_API_KEY")
+
+
+def get_anthropic_model_env():
+    return os.getenv("ANTHROPIC_MODEL")
+
+
 def get_ollama_url_env():
     return os.getenv("OLLAMA_URL")
 
@@ -37,8 +45,16 @@ def get_openai_api_key_env():
     return os.getenv("OPENAI_API_KEY")
 
 
+def get_openai_model_env():
+    return os.getenv("OPENAI_MODEL")
+
+
 def get_google_api_key_env():
     return os.getenv("GOOGLE_API_KEY")
+
+
+def get_google_model_env():
+    return os.getenv("GOOGLE_MODEL")
 
 
 def get_custom_llm_api_key_env():
@@ -79,3 +95,7 @@ def get_redis_db_env():
 
 def get_redis_password_env():
     return os.getenv("REDIS_PASSWORD")
+
+
+def get_extended_reasoning_env():
+    return os.getenv("EXTENDED_REASONING")
