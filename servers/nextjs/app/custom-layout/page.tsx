@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Upload, FileText, X } from "lucide-react";
+import { Upload, FileText, X, Loader2 } from "lucide-react";
 import { ApiResponseHandler } from "@/app/(presentation-generator)/services/api/api-error-handler";
 
 // Types
@@ -30,6 +30,7 @@ interface ProcessedSlide extends SlideData {
   processing?: boolean;
   processed?: boolean;
   error?: string;
+  modified?: boolean; // Added for unsaved changes
 }
 
 const CustomLayoutPage = () => {
@@ -37,6 +38,121 @@ const CustomLayoutPage = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isProcessingPptx, setIsProcessingPptx] = useState(false);
   const [slides, setSlides] = useState<ProcessedSlide[]>([]);
+  const [isSavingLayout, setIsSavingLayout] = useState(false);
+
+  // Warning before page unload
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      return "You have unsaved changes. Are you sure you want to leave?";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
+
+  // Save layout functionality
+  const saveLayout = useCallback(async () => {
+    if (!slides.length) {
+      toast.error("No slides to save");
+      return;
+    }
+
+    setIsSavingLayout(true);
+    const layoutName = `layout-${Date.now()}`;
+
+    try {
+      // Convert each slide HTML to React component
+      const reactComponents = [];
+
+      for (let i = 0; i < slides.length; i++) {
+        const slide = slides[i];
+
+        if (!slide.html) {
+          toast.error(`Slide ${slide.slide_number} has no HTML content`);
+          continue;
+        }
+
+        try {
+          const response = await fetch("/api/v1/ppt/html-to-react/", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              html: slide.html,
+              component_name: `Slide${slide.slide_number}`,
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error(
+              `Failed to convert slide ${slide.slide_number} to React`
+            );
+          }
+
+          const data = await response.json();
+          reactComponents.push({
+            slide_number: slide.slide_number,
+            component_code: data.react_component || data.component_code,
+            component_name: `Slide${slide.slide_number}`,
+          });
+
+          // Update progress
+          toast.info(
+            `Converted slide ${slide.slide_number} to React component`
+          );
+        } catch (error) {
+          console.error(`Error converting slide ${slide.slide_number}:`, error);
+          toast.error(`Failed to convert slide ${slide.slide_number}`);
+        }
+      }
+
+      if (reactComponents.length === 0) {
+        toast.error("No slides were successfully converted");
+        return;
+      }
+
+      // Save the layout components to the app_data/layouts folder
+      const saveResponse = await fetch("/api/save-layout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          layout_name: layoutName,
+          components: reactComponents,
+        }),
+      });
+
+      if (!saveResponse.ok) {
+        throw new Error("Failed to save layout components");
+      }
+
+      const saveData = await saveResponse.json();
+
+      // Mark all slides as saved (remove modified flag)
+      setSlides((prevSlides) =>
+        prevSlides.map((slide) => ({ ...slide, modified: false }))
+      );
+
+      toast.success(`Layout saved successfully as ${layoutName}`, {
+        description: `${reactComponents.length} React components saved to ${
+          saveData.path || "/app_data/layouts/"
+        }`,
+      });
+    } catch (error) {
+      console.error("Error saving layout:", error);
+      toast.error("Failed to save layout", {
+        description:
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred",
+      });
+    } finally {
+      setIsSavingLayout(false);
+    }
+  }, [slides]);
 
   // File upload handler
   const handleFileSelect = useCallback(
@@ -84,34 +200,21 @@ const CustomLayoutPage = () => {
       );
 
       try {
-        // const htmlResponse = await fetch("/api/v1/ppt/slide-to-html/", {
-        //   method: "POST",
-        //   headers: {
-        //     "Content-Type": "application/json",
-        //   },
-        //   body: JSON.stringify({
-        //     image: slide.screenshot_url,
-        //     xml: slide.xml_content,
-        //   }),
-        // });
-        let htmlResponse: any;
-        if (index === 0) {
-          htmlResponse = firstSlide;
-        } else if (index === 1) {
-          htmlResponse = slide2;
-        } else if (index === 2) {
-          htmlResponse = slide3;
-        } else {
-          htmlResponse = slide4;
-        }
+        const htmlResponse = await fetch("/api/v1/ppt/slide-to-html/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            image: slide.screenshot_url,
+            xml: slide.xml_content,
+          }),
+        });
 
-        // const htmlData: SlideToHtmlResponse =
-        //   await ApiResponseHandler.handleResponse(
-        //     htmlResponse,
-        //     `Failed to convert slide ${slide.slide_number} to HTML`
-        //   );
-
-        const htmlData = htmlResponse;
+        const htmlData = await ApiResponseHandler.handleResponse(
+          htmlResponse,
+          `Failed to convert slide ${slide.slide_number} to HTML`
+        );
 
         console.log(`Successfully processed slide ${slide.slide_number}`);
 
@@ -198,29 +301,27 @@ const CustomLayoutPage = () => {
       const formData = new FormData();
       formData.append("pptx_file", selectedFile);
 
-      // const pptxResponse = await fetch("/api/v1/ppt/pptx-slides/process", {
-      //   method: "POST",
-      //   body: formData,
-      // });
-      const pptxResponse = processData;
-      const pptxData = pptxResponse;
+      const pptxResponse = await fetch("/api/v1/ppt/pptx-slides/process", {
+        method: "POST",
+        body: formData,
+      });
+      const pptxData = await ApiResponseHandler.handleResponse(
+        pptxResponse,
+        "Failed to process PPTX file"
+      );
 
-      // const pptxData: PptxProcessResponse =
-      //   await ApiResponseHandler.handleResponse(
-      //     pptxResponse,
-      //     "Failed to process PPTX file"
-      //   );
-
-      // if (!pptxData.success || !pptxData.slides?.length) {
-      //   throw new Error("No slides found in the PPTX file");
-      // }
+      if (!pptxData.success || !pptxData.slides?.length) {
+        throw new Error("No slides found in the PPTX file");
+      }
 
       // Initialize slides with skeleton state
-      const initialSlides: ProcessedSlide[] = pptxData.slides.map((slide) => ({
-        ...slide,
-        processing: false,
-        processed: false,
-      }));
+      const initialSlides: ProcessedSlide[] = pptxData.slides.map(
+        (slide: any) => ({
+          ...slide,
+          processing: false,
+          processed: false,
+        })
+      );
 
       setSlides(initialSlides);
 
@@ -254,6 +355,24 @@ const CustomLayoutPage = () => {
       }
     },
     [slides, processSlideToHtml]
+  );
+
+  // Mark slide as modified when it's updated
+  const handleSlideUpdate = useCallback(
+    (index: number, updatedSlideData: any) => {
+      setSlides((prevSlides) =>
+        prevSlides.map((s, i) =>
+          i === index
+            ? {
+                ...s,
+                ...updatedSlideData,
+                modified: true,
+              }
+            : s
+        )
+      );
+    },
+    []
   );
 
   // Calculate progress
@@ -386,8 +505,35 @@ const CustomLayoutPage = () => {
                 index={index}
                 retrySlide={retrySlide}
                 setSlides={setSlides}
+                onSlideUpdate={(updatedSlideData) =>
+                  handleSlideUpdate(index, updatedSlideData)
+                }
               />
             ))}
+          </div>
+        )}
+
+        {/* Floating Save Layout Button */}
+        {slides.length > 0 && slides.some((s) => s.processed) && (
+          <div className="fixed bottom-6 right-6 z-50">
+            <Button
+              onClick={saveLayout}
+              disabled={isSavingLayout}
+              className="bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3 text-lg"
+              size="lg"
+            >
+              {isSavingLayout ? (
+                <>
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                  Saving Layout...
+                </>
+              ) : (
+                <>
+                  <FileText className="w-5 h-5 mr-2" />
+                  Save Layout
+                </>
+              )}
+            </Button>
           </div>
         )}
       </div>

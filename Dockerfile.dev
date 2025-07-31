@@ -4,7 +4,15 @@ FROM python:3.11-slim-bookworm
 RUN apt-get update && apt-get install -y \
   nginx \
   curl \
-  redis-server
+  redis-server \
+  default-libmysqlclient-dev \
+  build-essential \
+  pkg-config \
+  libreoffice \
+  fontconfig \
+  imagemagick
+
+RUN sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /etc/ImageMagick-6/policy.xml
 
 
     # Install Node.js 20 using NodeSource repository

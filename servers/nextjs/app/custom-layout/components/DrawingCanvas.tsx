@@ -2,27 +2,41 @@
 
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Save, X, Pencil, Eraser, RotateCcw, Download } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  X,
+  Pencil,
+  Eraser,
+  RotateCcw,
+  Download,
+  SendHorizontal,
+} from "lucide-react";
 import html2canvas from "html2canvas";
 
 interface DrawingCanvasProps {
   slideElement: HTMLElement | null;
   onClose: () => void;
   slideNumber: number;
+  onSlideUpdate: (updatedSlide: any) => void;
 }
 
 const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   slideElement,
   onClose,
   slideNumber,
+  onSlideUpdate,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const slideDisplayRef = useRef<HTMLDivElement>(null);
+  const slideContentRef = useRef<HTMLDivElement>(null);
   const [strokeWidth, setStrokeWidth] = useState(3);
   const [strokeColor, setStrokeColor] = useState("#000000");
   const [eraserMode, setEraserMode] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [prompt, setPrompt] = useState("");
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [slideHtml, setSlideHtml] = useState("");
   const [canvasDimensions, setCanvasDimensions] = useState({
     width: 800,
     height: 600,
@@ -30,6 +44,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
 
   useEffect(() => {
     if (slideElement && containerRef.current) {
+      console.log("slideElement", slideElement);
       const rect = slideElement.getBoundingClientRect();
 
       // Set canvas dimensions to match the slide element
@@ -37,8 +52,51 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
         width: Math.max(rect.width, 800),
         height: Math.max(rect.height, 600),
       });
+
+      // Store the HTML once to prevent re-renders
+      setSlideHtml(slideElement.innerHTML);
     }
   }, [slideElement]);
+
+  // Apply optimizations once after slide content is rendered
+  useEffect(() => {
+    if (slideContentRef.current && slideHtml) {
+      const slideContent = slideContentRef.current;
+
+      // Apply styles to prevent interactions and flickering
+      slideContent.style.pointerEvents = "none";
+      slideContent.style.userSelect = "none";
+      slideContent.style.transform = "translateZ(0)";
+      slideContent.style.willChange = "auto";
+      slideContent.style.backfaceVisibility = "hidden";
+
+      // Target all interactive elements
+      const interactiveElements = slideContent.querySelectorAll(
+        "img, video, iframe, a, button, input, textarea, select"
+      );
+
+      interactiveElements.forEach((element) => {
+        const el = element as HTMLElement;
+        el.style.pointerEvents = "none";
+        el.style.userSelect = "none";
+        (el.style as any).webkitUserSelect = "none";
+        (el.style as any).webkitTouchCallout = "none";
+        (el.style as any).webkitUserDrag = "none";
+        el.style.transform = "translateZ(0)";
+        el.style.backfaceVisibility = "hidden";
+
+        if (element.tagName === "IMG") {
+          (element as HTMLImageElement).draggable = false;
+        }
+
+        // Remove any event listeners
+        el.onclick = null;
+        el.onmousedown = null;
+        el.onmouseup = null;
+        el.onmousemove = null;
+      });
+    }
+  }, [slideHtml]);
 
   const getCanvasContext = () => {
     const canvas = canvasRef.current;
@@ -154,17 +212,30 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   };
 
-  const downloadImage = (dataURL: string, filename: string) => {
-    const link = document.createElement("a");
-    link.download = filename;
-    link.href = dataURL;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // Convert data URL to blob for form data
+  const dataURLToBlob = (dataURL: string): Blob => {
+    const parts = dataURL.split(",");
+    const contentType = parts[0].match(/:(.*?);/)?.[1] || "image/png";
+    const raw = window.atob(parts[1]);
+    const rawLength = raw.length;
+    const uInt8Array = new Uint8Array(rawLength);
+
+    for (let i = 0; i < rawLength; ++i) {
+      uInt8Array[i] = raw.charCodeAt(i);
+    }
+
+    return new Blob([uInt8Array], { type: contentType });
   };
 
   const handleSave = async () => {
     if (!slideElement || !canvasRef.current || !slideDisplayRef.current) return;
+
+    if (!prompt.trim()) {
+      alert("Please enter a prompt before saving.");
+      return;
+    }
+
+    setIsUpdating(true);
 
     try {
       // Take screenshot of the slide display area (slide only)
@@ -187,17 +258,63 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
         useCORS: true,
       });
 
-      // Download both images
-      const slideOnlyDataURL = slideOnly.toDataURL("image/png");
-      const slideWithCanvasDataURL = slideWithCanvas.toDataURL("image/png");
+      // Get the current HTML content from the original slide element
+      const currentHtml = slideElement.innerHTML;
 
-      downloadImage(slideOnlyDataURL, `slide-${slideNumber}-original.png`);
-      downloadImage(
-        slideWithCanvasDataURL,
-        `slide-${slideNumber}-with-annotations.png`
+      // Convert canvas images to blobs
+      const currentUiImageBlob = dataURLToBlob(
+        slideOnly.toDataURL("image/png")
       );
+      const sketchImageBlob = dataURLToBlob(
+        slideWithCanvas.toDataURL("image/png")
+      );
+
+      // Prepare form data
+      const formData = new FormData();
+      formData.append(
+        "current_ui_image",
+        currentUiImageBlob,
+        `slide-${slideNumber}-current.png`
+      );
+      formData.append(
+        "sketch_image",
+        sketchImageBlob,
+        `slide-${slideNumber}-sketch.png`
+      );
+      formData.append("html", currentHtml);
+      formData.append("prompt", prompt);
+
+      // Call the API
+      const response = await fetch("/api/v1/ppt/html-edit/", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`API call failed: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      // Update the slide with new data
+      onSlideUpdate({
+        slide_number: slideNumber,
+        html: data.edited_html || currentHtml,
+        processed: true,
+        processing: false,
+        error: undefined,
+      });
+      // Close the drawing canvas
+      onClose();
     } catch (error) {
-      console.error("Error capturing slide:", error);
+      console.error("Error updating slide:", error);
+      alert(
+        `Error updating slide: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -320,13 +437,6 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
 
           <div className="flex items-center gap-2 flex-shrink-0">
             <Button
-              onClick={handleSave}
-              className="flex items-center gap-1 bg-green-600 hover:bg-green-700"
-            >
-              <Download size={16} />
-              Save & Download
-            </Button>
-            <Button
               variant="outline"
               onClick={onClose}
               className="flex items-center gap-1"
@@ -334,6 +444,42 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
               <X size={16} />
               Close
             </Button>
+          </div>
+        </div>
+
+        {/* Prompt Section */}
+        <div className="p-4 border-b bg-gray-50 flex-shrink-0">
+          <div className="space-y-2">
+            <label
+              htmlFor="edit-prompt"
+              className="text-sm font-medium text-gray-700"
+            >
+              Describe the changes you want to make:
+            </label>
+            <div className="flex gap-2">
+              <Textarea
+                id="edit-prompt"
+                placeholder="Enter your prompt here... (e.g., 'Change the title color to blue', 'Add a border to the image', etc.)"
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                className="flex-1 min-h-[80px] max-h-[80px] resize-none"
+                disabled={isUpdating}
+              />
+              <Button
+                onClick={handleSave}
+                disabled={isUpdating || !prompt.trim()}
+                className="flex items-center gap-1 bg-green-600 hover:bg-green-700 px-6"
+              >
+                {isUpdating ? (
+                  "Updating..."
+                ) : (
+                  <>
+                    <SendHorizontal size={16} />
+                    Update Slide
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -347,15 +493,19 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
               height: canvasDimensions.height,
             }}
           >
-            {/* Slide Background */}
-            {slideElement && (
-              <div
-                className="absolute inset-0 pointer-events-none z-10"
-                dangerouslySetInnerHTML={{
-                  __html: slideElement.innerHTML,
-                }}
-              />
-            )}
+            {/* Slide Background - Static HTML content */}
+            <div
+              ref={slideContentRef}
+              className="absolute inset-0 z-10"
+              style={{
+                overflow: "hidden",
+                isolation: "isolate",
+                contain: "layout style paint",
+              }}
+              dangerouslySetInnerHTML={{
+                __html: slideHtml,
+              }}
+            />
 
             {/* Drawing Canvas */}
             <canvas
@@ -368,6 +518,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
                 left: 0,
                 zIndex: 20,
                 cursor: eraserMode ? "grab" : "crosshair",
+                pointerEvents: "auto",
+                touchAction: "none",
               }}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
@@ -376,6 +528,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
               onTouchStart={handleTouchStart}
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
+              onContextMenu={(e) => e.preventDefault()}
             />
           </div>
         </div>

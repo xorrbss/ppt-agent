@@ -1,20 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  AlertCircle,
-  CheckCircle,
-  Edit,
-  Loader2,
-  SendHorizontal,
-  WandSparkles,
-} from "lucide-react";
+
+import { AlertCircle, CheckCircle, Edit, Loader2 } from "lucide-react";
 import React, { useState, useEffect, useRef } from "react";
-import { Textarea } from "@/components/ui/textarea";
 import ToolTip from "@/components/ToolTip";
 import DrawingCanvas from "./DrawingCanvas";
 
@@ -23,11 +11,13 @@ const EachSlide = ({
   index,
   retrySlide,
   setSlides,
+  onSlideUpdate,
 }: {
   slide: any;
   index: number;
   retrySlide: (index: number) => void;
-  setSlides: (slides: any[]) => void;
+  setSlides: React.Dispatch<React.SetStateAction<any[]>>;
+  onSlideUpdate?: (updatedSlideData: any) => void;
 }) => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [prompt, setPrompt] = useState("");
@@ -50,31 +40,25 @@ const EachSlide = ({
     }
   }, [slide.processed, slide.html]);
 
-  const handleSubmit = async () => {
-    setIsUpdating(true);
-    try {
-      const response = await fetch("/api/update-slide", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ slide_number: slide.slide_number, prompt }),
-      });
-      const data = await response.json();
-      console.log(data);
-    } catch (error) {
-      console.error("Error updating slide:", error);
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
   const handleEditClick = () => {
     setShowDrawingCanvas(true);
   };
 
   const handleCloseDrawingCanvas = () => {
     setShowDrawingCanvas(false);
+  };
+
+  const handleSlideUpdate = (updatedSlideData: any) => {
+    if (onSlideUpdate) {
+      onSlideUpdate(updatedSlideData);
+    } else {
+      // Fallback to original behavior
+      setSlides((prevSlides) =>
+        prevSlides.map((s, i) =>
+          i === index ? { ...s, ...updatedSlideData } : s
+        )
+      );
+    }
   };
 
   return (
@@ -184,60 +168,6 @@ const EachSlide = ({
         >
           Open in new tab
         </Button>
-        <div className="absolute top-2 z-20 sm:top-4 hidden md:block left-2 sm:left-4 transition-transform">
-          <Popover>
-            <PopoverTrigger>
-              <ToolTip content="Update slide using prompt">
-                <div
-                  className={`p-2 group-hover:scale-105 rounded-lg bg-[#5141e5] hover:shadow-md transition-all duration-300 cursor-pointer shadow-md `}
-                >
-                  <WandSparkles className="w-4 sm:w-5 h-4 sm:h-5 text-white" />
-                </div>
-              </ToolTip>
-            </PopoverTrigger>
-            <PopoverContent
-              side="right"
-              align="start"
-              sideOffset={10}
-              className="w-[280px] sm:w-[400px] z-20"
-            >
-              <div className="space-y-4">
-                <form
-                  className="flex flex-col gap-3"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleSubmit();
-                  }}
-                >
-                  <Textarea
-                    id={`slide-${slide.index}-prompt`}
-                    placeholder="Enter your prompt here..."
-                    className="w-full min-h-[100px] max-h-[100px] p-2 text-sm border rounded-lg focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                    disabled={isUpdating}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSubmit();
-                      }
-                    }}
-                    rows={4}
-                    wrap="soft"
-                  />
-                  <button
-                    disabled={isUpdating}
-                    type="submit"
-                    className={`bg-gradient-to-r from-[#9034EA] to-[#5146E5] rounded-[32px] px-4 py-2 text-white flex items-center justify-end gap-2 ml-auto ${
-                      isUpdating ? "opacity-70 cursor-not-allowed" : ""
-                    }`}
-                  >
-                    {isUpdating ? "Updating..." : "Update"}
-                    <SendHorizontal className="w-4 sm:w-5 h-4 sm:h-5" />
-                  </button>
-                </form>
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
         <div className="absolute top-2 z-20 sm:top-4 hidden md:block left-2 sm:left-16 transition-transform">
           <ToolTip content="Edit slide">
             <div
@@ -256,6 +186,7 @@ const EachSlide = ({
           slideElement={slideContentRef.current}
           onClose={handleCloseDrawingCanvas}
           slideNumber={slide.slide_number}
+          onSlideUpdate={handleSlideUpdate}
         />
       )}
     </>
