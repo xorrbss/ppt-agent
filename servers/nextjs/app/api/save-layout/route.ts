@@ -40,8 +40,11 @@ export async function POST(request: NextRequest) {
 
       const fileName = `${component_name}.tsx`;
       const filePath = join(layoutsDir, fileName);
+      const cleanComponentCode = component_code
+        .replace(/```tsx/g, "")
+        .replace(/```/g, "");
 
-      await writeFile(filePath, component_code, "utf8");
+      await writeFile(filePath, cleanComponentCode, "utf8");
       savedFiles.push({
         slide_number,
         component_name,

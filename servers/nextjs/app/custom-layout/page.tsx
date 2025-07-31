@@ -128,19 +128,12 @@ const CustomLayoutPage = () => {
       if (!saveResponse.ok) {
         throw new Error("Failed to save layout components");
       }
-
-      const saveData = await saveResponse.json();
-
       // Mark all slides as saved (remove modified flag)
       setSlides((prevSlides) =>
         prevSlides.map((slide) => ({ ...slide, modified: false }))
       );
 
-      toast.success(`Layout saved successfully as ${layoutName}`, {
-        description: `${reactComponents.length} React components saved to ${
-          saveData.path || "/app_data/layouts/"
-        }`,
-      });
+      toast.success(`Layout saved successfully`);
     } catch (error) {
       console.error("Error saving layout:", error);
       toast.error("Failed to save layout", {
@@ -200,23 +193,34 @@ const CustomLayoutPage = () => {
       );
 
       try {
-        const htmlResponse = await fetch("/api/v1/ppt/slide-to-html/", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            image: slide.screenshot_url,
-            xml: slide.xml_content,
-          }),
-        });
+        // const htmlResponse = await fetch("/api/v1/ppt/slide-to-html/", {
+        //   method: "POST",
+        //   headers: {
+        //     "Content-Type": "application/json",
+        //   },
+        //   body: JSON.stringify({
+        //     image: slide.screenshot_url,
+        //     xml: slide.xml_content,
+        //   }),
+        // });
 
-        const htmlData = await ApiResponseHandler.handleResponse(
-          htmlResponse,
-          `Failed to convert slide ${slide.slide_number} to HTML`
-        );
+        // const htmlData = await ApiResponseHandler.handleResponse(
+        //   htmlResponse,
+        //   `Failed to convert slide ${slide.slide_number} to HTML`
+        // );
 
-        console.log(`Successfully processed slide ${slide.slide_number}`);
+        // console.log(`Successfully processed slide ${slide.slide_number}`);
+
+        let data: any;
+        if (slide.slide_number === 1) {
+          data = firstSlide;
+        } else if (slide.slide_number === 2) {
+          data = slide2;
+        } else if (slide.slide_number === 3) {
+          data = slide3;
+        } else if (slide.slide_number === 4) {
+          data = slide4;
+        }
 
         // Update slide with success
         setSlides((prev) => {
@@ -226,7 +230,7 @@ const CustomLayoutPage = () => {
                   ...s,
                   processing: false,
                   processed: true,
-                  html: htmlData.html,
+                  html: data.html,
                 }
               : s
           );
@@ -301,19 +305,20 @@ const CustomLayoutPage = () => {
       const formData = new FormData();
       formData.append("pptx_file", selectedFile);
 
-      const pptxResponse = await fetch("/api/v1/ppt/pptx-slides/process", {
-        method: "POST",
-        body: formData,
-      });
-      const pptxData = await ApiResponseHandler.handleResponse(
-        pptxResponse,
-        "Failed to process PPTX file"
-      );
+      // const pptxResponse = await fetch("/api/v1/ppt/pptx-slides/process", {
+      //   method: "POST",
+      //   body: formData,
+      // });
+      // const pptxData = await ApiResponseHandler.handleResponse(
+      //   pptxResponse,
+      //   "Failed to process PPTX file"
+      // );
 
-      if (!pptxData.success || !pptxData.slides?.length) {
-        throw new Error("No slides found in the PPTX file");
-      }
+      // if (!pptxData.success || !pptxData.slides?.length) {
+      //   throw new Error("No slides found in the PPTX file");
+      // }
 
+      const pptxData = processData;
       // Initialize slides with skeleton state
       const initialSlides: ProcessedSlide[] = pptxData.slides.map(
         (slide: any) => ({
