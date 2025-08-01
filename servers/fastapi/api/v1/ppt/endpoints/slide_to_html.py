@@ -1,10 +1,14 @@
 import os
 import base64
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Dict
 from fastapi import APIRouter, HTTPException, File, UploadFile, Form, Depends
 from pydantic import BaseModel
 import anthropic
+import aiohttp
+import asyncio
+import xml.etree.ElementTree as ET
+import re
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from utils.asset_directory_utils import get_images_directory
@@ -25,10 +29,15 @@ class SlideToHtmlRequest(BaseModel):
     image: str  # Partial path to image file (e.g., "/app_data/images/uuid/slide_1.png")
     xml: str    # OXML content as text
 
+class FontAnalysisResult(BaseModel):
+    internally_supported_fonts: List[Dict[str, str]]  # [{"name": "Open Sans", "google_fonts_url": "..."}]
+    not_supported_fonts: List[str]  # ["Custom Font Name"]
+
 
 class SlideToHtmlResponse(BaseModel):
     success: bool
     html: str
+    fonts: Optional[FontAnalysisResult] = None
     message: Optional[str] = None
 
 
@@ -79,6 +88,152 @@ class ErrorResponse(BaseModel):
     detail: str
     error_code: Optional[str] = None
 
+
+
+
+def extract_fonts_from_oxml(xml_content: str) -> List[str]:
+    """
+    Extract font names from OXML content.
+    
+    Args:
+        xml_content: OXML content as string
+    
+    Returns:
+        List of unique font names found in the OXML
+    """
+    fonts = set()
+    
+    try:
+        # Parse the XML content
+        root = ET.fromstring(xml_content)
+        
+        # Define namespaces commonly used in OXML
+        namespaces = {
+            'a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
+            'p': 'http://schemas.openxmlformats.org/presentationml/2006/main',
+            'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+        }
+        
+        # Search for font references in various OXML elements
+        # Look for latin fonts
+        for font_elem in root.findall('.//a:latin', namespaces):
+            if 'typeface' in font_elem.attrib:
+                fonts.add(font_elem.attrib['typeface'])
+        
+        # Look for east asian fonts
+        for font_elem in root.findall('.//a:ea', namespaces):
+            if 'typeface' in font_elem.attrib:
+                fonts.add(font_elem.attrib['typeface'])
+        
+        # Look for complex script fonts
+        for font_elem in root.findall('.//a:cs', namespaces):
+            if 'typeface' in font_elem.attrib:
+                fonts.add(font_elem.attrib['typeface'])
+        
+        # Look for font references in theme elements
+        for font_elem in root.findall('.//a:font', namespaces):
+            if 'typeface' in font_elem.attrib:
+                fonts.add(font_elem.attrib['typeface'])
+        
+        # Look for rPr (run properties) font references
+        for rpr_elem in root.findall('.//a:rPr', namespaces):
+            for font_elem in rpr_elem.findall('.//a:latin', namespaces):
+                if 'typeface' in font_elem.attrib:
+                    fonts.add(font_elem.attrib['typeface'])
+        
+        # Also search without namespace prefix for compatibility
+        for font_elem in root.findall('.//latin'):
+            if 'typeface' in font_elem.attrib:
+                fonts.add(font_elem.attrib['typeface'])
+                
+        for font_elem in root.findall('.//font'):
+            if 'typeface' in font_elem.attrib:
+                fonts.add(font_elem.attrib['typeface'])
+    
+    except ET.ParseError as e:
+        print(f"Error parsing OXML: {e}")
+        # Fallback: try to extract fonts using regex
+        font_pattern = r'typeface="([^"]+)"'
+        matches = re.findall(font_pattern, xml_content)
+        fonts.update(matches)
+    
+    # Filter out system fonts and empty strings
+    filtered_fonts = []
+    system_fonts = {'+mn-lt', '+mj-lt', '+mn-ea', '+mj-ea', '+mn-cs', '+mj-cs', ''}
+    
+    for font in fonts:
+        if font and font not in system_fonts:
+            filtered_fonts.append(font)
+    
+    return list(set(filtered_fonts))  # Remove duplicates
+
+
+async def check_google_font_availability(font_name: str) -> bool:
+    """
+    Check if a font is available in Google Fonts by making a HEAD request.
+    
+    Args:
+        font_name: Name of the font to check
+    
+    Returns:
+        True if font is available in Google Fonts, False otherwise
+    """
+    try:
+        # Format font name for Google Fonts URL (replace spaces with +)
+        formatted_name = font_name.replace(' ', '+')
+        google_fonts_url = f"https://fonts.googleapis.com/css2?family={formatted_name}&display=swap"
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.head(google_fonts_url, timeout=aiohttp.ClientTimeout(total=5)) as response:
+                # Google Fonts returns 200 for valid fonts, 400 for invalid ones
+                return response.status == 200
+                
+    except Exception as e:
+        print(f"Error checking Google Font availability for {font_name}: {e}")
+        return False
+
+
+async def analyze_fonts_in_oxml(xml_content: str) -> FontAnalysisResult:
+    """
+    Analyze fonts in OXML content and determine Google Fonts availability.
+    
+    Args:
+        xml_content: OXML content as string
+    
+    Returns:
+        FontAnalysisResult with supported and unsupported fonts
+    """
+    # Extract all fonts from OXML
+    fonts = extract_fonts_from_oxml(xml_content)
+    
+    if not fonts:
+        return FontAnalysisResult(
+            internally_supported_fonts=[],
+            not_supported_fonts=[]
+        )
+    
+    # Check each font's availability in Google Fonts concurrently
+    tasks = [check_google_font_availability(font) for font in fonts]
+    results = await asyncio.gather(*tasks)
+    
+    internally_supported_fonts = []
+    not_supported_fonts = []
+    
+    for font, is_available in zip(fonts, results):
+        if is_available:
+            formatted_name = font.replace(' ', '+')
+            google_fonts_url = f"https://fonts.googleapis.com/css2?family={formatted_name}&display=swap"
+            internally_supported_fonts.append({
+                "name": font,
+                "google_fonts_url": google_fonts_url
+            })
+        else:
+            not_supported_fonts.append(font)
+    
+    return FontAnalysisResult(
+        internally_supported_fonts=internally_supported_fonts,
+        not_supported_fonts=not_supported_fonts
+    )
 
 
 async def generate_html_from_slide(base64_image: str, media_type: str, xml_content: str, api_key: str) -> str:
@@ -307,29 +462,29 @@ async def edit_html_with_images(current_ui_base64: str, sketch_base64: Optional[
         
         # Build content array - always include text and current UI image
         content = [
-            {
-                "type": "text",
-                "text": f"Current HTML to edit:\n\n{html_content}\n\nText prompt for changes: {prompt}"
-            },
-            {
-                "type": "image",
-                "source": {
-                    "type": "base64",
-                    "media_type": media_type,
-                    "data": current_ui_base64
-                }
+                        {
+                            "type": "text",
+                            "text": f"Current HTML to edit:\n\n{html_content}\n\nText prompt for changes: {prompt}"
+                        },
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": media_type,
+                                "data": current_ui_base64
+                            }
             }
         ]
         
         # Only add sketch image if provided
         if sketch_base64:
             content.append({
-                "type": "image",
-                "source": {
-                    "type": "base64",
-                    "media_type": media_type,
-                    "data": sketch_base64
-                }
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": media_type,
+                                "data": sketch_base64
+                            }
             })
         
         with client.messages.stream(
@@ -467,13 +622,17 @@ async def convert_slide_to_html(request: SlideToHtmlRequest):
             xml_content=request.xml,
             api_key=api_key
             )
-
+        
         html_content = html_content.replace("```html", "").replace("```", "")
+        
+        # Analyze fonts in the OXML content
+        font_analysis = await analyze_fonts_in_oxml(request.xml)
         
         return SlideToHtmlResponse(
             success=True,
             html=html_content,
-            message="HTML generated successfully"
+            fonts=font_analysis,
+            message="HTML generated successfully with font analysis"
         )
         
     except HTTPException:
@@ -829,4 +988,4 @@ async def get_layouts(
         raise HTTPException(
             status_code=500,
             detail=f"Internal server error while retrieving layouts: {str(e)}"
-        )
+        ) 
