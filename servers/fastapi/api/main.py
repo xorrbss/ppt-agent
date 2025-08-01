@@ -5,6 +5,8 @@ from api.lifespan import app_lifespan
 from api.middlewares import UserConfigEnvUpdateMiddleware
 from api.v1.ppt.router import API_V1_PPT_ROUTER
 from utils.asset_directory_utils import get_exports_directory, get_images_directory, get_uploads_directory
+# Import models to ensure they are registered with SQLModel
+from models.sql.presentation_layout_code import PresentationLayoutCodeModel
 
 
 app = FastAPI(lifespan=app_lifespan)
