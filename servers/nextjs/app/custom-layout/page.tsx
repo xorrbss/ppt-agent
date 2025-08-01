@@ -65,6 +65,7 @@ const CustomLayoutPage = () => {
     try {
       // Convert each slide HTML to React component
       const reactComponents = [];
+      const presentationId = uuidv4();
 
       for (let i = 0; i < slides.length - 3; i++) {
         const slide = slides[i];
@@ -91,7 +92,7 @@ const CustomLayoutPage = () => {
           );
 
           reactComponents.push({
-            presentation_id: uuidv4(),
+            presentation_id: presentationId,
             layout_id: `${slide.slide_number}`,
             layout_name: `Slide${slide.slide_number}`,
             layout_code: data.react_component || data.component_code,
