@@ -18,7 +18,6 @@ import { ApiResponseHandler } from "@/app/(presentation-generator)/services/api/
 import { v4 as uuidv4 } from "uuid";
 // Types
 import EachSlide from "./components/EachSlide";
-import { firstSlide, processData, slide2, slide3, slide4 } from "./data";
 interface SlideData {
   slide_number: number;
   screenshot_url: string;
@@ -67,7 +66,7 @@ const CustomLayoutPage = () => {
       const reactComponents = [];
       const presentationId = uuidv4();
 
-      for (let i = 0; i < slides.length - 3; i++) {
+      for (let i = 0; i < slides.length; i++) {
         const slide = slides[i];
 
         if (!slide.html) {
@@ -529,6 +528,7 @@ const CustomLayoutPage = () => {
                 key={index}
                 slide={slide}
                 index={index}
+                isProcessingPptx={isProcessingPptx}
                 retrySlide={retrySlide}
                 setSlides={setSlides}
                 onSlideUpdate={(updatedSlideData) =>

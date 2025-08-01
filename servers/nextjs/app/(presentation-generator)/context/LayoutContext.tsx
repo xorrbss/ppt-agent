@@ -69,211 +69,11 @@ const createCacheKey = (groupName: string, fileName: string): string =>
 
 // Extract Babel compilation logic into a utility function
 const compileCustomLayout = (layoutCode: string, React: any, z: any) => {
-  const jsxCode = `
-const ImageSchema = z.object({
-    __image_url__: z.url().meta({
-        description: "URL to image",
-    }),
-    __image_prompt__: z.string().meta({
-        description: "Prompt used to generate the image",
-    }).min(10).max(50),
-})
+  const cleanCode = layoutCode
+    .replace(/import\s+React\s+from\s+'react';?/g, "")
+    .replace(/import\s*{\s*z\s*}\s*from\s+'zod';?/g, "");
 
-const layoutId = 'title-slide-with-decorative-elements'
-const layoutName = 'TitleSlideWithDecorativeElements'
-const layoutDescription = 'A title slide layout with company name, main title, subtitle, author text, and decorative curved shapes with images.'
-
-const titleSlideWithDecorativeElementsSchema = z.object({
-    companyName: z.string().min(5).max(30).default('AROWWAI INDUSTRIES').meta({
-        description: "Company or organization name",
-    }),
-    mainTitle: z.string().min(5).max(50).default('STRATEGY DECK').meta({
-        description: "Main title of the presentation (can include line breaks)",
-    }),
-    subtitle: z.string().min(10).max(80).default('STRATEGIES FOR GROWTH AND INNOVATION').meta({
-        description: "Subtitle describing the presentation topic",
-    }),
-    authorText: z.string().min(5).max(30).default('BY GROUP 1').meta({
-        description: "Author or presenter information",
-    }),
-    logo: ImageSchema.default({
-        __image_url__: 'https://images.pexels.com/photos/31995895/pexels-photo-31995895/free-photo-of-turkish-coffee-with-scenic-bursa-view.jpeg',
-        __image_prompt__: 'Company logo or brand icon'
-    }).meta({
-        description: "Company logo or brand icon",
-    }),
-    leftDecorativeImage: ImageSchema.default({
-        __image_url__: 'https://images.pexels.com/photos/31995895/pexels-photo-31995895/free-photo-of-turkish-coffee-with-scenic-bursa-view.jpeg',
-        __image_prompt__: 'Turkish coffee with scenic Bursa view'
-    }).meta({
-        description: "Left decorative curved shape background image",
-    }),
-    rightDecorativeImage: ImageSchema.default({
-        __image_url__: 'https://images.pexels.com/photos/31995895/pexels-photo-31995895/free-photo-of-turkish-coffee-with-scenic-bursa-view.jpeg',
-        __image_prompt__: 'Turkish coffee with scenic Bursa view'
-    }).meta({
-        description: "Right decorative curved shape background image",
-    })
-})
-
-const Schema = titleSlideWithDecorativeElementsSchema
-
-const TitleSlideWithDecorativeElementsLayout = ({ data: slideData }) => {
-    // Split main title by newlines for proper rendering
-    const titleLines = (slideData?.mainTitle || 'STRATEGY DECK').split('\\n')
-
-    return (
-        <>
-            {/* Import Google Fonts */}
-            <link 
-                href="https://fonts.googleapis.com/css2?family=League+Spartan:wght@400;500;600;700&display=swap" 
-                rel="stylesheet"
-            />
-            <link 
-                href="https://fonts.googleapis.com/css2?family=Futura:wght@400;500;600&display=swap" 
-                rel="stylesheet"
-            />
-            
-            <div 
-                className=" w-full rounded-sm max-w-[1280px] shadow-lg max-h-[720px] aspect-video bg-white relative z-20 mx-auto overflow-hidden"
-                style={{ backgroundColor: '#8d7b68' }}
-            >
-                {/* Bottom horizontal line */}
-                <div 
-                    className="absolute bottom-0 left-0 w-full h-0.5 bg-yellow-50" 
-                    style={{ backgroundColor: '#fdf7e4' }}
-                ></div>
-                
-                {/* Upper horizontal line */}
-                <div 
-                    className="absolute top-20 left-48 w-80 h-0.5 bg-yellow-50" 
-                    style={{ backgroundColor: '#fdf7e4' }}
-                ></div>
-                
-                {/* Right vertical line */}
-                <div 
-                    className="absolute top-0 right-8 w-0.5 h-full bg-yellow-50" 
-                    style={{ backgroundColor: '#fdf7e4' }}
-                ></div>
-                
-                {/* Upper left circular element */}
-                <div 
-                    className="absolute top-8 left-24 w-20 h-20 rounded-full" 
-                    style={{ backgroundColor: '#a4907c' }}
-                ></div>
-                
-                {/* Lower right circular element */}
-                <div 
-                    className="absolute bottom-20 right-28 w-48 h-48 rounded-full" 
-                    style={{ backgroundColor: '#a4907c' }}
-                ></div>
-                
-                {/* Left decorative curved shape */}
-                <div className="absolute top-20 left-0 w-64 h-80 overflow-hidden">
-                    <svg viewBox="0 0 660 996" className="w-full h-full">
-                        <path 
-                            d="M220.252 19.07C254 7.556 292.6 0 330.378 0C368.157 0 404.509 6.476 438.009 17.99C438.723 18.35 439.435 18.35 440.148 18.71C565.955 64.765 658.618 186.379 660.4 332.57L660.4 995.919L0 995.919L0 333.062C1.782 185.66 93.019 64.045 220.252 19.07Z" 
-                            fill="url(#leftImage)"
-                        />
-                        <defs>
-                            <pattern id="leftImage" patternUnits="objectBoundingBox" width="1" height="1">
-                                <image 
-                                    href={slideData?.leftDecorativeImage?.__image_url__ || 'https://images.pexels.com/photos/31995895/pexels-photo-31995895/free-photo-of-turkish-coffee-with-scenic-bursa-view.jpeg'} 
-                                    x="0" 
-                                    y="0" 
-                                    width="1" 
-                                    height="1" 
-                                    preserveAspectRatio="xMidYMid slice"
-                                />
-                            </pattern>
-                        </defs>
-                    </svg>
-                </div>
-                
-                {/* Right decorative curved shape */}
-                <div className="absolute top-32 right-0 w-80 h-96 overflow-hidden">
-                    <svg viewBox="0 0 660 996" className="w-full h-full">
-                        <path 
-                            d="M220.252 19.07C254 7.556 292.6 0 330.378 0C368.157 0 404.509 6.476 438.009 17.99C438.723 18.35 439.435 18.35 440.148 18.71C565.955 64.765 658.618 186.379 660.4 332.57L660.4 995.919L0 995.919L0 333.062C1.782 185.66 93.019 64.045 220.252 19.07Z" 
-                            fill="url(#rightImage)"
-                        />
-                        <defs>
-                            <pattern id="rightImage" patternUnits="objectBoundingBox" width="1" height="1">
-                                <image 
-                                    href={slideData?.rightDecorativeImage?.__image_url__ || 'https://images.pexels.com/photos/31995895/pexels-photo-31995895/free-photo-of-turkish-coffee-with-scenic-bursa-view.jpeg'} 
-                                    x="0" 
-                                    y="0" 
-                                    width="1" 
-                                    height="1" 
-                                    preserveAspectRatio="xMidYMid slice"
-                                />
-                            </pattern>
-                        </defs>
-                    </svg>
-                </div>
-                
-                {/* Small icon/logo near company name */}
-                <div className="absolute top-16 right-56 w-16 h-12 overflow-hidden">
-                    <img 
-                        src={slideData?.logo?.__image_url__ || 'https://images.pexels.com/photos/31995895/pexels-photo-31995895/free-photo-of-turkish-coffee-with-scenic-bursa-view.jpeg'} 
-                        alt={slideData?.logo?.__image_prompt__ || 'Company logo'} 
-                        className="w-full h-full object-cover"
-                    />
-                </div>
-                
-                {/* Company name */}
-                <div className="absolute top-14 right-8 text-right">
-                    <h2 
-                        className="text-yellow-50 text-lg font-normal tracking-wider" 
-                        style={{ fontFamily: "'Futura', sans-serif", color: '#fdf7e4' }}
-                    >
-                        {slideData?.companyName || 'AROWWAI INDUSTRIES'}
-                    </h2>
-                </div>
-                
-                {/* Main title */}
-                <div className="absolute top-64 left-64 right-8 text-right">
-                    <h1 
-                        className="text-yellow-50 text-8xl font-normal tracking-wider leading-tight" 
-                        style={{ fontFamily: "'League Spartan', sans-serif", color: '#fdf7e4' }}
-                    >
-                        {titleLines.map((line, index) => (
-                            <React.Fragment key={index}>
-                                {line}
-                                {index < titleLines.length - 1 && <br />}
-                            </React.Fragment>
-                        ))}
-                    </h1>
-                </div>
-                
-                {/* Subtitle */}
-                <div className="absolute bottom-24 left-64 right-8 text-right">
-                    <h3 
-                        className="text-yellow-50 text-xl font-normal tracking-wide" 
-                        style={{ fontFamily: "'Futura', sans-serif", color: '#fdf7e4' }}
-                    >
-                        {slideData?.subtitle || 'STRATEGIES FOR GROWTH AND INNOVATION'}
-                    </h3>
-                </div>
-                
-                {/* Bottom left text */}
-                <div className="absolute bottom-4 left-8">
-                    <p 
-                        className="text-yellow-50 text-2xl font-normal tracking-wide" 
-                        style={{ fontFamily: "'Futura', sans-serif", color: '#fdf7e4' }}
-                    >
-                        {slideData?.authorText || 'BY GROUP 1'}
-                    </p>
-                </div>
-            </div>
-        </>
-    )
-}
-
-// Return the component
-
-`;
-  const compiled = Babel.transform(jsxCode, {
+  const compiled = Babel.transform(cleanCode, {
     presets: [
       ["react", { runtime: "classic" }],
       ["typescript", { isTSX: true, allExtensions: true }],
@@ -290,7 +90,7 @@ const TitleSlideWithDecorativeElementsLayout = ({ data: slideData }) => {
       /* everything declared in the string is in scope here */
       return {
         __esModule: true,   
-        default: TitleSlideWithDecorativeElementsLayout,
+        default: dynamicSlideLayout,
         layoutName,
         layoutId,
         layoutDescription,
@@ -304,18 +104,12 @@ const TitleSlideWithDecorativeElementsLayout = ({ data: slideData }) => {
 
 export const LayoutProvider: React.FC<{
   children: ReactNode;
-  presentationId?: string;
-}> = ({
-  children,
-  presentationId = "6038f1cb-80cb-448c-83cc-f6cb96081943", // default value
-}) => {
+}> = ({ children }) => {
   const [layoutData, setLayoutData] = useState<LayoutData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPreloading, setIsPreloading] = useState(false);
   const dispatch = useDispatch();
-
-  console.log("🔍 layoutData", layoutData);
 
   const buildData = async (groupedLayoutsData: GroupedLayoutsResponse[]) => {
     const layouts: LayoutInfo[] = [];
@@ -353,7 +147,6 @@ export const LayoutProvider: React.FC<{
             const module = await import(
               `@/presentation-layouts/${groupData.groupName}/${file}`
             );
-            console.log("🔍 module", module);
 
             if (!module.default) {
               toast.error(`${file} has no default export`, {
@@ -420,8 +213,8 @@ export const LayoutProvider: React.FC<{
         // Cache grouped layouts
         groupedLayouts.set(groupData.groupName, groupLayouts);
       }
-    } finally {
-      setIsPreloading(false);
+    } catch (err: any) {
+      console.error("Compilation error:", err);
     }
 
     return {
@@ -458,7 +251,8 @@ export const LayoutProvider: React.FC<{
       }
 
       const data = await buildData(groupedLayoutsData);
-      const customLayouts = await LoadCustomLayouts(presentationId);
+      const customLayouts = await LoadCustomLayouts();
+      setIsPreloading(false);
       const combinedData = {
         layoutsById: mergeMaps(data.layoutsById, customLayouts.layoutsById),
         layoutsByGroup: mergeMaps(
@@ -499,7 +293,7 @@ export const LayoutProvider: React.FC<{
     return merged;
   }
 
-  const LoadCustomLayouts = async (presentationId: string) => {
+  const LoadCustomLayouts = async () => {
     const layouts: LayoutInfo[] = [];
 
     const layoutsById = new Map<string, LayoutInfo>();
@@ -508,89 +302,103 @@ export const LayoutProvider: React.FC<{
     const fileMap = new Map<string, { fileName: string; groupName: string }>();
     const groupedLayouts = new Map<string, LayoutInfo[]>();
 
-    const customLayoutResponse = await fetch(
-      `/api/v1/ppt/layout-management/get-layouts/${presentationId}`
-    );
-    const customLayoutsData = await customLayoutResponse.json();
-    const allLayout = customLayoutsData.layouts;
-
-    const settings = {
-      description: `Custom presentation layouts`,
-      ordered: false,
-      default: false,
-    };
-
-    groupSettingsMap.set(`custom-${presentationId}`, settings);
-    const groupLayouts: LayoutInfo[] = [];
-    const groupName = `custom-${presentationId}`;
-    if (!layoutsByGroup.has(groupName)) {
-      layoutsByGroup.set(groupName, new Set());
-    }
-    for (const i of allLayout) {
-      try {
-        /* ---------- 1. compile JSX to plain script ------------------ */
-        const module = compileCustomLayout(i.layout_code, React, z);
-
-        if (!module.default) {
-          toast.error(`Custom Layout has no default export`, {
-            description:
-              "Please ensure the layout file exports a default component",
-          });
-          console.warn(`❌ Custom Layout has no default export`);
-          continue;
+    try {
+      const customGroupResponse = await fetch(
+        "/api/v1/ppt/layout-management/summary"
+      );
+      const customGroupData = await customGroupResponse.json();
+      console.log("🔍 customGroupData", customGroupData);
+      const customGroup = customGroupData.presentations;
+      console.log("🔍 customGroup", customGroup);
+      for (const group of customGroup) {
+        const groupName = `custom-${group.presentation_id}`;
+        if (!layoutsByGroup.has(groupName)) {
+          layoutsByGroup.set(groupName, new Set());
         }
-
-        if (!module.Schema) {
-          toast.error(`Custom Layout has no Schema export`, {
-            description: "Please ensure the layout file exports a Schema",
-          });
-          console.warn(`❌ Custom Layout has no Schema export`);
-          continue;
-        }
-        const cacheKey = createCacheKey(
-          `custom-${presentationId}`,
-          i.layout_name
+        const presentationId = group.presentation_id;
+        const customLayoutResponse = await fetch(
+          `/api/v1/ppt/layout-management/get-layouts/${presentationId}`
         );
-        if (!layoutCache.has(cacheKey)) {
-          layoutCache.set(cacheKey, module.default);
-        }
+        const customLayoutsData = await customLayoutResponse.json();
+        const allLayout = customLayoutsData.layouts;
 
-        const originalLayoutId =
-          module.layoutId || i.layout_name.toLowerCase().replace(/layout$/, "");
-        const uniqueKey = `${`custom-${presentationId}`}:${originalLayoutId}`;
-        const layoutName =
-          module.layoutName || i.layout_name.replace(/([A-Z])/g, " $1").trim();
-        const layoutDescription =
-          module.layoutDescription || `${layoutName} layout for presentations`;
-
-        const jsonSchema = z.toJSONSchema(module.Schema, {
-          override: (ctx) => {
-            delete ctx.jsonSchema.default;
-          },
-        });
-
-        const layout: LayoutInfo = {
-          id: uniqueKey,
-          name: layoutName,
-          description: layoutDescription,
-          json_schema: jsonSchema,
-          groupName: groupName,
+        const settings = {
+          description: `Custom presentation layouts`,
+          ordered: false,
+          default: false,
         };
 
-        layoutsById.set(uniqueKey, layout);
-        layoutsByGroup.get(groupName)!.add(uniqueKey);
-        fileMap.set(uniqueKey, {
-          fileName: i.layout_name,
-          groupName: groupName,
-        });
-        groupLayouts.push(layout);
-        layouts.push(layout);
-      } catch (err: any) {
-        console.error("Compilation error:", err);
+        groupSettingsMap.set(`custom-${presentationId}`, settings);
+        const groupLayouts: LayoutInfo[] = [];
+
+        for (const i of allLayout) {
+          /* ---------- 1. compile JSX to plain script ------------------ */
+          const module = compileCustomLayout(i.layout_code, React, z);
+
+          if (!module.default) {
+            toast.error(`Custom Layout has no default export`, {
+              description:
+                "Please ensure the layout file exports a default component",
+            });
+            console.warn(`❌ Custom Layout has no default export`);
+            continue;
+          }
+
+          if (!module.Schema) {
+            toast.error(`Custom Layout has no Schema export`, {
+              description: "Please ensure the layout file exports a Schema",
+            });
+            console.warn(`❌ Custom Layout has no Schema export`);
+            continue;
+          }
+          const cacheKey = createCacheKey(
+            `custom-${presentationId}`,
+            i.layout_name
+          );
+          if (!layoutCache.has(cacheKey)) {
+            layoutCache.set(cacheKey, module.default);
+          }
+
+          const originalLayoutId =
+            module.layoutId ||
+            i.layout_name.toLowerCase().replace(/layout$/, "");
+          const uniqueKey = `${`custom-${presentationId}`}:${originalLayoutId}`;
+          const layoutName =
+            module.layoutName ||
+            i.layout_name.replace(/([A-Z])/g, " $1").trim();
+          const layoutDescription =
+            module.layoutDescription ||
+            `${layoutName} layout for presentations`;
+
+          const jsonSchema = z.toJSONSchema(module.Schema, {
+            override: (ctx) => {
+              delete ctx.jsonSchema.default;
+            },
+          });
+
+          const layout: LayoutInfo = {
+            id: uniqueKey,
+            name: layoutName,
+            description: layoutDescription,
+            json_schema: jsonSchema,
+            groupName: groupName,
+          };
+
+          layoutsById.set(uniqueKey, layout);
+          layoutsByGroup.get(groupName)!.add(uniqueKey);
+          fileMap.set(uniqueKey, {
+            fileName: i.layout_name,
+            groupName: groupName,
+          });
+          groupLayouts.push(layout);
+          layouts.push(layout);
+        }
+        // Cache grouped layouts
+        groupedLayouts.set(groupName, groupLayouts);
       }
+    } catch (err: any) {
+      console.error("Compilation error:", err);
     }
-    // Cache grouped layouts
-    groupedLayouts.set(groupName, groupLayouts);
 
     return {
       layoutsById,
@@ -684,7 +492,7 @@ export const LayoutProvider: React.FC<{
   // Load layouts on mount
   useEffect(() => {
     loadLayouts();
-  }, [presentationId]); // Add presentationId to dependency array
+  }, []); // Add presentationId to dependency array
 
   const contextValue: LayoutContextType = {
     getLayoutById,

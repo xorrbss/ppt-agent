@@ -24,12 +24,14 @@ const EachSlide = ({
   retrySlide,
   setSlides,
   onSlideUpdate,
+  isProcessingPptx,
 }: {
   slide: any;
   index: number;
   retrySlide: (index: number) => void;
   setSlides: React.Dispatch<React.SetStateAction<any[]>>;
   onSlideUpdate?: (updatedSlideData: any) => void;
+  isProcessingPptx: boolean;
 }) => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [prompt, setPrompt] = useState("");
@@ -411,33 +413,35 @@ const EachSlide = ({
               )}
             </div>
 
-            <div className="flex  gap-6">
-              {slide.processed && slide.html && !isEditMode && (
-                <div className=" ">
-                  <ToolTip content="Edit slide">
+            {!isProcessingPptx && (
+              <div className="flex  gap-6">
+                {slide.processed && slide.html && !isEditMode && (
+                  <div className=" ">
+                    <ToolTip content="Edit slide">
+                      <button
+                        onClick={handleEditClick}
+                        className={`px-6 py-2 flex gap-2 text-sm items-center group-hover:scale-105 rounded-lg bg-[#5141e5] hover:shadow-md transition-all duration-300 cursor-pointer shadow-md `}
+                      >
+                        <Edit className="w-4 sm:w-5 h-4 sm:h-5 text-white" />
+                        <span className="text-white">Edit Slide</span>
+                      </button>
+                    </ToolTip>
+                  </div>
+                )}
+                <div>
+                  <ToolTip content="Retry fetch">
                     <button
-                      onClick={handleEditClick}
-                      className={`px-6 py-2 flex gap-2 text-sm items-center group-hover:scale-105 rounded-lg bg-[#5141e5] hover:shadow-md transition-all duration-300 cursor-pointer shadow-md `}
+                      onClick={() => retrySlide(index)}
+                      disabled={slide.processing}
+                      className="px-6 py-2 flex gap-2 text-sm items-center group-hover:scale-105 rounded-lg bg-[#5141e5] hover:shadow-md transition-all duration-300 cursor-pointer shadow-md"
                     >
-                      <Edit className="w-4 sm:w-5 h-4 sm:h-5 text-white" />
-                      <span className="text-white">Edit Slide</span>
+                      <Repeat2 className="w-4 sm:w-5 h-4 sm:h-5 text-white" />
+                      <span className="text-white">Retry Fetch</span>
                     </button>
                   </ToolTip>
                 </div>
-              )}
-              <div>
-                <ToolTip content="Retry fetch">
-                  <button
-                    onClick={() => retrySlide(index)}
-                    disabled={slide.processing}
-                    className="px-6 py-2 flex gap-2 text-sm items-center group-hover:scale-105 rounded-lg bg-[#5141e5] hover:shadow-md transition-all duration-300 cursor-pointer shadow-md"
-                  >
-                    <Repeat2 className="w-4 sm:w-5 h-4 sm:h-5 text-white" />
-                    <span className="text-white">Retry Fetch</span>
-                  </button>
-                </ToolTip>
               </div>
-            </div>
+            )}
           </div>
         </CardTitle>
       </CardHeader>

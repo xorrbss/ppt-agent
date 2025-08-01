@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { Slide } from "../../types/slide";
 import { Loader2, PlusIcon, Trash2, WandSparkles } from "lucide-react";
 import {
   Popover,
@@ -13,7 +12,10 @@ import { PresentationGenerationApi } from "../../services/api/presentation-gener
 import ToolTip from "@/components/ToolTip";
 import { RootState } from "@/store/store";
 import { useDispatch, useSelector } from "react-redux";
-import { deletePresentationSlide, updateSlide } from "@/store/slices/presentationGeneration";
+import {
+  deletePresentationSlide,
+  updateSlide,
+} from "@/store/slices/presentationGeneration";
 import { useGroupLayouts } from "../../hooks/useGroupLayouts";
 import NewSlide from "../../components/NewSlide";
 
@@ -23,12 +25,7 @@ interface SlideContentProps {
   presentationId: string;
 }
 
-const SlideContent = ({
-  slide,
-  index,
-  presentationId,
-
-}: SlideContentProps) => {
+const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
   const dispatch = useDispatch();
   const [isUpdating, setIsUpdating] = useState(false);
   const [showNewSlideSelection, setShowNewSlideSelection] = useState(false);
@@ -89,7 +86,9 @@ const SlideContent = ({
     ) {
       // Scroll to the last slide (newly generated during streaming)
       const lastSlideIndex = presentationData.slides.length - 1;
-      const slideElement = document.getElementById(`slide-${presentationData.slides[lastSlideIndex].index}`);
+      const slideElement = document.getElementById(
+        `slide-${presentationData.slides[lastSlideIndex].index}`
+      );
       if (slideElement) {
         slideElement.scrollIntoView({
           behavior: "smooth",
@@ -104,6 +103,23 @@ const SlideContent = ({
     return renderSlideContent(slide, isStreaming ? false : true); // Enable edit mode for main content
   }, [renderSlideContent, slide, isStreaming]);
 
+  useEffect(() => {
+    if (isStreaming || loading) {
+      return;
+    }
+    if (slide) {
+      const existingScript = document.querySelector(
+        'script[src*="tailwindcss.com"]'
+      );
+      if (!existingScript) {
+        const script = document.createElement("script");
+        script.src = "https://cdn.tailwindcss.com";
+        script.async = true;
+        document.head.appendChild(script);
+      }
+    }
+  }, [slide, isStreaming, loading]);
+
   return (
     <>
       <div
@@ -113,11 +129,19 @@ const SlideContent = ({
         {isStreaming && (
           <Loader2 className="w-8 h-8 absolute right-2 top-2 z-30 text-blue-800 animate-spin" />
         )}
-        <div data-layout={slide.layout} data-group={slide.layout_group} className={` w-full  group `}>
+        <div
+          data-layout={slide.layout}
+          data-group={slide.layout_group}
+          className={` w-full  group `}
+        >
           {/* render slides */}
-          {loading ? <div className="flex flex-col bg-white aspect-video items-center justify-center h-full">
-            <Loader2 className="w-8 h-8 animate-spin" />
-          </div> : slideContent}
+          {loading ? (
+            <div className="flex flex-col bg-white aspect-video items-center justify-center h-full">
+              <Loader2 className="w-8 h-8 animate-spin" />
+            </div>
+          ) : (
+            slideContent
+          )}
 
           {!showNewSlideSelection && (
             <div className="group-hover:opacity-100 hidden md:block opacity-0 transition-opacity my-4 duration-300">
@@ -194,8 +218,9 @@ const SlideContent = ({
                       <button
                         disabled={isUpdating}
                         type="submit"
-                        className={`bg-gradient-to-r from-[#9034EA] to-[#5146E5] rounded-[32px] px-4 py-2 text-white flex items-center justify-end gap-2 ml-auto ${isUpdating ? "opacity-70 cursor-not-allowed" : ""
-                          }`}
+                        className={`bg-gradient-to-r from-[#9034EA] to-[#5146E5] rounded-[32px] px-4 py-2 text-white flex items-center justify-end gap-2 ml-auto ${
+                          isUpdating ? "opacity-70 cursor-not-allowed" : ""
+                        }`}
                       >
                         {isUpdating ? "Updating..." : "Update"}
                         <SendHorizontal className="w-4 sm:w-5 h-4 sm:h-5" />
