@@ -12,7 +12,14 @@ Follow these rules strictly:
 - Read through the OXML data of slide and then match exact position ans size of elements. Make sure to convert between dimension and pixels.
 - Properly export shapes as exact SVG.
 - Add relevant font in tailwind to all texts.   
-- Wrap the output code inside these classes: \"relative w-full rounded-sm max-w-[1280px] shadow-lg max-h-[720px] aspect-video bg-white relative z-20 mx-auto overflow-hidden\". For all images use this https://images.pexels.com/photos/31995895/pexels-photo-31995895/free-photo-of-turkish-coffee-with-scenic-bursa-view.jpeg url.
+- Wrap the output code inside these classes: \"relative w-full rounded-sm max-w-[1280px] shadow-lg max-h-[720px] aspect-video bg-white relative z-20 mx-auto overflow-hidden\". 
+- For image use one of these images as appropriate:
+    - /static/images/layout-placeholders/abstract.jpg
+    - /static/images/layout-placeholders/aesthetic.jpg
+    - /static/images/layout-placeholders/charts.jpg
+    - /static/images/layout-placeholders/technology.jpg
+    - /static/images/layout-placeholders/workspace.jpg
+    - /static/images/layout-placeholders/portrait.jpg
 - Give out only HTML and Tailwind code. No other texts or explanations.
  """
 
