@@ -49,11 +49,8 @@ COPY start.js LICENSE NOTICE ./
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
 
-# Copy start script
-COPY docker-start.sh /app/docker-start.sh
-
 # Expose the port
 EXPOSE 80
 
 # Start the servers
-CMD ["/bin/bash", "/app/docker-start.sh"]
+CMD ["node", "/app/start.js"]

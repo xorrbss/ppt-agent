@@ -1,25 +1,48 @@
 /* This script starts the FastAPI and Next.js servers, setting up user configuration if necessary. It reads environment variables to configure API keys and other settings, ensuring that the user configuration file is created if it doesn't exist. The script also handles the starting of both servers and keeps the Node.js process alive until one of the servers exits. */
 
-const path = require('path');
-const { spawn } = require('child_process');
-const fs = require('fs');
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+import { spawn } from 'child_process';
+import { existsSync, mkdirSync, rmSync, cpSync, readFileSync, writeFileSync } from 'fs';
 
-const fastapiDir = path.join(__dirname, 'servers/fastapi');
-const nextjsDir = path.join(__dirname, 'servers/nextjs');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
-const isDev = process.env.NODE_ENV === 'development';
+const fastapiDir = join(__dirname, 'servers/fastapi');
+const nextjsDir = join(__dirname, 'servers/nextjs');
+
+const args = process.argv.slice(2);
+const hasDevArg = args.includes('--dev') || args.includes('-d');
+const isDev = hasDevArg;
 const canChangeKeys = process.env.CAN_CHANGE_KEYS !== 'false';
 
 const fastapiPort = 8000;
 const nextjsPort = 3000;
 
-const userConfigPath = path.join(process.env.APP_DATA_DIRECTORY, 'userConfig.json');
-const userDataDir = path.dirname(userConfigPath);
+const userConfigPath = join(process.env.APP_DATA_DIRECTORY, 'userConfig.json');
+const userDataDir = dirname(userConfigPath);
 
 // Create user_data directory if it doesn't exist
-if (!fs.existsSync(userDataDir)) {
-  fs.mkdirSync(userDataDir, { recursive: true });
+if (!existsSync(userDataDir)) {
+  mkdirSync(userDataDir, { recursive: true });
 }
+
+// Setup node_modules for development
+const setupNodeModules = () => {
+  console.log('Setting up node_modules for development...');
+  const nodeDependenciesPath = '/node_dependencies/node_modules';
+  const nextjsNodeModulesPath = join(nextjsDir, 'node_modules');
+
+  if (existsSync(nodeDependenciesPath)) {
+    if (existsSync(nextjsNodeModulesPath)) {
+      rmSync(nextjsNodeModulesPath, { recursive: true, force: true });
+    }
+
+    cpSync(nodeDependenciesPath, nextjsNodeModulesPath, { recursive: true });
+    console.log('Copied node_modules from /node_dependencies to Next.js server directory');
+  }
+};
+
 
 process.env.USER_CONFIG_PATH = userConfigPath;
 
@@ -27,8 +50,8 @@ process.env.USER_CONFIG_PATH = userConfigPath;
 const setupUserConfigFromEnv = () => {
 
   let existingConfig = {};
-  if (fs.existsSync(userConfigPath)) {
-    existingConfig = JSON.parse(fs.readFileSync(userConfigPath, 'utf8'));
+  if (existsSync(userConfigPath)) {
+    existingConfig = JSON.parse(readFileSync(userConfigPath, 'utf8'));
   }
 
   if (!['ollama', 'openai', 'google'].includes(existingConfig.LLM)) {
@@ -55,7 +78,7 @@ const setupUserConfigFromEnv = () => {
     USE_CUSTOM_URL: process.env.USE_CUSTOM_URL || existingConfig.USE_CUSTOM_URL,
   };
 
-  fs.writeFileSync(userConfigPath, JSON.stringify(userConfig));
+  writeFileSync(userConfigPath, JSON.stringify(userConfig));
 }
 const startServers = async () => {
 
@@ -87,17 +110,74 @@ const startServers = async () => {
     console.error("Next.js process failed to start:", err);
   });
 
+  const ollamaProcess = spawn(
+    "ollama",
+    ["serve"],
+    {
+      cwd: "/",
+      stdio: "inherit",
+      env: process.env,
+    }
+  );
+
+  ollamaProcess.on("error", err => {
+    console.error("Ollama process failed to start:", err);
+  });
+
+  const redisProcess = spawn(
+    "redis-server",
+    [],
+    {
+      cwd: "/",
+      stdio: "inherit",
+      env: process.env,
+    }
+  );
+
+  redisProcess.on("error", err => {
+    console.error("Redis process failed to start:", err);
+  });
+
   // Keep the Node process alive until both servers exit
   const exitCode = await Promise.race([
     new Promise(resolve => fastApiProcess.on("exit", resolve)),
     new Promise(resolve => nextjsProcess.on("exit", resolve)),
+    new Promise(resolve => ollamaProcess.on("exit", resolve)),
+    new Promise(resolve => redisProcess.on("exit", resolve)),
   ]);
 
   console.log(`One of the processes exited. Exit code: ${exitCode}`);
   process.exit(exitCode);
 };
 
+// Start nginx service
+const startNginx = () => {
+  const nginxProcess = spawn('service', ['nginx', 'start'], {
+    stdio: 'inherit',
+    env: process.env,
+  });
+
+  nginxProcess.on('error', err => {
+    console.error('Nginx process failed to start:', err);
+  });
+
+  nginxProcess.on('exit', (code) => {
+    if (code === 0) {
+      console.log('Nginx started successfully');
+    } else {
+      console.error(`Nginx failed to start with exit code: ${code}`);
+    }
+  });
+};
+
+if (isDev) {
+  setupNodeModules();
+}
+
 if (canChangeKeys) {
   setupUserConfigFromEnv();
 }
+
 startServers();
+
+startNginx();
