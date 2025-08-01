@@ -1,15 +1,23 @@
 import os
 import base64
+from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, HTTPException, File, UploadFile, Form
+from fastapi import APIRouter, HTTPException, File, UploadFile, Form, Depends
 from pydantic import BaseModel
 import anthropic
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, delete
 from utils.asset_directory_utils import get_images_directory
+from services.database import get_async_session
+from models.sql.presentation_layout_code import PresentationLayoutCodeModel
+from .prompts import GENERATE_HTML_SYSTEM_PROMPT, HTML_TO_REACT_SYSTEM_PROMPT, HTML_EDIT_SYSTEM_PROMPT
+
 
 # Create separate routers for each functionality
 SLIDE_TO_HTML_ROUTER = APIRouter(prefix="/slide-to-html", tags=["slide-to-html"])
 HTML_TO_REACT_ROUTER = APIRouter(prefix="/html-to-react", tags=["html-to-react"])
 HTML_EDIT_ROUTER = APIRouter(prefix="/html-edit", tags=["html-edit"])
+LAYOUT_MANAGEMENT_ROUTER = APIRouter(prefix="/layout-management", tags=["layout-management"])
 
 
 # Request/Response models for slide-to-html endpoint
@@ -42,225 +50,35 @@ class HtmlToReactResponse(BaseModel):
     message: Optional[str] = None
 
 
-SYSTEM_PROMPT = """
-You need to generate html and tailwind code for given presentation slide image. You need to think through each design elements and then decide where each element should go.
-Follow these rules strictly:
-- Make sure the design from html and tailwind is exact to the slide. 
-- Make sure all components are in their own place. 
-- Make sure size of elements are exact.
-- Smallest of elements should be noted of and should be added as it is.
-- Image's and icons's size and position should be added exactly as it is.
-- Read through the OXML data of slide and then match exact position ans size of elements. Make sure to convert between dimension and pixels.
-- Properly export shapes as exact SVG.
-- Add relevant font in tailwind to all texts.   
-- Wrap the output code inside these classes: \"relative w-full rounded-sm max-w-[1280px] shadow-lg max-h-[720px] aspect-video bg-white relative z-20 mx-auto overflow-hidden\". For all images use this https://images.pexels.com/photos/31995895/pexels-photo-31995895/free-photo-of-turkish-coffee-with-scenic-bursa-view.jpeg url.
-- Give out only HTML and Tailwind code. No other texts or explanations.
- """
-
-HTML_TO_REACT_SYSTEM_PROMPT = """
-Convert given static HTML and Tailwind slide to a TSX React component so that it can be dynamically populated. Follow these rules strictly while converting:
-
-1) Required imports, a zod schema and HTML layout has to be generated.
-2) Schema will populate the layout so make sure schema has fields for all text, images and icons in the layout.
-3) For similar components in the layouts (eg, team members), they should be represented by array of such components in the schema.
-4) For image and icons icons should be a different schema with two dunder fields for prompt and url separately.
-5) Default value for schema fields should be populated with the respective static value in HTML input.
-6) In schema max and min value for characters in string and items in array should be specified as per the given image of the slide. You should accurately evaluate the maximum and minimum possible characters respective fields can handle visually through the image.
-7) For image and icons schema should be compulsorily declared with two dunder fields for prompt and url separately.
-8) Layout Id, layout name and layout description should be declared and should describe the structure of the layout not its purpose. Do not describe numbers of any items in the layout.
-    -Description should not have any purpose for elements in it, so use 'cards' instead of 'goal cards' and 'bullet points' instead of 'solution bullet points'.
-    -layoutName constant should be same as the component name in the layout.
-    -Layout Id examples: header-description-bullet-points-slide, header-description-image-slide
-    -Layout Name examples: HeaderDescriptionBulletPointsLayout, HeaderDescriptionImageLayout
-    -Layout Description examples: A slide with a header, description, and bullet points and A slide with a header, description, and image
-
-For example: 
-Input: <div class="w-full rounded-sm max-w-[1280px] shadow-lg max-h-[720px] aspect-video bg-gradient-to-br from-gray-50 to-white relative z-20 mx-auto overflow-hidden" style="font-family: Poppins, sans-serif;"><div class="flex flex-col h-full px-8 sm:px-12 lg:px-20 pt-8 pb-8"><div class="mb-8"><div class="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900" style="font-size: 60px; font-weight: 700; font-family: Poppins, sans-serif; color: rgb(17, 24, 39); line-height: 60px; text-align: start; margin: 0px; padding: 0px; border-radius: 0px; border: 0px solid rgb(229, 231, 235); background-color: rgba(0, 0, 0, 0); opacity: 1; box-shadow: none; text-shadow: none; text-decoration: none solid rgb(17, 24, 39); text-transform: none; letter-spacing: normal; word-spacing: 0px; text-overflow: clip; white-space: normal; word-break: normal; overflow: visible;"><div class="tiptap-text-editor w-full" style="line-height: inherit; font-size: inherit; font-weight: inherit; font-family: inherit; color: inherit; text-align: inherit;"><div contenteditable="true" data-placeholder="Enter text..." translate="no" class="tiptap ProseMirror outline-none focus:outline-none transition-all duration-200" tabindex="0"><p>Effects of Global Warming</p></div></div></div></div><div class="flex flex-1"><div class="flex-1 relative"><div class="absolute top-0 left-0 w-full h-full"><svg class="w-full h-full opacity-30" viewBox="0 0 200 200"><defs><pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 L 0 0 0 20" fill="none" stroke="#8b5cf6" stroke-width="0.5"></path></pattern></defs><rect width="100%" height="100%" fill="url(#grid)"></rect></svg></div><div class="relative z-10 h-full flex items-center justify-center p-4"><div class="w-full max-w-md h-80 rounded-2xl overflow-hidden shadow-lg"><img src="/app_data/images/08b1c132-84e0-4d04-8082-6f34330817ef.jpg" alt="global warming effects on earth" class="w-full h-full object-cover" data-editable-processed="true" data-editable-id="2-image-image-0" style="cursor: pointer; transition: opacity 0.2s, transform 0.2s;"></div></div><div class="absolute top-20 right-8 text-purple-600"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0l3.09 6.26L22 9l-6.91 2.74L12 18l-3.09-6.26L2 9l6.91-2.74L12 0z"></path></svg></div></div><div class="flex-1 flex flex-col justify-center pl-8 lg:pl-16"><div class="text-lg text-gray-700 leading-relaxed mb-8" style="font-size: 18px; font-weight: 400; font-family: Poppins, sans-serif; color: rgb(55, 65, 81); line-height: 29.25px; text-align: start; margin: 0px 0px 32px; padding: 0px; border-radius: 0px; border: 0px solid rgb(229, 231, 235); background-color: rgba(0, 0, 0, 0); opacity: 1; box-shadow: none; text-shadow: none; text-decoration: none solid rgb(55, 65, 81); text-transform: none; letter-spacing: normal; word-spacing: 0px; text-overflow: clip; white-space: normal; word-break: normal; overflow: visible;"><div class="tiptap-text-editor w-full" style="line-height: inherit; font-size: inherit; font-weight: inherit; font-family: inherit; color: inherit; text-align: inherit;"><div contenteditable="true" data-placeholder="Enter text..." translate="no" class="tiptap ProseMirror outline-none focus:outline-none transition-all duration-200" tabindex="0"><p>Global warming triggers a cascade of effects on our planet. These changes impact everything from our oceans to our ecosystems.</p></div></div></div><div class="space-y-6"><div class="flex items-start space-x-4"><div class="flex-shrink-0 w-12 h-12 bg-white rounded-lg shadow-md flex items-center justify-center"><img src="/static/icons/bold/dots-three-vertical-bold.png" alt="sea level rising icon" class="w-6 h-6 object-contain text-gray-700" data-editable-processed="true" data-editable-id="2-icon-bulletPoints[0].icon-1" style="cursor: pointer; transition: opacity 0.2s, transform 0.2s;"></div><div class="flex-1"><div class="text-xl font-semibold text-gray-900 mb-2" style="font-size: 20px; font-weight: 600; font-family: Poppins, sans-serif; color: rgb(17, 24, 39); line-height: 28px; text-align: start; margin: 0px 0px 8px; padding: 0px; border-radius: 0px; border: 0px solid rgb(229, 231, 235); background-color: rgba(0, 0, 0, 0); opacity: 1; box-shadow: none; text-shadow: none; text-decoration: none solid rgb(17, 24, 39); text-transform: none; letter-spacing: normal; word-spacing: 0px; text-overflow: clip; white-space: normal; word-break: normal; overflow: visible;"><div class="tiptap-text-editor w-full" style="line-height: inherit; font-size: inherit; font-weight: inherit; font-family: inherit; color: inherit; text-align: inherit;"><div contenteditable="true" data-placeholder="Enter text..." translate="no" class="tiptap ProseMirror outline-none focus:outline-none transition-all duration-200" tabindex="0"><p>Rising Sea Levels</p></div></div></div><div class="w-12 h-0.5 bg-purple-600 mb-3"></div><div class="text-base text-gray-700 leading-relaxed" style="font-size: 16px; font-weight: 400; font-family: Poppins, sans-serif; color: rgb(55, 65, 81); line-height: 26px; text-align: start; margin: 0px; padding: 0px; border-radius: 0px; border: 0px solid rgb(229, 231, 235); background-color: rgba(0, 0, 0, 0); opacity: 1; box-shadow: none; text-shadow: none; text-decoration: none solid rgb(55, 65, 81); text-transform: none; letter-spacing: normal; word-spacing: 0px; text-overflow: clip; white-space: normal; word-break: normal; overflow: visible;"><div class="tiptap-text-editor w-full" style="line-height: inherit; font-size: inherit; font-weight: inherit; font-family: inherit; color: inherit; text-align: inherit;"><div contenteditable="true" data-placeholder="Enter text..." translate="no" class="tiptap ProseMirror outline-none focus:outline-none transition-all duration-200" tabindex="0"><p>Rising sea levels threaten coastal communities and ecosystems due to melting glaciers and thermal expansion.</p></div></div></div></div></div><div class="flex items-start space-x-4"><div class="flex-shrink-0 w-12 h-12 bg-white rounded-lg shadow-md flex items-center justify-center"><img src="/static/icons/bold/discord-logo-bold.png" alt="heatwave icon" class="w-6 h-6 object-contain text-gray-700" data-editable-processed="true" data-editable-id="2-icon-bulletPoints[1].icon-2" style="cursor: pointer; transition: opacity 0.2s, transform 0.2s;"></div><div class="flex-1"><div class="text-xl font-semibold text-gray-900 mb-2" style="font-size: 20px; font-weight: 600; font-family: Poppins, sans-serif; color: rgb(17, 24, 39); line-height: 28px; text-align: start; margin: 0px 0px 8px; padding: 0px; border-radius: 0px; border: 0px solid rgb(229, 231, 235); background-color: rgba(0, 0, 0, 0); opacity: 1; box-shadow: none; text-shadow: none; text-decoration: none solid rgb(17, 24, 39); text-transform: none; letter-spacing: normal; word-spacing: 0px; text-overflow: clip; white-space: normal; word-break: normal; overflow: visible;"><div class="tiptap-text-editor w-full" style="line-height: inherit; font-size: inherit; font-weight: inherit; font-family: inherit; color: inherit; text-align: inherit;"><div contenteditable="true" data-placeholder="Enter text..." translate="no" class="tiptap ProseMirror outline-none focus:outline-none transition-all duration-200" tabindex="0"><p>Intense Heatwaves</p></div></div></div><div class="w-12 h-0.5 bg-purple-600 mb-3"></div><div class="text-base text-gray-700 leading-relaxed" style="font-size: 16px; font-weight: 400; font-family: Poppins, sans-serif; color: rgb(55, 65, 81); line-height: 26px; text-align: start; margin: 0px; padding: 0px; border-radius: 0px; border: 0px solid rgb(229, 231, 235); background-color: rgba(0, 0, 0, 0); opacity: 1; box-shadow: none; text-shadow: none; text-decoration: none solid rgb(55, 65, 81); text-transform: none; letter-spacing: normal; word-spacing: 0px; text-overflow: clip; white-space: normal; word-break: normal; overflow: visible;"><div class="tiptap-text-editor w-full" style="line-height: inherit; font-size: inherit; font-weight: inherit; font-family: inherit; color: inherit; text-align: inherit;"><div contenteditable="true" data-placeholder="Enter text..." translate="no" class="tiptap ProseMirror outline-none focus:outline-none transition-all duration-200" tabindex="0"><p>Heatwaves are becoming more frequent and intense, posing significant risks to human health and agriculture.</p></div></div></div></div></div><div class="flex items-start space-x-4"><div class="flex-shrink-0 w-12 h-12 bg-white rounded-lg shadow-md flex items-center justify-center"><img src="/static/icons/bold/cloud-rain-bold.png" alt="precipitation changes icon" class="w-6 h-6 object-contain text-gray-700" data-editable-processed="true" data-editable-id="2-icon-bulletPoints[2].icon-3" style="cursor: pointer; transition: opacity 0.2s, transform 0.2s;"></div><div class="flex-1"><div class="text-xl font-semibold text-gray-900 mb-2" style="font-size: 20px; font-weight: 600; font-family: Poppins, sans-serif; color: rgb(17, 24, 39); line-height: 28px; text-align: start; margin: 0px 0px 8px; padding: 0px; border-radius: 0px; border: 0px solid rgb(229, 231, 235); background-color: rgba(0, 0, 0, 0); opacity: 1; box-shadow: none; text-shadow: none; text-decoration: none solid rgb(17, 24, 39); text-transform: none; letter-spacing: normal; word-spacing: 0px; text-overflow: clip; white-space: normal; word-break: normal; overflow: visible;"><div class="tiptap-text-editor w-full" style="line-height: inherit; font-size: inherit; font-weight: inherit; font-family: inherit; color: inherit; text-align: inherit;"><div contenteditable="true" data-placeholder="Enter text..." translate="no" class="tiptap ProseMirror outline-none focus:outline-none transition-all duration-200" tabindex="0"><p>Changes in Precipitation</p></div></div></div><div class="w-12 h-0.5 bg-purple-600 mb-3"></div><div class="text-base text-gray-700 leading-relaxed" style="font-size: 16px; font-weight: 400; font-family: Poppins, sans-serif; color: rgb(55, 65, 81); line-height: 26px; text-align: start; margin: 0px; padding: 0px; border-radius: 0px; border: 0px solid rgb(229, 231, 235); background-color: rgba(0, 0, 0, 0); opacity: 1; box-shadow: none; text-shadow: none; text-decoration: none solid rgb(55, 65, 81); text-transform: none; letter-spacing: normal; word-spacing: 0px; text-overflow: clip; white-space: normal; word-break: normal; overflow: visible;"><div class="tiptap-text-editor w-full" style="line-height: inherit; font-size: inherit; font-weight: inherit; font-family: inherit; color: inherit; text-align: inherit;"><div contenteditable="true" data-placeholder="Enter text..." translate="no" class="tiptap ProseMirror outline-none focus:outline-none transition-all duration-200" tabindex="0"><p>Altered precipitation patterns lead to increased droughts in some regions and severe flooding in others, affecting water resources.</p></div></div></div></div></div></div></div></div></div></div>
-Output: import React from 'react'
-import * as z from "zod";
-
-const ImageSchema = z.object({
-    __image_url__: z.url().meta({
-        description: "URL to image",
-    }),
-    __image_prompt__: z.string().meta({
-        description: "Prompt used to generate the image",
-    }).min(10).max(50),
-})
-
-const IconSchema = z.object({
-    __icon_url__: z.string().meta({
-        description: "URL to icon",
-    }),
-    __icon_query__: z.string().meta({
-        description: "Query used to search the icon",
-    }).min(5).max(20),
-})
-export const layoutId = 'bullet-with-icons-slide'
-export const layoutName = 'Bullet with Icons'
-export const layoutDescription = 'A bullets style slide with main content, supporting image, and bullet points with icons and descriptions.'
-
-const bulletWithIconsSlideSchema = z.object({
-    title: z.string().min(3).max(40).default('Problem').meta({
-        description: "Main title of the slide",
-    }),
-    description: z.string().max(150).default('Businesses face challenges with outdated technology and rising costs, limiting efficiency and growth in competitive markets.').meta({
-        description: "Main description text explaining the problem or topic",
-    }),
-    image: ImageSchema.default({
-        __image_url__: 'https://images.unsplash.com/photo-1552664730-d307ca884978?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80',
-        __image_prompt__: 'Business people analyzing documents and charts in office'
-    }).meta({
-        description: "Supporting image for the slide",
-    }),
-    bulletPoints: z.array(z.object({
-        title: z.string().min(2).max(80).meta({
-            description: "Bullet point title",
-        }),
-        description: z.string().min(10).max(150).meta({
-            description: "Bullet point description",
-        }),
-        icon: IconSchema,
-    })).min(1).max(3).default([
-        {
-            title: 'Inefficiency',
-            description: 'Businesses struggle to find digital tools that meet their needs, causing operational slowdowns.',
-            icon: {
-                __icon_url__: '/static/icons/placeholder.png',
-                __icon_query__: 'warning alert inefficiency'
-            }
-        },
-        {
-            title: 'High Costs',
-            description: 'Outdated systems increase expenses, while small businesses struggle to expand their market reach.',
-            icon: {
-                __icon_url__: '/static/icons/placeholder.png',
-                __icon_query__: 'trending up costs chart'
-            }
-        }
-    ]).meta({
-        description: "List of bullet points with icons and descriptions",
-    })
-})
-
-export const Schema = bulletWithIconsSlideSchema
-
-export type BulletWithIconsSlideData = z.infer<typeof bulletWithIconsSlideSchema>
-
-interface BulletWithIconsSlideLayoutProps {
-    data?: Partial<BulletWithIconsSlideData>
-}
-
-const BulletWithIconsSlideLayout: React.FC<BulletWithIconsSlideLayoutProps> = ({ data: slideData }) => {
-    const bulletPoints = slideData?.bulletPoints || []
-
-    return (
-        <>
-            {/* Import Google Fonts */}
-            <link 
-                href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" 
-                rel="stylesheet"
-            />
-            
-            <div 
-                className="w-full rounded-sm max-w-[1280px] shadow-lg max-h-[720px] aspect-video bg-gradient-to-br from-gray-50 to-white relative z-20 mx-auto overflow-hidden"
-                style={{
-                    fontFamily: 'Poppins, sans-serif'
-                }}
-            >
+# Request/Response models for layout management endpoints
+class LayoutData(BaseModel):
+    presentation_id: str  # UUID of the presentation
+    layout_id: str        # Unique identifier for the layout
+    layout_name: str      # Display name of the layout
+    layout_code: str      # TSX/React component code for the layout
 
 
-                {/* Main Content */}
-                <div className="flex flex-col h-full px-8 sm:px-12 lg:px-20 pt-8 pb-8">
-                    {/* Title Section - Full Width */}
-                    <div className="mb-8">
-                        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900">
-                            {slideData?.title || 'Problem'}
-                        </h1>
-                    </div>
+class SaveLayoutsRequest(BaseModel):
+    layouts: list[LayoutData]
 
-                    {/* Content Container */}
-                    <div className="flex flex-1">
-                        {/* Left Section - Image with Grid Pattern */}
-                        <div className="flex-1 relative">
-                        {/* Grid Pattern Background */}
-                        <div className="absolute top-0 left-0 w-full h-full">
-                            <svg className="w-full h-full opacity-30" viewBox="0 0 200 200">
-                                <defs>
-                                    <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-                                        <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#8b5cf6" strokeWidth="0.5"/>
-                                    </pattern>
-                                </defs>
-                                <rect width="100%" height="100%" fill="url(#grid)" />
-                            </svg>
-                        </div>
-                        
-                        {/* Image Container */}
-                        <div className="relative z-10 h-full flex items-center justify-center p-4">
-                            <div className="w-full max-w-md h-80 rounded-2xl overflow-hidden shadow-lg">
-                                <img
-                                    src={slideData?.image?.__image_url__ || ''}
-                                    alt={slideData?.image?.__image_prompt__ || slideData?.title || ''}
-                                    className="w-full h-full object-cover"
-                                />
-                            </div>
-                        </div>
 
-                        {/* Decorative Sparkle */}
-                        <div className="absolute top-20 right-8 text-purple-600">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M12 0l3.09 6.26L22 9l-6.91 2.74L12 18l-3.09-6.26L2 9l6.91-2.74L12 0z"/>
-                            </svg>
-                        </div>
-                    </div>
+class SaveLayoutsResponse(BaseModel):
+    success: bool
+    saved_count: int
+    message: Optional[str] = None
 
-                        {/* Right Section - Content */}
-                        <div className="flex-1 flex flex-col justify-center pl-8 lg:pl-16">
-                            {/* Description */}
-                            <p className="text-lg text-gray-700 leading-relaxed mb-8">
-                                {slideData?.description || 'Businesses face challenges with outdated technology and rising costs, limiting efficiency and growth in competitive markets.'}
-                            </p>
 
-                        {/* Bullet Points */}
-                        <div className="space-y-6">
-                            {bulletPoints.map((bullet, index) => (
-                                <div key={index} className="flex items-start space-x-4">
-                                    {/* Icon */}
-                                    <div className="flex-shrink-0 w-12 h-12 bg-white rounded-lg shadow-md flex items-center justify-center">
-                                        <img 
-                                            src={bullet.icon.__icon_url__} 
-                                            alt={bullet.icon.__icon_query__}
-                                            className="w-6 h-6 object-contain text-gray-700"
-                                        />
-                                    </div>
-                                    
-                                    {/* Content */}
-                                    <div className="flex-1">
-                                        <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                                            {bullet.title}
-                                        </h3>
-                                        <div className="w-12 h-0.5 bg-purple-600 mb-3"></div>
-                                        <p className="text-base text-gray-700 leading-relaxed">
-                                            {bullet.description}
-                                        </p>
-                                    </div>
-                                </div>
-                            ))}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </>
-    )
-}
+class GetLayoutsResponse(BaseModel):
+    success: bool
+    layouts: list[LayoutData]
+    message: Optional[str] = None
 
-export default BulletWithIconsSlideLayout 
-"""
 
-HTML_EDIT_SYSTEM_PROMPT = """
-You need to edit given html with respect to the indication and sketch in the given UI. You'll be given the code for current UI which is in presentation size, along with its visualization in image form. Over that you'll also be given another image which has indications of what might change in form of sketch in the UI. You will have to return the edited html with tailwind with the changes as indicated on the image and through prompt. Make sure you think through the design before making the change and also make sure you don't change the non-indicated part. Try to follow the design style of current content for generated content. If sketch image is not provided, then you need to edit the html with respect to the prompt. Only give out code and nothing else.
-"""
+class ErrorResponse(BaseModel):
+    success: bool = False
+    detail: str
+    error_code: Optional[str] = None
+
 
 
 async def generate_html_from_slide(base64_image: str, media_type: str, xml_content: str, api_key: str) -> str:
@@ -293,7 +111,7 @@ async def generate_html_from_slide(base64_image: str, media_type: str, xml_conte
             model="claude-sonnet-4-20250514",
             max_tokens=64000,
             temperature=1,
-            system=SYSTEM_PROMPT,
+            system=GENERATE_HTML_SYSTEM_PROMPT,
             messages=[
                 {
                     "role": "user",
@@ -821,3 +639,194 @@ async def edit_html_with_images_endpoint(
             status_code=500,
             detail=f"Error processing HTML editing: {str(e)}"
         ) 
+
+
+# ENDPOINT 4: Save layouts for a presentation
+@LAYOUT_MANAGEMENT_ROUTER.post(
+    "/save-layouts", 
+    response_model=SaveLayoutsResponse,
+    responses={
+        400: {"model": ErrorResponse, "description": "Validation error"},
+        500: {"model": ErrorResponse, "description": "Internal server error"}
+    }
+)
+async def save_layouts(
+    request: SaveLayoutsRequest,
+    session: AsyncSession = Depends(get_async_session)
+):
+    """
+    Save multiple layouts for presentations.
+    
+    Args:
+        request: JSON request containing array of layout data
+        session: Database session
+    
+    Returns:
+        SaveLayoutsResponse with success status and count of saved layouts
+    
+    Raises:
+        HTTPException: 400 for validation errors, 500 for server errors
+    """
+    try:
+        # Validate request data
+        if not request.layouts:
+            raise HTTPException(
+                status_code=400,
+                detail="Layouts array cannot be empty"
+            )
+        
+        if len(request.layouts) > 50:  # Reasonable limit
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot save more than 50 layouts at once"
+            )
+        
+        saved_count = 0
+        
+        for i, layout_data in enumerate(request.layouts):
+            # Validate individual layout data
+            if not layout_data.presentation_id or not layout_data.presentation_id.strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Layout {i+1}: presentation_id cannot be empty"
+                )
+            
+            if not layout_data.layout_id or not layout_data.layout_id.strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Layout {i+1}: layout_id cannot be empty"
+                )
+            
+            if not layout_data.layout_name or not layout_data.layout_name.strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Layout {i+1}: layout_name cannot be empty"
+                )
+            
+            if not layout_data.layout_code or not layout_data.layout_code.strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Layout {i+1}: layout_code cannot be empty"
+                )
+            
+            # Check if layout already exists for this presentation and layout_id
+            stmt = select(PresentationLayoutCodeModel).where(
+                PresentationLayoutCodeModel.presentation_id == layout_data.presentation_id,
+                PresentationLayoutCodeModel.layout_id == layout_data.layout_id
+            )
+            result = await session.execute(stmt)
+            existing_layout = result.scalar_one_or_none()
+            
+            if existing_layout:
+                # Update existing layout
+                existing_layout.layout_name = layout_data.layout_name
+                existing_layout.layout_code = layout_data.layout_code
+                existing_layout.updated_at = datetime.now()
+            else:
+                # Create new layout
+                new_layout = PresentationLayoutCodeModel(
+                    presentation_id=layout_data.presentation_id,
+                    layout_id=layout_data.layout_id,
+                    layout_name=layout_data.layout_name,
+                    layout_code=layout_data.layout_code
+                )
+                session.add(new_layout)
+            
+            saved_count += 1
+        
+        await session.commit()
+        
+        return SaveLayoutsResponse(
+            success=True,
+            saved_count=saved_count,
+            message=f"Successfully saved {saved_count} layout(s)"
+        )
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        await session.rollback()
+        raise
+    except Exception as e:
+        await session.rollback()
+        print(f"Unexpected error saving layouts: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error while saving layouts: {str(e)}"
+        )
+
+
+# ENDPOINT 5: Get layouts for a presentation
+@LAYOUT_MANAGEMENT_ROUTER.get(
+    "/get-layouts/{presentation_id}", 
+    response_model=GetLayoutsResponse,
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid presentation ID"},
+        404: {"model": ErrorResponse, "description": "No layouts found for presentation"},
+        500: {"model": ErrorResponse, "description": "Internal server error"}
+    }
+)
+async def get_layouts(
+    presentation_id: str,
+    session: AsyncSession = Depends(get_async_session)
+):
+    """
+    Retrieve all layouts for a specific presentation.
+    
+    Args:
+        presentation_id: UUID of the presentation
+        session: Database session
+    
+    Returns:
+        GetLayoutsResponse with layouts data
+    
+    Raises:
+        HTTPException: 404 if no layouts found, 400 for invalid UUID, 500 for server errors
+    """
+    try:
+        # Validate presentation_id format (basic UUID check)
+        if not presentation_id or len(presentation_id.strip()) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Presentation ID cannot be empty"
+            )
+        
+        # Query layouts for the given presentation_id
+        stmt = select(PresentationLayoutCodeModel).where(
+            PresentationLayoutCodeModel.presentation_id == presentation_id
+        )
+        result = await session.execute(stmt)
+        layouts_db = result.scalars().all()
+        
+        # Check if any layouts were found
+        if not layouts_db:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No layouts found for presentation ID: {presentation_id}"
+            )
+        
+        # Convert to response format
+        layouts = [
+            LayoutData(
+                presentation_id=layout.presentation_id,
+                layout_id=layout.layout_id,
+                layout_name=layout.layout_name,
+                layout_code=layout.layout_code
+            )
+            for layout in layouts_db
+        ]
+        
+        return GetLayoutsResponse(
+            success=True,
+            layouts=layouts,
+            message=f"Retrieved {len(layouts)} layout(s) for presentation {presentation_id}"
+        )
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except Exception as e:
+        print(f"Error retrieving layouts for presentation {presentation_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error while retrieving layouts: {str(e)}"
+        )
