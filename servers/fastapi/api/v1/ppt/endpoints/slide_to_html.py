@@ -10,7 +10,7 @@ import asyncio
 import xml.etree.ElementTree as ET
 import re
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from utils.asset_directory_utils import get_images_directory
 from services.database import get_async_session
 from models.sql.presentation_layout_code import PresentationLayoutCodeModel
@@ -81,6 +81,19 @@ class SaveLayoutsResponse(BaseModel):
 class GetLayoutsResponse(BaseModel):
     success: bool
     layouts: list[LayoutData]
+    message: Optional[str] = None
+
+
+class PresentationSummary(BaseModel):
+    presentation_id: str
+    layout_count: int
+
+
+class GetPresentationSummaryResponse(BaseModel):
+    success: bool
+    presentations: List[PresentationSummary]
+    total_presentations: int
+    total_layouts: int
     message: Optional[str] = None
 
 
@@ -992,4 +1005,69 @@ async def get_layouts(
         raise HTTPException(
             status_code=500,
             detail=f"Internal server error while retrieving layouts: {str(e)}"
+        )
+
+
+# ENDPOINT: Get all presentations with layout counts
+@LAYOUT_MANAGEMENT_ROUTER.get(
+    "/summary",
+    response_model=GetPresentationSummaryResponse,
+    summary="Get all presentations with layout counts",
+    description="Retrieve a summary of all presentations and the number of layouts in each",
+    responses={
+        200: {"model": GetPresentationSummaryResponse, "description": "Presentations summary retrieved successfully"},
+        500: {"model": ErrorResponse, "description": "Internal server error"}
+    }
+)
+async def get_presentations_summary(
+    session: AsyncSession = Depends(get_async_session)
+):
+    """
+    Get summary of all presentations with their layout counts.
+    
+    Args:
+        session: Database session
+    
+    Returns:
+        GetPresentationSummaryResponse with list of presentations and their layout counts
+    
+    Raises:
+        HTTPException: 500 for server errors
+    """
+    try:
+        # Query to get presentation_id and count of layouts grouped by presentation_id
+        stmt = select(
+            PresentationLayoutCodeModel.presentation_id,
+            func.count(PresentationLayoutCodeModel.id).label('layout_count')
+        ).group_by(PresentationLayoutCodeModel.presentation_id)
+        
+        result = await session.execute(stmt)
+        presentation_data = result.all()
+        
+        # Convert to response format
+        presentations = [
+            PresentationSummary(
+                presentation_id=row.presentation_id,
+                layout_count=row.layout_count
+            )
+            for row in presentation_data
+        ]
+        
+        # Calculate totals
+        total_presentations = len(presentations)
+        total_layouts = sum(p.layout_count for p in presentations)
+        
+        return GetPresentationSummaryResponse(
+            success=True,
+            presentations=presentations,
+            total_presentations=total_presentations,
+            total_layouts=total_layouts,
+            message=f"Retrieved {total_presentations} presentation(s) with {total_layouts} total layout(s)"
+        )
+        
+    except Exception as e:
+        print(f"Error retrieving presentations summary: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error while retrieving presentations summary: {str(e)}"
         ) 
