@@ -79,7 +79,7 @@ You may want to directly provide your API KEYS as environment variables and keep
 - **CAN_CHANGE_KEYS=[true/false]**: Set this to **false** if you want to keep API Keys hidden and make them unmodifiable.
 - **LLM=[openai/google/anthropic/ollama/custom]**: Select **LLM** of your choice.
 - **OPENAI_API_KEY=[Your OpenAI API Key]**: Provide this if **LLM** is set to **openai**
-- **OPENAI_MODEL=[OpenAI Model ID]**: Provide this if **LLM** is set to **openai** (default: "gpt-4o")
+- **OPENAI_MODEL=[OpenAI Model ID]**: Provide this if **LLM** is set to **openai** (default: "gpt-4.1")
 - **GOOGLE_API_KEY=[Your Google API Key]**: Provide this if **LLM** is set to **google**
 - **GOOGLE_MODEL=[Google Model ID]**: Provide this if **LLM** is set to **google** (default: "models/gemini-2.0-flash")
 - **ANTHROPIC_API_KEY=[Your Anthropic API Key]**: Provide this if **LLM** is set to **anthropic**
