@@ -65,6 +65,7 @@ export default function AnthropicConfig({
         const data = await response.json();
         setAvailableModels(data);
         setModelsChecked(true);
+        onInputChange("claude-3-5-sonnet-20241022", "anthropic_model");
       } else {
         console.error('Failed to fetch models');
         setAvailableModels([]);

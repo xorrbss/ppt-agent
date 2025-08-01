@@ -61,6 +61,7 @@ export default function GoogleConfig({
         const data = await response.json();
         setAvailableModels(data);
         setModelsChecked(true);
+        onInputChange("models/gemini-2.0-flash", "google_model");
       } else {
         console.error('Failed to fetch models');
         setAvailableModels([]);
