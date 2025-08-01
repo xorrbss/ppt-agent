@@ -65,6 +65,7 @@ class LayoutData(BaseModel):
     layout_id: str        # Unique identifier for the layout
     layout_name: str      # Display name of the layout
     layout_code: str      # TSX/React component code for the layout
+    fonts: Optional[List[str]] = None  # Optional list of font links
 
 
 class SaveLayoutsRequest(BaseModel):
@@ -365,7 +366,7 @@ async def generate_react_component_from_html(html_content: str, api_key: str) ->
         
         with client.messages.stream(
             model="claude-sonnet-4-20250514",
-            max_tokens=20000,
+            max_tokens=64000,
             temperature=1,
             system=HTML_TO_REACT_SYSTEM_PROMPT,
             messages=[
@@ -381,7 +382,7 @@ async def generate_react_component_from_html(html_content: str, api_key: str) ->
             ],
             thinking={
                 "type": "enabled",
-                "budget_tokens": 16000
+                "budget_tokens": 25000
             }
         ) as stream:
             print("Streaming started, collecting React component response...")
@@ -880,6 +881,7 @@ async def save_layouts(
                 # Update existing layout
                 existing_layout.layout_name = layout_data.layout_name
                 existing_layout.layout_code = layout_data.layout_code
+                existing_layout.fonts = layout_data.fonts
                 existing_layout.updated_at = datetime.now()
             else:
                 # Create new layout
@@ -887,7 +889,8 @@ async def save_layouts(
                     presentation_id=layout_data.presentation_id,
                     layout_id=layout_data.layout_id,
                     layout_name=layout_data.layout_name,
-                    layout_code=layout_data.layout_code
+                    layout_code=layout_data.layout_code,
+                    fonts=layout_data.fonts
                 )
                 session.add(new_layout)
             
@@ -969,7 +972,8 @@ async def get_layouts(
                 presentation_id=layout.presentation_id,
                 layout_id=layout.layout_id,
                 layout_name=layout.layout_name,
-                layout_code=layout.layout_code
+                layout_code=layout.layout_code,
+                fonts=layout.fonts
             )
             for layout in layouts_db
         ]
