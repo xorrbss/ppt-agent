@@ -1,6 +1,6 @@
 from datetime import datetime
-from typing import Optional
-from sqlalchemy import Column, DateTime, Text
+from typing import Optional, List
+from sqlalchemy import Column, DateTime, Text, JSON
 from sqlmodel import SQLModel, Field
 
 
@@ -14,5 +14,6 @@ class PresentationLayoutCodeModel(SQLModel, table=True):
     layout_id: str = Field(description="Unique identifier for the layout")
     layout_name: str = Field(description="Display name of the layout")
     layout_code: str = Field(sa_column=Column(Text), description="TSX/React component code for the layout")
+    fonts: Optional[List[str]] = Field(sa_column=Column(JSON), default=None, description="Optional list of font links")
     created_at: datetime = Field(sa_column=Column(DateTime, default=datetime.now))
     updated_at: datetime = Field(sa_column=Column(DateTime, default=datetime.now, onupdate=datetime.now)) 
