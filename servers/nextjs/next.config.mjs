@@ -9,6 +9,15 @@ const nextConfig = {
   reactStrictMode: false,
   
 
+  // Rewrites for development - proxy font requests to FastAPI backend
+  async rewrites() {
+    return [
+      {
+        source: '/app_data/fonts/:path*',
+        destination: 'http://localhost:8000/app_data/fonts/:path*',
+      },
+    ];
+  },
 
   images: {
     remotePatterns: [

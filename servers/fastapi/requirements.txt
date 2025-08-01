@@ -30,6 +30,7 @@ fastapi-cloud-cli==0.1.4
 fastembed==0.7.1
 filelock==3.18.0
 flatbuffers==25.2.10
+fonttools==4.59.0
 frozenlist==1.7.0
 fsspec==2025.7.0
 google-auth==2.40.3
