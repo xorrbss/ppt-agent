@@ -377,7 +377,6 @@ async def generate_presentation_api(
                 presentation_outline=PresentationOutlineModel(
                     title=presentation_content.title,
                     slides=outlines,
-                    notes=presentation_content.notes,
                 ),
                 presentation_layout=layout_model,
             )
@@ -401,7 +400,6 @@ async def generate_presentation_api(
         title=presentation_content.title,
         summary=summary,
         outlines=[each.model_dump() for each in outlines],
-        notes=presentation_content.notes,
         layout=layout_model.model_dump(),
         structure=presentation_structure.model_dump(),
     )
