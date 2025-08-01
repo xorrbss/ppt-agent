@@ -92,15 +92,12 @@ async def check_llm_and_image_provider_api_or_model_availability():
         elif is_custom_llm_selected():
             custom_model = get_custom_model_env()
             custom_llm_url = get_custom_llm_url_env()
-            custom_llm_api_key = get_custom_llm_api_key_env()
             if not custom_model:
                 raise Exception("CUSTOM_MODEL must be provided")
             if not custom_llm_url:
                 raise Exception("CUSTOM_LLM_URL must be provided")
-            if not custom_llm_api_key:
-                raise Exception("CUSTOM_LLM_API_KEY must be provided")
             available_models = await list_available_openai_compatible_models(
-                custom_llm_url, custom_llm_api_key
+                custom_llm_url, get_custom_llm_api_key_env() or "null"
             )
             print("-" * 50)
             print("Available models: ", available_models)

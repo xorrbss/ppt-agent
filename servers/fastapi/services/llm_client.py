@@ -79,14 +79,14 @@ class LLMClient:
         )
 
     def _get_custom_client(self):
-        if not (get_custom_llm_api_key_env() and get_custom_llm_url_env()):
+        if not get_custom_llm_url_env():
             raise HTTPException(
                 status_code=400,
-                detail="Custom LLM API Key is not set",
+                detail="Custom LLM URL is not set",
             )
         return AsyncOpenAI(
             base_url=get_custom_llm_url_env(),
-            api_key=get_custom_llm_api_key_env(),
+            api_key=get_custom_llm_api_key_env() or "null",
         )
 
     # ? Prompts
