@@ -51,16 +51,6 @@ export default function LLMProviderSelection({
   const [openImageProviderSelect, setOpenImageProviderSelect] = useState(false);
 
   useEffect(() => {
-    if (!llmConfig.USE_CUSTOM_URL) {
-      setLlmConfig({ ...llmConfig, OLLAMA_URL: "http://localhost:11434" });
-    } else {
-      if (!llmConfig.OLLAMA_URL) {
-        setLlmConfig({ ...llmConfig, OLLAMA_URL: "http://localhost:11434" });
-      }
-    }
-  }, [llmConfig.USE_CUSTOM_URL]);
-
-  useEffect(() => {
     onConfigChange(llmConfig);
   }, [llmConfig]);
 
@@ -79,10 +69,12 @@ export default function LLMProviderSelection({
       (llmConfig.IMAGE_PROVIDER === "pexels" && !llmConfig.PEXELS_API_KEY) ||
       (llmConfig.IMAGE_PROVIDER === "pixabay" && !llmConfig.PIXABAY_API_KEY);
 
+    const needsOllamaUrl = (llmConfig.LLM === "ollama" && !llmConfig.OLLAMA_URL);
+
     setButtonState({
       isLoading: false,
-      isDisabled: needsModelSelection || needsApiKey,
-      text: needsModelSelection ? "Please Select a Model" : needsApiKey ? "Please Enter API Key" : "Save Configuration",
+      isDisabled: needsModelSelection || needsApiKey || needsOllamaUrl,
+      text: needsModelSelection ? "Please Select a Model" : needsApiKey ? "Please Enter API Key" : needsOllamaUrl ? "Please Enter Ollama URL" : "Save Configuration",
       showProgress: false
     });
 
@@ -99,15 +91,30 @@ export default function LLMProviderSelection({
   };
 
   useEffect(() => {
-    if (!llmConfig.IMAGE_PROVIDER) {
-      if (llmConfig.LLM === "openai") {
-        setLlmConfig({ ...llmConfig, IMAGE_PROVIDER: "dall-e-3" });
-      } else if (llmConfig.LLM === "google") {
-        setLlmConfig({ ...llmConfig, IMAGE_PROVIDER: "gemini_flash" });
-      } else {
-        setLlmConfig({ ...llmConfig, IMAGE_PROVIDER: "pexels" });
+    if (!llmConfig.USE_CUSTOM_URL) {
+      setLlmConfig({ ...llmConfig, OLLAMA_URL: "http://localhost:11434" });
+    } else {
+      if (!llmConfig.OLLAMA_URL) {
+        setLlmConfig({ ...llmConfig, OLLAMA_URL: "http://localhost:11434" });
       }
     }
+  }, [llmConfig.USE_CUSTOM_URL]);
+
+  useEffect(() => {
+    let updates: any = {};
+    if (!llmConfig.IMAGE_PROVIDER) {
+      if (llmConfig.LLM === "openai") {
+        updates.IMAGE_PROVIDER = "dall-e-3";
+      } else if (llmConfig.LLM === "google") {
+        updates.IMAGE_PROVIDER = "gemini_flash";
+      } else {
+        updates.IMAGE_PROVIDER = "pexels";
+      }
+    }
+    if (!llmConfig.OLLAMA_URL) {
+      updates.OLLAMA_URL = "http://localhost:11434";
+    }
+    setLlmConfig({ ...llmConfig, ...updates });
   }, []);
 
   return (
