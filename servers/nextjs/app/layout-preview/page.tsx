@@ -5,13 +5,14 @@ import { useLayout } from "../(presentation-generator)/context/LayoutContext";
 import LoadingStates from "./components/LoadingStates";
 import { Card } from "@/components/ui/card";
 import { ExternalLink } from "lucide-react";
+import Header from "@/components/Header";
 
 const LayoutPreview = () => {
   const {
     getAllGroups,
     getLayoutsByGroup,
     getGroupSetting,
-    getAllLayouts,
+
     loading,
     error,
   } = useLayout();
@@ -53,6 +54,7 @@ const LayoutPreview = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <Header />
       <div className=" sticky top-0 z-30">
         <div className="max-w-7xl mx-auto border-b px-6 py-6">
           <div className="text-center">

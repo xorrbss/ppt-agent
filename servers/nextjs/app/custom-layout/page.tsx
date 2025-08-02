@@ -17,6 +17,7 @@ import { ApiResponseHandler } from "@/app/(presentation-generator)/services/api/
 import { v4 as uuidv4 } from "uuid";
 import EachSlide from "./components/EachSlide";
 import GlobalFontManager from "./components/GlobalFontManager";
+import Header from "@/components/Header";
 
 // Types
 interface SlideData {
@@ -562,10 +563,11 @@ const CustomLayoutPage = () => {
     slides.length > 0 ? Math.round((completedSlides / slides.length) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 ">
+      <Header />
       <div className="max-w-[1440px] aspect-video mx-auto px-6 ">
         {/* Header */}
-        <div className="text-center space-y-2 mb-6">
+        <div className="text-center space-y-2 my-6">
           <h1 className="text-4xl font-bold text-gray-900">
             Custom Layout Processor
           </h1>

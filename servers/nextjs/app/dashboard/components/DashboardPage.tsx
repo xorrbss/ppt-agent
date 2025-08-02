@@ -7,7 +7,7 @@ import Wrapper from "@/components/Wrapper";
 import { DashboardApi } from "../api/dashboard";
 import { PresentationGrid } from "./PresentationGrid";
 
-import Header from "./Header";
+import Header from "@/components/Header";
 
 const DashboardPage: React.FC = () => {
   const [presentations, setPresentations] = useState<any>(null);
@@ -26,7 +26,10 @@ const DashboardPage: React.FC = () => {
       setIsLoading(true);
       setError(null);
       const data = await DashboardApi.getPresentations();
-      data.sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+      data.sort(
+        (a: any, b: any) =>
+          new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+      );
       setPresentations(data);
     } catch (err) {
       setError(null);
