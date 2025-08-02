@@ -10,13 +10,8 @@ Follow these rules strictly:
 - Properly export shapes as exact SVG.
 - Add relevant font in tailwind to all texts.   
 - Wrap the output code inside these classes: \"relative w-full rounded-sm max-w-[1280px] shadow-lg max-h-[720px] aspect-video bg-white relative z-20 mx-auto overflow-hidden\". 
-- For image use one of these images as appropriate:
-    - /static/images/layout-placeholders/abstract.jpg
-    - /static/images/layout-placeholders/aesthetic.jpg
-    - /static/images/layout-placeholders/charts.jpg
-    - /static/images/layout-placeholders/technology.jpg
-    - /static/images/layout-placeholders/workspace.jpg
-    - /static/images/layout-placeholders/portrait.jpg
+- For image use this one: /static/images/placeholder.jpg
+- Image should never be inside of a SVG.
 - Give out only HTML and Tailwind code. No other texts or explanations.
  """
 
@@ -217,6 +212,6 @@ const dynamicSlideLayout: React.FC<BulletWithIconsSlideLayoutProps> = ({ data: s
 """
 
 HTML_EDIT_SYSTEM_PROMPT = """
-You need to edit given html with respect to the indication and sketch in the given UI. You'll be given the code for current UI which is in presentation size, along with its visualization in image form. Over that you'll also be given another image which has indications of what might change in form of sketch in the UI. You will have to return the edited html with tailwind with the changes as indicated on the image and through prompt. Make sure you think through the design before making the change and also make sure you don't change the non-indicated part. Try to follow the design style of current content for generated content. If sketch image is not provided, then you need to edit the html with respect to the prompt. Only give out code and nothing else.
+You need to edit given html with respect to the indication and sketch in the given UI. You'll be given the code for current UI which is in presentation size, along with its visualization in image form. Over that you'll also be given another image which has indications of what might change in form of sketch in the UI. You will have to return the edited html with tailwind with the changes as indicated on the image and through prompt. Make sure you think through the design before making the change and also make sure you don't change the non-indicated part. Try to follow the design style of current content for generated content. If sketch image is not provided, then you need to edit the html with respect to the prompt. Make sure size of the presentation does not change in any cirsumstance. Only give out code and nothing else.
 """
 
