@@ -9,10 +9,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Wand2,
-  Upload,
-} from "lucide-react";
+import { Wand2, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PresentationGenerationApi } from "../services/api/presentation-generation";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -38,11 +35,12 @@ const ImageEditor = ({
   onClose,
   onFocusPointClick,
   onImageChange,
-
 }: ImageEditorProps) => {
   // State management
   const [previewImages, setPreviewImages] = useState(initialImage);
-  const [previousGeneratedImages, setPreviousGeneratedImages] = useState<PreviousGeneratedImagesResponse[]>([]);
+  const [previousGeneratedImages, setPreviousGeneratedImages] = useState<
+    PreviousGeneratedImagesResponse[]
+  >([]);
   const [prompt, setPrompt] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +63,7 @@ const ImageEditor = ({
     (properties &&
       properties[imageIdx] &&
       properties[imageIdx].initialObjectFit) ||
-    "cover"
+      "cover"
   );
 
   // Refs
@@ -74,7 +72,6 @@ const ImageEditor = ({
   useEffect(() => {
     setPreviewImages(initialImage);
   }, [initialImage]);
-
 
   useEffect(() => {
     if (isOpen && !previousGeneratedImages.length) {
@@ -91,26 +88,25 @@ const ImageEditor = ({
     }, 300); // Match the Sheet animation duration
   };
 
-
   const getPreviousGeneratedImage = async () => {
     try {
-      const response = await PresentationGenerationApi.getPreviousGeneratedImages();
+      const response =
+        await PresentationGenerationApi.getPreviousGeneratedImages();
       setPreviousGeneratedImages(response);
     } catch (error: any) {
       toast.error("Failed to get previous generated images. Please try again.");
       console.error("error in getting previous generated images", error);
-      setError(error.message || "Failed to get previous generated images. Please try again.");
+      setError(
+        error.message ||
+          "Failed to get previous generated images. Please try again."
+      );
     }
-  }
-
-
+  };
 
   /**
    * Handles image selection and calls the parent callback
    */
   const handleImageChange = (newImage: string) => {
-
-
     if (onImageChange) {
       onImageChange(newImage, promptContent);
       setPreviewImages(newImage);
@@ -230,17 +226,17 @@ const ImageEditor = ({
       setUploadError(null);
 
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append("file", file);
 
-      const response = await fetch('/api/upload-image', {
-        method: 'POST',
+      const response = await fetch("/api/upload-image", {
+        method: "POST",
         body: formData,
       });
 
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || 'Upload failed');
+        throw new Error(result.error || "Upload failed");
       }
 
       setUploadedImageUrl(result.filePath);
@@ -254,8 +250,6 @@ const ImageEditor = ({
 
   return (
     <div className="image-editor-container">
-
-
       <Sheet open={isOpen} onOpenChange={() => handleClose()}>
         <SheetContent
           side="right"
@@ -276,7 +270,9 @@ const ImageEditor = ({
                 <TabsTrigger className="font-medium" value="upload">
                   Upload
                 </TabsTrigger>
-                <TabsTrigger className="font-medium" value="edit">Edit</TabsTrigger>
+                <TabsTrigger className="font-medium" value="edit">
+                  Edit
+                </TabsTrigger>
               </TabsList>
               {/* Generate Tab */}
               <TabsContent value="generate" className="mt-4 space-y-4">
@@ -287,7 +283,9 @@ const ImageEditor = ({
                   </div>
 
                   <div>
-                    <h3 className="text-base font-medium mb-2">Image Description</h3>
+                    <h3 className="text-base font-medium mb-2">
+                      Image Description
+                    </h3>
                     <Textarea
                       placeholder="Describe the image you want to generate..."
                       value={prompt}
@@ -308,14 +306,15 @@ const ImageEditor = ({
                   {error && <p className="text-red-500 text-sm">{error}</p>}
 
                   <div className="grid grid-cols-2 gap-4">
-                    {isGenerating || !previewImages
-                      ? Array.from({ length: 4 }).map((_, index) => (
+                    {isGenerating || !previewImages ? (
+                      Array.from({ length: 4 }).map((_, index) => (
                         <Skeleton
                           key={index}
                           className="aspect-[4/3] w-full rounded-lg"
                         />
                       ))
-                      : <div
+                    ) : (
+                      <div
                         onClick={() => handleImageChange(previewImages)}
                         className="aspect-[4/3] w-full overflow-hidden rounded-lg border cursor-pointer hover:border-blue-500 transition-colors"
                       >
@@ -327,15 +326,25 @@ const ImageEditor = ({
                           />
                         )}
                       </div>
-                    }
+                    )}
                   </div>
                   {previousGeneratedImages.length > 0 && (
                     <div className="mt-4">
-                      <h3 className="text-sm font-medium mb-2">Previous Generated Images</h3>
-                      <div className="grid grid-cols-2 gap-4">
+                      <h3 className="text-sm font-medium mb-2">
+                        Previous Generated Images
+                      </h3>
+                      <div className="grid grid-cols-2 gap-4 h-[400px] overflow-y-auto hide-scrollbar">
                         {previousGeneratedImages.map((image) => (
-                          <div onClick={() => handleImageChange(image.path)} key={image.id} className="aspect-[4/3] w-full overflow-hidden rounded-lg border cursor-pointer hover:border-blue-500 transition-colors" >
-                            <img src={image.path} alt={image.extras.prompt} className="w-full h-full object-cover" />
+                          <div
+                            onClick={() => handleImageChange(image.path)}
+                            key={image.id}
+                            className="aspect-[4/3] w-full overflow-hidden rounded-lg border cursor-pointer hover:border-blue-500 transition-colors"
+                          >
+                            <img
+                              src={image.path}
+                              alt={image.extras.prompt}
+                              className="w-full h-full object-cover"
+                            />
                           </div>
                         ))}
                       </div>
@@ -437,56 +446,66 @@ const ImageEditor = ({
               <TabsContent value="edit" className="mt-4 space-y-4">
                 <div className="space-y-4">
                   <h3 className="text-sm font-medium mb-2">Current Image</h3>
-                  <div onClick={(e) => {
-
-                    if (isFocusPointMode) {
-                      handleFocusPointClick(e);
-                    } else {
-
-                    }
-
-                  }}
-
-                    className="aspect-[4/3] group  rounded-lg overflow-hidden relative border border-gray-200">
-                    <p className="group-hover:opacity-100 opacity-0 transition-opacity absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-sm text-center font-medium bg-black/50 text-white px-2 py-1 rounded">Click to Change Focus Point</p>
-                    {previewImages && <img ref={imageRef} onClick={
-                      () => {
-
-                        setIsFocusPointMode(true);
-
+                  <div
+                    onClick={(e) => {
+                      if (isFocusPointMode) {
+                        handleFocusPointClick(e);
+                      } else {
                       }
-                    } src={previewImages} style={{ objectFit: objectFit, objectPosition: `${focusPoint.x}% ${focusPoint.y}%`, }} alt={`Preview`} className="w-full h-full " />}
-                    {isFocusPointMode && <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                      <div className="text-white text-center p-2 bg-black/50 rounded">
-                        <p className="text-sm font-medium pointer-events-none">
-                          Click anywhere to set focus point
-                        </p>
-                        <button
-                          className="mt-2 px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleFocusPointMode();
+                    }}
+                    className="aspect-[4/3] group  rounded-lg overflow-hidden relative border border-gray-200"
+                  >
+                    <p className="group-hover:opacity-100 opacity-0 transition-opacity absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-sm text-center font-medium bg-black/50 text-white px-2 py-1 rounded">
+                      Click to Change Focus Point
+                    </p>
+                    {previewImages && (
+                      <img
+                        ref={imageRef}
+                        onClick={() => {
+                          setIsFocusPointMode(true);
+                        }}
+                        src={previewImages}
+                        style={{
+                          objectFit: objectFit,
+                          objectPosition: `${focusPoint.x}% ${focusPoint.y}%`,
+                        }}
+                        alt={`Preview`}
+                        className="w-full h-full "
+                      />
+                    )}
+                    {isFocusPointMode && (
+                      <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                        <div className="text-white text-center p-2 bg-black/50 rounded">
+                          <p className="text-sm font-medium pointer-events-none">
+                            Click anywhere to set focus point
+                          </p>
+                          <button
+                            className="mt-2 px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleFocusPointMode();
+                            }}
+                          >
+                            Done
+                          </button>
+                        </div>
+
+                        <div
+                          className="absolute w-8 h-8 border-2 border-white rounded-full transform -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+                          style={{
+                            left: `${focusPoint.x}%`,
+                            top: `${focusPoint.y}%`,
+                            boxShadow: "0 0 0 2px rgba(0,0,0,0.5)",
                           }}
                         >
-                          Done
-                        </button>
-                      </div>
-
-                      <div
-                        className="absolute w-8 h-8 border-2 border-white rounded-full transform -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-                        style={{
-                          left: `${focusPoint.x}%`,
-                          top: `${focusPoint.y}%`,
-                          boxShadow: "0 0 0 2px rgba(0,0,0,0.5)",
-                        }}
-                      >
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-2 h-2 bg-white rounded-full"></div>
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="w-2 h-2 bg-white rounded-full"></div>
+                          </div>
+                          <div className="absolute w-16 h-0.5 bg-white/70 left-1/2 -translate-x-1/2"></div>
+                          <div className="absolute w-0.5 h-16 bg-white/70 top-1/2 -translate-y-1/2"></div>
                         </div>
-                        <div className="absolute w-16 h-0.5 bg-white/70 left-1/2 -translate-x-1/2"></div>
-                        <div className="absolute w-0.5 h-16 bg-white/70 top-1/2 -translate-y-1/2"></div>
                       </div>
-                    </div>}
+                    )}
                   </div>
                   {/* Edit Image  */}
                   {/* Object Fit */}
@@ -494,17 +513,40 @@ const ImageEditor = ({
                     <div>
                       <h3 className="text-sm font-medium mb-2">Object Fit</h3>
                       <div className="flex gap-4">
-                        <Button variant="outline" className={cn(objectFit === "cover" && "bg-blue-50 border-blue-500")} onClick={() => handleFitChange("cover")}>Cover</Button>
-                        <Button variant="outline" className={cn(objectFit === "contain" && "bg-blue-50 border-blue-500")} onClick={() => handleFitChange("contain")}>Contain</Button>
-                        <Button variant="outline" className={cn(objectFit === "fill" && "bg-blue-50 border-blue-500")} onClick={() => handleFitChange("fill")}>Fill</Button>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            objectFit === "cover" &&
+                              "bg-blue-50 border-blue-500"
+                          )}
+                          onClick={() => handleFitChange("cover")}
+                        >
+                          Cover
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            objectFit === "contain" &&
+                              "bg-blue-50 border-blue-500"
+                          )}
+                          onClick={() => handleFitChange("contain")}
+                        >
+                          Contain
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            objectFit === "fill" && "bg-blue-50 border-blue-500"
+                          )}
+                          onClick={() => handleFitChange("fill")}
+                        >
+                          Fill
+                        </Button>
                       </div>
                     </div>
-
                   }
                   {/* Focus Point */}
-                  {
-
-                  }
+                  {}
                 </div>
               </TabsContent>
             </Tabs>
