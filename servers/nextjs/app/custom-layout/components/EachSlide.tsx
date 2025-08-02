@@ -67,53 +67,6 @@ const EachSlide = ({
       }
     }
   }, [slide.processed, slide.html]);
-  // Load Google Fonts
-  useEffect(() => {
-    if (slide.fonts?.internally_supported_fonts) {
-      slide.fonts.internally_supported_fonts.forEach((font: any) => {
-        // Check if font link already exists
-        const existingFont = document.querySelector(
-          `link[href="${font.google_fonts_url}"]`
-        );
-        // Only add if font doesn't already exist
-        if (!existingFont) {
-          const link = document.createElement("link");
-          link.href = font.google_fonts_url;
-          link.rel = "stylesheet";
-          document.head.appendChild(link);
-        }
-      });
-    }
-  }, [slide.fonts]);
-
-  // Load uploaded fonts
-  useEffect(() => {
-    if (slide.uploaded_fonts && slide.uploaded_fonts.length > 0) {
-      slide.uploaded_fonts.forEach((fontUrl: string) => {
-        // Check if font style already exists
-        const existingStyle = document.querySelector(
-          `style[data-font-url="${fontUrl}"]`
-        );
-        if (!existingStyle) {
-          const style = document.createElement("style");
-          style.setAttribute("data-font-url", fontUrl);
-
-          // Extract font name from URL for font-family
-          const fontName =
-            fontUrl.split("/").pop()?.split(".")[0] || "CustomFont";
-
-          style.textContent = `
-            @font-face {
-              font-family: '${fontName}';
-              src: url('${fontUrl}') format('truetype');
-              font-display: swap;
-            }
-          `;
-          document.head.appendChild(style);
-        }
-      });
-    }
-  }, [slide.uploaded_fonts]);
 
   // Set up canvas when entering edit mode
   useEffect(() => {

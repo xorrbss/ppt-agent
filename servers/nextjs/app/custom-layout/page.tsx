@@ -16,7 +16,7 @@ import { Upload, FileText, X, Loader2 } from "lucide-react";
 import { ApiResponseHandler } from "@/app/(presentation-generator)/services/api/api-error-handler";
 import { v4 as uuidv4 } from "uuid";
 import EachSlide from "./components/EachSlide";
-import GlobalFontManager from "./components/GlobalFontManager";
+import FontManager from "./components/FontManager";
 import Header from "@/components/Header";
 
 // Types
@@ -34,18 +34,19 @@ interface UploadedFont {
 
 interface ProcessedSlide extends SlideData {
   html?: string;
-  fonts: {
-    internally_supported_fonts: {
-      name: string;
-      google_fonts_url: string;
-    }[];
-    not_supported_fonts: string[];
-  };
   uploaded_fonts?: string[];
   processing?: boolean;
   processed?: boolean;
   error?: string;
   modified?: boolean; // Added for unsaved changes
+}
+
+interface FontData {
+  internally_supported_fonts: {
+    name: string;
+    google_fonts_url: string;
+  }[];
+  not_supported_fonts: string[];
 }
 
 const CustomLayoutPage = () => {
@@ -55,15 +56,14 @@ const CustomLayoutPage = () => {
   const [slides, setSlides] = useState<ProcessedSlide[]>([]);
   const [isSavingLayout, setIsSavingLayout] = useState(false);
   const [isLayoutSaved, setIsLayoutSaved] = useState(false);
-  const [globalUploadedFonts, setGlobalUploadedFonts] = useState<
-    UploadedFont[]
-  >([]);
+  const [UploadedFonts, setUploadedFonts] = useState<UploadedFont[]>([]);
+  const [fontsData, setFontsData] = useState<FontData | null>(null);
 
   console.log(slides);
 
   // Load uploaded fonts dynamically
   useEffect(() => {
-    globalUploadedFonts.forEach((font) => {
+    UploadedFonts.forEach((font) => {
       // Check if font style already exists
       const existingStyle = document.querySelector(
         `style[data-font-url="${font.fontUrl}"]`
@@ -83,15 +83,43 @@ const CustomLayoutPage = () => {
         document.head.appendChild(style);
       }
     });
-  }, [globalUploadedFonts]);
+  }, [UploadedFonts]);
 
+  // Load Google Fonts from fontsData
+  useEffect(() => {
+    if (fontsData?.internally_supported_fonts) {
+      fontsData.internally_supported_fonts.forEach((font) => {
+        // Check if font link already exists
+        const existingFont = document.querySelector(
+          `link[href="${font.google_fonts_url}"]`
+        );
+        // Only add if font doesn't already exist
+        if (!existingFont) {
+          const link = document.createElement("link");
+          link.href = font.google_fonts_url;
+          link.rel = "stylesheet";
+          document.head.appendChild(link);
+        }
+      });
+    }
+  }, [fontsData]);
+
+  // Warning before page unload
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      return "You have unsaved changes. Are you sure you want to leave?";
+    };
+    if (slides.length > 0 && !isLayoutSaved) {
+      window.addEventListener("beforeunload", handleBeforeUnload);
+    }
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [slides, isLayoutSaved]);
   // Font management functions
   const uploadFont = useCallback(
     async (fontName: string, file: File): Promise<string | null> => {
       // Check if font is already uploaded
-      const existingFont = globalUploadedFonts.find(
-        (f) => f.fontName === fontName
-      );
+      const existingFont = UploadedFonts.find((f) => f.fontName === fontName);
       if (existingFont) {
         toast.info(`Font "${fontName}" is already uploaded`);
         return existingFont.fontUrl;
@@ -139,7 +167,7 @@ const CustomLayoutPage = () => {
             fontPath: data.font_path,
           };
 
-          setGlobalUploadedFonts((prev) => [...prev, newFont]);
+          setUploadedFonts((prev) => [...prev, newFont]);
           toast.success(`Font "${fontName}" uploaded successfully`);
           return newFont.fontUrl;
         } else {
@@ -156,13 +184,11 @@ const CustomLayoutPage = () => {
         return null;
       }
     },
-    [globalUploadedFonts]
+    [UploadedFonts]
   );
 
-  const removeGlobalFont = useCallback((fontUrl: string) => {
-    setGlobalUploadedFonts((prev) =>
-      prev.filter((font) => font.fontUrl !== fontUrl)
-    );
+  const removeFont = useCallback((fontUrl: string) => {
+    setUploadedFonts((prev) => prev.filter((font) => font.fontUrl !== fontUrl));
 
     // Remove the style element for this font
     const styleElement = document.querySelector(
@@ -175,34 +201,12 @@ const CustomLayoutPage = () => {
     toast.info("Font removed globally");
   }, []);
 
-  const getAllUnsupportedFonts = useCallback(
-    (slides: ProcessedSlide[]): string[] => {
-      const allUnsupportedFonts = new Set<string>();
-
-      slides.forEach((slide) => {
-        if (slide.fonts?.not_supported_fonts) {
-          slide.fonts.not_supported_fonts.forEach((fontName: string) => {
-            allUnsupportedFonts.add(fontName);
-          });
-        }
-      });
-
-      return Array.from(allUnsupportedFonts);
-    },
-    []
-  );
-
-  // Warning before page unload
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      return "You have unsaved changes. Are you sure you want to leave?";
-    };
-    if (slides.length > 0 && !isLayoutSaved) {
-      window.addEventListener("beforeunload", handleBeforeUnload);
+  const getAllUnsupportedFonts = useCallback((): string[] => {
+    if (!fontsData?.not_supported_fonts) {
+      return [];
     }
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [slides, isLayoutSaved]);
+    return fontsData.not_supported_fonts;
+  }, [fontsData]);
 
   // Save layout functionality
   const saveLayout = useCallback(async () => {
@@ -219,7 +223,8 @@ const CustomLayoutPage = () => {
       const presentationId = uuidv4();
 
       // Get all uploaded font URLs
-      const globalFontUrls = globalUploadedFonts.map((font) => font.fontUrl);
+      const FontUrls = UploadedFonts.map((font) => font.fontUrl);
+      console.log("FontUrls", FontUrls);
 
       for (let i = 0; i < slides.length; i++) {
         const slide = slides[i];
@@ -245,21 +250,12 @@ const CustomLayoutPage = () => {
             `Failed to convert slide ${slide.slide_number} to React`
           );
 
-          // Combine global fonts with slide-specific uploaded fonts
-          const slideFonts = [
-            ...globalFontUrls,
-            ...(slide.uploaded_fonts || []),
-          ];
-
-          // Remove duplicates
-          const uniqueFonts = Array.from(new Set(slideFonts));
-
           reactComponents.push({
             presentation_id: presentationId,
             layout_id: `${slide.slide_number}`,
             layout_name: `Slide${slide.slide_number}`,
             layout_code: data.react_component || data.component_code,
-            fonts: uniqueFonts,
+            fonts: FontUrls,
           });
 
           // Update progress
@@ -327,7 +323,7 @@ const CustomLayoutPage = () => {
     } finally {
       setIsSavingLayout(false);
     }
-  }, [slides, globalUploadedFonts]);
+  }, [slides, UploadedFonts]);
 
   // File upload handler
   const handleFileSelect = useCallback(
@@ -403,7 +399,6 @@ const CustomLayoutPage = () => {
                   processing: false,
                   processed: true,
                   html: htmlData.html,
-                  fonts: htmlData.fonts,
                 }
               : s
           );
@@ -489,6 +484,11 @@ const CustomLayoutPage = () => {
 
       if (!pptxData.success || !pptxData.slides?.length) {
         throw new Error("No slides found in the PPTX file");
+      }
+
+      // Extract fonts data from the response
+      if (pptxData.fonts) {
+        setFontsData(pptxData.fonts);
       }
 
       // const pptxData = processData;
@@ -578,12 +578,12 @@ const CustomLayoutPage = () => {
         </div>
 
         {/* Global Font Management */}
-        {slides.length > 0 && (
-          <GlobalFontManager
-            slides={slides}
-            globalUploadedFonts={globalUploadedFonts}
+        {fontsData && (
+          <FontManager
+            fontsData={fontsData}
+            UploadedFonts={UploadedFonts}
             uploadFont={uploadFont}
-            removeFont={removeGlobalFont}
+            removeFont={removeFont}
             getAllUnsupportedFonts={getAllUnsupportedFonts}
           />
         )}

@@ -1,8 +1,14 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle, AlertCircle, X } from "lucide-react";
-import { toast } from "sonner";
+import {
+  Upload,
+  CheckCircle,
+  AlertCircle,
+  X,
+  Loader2,
+  Type,
+} from "lucide-react";
 
 interface UploadedFont {
   fontName: string;
@@ -10,75 +16,99 @@ interface UploadedFont {
   fontPath: string;
 }
 
+interface FontData {
+  internally_supported_fonts: {
+    name: string;
+    google_fonts_url: string;
+  }[];
+  not_supported_fonts: string[];
+}
+
 interface FontManagerProps {
-  slide: any;
-  onFontsUpdate: (updatedFonts: string[]) => void;
-  globalUploadedFonts: UploadedFont[];
+  fontsData: FontData;
+  UploadedFonts: UploadedFont[];
+  uploadFont: (fontName: string, file: File) => Promise<string | null>;
+  removeFont: (fontUrl: string) => void;
+  getAllUnsupportedFonts: () => string[];
 }
 
 const FontManager: React.FC<FontManagerProps> = ({
-  slide,
-  onFontsUpdate,
-  globalUploadedFonts,
+  fontsData,
+  UploadedFonts,
+  uploadFont,
+  removeFont,
+  getAllUnsupportedFonts,
 }) => {
-  const [slideSpecificFonts, setSlideSpecificFonts] = useState<string[]>(
-    slide.uploaded_fonts || []
+  const [uploadingFonts, setUploadingFonts] = useState<Set<string>>(new Set());
+  const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
+
+  const allUnsupportedFonts = getAllUnsupportedFonts();
+
+  // Filter out fonts that are already uploaded
+  const fontsNeedingUpload = allUnsupportedFonts.filter(
+    (fontName) =>
+      !UploadedFonts.some((uploadedFont) => uploadedFont.fontName === fontName)
   );
 
-  // Update slide-specific fonts when slide changes
-  useEffect(() => {
-    setSlideSpecificFonts(slide.uploaded_fonts || []);
-  }, [slide.uploaded_fonts]);
+  const handleFontUpload = async (fontName: string, file: File) => {
+    if (!file) return;
 
-  const addGlobalFontToSlide = (fontUrl: string) => {
-    if (!slideSpecificFonts.includes(fontUrl)) {
-      const updatedFonts = [...slideSpecificFonts, fontUrl];
-      setSlideSpecificFonts(updatedFonts);
-      onFontsUpdate(updatedFonts);
-      toast.success("Font added to slide");
+    setUploadingFonts((prev) => new Set(prev).add(fontName));
+
+    try {
+      const fontUrl = await uploadFont(fontName, file);
+
+      if (fontUrl) {
+        // Clear the file input
+        if (fileInputRefs.current[fontName]) {
+          fileInputRefs.current[fontName]!.value = "";
+        }
+      }
+    } finally {
+      setUploadingFonts((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(fontName);
+        return newSet;
+      });
     }
   };
 
-  const removeSlideFont = (fontUrl: string) => {
-    const updatedFonts = slideSpecificFonts.filter((url) => url !== fontUrl);
-    setSlideSpecificFonts(updatedFonts);
-    onFontsUpdate(updatedFonts);
-    toast.info("Font removed from slide");
+  const handleFileInputChange = (
+    fontName: string,
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      handleFontUpload(fontName, file);
+    }
   };
 
-  const getFontNameFromUrl = (url: string) => {
-    return url.split("/").pop()?.split(".")[0] || "Custom Font";
-  };
-
-  if (!slide.fonts) {
+  if (allUnsupportedFonts.length === 0 && UploadedFonts.length === 0) {
     return null;
   }
 
-  const { internally_supported_fonts = [], not_supported_fonts = [] } =
-    slide.fonts;
-
-  // Get fonts that are globally uploaded but not in this slide
-  const availableGlobalFonts = globalUploadedFonts.filter(
-    (font) => !slideSpecificFonts.includes(font.fontUrl)
-  );
-
   return (
-    <Card className="mt-4">
+    <Card className="mb-6">
       <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2">
-          <span>Slide Font Management</span>
+        <CardTitle className="text-xl flex items-center gap-2">
+          <Type className="w-6 h-6" />
+          Global Font Management
         </CardTitle>
+        <p className="text-sm text-gray-600">
+          Manage fonts across all slides. Upload fonts once and they'll be
+          available for all slides.
+        </p>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-6">
         {/* Supported Fonts */}
-        {internally_supported_fonts.length > 0 && (
+        {fontsData.internally_supported_fonts.length > 0 && (
           <div>
-            <h4 className="text-sm font-medium text-green-700 mb-2 flex items-center gap-1">
+            <h4 className="text-sm font-medium text-green-700 mb-3 flex items-center gap-1">
               <CheckCircle className="w-4 h-4" />
-              Supported Fonts ({internally_supported_fonts.length})
+              Supported Fonts ({fontsData.internally_supported_fonts.length})
             </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {internally_supported_fonts.map((font: any, index: number) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {fontsData.internally_supported_fonts.map((font, index) => (
                 <div
                   key={index}
                   className="p-2 bg-green-50 border border-green-200 rounded text-sm text-green-800"
@@ -90,30 +120,97 @@ const FontManager: React.FC<FontManagerProps> = ({
           </div>
         )}
 
-        {/* Unsupported Fonts - only show if they're not globally uploaded */}
-        {not_supported_fonts.filter(
-          (fontName: string) =>
-            !globalUploadedFonts.some((gf) => gf.fontName === fontName)
-        ).length > 0 && (
+        {/* Fonts Needing Upload */}
+        {fontsNeedingUpload.length > 0 && (
           <div>
-            <h4 className="text-sm font-medium text-orange-700 mb-2 flex items-center gap-1">
+            <h4 className="text-sm font-medium text-orange-700 mb-3 flex items-center gap-1">
               <AlertCircle className="w-4 h-4" />
-              Missing Fonts (Upload in Global Font Manager above)
+              Fonts Needing Upload ({fontsNeedingUpload.length})
+            </h4>
+            <div className="space-y-3">
+              {fontsNeedingUpload.map((fontName: string, index: number) => (
+                <div
+                  key={index}
+                  className="p-4 bg-orange-50 border border-orange-200 rounded-lg"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-sm font-medium text-orange-800">
+                        {fontName}
+                      </span>
+                      <p className="text-xs text-orange-600 mt-1">
+                        Required for presentation
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        ref={(el) => {
+                          fileInputRefs.current[fontName] = el;
+                        }}
+                        type="file"
+                        accept=".ttf,.otf,.woff,.woff2,.eot"
+                        onChange={(e) => handleFileInputChange(fontName, e)}
+                        className="hidden"
+                        id={`global-font-upload-${index}`}
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={uploadingFonts.has(fontName)}
+                        onClick={() => fileInputRefs.current[fontName]?.click()}
+                        className="text-xs bg-blue-600 text-white hover:bg-blue-700 border-blue-600"
+                      >
+                        {uploadingFonts.has(fontName) ? (
+                          <>
+                            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-3 h-3 mr-1" />
+                            Upload Font
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Successfully Uploaded Fonts */}
+        {UploadedFonts.length > 0 && (
+          <div>
+            <h4 className="text-sm font-medium text-green-700 mb-3 flex items-center gap-1">
+              <CheckCircle className="w-4 h-4" />
+              Uploaded Fonts ({UploadedFonts.length})
             </h4>
             <div className="space-y-2">
-              {not_supported_fonts
-                .filter(
-                  (fontName: string) =>
-                    !globalUploadedFonts.some((gf) => gf.fontName === fontName)
-                )
-                .map((fontName: string, index: number) => (
-                  <div
-                    key={index}
-                    className="p-2 bg-orange-50 border border-orange-200 rounded text-sm text-orange-800"
-                  >
-                    {fontName} - Please upload in Global Font Manager
+              {UploadedFonts.map((font, index) => (
+                <div
+                  key={index}
+                  className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between"
+                >
+                  <div>
+                    <span className="text-sm font-medium text-green-800">
+                      {font.fontName}
+                    </span>
+                    <p className="text-xs text-green-600 mt-1">
+                      Available for all slides
+                    </p>
                   </div>
-                ))}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => removeFont(font.fontUrl)}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1"
+                  >
+                    <X className="w-3 h-3" />
+                  </Button>
+                </div>
+              ))}
             </div>
           </div>
         )}
