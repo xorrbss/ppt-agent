@@ -18,7 +18,6 @@ export const useGroupLayouts = () => {
       if (layout) {
         return getLayout(layoutId);
       }
-      console.warn(`Layout ${layoutId} not found in group ${groupName}`);
       return null;
     };
   }, [getLayoutByIdAndGroup, getLayout]);

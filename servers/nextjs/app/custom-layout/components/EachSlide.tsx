@@ -25,14 +25,14 @@ const EachSlide = ({
   retrySlide,
   setSlides,
   onSlideUpdate,
-  isProcessingPptx,
+  isProcessing,
 }: {
   slide: any;
   index: number;
   retrySlide: (index: number) => void;
   setSlides: React.Dispatch<React.SetStateAction<any[]>>;
   onSlideUpdate?: (updatedSlideData: any) => void;
-  isProcessingPptx: boolean;
+  isProcessing: boolean;
 }) => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [prompt, setPrompt] = useState("");
@@ -418,14 +418,19 @@ const EachSlide = ({
               )}
             </div>
 
-            {!isProcessingPptx && slide.processed && (
+            {slide.processed && (
               <div className="flex  gap-6">
                 {slide.processed && slide.html && !isEditMode && (
                   <div className=" ">
                     <ToolTip content="Edit slide">
                       <button
                         onClick={handleEditClick}
-                        className={`px-6 py-2 flex gap-2 text-sm items-center group-hover:scale-105 rounded-lg bg-[#5141e5] hover:shadow-md transition-all duration-300 cursor-pointer shadow-md `}
+                        disabled={isProcessing || !slide.processed}
+                        className={`px-6 py-2 flex gap-2 text-sm items-center group-hover:scale-105 rounded-lg bg-[#5141e5] hover:shadow-md transition-all duration-300 cursor-pointer shadow-md ${
+                          isProcessing || !slide.processed
+                            ? "opacity-50 cursor-not-allowed"
+                            : ""
+                        }`}
                       >
                         <Edit className="w-4 sm:w-5 h-4 sm:h-5 text-white" />
                         <span className="text-white">Edit Slide</span>
@@ -437,19 +442,26 @@ const EachSlide = ({
                   <ToolTip content="Re-Design this slide">
                     <button
                       onClick={() => retrySlide(index)}
-                      disabled={slide.processing}
-                      className="px-6 py-2 flex gap-2 text-sm items-center group-hover:scale-105 rounded-lg bg-[#5141e5] hover:shadow-md transition-all duration-300 cursor-pointer shadow-md"
+                      disabled={isProcessing || !slide.processed}
+                      className={`px-6 py-2 flex gap-2 text-sm items-center group-hover:scale-105 rounded-lg bg-[#5141e5] hover:shadow-md transition-all duration-300 cursor-pointer shadow-md ${
+                        isProcessing || !slide.processed
+                          ? "opacity-50 cursor-not-allowed"
+                          : ""
+                      }`}
                     >
                       <Repeat2 className="w-4 sm:w-5 h-4 sm:h-5 text-white" />
-                      <span className="text-white">Re-Design</span>
+                      <span className="text-white">Re-Construct</span>
                     </button>
                   </ToolTip>
                 </div>
                 <div>
                   <ToolTip content="Delete Slide">
                     <button
+                      disabled={isProcessing}
                       onClick={handleDeleteSlide}
-                      className="px-4 py-2 flex gap-2 text-sm items-center group-hover:scale-105 rounded-lg  hover:shadow-md transition-all duration-300 cursor-pointer shadow-md"
+                      className={`px-4 py-2 flex gap-2 text-sm items-center group-hover:scale-105 rounded-lg  hover:shadow-md transition-all duration-300 cursor-pointer shadow-md ${
+                        isProcessing ? "opacity-50 cursor-not-allowed" : ""
+                      }`}
                     >
                       <Trash className="w-4 sm:w-5 h-4 sm:h-5 text-red-500" />
                     </button>

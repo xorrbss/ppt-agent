@@ -107,16 +107,15 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
     if (isStreaming || loading) {
       return;
     }
-    if (slide.layout_group.includes("custom")) {
-      const existingScript = document.querySelector(
-        'script[src*="tailwindcss.com"]'
-      );
-      if (!existingScript) {
-        const script = document.createElement("script");
-        script.src = "https://cdn.tailwindcss.com";
-        script.async = true;
-        document.head.appendChild(script);
-      }
+
+    const existingScript = document.querySelector(
+      'script[src*="tailwindcss.com"]'
+    );
+    if (!existingScript) {
+      const script = document.createElement("script");
+      script.src = "https://cdn.tailwindcss.com";
+      script.async = true;
+      document.head.appendChild(script);
     }
   }, [slide, isStreaming, loading]);
 

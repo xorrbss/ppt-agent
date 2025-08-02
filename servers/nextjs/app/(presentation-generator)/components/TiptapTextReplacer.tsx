@@ -63,81 +63,16 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
         if (shouldSkipElement(htmlElement)) return;
 
         // Get all computed styles to preserve them
-        const computedStyles = window.getComputedStyle(htmlElement);
-        const preservedStyles = {
-          fontSize: computedStyles.fontSize,
-          fontWeight: computedStyles.fontWeight,
-          fontFamily: computedStyles.fontFamily,
-          color: computedStyles.color,
-          lineHeight: computedStyles.lineHeight,
-          textAlign: computedStyles.textAlign,
-          marginTop: computedStyles.marginTop,
-          marginBottom: computedStyles.marginBottom,
-          marginLeft: computedStyles.marginLeft,
-          marginRight: computedStyles.marginRight,
-          paddingTop: computedStyles.paddingTop,
-          paddingBottom: computedStyles.paddingBottom,
-          paddingLeft: computedStyles.paddingLeft,
-          paddingRight: computedStyles.paddingRight,
-          borderRadius: computedStyles.borderRadius,
-          border: computedStyles.border,
-          backgroundColor: computedStyles.backgroundColor,
-          opacity: computedStyles.opacity,
-          zIndex: computedStyles.zIndex,
-          cursor: computedStyles.cursor,
-          boxShadow: computedStyles.boxShadow,
-          textShadow: computedStyles.textShadow,
-          textDecoration: computedStyles.textDecoration,
-          textTransform: computedStyles.textTransform,
-          letterSpacing: computedStyles.letterSpacing,
-          wordSpacing: computedStyles.wordSpacing,
-          textOverflow: computedStyles.textOverflow,
-          whiteSpace: computedStyles.whiteSpace,
-          wordBreak: computedStyles.wordBreak,
-          overflow: computedStyles.overflow,
-          textAlignLast: computedStyles.textAlignLast,
-          position: computedStyles.position,
-          top: computedStyles.top,
-          left: computedStyles.left,
-          right: computedStyles.right,
-          bottom: computedStyles.bottom,
-          display: computedStyles.display,
-          flexDirection: computedStyles.flexDirection,
-          flexWrap: computedStyles.flexWrap,
-          flexGrow: computedStyles.flexGrow,
-          flexShrink: computedStyles.flexShrink,
-          flexBasis: computedStyles.flexBasis,
-          alignItems: computedStyles.alignItems,
-          justifyContent: computedStyles.justifyContent,
-          gap: computedStyles.gap,
-          gridTemplateColumns: computedStyles.gridTemplateColumns,
-          gridTemplateRows: computedStyles.gridTemplateRows,
-          gridTemplateAreas: computedStyles.gridTemplateAreas,
-          gridTemplate: computedStyles.gridTemplate,
-          gridAutoFlow: computedStyles.gridAutoFlow,
-          gridAutoColumns: computedStyles.gridAutoColumns,
-          gridAutoRows: computedStyles.gridAutoRows,
-          gridColumn: computedStyles.gridColumn,
-          gridRow: computedStyles.gridRow,
-          gridArea: computedStyles.gridArea,
-          grid: computedStyles.grid,
-        };
-        // Try to find matching data path
+        const allClasses = Array.from(htmlElement.classList);
+        const allStyles = htmlElement.getAttribute("style");
+
         const dataPath = findDataPath(slideData, trimmedText);
 
         // Create a container for the TiptapText
         const tiptapContainer = document.createElement("div");
-        tiptapContainer.className = htmlElement.className;
+        tiptapContainer.style.cssText = allStyles || "";
+        tiptapContainer.className = Array.from(allClasses).join(" ");
 
-        // Apply preserved styles
-        Object.entries(preservedStyles).forEach(([property, value]) => {
-          if (value && value !== "auto") {
-            tiptapContainer.style.setProperty(
-              property.replace(/([A-Z])/g, "-$1").toLowerCase(),
-              value
-            );
-          }
-        });
         // Replace the element
         htmlElement.parentNode?.replaceChild(tiptapContainer, htmlElement);
         // Mark as processed
@@ -147,6 +82,7 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
         root.render(
           <TiptapText
             content={trimmedText}
+            tag={htmlElement.tagName}
             onContentChange={(content: string) => {
               if (dataPath && onContentChange) {
                 onContentChange(content, dataPath.path, slideIndex);

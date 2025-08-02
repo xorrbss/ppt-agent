@@ -6,6 +6,7 @@ import LoadingStates from "./components/LoadingStates";
 import { Card } from "@/components/ui/card";
 import { ExternalLink } from "lucide-react";
 import Header from "@/components/Header";
+import CustomLayout from "./CustomLayout";
 
 const LayoutPreview = () => {
   const {
@@ -127,7 +128,7 @@ const LayoutPreview = () => {
             </div>
           </div>
         </div>
-        {/* <CustomLayouts /> */}
+        {/* <CustomLayout /> */}
       </div>
     </div>
   );

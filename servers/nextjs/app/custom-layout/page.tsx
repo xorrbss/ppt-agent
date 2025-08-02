@@ -10,7 +10,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { Upload, FileText, X, Loader2 } from "lucide-react";
 import { ApiResponseHandler } from "@/app/(presentation-generator)/services/api/api-error-handler";
@@ -60,8 +59,17 @@ const CustomLayoutPage = () => {
   const [isLayoutSaved, setIsLayoutSaved] = useState(false);
   const [UploadedFonts, setUploadedFonts] = useState<UploadedFont[]>([]);
   const [fontsData, setFontsData] = useState<FontData | null>(null);
+  const [hasAnthropicKey, setHasAnthropicKey] = useState(false);
+  const [isAnthropicKeyLoading, setIsAnthropicKeyLoading] = useState(true);
 
-  console.log(slides);
+  useEffect(() => {
+    fetch("/api/has-anthropic-key")
+      .then((res) => res.json())
+      .then((data) => {
+        setHasAnthropicKey(data.hasKey);
+        setIsAnthropicKeyLoading(false);
+      });
+  }, []);
 
   // Load uploaded fonts dynamically
   useEffect(() => {
@@ -117,6 +125,9 @@ const CustomLayoutPage = () => {
     }
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [slides, isLayoutSaved]);
+
+  // If User does not put Anthropic Key, Can't process the layout
+
   // Font management functions
   const uploadFont = useCallback(
     async (fontName: string, file: File): Promise<string | null> => {
@@ -563,6 +574,36 @@ const CustomLayoutPage = () => {
     (slide) => slide.processed || slide.error
   ).length;
 
+  if (isAnthropicKeyLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 ">
+        <Header />
+        <div className="max-w-[1440px] min-h-screen flex items-center justify-center aspect-video mx-auto px-6 ">
+          <div className="text-center space-y-2 my-6 bg-white p-6 rounded-lg shadow-md">
+            <Loader2 className="w-6 h-6 animate-spin text-blue-600 mx-auto" />
+            <p>Checking Anthropic Key...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (!hasAnthropicKey) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 ">
+        <Header />
+        <div className="max-w-[1440px] min-h-screen flex items-center justify-center aspect-video mx-auto px-6 ">
+          <div className="text-center space-y-2 my-6 bg-white p-6 rounded-lg shadow-md">
+            <h1 className="text-4xl font-bold text-gray-900">
+              Please put Anthropic Key To Process The Layout
+            </h1>
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              It Only works on Anthropic(Claude-4).
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 ">
       <Header />
@@ -680,7 +721,7 @@ const CustomLayoutPage = () => {
                 key={index}
                 slide={slide}
                 index={index}
-                isProcessingPptx={isProcessingPptx}
+                isProcessing={slides.some((s) => s.processing)}
                 retrySlide={retrySlide}
                 setSlides={setSlides}
                 onSlideUpdate={(updatedSlideData) =>
@@ -696,7 +737,7 @@ const CustomLayoutPage = () => {
           <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
             <Button
               onClick={saveLayout}
-              disabled={isSavingLayout || isProcessingPptx}
+              disabled={isSavingLayout || slides.some((s) => s.processing)}
               className="bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 px-10 py-3 text-lg"
               size="lg"
             >

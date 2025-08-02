@@ -112,7 +112,7 @@ const compileCustomLayout = (layoutCode: string, React: any, z: any) => {
       };
     `
   );
-  // globalThis.z = z;
+
   return factory(React, z);
 };
 
@@ -124,7 +124,6 @@ export const LayoutProvider: React.FC<{
   const [error, setError] = useState<string | null>(null);
   const [isPreloading, setIsPreloading] = useState(false);
   const dispatch = useDispatch();
-  console.log("🔍 layoutData", layoutData);
 
   const buildData = async (groupedLayoutsData: GroupedLayoutsResponse[]) => {
     const layouts: LayoutInfo[] = [];
@@ -278,7 +277,6 @@ export const LayoutProvider: React.FC<{
         await layoutResponse.json();
 
       if (!groupedLayoutsData || groupedLayoutsData.length === 0) {
-        console.warn("⚠️ API returned empty data");
         setError("No layout groups found");
         return;
       }
@@ -344,11 +342,10 @@ export const LayoutProvider: React.FC<{
         "/api/v1/ppt/layout-management/summary"
       );
       const customGroupData = await customGroupResponse.json();
-      console.log("🔍 customGroupData", customGroupData);
+
       const customGroup = customGroupData.presentations;
-      console.log("🔍 customGroup", customGroup);
+
       for (const group of customGroup) {
-        console.log("🔍 group", group);
         const groupName = `custom-${group.presentation_id}`;
         fullDataByGroup.set(groupName, []);
         if (!layoutsByGroup.has(groupName)) {
