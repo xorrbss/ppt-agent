@@ -2,7 +2,6 @@ FROM python:3.11-slim-bookworm
 
 # Install Node.js and npm
 RUN apt-get update && apt-get install -y \
-   
     nginx \
     curl \
     redis-server
@@ -18,6 +17,8 @@ WORKDIR /app
 # Set environment variables
 ENV APP_DATA_DIRECTORY=/app_data
 ENV TEMP_DIRECTORY=/tmp/presenton
+ENV PYTHONPATH="${PYTHONPATH}:/app/servers/fastapi"
+
 
 # Install ollama
 RUN curl -fsSL https://ollama.com/install.sh | sh
@@ -25,6 +26,7 @@ RUN curl -fsSL https://ollama.com/install.sh | sh
 # Install dependencies for FastAPI
 COPY servers/fastapi/requirements.txt ./
 RUN pip install -r requirements.txt
+RUN pip install fastmcp
 
 # Install dependencies for Next.js
 WORKDIR /app/servers/nextjs

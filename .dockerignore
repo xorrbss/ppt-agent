@@ -9,3 +9,4 @@ build
 tmp
 debug
 .fastembed_cache
+servers/nextjs/node_modules
