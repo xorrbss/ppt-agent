@@ -1,6 +1,3 @@
-
-
-
 GENERATE_HTML_SYSTEM_PROMPT = """
 You need to generate html and tailwind code for given presentation slide image. You need to think through each design elements and then decide where each element should go.
 Follow these rules strictly:
@@ -35,7 +32,8 @@ Convert given static HTML and Tailwind slide to a TSX React component so that it
 7) For image and icons schema should be compulsorily declared with two dunder fields for prompt and url separately.
 8) Component name at the end should always yo 'dynamicSlideLayout'.
 9) **Import or export statements should not be present in the output.**
-10) Layout Id, layout name and layout description should be declared and should describe the structure of the layout not its purpose. Do not describe numbers of any items in the layout.
+10) Always use double quotes for strings.
+11) Layout Id, layout name and layout description should be declared and should describe the structure of the layout not its purpose. Do not describe numbers of any items in the layout.
     -layoutDescription should not have any purpose for elements in it, so use '...cards' instead of '...goal cards' and '...bullet points' instead of '...solution bullet points'.
     -layoutDescription should not have words like 'goals', 'solutions', 'problems' in it.
     -layoutName constant should be same as the component name in the layout.
@@ -64,20 +62,20 @@ const IconSchema = z.object({
         description: "Query used to search the icon",
     }).min(5).max(20),
 })
-const layoutId = 'bullet-with-icons-slide'
-const layoutName = 'Bullet with Icons'
-const layoutDescription = 'A bullets style slide with main content, supporting image, and bullet points with icons and descriptions.'
+const layoutId = "bullet-with-icons-slide"
+const layoutName = "Bullet with Icons"
+const layoutDescription = "A bullets style slide with main content, supporting image, and bullet points with icons and descriptions."
 
 const bulletWithIconsSlideSchema = z.object({
-    title: z.string().min(3).max(40).default('Problem').meta({
+    title: z.string().min(3).max(40).default("Problem").meta({
         description: "Main title of the slide",
     }),
-    description: z.string().max(150).default('Businesses face challenges with outdated technology and rising costs, limiting efficiency and growth in competitive markets.').meta({
+    description: z.string().max(150).default("Businesses face challenges with outdated technology and rising costs, limiting efficiency and growth in competitive markets.").meta({
         description: "Main description text explaining the problem or topic",
-    }),
+    }), 
     image: ImageSchema.default({
         __image_url__: 'https://images.unsplash.com/photo-1552664730-d307ca884978?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80',
-        __image_prompt__: 'Business people analyzing documents and charts in office'
+        __image_prompt__: "Business people analyzing documents and charts in office"
     }).meta({
         description: "Supporting image for the slide",
     }),
@@ -91,19 +89,19 @@ const bulletWithIconsSlideSchema = z.object({
         icon: IconSchema,
     })).min(1).max(3).default([
         {
-            title: 'Inefficiency',
-            description: 'Businesses struggle to find digital tools that meet their needs, causing operational slowdowns.',
+            title: "Inefficiency",
+            description: "Businesses struggle to find digital tools that meet their needs, causing operational slowdowns.",
             icon: {
-                __icon_url__: '/static/icons/placeholder.png',
-                __icon_query__: 'warning alert inefficiency'
+                __icon_url__: "/static/icons/placeholder.png",
+                __icon_query__: "warning alert inefficiency"
             }
         },
         {
-            title: 'High Costs',
-            description: 'Outdated systems increase expenses, while small businesses struggle to expand their market reach.',
+            title: "High Costs",
+            description: "Outdated systems increase expenses, while small businesses struggle to expand their market reach.",
             icon: {
-                __icon_url__: '/static/icons/placeholder.png',
-                __icon_query__: 'trending up costs chart'
+                __icon_url__: "/static/icons/placeholder.png",
+                __icon_query__: "trending up costs chart"
             }
         }
     ]).meta({
@@ -127,7 +125,7 @@ const dynamicSlideLayout: React.FC<BulletWithIconsSlideLayoutProps> = ({ data: s
             <div 
                 className="w-full rounded-sm max-w-[1280px] shadow-lg max-h-[720px] aspect-video bg-gradient-to-br from-gray-50 to-white relative z-20 mx-auto overflow-hidden"
                 style={{
-                    fontFamily: 'Poppins, sans-serif'
+                    fontFamily: "Poppins, sans-serif"
                 }}
             >
 
@@ -137,7 +135,7 @@ const dynamicSlideLayout: React.FC<BulletWithIconsSlideLayoutProps> = ({ data: s
                     {/* Title Section - Full Width */}
                     <div className="mb-8">
                         <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900">
-                            {slideData?.title || 'Problem'}
+                            {slideData?.title || "Problem"}
                         </h1>
                     </div>
 
@@ -161,8 +159,8 @@ const dynamicSlideLayout: React.FC<BulletWithIconsSlideLayoutProps> = ({ data: s
                         <div className="relative z-10 h-full flex items-center justify-center p-4">
                             <div className="w-full max-w-md h-80 rounded-2xl overflow-hidden shadow-lg">
                                 <img
-                                    src={slideData?.image?.__image_url__ || ''}
-                                    alt={slideData?.image?.__image_prompt__ || slideData?.title || ''}
+                                    src={slideData?.image?.__image_url__ || ""}
+                                    alt={slideData?.image?.__image_prompt__ || slideData?.title || ""}
                                     className="w-full h-full object-cover"
                                 />
                             </div>
@@ -180,7 +178,7 @@ const dynamicSlideLayout: React.FC<BulletWithIconsSlideLayoutProps> = ({ data: s
                         <div className="flex-1 flex flex-col justify-center pl-8 lg:pl-16">
                             {/* Description */}
                             <p className="text-lg text-gray-700 leading-relaxed mb-8">
-                                {slideData?.description || 'Businesses face challenges with outdated technology and rising costs, limiting efficiency and growth in competitive markets.'}
+                                {slideData?.description || "Businesses face challenges with outdated technology and rising costs, limiting efficiency and growth in competitive markets."}
                             </p>
 
                         {/* Bullet Points */}
@@ -200,7 +198,7 @@ const dynamicSlideLayout: React.FC<BulletWithIconsSlideLayoutProps> = ({ data: s
                                     <div className="flex-1">
                                         <h3 className="text-xl font-semibold text-gray-900 mb-2">
                                             {bullet.title}
-                                        </h3>
+                                        </h3>   
                                         <div className="w-12 h-0.5 bg-purple-600 mb-3"></div>
                                         <p className="text-base text-gray-700 leading-relaxed">
                                             {bullet.description}
