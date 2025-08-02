@@ -1,7 +1,7 @@
 import React from 'react'
-import Header from '@/app/dashboard/components/Header'
 import { Metadata } from 'next'
 import OutlinePage from './components/OutlinePage'
+import Header from '@/components/Header'
 export const metadata: Metadata = {
   title: "Outline Presentation",
   description: "Customize and organize your presentation outline. Drag and drop slides, add charts, and generate your presentation with ease.",

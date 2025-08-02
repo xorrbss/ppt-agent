@@ -81,8 +81,11 @@ const createCacheKey = (groupName: string, fileName: string): string =>
 const compileCustomLayout = (layoutCode: string, React: any, z: any) => {
   const cleanCode = layoutCode
     .replace(/import\s+React\s+from\s+'react';?/g, "")
-    .replace(/import\s*{\s*z\s*}\s*from\s+'zod';?/g, "");
-
+    .replace(/import\s*{\s*z\s*}\s*from\s+'zod';?/g, "")
+    .replace(/import\s+.*\s+from\s+['"]zod['"];?/g, "")
+    // remove every zod import (any style)
+    .replace(/import\s+.*\s+from\s+['"]zod['"];?/g, "")
+    .replace(/const\s+[^=]*=\s*require\(['"]zod['"]\);?/g, "");
   const compiled = Babel.transform(cleanCode, {
     presets: [
       ["react", { runtime: "classic" }],
@@ -93,8 +96,9 @@ const compileCustomLayout = (layoutCode: string, React: any, z: any) => {
 
   const factory = new Function(
     "React",
-    "z",
+    "_z",
     `
+    const z = _z;
       ${compiled}
 
       /* everything declared in the string is in scope here */
@@ -108,7 +112,7 @@ const compileCustomLayout = (layoutCode: string, React: any, z: any) => {
       };
     `
   );
-
+  // globalThis.z = z;
   return factory(React, z);
 };
 
@@ -120,6 +124,7 @@ export const LayoutProvider: React.FC<{
   const [error, setError] = useState<string | null>(null);
   const [isPreloading, setIsPreloading] = useState(false);
   const dispatch = useDispatch();
+  console.log("🔍 layoutData", layoutData);
 
   const buildData = async (groupedLayoutsData: GroupedLayoutsResponse[]) => {
     const layouts: LayoutInfo[] = [];
@@ -343,6 +348,7 @@ export const LayoutProvider: React.FC<{
       const customGroup = customGroupData.presentations;
       console.log("🔍 customGroup", customGroup);
       for (const group of customGroup) {
+        console.log("🔍 group", group);
         const groupName = `custom-${group.presentation_id}`;
         fullDataByGroup.set(groupName, []);
         if (!layoutsByGroup.has(groupName)) {
