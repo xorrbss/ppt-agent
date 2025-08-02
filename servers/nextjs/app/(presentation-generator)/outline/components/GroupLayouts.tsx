@@ -1,7 +1,8 @@
 import { CheckCircle } from "lucide-react";
 import React from "react";
 import { LayoutGroup } from "../types/index";
-import { useGroupLayoutLoader } from "@/app/layout-preview/hooks/useGroupLayoutLoader";
+import { useLayout } from "../../context/LayoutContext";
+// import { useGroupLayoutLoader } from "@/app/layout-preview/hooks/useGroupLayoutLoader";
 interface GroupLayoutsProps {
   group: LayoutGroup;
   onSelectLayoutGroup: (group: LayoutGroup) => void;
@@ -13,7 +14,8 @@ const GroupLayouts: React.FC<GroupLayoutsProps> = ({
   onSelectLayoutGroup,
   selectedLayoutGroup,
 }) => {
-  const { layoutGroup } = useGroupLayoutLoader(group.id);
+  const { getFullDataByGroup } = useLayout();
+  const layoutGroup = getFullDataByGroup(group.id);
   return (
     <div
       onClick={() => onSelectLayoutGroup(group)}
@@ -39,11 +41,16 @@ const GroupLayouts: React.FC<GroupLayoutsProps> = ({
       {/* Layout previews */}
       <div className="grid grid-cols-2 gap-2 mb-3 min-h-[300px]">
         {layoutGroup &&
-          layoutGroup?.layouts.slice(0, 4).map((layout: any, index: number) => {
-            const { component: LayoutComponent, sampleData, layoutId } = layout;
+          layoutGroup?.slice(0, 4).map((layout: any, index: number) => {
+            const {
+              component: LayoutComponent,
+              sampleData,
+              layoutId,
+              groupName,
+            } = layout;
             return (
               <div
-                key={`${layoutGroup?.groupName}-${index}`}
+                key={`${groupName}-${index}`}
                 className=" relative cursor-pointer overflow-hidden aspect-video"
               >
                 <div className="absolute cursor-pointer bg-transparent z-40 top-0 left-0 w-full h-full" />
@@ -56,7 +63,7 @@ const GroupLayouts: React.FC<GroupLayoutsProps> = ({
       </div>
 
       <div className="flex items-center justify-between text-sm text-gray-500">
-        <span>{layoutGroup?.layouts.length} layouts</span>
+        <span>{layoutGroup?.length} layouts</span>
         <span
           className={`px-2 py-1 rounded text-xs ${
             group.ordered

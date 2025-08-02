@@ -9,23 +9,38 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { Upload, FileText, X, Loader2 } from "lucide-react";
 import { ApiResponseHandler } from "@/app/(presentation-generator)/services/api/api-error-handler";
 import { v4 as uuidv4 } from "uuid";
-// Types
 import EachSlide from "./components/EachSlide";
+import GlobalFontManager from "./components/GlobalFontManager";
+
+// Types
 interface SlideData {
   slide_number: number;
   screenshot_url: string;
   xml_content: string;
 }
 
+interface UploadedFont {
+  fontName: string;
+  fontUrl: string;
+  fontPath: string;
+}
+
 interface ProcessedSlide extends SlideData {
   html?: string;
+  fonts: {
+    internally_supported_fonts: {
+      name: string;
+      google_fonts_url: string;
+    }[];
+    not_supported_fonts: string[];
+  };
+  uploaded_fonts?: string[];
   processing?: boolean;
   processed?: boolean;
   error?: string;
@@ -39,6 +54,142 @@ const CustomLayoutPage = () => {
   const [slides, setSlides] = useState<ProcessedSlide[]>([]);
   const [isSavingLayout, setIsSavingLayout] = useState(false);
   const [isLayoutSaved, setIsLayoutSaved] = useState(false);
+  const [globalUploadedFonts, setGlobalUploadedFonts] = useState<
+    UploadedFont[]
+  >([]);
+
+  console.log(slides);
+
+  // Load uploaded fonts dynamically
+  useEffect(() => {
+    globalUploadedFonts.forEach((font) => {
+      // Check if font style already exists
+      const existingStyle = document.querySelector(
+        `style[data-font-url="${font.fontUrl}"]`
+      );
+      if (!existingStyle) {
+        const style = document.createElement("style");
+        style.setAttribute("data-font-url", font.fontUrl);
+
+        // Use the actual font name for font-family
+        style.textContent = `
+          @font-face {
+            font-family: '${font.fontName}';
+            src: url('${font.fontUrl}') format('truetype');
+            font-display: swap;
+          }
+        `;
+        document.head.appendChild(style);
+      }
+    });
+  }, [globalUploadedFonts]);
+
+  // Font management functions
+  const uploadFont = useCallback(
+    async (fontName: string, file: File): Promise<string | null> => {
+      // Check if font is already uploaded
+      const existingFont = globalUploadedFonts.find(
+        (f) => f.fontName === fontName
+      );
+      if (existingFont) {
+        toast.info(`Font "${fontName}" is already uploaded`);
+        return existingFont.fontUrl;
+      }
+
+      // Validate file type
+      const validExtensions = [".ttf", ".otf", ".woff", ".woff2", ".eot"];
+      const fileExtension = file.name
+        .toLowerCase()
+        .substring(file.name.lastIndexOf("."));
+
+      if (!validExtensions.includes(fileExtension)) {
+        toast.error(
+          "Invalid font file type. Please upload .ttf, .otf, .woff, .woff2, or .eot files"
+        );
+        return null;
+      }
+
+      // Validate file size (10MB limit)
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (file.size > maxSize) {
+        toast.error("Font file size must be less than 10MB");
+        return null;
+      }
+
+      try {
+        const formData = new FormData();
+        formData.append("font_file", file);
+
+        const response = await fetch("/api/v1/ppt/fonts/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Upload failed: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        if (data.success) {
+          const newFont: UploadedFont = {
+            fontName: data.font_name || fontName,
+            fontUrl: data.font_url,
+            fontPath: data.font_path,
+          };
+
+          setGlobalUploadedFonts((prev) => [...prev, newFont]);
+          toast.success(`Font "${fontName}" uploaded successfully`);
+          return newFont.fontUrl;
+        } else {
+          throw new Error(data.message || "Upload failed");
+        }
+      } catch (error) {
+        console.error("Error uploading font:", error);
+        toast.error(`Failed to upload font "${fontName}"`, {
+          description:
+            error instanceof Error
+              ? error.message
+              : "An unexpected error occurred",
+        });
+        return null;
+      }
+    },
+    [globalUploadedFonts]
+  );
+
+  const removeGlobalFont = useCallback((fontUrl: string) => {
+    setGlobalUploadedFonts((prev) =>
+      prev.filter((font) => font.fontUrl !== fontUrl)
+    );
+
+    // Remove the style element for this font
+    const styleElement = document.querySelector(
+      `style[data-font-url="${fontUrl}"]`
+    );
+    if (styleElement) {
+      styleElement.remove();
+    }
+
+    toast.info("Font removed globally");
+  }, []);
+
+  const getAllUnsupportedFonts = useCallback(
+    (slides: ProcessedSlide[]): string[] => {
+      const allUnsupportedFonts = new Set<string>();
+
+      slides.forEach((slide) => {
+        if (slide.fonts?.not_supported_fonts) {
+          slide.fonts.not_supported_fonts.forEach((fontName: string) => {
+            allUnsupportedFonts.add(fontName);
+          });
+        }
+      });
+
+      return Array.from(allUnsupportedFonts);
+    },
+    []
+  );
 
   // Warning before page unload
   useEffect(() => {
@@ -66,6 +217,9 @@ const CustomLayoutPage = () => {
       const reactComponents = [];
       const presentationId = uuidv4();
 
+      // Get all uploaded font URLs
+      const globalFontUrls = globalUploadedFonts.map((font) => font.fontUrl);
+
       for (let i = 0; i < slides.length; i++) {
         const slide = slides[i];
 
@@ -90,11 +244,21 @@ const CustomLayoutPage = () => {
             `Failed to convert slide ${slide.slide_number} to React`
           );
 
+          // Combine global fonts with slide-specific uploaded fonts
+          const slideFonts = [
+            ...globalFontUrls,
+            ...(slide.uploaded_fonts || []),
+          ];
+
+          // Remove duplicates
+          const uniqueFonts = Array.from(new Set(slideFonts));
+
           reactComponents.push({
             presentation_id: presentationId,
             layout_id: `${slide.slide_number}`,
             layout_name: `Slide${slide.slide_number}`,
             layout_code: data.react_component || data.component_code,
+            fonts: uniqueFonts,
           });
 
           // Update progress
@@ -162,7 +326,7 @@ const CustomLayoutPage = () => {
     } finally {
       setIsSavingLayout(false);
     }
-  }, [slides]);
+  }, [slides, globalUploadedFonts]);
 
   // File upload handler
   const handleFileSelect = useCallback(
@@ -229,17 +393,6 @@ const CustomLayoutPage = () => {
 
         console.log(`Successfully processed slide ${slide.slide_number}`);
 
-        // let data: any;
-        // if (slide.slide_number === 1) {
-        //   data = firstSlide;
-        // } else if (slide.slide_number === 2) {
-        //   data = slide2;
-        // } else if (slide.slide_number === 3) {
-        //   data = slide3;
-        // } else if (slide.slide_number === 4) {
-        //   data = slide4;
-        // }
-
         // Update slide with success
         setSlides((prev) => {
           const newSlides = prev.map((s, i) =>
@@ -249,6 +402,7 @@ const CustomLayoutPage = () => {
                   processing: false,
                   processed: true,
                   html: htmlData.html,
+                  fonts: htmlData.fonts,
                 }
               : s
           );
@@ -421,6 +575,17 @@ const CustomLayoutPage = () => {
           </p>
         </div>
 
+        {/* Global Font Management */}
+        {slides.length > 0 && (
+          <GlobalFontManager
+            slides={slides}
+            globalUploadedFonts={globalUploadedFonts}
+            uploadFont={uploadFont}
+            removeFont={removeGlobalFont}
+            getAllUnsupportedFonts={getAllUnsupportedFonts}
+          />
+        )}
+
         {/* Upload Section */}
         <Card className="w-full">
           <CardHeader>
@@ -544,7 +709,7 @@ const CustomLayoutPage = () => {
           <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
             <Button
               onClick={saveLayout}
-              disabled={isSavingLayout}
+              disabled={isSavingLayout || isProcessingPptx}
               className="bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 px-10 py-3 text-lg"
               size="lg"
             >

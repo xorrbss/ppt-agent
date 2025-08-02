@@ -19,6 +19,15 @@ export interface LayoutInfo {
   json_schema: any;
   groupName: string;
 }
+export interface FullDataInfo {
+  name: string;
+  component: React.ComponentType<any>;
+  schema: any;
+  sampleData: any;
+  fileName: string;
+  groupName: string;
+  layoutId: string;
+}
 
 export interface GroupSetting {
   description: string;
@@ -39,6 +48,7 @@ export interface LayoutData {
   fileMap: Map<string, { fileName: string; groupName: string }>;
   groupedLayouts: Map<string, LayoutInfo[]>;
   layoutSchema: LayoutInfo[];
+  fullDataByGroup: Map<string, FullDataInfo[]>;
 }
 
 export interface LayoutContextType {
@@ -51,7 +61,7 @@ export interface LayoutContextType {
   getGroupSetting: (groupName: string) => GroupSetting | null;
   getAllGroups: () => string[];
   getAllLayouts: () => LayoutInfo[];
-
+  getFullDataByGroup: (groupName: string) => FullDataInfo[];
   loading: boolean;
   error: string | null;
   getLayout: (layoutId: string) => React.ComponentType<{ data: any }> | null;
@@ -119,6 +129,7 @@ export const LayoutProvider: React.FC<{
     const groupSettingsMap = new Map<string, GroupSetting>();
     const fileMap = new Map<string, { fileName: string; groupName: string }>();
     const groupedLayouts = new Map<string, LayoutInfo[]>();
+    const fullDataByGroup = new Map<string, FullDataInfo[]>();
 
     // Start preloading process
     setIsPreloading(true);
@@ -130,6 +141,8 @@ export const LayoutProvider: React.FC<{
           layoutsByGroup.set(groupData.groupName, new Set());
         }
 
+        fullDataByGroup.set(groupData.groupName, []);
+
         // group settings or default settings
         const settings = groupData.settings || {
           description: `${groupData.groupName} presentation layouts`,
@@ -139,6 +152,7 @@ export const LayoutProvider: React.FC<{
 
         groupSettingsMap.set(groupData.groupName, settings);
         const groupLayouts: LayoutInfo[] = [];
+        const groupFullData: FullDataInfo[] = [];
 
         for (const fileName of groupData.files) {
           try {
@@ -194,6 +208,18 @@ export const LayoutProvider: React.FC<{
               groupName: groupData.groupName,
             };
 
+            const sampleData = module.Schema.parse({});
+            const fullData: FullDataInfo = {
+              name: layoutName,
+              component: module.default,
+              schema: jsonSchema,
+              sampleData: sampleData,
+              fileName,
+              groupName: groupData.groupName,
+              layoutId: uniqueKey,
+            };
+            groupFullData.push(fullData);
+
             layoutsById.set(uniqueKey, layout);
             layoutsByGroup.get(groupData.groupName)!.add(uniqueKey);
             fileMap.set(uniqueKey, {
@@ -210,6 +236,7 @@ export const LayoutProvider: React.FC<{
           }
         }
 
+        fullDataByGroup.set(groupData.groupName, groupFullData);
         // Cache grouped layouts
         groupedLayouts.set(groupData.groupName, groupLayouts);
       }
@@ -224,6 +251,7 @@ export const LayoutProvider: React.FC<{
       fileMap,
       groupedLayouts,
       layoutSchema: layouts,
+      fullDataByGroup,
     };
   };
 
@@ -269,6 +297,10 @@ export const LayoutProvider: React.FC<{
           customLayouts.groupedLayouts
         ),
         layoutSchema: [...data.layoutSchema, ...customLayouts.layoutSchema],
+        fullDataByGroup: mergeMaps(
+          data.fullDataByGroup,
+          customLayouts.fullDataByGroup
+        ),
       };
 
       setLayoutData(combinedData);
@@ -301,7 +333,7 @@ export const LayoutProvider: React.FC<{
     const groupSettingsMap = new Map<string, GroupSetting>();
     const fileMap = new Map<string, { fileName: string; groupName: string }>();
     const groupedLayouts = new Map<string, LayoutInfo[]>();
-
+    const fullDataByGroup = new Map<string, FullDataInfo[]>();
     try {
       const customGroupResponse = await fetch(
         "/api/v1/ppt/layout-management/summary"
@@ -312,6 +344,7 @@ export const LayoutProvider: React.FC<{
       console.log("🔍 customGroup", customGroup);
       for (const group of customGroup) {
         const groupName = `custom-${group.presentation_id}`;
+        fullDataByGroup.set(groupName, []);
         if (!layoutsByGroup.has(groupName)) {
           layoutsByGroup.set(groupName, new Set());
         }
@@ -330,6 +363,7 @@ export const LayoutProvider: React.FC<{
 
         groupSettingsMap.set(`custom-${presentationId}`, settings);
         const groupLayouts: LayoutInfo[] = [];
+        const groupFullData: FullDataInfo[] = [];
 
         for (const i of allLayout) {
           /* ---------- 1. compile JSX to plain script ------------------ */
@@ -383,6 +417,17 @@ export const LayoutProvider: React.FC<{
             json_schema: jsonSchema,
             groupName: groupName,
           };
+          const sampleData = module.Schema.parse({});
+          const fullData: FullDataInfo = {
+            name: layoutName,
+            component: module.default,
+            schema: jsonSchema,
+            sampleData: sampleData,
+            fileName: i.layout_name,
+            groupName: groupName,
+            layoutId: uniqueKey,
+          };
+          groupFullData.push(fullData);
 
           layoutsById.set(uniqueKey, layout);
           layoutsByGroup.get(groupName)!.add(uniqueKey);
@@ -395,6 +440,7 @@ export const LayoutProvider: React.FC<{
         }
         // Cache grouped layouts
         groupedLayouts.set(groupName, groupLayouts);
+        fullDataByGroup.set(groupName, groupFullData);
       }
     } catch (err: any) {
       console.error("Compilation error:", err);
@@ -407,6 +453,7 @@ export const LayoutProvider: React.FC<{
       fileMap,
       groupedLayouts,
       layoutSchema: layouts,
+      fullDataByGroup,
     };
   };
 
@@ -489,6 +536,10 @@ export const LayoutProvider: React.FC<{
     return layoutData?.layoutSchema || [];
   };
 
+  const getFullDataByGroup = (groupName: string): FullDataInfo[] => {
+    return layoutData?.fullDataByGroup.get(groupName) || [];
+  };
+
   // Load layouts on mount
   useEffect(() => {
     loadLayouts();
@@ -501,7 +552,7 @@ export const LayoutProvider: React.FC<{
     getGroupSetting,
     getAllGroups,
     getAllLayouts,
-
+    getFullDataByGroup,
     loading,
     error,
     getLayout,

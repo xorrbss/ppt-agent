@@ -12,6 +12,7 @@ import {
   SendHorizontal,
   X,
   Repeat2,
+  Trash,
 } from "lucide-react";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import ToolTip from "@/components/ToolTip";
@@ -66,6 +67,53 @@ const EachSlide = ({
       }
     }
   }, [slide.processed, slide.html]);
+  // Load Google Fonts
+  useEffect(() => {
+    if (slide.fonts?.internally_supported_fonts) {
+      slide.fonts.internally_supported_fonts.forEach((font: any) => {
+        // Check if font link already exists
+        const existingFont = document.querySelector(
+          `link[href="${font.google_fonts_url}"]`
+        );
+        // Only add if font doesn't already exist
+        if (!existingFont) {
+          const link = document.createElement("link");
+          link.href = font.google_fonts_url;
+          link.rel = "stylesheet";
+          document.head.appendChild(link);
+        }
+      });
+    }
+  }, [slide.fonts]);
+
+  // Load uploaded fonts
+  useEffect(() => {
+    if (slide.uploaded_fonts && slide.uploaded_fonts.length > 0) {
+      slide.uploaded_fonts.forEach((fontUrl: string) => {
+        // Check if font style already exists
+        const existingStyle = document.querySelector(
+          `style[data-font-url="${fontUrl}"]`
+        );
+        if (!existingStyle) {
+          const style = document.createElement("style");
+          style.setAttribute("data-font-url", fontUrl);
+
+          // Extract font name from URL for font-family
+          const fontName =
+            fontUrl.split("/").pop()?.split(".")[0] || "CustomFont";
+
+          style.textContent = `
+            @font-face {
+              font-family: '${fontName}';
+              src: url('${fontUrl}') format('truetype');
+              font-display: swap;
+            }
+          `;
+          document.head.appendChild(style);
+        }
+      });
+    }
+  }, [slide.uploaded_fonts]);
 
   // Set up canvas when entering edit mode
   useEffect(() => {
@@ -393,6 +441,10 @@ const EachSlide = ({
 
   const strokeWidths = [1, 3, 5, 8, 12];
 
+  const handleDeleteSlide = () => {
+    setSlides((prevSlides) => prevSlides.filter((_, i) => i !== index));
+  };
+
   return (
     <Card
       key={slide.slide_number}
@@ -413,7 +465,7 @@ const EachSlide = ({
               )}
             </div>
 
-            {!isProcessingPptx && (
+            {!isProcessingPptx && slide.processed && (
               <div className="flex  gap-6">
                 {slide.processed && slide.html && !isEditMode && (
                   <div className=" ">
@@ -429,14 +481,24 @@ const EachSlide = ({
                   </div>
                 )}
                 <div>
-                  <ToolTip content="Retry fetch">
+                  <ToolTip content="Re-Design this slide">
                     <button
                       onClick={() => retrySlide(index)}
                       disabled={slide.processing}
                       className="px-6 py-2 flex gap-2 text-sm items-center group-hover:scale-105 rounded-lg bg-[#5141e5] hover:shadow-md transition-all duration-300 cursor-pointer shadow-md"
                     >
                       <Repeat2 className="w-4 sm:w-5 h-4 sm:h-5 text-white" />
-                      <span className="text-white">Retry Fetch</span>
+                      <span className="text-white">Re-Design</span>
+                    </button>
+                  </ToolTip>
+                </div>
+                <div>
+                  <ToolTip content="Delete Slide">
+                    <button
+                      onClick={handleDeleteSlide}
+                      className="px-4 py-2 flex gap-2 text-sm items-center group-hover:scale-105 rounded-lg  hover:shadow-md transition-all duration-300 cursor-pointer shadow-md"
+                    >
+                      <Trash className="w-4 sm:w-5 h-4 sm:h-5 text-red-500" />
                     </button>
                   </ToolTip>
                 </div>
@@ -592,13 +654,6 @@ const EachSlide = ({
         ) : slide.processed && slide.html ? (
           <div className="relative">
             <div ref={slideDisplayRef} className="relative mx-auto w-full ">
-              {/* <div
-                ref={slideContentRef}
-                className="relative"
-                dangerouslySetInnerHTML={{
-                  __html: slide.html,
-                }}
-              /> */}
               <div ref={slideContentRef}>
                 <SlideContent slide={slide} />
               </div>
