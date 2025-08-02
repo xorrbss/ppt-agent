@@ -7,6 +7,10 @@ import uuid
 from typing import List, Optional, Dict
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from pydantic import BaseModel
+import aiohttp
+import asyncio
+import xml.etree.ElementTree as ET
+import re
 
 from utils.asset_directory_utils import get_images_directory
 from utils.randomizers import get_random_uuid
@@ -22,10 +26,156 @@ class SlideData(BaseModel):
     xml_content: str
 
 
+class FontAnalysisResult(BaseModel):
+    internally_supported_fonts: List[Dict[str, str]]  # [{"name": "Open Sans", "google_fonts_url": "..."}]
+    not_supported_fonts: List[str]  # ["Custom Font Name"]
+
+
 class PptxSlidesResponse(BaseModel):
     success: bool
     slides: List[SlideData]
     total_slides: int
+    fonts: Optional[FontAnalysisResult] = None
+
+
+def extract_fonts_from_oxml(xml_content: str) -> List[str]:
+    """
+    Extract font names from OXML content.
+    
+    Args:
+        xml_content: OXML content as string
+    
+    Returns:
+        List of unique font names found in the OXML
+    """
+    fonts = set()
+    
+    try:
+        # Parse the XML content
+        root = ET.fromstring(xml_content)
+        
+        # Define namespaces commonly used in OXML
+        namespaces = {
+            'a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
+            'p': 'http://schemas.openxmlformats.org/presentationml/2006/main',
+            'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+        }
+        
+        # Search for font references in various OXML elements
+        # Look for latin fonts
+        for font_elem in root.findall('.//a:latin', namespaces):
+            if 'typeface' in font_elem.attrib:
+                fonts.add(font_elem.attrib['typeface'])
+        
+        # Look for east asian fonts
+        for font_elem in root.findall('.//a:ea', namespaces):
+            if 'typeface' in font_elem.attrib:
+                fonts.add(font_elem.attrib['typeface'])
+        
+        # Look for complex script fonts
+        for font_elem in root.findall('.//a:cs', namespaces):
+            if 'typeface' in font_elem.attrib:
+                fonts.add(font_elem.attrib['typeface'])
+        
+        # Look for font references in theme elements
+        for font_elem in root.findall('.//a:font', namespaces):
+            if 'typeface' in font_elem.attrib:
+                fonts.add(font_elem.attrib['typeface'])
+        
+        # Look for rPr (run properties) font references
+        for rpr_elem in root.findall('.//a:rPr', namespaces):
+            for font_elem in rpr_elem.findall('.//a:latin', namespaces):
+                if 'typeface' in font_elem.attrib:
+                    fonts.add(font_elem.attrib['typeface'])
+        
+        # Also search without namespace prefix for compatibility
+        for font_elem in root.findall('.//latin'):
+            if 'typeface' in font_elem.attrib:
+                fonts.add(font_elem.attrib['typeface'])
+        
+        # Regex fallback for fonts that might be missed
+        font_pattern = r'typeface="([^"]+)"'
+        regex_fonts = re.findall(font_pattern, xml_content)
+        fonts.update(regex_fonts)
+        
+        # Filter out system fonts and empty values
+        system_fonts = {'+mn-lt', '+mj-lt', '+mn-ea', '+mj-ea', '+mn-cs', '+mj-cs', ''}
+        fonts = {font for font in fonts if font not in system_fonts and font.strip()}
+        
+        return list(fonts)
+        
+    except Exception as e:
+        print(f"Error extracting fonts from OXML: {e}")
+        return []
+
+
+async def check_google_font_availability(font_name: str) -> bool:
+    """
+    Check if a font is available in Google Fonts.
+    
+    Args:
+        font_name: Name of the font to check
+    
+    Returns:
+        True if font is available in Google Fonts, False otherwise
+    """
+    try:
+        formatted_name = font_name.replace(' ', '+')
+        url = f"https://fonts.googleapis.com/css2?family={formatted_name}&display=swap"
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.head(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                return response.status == 200
+                
+    except Exception as e:
+        print(f"Error checking Google Font availability for {font_name}: {e}")
+        return False
+
+
+async def analyze_fonts_in_all_slides(slide_xmls: List[str]) -> FontAnalysisResult:
+    """
+    Analyze fonts across all slides and determine Google Fonts availability.
+    
+    Args:
+        slide_xmls: List of OXML content strings from all slides
+    
+    Returns:
+        FontAnalysisResult with supported and unsupported fonts
+    """
+    # Extract fonts from all slides
+    all_fonts = set()
+    for xml_content in slide_xmls:
+        slide_fonts = extract_fonts_from_oxml(xml_content)
+        all_fonts.update(slide_fonts)
+    
+    if not all_fonts:
+        return FontAnalysisResult(
+            internally_supported_fonts=[],
+            not_supported_fonts=[]
+        )
+    
+    # Check each font's availability in Google Fonts concurrently
+    tasks = [check_google_font_availability(font) for font in all_fonts]
+    results = await asyncio.gather(*tasks)
+    
+    internally_supported_fonts = []
+    not_supported_fonts = []
+    
+    for font, is_available in zip(all_fonts, results):
+        if is_available:
+            formatted_name = font.replace(' ', '+')
+            google_fonts_url = f"https://fonts.googleapis.com/css2?family={formatted_name}&display=swap"
+            internally_supported_fonts.append({
+                "name": font,
+                "google_fonts_url": google_fonts_url
+            })
+        else:
+            not_supported_fonts.append(font)
+    
+    return FontAnalysisResult(
+        internally_supported_fonts=internally_supported_fonts,
+        not_supported_fonts=not_supported_fonts
+    )
 
 
 @PPTX_SLIDES_ROUTER.post("/process", response_model=PptxSlidesResponse)
@@ -71,6 +221,10 @@ async def process_pptx_slides(
             screenshot_paths = await _generate_screenshots(pptx_path, temp_dir)
             print(f"Screenshot paths: {screenshot_paths}")
             
+            # Analyze fonts across all slides
+            font_analysis = await analyze_fonts_in_all_slides(slide_xmls)
+            print(f"Font analysis completed: {len(font_analysis.internally_supported_fonts)} supported, {len(font_analysis.not_supported_fonts)} not supported")
+            
             # Move screenshots to images directory and generate URLs
             images_dir = get_images_directory()
             presentation_id = get_random_uuid()
@@ -101,7 +255,8 @@ async def process_pptx_slides(
             return PptxSlidesResponse(
                 success=True,
                 slides=slides_data,
-                total_slides=len(slides_data)
+                total_slides=len(slides_data),
+                fonts=font_analysis
             )
 
 async def _install_fonts(fonts: List[UploadFile], temp_dir: str) -> None:
