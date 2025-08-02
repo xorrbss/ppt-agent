@@ -18,6 +18,7 @@ import { v4 as uuidv4 } from "uuid";
 import EachSlide from "./components/EachSlide";
 import FontManager from "./components/FontManager";
 import Header from "@/components/Header";
+import { useLayout } from "../(presentation-generator)/context/LayoutContext";
 
 // Types
 interface SlideData {
@@ -50,6 +51,7 @@ interface FontData {
 }
 
 const CustomLayoutPage = () => {
+  const { refetch } = useLayout();
   // State management
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isProcessingPptx, setIsProcessingPptx] = useState(false);
@@ -311,6 +313,7 @@ const CustomLayoutPage = () => {
       );
 
       toast.success(`Layout saved successfully`);
+      refetch();
       setIsLayoutSaved(true);
     } catch (error) {
       console.error("Error saving layout:", error);
@@ -559,8 +562,6 @@ const CustomLayoutPage = () => {
   const completedSlides = slides.filter(
     (slide) => slide.processed || slide.error
   ).length;
-  const progressPercentage =
-    slides.length > 0 ? Math.round((completedSlides / slides.length) * 100) : 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 ">
@@ -577,17 +578,6 @@ const CustomLayoutPage = () => {
           </p>
         </div>
 
-        {/* Global Font Management */}
-        {fontsData && (
-          <FontManager
-            fontsData={fontsData}
-            UploadedFonts={UploadedFonts}
-            uploadFont={uploadFont}
-            removeFont={removeFont}
-            getAllUnsupportedFonts={getAllUnsupportedFonts}
-          />
-        )}
-
         {/* Upload Section */}
         <Card className="w-full">
           <CardHeader>
@@ -599,6 +589,14 @@ const CustomLayoutPage = () => {
               Select a PowerPoint file (.pptx) to process. Maximum file size:
               50MB
             </CardDescription>
+            {slides.length > 0 && (
+              <div className="flex items-center justify-end gap-2">
+                {slides.some((s) => s.processing) && (
+                  <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                )}
+                {completedSlides}/{slides.length} slides completed
+              </div>
+            )}
           </CardHeader>
           <CardContent className="space-y-4">
             {!selectedFile ? (
@@ -663,28 +661,15 @@ const CustomLayoutPage = () => {
           </CardContent>
         </Card>
 
-        {/* Progress Section */}
-        {slides.length > 0 && (
-          <Card className="mt-10">
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Processing Progress</span>
-                <span className="text-sm font-normal text-gray-600">
-                  {completedSlides}/{slides.length} slides completed
-                </span>
-              </CardTitle>
-              <CardDescription>
-                Converting slides to HTML layouts...
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Progress value={progressPercentage} className="w-full" />
-              <div className="flex justify-between text-sm text-gray-600 mt-2">
-                <span>Progress: {progressPercentage}%</span>
-                <span>{slides.length} total slides</span>
-              </div>
-            </CardContent>
-          </Card>
+        {/* Global Font Management */}
+        {fontsData && (
+          <FontManager
+            fontsData={fontsData}
+            UploadedFonts={UploadedFonts}
+            uploadFont={uploadFont}
+            removeFont={removeFont}
+            getAllUnsupportedFonts={getAllUnsupportedFonts}
+          />
         )}
 
         {/* Slides Section */}

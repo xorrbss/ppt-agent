@@ -88,11 +88,11 @@ const FontManager: React.FC<FontManagerProps> = ({
   }
 
   return (
-    <Card className="mb-6">
+    <Card className="my-6">
       <CardHeader>
         <CardTitle className="text-xl flex items-center gap-2">
           <Type className="w-6 h-6" />
-          Global Font Management
+          Font Management
         </CardTitle>
         <p className="text-sm text-gray-600">
           Manage fonts across all slides. Upload fonts once and they'll be
@@ -158,7 +158,7 @@ const FontManager: React.FC<FontManagerProps> = ({
                         variant="outline"
                         disabled={uploadingFonts.has(fontName)}
                         onClick={() => fileInputRefs.current[fontName]?.click()}
-                        className="text-xs bg-blue-600 text-white hover:bg-blue-700 border-blue-600"
+                        className="text-xs bg-blue-600 text-white hover:text-white hover:bg-blue-700 border-blue-600"
                       >
                         {uploadingFonts.has(fontName) ? (
                           <>
