@@ -13,3 +13,4 @@ debug
 .fastembed_cache
 my-doc.txt
 generated_models
+nltk
