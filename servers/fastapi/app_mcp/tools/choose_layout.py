@@ -14,9 +14,9 @@ def register_choose_layout(mcp, orchestrator):
         - Slide structure and layout patterns
         - Font choices and styling
         - Overall presentation aesthetic
-        
-        Use 'show_layouts' first to see all available options.
-        
+
+        Use 'show_layouts' first to see all available options. Only show the layout name and short description.
+
         Args:
             session_id: Your presentation session ID
             layout_name: Name of the layout you want to use

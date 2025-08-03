@@ -16,8 +16,10 @@ async def export_presentation_and_get_path(
     )
     # model_dump() is assumed to return a dict with the export path and related info
     data = presentation_and_path.model_dump()
+    print("Exported presentation data:", data)
     # Map export_path to path if needed
     return {
         **data,
         "edit_path": f"/presentation?id={presentation_id}",
+        "export_path": data["path"],
     }

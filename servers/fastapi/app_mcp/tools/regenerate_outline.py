@@ -46,8 +46,8 @@ def register_regenerate_outline(mcp, orchestrator):
                 fsm.transition(PresentationState.OUTLINE_REQUESTED)
 
             # Generate new outline
-            continue_workflow = await register_continue_workflow(mcp, orchestrator)
-            result = await continue_workflow(session_id, "continue")
+            continue_workflow = register_continue_workflow(mcp, orchestrator)
+            result = await continue_workflow(session_id=session_id, action="continue")
 
             if result["status"] == "success":
                 result["message"] = "I've created a new outline for you:"

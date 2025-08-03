@@ -68,6 +68,8 @@ def register_start_presentation(mcp, orchestrator):
                 "n_slides": max(1, min(50, n_slides)),  # Validate slide count
                 "language": language.strip() if language else "English"
             })
+            # Debug log to verify metadata update
+            print("DEBUG: Metadata after update:", fsm.context.metadata)
 
             # Handle files if provided
             if files and len(files) > 0:
@@ -93,8 +95,8 @@ def register_start_presentation(mcp, orchestrator):
                     "suggestion": "I'll generate an outline with the key topics and structure. Use 'continue_workflow' to proceed.",
                     "next_step": "Call continue_workflow to generate the outline",
                     "parameters": {
-                        "n_slides": fsm.context.metadata["n_slides"],
-                        "language": fsm.context.metadata["language"]
+                    "n_slides": fsm.context.metadata.get("n_slides", 8),  # Ensure n_slides is retrieved correctly
+                    "language": fsm.context.metadata.get("language", "English")  # Ensure language is retrieved correctly
                     }
                 }
         except Exception as e:

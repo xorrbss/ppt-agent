@@ -6,7 +6,8 @@ def register_export_presentation(mcp, orchestrator):
     @mcp.tool("export_presentation")
     async def export_presentation(
         session_id: str,
-        format: str = "pptx"
+        format: str = "pptx",
+        export_path: str = None
     ) -> Dict[str, Any]:
         """
         📁 Download your finished presentation in your preferred format.
