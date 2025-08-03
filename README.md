@@ -33,17 +33,22 @@
 
 ## ✨ More Freedom with AI Presentations
 
-* ✅ **Custom layouts/templates/themes** — Create custom layouts with HTML and Tailwind, support any presentation design
-* ✅ **Bring Your Own Key** — Only pay for what you use. OpenAI, Gemini (More coming soon...)
-* ✅ **API Presentation Generation** — Host as API to generate presentations over requests
-* ✅ **Ollama Support** — Run open-source models locally with Ollama integration
-* ✅ **OpenAI API Compatibility** — Use any OpenAI-compatible API endpoint with your own models
-* ✅ **Versatile Image Generation** — Choose from DALL-E 3, Gemini Flash, Pexels, or Pixabay for your visuals
-* ✅ **Runs Locally** — All code runs on your device
-* ✅ **Privacy-First** — No tracking, no data stored by us
-* ✅ **Flexible** — Generate presentations from prompts or outlines
-* ✅ **Export Ready** — Save as PowerPoint (PPTX) and PDF
-* ✅ **Fully Open-Source** — Apache 2.0 licensed
+Presenton gives you complete control over your AI presentation workflow. Choose your models, customize your experience, and keep your data private.
+
+* ✅ **Custom Layouts & Themes** — Create unlimited presentation designs with HTML and Tailwind CSS
+* ✅ **Flexible Generation** — Build presentations from prompts or uploaded documents
+* ✅ **Export Ready** — Save as PowerPoint (PPTX) and PDF with professional formatting
+* ✅ **Bring Your Own Key** — Use your own API keys for OpenAI, Google Gemini, Anthropic Claude, or any compatible provider. Only pay for what you use, no hidden fees or subscriptions.
+* ✅ **Ollama Integration** — Run open-source models locally with full privacy
+* ✅ **OpenAI API Compatible** — Connect to any OpenAI-compatible endpoint with your own models
+* ✅ **Multi-Provider Support** — Mix and match text and image generation providers
+* ✅ **Versatile Image Generation** — Choose from DALL-E 3, Gemini Flash, Pexels, or Pixabay
+* ✅ **Rich Media Support** — Icons, charts, and custom graphics for professional presentations
+* ✅ **Runs Locally** — All processing happens on your device, no cloud dependencies
+* ✅ **Privacy-First** — Zero tracking, no data stored by us, complete data sovereignty
+* ✅ **API Deployment** — Host as your own API service for your team
+* ✅ **Fully Open-Source** — Apache 2.0 licensed, inspect, modify, and contribute
+* ✅ **Docker Ready** — One-command deployment with GPU support for local models
 
 ## Deploy on Cloud (one click deployment)
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/presenton-ai-presentations?referralCode=ubp0kk)
@@ -72,9 +77,13 @@ Open http://localhost:5000 on browser of your choice to use Presenton.
 You may want to directly provide your API KEYS as environment variables and keep them hidden. You can set these environment variables to achieve it.
 
 - **CAN_CHANGE_KEYS=[true/false]**: Set this to **false** if you want to keep API Keys hidden and make them unmodifiable.
-- **LLM=[openai/google/ollama/custom]**: Select **LLM** of your choice.
+- **LLM=[openai/google/anthropic/ollama/custom]**: Select **LLM** of your choice.
 - **OPENAI_API_KEY=[Your OpenAI API Key]**: Provide this if **LLM** is set to **openai**
+- **OPENAI_MODEL=[OpenAI Model ID]**: Provide this if **LLM** is set to **openai** (default: "gpt-4.1")
 - **GOOGLE_API_KEY=[Your Google API Key]**: Provide this if **LLM** is set to **google**
+- **GOOGLE_MODEL=[Google Model ID]**: Provide this if **LLM** is set to **google** (default: "models/gemini-2.0-flash")
+- **ANTHROPIC_API_KEY=[Your Anthropic API Key]**: Provide this if **LLM** is set to **anthropic**
+- **ANTHROPIC_MODEL=[Anthropic Model ID]**: Provide this if **LLM** is set to **anthropic** (default: "claude-3-5-sonnet-20241022")
 - **OLLAMA_URL=[Custom Ollama URL]**: Provide this if you want to custom Ollama URL and **LLM** is set to **ollama**
 - **OLLAMA_MODEL=[Ollama Model ID]**: Provide this if **LLM** is set to **ollama**
 - **CUSTOM_LLM_URL=[Custom OpenAI Compatible URL]**: Provide this if **LLM** is set to **custom**
@@ -97,9 +106,19 @@ You can also set the following environment variables to customize the image gene
 docker run -it --name presenton -p 5000:80 -e LLM="openai" -e OPENAI_API_KEY="******" -e IMAGE_PROVIDER="dall-e-3" -e CAN_CHANGE_KEYS="false" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest
 ```
 
+### Using Google
+```bash
+docker run -it --name presenton -p 5000:80 -e LLM="google" -e GOOGLE_API_KEY="******" -e IMAGE_PROVIDER="gemini_flash" -e CAN_CHANGE_KEYS="false" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest
+```
+
 ### Using Ollama
 ```bash
 docker run -it --name presenton -p 5000:80 -e LLM="ollama" -e OLLAMA_MODEL="llama3.2:3b" -e IMAGE_PROVIDER="pexels" -e PEXELS_API_KEY="*******" -e CAN_CHANGE_KEYS="false" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest
+```
+
+### Using Anthropic
+```bash
+docker run -it --name presenton -p 5000:80 -e LLM="anthropic" -e ANTHROPIC_API_KEY="******" -e IMAGE_PROVIDER="pexels" -e PEXELS_API_KEY="******" -e CAN_CHANGE_KEYS="false" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest
 ```
 
 ### Using OpenAI Compatible API

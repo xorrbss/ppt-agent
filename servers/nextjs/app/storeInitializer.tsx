@@ -53,7 +53,7 @@ export function StoreInitializer({ children }: { children: React.ReactNode }) {
           }
         }
         if (llmConfig.LLM === 'custom') {
-          const isAvailable = await checkIfSelectedCustomModelIsAvailable(llmConfig.CUSTOM_MODEL);
+          const isAvailable = await checkIfSelectedCustomModelIsAvailable(llmConfig);
           if (!isAvailable) {
             router.push('/');
             setLoadingToFalseAfterNavigatingTo('/');
@@ -83,16 +83,20 @@ export function StoreInitializer({ children }: { children: React.ReactNode }) {
   }
 
 
-  const checkIfSelectedCustomModelIsAvailable = async (customModel: string) => {
+  const checkIfSelectedCustomModelIsAvailable = async (llmConfig: LLMConfig) => {
     try {
-      const response = await fetch('/api/v1/ppt/custom_llm/models/available', {
+      const response = await fetch('/api/v1/ppt/openai/models/available', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          url: llmConfig.CUSTOM_LLM_URL,
+          api_key: llmConfig.CUSTOM_LLM_API_KEY,
+        }),
       });
       const data = await response.json();
-      return data.includes(customModel);
+      return data.includes(llmConfig.CUSTOM_MODEL);
     } catch (error) {
       console.error('Error fetching custom models:', error);
       return false;

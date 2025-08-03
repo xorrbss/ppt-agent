@@ -7,4 +7,3 @@ class OllamaModelMetadata(BaseModel):
     description: str
     icon: str
     size: str
-    supports_graph: bool

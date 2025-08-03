@@ -1,7 +1,6 @@
 .venv
 .env
 .next
-node_modules
 out
 build
 .git
@@ -9,4 +8,6 @@ build
 tmp
 debug
 .fastembed_cache
+servers/fastapi/tmp
+servers/fastapi/debug
 servers/nextjs/node_modules

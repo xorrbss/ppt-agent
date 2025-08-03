@@ -22,12 +22,6 @@ def get_presentation_outline_model_with_n_slides(n_slides: int):
             min_length=10,
             max_length=50,
         )
-        notes: Optional[List[str]] = Field(
-            default=None,
-            description="Important notes for the presentation styling and formatting",
-            min_length=0,
-            max_length=10,
-        )
         slides: List[SlideOutlineModelWithValidation] = Field(
             description="List of slides", min_items=n_slides, max_items=n_slides
         )

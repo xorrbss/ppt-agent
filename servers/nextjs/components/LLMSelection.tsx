@@ -15,16 +15,13 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { cn } from "@/lib/utils";
 import OpenAIConfig from "./OpenAIConfig";
 import GoogleConfig from "./GoogleConfig";
+import AnthropicConfig from "./AnthropicConfig";
 import OllamaConfig from "./OllamaConfig";
 import CustomConfig from "./CustomConfig";
 import {
-  OllamaModel,
   LLMConfig,
   updateLLMConfig,
   changeProvider as changeProviderUtil,
-  fetchOllamaModelsWithConfig,
-  setOllamaConfig,
-  fetchCustomModels,
 } from "@/utils/providerUtils";
 import { IMAGE_PROVIDERS, LLM_PROVIDERS } from "@/utils/providerConstants";
 
@@ -51,15 +48,6 @@ export default function LLMProviderSelection({
   setButtonState,
 }: LLMProviderSelectionProps) {
   const [llmConfig, setLlmConfig] = useState<LLMConfig>(initialLLMConfig);
-  const [ollamaModels, setOllamaModels] = useState<OllamaModel[]>([]);
-  const [customModels, setCustomModels] = useState<string[]>([]);
-  const [customModelsLoading, setCustomModelsLoading] = useState<boolean>(false);
-  const [customModelsChecked, setCustomModelsChecked] = useState<boolean>(false);
-  const [ollamaModelsLoading, setOllamaModelsLoading] = useState<boolean>(false);
-  const [useCustomOllamaUrl, setUseCustomOllamaUrl] = useState<boolean>(
-    initialLLMConfig.USE_CUSTOM_URL || false
-  );
-  const [openModelSelect, setOpenModelSelect] = useState(false);
   const [openImageProviderSelect, setOpenImageProviderSelect] = useState(false);
 
   useEffect(() => {
@@ -68,25 +56,31 @@ export default function LLMProviderSelection({
 
   useEffect(() => {
     const needsModelSelection =
+      (llmConfig.LLM === "openai" && !llmConfig.OPENAI_MODEL) ||
+      (llmConfig.LLM === "google" && !llmConfig.GOOGLE_MODEL) ||
       (llmConfig.LLM === "ollama" && !llmConfig.OLLAMA_MODEL) ||
-      (llmConfig.LLM === "custom" && !llmConfig.CUSTOM_MODEL);
+      (llmConfig.LLM === "custom" && !llmConfig.CUSTOM_MODEL) ||
+      (llmConfig.LLM === "anthropic" && !llmConfig.ANTHROPIC_MODEL);
 
     const needsApiKey =
       ((llmConfig.IMAGE_PROVIDER === "dall-e-3" || llmConfig.LLM === "openai") && !llmConfig.OPENAI_API_KEY) ||
       ((llmConfig.IMAGE_PROVIDER === "gemini_flash" || llmConfig.LLM === "google") && !llmConfig.GOOGLE_API_KEY) ||
+      (llmConfig.LLM === "anthropic" && !llmConfig.ANTHROPIC_API_KEY) ||
       (llmConfig.IMAGE_PROVIDER === "pexels" && !llmConfig.PEXELS_API_KEY) ||
       (llmConfig.IMAGE_PROVIDER === "pixabay" && !llmConfig.PIXABAY_API_KEY);
 
+    const needsOllamaUrl = (llmConfig.LLM === "ollama" && !llmConfig.OLLAMA_URL);
+
     setButtonState({
       isLoading: false,
-      isDisabled: needsModelSelection || needsApiKey,
-      text: needsModelSelection ? "Please Select a Model" : needsApiKey ? "Please Enter API Key" : "Save Configuration",
+      isDisabled: needsModelSelection || needsApiKey || needsOllamaUrl,
+      text: needsModelSelection ? "Please Select a Model" : needsApiKey ? "Please Enter API Key" : needsOllamaUrl ? "Please Enter Ollama URL" : "Save Configuration",
       showProgress: false
     });
 
   }, [llmConfig]);
 
-  const input_field_changed = (new_value: string, field: string) => {
+  const input_field_changed = (new_value: string | boolean, field: string) => {
     const updatedConfig = updateLLMConfig(llmConfig, field, new_value);
     setLlmConfig(updatedConfig);
   };
@@ -94,78 +88,33 @@ export default function LLMProviderSelection({
   const handleProviderChange = (provider: string) => {
     const newConfig = changeProviderUtil(llmConfig, provider);
     setLlmConfig(newConfig);
-    if (provider === "ollama") {
-      fetchOllamaModels();
-    }
   };
 
-  const fetchOllamaModels = async () => {
-    try {
-      setOllamaModelsLoading(true);
-      const result = await fetchOllamaModelsWithConfig(llmConfig);
-      setOllamaModels(result.models);
-      if (result.updatedConfig) {
-        setLlmConfig(result.updatedConfig);
+  useEffect(() => {
+    if (!llmConfig.USE_CUSTOM_URL) {
+      setLlmConfig({ ...llmConfig, OLLAMA_URL: "http://localhost:11434" });
+    } else {
+      if (!llmConfig.OLLAMA_URL) {
+        setLlmConfig({ ...llmConfig, OLLAMA_URL: "http://localhost:11434" });
       }
-    } catch (error) {
-      console.error("Error fetching Ollama models:", error);
-      setOllamaModels([]);
-    } finally {
-      setOllamaModelsLoading(false);
     }
-  };
-
-  const fetchCustomModelsHandler = async () => {
-    try {
-      setCustomModelsLoading(true);
-      const models = await fetchCustomModels(
-        llmConfig.CUSTOM_LLM_URL || "",
-        llmConfig.CUSTOM_LLM_API_KEY || ""
-      );
-      setCustomModels(models);
-      setCustomModelsChecked(true);
-    } catch (error) {
-      console.error("Error fetching custom models:", error);
-      setCustomModels([]);
-    } finally {
-      setCustomModelsLoading(false);
-    }
-  };
-
-  const setOllamaConfigHandler = () => {
-    const updatedConfig = setOllamaConfig(llmConfig, useCustomOllamaUrl);
-    setLlmConfig(updatedConfig);
-  };
+  }, [llmConfig.USE_CUSTOM_URL]);
 
   useEffect(() => {
-    if (llmConfig.LLM === "ollama") {
-      setOllamaConfigHandler();
-      fetchOllamaModels();
-    }
-  }, [llmConfig.LLM]);
-
-  useEffect(() => {
-    setOllamaConfigHandler();
-  }, [useCustomOllamaUrl]);
-
-  useEffect(() => {
-    if (llmConfig.LLM === "custom") {
-      setCustomModels([]);
-      setCustomModelsChecked(false);
-      setLlmConfig({ ...llmConfig, CUSTOM_MODEL: "" });
-    }
-  }, [llmConfig.CUSTOM_LLM_URL, llmConfig.CUSTOM_LLM_API_KEY]);
-
-  useEffect(() => {
+    let updates: any = {};
     if (!llmConfig.IMAGE_PROVIDER) {
       if (llmConfig.LLM === "openai") {
-        setLlmConfig({ ...llmConfig, IMAGE_PROVIDER: "dall-e-3" });
+        updates.IMAGE_PROVIDER = "dall-e-3";
       } else if (llmConfig.LLM === "google") {
-        setLlmConfig({ ...llmConfig, IMAGE_PROVIDER: "gemini_flash" });
+        updates.IMAGE_PROVIDER = "gemini_flash";
       } else {
-        setLlmConfig({ ...llmConfig, IMAGE_PROVIDER: "pexels" });
+        updates.IMAGE_PROVIDER = "pexels";
       }
     }
+    if (!llmConfig.OLLAMA_URL) {
+      updates.OLLAMA_URL = "http://localhost:11434";
+    }
+    setLlmConfig({ ...llmConfig, ...updates });
   }, []);
 
   return (
@@ -177,9 +126,10 @@ export default function LLMProviderSelection({
           onValueChange={handleProviderChange}
           className="w-full"
         >
-          <TabsList className="grid w-full grid-cols-4 bg-transparent h-10">
+          <TabsList className="grid w-full grid-cols-5 bg-transparent h-10">
             <TabsTrigger value="openai">OpenAI</TabsTrigger>
             <TabsTrigger value="google">Google</TabsTrigger>
+            <TabsTrigger value="anthropic">Anthropic</TabsTrigger>
             <TabsTrigger value="ollama">Ollama</TabsTrigger>
             <TabsTrigger value="custom">Custom</TabsTrigger>
           </TabsList>
@@ -198,6 +148,7 @@ export default function LLMProviderSelection({
           <TabsContent value="openai" className="mt-6">
             <OpenAIConfig
               openaiApiKey={llmConfig.OPENAI_API_KEY || ""}
+              openaiModel={llmConfig.OPENAI_MODEL || ""}
               onInputChange={input_field_changed}
             />
           </TabsContent>
@@ -206,6 +157,17 @@ export default function LLMProviderSelection({
           <TabsContent value="google" className="mt-6">
             <GoogleConfig
               googleApiKey={llmConfig.GOOGLE_API_KEY || ""}
+              googleModel={llmConfig.GOOGLE_MODEL || ""}
+              onInputChange={input_field_changed}
+            />
+          </TabsContent>
+
+          {/* Anthropic Content */}
+          <TabsContent value="anthropic" className="mt-6">
+            <AnthropicConfig
+              anthropicApiKey={llmConfig.ANTHROPIC_API_KEY || ""}
+              anthropicModel={llmConfig.ANTHROPIC_MODEL || ""}
+              extendedReasoning={llmConfig.EXTENDED_REASONING || false}
               onInputChange={input_field_changed}
             />
           </TabsContent>
@@ -215,16 +177,8 @@ export default function LLMProviderSelection({
             <OllamaConfig
               ollamaModel={llmConfig.OLLAMA_MODEL || ""}
               ollamaUrl={llmConfig.OLLAMA_URL || ""}
-              useCustomUrl={useCustomOllamaUrl}
-              ollamaModels={ollamaModels}
-              ollamaModelsLoading={ollamaModelsLoading}
+              useCustomUrl={llmConfig.USE_CUSTOM_URL || false}
               onInputChange={input_field_changed}
-              onUseCustomUrlChange={setUseCustomOllamaUrl}
-              openModelSelect={openModelSelect}
-              onOpenModelSelectChange={setOpenModelSelect}
-              onModelSelect={(modelName: string) => {
-                input_field_changed(modelName, "ollama_model");
-              }}
             />
           </TabsContent>
 
@@ -234,19 +188,13 @@ export default function LLMProviderSelection({
               customLlmUrl={llmConfig.CUSTOM_LLM_URL || ""}
               customLlmApiKey={llmConfig.CUSTOM_LLM_API_KEY || ""}
               customModel={llmConfig.CUSTOM_MODEL || ""}
-              customModels={customModels}
-              customModelsLoading={customModelsLoading}
-              customModelsChecked={customModelsChecked}
-              openModelSelect={openModelSelect}
               onInputChange={input_field_changed}
-              onOpenModelSelectChange={setOpenModelSelect}
-              onFetchCustomModels={fetchCustomModelsHandler}
             />
           </TabsContent>
         </Tabs>
 
         {/* Image Provider Selection */}
-        <div className="mb-8">
+        <div className="my-8">
           <label className="block text-sm font-medium text-gray-700 mb-3">
             Select Image Provider
           </label>
@@ -388,7 +336,13 @@ export default function LLMProviderSelection({
                   ? llmConfig.OLLAMA_MODEL ?? "xxxxx"
                   : llmConfig.LLM === "custom"
                     ? llmConfig.CUSTOM_MODEL ?? "xxxxx"
-                    : LLM_PROVIDERS[llmConfig.LLM!]?.model_label || "xxxxx"}{" "}
+                    : llmConfig.LLM === "anthropic"
+                      ? llmConfig.ANTHROPIC_MODEL ?? "xxxxx"
+                      : llmConfig.LLM === "google"
+                        ? llmConfig.GOOGLE_MODEL ?? "xxxxx"
+                        : llmConfig.LLM === "openai"
+                          ? llmConfig.OPENAI_MODEL ?? "xxxxx"
+                          : "xxxxx"}{" "}
                 for text generation and{" "}
                 {llmConfig.IMAGE_PROVIDER &&
                   IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]
