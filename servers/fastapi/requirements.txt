@@ -55,37 +55,22 @@ huggingface-hub==0.34.3
 humanfriendly==10.0
 idna==3.10
 imageio==2.37.0
-<<<<<<< HEAD
-importlib_metadata==8.7.0
-importlib_resources==6.5.2
-Jinja2==3.1.6
-jiter==0.10.0
-=======
 importlib-metadata==8.7.0
 importlib-resources==6.5.2
 jinja2==3.1.6
 jiter==0.10.0
 joblib==1.5.1
->>>>>>> main
 jsonlines==3.1.0
 jsonref==1.1.0
 jsonschema==4.25.0
 jsonschema-specifications==2025.4.1
 kubernetes==33.1.0
 latex2mathml==3.78.0
-<<<<<<< HEAD
-lazy_loader==0.4
-lxml==5.4.0
-markdown-it-py==3.0.0
-marko==2.1.4
-MarkupSafe==3.0.2
-=======
 lazy-loader==0.4
 lxml==5.4.0
 markdown-it-py==3.0.0
 marko==2.1.4
 markupsafe==3.0.1
->>>>>>> main
 mdurl==0.1.2
 mmh3==5.2.0
 mpire==2.10.2
@@ -94,20 +79,12 @@ multidict==6.6.3
 multiprocess==0.70.18
 networkx==3.5
 ninja==1.11.1.4
-<<<<<<< HEAD
-numpy==2.2.6
-oauthlib==3.3.1
-onnxruntime==1.22.1
-openai==1.98.0
-opencv-python-headless==4.12.0.88
-=======
 nltk==3.9.1
 numpy==2.3.2
 oauthlib==3.3.1
 onnxruntime==1.22.1
 openai==1.98.0
 opencv-python-headless==4.11.0.86
->>>>>>> main
 openpyxl==3.1.5
 opentelemetry-api==1.36.0
 opentelemetry-exporter-otlp-proto-common==1.36.0

@@ -102,7 +102,10 @@ export const usePresentationStreaming = (
     if (stream) {
       initializeStream();
     } else {
+      console.log("stream is null", stream);
+      console.log("presentationData", presentationData);
       if(!presentationData || presentationData.slides.length === 0){
+        console.log("fetching user slides");
         fetchUserSlides();
       }
     }

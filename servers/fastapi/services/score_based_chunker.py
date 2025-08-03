@@ -2,6 +2,8 @@ import asyncio
 from typing import List
 import nltk
 
+from models.document_chunk import DocumentChunk
+
 try:
     nltk.data.find("tokenizers/punkt")
 except LookupError:
@@ -104,7 +106,7 @@ class ScoreBasedChunker:
 
     def get_chunks(
         self, sentences: List[str], sentences_scores: List[float], top_k: int = 10
-    ) -> List[dict]:
+    ) -> List[DocumentChunk]:
         if not sentences_scores:
             sentences_scores = self.score_sentences_for_heading(sentences)
 
@@ -175,16 +177,16 @@ class ScoreBasedChunker:
             content_sentences = sentences[heading_idx + 1 : content_end]
             content = " ".join(content_sentences).strip()
 
-            chunk = {
-                "heading": heading,
-                "content": content,
-                "heading_index": heading_idx,
-                "score": sentences_scores[heading_idx],
-            }
+            chunk = DocumentChunk(
+                heading=heading,
+                content=content,
+                heading_index=heading_idx,
+                score=sentences_scores[heading_idx],
+            )
             chunks.append(chunk)
         return chunks
 
-    async def get_n_chunks(self, text: str, n: int) -> List[dict]:
+    async def get_n_chunks(self, text: str, n: int) -> List[DocumentChunk]:
         sentences = await asyncio.to_thread(self.extract_sentences, text, n)
         sentences_scores = await asyncio.to_thread(
             self.score_sentences_for_heading, sentences
