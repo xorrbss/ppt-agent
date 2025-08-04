@@ -1,6 +1,10 @@
 import { useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { clearPresentationData, setPresentationData, setStreaming } from "@/store/slices/presentationGeneration";
+import {
+  clearPresentationData,
+  setPresentationData,
+  setStreaming,
+} from "@/store/slices/presentationGeneration";
 import { jsonrepair } from "jsonrepair";
 import { RootState } from "@/store/store";
 
@@ -11,8 +15,6 @@ export const usePresentationStreaming = (
   setError: (error: boolean) => void,
   fetchUserSlides: () => void
 ) => {
-  const { presentationData } = useSelector((state: RootState) => state.presentationGeneration);
-
   const dispatch = useDispatch();
   const previousSlidesLength = useRef(0);
 
@@ -64,7 +66,7 @@ export const usePresentationStreaming = (
               dispatch(setStreaming(false));
               setLoading(false);
               eventSource.close();
-              
+
               // Remove stream parameter from URL
               const newUrl = new URL(window.location.href);
               newUrl.searchParams.delete("stream");
@@ -81,7 +83,7 @@ export const usePresentationStreaming = (
             setLoading(false);
             dispatch(setStreaming(false));
             eventSource.close();
-            
+
             // Remove stream parameter from URL
             const newUrl = new URL(window.location.href);
             newUrl.searchParams.delete("stream");
@@ -102,12 +104,7 @@ export const usePresentationStreaming = (
     if (stream) {
       initializeStream();
     } else {
-      console.log("stream is null", stream);
-      console.log("presentationData", presentationData);
-      if(!presentationData || presentationData.slides.length === 0){
-        console.log("fetching user slides");
-        fetchUserSlides();
-      }
+      fetchUserSlides();
     }
 
     return () => {
@@ -116,4 +113,4 @@ export const usePresentationStreaming = (
       }
     };
   }, [presentationId, stream, dispatch, setLoading, setError, fetchUserSlides]);
-}; 
+};

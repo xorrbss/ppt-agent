@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect } from "react";
 import { useDispatch } from "react-redux";
 import { toast } from "sonner";
 import { DashboardApi } from "@/app/dashboard/api/dashboard";
@@ -12,7 +12,6 @@ export const usePresentationData = (
   const dispatch = useDispatch();
 
   const fetchUserSlides = useCallback(async () => {
-    console.log("fetching user slides inside usePresentationData");
     try {
       const data = await DashboardApi.getPresentation(presentationId);
       if (data) {
@@ -27,11 +26,7 @@ export const usePresentationData = (
     }
   }, [presentationId, dispatch, setLoading, setError]);
 
-  // useEffect(() => {
-  //   fetchUserSlides();
-  // }, [fetchUserSlides]);
-
   return {
     fetchUserSlides,
   };
-}; 
+};
