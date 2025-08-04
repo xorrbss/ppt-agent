@@ -1,13 +1,13 @@
 /**
  * DocumentPreviewPage Component
- * 
+ *
  * A component that displays and manages document previews for presentation generation.
  * Features:
  * - Document content preview with markdown support
  * - Sidebar navigation for documents
  * - Document content editing and saving
  * - Presentation generation workflow
- * 
+ *
  * @component
  */
 
@@ -27,7 +27,7 @@ import MarkdownRenderer from "./MarkdownRenderer";
 import { getIconFromFile } from "../../utils/others";
 import { ChevronRight, PanelRightOpen, X } from "lucide-react";
 import ToolTip from "@/components/ToolTip";
-import Header from "@/app/dashboard/components/Header";
+import Header from "@/components/Header";
 
 // Types
 interface LoadingState {
@@ -60,7 +60,9 @@ const DocumentsPreviewPage: React.FC = () => {
   // Local state
   const [textContents, setTextContents] = useState<TextContents>({});
   const [selectedDocument, setSelectedDocument] = useState<string | null>(null);
-  const [downloadingDocuments, setDownloadingDocuments] = useState<string[]>([]);
+  const [downloadingDocuments, setDownloadingDocuments] = useState<string[]>(
+    []
+  );
   const [isOpen, setIsOpen] = useState(true);
   const [showLoading, setShowLoading] = useState<LoadingState>({
     message: "",
@@ -72,17 +74,19 @@ const DocumentsPreviewPage: React.FC = () => {
   // Memoized computed values
   const fileItems: FileItem[] = useMemo(() => {
     if (!files || !Array.isArray(files) || files.length === 0) return [];
-    return files.flat().filter((item: any) => item && item.name && item.file_path);
+    return files
+      .flat()
+      .filter((item: any) => item && item.name && item.file_path);
   }, [files]);
 
   const documentKeys = useMemo(() => {
-    return fileItems.map(file => file.name);
+    return fileItems.map((file) => file.name);
   }, [fileItems]);
 
   const updateSelectedDocument = (value: string) => {
     setSelectedDocument(value);
     if (textareaRef.current) {
-      textareaRef.current.value = textContents[value] || '';
+      textareaRef.current.value = textContents[value] || "";
     }
   };
 
@@ -92,7 +96,7 @@ const DocumentsPreviewPage: React.FC = () => {
       body: JSON.stringify({ filePath }),
     });
     return res.json();
-  }
+  };
 
   const maintainDocumentTexts = async () => {
     const newDocuments: string[] = [];
@@ -102,7 +106,7 @@ const DocumentsPreviewPage: React.FC = () => {
     documentKeys.forEach((key: string) => {
       if (!(key in textContents)) {
         newDocuments.push(key);
-        const fileItem = fileItems.find(item => item.name === key);
+        const fileItem = fileItems.find((item) => item.name === key);
         if (fileItem) {
           promises.push(readFile(fileItem.file_path));
         }
@@ -113,7 +117,7 @@ const DocumentsPreviewPage: React.FC = () => {
       setDownloadingDocuments(newDocuments);
       try {
         const results = await Promise.all(promises);
-        setTextContents(prev => {
+        setTextContents((prev) => {
           const newContents = { ...prev };
           newDocuments.forEach((key, index) => {
             newContents[key] = results[index].content || "";
@@ -121,7 +125,7 @@ const DocumentsPreviewPage: React.FC = () => {
           return newContents;
         });
       } catch (error) {
-        console.error('Error reading files:', error);
+        console.error("Error reading files:", error);
         toast.error("Failed to read document content");
       }
       setDownloadingDocuments([]);
@@ -130,7 +134,6 @@ const DocumentsPreviewPage: React.FC = () => {
 
   const handleCreatePresentation = async () => {
     try {
-
       setShowLoading({
         message: "Generating presentation outline...",
         show: true,
@@ -138,20 +141,23 @@ const DocumentsPreviewPage: React.FC = () => {
         progress: true,
       });
 
-      const documentPaths = fileItems.map((fileItem: FileItem) => fileItem.file_path);
-      const createResponse = await PresentationGenerationApi.createPresentation({
-        prompt: config?.prompt ?? "",
-        n_slides: config?.slides ? parseInt(config.slides) : null,
-        file_paths: documentPaths,
-        language: config?.language ?? "",
-
-      });
+      const documentPaths = fileItems.map(
+        (fileItem: FileItem) => fileItem.file_path
+      );
+      const createResponse = await PresentationGenerationApi.createPresentation(
+        {
+          prompt: config?.prompt ?? "",
+          n_slides: config?.slides ? parseInt(config.slides) : null,
+          file_paths: documentPaths,
+          language: config?.language ?? "",
+        }
+      );
 
       dispatch(setPresentationId(createResponse.id));
       router.push("/outline");
     } catch (error: any) {
       console.error("Error in radar presentation creation:", error);
-      toast.error('Error', {
+      toast.error("Error", {
         description: error.message || "Error in radar presentation creation.",
       });
       setShowLoading({
@@ -194,7 +200,9 @@ const DocumentsPreviewPage: React.FC = () => {
             {downloadingDocuments.includes(selectedDocument) ? (
               <Skeleton className="w-full h-full" />
             ) : (
-              <MarkdownRenderer content={textContents[selectedDocument] || ""} />
+              <MarkdownRenderer
+                content={textContents[selectedDocument] || ""}
+              />
             )}
           </div>
         </div>
@@ -206,8 +214,10 @@ const DocumentsPreviewPage: React.FC = () => {
     if (!isOpen) return null;
 
     return (
-      <div className={`border-r border-gray-200 fixed xl:relative w-full z-50 xl:z-auto
-        transition-all duration-300 ease-in-out max-w-[200px] md:max-w-[300px] h-[85vh] rounded-md p-5`}>
+      <div
+        className={`border-r border-gray-200 fixed xl:relative w-full z-50 xl:z-auto
+        transition-all duration-300 ease-in-out max-w-[200px] md:max-w-[300px] h-[85vh] rounded-md p-5`}
+      >
         <X
           onClick={() => setIsOpen(false)}
           className="text-black mb-4 ml-auto mr-0 cursor-pointer hover:text-gray-600"
@@ -222,8 +232,9 @@ const DocumentsPreviewPage: React.FC = () => {
                 <div
                   key={key}
                   onClick={() => updateSelectedDocument(key)}
-                  className={`${selectedDocument === key ? 'border border-blue-500' : ""
-                    } flex p-2 rounded-sm gap-2 items-center cursor-pointer`}
+                  className={`${
+                    selectedDocument === key ? "border border-blue-500" : ""
+                  } flex p-2 rounded-sm gap-2 items-center cursor-pointer`}
                 >
                   <img
                     className="h-6 w-6 border border-gray-200"
