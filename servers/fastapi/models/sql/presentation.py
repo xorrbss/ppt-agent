@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional
 from sqlalchemy import JSON, Column, DateTime
-from sqlmodel import SQLModel, Field
+from sqlmodel import Field, SQLModel
 
 from models.presentation_layout import PresentationLayoutModel
 from models.presentation_outline_model import PresentationOutlineModel

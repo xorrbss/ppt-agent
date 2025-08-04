@@ -1,4 +1,4 @@
-from sqlmodel import SQLModel, Field, Column, JSON
+from sqlmodel import Field, Column, JSON, SQLModel
 
 from utils.randomizers import get_random_uuid
 

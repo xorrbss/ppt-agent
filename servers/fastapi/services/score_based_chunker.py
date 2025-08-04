@@ -5,7 +5,7 @@ import nltk
 from models.document_chunk import DocumentChunk
 
 try:
-    nltk.data.find("tokenizers/punkt")
+    nltk.data.find("tokenizers/punkt", paths=["./nltk"])
 except LookupError:
     nltk.download("punkt", download_dir="./nltk")
 
