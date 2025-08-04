@@ -5,7 +5,7 @@ from models.presentation_layout import PresentationLayoutModel
 from models.presentation_structure_model import PresentationStructureModel
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
-from services.get_layout_by_name import get_layout_by_name
+from utils.get_layout_by_name import get_layout_by_name
 from utils.llm_calls.generate_presentation_structure import generate_presentation_structure
 from utils.llm_calls.generate_slide_content import get_slide_content_from_type_and_outline
 from services.image_generation_service import ImageGenerationService
