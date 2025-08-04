@@ -51,8 +51,8 @@ export async function POST(request: Request) {
       userConfig.PIXABAY_API_KEY || existingConfig.PIXABAY_API_KEY,
     IMAGE_PROVIDER: userConfig.IMAGE_PROVIDER || existingConfig.IMAGE_PROVIDER,
     PEXELS_API_KEY: userConfig.PEXELS_API_KEY || existingConfig.PEXELS_API_KEY,
-    TOOL_CALLS: userConfig.TOOL_CALLS || existingConfig.TOOL_CALLS,
-    DISABLE_THINKING: userConfig.DISABLE_THINKING || existingConfig.DISABLE_THINKING,
+    TOOL_CALLS: userConfig.TOOL_CALLS === undefined ? existingConfig.TOOL_CALLS : userConfig.TOOL_CALLS,
+    DISABLE_THINKING: userConfig.DISABLE_THINKING === undefined ? existingConfig.DISABLE_THINKING : userConfig.DISABLE_THINKING,
     EXTENDED_REASONING:
       userConfig.EXTENDED_REASONING === undefined
         ? existingConfig.EXTENDED_REASONING
