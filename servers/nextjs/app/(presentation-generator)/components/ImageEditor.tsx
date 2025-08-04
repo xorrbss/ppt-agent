@@ -275,7 +275,7 @@ const ImageEditor = ({
                 </TabsTrigger>
               </TabsList>
               {/* Generate Tab */}
-              <TabsContent value="generate" className="mt-4 space-y-4">
+              <TabsContent value="generate" className="mt-4 space-y-4 overflow-y-auto hide-scrollbar h-[85vh]">
                 <div className="space-y-4">
                   <div>
                     <h3 className="text-sm font-medium mb-1">Current Prompt</h3>
@@ -333,7 +333,7 @@ const ImageEditor = ({
                       <h3 className="text-sm font-medium mb-2">
                         Previous Generated Images
                       </h3>
-                      <div className="grid grid-cols-2 gap-4 h-[400px] overflow-y-auto hide-scrollbar">
+                      <div className="grid grid-cols-2 gap-4  ">
                         {previousGeneratedImages.map((image) => (
                           <div
                             onClick={() => handleImageChange(image.path)}

@@ -5,14 +5,14 @@ import { useParams, useRouter } from "next/navigation";
 import LoadingStates from "../components/LoadingStates";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Home } from "lucide-react";
+import { ArrowLeft, Home, Trash2 } from "lucide-react";
 import { useLayout } from "@/app/(presentation-generator)/context/LayoutContext";
 const GroupLayoutPreview = () => {
   const params = useParams();
   const router = useRouter();
   const slug = params.slug as string;
 
-  const { getFullDataByGroup, loading } = useLayout();
+  const { getFullDataByGroup, loading,refetch } = useLayout();
   const layoutGroup = getFullDataByGroup(slug);
 
   useEffect(() => {
@@ -36,7 +36,17 @@ const GroupLayoutPreview = () => {
   if (!layoutGroup || layoutGroup.length === 0) {
     return <LoadingStates type="empty" />;
   }
-
+  const deleteLayouts = async () => {
+    const presentationId = slug.replace('custom-','');
+    refetch();
+    router.back();
+    const response = await fetch(`/api/v1/ppt/layout-management/delete-layouts/${presentationId}`, {
+      method: "DELETE",
+    }); 
+    if (response.ok) {
+      router.push("/layout-preview");
+    }
+  }
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -62,6 +72,9 @@ const GroupLayoutPreview = () => {
               <Home className="w-4 h-4" />
               All Groups
             </Button>
+             {slug.includes('custom-') && <button className=" border border-red-200 flex justify-center items-center gap-2 text-red-700 px-4 py-1 rounded-md" onClick={() => {
+            deleteLayouts();
+          }}><Trash2 className="w-4 h-4" />Delete</button>}
           </div>
 
           <div className="text-center">
@@ -73,6 +86,7 @@ const GroupLayoutPreview = () => {
               {layoutGroup[0].groupName}
             </p>
           </div>
+         
         </div>
       </header>
 

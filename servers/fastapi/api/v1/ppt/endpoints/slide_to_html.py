@@ -73,6 +73,11 @@ class GetLayoutsResponse(BaseModel):
     message: Optional[str] = None
 
 
+class DeleteLayoutResponse(BaseModel):
+    success: bool
+    message: Optional[str] = None
+
+
 class PresentationSummary(BaseModel):
     presentation_id: str
     layout_count: int
@@ -918,3 +923,39 @@ async def get_presentations_summary(
             status_code=500,
             detail=f"Internal server error while retrieving presentations summary: {str(e)}"
         ) 
+        
+        
+        
+# ENDPOINT : Delete a layout 
+@LAYOUT_MANAGEMENT_ROUTER.delete(
+    "/delete-layouts/{presentation_id}",
+    response_model=DeleteLayoutResponse,
+    responses={
+        200: {"model": DeleteLayoutResponse, "description": "Layout deleted successfully"},
+        404: {"model": ErrorResponse, "description": "Presentation Layouts not found"},
+        500: {"model": ErrorResponse, "description": "Internal server error"}
+    }
+)
+async def delete_layouts(presentation_id: str, session: AsyncSession = Depends(get_async_session)):
+    try:
+      # Validate presentation_id format (basic UUID check)
+        if not presentation_id or len(presentation_id.strip()) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Presentation ID cannot be empty"
+            )
+        # Delete Presentation with all layouts
+        await session.execute(delete(PresentationLayoutCodeModel).where(PresentationLayoutCodeModel.presentation_id == presentation_id))
+        await session.commit()
+        return DeleteLayoutResponse(
+         success=True,
+         message=f"Successfully deleted  layout(s) for presentation {presentation_id}"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error deleting layouts for presentation {presentation_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error while deleting layouts: {str(e)}"
+        )

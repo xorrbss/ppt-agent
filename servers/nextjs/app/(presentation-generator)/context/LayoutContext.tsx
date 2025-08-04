@@ -85,7 +85,8 @@ const compileCustomLayout = (layoutCode: string, React: any, z: any) => {
     .replace(/import\s+.*\s+from\s+['"]zod['"];?/g, "")
     // remove every zod import (any style)
     .replace(/import\s+.*\s+from\s+['"]zod['"];?/g, "")
-    .replace(/const\s+[^=]*=\s*require\(['"]zod['"]\);?/g, "");
+    .replace(/const\s+[^=]*=\s*require\(['"]zod['"]\);?/g, "")
+    .replace(/Looking at this HTML structure, I can see it's a slide layout with a header, title, description, and a 2x2 grid of images with captions, plus footer elements.?/g, "")
   const compiled = Babel.transform(cleanCode, {
     presets: [
       ["react", { runtime: "classic" }],
