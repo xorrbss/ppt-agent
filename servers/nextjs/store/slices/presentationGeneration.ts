@@ -3,10 +3,7 @@ import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 
 
-export interface SlideOutline {
-  title?: string;
-  body?: string;
-}
+
 
 
 export interface PresentationData {
@@ -26,7 +23,7 @@ interface PresentationGenerationState {
   presentation_id: string | null;
   isLoading: boolean;
   isStreaming: boolean | null;
-  outlines: SlideOutline[];
+  outlines: string[];
   error: string | null;
   presentationData: PresentationData | null;
   isSlidesRendered: boolean;
@@ -63,7 +60,7 @@ const presentationGenerationSlice = createSlice({
       state.presentation_id = action.payload;
       state.error = null;
     },
-    // Slides rendered
+    // Slides rendereimport { useEffect } from "react"d
     setSlidesRendered: (state, action: PayloadAction<boolean>) => {
       state.isSlidesRendered = action.payload;
     },
@@ -80,7 +77,7 @@ const presentationGenerationSlice = createSlice({
       state.outlines = [];
     },
     // Set outlines
-    setOutlines: (state, action: PayloadAction<SlideOutline[]>) => {
+    setOutlines: (state, action: PayloadAction<string[]>) => {
       state.outlines = action.payload;
     },
     // Set presentation data

@@ -15,11 +15,14 @@ from utils.get_env import (
     get_anthropic_api_key_env,
     get_custom_llm_api_key_env,
     get_custom_llm_url_env,
+    get_disable_thinking_env,
     get_google_api_key_env,
     get_ollama_url_env,
     get_openai_api_key_env,
+    get_tool_calls_env,
 )
 from utils.llm_provider import get_llm_provider
+from utils.parsers import parse_bool_or_none
 from utils.schema_utils import ensure_strict_json_schema
 
 
@@ -28,13 +31,17 @@ class LLMClient:
         self.llm_provider = get_llm_provider()
         self._client = self._get_client()
 
-    # Supports json_schema
-    def supports_json_schema(self, model: str) -> bool:
-        if model.startswith("deepseek"):
+    # ? Use tool calls
+    def use_tool_calls(self) -> bool:
+        if self.llm_provider != LLMProvider.CUSTOM:
             return False
-        if model.startswith("claude"):
+        return parse_bool_or_none(get_tool_calls_env()) or False
+
+    # ? Disable thinking
+    def disable_thinking(self) -> bool:
+        if self.llm_provider != LLMProvider.CUSTOM:
             return False
-        return True
+        return parse_bool_or_none(get_disable_thinking_env()) or False
 
     # ? Clients
     def _get_client(self):
@@ -121,6 +128,9 @@ class LLMClient:
             model=model,
             messages=[message.model_dump() for message in messages],
             max_completion_tokens=max_tokens,
+            extra_body={
+                "enable_thinking": not self.disable_thinking(),
+            },
         )
         return response.choices[0].message.content
 
@@ -212,7 +222,7 @@ class LLMClient:
         max_tokens: Optional[int] = None,
     ):
         client: AsyncOpenAI = self._client
-        supports_json_schema = self.supports_json_schema(model)
+        use_tool_calls = self.use_tool_calls()
         response_schema = response_format
         if strict:
             response_schema = ensure_strict_json_schema(
@@ -220,7 +230,7 @@ class LLMClient:
                 path=(),
                 root=response_schema,
             )
-        if supports_json_schema:
+        if not use_tool_calls:
             response = await client.chat.completions.create(
                 model=model,
                 messages=[message.model_dump() for message in messages],
@@ -235,6 +245,9 @@ class LLMClient:
                     ),
                 },
                 max_completion_tokens=max_tokens,
+                extra_body={
+                    "enable_thinking": not self.disable_thinking(),
+                },
             )
             content = response.choices[0].message.content
         else:
@@ -254,6 +267,9 @@ class LLMClient:
                 ],
                 tool_choice="required",
                 max_completion_tokens=max_tokens,
+                extra_body={
+                    "enable_thinking": not self.disable_thinking(),
+                },
             )
             tool_calls = response.choices[0].message.tool_calls
             if tool_calls:
@@ -396,6 +412,9 @@ class LLMClient:
             model=model,
             messages=[message.model_dump() for message in messages],
             max_completion_tokens=max_tokens,
+            extra_body={
+                "enable_thinking": not self.disable_thinking(),
+            },
         ) as stream:
             async for event in stream:
                 if event.type == "content.delta":
@@ -482,7 +501,7 @@ class LLMClient:
         max_tokens: Optional[int] = None,
     ):
         client: AsyncOpenAI = self._client
-        supports_json_schema = self.supports_json_schema(model)
+        use_tool_calls = self.use_tool_calls()
         response_schema = response_format
         if strict:
             response_schema = ensure_strict_json_schema(
@@ -490,7 +509,7 @@ class LLMClient:
                 path=(),
                 root=response_schema,
             )
-        if supports_json_schema:
+        if not use_tool_calls:
             async with client.chat.completions.stream(
                 model=model,
                 messages=[message.model_dump() for message in messages],
@@ -505,6 +524,9 @@ class LLMClient:
                         },
                     }
                 ),
+                extra_body={
+                    "enable_thinking": not self.disable_thinking(),
+                },
             ) as stream:
                 async for event in stream:
                     if event.type == "content.delta":
@@ -526,6 +548,9 @@ class LLMClient:
                     }
                 ],
                 tool_choice="required",
+                extra_body={
+                    "enable_thinking": not self.disable_thinking(),
+                },
             ) as stream:
                 async for event in stream:
                     if event.type == "tool_calls.function.arguments.delta":

@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect } from "react";
 import { useDispatch } from "react-redux";
 import { toast } from "sonner";
 import { DashboardApi } from "@/app/dashboard/api/dashboard";
@@ -26,11 +26,7 @@ export const usePresentationData = (
     }
   }, [presentationId, dispatch, setLoading, setError]);
 
-  useEffect(() => {
-    fetchUserSlides();
-  }, [fetchUserSlides]);
-
   return {
     fetchUserSlides,
   };
-}; 
+};

@@ -89,6 +89,8 @@ You may want to directly provide your API KEYS as environment variables and keep
 - **CUSTOM_LLM_URL=[Custom OpenAI Compatible URL]**: Provide this if **LLM** is set to **custom**
 - **CUSTOM_LLM_API_KEY=[Custom OpenAI Compatible API KEY]**: Provide this if **LLM** is set to **custom**
 - **CUSTOM_MODEL=[Custom Model ID]**: Provide this if **LLM** is set to **custom**
+- **TOOL_CALLS=[Enable/Disable Tool Calls on Custom LLM]**: If **true**, **LLM** will use Tool Call instead of Json Schema for Structured Output.
+- **DISABLE_THINKING=[Enable/Disable Thinking on Custom LLM]**: If **true**, Thinking will be disabled.
 
 You can also set the following environment variables to customize the image generation provider and API keys:
 

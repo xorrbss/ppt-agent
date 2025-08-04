@@ -8,6 +8,7 @@ from utils.get_env import (
     get_custom_llm_api_key_env,
     get_custom_llm_url_env,
     get_custom_model_env,
+    get_disable_thinking_env,
     get_google_api_key_env,
     get_google_model_env,
     get_llm_provider_env,
@@ -16,17 +17,20 @@ from utils.get_env import (
     get_openai_api_key_env,
     get_openai_model_env,
     get_pexels_api_key_env,
+    get_tool_calls_env,
     get_user_config_path_env,
     get_image_provider_env,
     get_pixabay_api_key_env,
     get_extended_reasoning_env,
 )
+from utils.parsers import parse_bool_or_none
 from utils.set_env import (
     set_anthropic_api_key_env,
     set_anthropic_model_env,
     set_custom_llm_api_key_env,
     set_custom_llm_url_env,
     set_custom_model_env,
+    set_disable_thinking_env,
     set_extended_reasoning_env,
     set_google_api_key_env,
     set_google_model_env,
@@ -38,6 +42,7 @@ from utils.set_env import (
     set_pexels_api_key_env,
     set_image_provider_env,
     set_pixabay_api_key_env,
+    set_tool_calls_env,
 )
 
 
@@ -52,12 +57,6 @@ def get_user_config():
     except Exception as e:
         print("Error while loading user config")
         pass
-
-    new_extended_reasoning = (
-        existing_config.EXTENDED_REASONING or get_extended_reasoning_env()
-    )
-    if new_extended_reasoning is not None:
-        new_extended_reasoning = bool(new_extended_reasoning)
 
     return UserConfig(
         LLM=existing_config.LLM or get_llm_provider_env(),
@@ -77,7 +76,12 @@ def get_user_config():
         IMAGE_PROVIDER=existing_config.IMAGE_PROVIDER or get_image_provider_env(),
         PIXABAY_API_KEY=existing_config.PIXABAY_API_KEY or get_pixabay_api_key_env(),
         PEXELS_API_KEY=existing_config.PEXELS_API_KEY or get_pexels_api_key_env(),
-        EXTENDED_REASONING=new_extended_reasoning,
+        TOOL_CALLS=existing_config.TOOL_CALLS
+        or parse_bool_or_none(get_tool_calls_env()),
+        DISABLE_THINKING=existing_config.DISABLE_THINKING
+        or parse_bool_or_none(get_disable_thinking_env()),
+        EXTENDED_REASONING=existing_config.EXTENDED_REASONING
+        or parse_bool_or_none(get_extended_reasoning_env()),
     )
 
 
@@ -113,6 +117,10 @@ def update_env_with_user_config():
         set_pixabay_api_key_env(user_config.PIXABAY_API_KEY)
     if user_config.PEXELS_API_KEY:
         set_pexels_api_key_env(user_config.PEXELS_API_KEY)
+    if user_config.TOOL_CALLS:
+        set_tool_calls_env(str(user_config.TOOL_CALLS))
+    if user_config.DISABLE_THINKING:
+        set_disable_thinking_env(str(user_config.DISABLE_THINKING))
     if user_config.EXTENDED_REASONING:
         if user_config.EXTENDED_REASONING:
             set_extended_reasoning_env(str(user_config.EXTENDED_REASONING))

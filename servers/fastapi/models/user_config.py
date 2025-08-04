@@ -32,4 +32,6 @@ class UserConfig(BaseModel):
     PIXABAY_API_KEY: Optional[str] = None
 
     # Reasoning
+    TOOL_CALLS: Optional[bool] = None
+    DISABLE_THINKING: Optional[bool] = None
     EXTENDED_REASONING: Optional[bool] = None

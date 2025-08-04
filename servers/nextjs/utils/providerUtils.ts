@@ -1,3 +1,5 @@
+import { LLMConfig } from "@/types/llm_config";
+
 export interface OllamaModel {
   label: string;
   value: string;
@@ -12,42 +14,6 @@ export interface DownloadingModel {
   downloaded: number | null;
   status: string;
   done: boolean;
-}
-
-export interface LLMConfig {
-  LLM?: string;
-
-  // OpenAI
-  OPENAI_API_KEY?: string;
-  OPENAI_MODEL?: string;
-
-  // Google
-  GOOGLE_API_KEY?: string;
-  GOOGLE_MODEL?: string;
-
-  // Anthropic
-  ANTHROPIC_API_KEY?: string;
-  ANTHROPIC_MODEL?: string;
-
-  // Ollama
-  OLLAMA_URL?: string;
-  OLLAMA_MODEL?: string;
-
-  // Custom LLM
-  CUSTOM_LLM_URL?: string;
-  CUSTOM_LLM_API_KEY?: string;
-  CUSTOM_MODEL?: string;
-
-  // Image providers
-  IMAGE_PROVIDER?: string;
-  PEXELS_API_KEY?: string;
-  PIXABAY_API_KEY?: string;
-
-  // Extended reasoning
-  EXTENDED_REASONING?: boolean;
-
-  // Only used in UI settings
-  USE_CUSTOM_URL?: boolean;
 }
 
 export interface OllamaModelsResult {
@@ -78,8 +44,10 @@ export const updateLLMConfig = (
     pexels_api_key: "PEXELS_API_KEY",
     pixabay_api_key: "PIXABAY_API_KEY",
     image_provider: "IMAGE_PROVIDER",
-    extended_reasoning: "EXTENDED_REASONING",
     use_custom_url: "USE_CUSTOM_URL",
+    tool_calls: "TOOL_CALLS",
+    disable_thinking: "DISABLE_THINKING",
+    extended_reasoning: "EXTENDED_REASONING",
   };
 
   const configKey = fieldMappings[field];

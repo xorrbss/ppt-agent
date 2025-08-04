@@ -19,11 +19,11 @@ import AnthropicConfig from "./AnthropicConfig";
 import OllamaConfig from "./OllamaConfig";
 import CustomConfig from "./CustomConfig";
 import {
-  LLMConfig,
   updateLLMConfig,
   changeProvider as changeProviderUtil,
 } from "@/utils/providerUtils";
 import { IMAGE_PROVIDERS, LLM_PROVIDERS } from "@/utils/providerConstants";
+import { LLMConfig } from "@/types/llm_config";
 
 // Button state interface
 interface ButtonState {
@@ -188,6 +188,8 @@ export default function LLMProviderSelection({
               customLlmUrl={llmConfig.CUSTOM_LLM_URL || ""}
               customLlmApiKey={llmConfig.CUSTOM_LLM_API_KEY || ""}
               customModel={llmConfig.CUSTOM_MODEL || ""}
+              toolCalls={llmConfig.TOOL_CALLS || false}
+              disableThinking={llmConfig.DISABLE_THINKING || false}
               onInputChange={input_field_changed}
             />
           </TabsContent>

@@ -19,7 +19,7 @@ const comparisonSectionSchema = z.object({
 });
 
 const comparisonSchema = z.object({
-  title: z.string().min(3).max(100).default('Key Commodities in Focus').meta({
+  title: z.string().min(3).max(80).default('Key Commodities in Focus').meta({
     description: "Main title of the slide",
   }),
   comparisonSections: z.array(comparisonSectionSchema).min(2).max(2).default([

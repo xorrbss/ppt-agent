@@ -13,18 +13,23 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { Switch } from "./ui/switch";
 
 interface CustomConfigProps {
   customLlmUrl: string;
   customLlmApiKey: string;
   customModel: string;
-  onInputChange: (value: string, field: string) => void;
+  toolCalls: boolean;
+  disableThinking: boolean;
+  onInputChange: (value: string | boolean, field: string) => void;
 }
 
 export default function CustomConfig({
   customLlmUrl,
   customLlmApiKey,
   customModel,
+  toolCalls,
+  disableThinking,
   onInputChange,
 }: CustomConfigProps) {
   const [customModels, setCustomModels] = useState<string[]>([]);
@@ -225,6 +230,39 @@ export default function CustomConfig({
           </div>
         </div>
       )}
-    </div>
+
+      {/* Tool Calls Toggle */}
+      <div>
+        <div className="flex items-center justify-between mb-4 bg-green-50 p-2 rounded-sm">
+          <label className="text-sm font-medium text-gray-700">
+            Use Tool Calls
+          </label>
+          <Switch
+            checked={toolCalls}
+            onCheckedChange={(checked) => onInputChange(checked, "tool_calls")}
+          />
+        </div>
+        <p className="mt-2 text-sm text-gray-500 flex items-center gap-2">
+          <span className="block w-1 h-1 rounded-full bg-gray-400"></span>
+          If enabled, Tool Calls will be used instead of JSON Schema for Structured Output.
+        </p>
+      </div>
+      {/* Disable Thinking Toggle */}
+      <div>
+        <div className="flex items-center justify-between mb-4 bg-green-50 p-2 rounded-sm">
+          <label className="text-sm font-medium text-gray-700">
+            Disable Thinking
+          </label>
+          <Switch
+            checked={disableThinking}
+            onCheckedChange={(checked) => onInputChange(checked, "disable_thinking")}
+          />
+        </div>
+        <p className="mt-2 text-sm text-gray-500 flex items-center gap-2">
+          <span className="block w-1 h-1 rounded-full bg-gray-400"></span>
+          If enabled, Thinking will be disabled.
+        </p>
+      </div>
+    </div >
   );
 } 

@@ -14,10 +14,10 @@ const metricItemSchema = z.object({
 });
 
 const metricsSchema = z.object({
-  title: z.string().min(3).max(100).default('Top Export Destinations').meta({
+  title: z.string().min(3).max(80).default('Top Export Destinations').meta({
     description: "Main title of the slide",
   }),
-  description: z.string().min(10).max(200).default('Nepal exports 760 products to 132 countries, with a strong focus on regional trade.').meta({
+  description: z.string().min(10).max(120).default('Nepal exports 760 products to 132 countries, with a strong focus on regional trade.').meta({
     description: "Description text",
   }),
   metrics: z.array(metricItemSchema).min(2).max(6).default([
