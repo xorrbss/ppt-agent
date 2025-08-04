@@ -7,12 +7,12 @@ export const layoutName = 'Classic Dark Bullet Point with Description'
 export const layoutDescription = 'A modern slide with dark background, image on the left (2/5), and bullet points with descriptions in boxes on the right (3/5).'
 
 const bulletPointSchema = z.object({
-  title: z.string().min(3).max(80).meta({ description: "Bullet point title" }),
-  content: z.string().min(10).max(150).meta({ description: "Bullet point content (max 150 characters)" }),
+  title: z.string().min(3).max(60).meta({ description: "Bullet point title" }),
+  content: z.string().min(10).max(120).meta({ description: "Bullet point content (max 150 characters)" }),
 });
 
 const bulletPointWithDescriptionSchema = z.object({
-  title: z.string().min(3).max(100).default('Trade Policies and Challenges').meta({
+  title: z.string().min(3).max(80).default('Trade Policies and Challenges').meta({
     description: "Main title of the slide",
   }),
   bulletPoints: z.array(bulletPointSchema).min(2).max(3).default([

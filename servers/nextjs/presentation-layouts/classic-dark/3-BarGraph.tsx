@@ -8,15 +8,15 @@ export const layoutName = 'Classic Dark Bar Graph'
 export const layoutDescription = 'A modern slide with dark background, gradient title, bar chart visualization, and footer text.'
 
 const barDataSchema = z.object({
-  name: z.string().meta({ description: "Product name" }),
+  name: z.string().min(2).max(30).meta({ description: "Product name" }),
   value: z.number().meta({ description: "Export value in millions" }),
 });
 
 const barGraphSchema = z.object({
-  title: z.string().min(3).max(100).default('Export Overview: Key Products').meta({
+  title: z.string().min(3).max(80).default('Export Overview: Key Products').meta({
     description: "Main title of the slide",
   }),
-  description: z.string().min(10).max(150).default('Nepal\'s total exports were $1.3 billion in 2022, a 21% decrease from 2021, but showed a 47.5% YoY increase by Nov 2024.').meta({
+  description: z.string().min(10).max(120).default('Nepal\'s total exports were $1.3 billion in 2022, a 21% decrease from 2021, but showed a 47.5% YoY increase by Nov 2024.').meta({
     description: "Description text",
   }),
   chartData: z.array(barDataSchema).min(2).max(6).default([

@@ -8,15 +8,15 @@ export const layoutName = 'Classic Dark Pie Chart and Metrics'
 export const layoutDescription = 'A modern slide with dark background, metrics on the left, and pie chart visualization on the right.'
 
 const chartDataSchema = z.object({
-  name: z.string().meta({ description: "Data point name" }),
+  name: z.string().min(2).max(30).meta({ description: "Data point name" }),
   value: z.number().meta({ description: "Data point value" }),
 });
 
 const pieChartAndMetricsSchema = z.object({
-  title: z.string().min(3).max(100).default('Introduction to Nepal\'s Trade').meta({
+  title: z.string().min(3).max(80).default('Introduction to Nepal\'s Trade').meta({
     description: "Main title of the slide",
   }),
-  description: z.string().min(10).max(200).default('Nepal\'s landlocked geography heavily influences its trade, fostering reliance on India and China.').meta({
+  description: z.string().min(10).max(100).default('Nepal\'s landlocked geography heavily influences its trade, fostering reliance on India and China.').meta({
     description: "Description text",
   }),
   metrics: z.array(z.object({
@@ -37,13 +37,7 @@ const pieChartAndMetricsSchema = z.object({
     { name: 'Other GDP', value: 50.6 },
   ]).meta({
     description: "Pie chart data",
-  }),
-  showLegend: z.boolean().default(true).meta({
-    description: "Whether to show chart legend",
-  }),
-  showTooltip: z.boolean().default(true).meta({
-    description: "Whether to show chart tooltip",
-  }),
+  })
 })
 
 const chartConfig = {
@@ -70,7 +64,7 @@ interface PieChartAndMetricsLayoutProps {
 }
 
 const PieChartAndMetricsLayout: React.FC<PieChartAndMetricsLayoutProps> = ({ data: slideData }) => {
-  const { title, description, metrics, chartData, showLegend = true, showTooltip = true } = slideData;
+  const { title, description, metrics, chartData } = slideData;
 
   const CustomLegend = () => (
     <div className="flex justify-center space-x-8 mt-4">
@@ -89,7 +83,7 @@ const PieChartAndMetricsLayout: React.FC<PieChartAndMetricsLayoutProps> = ({ dat
   const renderPieChart = () => {
     return (
       <PieChart>
-        {showTooltip && <ChartTooltip content={<ChartTooltipContent />} />}
+        <ChartTooltip content={<ChartTooltipContent />} />
         <Pie
           data={chartData}
           fill="#8b5cf6"
@@ -149,7 +143,7 @@ const PieChartAndMetricsLayout: React.FC<PieChartAndMetricsLayoutProps> = ({ dat
             <ChartContainer config={chartConfig} className="h-[500px] w-[500px]">
               {renderPieChart()}
             </ChartContainer>
-            {showLegend && <CustomLegend />}
+            <CustomLegend />
           </div>
         </div>
       </div>
