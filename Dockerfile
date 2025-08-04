@@ -17,13 +17,17 @@ WORKDIR /app
 # Set environment variables
 ENV APP_DATA_DIRECTORY=/app_data
 ENV TEMP_DIRECTORY=/tmp/presenton
+ENV PYTHONPATH="${PYTHONPATH}:/app/servers/fastapi"
+
 
 # Install ollama
 RUN curl -fsSL https://ollama.com/install.sh | sh
 
 # Install dependencies for FastAPI
-COPY servers/fastapi/requirements.txt ./
-RUN pip install -r requirements.txt
+RUN pip install aiohttp aiomysql asyncpg fastapi[standard] \
+    pathvalidate pdfplumber nltk chromadb sqlmodel redis \
+    anthropic google-genai openai fastmcp
+RUN pip install docling --extra-index-url https://download.pytorch.org/whl/cpu
 
 # Install dependencies for Next.js
 WORKDIR /app/servers/nextjs

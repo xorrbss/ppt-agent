@@ -78,6 +78,13 @@ async def stream_outlines(
         ]
 
         presentation.outlines = presentation_outlines.model_dump()
+        presentation.title = (
+            presentation_outlines.slides[0][:50]
+            .replace("#", "")
+            .replace("/", "")
+            .replace("\\", "")
+            .replace("\n", "")
+        )
 
         sql_session.add(presentation)
         await sql_session.commit()
