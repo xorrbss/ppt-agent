@@ -20,6 +20,7 @@ interface CustomConfigProps {
   customLlmApiKey: string;
   customModel: string;
   toolCalls: boolean;
+  disableThinking: boolean;
   onInputChange: (value: string | boolean, field: string) => void;
 }
 
@@ -28,6 +29,7 @@ export default function CustomConfig({
   customLlmApiKey,
   customModel,
   toolCalls,
+  disableThinking,
   onInputChange,
 }: CustomConfigProps) {
   const [customModels, setCustomModels] = useState<string[]>([]);
@@ -229,7 +231,7 @@ export default function CustomConfig({
         </div>
       )}
 
-      {/* Extended Reasoning Toggle */}
+      {/* Tool Calls Toggle */}
       <div>
         <div className="flex items-center justify-between mb-4 bg-green-50 p-2 rounded-sm">
           <label className="text-sm font-medium text-gray-700">
@@ -242,9 +244,25 @@ export default function CustomConfig({
         </div>
         <p className="mt-2 text-sm text-gray-500 flex items-center gap-2">
           <span className="block w-1 h-1 rounded-full bg-gray-400"></span>
-          Enable extended reasoning for more detailed and thorough responses
+          If enabled, Tool Calls will be used instead of JSON Schema for Structured Output.
         </p>
       </div>
-    </div>
+      {/* Disable Thinking Toggle */}
+      <div>
+        <div className="flex items-center justify-between mb-4 bg-green-50 p-2 rounded-sm">
+          <label className="text-sm font-medium text-gray-700">
+            Disable Thinking
+          </label>
+          <Switch
+            checked={disableThinking}
+            onCheckedChange={(checked) => onInputChange(checked, "disable_thinking")}
+          />
+        </div>
+        <p className="mt-2 text-sm text-gray-500 flex items-center gap-2">
+          <span className="block w-1 h-1 rounded-full bg-gray-400"></span>
+          If enabled, Thinking will be disabled.
+        </p>
+      </div>
+    </div >
   );
 } 
