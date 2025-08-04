@@ -1,12 +1,14 @@
 import json
 from typing import List
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.ppt.background_tasks import pull_ollama_model_background_task
 from constants.supported_ollama_models import SUPPORTED_OLLAMA_MODELS
 from models.ollama_model_metadata import OllamaModelMetadata
 from models.ollama_model_status import OllamaModelStatus
-from services import REDIS_SERVICE
+from models.sql.ollama_pull_status import OllamaPullStatus
+from services.database import get_container_db_async_session
 from utils.ollama import list_pulled_ollama_models
 
 OLLAMA_ROUTER = APIRouter(prefix="/ollama", tags=["Ollama"])
@@ -23,7 +25,11 @@ async def get_available_models():
 
 
 @OLLAMA_ROUTER.get("/model/pull", response_model=OllamaModelStatus)
-async def pull_model(model: str, background_tasks: BackgroundTasks):
+async def pull_model(
+    model: str,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_container_db_async_session),
+):
 
     if model not in SUPPORTED_OLLAMA_MODELS:
         raise HTTPException(
@@ -46,21 +52,25 @@ async def pull_model(model: str, background_tasks: BackgroundTasks):
             detail=f"Failed to check pulled models: {e}",
         )
 
-    saved_model_status = REDIS_SERVICE.get(f"ollama_models/{model}")
+    saved_model_status = None
+    try:
+        result = await session.get(OllamaPullStatus, model)
+        saved_model_status = result.status
+    except Exception as e:
+        pass
 
     # If the model is being pulled, return the model
     if saved_model_status:
-        saved_model_status_json = json.loads(saved_model_status)
         # If the model is being pulled, return the model
         # ? If the model status is pulled in redis but was not found while listing pulled models,
         # ? it means the model was deleted and we need to pull it again
         if (
-            saved_model_status_json["status"] == "error"
-            or saved_model_status_json["status"] == "pulled"
+            saved_model_status["status"] == "error"
+            or saved_model_status["status"] == "pulled"
         ):
-            REDIS_SERVICE.delete(f"ollama_models/{model}")
+            await session.delete(OllamaPullStatus, model)
         else:
-            return saved_model_status_json
+            return saved_model_status
 
     # If the model is not being pulled, pull the model
     background_tasks.add_task(pull_ollama_model_background_task, model)

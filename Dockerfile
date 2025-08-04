@@ -3,8 +3,7 @@ FROM python:3.11-slim-bookworm
 # Install Node.js and npm
 RUN apt-get update && apt-get install -y \
     nginx \
-    curl \
-    redis-server
+    curl
 
 # Install Node.js 20 using NodeSource repository
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
@@ -25,7 +24,7 @@ RUN curl -fsSL https://ollama.com/install.sh | sh
 
 # Install dependencies for FastAPI
 RUN pip install aiohttp aiomysql aiosqlite asyncpg fastapi[standard] \
-    pathvalidate pdfplumber nltk chromadb sqlmodel redis \
+    pathvalidate pdfplumber nltk chromadb sqlmodel \
     anthropic google-genai openai fastmcp
 RUN pip install docling --extra-index-url https://download.pytorch.org/whl/cpu
 

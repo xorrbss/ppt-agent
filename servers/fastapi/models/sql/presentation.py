@@ -1,15 +1,16 @@
 from datetime import datetime
 from typing import List, Optional
 from sqlalchemy import JSON, Column, DateTime
-from sqlmodel import SQLModel, Field
+from sqlmodel import Field
 
 from models.presentation_layout import PresentationLayoutModel
 from models.presentation_outline_model import PresentationOutlineModel
 from models.presentation_structure_model import PresentationStructureModel
+from services.database import MAIN_DB_BASE
 from utils.randomizers import get_random_uuid
 
 
-class PresentationModel(SQLModel, table=True):
+class PresentationModel(MAIN_DB_BASE, table=True):
     id: str = Field(primary_key=True)
     prompt: str
     n_slides: int
