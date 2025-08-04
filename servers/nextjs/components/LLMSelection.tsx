@@ -188,6 +188,7 @@ export default function LLMProviderSelection({
               customLlmUrl={llmConfig.CUSTOM_LLM_URL || ""}
               customLlmApiKey={llmConfig.CUSTOM_LLM_API_KEY || ""}
               customModel={llmConfig.CUSTOM_MODEL || ""}
+              toolCalls={llmConfig.TOOL_CALLS || false}
               onInputChange={input_field_changed}
             />
           </TabsContent>

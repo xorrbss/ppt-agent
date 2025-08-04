@@ -37,6 +37,7 @@ export interface LLMConfig {
   CUSTOM_LLM_URL?: string;
   CUSTOM_LLM_API_KEY?: string;
   CUSTOM_MODEL?: string;
+  TOOL_CALLS?: boolean;
 
   // Image providers
   IMAGE_PROVIDER?: string;
@@ -75,6 +76,7 @@ export const updateLLMConfig = (
     custom_llm_url: "CUSTOM_LLM_URL",
     custom_llm_api_key: "CUSTOM_LLM_API_KEY",
     custom_model: "CUSTOM_MODEL",
+    tool_calls: "TOOL_CALLS",
     pexels_api_key: "PEXELS_API_KEY",
     pixabay_api_key: "PIXABAY_API_KEY",
     image_provider: "IMAGE_PROVIDER",

@@ -24,7 +24,7 @@ ENV PYTHONPATH="${PYTHONPATH}:/app/servers/fastapi"
 RUN curl -fsSL https://ollama.com/install.sh | sh
 
 # Install dependencies for FastAPI
-RUN pip install aiohttp aiomysql asyncpg fastapi[standard] \
+RUN pip install aiohttp aiomysql aiosqlite asyncpg fastapi[standard] \
     pathvalidate pdfplumber nltk chromadb sqlmodel redis \
     anthropic google-genai openai fastmcp
 RUN pip install docling --extra-index-url https://download.pytorch.org/whl/cpu

@@ -13,18 +13,21 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { Switch } from "./ui/switch";
 
 interface CustomConfigProps {
   customLlmUrl: string;
   customLlmApiKey: string;
   customModel: string;
-  onInputChange: (value: string, field: string) => void;
+  toolCalls: boolean;
+  onInputChange: (value: string | boolean, field: string) => void;
 }
 
 export default function CustomConfig({
   customLlmUrl,
   customLlmApiKey,
   customModel,
+  toolCalls,
   onInputChange,
 }: CustomConfigProps) {
   const [customModels, setCustomModels] = useState<string[]>([]);
@@ -225,6 +228,23 @@ export default function CustomConfig({
           </div>
         </div>
       )}
+
+      {/* Extended Reasoning Toggle */}
+      <div>
+        <div className="flex items-center justify-between mb-4 bg-green-50 p-2 rounded-sm">
+          <label className="text-sm font-medium text-gray-700">
+            Use Tool Calls
+          </label>
+          <Switch
+            checked={toolCalls}
+            onCheckedChange={(checked) => onInputChange(checked, "tool_calls")}
+          />
+        </div>
+        <p className="mt-2 text-sm text-gray-500 flex items-center gap-2">
+          <span className="block w-1 h-1 rounded-full bg-gray-400"></span>
+          Enable extended reasoning for more detailed and thorough responses
+        </p>
+      </div>
     </div>
   );
 } 
