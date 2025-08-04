@@ -11,6 +11,7 @@ system_prompt = """
 
     - Provide content for each slide in markdown format.
     - Make sure that flow of the presentation is logical and consistent.
+    - Place greater emphasis on numerical data.
     - If Additional Information is provided, divide it into slides.
     - Make sure that content follows language guidelines.
 """

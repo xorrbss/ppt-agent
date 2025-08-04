@@ -28,12 +28,6 @@ const barGraphSchema = z.object({
   ]).meta({
     description: "Bar chart data",
   }),
-  showLegend: z.boolean().default(true).meta({
-    description: "Whether to show chart legend",
-  }),
-  showTooltip: z.boolean().default(true).meta({
-    description: "Whether to show chart tooltip",
-  }),
 })
 
 const chartConfig = {
@@ -62,7 +56,7 @@ interface BarGraphLayoutProps {
 }
 
 const BarGraphLayout: React.FC<BarGraphLayoutProps> = ({ data: slideData }) => {
-  const { title, description, chartData, showLegend = false, showTooltip = true } = slideData;
+  const { title, description, chartData } = slideData;
 
   const CustomLegend = () => (
     <div className="flex justify-center space-x-8 mt-8">
@@ -98,9 +92,9 @@ const BarGraphLayout: React.FC<BarGraphLayoutProps> = ({ data: slideData }) => {
         />
         <YAxis
           tick={{ fill: '#ffffff', fontSize: 16, fontWeight: 600 }}
-          tickFormatter={(value) => `$${value.toFixed(0)}.00`}
+          tickFormatter={(value) => value.toFixed(0)}
         />
-        {showTooltip && <ChartTooltip content={<ChartTooltipContent />} />}
+        <ChartTooltip content={<ChartTooltipContent />} />
         <Bar
           dataKey="value"
           fill="#8b5cf6"
@@ -141,7 +135,7 @@ const BarGraphLayout: React.FC<BarGraphLayoutProps> = ({ data: slideData }) => {
             <ChartContainer config={chartConfig} className="h-[300px] w-full">
               {renderBarChart()}
             </ChartContainer>
-            {showLegend && <CustomLegend />}
+            <CustomLegend />
           </div>
         </div>
       </div>
