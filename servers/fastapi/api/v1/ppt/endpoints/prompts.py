@@ -10,7 +10,7 @@ Follow these rules strictly:
 - Properly export shapes as exact SVG.
 - Add relevant font in tailwind to all texts.   
 - Wrap the output code inside these classes: \"relative w-full rounded-sm max-w-[1280px] shadow-lg max-h-[720px] aspect-video bg-white relative z-20 mx-auto overflow-hidden\". 
-- For image use this one: /static/images/placeholder.jpg
+- For image everywhere use /static/images/placeholder.jpg
 - Image should never be inside of a SVG.
 - Give out only HTML and Tailwind code. No other texts or explanations.
  """
