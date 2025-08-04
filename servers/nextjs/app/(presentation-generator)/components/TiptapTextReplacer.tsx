@@ -76,12 +76,14 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
         // Replace the element
         htmlElement.parentNode?.replaceChild(tiptapContainer, htmlElement);
         // Mark as processed
+        htmlElement.innerHTML = "";
         setProcessedElements((prev) => new Set(prev).add(htmlElement));
         // Render TiptapText
         const root = ReactDOM.createRoot(tiptapContainer);
         root.render(
           <TiptapText
             content={trimmedText}
+            element={htmlElement}
             tag={htmlElement.tagName}
             onContentChange={(content: string) => {
               if (dataPath && onContentChange) {

@@ -18,11 +18,13 @@ interface TiptapTextProps {
   onContentChange?: (content: string) => void;
   className?: string;
   placeholder?: string;
+  element?: HTMLElement;
   tag?: "H1" | "H2" | "H3" | "H4" | "H5" | "H6" | "P" | "SPAN" | "DIV" | any;
 }
 
 const TiptapText: React.FC<TiptapTextProps> = ({
   content,
+  element,
   onContentChange,
   className = "",
   placeholder = "Enter text...",
