@@ -2,13 +2,12 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import JSON, Column, DateTime
-from sqlmodel import Field
+from sqlmodel import Field, SQLModel
 
-from services.database import MAIN_DB_BASE
 from utils.randomizers import get_random_uuid
 
 
-class ImageAsset(MAIN_DB_BASE, table=True):
+class ImageAsset(SQLModel, table=True):
     id: str = Field(default_factory=get_random_uuid, primary_key=True)
     created_at: datetime = Field(sa_column=Column(DateTime, default=datetime.now))
     path: str

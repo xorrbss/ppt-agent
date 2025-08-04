@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 import json
 from typing import List
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -52,10 +53,11 @@ async def pull_model(
             detail=f"Failed to check pulled models: {e}",
         )
 
+    saved_pull_status = None
     saved_model_status = None
     try:
-        result = await session.get(OllamaPullStatus, model)
-        saved_model_status = result.status
+        saved_pull_status = await session.get(OllamaPullStatus, model)
+        saved_model_status = saved_pull_status.status
     except Exception as e:
         pass
 
@@ -67,8 +69,9 @@ async def pull_model(
         if (
             saved_model_status["status"] == "error"
             or saved_model_status["status"] == "pulled"
+            or saved_pull_status.last_updated < (datetime.now() - timedelta(seconds=10))
         ):
-            await session.delete(OllamaPullStatus, model)
+            await session.delete(saved_pull_status)
         else:
             return saved_model_status
 

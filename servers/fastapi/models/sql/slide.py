@@ -1,11 +1,10 @@
 from typing import Optional
-from sqlmodel import Field, Column, JSON
+from sqlmodel import Field, Column, JSON, SQLModel
 
-from services.database import MAIN_DB_BASE
 from utils.randomizers import get_random_uuid
 
 
-class SlideModel(MAIN_DB_BASE, table=True):
+class SlideModel(SQLModel, table=True):
     id: str = Field(primary_key=True, default_factory=get_random_uuid)
     presentation: str
     layout_group: str

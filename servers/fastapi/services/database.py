@@ -6,12 +6,10 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     AsyncSession,
 )
-from sqlalchemy.orm import DeclarativeBase
+from sqlmodel import SQLModel
 
 from utils.get_env import get_app_data_directory_env, get_database_url_env
 
-
-MAIN_DB_BASE = DeclarativeBase()
 
 raw_database_url = get_database_url_env() or "sqlite:///" + os.path.join(
     get_app_data_directory_env() or "/tmp/presenton", "fastapi.db"
@@ -40,8 +38,6 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 # Container DB (Lives inside the container)
-CONTAINER_DB_BASE = DeclarativeBase()
-
 container_db_url = "sqlite+aiosqlite:////app/container.db"
 container_db_engine: AsyncEngine = create_async_engine(
     container_db_url, connect_args={"check_same_thread": False}
@@ -59,7 +55,7 @@ async def get_container_db_async_session() -> AsyncGenerator[AsyncSession, None]
 # Create Database and Tables
 async def create_db_and_tables():
     async with sql_engine.begin() as conn:
-        await conn.run_sync(MAIN_DB_BASE.metadata.create_all)
+        await conn.run_sync(SQLModel.metadata.create_all)
 
     async with container_db_engine.begin() as conn:
-        await conn.run_sync(CONTAINER_DB_BASE.metadata.create_all)
+        await conn.run_sync(SQLModel.metadata.create_all)
