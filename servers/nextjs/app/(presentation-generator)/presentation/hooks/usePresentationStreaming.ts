@@ -6,7 +6,7 @@ import {
   setStreaming,
 } from "@/store/slices/presentationGeneration";
 import { jsonrepair } from "jsonrepair";
-import { RootState } from "@/store/store";
+import { toast } from "sonner";
 
 export const usePresentationStreaming = (
   presentationId: string,
@@ -89,6 +89,17 @@ export const usePresentationStreaming = (
             newUrl.searchParams.delete("stream");
             window.history.replaceState({}, "", newUrl.toString());
             break;
+          case "error":
+            eventSource.close();
+            toast.error("Error in outline streaming", {
+              description:
+                data.detail ||
+                "Failed to connect to the server. Please try again.",
+            });
+            setLoading(false);
+            dispatch(setStreaming(false));
+            setError(true);
+             break;
         }
       });
 

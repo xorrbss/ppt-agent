@@ -148,7 +148,7 @@ const DocumentsPreviewPage: React.FC = () => {
       });
 
       dispatch(setPresentationId(createResponse.id));
-      router.push("/outline");
+      router.replace("/outline");
     } catch (error: any) {
       console.error("Error in radar presentation creation:", error);
       toast.error('Error', {
