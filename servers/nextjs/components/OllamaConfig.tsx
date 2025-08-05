@@ -18,7 +18,6 @@ import { toast } from "sonner";
 interface OllamaModel {
   label: string;
   value: string;
-  description: string;
   size: string;
   icon: string;
 }
@@ -206,9 +205,6 @@ export default function OllamaConfig({
                                   {model.size}
                                 </span>
                               </div>
-                              <span className="text-xs text-gray-600 leading-relaxed">
-                                {model.description}
-                              </span>
                             </div>
                           </div>
                         </CommandItem>
