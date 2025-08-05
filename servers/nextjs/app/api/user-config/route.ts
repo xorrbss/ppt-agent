@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import fs from "fs";
+import { LLMConfig } from "@/types/llm_config";
 
 const userConfigPath = process.env.USER_CONFIG_PATH!;
 const canChangeKeys = process.env.CAN_CHANGE_KEYS !== "false";
@@ -50,14 +51,16 @@ export async function POST(request: Request) {
       userConfig.PIXABAY_API_KEY || existingConfig.PIXABAY_API_KEY,
     IMAGE_PROVIDER: userConfig.IMAGE_PROVIDER || existingConfig.IMAGE_PROVIDER,
     PEXELS_API_KEY: userConfig.PEXELS_API_KEY || existingConfig.PEXELS_API_KEY,
-    USE_CUSTOM_URL:
-      userConfig.USE_CUSTOM_URL === undefined
-        ? existingConfig.USE_CUSTOM_URL
-        : userConfig.USE_CUSTOM_URL,
+    TOOL_CALLS: userConfig.TOOL_CALLS === undefined ? existingConfig.TOOL_CALLS : userConfig.TOOL_CALLS,
+    DISABLE_THINKING: userConfig.DISABLE_THINKING === undefined ? existingConfig.DISABLE_THINKING : userConfig.DISABLE_THINKING,
     EXTENDED_REASONING:
       userConfig.EXTENDED_REASONING === undefined
         ? existingConfig.EXTENDED_REASONING
         : userConfig.EXTENDED_REASONING,
+    USE_CUSTOM_URL:
+      userConfig.USE_CUSTOM_URL === undefined
+        ? existingConfig.USE_CUSTOM_URL
+        : userConfig.USE_CUSTOM_URL,
   };
   fs.writeFileSync(userConfigPath, JSON.stringify(mergedConfig));
   return NextResponse.json(mergedConfig);

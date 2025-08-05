@@ -3,14 +3,14 @@ import { CSS } from "@dnd-kit/utilities"
 import { Trash2 } from "lucide-react"
 import { RootState } from "@/store/store"
 import { useDispatch, useSelector } from "react-redux"
-import { deleteSlideOutline, setOutlines, SlideOutline } from "@/store/slices/presentationGeneration"
+import { deleteSlideOutline, setOutlines } from "@/store/slices/presentationGeneration"
 import ToolTip from "@/components/ToolTip"
 import MarkdownEditor from "../../components/MarkdownEditor"
 import { useEffect } from "react"
 
 
 interface OutlineItemProps {
-    slideOutline: SlideOutline,
+    slideOutline: string,
     index: number
     isStreaming: boolean
 }
@@ -26,7 +26,7 @@ export function OutlineItem({
     const dispatch = useDispatch()
 
     useEffect(() => {
-        if (isStreaming && slideOutline.body) {
+        if (isStreaming && slideOutline) {
             const outlineItem = document.getElementById(`outline-item-${index}`);
             if (outlineItem) {
                 outlineItem.scrollIntoView({
@@ -38,7 +38,7 @@ export function OutlineItem({
         }
     }, [outlines.length]);
 
-    const handleSlideChange = (newOutline: SlideOutline) => {
+    const handleSlideChange = (newOutline: string) => {
         if (isStreaming) return;
         const newData = outlines?.map((each, idx) => {
             if (idx === index - 1) {
@@ -60,7 +60,7 @@ export function OutlineItem({
         transform,
         transition,
         isDragging,
-    } = useSortable({ id: slideOutline.title || index })
+    } = useSortable({ id: index })
 
     const style = {
         transform: CSS.Transform.toString(transform),
@@ -96,24 +96,16 @@ export function OutlineItem({
 
                 {/* Main Title Input - Add onFocus handler */}
                 <div id={`outline-item-${index}`} className="flex flex-col basis-full gap-2">
-                    <input
-                        type="text"
-                        defaultValue={slideOutline.title || ''}
-                        onBlur={(e) => handleSlideChange({ ...slideOutline, title: e.target.value })}
-                        className="text-lg mt-4 sm:text-xl flex-1 font-semibold bg-transparent outline-none"
-                        placeholder="Title goes here"
-                    />
-
                     {/* Editable Markdown Content */}
                     {isStreaming ? <textarea
-                        defaultValue={slideOutline.body || ''}
-                        onBlur={(e) => handleSlideChange({ ...slideOutline, body: e.target.value })}
+                        defaultValue={slideOutline || ''}
+                        onBlur={(e) => handleSlideChange(e.target.value)}
                         className="text-sm  flex-1 font-normal bg-transparent outline-none overflow-y-hidden"
                         placeholder="Content goes here"
                     /> : <MarkdownEditor
                         key={index}
-                        content={slideOutline.body || ''}
-                        onChange={(content) => handleSlideChange({ ...slideOutline, body: content })}
+                        content={slideOutline || ''}
+                        onChange={(content) => handleSlideChange(content)}
                     />}
 
                 </div>

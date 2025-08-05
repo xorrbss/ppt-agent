@@ -207,7 +207,7 @@ const DocumentsPreviewPage: React.FC = () => {
 
     return (
       <div className={`border-r border-gray-200 fixed xl:relative w-full z-50 xl:z-auto
-        transition-all duration-300 ease-in-out max-w-[200px] md:max-w-[300px] h-[85vh] rounded-md p-5`}>
+        transition-all duration-300 bg-white ease-in-out max-w-[200px] md:max-w-[300px] h-[85vh] rounded-md p-5`}>
         <X
           onClick={() => setIsOpen(false)}
           className="text-black mb-4 ml-auto mr-0 cursor-pointer hover:text-gray-600"

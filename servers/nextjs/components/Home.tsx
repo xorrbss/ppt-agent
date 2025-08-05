@@ -9,9 +9,9 @@ import { handleSaveLLMConfig } from "@/utils/storeHelpers";
 import LLMProviderSelection from "./LLMSelection";
 import {
   checkIfSelectedOllamaModelIsPulled,
-  LLMConfig,
   pullOllamaModel,
 } from "@/utils/providerUtils";
+import { LLMConfig } from "@/types/llm_config";
 
 // Button state interface
 interface ButtonState {

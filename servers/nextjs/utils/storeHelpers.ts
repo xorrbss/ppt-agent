@@ -1,5 +1,6 @@
 import { setLLMConfig } from "@/store/slices/userConfig";
 import { store } from "@/store/store";
+import { LLMConfig } from "@/types/llm_config";
 
 export const handleSaveLLMConfig = async (llmConfig: LLMConfig) => {
   if (!hasValidLLMConfig(llmConfig)) {

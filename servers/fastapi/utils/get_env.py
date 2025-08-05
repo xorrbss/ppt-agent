@@ -97,5 +97,13 @@ def get_redis_password_env():
     return os.getenv("REDIS_PASSWORD")
 
 
+def get_tool_calls_env():
+    return os.getenv("TOOL_CALLS")
+
+
+def get_disable_thinking_env():
+    return os.getenv("DISABLE_THINKING")
+
+
 def get_extended_reasoning_env():
     return os.getenv("EXTENDED_REASONING")

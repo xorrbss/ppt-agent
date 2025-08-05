@@ -8,11 +8,11 @@ import { handleSaveLLMConfig } from "@/utils/storeHelpers";
 import {
   checkIfSelectedOllamaModelIsPulled,
   pullOllamaModel,
-  LLMConfig
 } from "@/utils/providerUtils";
 import { useRouter } from "next/navigation";
 import LLMProviderSelection from "@/components/LLMSelection";
 import Header from "../dashboard/components/Header";
+import { LLMConfig } from "@/types/llm_config";
 
 // Button state interface
 interface ButtonState {

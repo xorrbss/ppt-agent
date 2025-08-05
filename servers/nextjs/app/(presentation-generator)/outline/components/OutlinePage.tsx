@@ -32,7 +32,6 @@ const OutlinePage: React.FC = () => {
     selectedLayoutGroup,
     setActiveTab
   );
-
   if (!presentation_id) {
     return <EmptyStateView />;
   }

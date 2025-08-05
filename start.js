@@ -18,6 +18,8 @@ const canChangeKeys = process.env.CAN_CHANGE_KEYS !== 'false';
 
 const fastapiPort = 8000;
 const nextjsPort = 3000;
+const appmcpPort = 8001;
+
 
 const userConfigPath = join(process.env.APP_DATA_DIRECTORY, 'userConfig.json');
 const userDataDir = dirname(userConfigPath);
@@ -48,13 +50,13 @@ process.env.USER_CONFIG_PATH = userConfigPath;
 
 //? UserConfig is only setup if API Keys can be changed
 const setupUserConfigFromEnv = () => {
-
   let existingConfig = {};
+
   if (existsSync(userConfigPath)) {
     existingConfig = JSON.parse(readFileSync(userConfigPath, 'utf8'));
   }
 
-  if (!['ollama', 'openai', 'google'].includes(existingConfig.LLM)) {
+  if (!["ollama", "openai", "google"].includes(existingConfig.LLM)) {
     existingConfig.LLM = undefined;
   }
 
@@ -69,19 +71,24 @@ const setupUserConfigFromEnv = () => {
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || existingConfig.ANTHROPIC_API_KEY,
     ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL || existingConfig.ANTHROPIC_MODEL,
     CUSTOM_LLM_URL: process.env.CUSTOM_LLM_URL || existingConfig.CUSTOM_LLM_URL,
-    CUSTOM_LLM_API_KEY: process.env.CUSTOM_LLM_API_KEY || existingConfig.CUSTOM_LLM_API_KEY,
+    CUSTOM_LLM_API_KEY:
+      process.env.CUSTOM_LLM_API_KEY || existingConfig.CUSTOM_LLM_API_KEY,
     CUSTOM_MODEL: process.env.CUSTOM_MODEL || existingConfig.CUSTOM_MODEL,
     PEXELS_API_KEY: process.env.PEXELS_API_KEY || existingConfig.PEXELS_API_KEY,
-    PIXABAY_API_KEY: process.env.PIXABAY_API_KEY || existingConfig.PIXABAY_API_KEY,
+    PIXABAY_API_KEY:
+      process.env.PIXABAY_API_KEY || existingConfig.PIXABAY_API_KEY,
     IMAGE_PROVIDER: process.env.IMAGE_PROVIDER || existingConfig.IMAGE_PROVIDER,
+    TOOL_CALLS: process.env.TOOL_CALLS || existingConfig.TOOL_CALLS,
+    DISABLE_THINKING: process.env.DISABLE_THINKING || existingConfig.DISABLE_THINKING,
     EXTENDED_REASONING: process.env.EXTENDED_REASONING || existingConfig.EXTENDED_REASONING,
     USE_CUSTOM_URL: process.env.USE_CUSTOM_URL || existingConfig.USE_CUSTOM_URL,
   };
 
+
   writeFileSync(userConfigPath, JSON.stringify(userConfig));
 }
-const startServers = async () => {
 
+const startServers = async () => {
   const fastApiProcess = spawn(
     "python",
     ["server.py", "--port", fastapiPort.toString(), "--reload", isDev],
@@ -89,11 +96,25 @@ const startServers = async () => {
       cwd: fastapiDir,
       stdio: "inherit",
       env: process.env,
-    }
+    },
   );
 
-  fastApiProcess.on("error", err => {
+  fastApiProcess.on("error", (err) => {
     console.error("FastAPI process failed to start:", err);
+  });
+
+  const appmcpProcess = spawn(
+    "python",
+    ["mcp_server.py", "--port", appmcpPort.toString()],
+    {
+      cwd: fastapiDir,
+      stdio: "inherit",
+      env: process.env,
+    },
+  );
+
+  appmcpProcess.on("error", (err) => {
+    console.error("App MCP process failed to start:", err);
   });
 
   const nextjsProcess = spawn(
@@ -103,10 +124,10 @@ const startServers = async () => {
       cwd: nextjsDir,
       stdio: "inherit",
       env: process.env,
-    }
+    },
   );
 
-  nextjsProcess.on("error", err => {
+  nextjsProcess.on("error", (err) => {
     console.error("Next.js process failed to start:", err);
   });
 
@@ -140,6 +161,7 @@ const startServers = async () => {
 
   // Keep the Node process alive until both servers exit
   const exitCode = await Promise.race([
+
     new Promise(resolve => fastApiProcess.on("exit", resolve)),
     new Promise(resolve => nextjsProcess.on("exit", resolve)),
     new Promise(resolve => ollamaProcess.on("exit", resolve)),

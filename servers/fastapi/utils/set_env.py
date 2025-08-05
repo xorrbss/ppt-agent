@@ -69,5 +69,13 @@ def set_pixabay_api_key_env(value):
     os.environ["PIXABAY_API_KEY"] = value
 
 
+def set_tool_calls_env(value):
+    os.environ["TOOL_CALLS"] = value
+
+
+def set_disable_thinking_env(value):
+    os.environ["DISABLE_THINKING"] = value
+
+
 def set_extended_reasoning_env(value):
     os.environ["EXTENDED_REASONING"] = value
