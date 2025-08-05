@@ -1,5 +1,6 @@
 import json
 import os
+from fastapi import HTTPException
 from typing import Dict, Any, Optional, List, Annotated
 from models.presentation_outline_model import PresentationOutlineModel
 from utils.llm_calls.generate_presentation_outlines import generate_ppt_outline
@@ -63,8 +64,17 @@ async def generate_outline(
             await asyncio.sleep(0)
             presentation_outlines_text += chunk
 
-        presentation_outlines_json = json.loads(presentation_outlines_text)
-        presentation_outlines = PresentationOutlineModel(**presentation_outlines_json)
+        try:
+            presentation_outlines_json = json.loads(presentation_outlines_text)
+            presentation_outlines = PresentationOutlineModel(
+                **presentation_outlines_json
+            )
+        except Exception as e:
+            print(e)
+            raise HTTPException(
+                status_code=400,
+                detail="Failed to generate presentation outlines. Please try again.",
+            )
 
     # Truncate slides to n_slides
     presentation_outlines.slides = presentation_outlines.slides[:n_slides]
