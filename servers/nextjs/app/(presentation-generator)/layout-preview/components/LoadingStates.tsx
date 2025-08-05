@@ -2,7 +2,7 @@
 import React from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Loader2, AlertCircle, RefreshCw, FileX, Layers } from 'lucide-react'
+import { Loader2, AlertCircle, RefreshCw, FileX } from 'lucide-react'
 
 interface LoadingStatesProps {
     type: 'loading' | 'error' | 'empty'

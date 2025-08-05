@@ -3,9 +3,8 @@
 import React, { useState, useEffect } from "react";
 
 import Wrapper from "@/components/Wrapper";
-
-import { DashboardApi } from "../api/dashboard";
-import { PresentationGrid } from "./PresentationGrid";
+import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
+import { PresentationGrid } from "@/app/(presentation-generator)/dashboard/components/PresentationGrid";
 
 import Header from "./Header";
 

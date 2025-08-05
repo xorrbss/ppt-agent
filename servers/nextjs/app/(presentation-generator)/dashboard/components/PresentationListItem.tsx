@@ -1,6 +1,5 @@
 import React from 'react';
-import Image from 'next/image';
-// import { formatDistanceToNow } from 'date-fns';
+
 import { Card, CardContent } from "@/components/ui/card";
 import { Presentation } from '../types';
 

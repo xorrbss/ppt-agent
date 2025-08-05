@@ -2,7 +2,7 @@ import React from "react";
 import { PresentationCard } from "./PresentationCard";
 import { PlusIcon } from "@radix-ui/react-icons";
 import { useRouter } from "next/navigation";
-import { PresentationResponse } from "../api/dashboard";
+import { PresentationResponse } from "@/app/(presentation-generator)/services/api/dashboard";
 
 interface PresentationGridProps {
   presentations: PresentationResponse[];

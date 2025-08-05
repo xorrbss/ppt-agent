@@ -7,7 +7,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useDispatch } from 'react-redux';
 import { checkIfSelectedOllamaModelIsPulled } from '@/utils/providerUtils';
 
-export function StoreInitializer({ children }: { children: React.ReactNode }) {
+export function ConfigurationInitializer({ children }: { children: React.ReactNode }) {
   const dispatch = useDispatch();
 
   const [isLoading, setIsLoading] = useState(true);

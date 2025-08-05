@@ -27,7 +27,7 @@ import MarkdownRenderer from "./MarkdownRenderer";
 import { getIconFromFile } from "../../utils/others";
 import { ChevronRight, PanelRightOpen, X } from "lucide-react";
 import ToolTip from "@/components/ToolTip";
-import Header from "@/app/dashboard/components/Header";
+import Header from "@/app/(presentation-generator)/dashboard/components/Header";
 
 // Types
 interface LoadingState {

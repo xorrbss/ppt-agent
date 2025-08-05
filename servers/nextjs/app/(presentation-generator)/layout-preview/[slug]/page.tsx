@@ -5,7 +5,7 @@ import { useGroupLayoutLoader } from '../hooks/useGroupLayoutLoader'
 import LoadingStates from '../components/LoadingStates'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Home, Wifi, WifiOff, RefreshCw } from 'lucide-react'
+import { ArrowLeft, Home, } from 'lucide-react'
 
 const GroupLayoutPreview = () => {
     const params = useParams()
