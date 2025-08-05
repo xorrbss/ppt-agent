@@ -24,7 +24,7 @@ RUN curl -fsSL https://ollama.com/install.sh | sh
 
 # Install dependencies for FastAPI
 RUN pip install aiohttp aiomysql aiosqlite asyncpg fastapi[standard] \
-    pathvalidate pdfplumber nltk chromadb sqlmodel \
+    pathvalidate pdfplumber chromadb sqlmodel \
     anthropic google-genai openai fastmcp
 RUN pip install docling --extra-index-url https://download.pytorch.org/whl/cpu
 
