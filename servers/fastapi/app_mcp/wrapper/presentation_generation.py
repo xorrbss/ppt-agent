@@ -1,13 +1,16 @@
 import random
 from typing import List, Dict, Any, Optional
-from models.presentation_outline_model import SlideOutlineModel
 from models.presentation_layout import PresentationLayoutModel
 from models.presentation_structure_model import PresentationStructureModel
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from utils.get_layout_by_name import get_layout_by_name
-from utils.llm_calls.generate_presentation_structure import generate_presentation_structure
-from utils.llm_calls.generate_slide_content import get_slide_content_from_type_and_outline
+from utils.llm_calls.generate_presentation_structure import (
+    generate_presentation_structure,
+)
+from utils.llm_calls.generate_slide_content import (
+    get_slide_content_from_type_and_outline,
+)
 from services.image_generation_service import ImageGenerationService
 from services.icon_finder_service import IconFinderService
 from utils.asset_directory_utils import get_images_directory
@@ -15,15 +18,13 @@ from utils.process_slides import process_slide_and_fetch_assets
 from models.presentation_outline_model import PresentationOutlineModel
 from utils.randomizers import get_random_uuid
 import asyncio
-from services.database import get_async_session
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
 # Standalone function for workflow orchestrator
 async def process_post_outline_workflow(
     title: str,
-    outlines: List[Dict[str, Any]],
-    notes: Optional[str]=[],
+    outlines: List[str],
     layout: str = "general",
     language: str = "English",
     prompt: str = "",
@@ -44,9 +45,7 @@ async def process_post_outline_workflow(
         presentation_structure: PresentationStructureModel = (
             await generate_presentation_structure(
                 presentation_outline=PresentationOutlineModel(
-                    title=title,
                     slides=outlines,
-                    notes=notes,
                 ),
                 presentation_layout=layout_model,
             )
@@ -69,7 +68,6 @@ async def process_post_outline_workflow(
         language=language,
         outlines=outlines,
         prompt=prompt,
-        notes=notes,
         layout=layout_model.model_dump(),
         structure=presentation_structure.model_dump(),
     )
@@ -83,7 +81,7 @@ async def process_post_outline_workflow(
     for i, slide_layout_index in enumerate(presentation_structure.slides):
         slide_layout = layout_model.slides[slide_layout_index]
         slide_content = await get_slide_content_from_type_and_outline(
-            slide_layout, SlideOutlineModel(**outlines[i]), language
+            slide_layout, outlines[i], language
         )
         slide = SlideModel(
             presentation=presentation_id,
@@ -107,6 +105,7 @@ async def process_post_outline_workflow(
     # 5. Save PresentationModel and Slides
     if sql_session is None:
         from services.database import get_async_session
+
         async for session in get_async_session():
             session.add(presentation)
             session.add_all(slides)
@@ -118,11 +117,10 @@ async def process_post_outline_workflow(
         sql_session.add_all(generated_assets)
         await sql_session.commit()
 
-
     # 6. Ask user if they want to export and in which format
     return {
         "presentation_id": presentation_id,
         "title": title,
         "message": "Presentation is ready. Would you like to export? (pdf or pptx)",
-        "export_options": ["pdf", "pptx"]
+        "export_options": ["pdf", "pptx"],
     }
