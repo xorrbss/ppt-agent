@@ -16,7 +16,7 @@ WORKDIR /app
 # Set environment variables
 ENV APP_DATA_DIRECTORY=/app_data
 ENV TEMP_DIRECTORY=/tmp/presenton
-ENV PYTHONPATH="${PYTHONPATH}:/app/servers/fastapi"
+# ENV PYTHONPATH="${PYTHONPATH}:/app/servers/fastapi"
 
 
 # Install ollama

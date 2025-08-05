@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import { useDispatch } from "react-redux";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { clearPresentationData, SlideOutline } from "@/store/slices/presentationGeneration";
+import { clearPresentationData } from "@/store/slices/presentationGeneration";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import { LayoutGroup, LoadingState, TABS } from "../types/index";
 
@@ -15,7 +15,7 @@ const DEFAULT_LOADING_STATE: LoadingState = {
 
 export const usePresentationGeneration = (
   presentationId: string | null,
-  outlines: SlideOutline[] | null,
+  outlines: string[] | null,
   selectedLayoutGroup: LayoutGroup | null,
   setActiveTab: (tab: string) => void
 ) => {

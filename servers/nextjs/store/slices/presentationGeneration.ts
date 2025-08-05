@@ -1,11 +1,6 @@
 import { Slide } from "@/app/(presentation-generator)/types/slide";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
-
-
-
-
-
 export interface PresentationData {
   id: string;
   language: string;
@@ -137,7 +132,7 @@ const presentationGenerationSlice = createSlice({
           action.payload.slide;
       }
     },
-    
+
     // Update slide content at specific data path (for Tiptap text editing)
     updateSlideContent: (
       state,
@@ -154,12 +149,12 @@ const presentationGenerationSlice = createSlice({
       ) {
         const slide = state.presentationData.slides[action.payload.slideIndex];
         const { dataPath, content } = action.payload;
-        
+
         // Helper function to set nested property value
         const setNestedValue = (obj: any, path: string, value: string) => {
           const keys = path.split(/[.\[\]]+/).filter(Boolean);
           let current = obj;
-          
+
           // Navigate to the parent object
           for (let i = 0; i < keys.length - 1; i++) {
             const key = keys[i];
@@ -178,7 +173,7 @@ const presentationGenerationSlice = createSlice({
               current = current[index];
             }
           }
-          
+
           // Set the final value
           const finalKey = keys[keys.length - 1];
           if (isNaN(Number(finalKey))) {
@@ -187,7 +182,7 @@ const presentationGenerationSlice = createSlice({
             current[Number(finalKey)] = value;
           }
         };
-        
+
         // Update the slide content
         if (dataPath && slide.content) {
           setNestedValue(slide.content, dataPath, content);
@@ -198,8 +193,8 @@ const presentationGenerationSlice = createSlice({
     addNewSlide: (state, action: PayloadAction<{ slideData: any; index: number }>) => {
       if (state.presentationData?.slides) {
         // Insert the new slide at the specified index + 1 (after current slide)
-        state.presentationData.slides.splice(action.payload.index +1, 0, action.payload.slideData);
-        
+        state.presentationData.slides.splice(action.payload.index + 1, 0, action.payload.slideData);
+
         // Update indices for all slides to ensure they remain sequential
         state.presentationData.slides = state.presentationData.slides.map(
           (slide: any, idx: number) => ({
@@ -227,12 +222,12 @@ const presentationGenerationSlice = createSlice({
       ) {
         const slide = state.presentationData.slides[action.payload.slideIndex];
         const { dataPath, imageUrl, prompt } = action.payload;
-        
+
         // Helper function to set nested property value for images
         const setNestedImageValue = (obj: any, path: string, url: string, promptText?: string) => {
           const keys = path.split(/[.\[\]]+/).filter(Boolean);
           let current = obj;
-          
+
           // Navigate to the parent object
           for (let i = 0; i < keys.length - 1; i++) {
             const key = keys[i];
@@ -249,33 +244,33 @@ const presentationGenerationSlice = createSlice({
               current = current[index];
             }
           }
-          
+
           // Set the image properties
           const finalKey = keys[keys.length - 1];
           const target = isNaN(Number(finalKey)) ? current[finalKey] : current[Number(finalKey)];
-          
+
           // Preserve existing properties if the target already exists
           const updatedValue = {
             ...(target && typeof target === 'object' ? target : {}),
             __image_url__: url,
             __image_prompt__: promptText || (target?.__image_prompt__) || ''
           };
-          
+
           if (isNaN(Number(finalKey))) {
             current[finalKey] = updatedValue;
           } else {
             current[Number(finalKey)] = updatedValue;
           }
-          
+
           // Add debugging
           console.log('Redux: Updated slide image at path:', path, 'with URL:', url);
         };
-        
+
         // Update the slide image
         if (dataPath && slide.content) {
           setNestedImageValue(slide.content, dataPath, imageUrl, prompt);
         }
-        
+
         // Also update the images array if it exists
         if (slide.images && Array.isArray(slide.images)) {
           const imageIndex = parseInt(dataPath.split('[')[1]?.split(']')[0]) || 0;
@@ -293,7 +288,7 @@ const presentationGenerationSlice = createSlice({
         itemIndex: number;
         properties: any;
       }>
-    ) => {  
+    ) => {
       if (
         state.presentationData &&
         state.presentationData.slides &&
@@ -305,8 +300,8 @@ const presentationGenerationSlice = createSlice({
           ...slide.properties,
           [itemIndex]: properties
         };
-        
-      } 
+
+      }
     },
 
     // Update slide icon at specific data path
@@ -326,12 +321,12 @@ const presentationGenerationSlice = createSlice({
       ) {
         const slide = state.presentationData.slides[action.payload.slideIndex];
         const { dataPath, iconUrl, query } = action.payload;
-        
+
         // Helper function to set nested property value for icons
         const setNestedIconValue = (obj: any, path: string, url: string, queryText?: string) => {
           const keys = path.split(/[.\[\]]+/).filter(Boolean);
           let current = obj;
-          
+
           // Navigate to the parent object
           for (let i = 0; i < keys.length - 1; i++) {
             const key = keys[i];
@@ -348,33 +343,33 @@ const presentationGenerationSlice = createSlice({
               current = current[index];
             }
           }
-          
+
           // Set the icon properties
           const finalKey = keys[keys.length - 1];
           const target = isNaN(Number(finalKey)) ? current[finalKey] : current[Number(finalKey)];
-          
+
           // Preserve existing properties if the target already exists
           const updatedValue = {
             ...(target && typeof target === 'object' ? target : {}),
             __icon_url__: url,
             __icon_query__: queryText || (target?.__icon_query__) || ''
           };
-          
+
           if (isNaN(Number(finalKey))) {
             current[finalKey] = updatedValue;
           } else {
             current[Number(finalKey)] = updatedValue;
           }
-          
+
           // Add debugging
           console.log('Redux: Updated slide icon at path:', path, 'with URL:', url);
         };
-        
+
         // Update the slide icon
         if (dataPath && slide.content) {
           setNestedIconValue(slide.content, dataPath, iconUrl, query);
         }
-        
+
         // Also update the icons array if it exists
         if (slide.icons && Array.isArray(slide.icons)) {
           const iconIndex = parseInt(dataPath.split('[')[1]?.split(']')[0]) || 0;
