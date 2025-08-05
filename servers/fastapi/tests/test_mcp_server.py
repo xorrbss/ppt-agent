@@ -4,7 +4,6 @@ from fastmcp import FastMCP, Client
 from app_mcp.tools.start_presentation import register_start_presentation
 from app_mcp.tools.help_me import register_help_me
 from app_mcp.tools.continue_workflow import register_continue_workflow
-from app_mcp.tools.regenerate_outline import register_regenerate_outline
 from app_mcp.tools.export_presentation import register_export_presentation
 from app_mcp.tools.show_layouts import register_show_layouts
 from app_mcp.tools.get_status import register_get_status
@@ -33,7 +32,6 @@ def mcp_server():
         register_start_presentation(mcp=mcp, orchestrator=mock_orchestrator)
         register_help_me(mcp=mcp, orchestrator=mock_orchestrator)
         register_continue_workflow(mcp=mcp, orchestrator=mock_orchestrator)
-        register_regenerate_outline(mcp=mcp, orchestrator=mock_orchestrator)
         register_export_presentation(mcp=mcp, orchestrator=mock_orchestrator)
         register_show_layouts(mcp=mcp, orchestrator=mock_orchestrator)
         register_get_status(mcp=mcp, orchestrator=mock_orchestrator)
@@ -179,32 +177,6 @@ class TestContinueWorkflow:
                 assert data["status"] == "error"
                 assert "Valid session_id is required" in data["error"]
         asyncio.run(run())
-
-
-class TestRegenerateOutline:
-    """
-    Tests for the regenerate_outline tool
-    """
-
-    def test_success(self, mcp_server):
-        """
-        Test regenerate_outline with valid session_id.
-        Checks for correct status and required fields in response.
-        """
-        async def run():
-            async with Client(mcp_server) as client:
-                params = {"session_id": "test_session"}
-                result = await client.call_tool("regenerate_outline", params)
-                data = result.data
-                assert "status" in data
-                assert data["status"] in ["success", "error"]
-                if data["status"] == "success":
-                    assert "message" in data
-                    assert "session_id" in data
-                if data["status"] == "error":
-                    assert "error" in data
-        asyncio.run(run())
-
 
 
 class TestExportPresentation:

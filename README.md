@@ -205,6 +205,8 @@ For detailed info checkout [API documentation](https://docs.presenton.ai/using-p
 
 ## 🏗️ MCP Architecture Overview
 
+![Demo](readme_assets/mcpdemo.gif)
+
 Presenton is built on a modular architecture featuring a FastAPI backend and a Next.js frontend. At its core is the **MCP (Model Context Protocol) server**, which orchestrates the entire presentation generation workflow using a robust state machine. This architecture ensures flexibility, reliability, and extensibility.
 
 ### MCP Workflow Highlights

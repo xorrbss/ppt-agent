@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 
 import { Card } from "@/components/ui/card";
-import { DashboardApi } from "../api/dashboard";
+import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
 import { DotsVerticalIcon, TrashIcon } from "@radix-ui/react-icons";
 import {
   Popover,

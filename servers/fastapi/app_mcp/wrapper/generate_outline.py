@@ -8,10 +8,8 @@ from services.documents_loader import DocumentsLoader
 from services.score_based_chunker import ScoreBasedChunker
 from utils.validators import validate_files
 from fastapi import UploadFile, File
-from models.sse_response import SSEResponse
 from constants.documents import UPLOAD_ACCEPTED_FILE_TYPES
 import asyncio
-
 
 
 async def generate_outline(
@@ -66,26 +64,24 @@ async def generate_outline(
             presentation_outlines_text += chunk
 
         presentation_outlines_json = json.loads(presentation_outlines_text)
-        presentation_outlines = PresentationOutlineModel(
-            **presentation_outlines_json
-        )
+        presentation_outlines = PresentationOutlineModel(**presentation_outlines_json)
 
     # Truncate slides to n_slides
     presentation_outlines.slides = presentation_outlines.slides[:n_slides]
 
-    # Compose title from first slide (if available)
-    title = ""
-    if presentation_outlines.slides and hasattr(presentation_outlines.slides[0], '__str__'):
-        title = str(presentation_outlines.slides[0])[:50]
-        title = title.replace("#", "").replace("/", "").replace("\\", "").replace("\n", "")
-    elif presentation_outlines.slides:
-        title = str(presentation_outlines.slides[0])[:50]
+    # Compose title from first slide
+    title = (
+        presentation_outlines.slides[0][:50]
+        .replace("#", "")
+        .replace("/", "")
+        .replace("\\", "")
+        .replace("\n", "")
+    )
 
     # Prepare outlines list
-    outlines = [slide.model_dump() for slide in presentation_outlines.slides]
+    outlines = presentation_outlines.model_dump(mode="json")
 
     return {
-        "title": getattr(presentation_outlines, 'title', title),
+        "title": title,
         "outlines": outlines,
-        "notes": getattr(presentation_outlines, 'notes', []),
     }
