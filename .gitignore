@@ -11,4 +11,8 @@ app_data
 tmp
 debug
 .fastembed_cache
-my-doc.txt 
+
+generated_models
+nltk
+chroma
+container.db

@@ -4,7 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from models.presentation_layout import PresentationLayoutModel
-from models.presentation_outline_model import SlideOutlineModel
+from models.presentation_outline_model import PresentationOutlineModel
 from models.presentation_structure_model import PresentationStructureModel
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
@@ -16,9 +16,7 @@ class PresentationWithSlides(BaseModel):
     n_slides: int
     language: str
     title: Optional[str] = None
-    notes: Optional[List[str]]
-    outlines: Optional[List[SlideOutlineModel]]
-    summary: Optional[str]
+    outlines: Optional[PresentationOutlineModel]
     created_at: datetime
     updated_at: datetime
     layout: Optional[PresentationLayoutModel]

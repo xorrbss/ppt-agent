@@ -16,10 +16,6 @@ export const usePresentationStreaming = (
   setError: (error: boolean) => void,
   fetchUserSlides: () => void
 ) => {
-  const { presentationData } = useSelector(
-    (state: RootState) => state.presentationGeneration
-  );
-
   const dispatch = useDispatch();
   const previousSlidesLength = useRef(0);
 
@@ -117,9 +113,7 @@ export const usePresentationStreaming = (
     if (stream) {
       initializeStream();
     } else {
-      if (!presentationData || presentationData.slides.length === 0) {
-        fetchUserSlides();
-      }
+      fetchUserSlides();
     }
 
     return () => {

@@ -11,7 +11,9 @@ class IconFinderService:
         self.client = chromadb.PersistentClient(
             path="chroma", settings=Settings(anonymized_telemetry=False)
         )
+        print('Initializing icons collection...')
         self._initialize_icons_collection()
+        print('Icons collection initialized.')
 
     def _initialize_icons_collection(self):
         self.embedding_function = ONNXMiniLM_L6_V2()
