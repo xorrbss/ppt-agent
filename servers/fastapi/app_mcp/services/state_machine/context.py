@@ -5,7 +5,6 @@ from dataclasses import dataclass
 class StateContext:
     """Context data that travels with the state machine"""
     presentation_id: Optional[str] = None
-    summary: Optional[str] = None
     title: Optional[str] = None
     outlines: Optional[list] = None
     layout: Optional[str] = None
