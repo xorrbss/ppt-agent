@@ -2,21 +2,10 @@ from app_mcp.services.state_machine.states import PresentationState
 
 TRANSITIONS = {
     PresentationState.INIT: {
-        PresentationState.FILES_UPLOADED,
         PresentationState.OUTLINE_REQUESTED
     },
 
-    # Upload and summary flow
-    PresentationState.FILES_UPLOADED: {
-        PresentationState.SUMMARY_GENERATED,
-        PresentationState.UPLOAD_FAILED
-    },
-    PresentationState.SUMMARY_GENERATED: {
-        PresentationState.OUTLINE_REQUESTED,
-        PresentationState.SUMMARY_FAILED
-    },
-
-    # Outline generation flow
+    # Outline generation flow (now includes file processing)
     PresentationState.OUTLINE_REQUESTED: {
         PresentationState.OUTLINE_GENERATED,
         PresentationState.OUTLINE_FAILED
@@ -74,14 +63,6 @@ TRANSITIONS = {
     },
 
     # Error recovery transitions
-    PresentationState.UPLOAD_FAILED: {
-        PresentationState.INIT,
-        PresentationState.FILES_UPLOADED
-    },
-    PresentationState.SUMMARY_FAILED: {
-        PresentationState.FILES_UPLOADED,
-        PresentationState.OUTLINE_REQUESTED
-    },
     PresentationState.OUTLINE_FAILED: {
         PresentationState.OUTLINE_REQUESTED,
         PresentationState.INIT
@@ -102,10 +83,9 @@ TRANSITIONS = {
 
 
 SUGGESTIONS = {
-    PresentationState.INIT: "Upload files or start with outline generation",
-    PresentationState.FILES_UPLOADED: "Generate summary from uploaded files",
-    PresentationState.SUMMARY_GENERATED: "Generate presentation outline",
-    PresentationState.OUTLINE_GENERATED: "Review and approve outline, or regenerate",
+    PresentationState.INIT: "Start with outline generation (files will be processed automatically if provided)",
+    PresentationState.OUTLINE_REQUESTED: "Generating presentation outline with file analysis if applicable",
+    PresentationState.OUTLINE_GENERATED: "Review and approve outline",
     PresentationState.OUTLINE_APPROVED: "Select presentation layout",
     PresentationState.LAYOUT_SELECTED: "Generate presentation",
     PresentationState.PRESENTATION_READY: "Export presentation or request edits",
@@ -117,9 +97,7 @@ SUGGESTIONS = {
 
 PROGRESS_WEIGHTS = {
     PresentationState.INIT: 0,
-    PresentationState.FILES_UPLOADED: 10,
-    PresentationState.SUMMARY_GENERATED: 20,
-    PresentationState.OUTLINE_REQUESTED: 25,
+    PresentationState.OUTLINE_REQUESTED: 20,
     PresentationState.OUTLINE_GENERATED: 35,
     PresentationState.OUTLINE_APPROVED: 40,
     PresentationState.LAYOUT_REQUESTED: 45,
@@ -134,8 +112,6 @@ PROGRESS_WEIGHTS = {
 
 
 ERROR_STATES = {
-    PresentationState.UPLOAD_FAILED,
-    PresentationState.SUMMARY_FAILED,
     PresentationState.OUTLINE_FAILED,
     PresentationState.GENERATION_FAILED,
     PresentationState.EXPORT_FAILED,

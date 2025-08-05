@@ -71,20 +71,21 @@ def register_start_presentation(mcp, orchestrator):
             # Debug log to verify metadata update
             print("DEBUG: Metadata after update:", fsm.context.metadata)
 
-            # Handle files if provided
+            # Handle files if provided - store them in context for later use
             if files and len(files) > 0:
-                result = await orchestrator.execute_upload_and_summarize(session_id, files)
-                if result["status"] == "error":
-                    return result
-
+                # Store files in context for integrated processing during outline generation
+                fsm.context.metadata.update({
+                    "files": files
+                })
+                
                 return {
                     "status": "success",
                     "session_id": session_id,
-                    "message": "Great! I've uploaded and analyzed your files. Here's a summary:",
-                    "summary": result["result"]["summary"],
+                    "message": "Great! I've received your files and will analyze them during presentation creation.",
                     "prompt": prompt,
-                    "suggestion": f"Now I can create a presentation outline based on your prompt '{prompt}' and the file content. Use 'continue_workflow' to proceed.",
-                    "next_step": "Call continue_workflow to generate the outline"
+                    "files_count": len(files),
+                    "suggestion": f"Now I'll create a presentation outline based on your prompt '{prompt}' and analyze the uploaded files. Use 'continue_workflow' to proceed.",
+                    "next_step": "Call continue_workflow to generate the outline with file analysis"
                 }
             else:
                 # Direct outline generation without files

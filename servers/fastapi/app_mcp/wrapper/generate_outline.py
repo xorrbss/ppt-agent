@@ -1,35 +1,91 @@
 import json
-from typing import Dict, Any, Optional
+import os
+from typing import Dict, Any, Optional, List, Annotated
 from models.presentation_outline_model import PresentationOutlineModel
 from utils.llm_calls.generate_presentation_outlines import generate_ppt_outline
+from services import TEMP_FILE_SERVICE
+from services.documents_loader import DocumentsLoader
+from services.score_based_chunker import ScoreBasedChunker
+from utils.validators import validate_files
+from fastapi import UploadFile, File
+from models.sse_response import SSEResponse
+from constants.documents import UPLOAD_ACCEPTED_FILE_TYPES
+import asyncio
+
 
 
 async def generate_outline(
     prompt: str,
     n_slides: int = 8,
     language: str = "English",
-    summary: Optional[str] = None,
+    files: Annotated[Optional[List[UploadFile]], File()] = None,
 ) -> Dict[str, Any]:
     """
-    Generate presentation outlines given a prompt, number of slides, language, and optional summary.
+    Generate presentation outlines given a prompt, number of slides, language, optional summary, and files.
+    Files are now processed directly within this function instead of a separate step.
     Returns the parsed outline data.
     """
-    presentation_content_text = ""
-    async for chunk in generate_ppt_outline(
-        prompt,
-        n_slides,
-        language,
-        summary,
-    ):
-        presentation_content_text += chunk
+    validate_files(files, True, True, 50, UPLOAD_ACCEPTED_FILE_TYPES)
 
-    presentation_content_json = json.loads(presentation_content_text)
-    presentation_content = PresentationOutlineModel(
-        **presentation_content_json)
-    outlines = [slide.model_dump()
-                for slide in presentation_content.slides[:n_slides]]
+    temp_dir = TEMP_FILE_SERVICE.create_temp_dir()
+    file_paths = []
+    if files:
+        for upload in files:
+            file_path = os.path.join(temp_dir, upload.filename)
+            with open(file_path, "wb") as f:
+                f.write(await upload.read())
+            file_paths.append(file_path)
+
+    presentation_outlines = None
+    additional_context = ""
+    if file_paths:
+        documents_loader = DocumentsLoader(file_paths=file_paths)
+        await documents_loader.load_documents(temp_dir)
+        documents = documents_loader.documents
+        if documents:
+            additional_context = documents[0]
+            chunker = ScoreBasedChunker()
+            try:
+                chunks = await chunker.get_n_chunks(documents[0], n_slides)
+                presentation_outlines = PresentationOutlineModel(
+                    slides=[chunk.to_slide_outline() for chunk in chunks]
+                )
+            except Exception as e:
+                print(e)
+
+    if not presentation_outlines:
+        presentation_outlines_text = ""
+        async for chunk in generate_ppt_outline(
+            prompt,
+            n_slides,
+            language,
+            additional_context,
+        ):
+            # Give control to the event loop
+            await asyncio.sleep(0)
+            presentation_outlines_text += chunk
+
+        presentation_outlines_json = json.loads(presentation_outlines_text)
+        presentation_outlines = PresentationOutlineModel(
+            **presentation_outlines_json
+        )
+
+    # Truncate slides to n_slides
+    presentation_outlines.slides = presentation_outlines.slides[:n_slides]
+
+    # Compose title from first slide (if available)
+    title = ""
+    if presentation_outlines.slides and hasattr(presentation_outlines.slides[0], '__str__'):
+        title = str(presentation_outlines.slides[0])[:50]
+        title = title.replace("#", "").replace("/", "").replace("\\", "").replace("\n", "")
+    elif presentation_outlines.slides:
+        title = str(presentation_outlines.slides[0])[:50]
+
+    # Prepare outlines list
+    outlines = [slide.model_dump() for slide in presentation_outlines.slides]
+
     return {
-        "title": presentation_content.title,
+        "title": getattr(presentation_outlines, 'title', title),
         "outlines": outlines,
-        "notes": presentation_content.notes
+        "notes": getattr(presentation_outlines, 'notes', []),
     }

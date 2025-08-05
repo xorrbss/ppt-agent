@@ -44,11 +44,12 @@ def register_continue_workflow(mcp, orchestrator):
             
             current_state = fsm.state.name
             
-            if current_state in ["FILES_UPLOADED", "SUMMARY_GENERATED", "INIT"]:
-                # Generate outline
+            if current_state in ["INIT"]:
+                # Generate outline (this now handles file processing internally)
                 prompt = fsm.context.metadata.get("original_prompt", "")
                 n_slides = fsm.context.metadata.get("n_slides", 8)
                 language = fsm.context.metadata.get("language", "English")
+                files = fsm.context.metadata.get("files", None)
                 
                 if not prompt:
                     return {
@@ -57,8 +58,13 @@ def register_continue_workflow(mcp, orchestrator):
                         "suggestion": "Call start_presentation with a valid prompt"
                     }
 
+                # Pass files to outline generation if they exist
+                kwargs = {"n_slides": n_slides, "language": language}
+                if files:
+                    kwargs["files"] = files
+
                 result = await orchestrator.execute_generate_outline(
-                    session_id, prompt, n_slides=n_slides, language=language
+                    session_id, prompt, **kwargs
                 )
                 
                 if result["status"] == "success":
@@ -68,8 +74,9 @@ def register_continue_workflow(mcp, orchestrator):
                         "message": "Here's your presentation outline:",
                         "title": result["result"]["title"],
                         "outlines": result["result"]["outlines"],
+                        "files_processed": bool(files),
                         "suggestion": "Take a look at the outline. If it looks good, use 'continue_workflow' again to proceed to layout selection.",
-                        "next_step": "Call continue_workflow again to choose layouts, or use regenerate_outline to try different approach"
+                        "next_step": "Call continue_workflow again to choose layouts"
                     }
                 return result
             

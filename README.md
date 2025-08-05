@@ -203,10 +203,77 @@ For detailed info checkout [API documentation](https://docs.presenton.ai/using-p
 - [Create Presentations from CSV using AI](https://docs.presenton.ai/tutorial/generate-presentation-from-csv)
 - [Create Data Reports Using AI](https://docs.presenton.ai/tutorial/create-data-reports-using-ai)
 
+## 🏗️ MCP Architecture Overview
+
+Presenton is built on a modular architecture featuring a FastAPI backend and a Next.js frontend. At its core is the **MCP (Model Context Protocol) server**, which orchestrates the entire presentation generation workflow using a robust state machine. This architecture ensures flexibility, reliability, and extensibility.
+
+### MCP Workflow Highlights
+
+- **Session Management:** Each presentation runs in its own session for isolation and tracking.
+- **Outline Generation:** Automatically creates outlines, with or without input files.
+- **Layout Selection:** Choose from built-in or custom layouts.
+- **Content & Asset Generation:** Generates slide text, images, and icons using your selected AI models.
+- **Export Options:** Seamlessly export presentations as PDF or PPTX files.
+
+All workflow logic and tool APIs are organized in the `app_mcp` package. The orchestrator handles state transitions and error management, making it easy to extend or customize.
+
+#### Key Files & Directories
+
+- `.vscode/mcp.json`: VS Code integration and MCP server configuration.
+- `servers/fastapi/app_mcp/`: Backend workflow logic and tool registration.
+
+---
+
+## ⚡ Quick Start: VS Code Integration
+
+1. **Configure MCP:** Make sure `.vscode/mcp.json` points to your running MCP server (see example below).
+2. **Start a Presentation:** Use the VS Code command palette or chat to run `start_presentation` with your topic.
+3. **Advance Workflow:** Use `continue_workflow` to progress through outline, layout, and slide generation steps.
+4. **Export:** Use `export_presentation` to download your presentation as PDF or PPTX.
+5. **Check Progress:** Use `get_status` at any time to view your workflow status.
+
+#### Example `.vscode/mcp.json`
+```jsonc
+{
+  "servers": {
+    "my-mcp-server-5f58fb2c": {
+      "url": "http://localhost:5000/mcp/",
+      "type": "http"
+    }
+  },
+  "inputs": []
+}
+```
+
+---
+
+### 🗣️ Using Chat Commands in VS Code
+
+You can interact with Presenton directly from the VS Code chat window:
+
+- **Step-by-step Workflow:**  
+  Type a prompt like:
+  ```plaintext
+  I want to create a presentation on "Artificial Intelligence in Healthcare". Can you please show me the step by step and verify things to me so that I can be sure that the presentation is good?
+  ```
+
+- **Direct Commands:**  
+  For a faster workflow, use direct commands such as:
+  ```plaintext
+  Start a presentation on "Artificial Intelligence in Healthcare" with general layout and 10 slides.
+  ```
+
+This integration gives you full control—whether you want a guided, step-by-step experience or prefer to automate the entire process with a single command.
+
+---
+
+
+
+
 ## Roadmap
 - [x] Support for custom HTML templates by developers
 - [x] Support for accessing custom templates over API
-- [ ] Implement MCP server
+- [x] Implement MCP server
 - [ ] Ability for users to change system prompt
 - [X] Support external SQL database
 

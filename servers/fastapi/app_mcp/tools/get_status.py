@@ -42,7 +42,7 @@ def register_get_status(mcp, orchestrator):
             # Provide user-friendly status messages
             friendly_messages = {
                 "INIT": "Ready to start! Use 'start_presentation' to begin.",
-                "SUMMARY_GENERATED": "Files processed. Use 'continue_workflow' to generate outline.",
+                "OUTLINE_REQUESTED": "Generating outline with file analysis if applicable.",
                 "OUTLINE_GENERATED": "Outline created. Use 'continue_workflow' to proceed to layouts.",
                 "OUTLINE_APPROVED": "Outline approved. Use 'choose_layout' to select a theme.",
                 "LAYOUT_SELECTED": "Layout chosen. Use 'continue_workflow' to generate presentation.",
@@ -52,8 +52,8 @@ def register_get_status(mcp, orchestrator):
 
             next_actions = {
                 "INIT": "start_presentation",
-                "SUMMARY_GENERATED": "continue_workflow",
-                "OUTLINE_GENERATED": "continue_workflow (or regenerate_outline)",
+                "OUTLINE_REQUESTED": "Wait for outline generation to complete",
+                "OUTLINE_GENERATED": "continue_workflow",
                 "OUTLINE_APPROVED": "choose_layout",
                 "LAYOUT_SELECTED": "continue_workflow",
                 "PRESENTATION_READY": "export_presentation",

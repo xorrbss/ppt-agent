@@ -39,12 +39,7 @@ def register_export_presentation(mcp, orchestrator):
                     "session_id": session_id,
                     "message": f"🎉 Your presentation has been exported as {format.upper()}!",
                     "path": result["result"]["path"],
-                    "suggestion": "You can download it now, or start creating another presentation.",
-                    "available_actions": {
-                        "download": "Download the presentation",
-                        "new_presentation": "Create a new presentation",
-                        "edit": "Make edits to this presentation"
-                    }
+                    "suggestion": "You can download it now, or start creating another presentation."
                 }
             return result
         except Exception as e:

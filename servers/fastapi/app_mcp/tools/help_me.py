@@ -30,7 +30,6 @@ def register_help_me(mcp, orchestrator):
             "helpful_commands": {
                 "get_status": "📊 Check your current progress anytime",
                 "show_layouts": "👀 Browse available themes and styles",
-                "regenerate_outline": "🔄 Try a different outline approach",
                 "help": "❓ Show this helpful guide"
             },
             "quick_start": {

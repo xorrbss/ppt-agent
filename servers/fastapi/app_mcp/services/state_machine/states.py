@@ -5,11 +5,8 @@ class PresentationState(Enum):
     Represents the various states in the presentation workflow.
     """
     INIT = auto()
-    # Upload and summary phase
-    FILES_UPLOADED = auto()
-    SUMMARY_GENERATED = auto()
-
-    # Outline generation phase
+    
+    # Outline generation phase (now includes file processing)
     OUTLINE_REQUESTED = auto()
     OUTLINE_GENERATED = auto()
     OUTLINE_APPROVED = auto()
@@ -32,8 +29,6 @@ class PresentationState(Enum):
     TEMPLATE_EDITING = auto()
 
     # Error states
-    UPLOAD_FAILED = auto()
-    SUMMARY_FAILED = auto()
     OUTLINE_FAILED = auto()
     GENERATION_FAILED = auto()
     EXPORT_FAILED = auto()

@@ -3,7 +3,6 @@ from dataclasses import asdict
 from app_mcp.services.state_machine.machine import PresentationStateMachine
 from app_mcp.services.state_machine.states import PresentationState
 from utils.user_config import update_env_with_user_config
-from app_mcp.wrapper.upload_and_generate_summary import upload_and_summarize_files
 from app_mcp.wrapper.generate_outline import generate_outline
 from app_mcp.wrapper.presentation_generation import process_post_outline_workflow
 from app_mcp.wrapper.presentation_export import export_presentation_and_get_path
@@ -73,50 +72,6 @@ class WorkflowOrchestrator:
         """Remove workflow session"""
         return self._active_sessions.pop(session_id, None) is not None
 
-    async def execute_upload_and_summarize(self, session_id: str, files: List[Any]) -> Dict[str, Any]:
-        """
-        Execute file upload and summary generation workflow step.
-        Args:
-            session_id (str): Unique identifier for the session.
-            files (List[Any]): List of files to be uploaded and summarized.
-        Returns:
-            Dict[str, Any]: Result containing status, state, progress, next action, and any
-        
-        """
-        fsm = self.get_session(session_id)
-        if not fsm:
-            raise ValueError(f"Session {session_id} not found")
-
-        try:
-            fsm.transition(PresentationState.FILES_UPLOADED)
-            
-            result = await upload_and_summarize_files(files)
-
-            # Update context and transition to summary generated
-            context_updates = {
-                "summary": result["summary"],
-                "file_paths": result["file_paths"]
-            }
-            fsm.transition(PresentationState.SUMMARY_GENERATED, context_updates)
-
-            return {
-                "status": "success",
-                "state": fsm.state.name,
-                "progress": fsm.get_workflow_progress(),
-                "next_action": fsm.get_next_suggested_action(),
-                "result": result
-            }
-
-        except Exception as e:
-            fsm.transition(PresentationState.UPLOAD_FAILED, {"error_message": str(e)})
-            print(f"There was an error uploading and summarizing files: {e}")
-            return {
-                "status": "error",
-                "state": fsm.state.name,
-                "error": str(e),
-                "next_action": fsm.get_next_suggested_action()
-            }
-
     async def execute_generate_outline(self, session_id: str, prompt: str, **kwargs) -> Dict[str, Any]:
         """
         Execute outline generation workflow step
@@ -136,7 +91,7 @@ class WorkflowOrchestrator:
             fsm.transition(PresentationState.OUTLINE_REQUESTED)
 
             
-            result = await generate_outline(prompt, summary=fsm.context.summary, **kwargs)
+            result = await generate_outline(prompt, **kwargs)
 
             # Update the Context and transition to outline generated
             context_updates = {
@@ -149,10 +104,9 @@ class WorkflowOrchestrator:
                 "status": "success",
                 "state": fsm.state.name,
                 "progress": fsm.get_workflow_progress(),
-                "next_action": "Review outline and approve, or request regeneration",
+                "next_action": "Review outline and approve",
                 "result": result,
-                "can_approve": True,
-                "can_regenerate": True
+                "can_approve": True
             }
 
         except Exception as e:
