@@ -145,27 +145,12 @@ const startServers = async () => {
     console.error("Ollama process failed to start:", err);
   });
 
-  const redisProcess = spawn(
-    "redis-server",
-    [],
-    {
-      cwd: "/",
-      stdio: "inherit",
-      env: process.env,
-    }
-  );
-
-  redisProcess.on("error", err => {
-    console.error("Redis process failed to start:", err);
-  });
-
   // Keep the Node process alive until both servers exit
   const exitCode = await Promise.race([
 
     new Promise(resolve => fastApiProcess.on("exit", resolve)),
     new Promise(resolve => nextjsProcess.on("exit", resolve)),
     new Promise(resolve => ollamaProcess.on("exit", resolve)),
-    new Promise(resolve => redisProcess.on("exit", resolve)),
   ]);
 
   console.log(`One of the processes exited. Exit code: ${exitCode}`);
