@@ -1,5 +1,6 @@
 from models.llm_message import LLMMessage
 from models.presentation_layout import SlideLayoutModel
+from models.presentation_outline_model import SlideOutlineModel
 from services.llm_client import LLMClient
 from utils.llm_provider import get_model
 from utils.schema_utils import remove_fields_from_schema
@@ -50,7 +51,7 @@ def get_messages(outline: str, language: str):
 
 
 async def get_slide_content_from_type_and_outline(
-    slide_layout: SlideLayoutModel, outline: str, language: str
+    slide_layout: SlideLayoutModel, outline: SlideOutlineModel, language: str
 ):
     client = LLMClient()
     model = get_model()
@@ -62,7 +63,7 @@ async def get_slide_content_from_type_and_outline(
     response = await client.generate_structured(
         model=model,
         messages=get_messages(
-            outline,
+            outline.content,
             language,
         ),
         response_format=response_schema,

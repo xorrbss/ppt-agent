@@ -87,7 +87,8 @@ async def stream_outlines(
 
         presentation.outlines = presentation_outlines.model_dump()
         presentation.title = (
-            presentation_outlines.slides[0][:50]
+            presentation_outlines.slides[0]
+            .content[:50]
             .replace("#", "")
             .replace("/", "")
             .replace("\\", "")
