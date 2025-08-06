@@ -11,7 +11,10 @@ from sqlmodel import select
 from constants.documents import UPLOAD_ACCEPTED_FILE_TYPES
 from models.presentation_and_path import PresentationPathAndEditPath
 from models.presentation_from_template import GetPresentationUsingTemplateRequest
-from models.presentation_outline_model import PresentationOutlineModel
+from models.presentation_outline_model import (
+    PresentationOutlineModel,
+    SlideOutlineModel,
+)
 from models.pptx_models import PptxPresentationModel
 from models.presentation_layout import PresentationLayoutModel
 from models.presentation_structure_model import PresentationStructureModel
@@ -126,7 +129,7 @@ async def create_presentation(
 @PRESENTATION_ROUTER.post("/prepare", response_model=PresentationModel)
 async def prepare_presentation(
     presentation_id: Annotated[str, Body()],
-    outlines: Annotated[List[str], Body()],
+    outlines: Annotated[List[SlideOutlineModel], Body()],
     layout: Annotated[PresentationLayoutModel, Body()],
     title: Annotated[Optional[str], Body()] = None,
     sql_session: AsyncSession = Depends(get_async_session),
@@ -161,7 +164,9 @@ async def prepare_presentation(
             presentation_structure.slides[index] = random_slide_index
 
     sql_session.add(presentation)
-    presentation.outlines = PresentationOutlineModel(slides=outlines).model_dump()
+    presentation.outlines = PresentationOutlineModel(slides=outlines).model_dump(
+        mode="json"
+    )
     presentation.title = title or presentation.title
     presentation.set_layout(layout)
     presentation.set_structure(presentation_structure)
