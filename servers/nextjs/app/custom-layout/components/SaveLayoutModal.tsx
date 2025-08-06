@@ -1,0 +1,120 @@
+import React, { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Loader2, Save } from "lucide-react";
+
+interface SaveLayoutModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (layoutName: string, description: string) => void;
+  isSaving: boolean;
+}
+
+export const SaveLayoutModal: React.FC<SaveLayoutModalProps> = ({
+  isOpen,
+  onClose,
+  onSave,
+  isSaving,
+}) => {
+  const [layoutName, setLayoutName] = useState("");
+  const [description, setDescription] = useState("");
+
+  const handleSave = () => {
+    if (!layoutName.trim()) {
+      return; // Don't save if name is empty
+    }
+    onSave(layoutName.trim(), description.trim());
+    // Reset form
+    setLayoutName("");
+    setDescription("");
+  };
+
+  const handleClose = () => {
+    if (!isSaving) {
+      setLayoutName("");
+      setDescription("");
+      onClose();
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Save className="w-5 h-5 text-green-600" />
+            Save Layout
+          </DialogTitle>
+          <DialogDescription>
+            Enter a name and description for your layout. This will help you identify it later.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <Label htmlFor="layout-name" className="text-sm font-medium">
+              Layout Name *
+            </Label>
+            <Input
+              id="layout-name"
+              value={layoutName}
+              onChange={(e) => setLayoutName(e.target.value)}
+              placeholder="Enter layout name..."
+              disabled={isSaving}
+              className="w-full"
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="description" className="text-sm font-medium">
+              Description
+            </Label>
+            <Textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Enter a description for your layout..."
+              disabled={isSaving}
+              className="w-full resize-none"
+              rows={3}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={handleClose}
+            disabled={isSaving}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={isSaving || !layoutName.trim()}
+            className="bg-green-600 hover:bg-green-700"
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4 mr-2" />
+                Save Layout
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}; 

@@ -57,7 +57,7 @@
     "sharp": "^0.34.3",
     "sonner": "^2.0.6",
     "tailwind-merge": "^2.5.3",
-    "tailwind-scrollbar-hide": "^2.0.0",
+   
     "tailwindcss-animate": "^1.0.7",
     "tiptap-markdown": "^0.8.10",
     "uuid": "^11.1.0",

@@ -79,13 +79,15 @@ const createCacheKey = (groupName: string, fileName: string): string =>
 
 // Extract Babel compilation logic into a utility function
 const compileCustomLayout = (layoutCode: string, React: any, z: any) => {
+  
   const cleanCode = layoutCode
     .replace(/import\s+React\s+from\s+'react';?/g, "")
     .replace(/import\s*{\s*z\s*}\s*from\s+'zod';?/g, "")
     .replace(/import\s+.*\s+from\s+['"]zod['"];?/g, "")
     // remove every zod import (any style)
     .replace(/import\s+.*\s+from\s+['"]zod['"];?/g, "")
-    .replace(/const\s+[^=]*=\s*require\(['"]zod['"]\);?/g, "");
+    .replace(/const\s+[^=]*=\s*require\(['"]zod['"]\);?/g, "")
+    .replace(/typescript/g, "")
   const compiled = Babel.transform(cleanCode, {
     presets: [
       ["react", { runtime: "classic" }],
