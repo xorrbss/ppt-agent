@@ -4,7 +4,8 @@ from datetime import datetime
 from typing import Optional, List, Dict
 from fastapi import APIRouter, HTTPException, File, UploadFile, Form, Depends
 from pydantic import BaseModel
-import anthropic
+from google import genai
+from google.genai import types
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func
 from utils.asset_directory_utils import get_images_directory
@@ -94,13 +95,13 @@ class ErrorResponse(BaseModel):
 
 async def generate_html_from_slide(base64_image: str, media_type: str, xml_content: str, api_key: str) -> str:
     """
-    Generate HTML content from slide image and XML using Anthropic Claude API.
+    Generate HTML content from slide image and XML using Google Gen AI API.
     
     Args:
         base64_image: Base64 encoded image data
         media_type: MIME type of the image (e.g., 'image/png')
         xml_content: OXML content as text
-        api_key: Anthropic API key
+        api_key: Google Gen AI API key
     
     Returns:
         Generated HTML content as string
@@ -109,100 +110,85 @@ async def generate_html_from_slide(base64_image: str, media_type: str, xml_conte
         HTTPException: If API call fails or no content is generated
     """
     try:
-        # Initialize Anthropic client
-        client = anthropic.Anthropic(api_key=api_key)
+        # Initialize Google Gen AI client
+        client = genai.Client(api_key=api_key)
+        
+        # Convert base64 to bytes
+        image_bytes = base64.b64decode(base64_image)
         
         # Use streaming to handle long requests
-        print("Starting streaming request to Claude for HTML generation...")
+        print("Starting streaming request to Google Gen AI for HTML generation...")
         
         html_content = ""
-        thinking_content = ""
         
-        with client.messages.stream(
-            model="claude-sonnet-4-20250514",
-            max_tokens=64000,
-            temperature=1,
-            system=GENERATE_HTML_SYSTEM_PROMPT,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": media_type,
-                                "data": base64_image
-                            }
-                        },
-                        {
-                            "type": "text",
-                            "text": f"\nOXML: \n\n{xml_content}"
-                        }
-                    ]
-                }
-            ],
-            thinking={
-                "type": "enabled",
-                "budget_tokens": 55000
-            }
-        ) as stream:
-            print("Streaming started, collecting HTML response...")
-            
-            # Collect all streamed content
-            for event in stream:
-                if event.type == "content_block_delta":
-                    if event.delta.type == "thinking_delta":
-                        thinking_content += event.delta.thinking
-                        print(f"[HTML THINKING] {event.delta.thinking}", end="", flush=True)
-                    elif event.delta.type == "text_delta":
-                        html_content += event.delta.text
-                        print(f"[HTML] {event.delta.text}", end="", flush=True)
-                elif event.type == "content_block_start":
-                    if hasattr(event.content_block, 'type'):
-                        print(f"\n[HTML BLOCK START] {event.content_block.type}")
-                elif event.type == "content_block_stop":
-                    print(f"\n[HTML BLOCK STOP] Index: {event.index}")
-                elif event.type == "message_start":
-                    print("[HTML MESSAGE START]")
-                elif event.type == "message_stop":
-                    print("\n[HTML MESSAGE STOP] - Streaming complete")
+        # Create content with image and text
+        contents = [
+            types.Part.from_bytes(
+                mime_type=media_type,
+                data=image_bytes,
+            ),
+            types.Part.from_text(text=f"\nOXML: \n\n{xml_content}"),
+        ]
+        
+        # Generate content config with thinking enabled
+        generate_content_config = types.GenerateContentConfig(
+            system_instruction=GENERATE_HTML_SYSTEM_PROMPT,
+            max_output_tokens=65536,
+            temperature=1.0,
+            thinking_config=types.ThinkingConfig(
+                thinking_budget=32768,
+            ),
+        )
+        
+        print("Streaming started, collecting HTML response...")
+        
+        # Stream the response
+        for chunk in client.models.generate_content_stream(
+            model="gemini-2.5-pro",
+            contents=contents,
+            config=generate_content_config,
+        ):
+            if chunk.text:
+                html_content += chunk.text
+                print(f"[HTML] {chunk.text}", end="", flush=True)
         
         print(f"\nCollected HTML content length: {len(html_content)}")
-        print(f"Collected HTML thinking content length: {len(thinking_content)}")
         
         if not html_content:
             raise HTTPException(
                 status_code=500,
-                detail="No HTML content generated by Claude API"
+                detail="No HTML content generated by Google Gen AI API"
             )
         
         return html_content
         
-    except anthropic.APITimeoutError as e:
-        raise HTTPException(
-            status_code=408,
-            detail=f"Claude API timeout during HTML streaming: {str(e)}"
-        )
-    except anthropic.APIConnectionError as e:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Claude API connection error during HTML streaming: {str(e)}"
-        )
-    except anthropic.APIError as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Anthropic API error during HTML generation: {str(e)}"
-        )
+    except Exception as e:
+        # Handle various API errors
+        error_msg = str(e)
+        if "timeout" in error_msg.lower():
+            raise HTTPException(
+                status_code=408,
+                detail=f"Google Gen AI API timeout during HTML streaming: {error_msg}"
+            )
+        elif "connection" in error_msg.lower():
+            raise HTTPException(
+                status_code=503,
+                detail=f"Google Gen AI API connection error during HTML streaming: {error_msg}"
+            )
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Google Gen AI API error during HTML generation: {error_msg}"
+            )
 
 
 async def generate_react_component_from_html(html_content: str, api_key: str) -> str:
     """
-    Convert HTML content to TSX React component using Anthropic Claude API.
+    Convert HTML content to TSX React component using Google Gen AI API.
     
     Args:
         html_content: Generated HTML content
-        api_key: Anthropic API key
+        api_key: Google Gen AI API key
     
     Returns:
         Generated TSX React component code as string
@@ -211,63 +197,44 @@ async def generate_react_component_from_html(html_content: str, api_key: str) ->
         HTTPException: If API call fails or no content is generated
     """
     try:
-        # Initialize Anthropic client
-        client = anthropic.Anthropic(api_key=api_key)
+        # Initialize Google Gen AI client
+        client = genai.Client(api_key=api_key)
         
-        print("Starting streaming request to Claude for React component generation...")
+        print("Starting streaming request to Google Gen AI for React component generation...")
         
         react_content = ""
-        thinking_content = ""
         
-        with client.messages.stream(
-            model="claude-sonnet-4-20250514",
-            max_tokens=64000,
-            temperature=1,
-            system=HTML_TO_REACT_SYSTEM_PROMPT,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": html_content
-                        }
-                    ]
-                }
-            ],
-            thinking={
-                "type": "enabled",
-                "budget_tokens": 25000
-            }
-        ) as stream:
-            print("Streaming started, collecting React component response...")
-            
-            # Collect all streamed content
-            for event in stream:
-                if event.type == "content_block_delta":
-                    if event.delta.type == "thinking_delta":
-                        thinking_content += event.delta.thinking
-                        print(f"[REACT THINKING] {event.delta.thinking}", end="", flush=True)
-                    elif event.delta.type == "text_delta":
-                        react_content += event.delta.text
-                        print(f"[REACT] {event.delta.text}", end="", flush=True)
-                elif event.type == "content_block_start":
-                    if hasattr(event.content_block, 'type'):
-                        print(f"\n[REACT BLOCK START] {event.content_block.type}")
-                elif event.type == "content_block_stop":
-                    print(f"\n[REACT BLOCK STOP] Index: {event.index}")
-                elif event.type == "message_start":
-                    print("[REACT MESSAGE START]")
-                elif event.type == "message_stop":
-                    print("\n[REACT MESSAGE STOP] - Streaming complete")
+        # Create content with text
+        contents = types.Part.from_text(text=html_content)
+        
+        # Generate content config with thinking enabled
+        generate_content_config = types.GenerateContentConfig(
+            system_instruction=HTML_TO_REACT_SYSTEM_PROMPT,
+            max_output_tokens=65536,
+            temperature=1.0,
+            thinking_config=types.ThinkingConfig(
+                thinking_budget=15000,
+            ),
+        )
+        
+        print("Streaming started, collecting React component response...")
+        
+        # Stream the response
+        for chunk in client.models.generate_content_stream(
+            model="gemini-2.5-pro",
+            contents=contents,
+            config=generate_content_config,
+        ):
+            if chunk.text:
+                react_content += chunk.text
+                print(f"[REACT] {chunk.text}", end="", flush=True)
         
         print(f"\nCollected React content length: {len(react_content)}")
-        print(f"Collected React thinking content length: {len(thinking_content)}")
         
         if not react_content:
             raise HTTPException(
                 status_code=500,
-                detail="No React component generated by Claude API"
+                detail="No React component generated by Google Gen AI API"
             )
         
         # Filter out lines that start with import or export
@@ -282,26 +249,29 @@ async def generate_react_component_from_html(html_content: str, api_key: str) ->
         
         return filtered_react_content
         
-    except anthropic.APITimeoutError as e:
-        raise HTTPException(
-            status_code=408,
-            detail=f"Claude API timeout during React generation: {str(e)}"
-        )
-    except anthropic.APIConnectionError as e:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Claude API connection error during React generation: {str(e)}"
-        )
-    except anthropic.APIError as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Anthropic API error during React generation: {str(e)}"
-        )
+    except Exception as e:
+        # Handle various API errors
+        error_msg = str(e)
+        if "timeout" in error_msg.lower():
+            raise HTTPException(
+                status_code=408,
+                detail=f"Google Gen AI API timeout during React generation: {error_msg}"
+            )
+        elif "connection" in error_msg.lower():
+            raise HTTPException(
+                status_code=503,
+                detail=f"Google Gen AI API connection error during React generation: {error_msg}"
+            )
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Google Gen AI API error during React generation: {error_msg}"
+            )
 
 
 async def edit_html_with_images(current_ui_base64: str, sketch_base64: Optional[str], media_type: str, html_content: str, prompt: str, api_key: str) -> str:
     """
-    Edit HTML content based on one or two images and a text prompt using Anthropic Claude API.
+    Edit HTML content based on one or two images and a text prompt using Google Gen AI API.
 
     Args:
         current_ui_base64: Base64 encoded current UI image data
@@ -309,7 +279,7 @@ async def edit_html_with_images(current_ui_base64: str, sketch_base64: Optional[
         media_type: MIME type of the images (e.g., 'image/png')
         html_content: Current HTML content to edit
         prompt: Text prompt describing the changes
-        api_key: Anthropic API key
+        api_key: Google Gen AI API key
     
     Returns:
         Edited HTML content as string
@@ -318,104 +288,85 @@ async def edit_html_with_images(current_ui_base64: str, sketch_base64: Optional[
         HTTPException: If API call fails or no content is generated
     """
     try:
-        # Initialize Anthropic client
-        client = anthropic.Anthropic(api_key=api_key)
+        # Initialize Google Gen AI client
+        client = genai.Client(api_key=api_key)
         
-        print("Starting streaming request to Claude for HTML editing...")
+        print("Starting streaming request to Google Gen AI for HTML editing...")
         
         edited_html = ""
-        thinking_content = ""
+        
+        # Convert base64 images to bytes
+        current_ui_bytes = base64.b64decode(current_ui_base64)
         
         # Build content array - always include text and current UI image
-        content = [
-                        {
-                            "type": "text",
-                            "text": f"Current HTML to edit:\n\n{html_content}\n\nText prompt for changes: {prompt}"
-                        },
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": media_type,
-                                "data": current_ui_base64
-                            }
-            }
+        contents = [
+            types.Part.from_text(text=f"Current HTML to edit:\n\n{html_content}\n\nText prompt for changes: {prompt}"),
+            types.Part.from_bytes(
+                mime_type=media_type,
+                data=current_ui_bytes,
+            )
         ]
         
         # Only add sketch image if provided
         if sketch_base64:
-            content.append({
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": media_type,
-                                "data": sketch_base64
-                            }
-            })
+            sketch_bytes = base64.b64decode(sketch_base64)
+            contents.append(
+                types.Part.from_bytes(
+                    mime_type=media_type,
+                    data=sketch_bytes,
+                )
+            )
         
-        with client.messages.stream(
-            model="claude-sonnet-4-20250514",
-            max_tokens=64000,
-            temperature=1,
-            system=HTML_EDIT_SYSTEM_PROMPT,
-            messages=[
-                {
-                    "role": "user",
-                    "content": content
-                }
-            ],
-            thinking={
-                "type": "enabled",
-                "budget_tokens": 16000
-            }
-        ) as stream:
-            print("Streaming started, collecting edited HTML response...")
-            
-            # Collect all streamed content
-            for event in stream:
-                if event.type == "content_block_delta":
-                    if event.delta.type == "thinking_delta":
-                        thinking_content += event.delta.thinking
-                        print(f"[HTML EDIT THINKING] {event.delta.thinking}", end="", flush=True)
-                    elif event.delta.type == "text_delta":
-                        edited_html += event.delta.text
-                        print(f"[HTML EDIT] {event.delta.text}", end="", flush=True)
-                elif event.type == "content_block_start":
-                    if hasattr(event.content_block, 'type'):
-                        print(f"\n[HTML EDIT BLOCK START] {event.content_block.type}")
-                elif event.type == "content_block_stop":
-                    print(f"\n[HTML EDIT BLOCK STOP] Index: {event.index}")
-                elif event.type == "message_start":
-                    print("[HTML EDIT MESSAGE START]")
-                elif event.type == "message_stop":
-                    print("\n[HTML EDIT MESSAGE STOP] - Streaming complete")
+        # Generate content config with thinking enabled
+        generate_content_config = types.GenerateContentConfig(
+            system_instruction=HTML_EDIT_SYSTEM_PROMPT,
+            max_output_tokens=65536,
+            temperature=1.0,
+            thinking_config=types.ThinkingConfig(
+                thinking_budget=16000,
+            ),
+        )
+        
+        print("Streaming started, collecting edited HTML response...")
+        
+        # Stream the response
+        for chunk in client.models.generate_content_stream(
+            model="gemini-2.5-pro",
+            contents=contents,
+            config=generate_content_config,
+        ):
+            if chunk.text:
+                edited_html += chunk.text
+                print(f"[HTML EDIT] {chunk.text}", end="", flush=True)
         
         print(f"\nCollected edited HTML content length: {len(edited_html)}")
-        print(f"Collected HTML edit thinking content length: {len(thinking_content)}")
         
         if not edited_html:
             raise HTTPException(
                 status_code=500,
-                detail="No edited HTML content generated by Claude API"
+                detail="No edited HTML content generated by Google Gen AI API"
             )
         
         return edited_html
         
-    except anthropic.APITimeoutError as e:
-        raise HTTPException(
-            status_code=408,
-            detail=f"Claude API timeout during HTML editing: {str(e)}"
-        )
-    except anthropic.APIConnectionError as e:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Claude API connection error during HTML editing: {str(e)}"
-        )
-    except anthropic.APIError as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Anthropic API error during HTML editing: {str(e)}"
-        )
+    except Exception as e:
+        # Handle various API errors
+        error_msg = str(e)
+        if "timeout" in error_msg.lower():
+            raise HTTPException(
+                status_code=408,
+                detail=f"Google Gen AI API timeout during HTML editing: {error_msg}"
+            )
+        elif "connection" in error_msg.lower():
+            raise HTTPException(
+                status_code=503,
+                detail=f"Google Gen AI API connection error during HTML editing: {error_msg}"
+            )
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Google Gen AI API error during HTML editing: {error_msg}"
+            )
 
 
 # ENDPOINT 1: Slide to HTML conversion
@@ -431,12 +382,12 @@ async def convert_slide_to_html(request: SlideToHtmlRequest):
         SlideToHtmlResponse with generated HTML
     """
     try:
-        # Get Anthropic API key from environment
-        api_key = os.getenv("ANTHROPIC_API_KEY")
+        # Get Google Gen AI API key from environment
+        api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
             raise HTTPException(
                 status_code=500, 
-                detail="ANTHROPIC_API_KEY environment variable not set"
+                detail="GOOGLE_API_KEY environment variable not set"
             )
         
         # Resolve image path to actual file system path
@@ -521,12 +472,12 @@ async def convert_html_to_react(request: HtmlToReactRequest):
         HtmlToReactResponse with generated React component
     """
     try:
-        # Get Anthropic API key from environment
-        api_key = os.getenv("ANTHROPIC_API_KEY")
+        # Get Google Gen AI API key from environment
+        api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
             raise HTTPException(
                 status_code=500, 
-                detail="ANTHROPIC_API_KEY environment variable not set"
+                detail="GOOGLE_API_KEY environment variable not set"
             )
         
         # Validate HTML content
@@ -583,12 +534,12 @@ async def edit_html_with_images_endpoint(
         HtmlEditResponse with edited HTML
     """
     try:
-        # Get Anthropic API key from environment
-        api_key = os.getenv("ANTHROPIC_API_KEY")
+        # Get Google Gen AI API key from environment
+        api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
             raise HTTPException(
                 status_code=500, 
-                detail="ANTHROPIC_API_KEY environment variable not set"
+                detail="GOOGLE_API_KEY environment variable not set"
             )
         
         # Validate inputs
