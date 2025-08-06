@@ -73,7 +73,7 @@ const EachSlide: React.FC<EachSlideProps> = ({
 
   // Handle save with drawing data
   const handleSaveWithDrawing = () => {
-    handleSave(slideDisplayRef, didYourDraw);
+    handleSave(slideDisplayRef!, didYourDraw);
   };
 
   // Handle delete slide
@@ -132,7 +132,6 @@ const EachSlide: React.FC<EachSlideProps> = ({
           onEraserModeChange={handleEraserModeChange}
           onClearCanvas={handleClearCanvas}
         />
-
         {/* Slide Content Display */}
         <SlideContentDisplay
           slide={slide}
@@ -152,6 +151,7 @@ const EachSlide: React.FC<EachSlideProps> = ({
           onMouseUp={handleMouseUp}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
+          retrySlide={handleRetrySlide}
           onTouchEnd={handleTouchEnd}
         />
       </CardContent>

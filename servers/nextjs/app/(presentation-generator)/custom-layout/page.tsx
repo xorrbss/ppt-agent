@@ -25,7 +25,7 @@ const CustomLayoutPage = () => {
   const { selectedFile, handleFileSelect, removeFile } = useFileUpload();
   const { slides, setSlides, completedSlides } = useCustomLayout();
   const { fontsData, UploadedFonts, uploadFont, removeFont, getAllUnsupportedFonts, setFontsData } = useFontManagement();
-  const { isProcessingPptx, processFile, retrySlide } = useSlideProcessing(
+  const { isProcessingPptx, processFile, retrySlide,processSlideToHtml } = useSlideProcessing(
     selectedFile,
     slides,
     setSlides,
@@ -37,6 +37,10 @@ const CustomLayoutPage = () => {
     UploadedFonts,
     refetch
   );
+
+  const handleProcessSlideToHtml = (slide: any) => {
+    processSlideToHtml(slide,0)
+  }
 
   // Handle slide updates
   const handleSlideUpdate = (index: number, updatedSlideData: any) => {
@@ -97,6 +101,7 @@ const CustomLayoutPage = () => {
             uploadFont={uploadFont}
             removeFont={removeFont}
             getAllUnsupportedFonts={getAllUnsupportedFonts}
+            processSlideToHtml={()=>handleProcessSlideToHtml(slides[0])}
           />
         )}
 
