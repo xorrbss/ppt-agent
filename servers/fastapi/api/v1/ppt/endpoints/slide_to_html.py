@@ -160,7 +160,7 @@ async def generate_html_from_slide(base64_image: str, media_type: str, xml_conte
         
         return html_content
         
-    except errors.GoogleAPIError as e:
+    except errors.APIError as e:
         print(f"Google API Error: {e}")
         raise HTTPException(
             status_code=500,
@@ -255,7 +255,7 @@ async def generate_react_component_from_html(html_content: str, api_key: str) ->
         print(f"Filtered React content length: {len(filtered_react_content)}")
         
         return filtered_react_content
-    except errors.GoogleAPIError as e:
+    except errors.APIError as e:
         print(f"Google API Error: {e}")
         raise HTTPException(
             status_code=500,
