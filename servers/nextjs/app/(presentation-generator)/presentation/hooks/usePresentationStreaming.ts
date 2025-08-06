@@ -6,7 +6,10 @@ import {
   setStreaming,
 } from "@/store/slices/presentationGeneration";
 import { jsonrepair } from "jsonrepair";
+<<<<<<< HEAD
 import { RootState } from "@/store/store";
+=======
+>>>>>>> main
 import { toast } from "sonner";
 
 export const usePresentationStreaming = (
@@ -97,7 +100,10 @@ export const usePresentationStreaming = (
                 data.detail ||
                 "Failed to connect to the server. Please try again.",
             });
-            break;
+            setLoading(false);
+            dispatch(setStreaming(false));
+            setError(true);
+             break;
         }
       });
 

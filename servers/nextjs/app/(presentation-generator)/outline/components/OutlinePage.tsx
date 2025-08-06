@@ -85,7 +85,6 @@ const OutlinePage: React.FC = () => {
             <GenerateButton
               loadingState={loadingState}
               streamState={streamState}
-              outlines={outlines}
               selectedLayoutGroup={selectedLayoutGroup}
               onSubmit={handleSubmit}
             />

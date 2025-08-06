@@ -355,7 +355,14 @@ async def generate_presentation_api(
         ):
             presentation_outlines_text += chunk
 
-    presentation_outlines_json = json.loads(presentation_outlines_text)
+    try:
+        presentation_outlines_json = json.loads(presentation_outlines_text)
+    except Exception as e:
+        print(e)
+        raise HTTPException(
+            status_code=400,
+            detail="Failed to generate presentation outlines. Please try again.",
+        )
     presentation_outlines = PresentationOutlineModel(**presentation_outlines_json)
     outlines = presentation_outlines.slides[:n_slides]
     total_outlines = len(outlines)
