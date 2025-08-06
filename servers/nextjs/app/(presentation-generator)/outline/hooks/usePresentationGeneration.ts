@@ -84,7 +84,7 @@ export const usePresentationGeneration = (
 
       if (response) {
         dispatch(clearPresentationData());
-          router.push(`/presentation?id=${presentationId}&stream=true`);
+          router.replace(`/presentation?id=${presentationId}&stream=true`);
       }
     } catch (error: any) {
       console.error('Error In Presentation Generation(prepare).', error);
