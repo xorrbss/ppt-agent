@@ -14,10 +14,7 @@ export interface LoadingState {
   duration: number;
 }
 
-export interface StreamState {
-  isStreaming: boolean;
-  isLoading: boolean;
-}
+
 
 export const TABS = {
   OUTLINE: 'outline',

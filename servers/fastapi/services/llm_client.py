@@ -39,8 +39,6 @@ class LLMClient:
 
     # ? Disable thinking
     def disable_thinking(self) -> bool:
-        if self.llm_provider != LLMProvider.CUSTOM:
-            return False
         return parse_bool_or_none(get_disable_thinking_env()) or False
 
     # ? Clients
@@ -122,15 +120,14 @@ class LLMClient:
         model: str,
         messages: List[LLMMessage],
         max_tokens: Optional[int] = None,
+        extra_body: Optional[dict] = None,
     ):
         client: AsyncOpenAI = self._client
         response = await client.chat.completions.create(
             model=model,
             messages=[message.model_dump() for message in messages],
             max_completion_tokens=max_tokens,
-            extra_body={
-                "enable_thinking": not self.disable_thinking(),
-            },
+            extra_body=extra_body,
         )
         return response.choices[0].message.content
 
@@ -185,7 +182,10 @@ class LLMClient:
     async def _generate_custom(
         self, model: str, messages: List[LLMMessage], max_tokens: Optional[int] = None
     ):
-        return await self._generate_openai(model, messages, max_tokens)
+        extra_body = {"enable_thinking": not self.disable_thinking()}
+        return await self._generate_openai(
+            model, messages, max_tokens, extra_body=extra_body
+        )
 
     async def generate(
         self,
@@ -220,6 +220,7 @@ class LLMClient:
         response_format: dict,
         strict: bool = False,
         max_tokens: Optional[int] = None,
+        extra_body: Optional[dict] = None,
     ):
         client: AsyncOpenAI = self._client
         use_tool_calls = self.use_tool_calls()
@@ -245,9 +246,7 @@ class LLMClient:
                     ),
                 },
                 max_completion_tokens=max_tokens,
-                extra_body={
-                    "enable_thinking": not self.disable_thinking(),
-                },
+                extra_body=extra_body,
             )
             content = response.choices[0].message.content
         else:
@@ -267,9 +266,7 @@ class LLMClient:
                 ],
                 tool_choice="required",
                 max_completion_tokens=max_tokens,
-                extra_body={
-                    "enable_thinking": not self.disable_thinking(),
-                },
+                extra_body=extra_body,
             )
             tool_calls = response.choices[0].message.tool_calls
             if tool_calls:
@@ -359,8 +356,9 @@ class LLMClient:
         strict: bool = False,
         max_tokens: Optional[int] = None,
     ):
+        extra_body = {"enable_thinking": not self.disable_thinking()}
         return await self._generate_openai_structured(
-            model, messages, response_format, strict, max_tokens
+            model, messages, response_format, strict, max_tokens, extra_body
         )
 
     async def generate_structured(
@@ -406,15 +404,14 @@ class LLMClient:
         model: str,
         messages: List[LLMMessage],
         max_tokens: Optional[int] = None,
+        extra_body: Optional[dict] = None,
     ):
         client: AsyncOpenAI = self._client
         async with client.chat.completions.stream(
             model=model,
             messages=[message.model_dump() for message in messages],
             max_completion_tokens=max_tokens,
-            extra_body={
-                "enable_thinking": not self.disable_thinking(),
-            },
+            extra_body=extra_body,
         ) as stream:
             async for event in stream:
                 if event.type == "content.delta":
@@ -474,7 +471,8 @@ class LLMClient:
         messages: List[LLMMessage],
         max_tokens: Optional[int] = None,
     ):
-        return self._stream_openai(model, messages, max_tokens)
+        extra_body = {"enable_thinking": not self.disable_thinking()}
+        return self._stream_openai(model, messages, max_tokens, extra_body)
 
     def stream(
         self, model: str, messages: List[LLMMessage], max_tokens: Optional[int] = None
@@ -499,6 +497,7 @@ class LLMClient:
         response_format: dict,
         strict: bool = False,
         max_tokens: Optional[int] = None,
+        extra_body: Optional[dict] = None,
     ):
         client: AsyncOpenAI = self._client
         use_tool_calls = self.use_tool_calls()
@@ -524,9 +523,7 @@ class LLMClient:
                         },
                     }
                 ),
-                extra_body={
-                    "enable_thinking": not self.disable_thinking(),
-                },
+                extra_body=extra_body,
             ) as stream:
                 async for event in stream:
                     if event.type == "content.delta":
@@ -548,9 +545,7 @@ class LLMClient:
                     }
                 ],
                 tool_choice="required",
-                extra_body={
-                    "enable_thinking": not self.disable_thinking(),
-                },
+                extra_body=extra_body,
             ) as stream:
                 async for event in stream:
                     if event.type == "tool_calls.function.arguments.delta":
@@ -630,8 +625,9 @@ class LLMClient:
         strict: bool = False,
         max_tokens: Optional[int] = None,
     ):
+        extra_body = {"enable_thinking": not self.disable_thinking()}
         return self._stream_openai_structured(
-            model, messages, response_format, strict, max_tokens
+            model, messages, response_format, strict, max_tokens, extra_body
         )
 
     def stream_structured(

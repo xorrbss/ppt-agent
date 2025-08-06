@@ -3,18 +3,15 @@ import { useDispatch, useSelector } from "react-redux";
 import { toast } from "sonner";
 import { setOutlines } from "@/store/slices/presentationGeneration";
 import { jsonrepair } from "jsonrepair";
-import { StreamState } from "../types/index";
 import { RootState } from "@/store/store";
 
-const DEFAULT_STREAM_STATE: StreamState = {
-  isStreaming: false,
-  isLoading: true,
-};
+
 
 export const useOutlineStreaming = (presentationId: string | null) => {
   const dispatch = useDispatch();
   const { outlines } = useSelector((state: RootState) => state.presentationGeneration);
-  const [streamState, setStreamState] = useState<StreamState>(DEFAULT_STREAM_STATE);
+  const [isStreaming, setIsStreaming] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (!presentationId || outlines.length > 0) return;
@@ -23,8 +20,8 @@ export const useOutlineStreaming = (presentationId: string | null) => {
     let accumulatedChunks = "";
 
     const initializeStream = async () => {
-      setStreamState({ isStreaming: true, isLoading: true });
-
+      setIsStreaming(true)
+      setIsLoading(true)
       try {
         eventSource = new EventSource(
           `/api/v1/ppt/outlines/stream?presentation_id=${presentationId}`
@@ -40,7 +37,7 @@ export const useOutlineStreaming = (presentationId: string | null) => {
                 const partialData = JSON.parse(repairedJson);
                 if (partialData.slides) {
                   dispatch(setOutlines(partialData.slides));
-                  setStreamState(prev => ({ ...prev, isLoading: false }));
+                  setIsLoading(false)
                 }
               } catch (error) {
                 // JSON isn't complete yet, continue accumulating
@@ -51,8 +48,9 @@ export const useOutlineStreaming = (presentationId: string | null) => {
               try {
                 const outlinesData: string[] = data.presentation.outlines.slides;
                 dispatch(setOutlines(outlinesData));
-                setStreamState({ isStreaming: false, isLoading: false });
-                eventSource.close();
+                  setIsStreaming(false)
+                  setIsLoading(false)
+                  eventSource.close();
               } catch (error) {
                 console.error("Error parsing accumulated chunks:", error);
                 toast.error("Failed to parse presentation data");
@@ -62,11 +60,13 @@ export const useOutlineStreaming = (presentationId: string | null) => {
               break;
 
             case "closing":
-              setStreamState({ isStreaming: false, isLoading: false });
+              setIsStreaming(false)
+              setIsLoading(false)
               eventSource.close();
               break;
             case "error":
-              setStreamState({ isStreaming: false, isLoading: false });
+              setIsStreaming(false)
+              setIsLoading(false)
               eventSource.close();
               toast.error('Error in outline streaming',
                 {
@@ -78,18 +78,21 @@ export const useOutlineStreaming = (presentationId: string | null) => {
         });
 
         eventSource.onerror = () => {
-          setStreamState({ isStreaming: false, isLoading: false });
+          setIsStreaming(false)
+          setIsLoading(false)
           eventSource.close();
           toast.error("Failed to connect to the server. Please try again.");
         };
       } catch (error) {
-        setStreamState({ isStreaming: false, isLoading: false });
+        setIsStreaming(false)
+        setIsLoading(false)
         toast.error("Failed to initialize connection");
-      }finally{
-        setStreamState({ isStreaming: false, isLoading: false });
+      } finally {
+        setIsStreaming(false)
+        setIsLoading(false)
       }
     };
-      initializeStream();
+    initializeStream();
     return () => {
       if (eventSource) {
         eventSource.close();
@@ -97,5 +100,5 @@ export const useOutlineStreaming = (presentationId: string | null) => {
     };
   }, [presentationId, dispatch]);
 
-  return streamState;
+  return { isStreaming, isLoading };
 }; 

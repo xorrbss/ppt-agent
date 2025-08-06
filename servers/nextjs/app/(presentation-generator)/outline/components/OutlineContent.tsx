@@ -32,7 +32,7 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
     onDragEnd,
     onAddSlide
 }) => {
-   
+    console.log('isLoading', isLoading)
     const sensors = useSensors(
         useSensor(PointerSensor),
         useSensor(KeyboardSensor, {
