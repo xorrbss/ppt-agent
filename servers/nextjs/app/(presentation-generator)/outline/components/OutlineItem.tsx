@@ -97,12 +97,11 @@ export function OutlineItem({
                 {/* Main Title Input - Add onFocus handler */}
                 <div id={`outline-item-${index}`} className="flex flex-col basis-full gap-2">
                     {/* Editable Markdown Content */}
-                    {isStreaming ? <textarea
-                        defaultValue={slideOutline || ''}
-                        onBlur={(e) => handleSlideChange(e.target.value)}
-                        className="text-sm  flex-1 font-normal bg-transparent outline-none overflow-y-hidden"
-                        placeholder="Content goes here"
-                    /> : <MarkdownEditor
+                    {isStreaming ? <p
+                        className="text-sm  flex-1 font-normal"
+                    >
+                        {slideOutline || ''}
+                    </p> : <MarkdownEditor
                         key={index}
                         content={slideOutline || ''}
                         onChange={(content) => handleSlideChange(content)}
