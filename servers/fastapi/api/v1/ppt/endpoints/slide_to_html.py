@@ -5,6 +5,7 @@ from typing import Optional, List, Dict
 from fastapi import APIRouter, HTTPException, File, UploadFile, Form, Depends
 from pydantic import BaseModel
 from google import genai
+from google.genai import errors
 from google.genai import types
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func
@@ -74,11 +75,6 @@ class GetLayoutsResponse(BaseModel):
     message: Optional[str] = None
 
 
-class DeleteLayoutResponse(BaseModel):
-    success: bool
-    message: Optional[str] = None
-
-
 class PresentationSummary(BaseModel):
     presentation_id: str
     layout_count: int
@@ -121,10 +117,7 @@ async def generate_html_from_slide(base64_image: str, media_type: str, xml_conte
         # Convert base64 to bytes
         image_bytes = base64.b64decode(base64_image)
         
-        # Use streaming to handle long requests
-        print("Starting streaming request to Google Gen AI for HTML generation...")
-        
-        html_content = ""
+        print("Starting non-streaming request to Google Gen AI for HTML generation...")
         
         # Create content with image and text
         contents = [
@@ -145,19 +138,19 @@ async def generate_html_from_slide(base64_image: str, media_type: str, xml_conte
             ),
         )
         
-        print("Streaming started, collecting HTML response...")
+        print("Making non-streaming request for HTML generation...")
         
-        # Stream the response
-        for chunk in client.models.generate_content_stream(
+        # Generate content in non-streaming mode
+        response = client.models.generate_content(
             model="gemini-2.5-pro",
             contents=contents,
             config=generate_content_config,
-        ):
-            if chunk.text:
-                html_content += chunk.text
-                print(f"[HTML] {chunk.text}", end="", flush=True)
+        )
+
+        # Extract the response text
+        html_content = response.text if response.text else ""
         
-        print(f"\nCollected HTML content length: {len(html_content)}")
+        print(f"Received HTML content length: {len(html_content)}")
         
         if not html_content:
             raise HTTPException(
@@ -167,18 +160,26 @@ async def generate_html_from_slide(base64_image: str, media_type: str, xml_conte
         
         return html_content
         
+    except errors.GoogleAPIError as e:
+        print(f"Google API Error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Google API error during HTML generation: {e}"
+        )
     except Exception as e:
         # Handle various API errors
         error_msg = str(e)
+        print(f"Exception occurred: {error_msg}")
+        print(f"Exception type: {type(e)}")
         if "timeout" in error_msg.lower():
             raise HTTPException(
                 status_code=408,
-                detail=f"Google Gen AI API timeout during HTML streaming: {error_msg}"
+                detail=f"Google Gen AI API timeout during HTML generation: {error_msg}"
             )
         elif "connection" in error_msg.lower():
             raise HTTPException(
                 status_code=503,
-                detail=f"Google Gen AI API connection error during HTML streaming: {error_msg}"
+                detail=f"Google Gen AI API connection error during HTML generation: {error_msg}"
             )
         else:
             raise HTTPException(
@@ -205,9 +206,7 @@ async def generate_react_component_from_html(html_content: str, api_key: str) ->
         # Initialize Google Gen AI client
         client = genai.Client(api_key=api_key)
         
-        print("Starting streaming request to Google Gen AI for React component generation...")
-        
-        react_content = ""
+        print("Starting non-streaming request to Google Gen AI for React component generation...")
         
         # Create content with text
         contents = types.Part.from_text(text=html_content)
@@ -222,25 +221,28 @@ async def generate_react_component_from_html(html_content: str, api_key: str) ->
             ),
         )
         
-        print("Streaming started, collecting React component response...")
+        print("Making non-streaming request for React component...")
         
-        # Stream the response
-        for chunk in client.models.generate_content_stream(
+        # Generate content in non-streaming mode
+        response = client.models.generate_content(
             model="gemini-2.5-pro",
             contents=contents,
             config=generate_content_config,
-        ):
-            if chunk.text:
-                react_content += chunk.text
-                print(f"[REACT] {chunk.text}", end="", flush=True)
+        )
+
+        # Extract the response text
+        react_content = response.text if response.text else ""
         
-        print(f"\nCollected React content length: {len(react_content)}")
+        print(f"Received React content length: {len(react_content)}")
         
         if not react_content:
             raise HTTPException(
                 status_code=500,
                 detail="No React component generated by Google Gen AI API"
             )
+        
+        react_content = react_content.replace("```tsx", "").replace("```", "").replace("typescript", "")
+
         
         # Filter out lines that start with import or export
         filtered_lines = []
@@ -253,10 +255,17 @@ async def generate_react_component_from_html(html_content: str, api_key: str) ->
         print(f"Filtered React content length: {len(filtered_react_content)}")
         
         return filtered_react_content
-        
+    except errors.GoogleAPIError as e:
+        print(f"Google API Error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Google API error during React generation: {e}"
+        )
     except Exception as e:
         # Handle various API errors
         error_msg = str(e)
+        print(f"Exception occurred: {error_msg}")
+        print(f"Exception type: {type(e)}")
         if "timeout" in error_msg.lower():
             raise HTTPException(
                 status_code=408,
@@ -874,39 +883,3 @@ async def get_presentations_summary(
             status_code=500,
             detail=f"Internal server error while retrieving presentations summary: {str(e)}"
         ) 
-        
-        
-        
-# ENDPOINT : Delete a layout 
-@LAYOUT_MANAGEMENT_ROUTER.delete(
-    "/delete-layouts/{presentation_id}",
-    response_model=DeleteLayoutResponse,
-    responses={
-        200: {"model": DeleteLayoutResponse, "description": "Layout deleted successfully"},
-        404: {"model": ErrorResponse, "description": "Presentation Layouts not found"},
-        500: {"model": ErrorResponse, "description": "Internal server error"}
-    }
-)
-async def delete_layouts(presentation_id: str, session: AsyncSession = Depends(get_async_session)):
-    try:
-      # Validate presentation_id format (basic UUID check)
-        if not presentation_id or len(presentation_id.strip()) == 0:
-            raise HTTPException(
-                status_code=400,
-                detail="Presentation ID cannot be empty"
-            )
-        # Delete Presentation with all layouts
-        await session.execute(delete(PresentationLayoutCodeModel).where(PresentationLayoutCodeModel.presentation_id == presentation_id))
-        await session.commit()
-        return DeleteLayoutResponse(
-         success=True,
-         message=f"Successfully deleted  layout(s) for presentation {presentation_id}"
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Error deleting layouts for presentation {presentation_id}: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Internal server error while deleting layouts: {str(e)}"
-        )
