@@ -2,8 +2,12 @@ from typing import List
 from pydantic import BaseModel
 
 
+class SlideOutlineModel(BaseModel):
+    content: str
+
+
 class PresentationOutlineModel(BaseModel):
-    slides: List[str]
+    slides: List[SlideOutlineModel]
 
     def to_string(self):
         message = ""
