@@ -3,7 +3,7 @@
 import React from "react";
 import FontManager from "./components/FontManager";
 import Header from "@/components/Header";
-import { useLayout } from "../(presentation-generator)/context/LayoutContext";
+import { useLayout } from "../context/LayoutContext";
 import { useCustomLayout } from "./hooks/useCustomLayout";
 import { useFontManagement } from "./hooks/useFontManagement";
 import { useFileUpload } from "./hooks/useFileUpload";
