@@ -3,13 +3,22 @@ import json
 from typing import List, Optional
 from fastapi import HTTPException
 from openai import AsyncOpenAI
+from openai.types.chat.chat_completion_message import ChatCompletionMessageToolCall
 from google import genai
 from google.genai.types import GenerateContentConfig
 from anthropic import AsyncAnthropic
 from anthropic.types import Message as AnthropicMessage
 from anthropic import MessageStreamEvent as AnthropicMessageStreamEvent
 from enums.llm_provider import LLMProvider
-from models.llm_message import LLMMessage
+from models.llm_message import (
+    LLMAssistantMessage,
+    LLMMessage,
+    LLMSystemMessage,
+    LLMUserMessage,
+)
+from models.llm_tool_call import LLMToolCall
+from models.llm_tools import LLMDynamicTool, LLMTool
+from services.llm_tool_calls_handler import LLMToolCallsHandler
 from utils.async_iterator import iterator_to_async
 from utils.get_env import (
     get_anthropic_api_key_env,
@@ -23,6 +32,7 @@ from utils.get_env import (
 )
 from utils.llm_provider import get_llm_provider
 from utils.parsers import parse_bool_or_none
+from utils.randomizers import get_random_uuid
 from utils.schema_utils import ensure_strict_json_schema
 
 
@@ -30,6 +40,7 @@ class LLMClient:
     def __init__(self):
         self.llm_provider = get_llm_provider()
         self._client = self._get_client()
+        self.tool_calls_handler = LLMToolCallsHandler(self)
 
     # ? Use tool calls
     def use_tool_calls(self) -> bool:
@@ -104,15 +115,19 @@ class LLMClient:
     # ? Prompts
     def _get_system_prompt(self, messages: List[LLMMessage]) -> str:
         for message in messages:
-            if message.role == "system":
+            if isinstance(message, LLMSystemMessage):
                 return message.content
         return ""
 
     def _get_user_prompts(self, messages: List[LLMMessage]) -> List[str]:
-        return [message.content for message in messages if message.role == "user"]
+        return [
+            message.content
+            for message in messages
+            if isinstance(message, LLMUserMessage)
+        ]
 
     def _get_user_llm_messages(self, messages: List[LLMMessage]) -> List[LLMMessage]:
-        return [message for message in messages if message.role == "user"]
+        return [message for message in messages if isinstance(message, LLMUserMessage)]
 
     # ? Generate Unstructured Content
     async def _generate_openai(
@@ -120,6 +135,7 @@ class LLMClient:
         model: str,
         messages: List[LLMMessage],
         max_tokens: Optional[int] = None,
+        tools: Optional[List[dict]] = None,
         extra_body: Optional[dict] = None,
     ):
         client: AsyncOpenAI = self._client
@@ -127,8 +143,36 @@ class LLMClient:
             model=model,
             messages=[message.model_dump() for message in messages],
             max_completion_tokens=max_tokens,
+            tools=tools,
             extra_body=extra_body,
         )
+        tool_calls = response.choices[0].message.tool_calls
+        if tool_calls:
+            tool_call_messages = await self.tool_calls_handler.handle_tool_calls_openai(
+                [
+                    LLMToolCall(
+                        id=tool_call.id,
+                        name=tool_call.function.name,
+                        arguments=tool_call.function.arguments,
+                    )
+                    for tool_call in tool_calls
+                ]
+            )
+            new_messages = [
+                *messages,
+                LLMAssistantMessage(
+                    role="assistant",
+                    content=response.choices[0].message.content,
+                    tool_calls=[
+                        tool_call.model_dump() for tool_call in tool_call_messages
+                    ],
+                ),
+                *tool_call_messages,
+            ]
+            return await self._generate_openai(
+                model, new_messages, max_tokens, tools, extra_body
+            )
+
         return response.choices[0].message.content
 
     async def _generate_google(
@@ -192,7 +236,10 @@ class LLMClient:
         model: str,
         messages: List[LLMMessage],
         max_tokens: Optional[int] = None,
+        tools: Optional[List[type[LLMTool] | LLMDynamicTool]] = None,
     ):
+        parsed_tools = self.get_tools(tools)
+
         content = None
         match self.llm_provider:
             case LLMProvider.OPENAI:
@@ -220,6 +267,7 @@ class LLMClient:
         response_format: dict,
         strict: bool = False,
         max_tokens: Optional[int] = None,
+        tools: Optional[List[dict]] = None,
         extra_body: Optional[dict] = None,
     ):
         client: AsyncOpenAI = self._client
@@ -231,46 +279,75 @@ class LLMClient:
                 path=(),
                 root=response_schema,
             )
-        if not use_tool_calls:
-            response = await client.chat.completions.create(
-                model=model,
-                messages=[message.model_dump() for message in messages],
-                response_format={
-                    "type": "json_schema",
-                    "json_schema": (
-                        {
-                            "name": "ResponseSchema",
-                            "strict": strict,
-                            "schema": response_schema,
-                        }
-                    ),
-                },
-                max_completion_tokens=max_tokens,
-                extra_body=extra_body,
-            )
-            content = response.choices[0].message.content
-        else:
-            response = await client.chat.completions.create(
-                model=model,
-                messages=[message.model_dump() for message in messages],
-                tools=[
+        response = await client.chat.completions.create(
+            model=model,
+            messages=[message.model_dump() for message in messages],
+            response_format={
+                "type": "json_schema",
+                "json_schema": (
                     {
-                        "type": "function",
-                        "function": {
-                            "name": "ResponseSchema",
-                            "description": "A response to the user's message",
-                            "strict": strict,
-                            "parameters": response_format,
-                        },
+                        "name": "ResponseSchema",
+                        "strict": strict,
+                        "schema": response_schema,
                     }
-                ],
-                tool_choice="required",
-                max_completion_tokens=max_tokens,
-                extra_body=extra_body,
+                ),
+            },
+            max_completion_tokens=max_tokens,
+            extra_body=extra_body,
+        )
+        tool_calls = response.choices[0].message.tool_calls
+        if tool_calls:
+            tool_call_messages = await self.tool_calls_handler.handle_tool_calls_openai(
+                [
+                    LLMToolCall(
+                        id=tool_call.id,
+                        name=tool_call.function.name,
+                        arguments=tool_call.function.arguments,
+                    )
+                    for tool_call in tool_calls
+                ]
             )
-            tool_calls = response.choices[0].message.tool_calls
-            if tool_calls:
-                content = tool_calls[0].function.arguments
+            new_messages = [
+                *messages,
+                LLMAssistantMessage(
+                    role="assistant",
+                    content=response.choices[0].message.content,
+                    tool_calls=[each.model_dump() for each in tool_calls],
+                ),
+                *tool_call_messages,
+            ]
+            return await self._generate_openai_structured(
+                model,
+                new_messages,
+                response_format,
+                strict,
+                max_tokens,
+                tools,
+                extra_body,
+            )
+        content = response.choices[0].message.content
+        # else:
+        #     response = await client.chat.completions.create(
+        #         model=model,
+        #         messages=[message.model_dump() for message in messages],
+        #         tools=[
+        #             {
+        #                 "type": "function",
+        #                 "function": {
+        #                     "name": "ResponseSchema",
+        #                     "description": "A response to the user's message",
+        #                     "strict": strict,
+        #                     "parameters": response_format,
+        #                 },
+        #             }
+        #         ],
+        #         tool_choice="required",
+        #         max_completion_tokens=max_tokens,
+        #         extra_body=extra_body,
+        #     )
+        #     tool_calls = response.choices[0].message.tool_calls
+        #     if tool_calls:
+        #         content = tool_calls[0].function.arguments
 
         if content:
             return json.loads(content)
@@ -404,6 +481,7 @@ class LLMClient:
         model: str,
         messages: List[LLMMessage],
         max_tokens: Optional[int] = None,
+        tools: Optional[List[dict]] = None,
         extra_body: Optional[dict] = None,
     ):
         client: AsyncOpenAI = self._client
@@ -413,9 +491,35 @@ class LLMClient:
             max_completion_tokens=max_tokens,
             extra_body=extra_body,
         ) as stream:
+            tool_calls = []
             async for event in stream:
-                if event.type == "content.delta":
+                if (
+                    event.type == "tool_calls.function.arguments.delta"
+                    and event.name == "ResponseSchema"
+                ):
+                    yield event.arguments_delta
+                elif event.type == "content.delta":
                     yield event.delta
+                elif (
+                    event.type == "tool_calls.function.arguments.done"
+                    and event.name != "ResponseSchema"
+                ):
+                    tool_calls.append(
+                        LLMToolCall(
+                            id=get_random_uuid(),
+                            name=event.name,
+                            arguments=event.arguments,
+                        )
+                    )
+            if tool_calls:
+                tool_call_messages = (
+                    await self.tool_calls_handler.handle_tool_calls_openai(tool_calls)
+                )
+
+                new_messages = [
+                    *messages,
+                    *tool_call_messages,
+                ]
 
     async def _stream_google(
         self,
@@ -497,6 +601,7 @@ class LLMClient:
         response_format: dict,
         strict: bool = False,
         max_tokens: Optional[int] = None,
+        tools: Optional[List[dict]] = None,
         extra_body: Optional[dict] = None,
     ):
         client: AsyncOpenAI = self._client
@@ -659,3 +764,10 @@ class LLMClient:
                 return self._stream_custom_structured(
                     model, messages, response_format, strict, max_tokens
                 )
+
+    # ? Tool call handling
+    def get_tools(self, tools: Optional[List[type[LLMTool] | LLMDynamicTool]] = None):
+        if tools is None:
+            return None
+        parsed_tools = map(self.tool_calls_handler.parse_tool, tools)
+        return list(parsed_tools)
