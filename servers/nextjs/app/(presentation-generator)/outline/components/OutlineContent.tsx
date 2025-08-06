@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { FileText } from "lucide-react";
 
 interface OutlineContentProps {
-    outlines: string[] | null;
+    outlines: { content: string }[] | null;
     isLoading: boolean;
     isStreaming: boolean;
     onDragEnd: (event: any) => void;
@@ -83,7 +83,18 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
                         collisionDetection={closestCenter}
                         onDragEnd={onDragEnd}
                     >
-                        <SortableContext
+                        {isStreaming ? (
+
+                           outlines.map((item, index) => (
+                            <OutlineItem
+                                key={`slide-${index}`}
+                                index={index + 1}
+                                slideOutline={item}
+                                isStreaming={isStreaming}
+                            />
+                        ))
+                        ) :
+                            <SortableContext
                             items={outlines?.map((item, index) => ({ id: `slide-${index}` })) || []}
                             strategy={verticalListSortingStrategy}
                         >
@@ -95,7 +106,7 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
                                     isStreaming={isStreaming}
                                 />
                             ))}
-                        </SortableContext>
+                        </SortableContext>}
                     </DndContext>
 
                     <Button

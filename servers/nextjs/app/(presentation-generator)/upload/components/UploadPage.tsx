@@ -131,6 +131,7 @@ const UploadPage = () => {
       config,
       files: responses,
     }));
+    dispatch(clearOutlines())
     router.push("/documents-preview");
   };
 
@@ -154,6 +155,7 @@ const UploadPage = () => {
     });
 
     dispatch(setPresentationId(createResponse.id));
+    dispatch(clearOutlines())
     router.push("/outline");
   };
 

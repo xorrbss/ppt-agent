@@ -10,7 +10,9 @@ import { useEffect } from "react"
 
 
 interface OutlineItemProps {
-    slideOutline: string,
+    slideOutline: {
+        content: string,
+    },
     index: number
     isStreaming: boolean
 }
@@ -38,7 +40,7 @@ export function OutlineItem({
         }
     }, [outlines.length]);
 
-    const handleSlideChange = (newOutline: string) => {
+    const handleSlideChange = (newOutline:any) => {
         if (isStreaming) return;
         const newData = outlines?.map((each, idx) => {
             if (idx === index - 1) {
@@ -100,10 +102,10 @@ export function OutlineItem({
                     {isStreaming ? <p
                         className="text-sm  flex-1 font-normal"
                     >
-                        {slideOutline || ''}
+                        {slideOutline.content || ''}
                     </p> : <MarkdownEditor
                         key={index}
-                        content={slideOutline || ''}
+                        content={slideOutline.content || ''}
                         onChange={(content) => handleSlideChange(content)}
                     />}
 
