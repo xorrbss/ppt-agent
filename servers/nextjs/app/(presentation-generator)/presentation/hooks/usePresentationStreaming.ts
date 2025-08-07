@@ -6,10 +6,6 @@ import {
   setStreaming,
 } from "@/store/slices/presentationGeneration";
 import { jsonrepair } from "jsonrepair";
-<<<<<<< HEAD
-import { RootState } from "@/store/store";
-=======
->>>>>>> main
 import { toast } from "sonner";
 
 export const usePresentationStreaming = (
