@@ -30,6 +30,7 @@ interface FontManagerProps {
   uploadFont: (fontName: string, file: File) => Promise<string | null>;
   removeFont: (fontUrl: string) => void;
   getAllUnsupportedFonts: () => string[];
+  processSlideToHtml: () => void;
 }
 
 const FontManager: React.FC<FontManagerProps> = ({
@@ -38,6 +39,7 @@ const FontManager: React.FC<FontManagerProps> = ({
   uploadFont,
   removeFont,
   getAllUnsupportedFonts,
+  processSlideToHtml,
 }) => {
   const [uploadingFonts, setUploadingFonts] = useState<Set<string>>(new Set());
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
@@ -214,6 +216,17 @@ const FontManager: React.FC<FontManagerProps> = ({
             </div>
           </div>
         )}
+        <div className="flex justify-center mt-4">
+
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={processSlideToHtml}
+          className="text-xs px-8 py-2 font-semibold bg-blue-600 text-white hover:text-white hover:bg-blue-700 border-blue-600"
+          >
+            Extract layouts
+        </Button>
+          </div>
       </CardContent>
     </Card>
   );

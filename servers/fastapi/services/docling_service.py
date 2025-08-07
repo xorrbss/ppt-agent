@@ -1,4 +1,9 @@
-from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.document_converter import (
+    DocumentConverter,
+    PdfFormatOption,
+    PowerpointFormatOption,
+    WordFormatOption,
+)
 from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.datamodel.base_models import InputFormat
 
@@ -9,17 +14,18 @@ class DoclingService:
         self.pipeline_options.do_ocr = False
 
         self.converter = DocumentConverter(
+            allowed_formats=[InputFormat.PPTX, InputFormat.PDF, InputFormat.DOCX],
             format_options={
-                InputFormat.DOCX: PdfFormatOption(
+                InputFormat.DOCX: WordFormatOption(
                     pipeline_options=self.pipeline_options,
                 ),
-                InputFormat.PPTX: PdfFormatOption(
+                InputFormat.PPTX: PowerpointFormatOption(
                     pipeline_options=self.pipeline_options,
                 ),
                 InputFormat.PDF: PdfFormatOption(
                     pipeline_options=self.pipeline_options,
                 ),
-            }
+            },
         )
 
     def parse_to_markdown(self, file_path: str) -> str:

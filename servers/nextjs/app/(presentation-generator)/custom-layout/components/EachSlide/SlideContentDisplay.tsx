@@ -1,6 +1,5 @@
 import React from "react";
-import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
+
 import SlideContent from "../SlideContent";
 import { SlideContentDisplayProps } from "../../types";
 
@@ -12,9 +11,9 @@ export const SlideContentDisplay: React.FC<SlideContentDisplayProps> = ({
   slideDisplayRef,
   canvasRef,
   canvasDimensions,
+  eraserMode,
   strokeWidth,
   strokeColor,
-  eraserMode,
   isDrawing,
   didYourDraw,
   onMouseDown,
@@ -23,6 +22,7 @@ export const SlideContentDisplay: React.FC<SlideContentDisplayProps> = ({
   onTouchStart,
   onTouchMove,
   onTouchEnd,
+  retrySlide,
 }) => {
   // Don't show slide content when in HTML edit mode
   if (isHtmlEditMode) {
@@ -103,6 +103,7 @@ export const SlideContentDisplay: React.FC<SlideContentDisplayProps> = ({
             slide.error
           )}
         </div>
+        <button onClick={() => retrySlide(slide.slide_number)}>Retry</button>
       </div>
     );
   }

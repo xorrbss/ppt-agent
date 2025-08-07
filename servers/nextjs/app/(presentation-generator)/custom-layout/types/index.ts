@@ -83,9 +83,9 @@ export interface SlideContentDisplayProps {
   slide: ProcessedSlide;
   isEditMode: boolean;
   isHtmlEditMode: boolean;
-  slideContentRef: React.RefObject<HTMLDivElement>;
-  slideDisplayRef: React.RefObject<HTMLDivElement>;
-  canvasRef: React.RefObject<HTMLCanvasElement>;
+  slideContentRef: React.RefObject<HTMLDivElement | null>;
+  slideDisplayRef: React.RefObject<HTMLDivElement | null>;
+  canvasRef: React.RefObject<HTMLCanvasElement | null>;
   canvasDimensions: { width: number; height: number };
   strokeWidth: number;
   strokeColor: string;
@@ -98,6 +98,7 @@ export interface SlideContentDisplayProps {
   onTouchStart: (e: React.TouchEvent<HTMLCanvasElement>) => void;
   onTouchMove: (e: React.TouchEvent<HTMLCanvasElement>) => void;
   onTouchEnd: (e: React.TouchEvent<HTMLCanvasElement>) => void;
+  retrySlide: (slideNumber: number) => void;
 }
 
 export interface HtmlEditorProps {

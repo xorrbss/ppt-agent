@@ -85,11 +85,11 @@ export const useOutlineStreaming = (presentationId: string | null) => {
       } catch (error) {
         setStreamState({ isStreaming: false, isLoading: false });
         toast.error("Failed to initialize connection");
+      }finally{
+        setStreamState({ isStreaming: false, isLoading: false });
       }
     };
-
-    initializeStream();
-
+      initializeStream();
     return () => {
       if (eventSource) {
         eventSource.close();

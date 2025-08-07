@@ -161,11 +161,7 @@ export const useSlideProcessing = (
         `Successfully extracted ${pptxData.slides.length} slides! Converting to HTML...`
       );
 
-      // Start processing first slide
-      setTimeout(() => {
-        console.log("Starting to process first slide");
-        processSlideToHtml(initialSlides[0], 0);
-      }, 500);
+      
     } catch (error) {
       console.error("Error processing file:", error);
       const errorMessage =

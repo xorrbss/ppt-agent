@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +20,10 @@ export const HtmlEditor: React.FC<HtmlEditorProps> = ({
 }) => {
   const [htmlContent, setHtmlContent] = useState(slide.html || "");
   const [isPreviewMode, setIsPreviewMode] = useState(false);
+
+  useEffect(() => {
+    setHtmlContent(slide.html || "");
+  }, [slide.html]);
 
   if (!isHtmlEditMode) return null;
 
@@ -83,8 +87,8 @@ export const HtmlEditor: React.FC<HtmlEditorProps> = ({
               Edit HTML Content:
             </label>
             <Textarea
-              value={htmlContent}
-              onChange={(e) => setHtmlContent(e.target.value)}
+              defaultValue={htmlContent}
+              onBlur={(e) => setHtmlContent(e.target.value)}
               className="font-mono text-sm h-96 resize-none"
               placeholder="Enter HTML content here..."
             />

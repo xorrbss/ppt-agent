@@ -12,7 +12,7 @@ export const useSlideEdit = (
   const [isUpdating, setIsUpdating] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [slideHtml, setSlideHtml] = useState("");
-  const slideContentRef = useRef<HTMLDivElement>(null);
+  const slideContentRef = useRef<HTMLDivElement | null>(null);
 
   // Load Tailwind CSS dynamically for slide content
   useEffect(() => {
@@ -90,7 +90,7 @@ export const useSlideEdit = (
   };
 
   const handleSave = async (
-    slideDisplayRef: React.RefObject<HTMLDivElement>,
+    slideDisplayRef: React.RefObject<HTMLDivElement |null>,
     didYourDraw: boolean
   ) => {
     if (
@@ -173,6 +173,20 @@ export const useSlideEdit = (
         processing: false,
         error: undefined,
       };
+      // download screenshot
+      const screenshot = slideOnly.toDataURL("image/png");
+      const link = document.createElement("a");
+      link.href = screenshot;
+      link.download = `slide-${slide.slide_number}-current.png`;
+      link.click();
+      // second screenshot
+      if (sketchImageBlob && slideWithCanvas) {
+        const screenshot2 = slideWithCanvas.toDataURL("image/png");
+        const link2 = document.createElement("a");
+        link2.href = screenshot2;
+        link2.download = `slide-${slide.slide_number}-sketch.png`;
+        link2.click();
+      }
 
       if (onSlideUpdate) {
         onSlideUpdate(updatedSlideData);

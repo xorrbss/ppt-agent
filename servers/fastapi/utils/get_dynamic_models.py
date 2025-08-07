@@ -7,7 +7,7 @@ from models.presentation_structure_model import PresentationStructureModel
 def get_presentation_outline_model_with_n_slides(n_slides: int):
     class PresentationOutlineModelWithNSlides(PresentationOutlineModel):
         slides: List[str] = Field(
-            description="Markdown content for each slide",
+            description="Markdown content for each slide in about 100 to 200 words",
             min_items=n_slides,
             max_items=n_slides,
         )
