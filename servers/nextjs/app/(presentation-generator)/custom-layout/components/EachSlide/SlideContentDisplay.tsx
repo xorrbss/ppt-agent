@@ -2,6 +2,7 @@ import React from "react";
 
 import SlideContent from "../SlideContent";
 import { SlideContentDisplayProps } from "../../types";
+import { Repeat2 } from "lucide-react";
 
 export const SlideContentDisplay: React.FC<SlideContentDisplayProps> = ({
   slide,
@@ -103,7 +104,10 @@ export const SlideContentDisplay: React.FC<SlideContentDisplayProps> = ({
             slide.error
           )}
         </div>
-        <button onClick={() => retrySlide(slide.slide_number)}>Retry</button>
+        <div className="flex justify-center">
+
+        <button className="bg-red-50 flex gap-2  items-center  rounded border border-red-200 px-4 py-2 " onClick={() => retrySlide(slide.slide_number)}><Repeat2 className="w-4 h-4" />Retry</button>
+        </div>
       </div>
     );
   }
