@@ -1,6 +1,7 @@
 from typing import Optional
 
 from models.llm_message import LLMMessage
+from models.llm_tools import GetCurrentDatetimeTool, SearchWebTool
 from services.llm_client import LLMClient
 from utils.get_dynamic_models import get_presentation_outline_model_with_n_slides
 from utils.llm_provider import get_model
@@ -55,5 +56,6 @@ async def generate_ppt_outline(
         get_messages(prompt, n_slides, language, content),
         response_model.model_json_schema(),
         strict=True,
+        tools=[SearchWebTool, GetCurrentDatetimeTool],
     ):
         yield chunk

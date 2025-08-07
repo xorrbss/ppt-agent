@@ -7,22 +7,24 @@ class LLMMessage(BaseModel):
 
 
 class LLMUserMessage(LLMMessage):
-    role: Literal["user"]
+    role: Literal["user"] = "user"
     content: str
 
 
 class LLMSystemMessage(LLMMessage):
-    role: Literal["system"]
+    role: Literal["system"] = "system"
     content: str
 
 
 class LLMToolCallMessage(LLMMessage):
-    role: Literal["tool"]
+    role: Literal["tool"] = "tool"
+    id: str
     content: str
+    type: str
     tool_call_id: str
 
 
 class LLMAssistantMessage(LLMMessage):
-    role: Literal["assistant"]
+    role: Literal["assistant"] = "assistant"
     content: str | None = None
     tool_calls: Optional[List[dict]] = None

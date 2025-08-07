@@ -1,9 +1,11 @@
 import asyncio
 import json
-from typing import List, Optional
+from typing import AsyncGenerator, List, Optional
 from fastapi import HTTPException
 from openai import AsyncOpenAI
-from openai.types.chat.chat_completion_message import ChatCompletionMessageToolCall
+from openai.types.chat.chat_completion_chunk import (
+    ChatCompletionChunk as OpenAIChatCompletionChunk,
+)
 from google import genai
 from google.genai.types import GenerateContentConfig
 from anthropic import AsyncAnthropic
@@ -16,10 +18,11 @@ from models.llm_message import (
     LLMSystemMessage,
     LLMUserMessage,
 )
-from models.llm_tool_call import LLMToolCall
+from models.llm_tool_call import LLMToolCall, OpenAIToolCall, OpenAIToolCallFunction
 from models.llm_tools import LLMDynamicTool, LLMTool
 from services.llm_tool_calls_handler import LLMToolCallsHandler
 from utils.async_iterator import iterator_to_async
+from utils.dummy_functions import do_nothing_async
 from utils.get_env import (
     get_anthropic_api_key_env,
     get_custom_llm_api_key_env,
@@ -43,7 +46,7 @@ class LLMClient:
         self.tool_calls_handler = LLMToolCallsHandler(self)
 
     # ? Use tool calls
-    def use_tool_calls(self) -> bool:
+    def use_tool_calls_for_structured_output(self) -> bool:
         if self.llm_provider != LLMProvider.CUSTOM:
             return False
         return parse_bool_or_none(get_tool_calls_env()) or False
@@ -137,7 +140,8 @@ class LLMClient:
         max_tokens: Optional[int] = None,
         tools: Optional[List[dict]] = None,
         extra_body: Optional[dict] = None,
-    ):
+        depth: int = 0,
+    ) -> str | None:
         client: AsyncOpenAI = self._client
         response = await client.chat.completions.create(
             model=model,
@@ -148,29 +152,37 @@ class LLMClient:
         )
         tool_calls = response.choices[0].message.tool_calls
         if tool_calls:
-            tool_call_messages = await self.tool_calls_handler.handle_tool_calls_openai(
-                [
-                    LLMToolCall(
-                        id=tool_call.id,
+            parsed_tool_calls = [
+                OpenAIToolCall(
+                    id=tool_call.id,
+                    type=tool_call.type,
+                    function=OpenAIToolCallFunction(
                         name=tool_call.function.name,
                         arguments=tool_call.function.arguments,
-                    )
-                    for tool_call in tool_calls
-                ]
+                    ),
+                )
+                for tool_call in tool_calls
+            ]
+            tool_call_messages = await self.tool_calls_handler.handle_tool_calls_openai(
+                parsed_tool_calls
+            )
+            assistant_message = LLMAssistantMessage(
+                role="assistant",
+                content=response.choices[0].message.content,
+                tool_calls=[tool_call.model_dump() for tool_call in parsed_tool_calls],
             )
             new_messages = [
                 *messages,
-                LLMAssistantMessage(
-                    role="assistant",
-                    content=response.choices[0].message.content,
-                    tool_calls=[
-                        tool_call.model_dump() for tool_call in tool_call_messages
-                    ],
-                ),
+                assistant_message,
                 *tool_call_messages,
             ]
             return await self._generate_openai(
-                model, new_messages, max_tokens, tools, extra_body
+                model=model,
+                messages=new_messages,
+                max_tokens=max_tokens,
+                tools=tools,
+                extra_body=extra_body,
+                depth=depth + 1,
             )
 
         return response.choices[0].message.content
@@ -180,6 +192,7 @@ class LLMClient:
         model: str,
         messages: List[LLMMessage],
         max_tokens: Optional[int] = None,
+        depth: int = 0,
     ):
         client: genai.Client = self._client
         response = await asyncio.to_thread(
@@ -199,6 +212,7 @@ class LLMClient:
         model: str,
         messages: List[LLMMessage],
         max_tokens: Optional[int] = None,
+        depth: int = 0,
     ):
         client: AsyncAnthropic = self._client
         response: AnthropicMessage = await client.messages.create(
@@ -219,16 +233,30 @@ class LLMClient:
         return text
 
     async def _generate_ollama(
-        self, model: str, messages: List[LLMMessage], max_tokens: Optional[int] = None
+        self,
+        model: str,
+        messages: List[LLMMessage],
+        max_tokens: Optional[int] = None,
+        depth: int = 0,
     ):
-        return await self._generate_openai(model, messages, max_tokens)
+        return await self._generate_openai(
+            model=model, messages=messages, max_tokens=max_tokens, depth=depth
+        )
 
     async def _generate_custom(
-        self, model: str, messages: List[LLMMessage], max_tokens: Optional[int] = None
+        self,
+        model: str,
+        messages: List[LLMMessage],
+        max_tokens: Optional[int] = None,
+        depth: int = 0,
     ):
         extra_body = {"enable_thinking": not self.disable_thinking()}
         return await self._generate_openai(
-            model, messages, max_tokens, extra_body=extra_body
+            model=model,
+            messages=messages,
+            max_tokens=max_tokens,
+            extra_body=extra_body,
+            depth=depth,
         )
 
     async def generate(
@@ -238,20 +266,33 @@ class LLMClient:
         max_tokens: Optional[int] = None,
         tools: Optional[List[type[LLMTool] | LLMDynamicTool]] = None,
     ):
-        parsed_tools = self.get_tools(tools)
+        parsed_tools = self.tool_calls_handler.parse_tools(tools)
 
         content = None
         match self.llm_provider:
             case LLMProvider.OPENAI:
-                content = await self._generate_openai(model, messages, max_tokens)
+                content = await self._generate_openai(
+                    model=model,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    tools=parsed_tools,
+                )
             case LLMProvider.GOOGLE:
-                content = await self._generate_google(model, messages, max_tokens)
+                content = await self._generate_google(
+                    model=model, messages=messages, max_tokens=max_tokens
+                )
             case LLMProvider.ANTHROPIC:
-                content = await self._generate_anthropic(model, messages, max_tokens)
+                content = await self._generate_anthropic(
+                    model=model, messages=messages, max_tokens=max_tokens
+                )
             case LLMProvider.OLLAMA:
-                content = await self._generate_ollama(model, messages, max_tokens)
+                content = await self._generate_ollama(
+                    model=model, messages=messages, max_tokens=max_tokens
+                )
             case LLMProvider.CUSTOM:
-                content = await self._generate_custom(model, messages, max_tokens)
+                content = await self._generate_custom(
+                    model=model, messages=messages, max_tokens=max_tokens
+                )
         if content is None:
             raise HTTPException(
                 status_code=400,
@@ -269,88 +310,109 @@ class LLMClient:
         max_tokens: Optional[int] = None,
         tools: Optional[List[dict]] = None,
         extra_body: Optional[dict] = None,
-    ):
+        depth: int = 0,
+    ) -> dict | None:
         client: AsyncOpenAI = self._client
-        use_tool_calls = self.use_tool_calls()
         response_schema = response_format
-        if strict:
+        all_tools = [*tools] if tools else None
+
+        use_tool_calls_for_structured_output = (
+            self.use_tool_calls_for_structured_output()
+        )
+        if strict and depth == 0:
             response_schema = ensure_strict_json_schema(
                 response_schema,
                 path=(),
                 root=response_schema,
             )
+        if use_tool_calls_for_structured_output and depth == 0:
+            if all_tools is None:
+                all_tools = []
+            all_tools.append(
+                self.tool_calls_handler.parse_tool(
+                    LLMDynamicTool(
+                        name="ResponseSchema",
+                        description="Provide response to the user",
+                        strict=strict,
+                        parameters=response_schema,
+                        handler=do_nothing_async,
+                    )
+                )
+            )
+
         response = await client.chat.completions.create(
             model=model,
             messages=[message.model_dump() for message in messages],
-            response_format={
-                "type": "json_schema",
-                "json_schema": (
-                    {
-                        "name": "ResponseSchema",
-                        "strict": strict,
-                        "schema": response_schema,
-                    }
-                ),
-            },
+            response_format=(
+                {
+                    "type": "json_schema",
+                    "json_schema": (
+                        {
+                            "name": "ResponseSchema",
+                            "strict": strict,
+                            "schema": response_schema,
+                        }
+                    ),
+                }
+                if not use_tool_calls_for_structured_output
+                else None
+            ),
             max_completion_tokens=max_tokens,
+            tools=all_tools,
             extra_body=extra_body,
         )
+
+        content = response.choices[0].message.content
+
         tool_calls = response.choices[0].message.tool_calls
+        has_response_schema = False
+
         if tool_calls:
-            tool_call_messages = await self.tool_calls_handler.handle_tool_calls_openai(
-                [
-                    LLMToolCall(
+            for tool_call in tool_calls:
+                if tool_call.function.name == "ResponseSchema":
+                    content = tool_call.function.arguments
+                    has_response_schema = True
+
+            if not has_response_schema:
+                parsed_tool_calls = [
+                    OpenAIToolCall(
                         id=tool_call.id,
-                        name=tool_call.function.name,
-                        arguments=tool_call.function.arguments,
+                        type=tool_call.type,
+                        function=OpenAIToolCallFunction(
+                            name=tool_call.function.name,
+                            arguments=tool_call.function.arguments,
+                        ),
                     )
                     for tool_call in tool_calls
                 ]
-            )
-            new_messages = [
-                *messages,
-                LLMAssistantMessage(
-                    role="assistant",
-                    content=response.choices[0].message.content,
-                    tool_calls=[each.model_dump() for each in tool_calls],
-                ),
-                *tool_call_messages,
-            ]
-            return await self._generate_openai_structured(
-                model,
-                new_messages,
-                response_format,
-                strict,
-                max_tokens,
-                tools,
-                extra_body,
-            )
-        content = response.choices[0].message.content
-        # else:
-        #     response = await client.chat.completions.create(
-        #         model=model,
-        #         messages=[message.model_dump() for message in messages],
-        #         tools=[
-        #             {
-        #                 "type": "function",
-        #                 "function": {
-        #                     "name": "ResponseSchema",
-        #                     "description": "A response to the user's message",
-        #                     "strict": strict,
-        #                     "parameters": response_format,
-        #                 },
-        #             }
-        #         ],
-        #         tool_choice="required",
-        #         max_completion_tokens=max_tokens,
-        #         extra_body=extra_body,
-        #     )
-        #     tool_calls = response.choices[0].message.tool_calls
-        #     if tool_calls:
-        #         content = tool_calls[0].function.arguments
-
+                tool_call_messages = (
+                    await self.tool_calls_handler.handle_tool_calls_openai(
+                        parsed_tool_calls
+                    )
+                )
+                new_messages = [
+                    *messages,
+                    LLMAssistantMessage(
+                        role="assistant",
+                        content=response.choices[0].message.content,
+                        tool_calls=[each.model_dump() for each in parsed_tool_calls],
+                    ),
+                    *tool_call_messages,
+                ]
+                content = await self._generate_openai_structured(
+                    model=model,
+                    messages=new_messages,
+                    response_format=response_schema,
+                    strict=strict,
+                    max_tokens=max_tokens,
+                    tools=all_tools,
+                    extra_body=extra_body,
+                    depth=depth + 1,
+                )
         if content:
-            return json.loads(content)
+            if depth == 0:
+                return json.loads(content)
+            return content
         return None
 
     async def _generate_google_structured(
@@ -359,6 +421,7 @@ class LLMClient:
         messages: List[LLMMessage],
         response_format: dict,
         max_tokens: Optional[int] = None,
+        depth: int = 0,
     ):
         client: genai.Client = self._client
         response = await asyncio.to_thread(
@@ -384,6 +447,7 @@ class LLMClient:
         messages: List[LLMMessage],
         response_format: dict,
         max_tokens: Optional[int] = None,
+        depth: int = 0,
     ):
         client: AsyncAnthropic = self._client
         response: AnthropicMessage = await client.messages.create(
@@ -420,9 +484,15 @@ class LLMClient:
         response_format: dict,
         strict: bool = False,
         max_tokens: Optional[int] = None,
+        depth: int = 0,
     ):
         return await self._generate_openai_structured(
-            model, messages, response_format, strict, max_tokens
+            model=model,
+            messages=messages,
+            response_format=response_format,
+            strict=strict,
+            max_tokens=max_tokens,
+            depth=depth,
         )
 
     async def _generate_custom_structured(
@@ -432,10 +502,17 @@ class LLMClient:
         response_format: dict,
         strict: bool = False,
         max_tokens: Optional[int] = None,
+        depth: int = 0,
     ):
         extra_body = {"enable_thinking": not self.disable_thinking()}
         return await self._generate_openai_structured(
-            model, messages, response_format, strict, max_tokens, extra_body
+            model=model,
+            messages=messages,
+            response_format=response_format,
+            strict=strict,
+            max_tokens=max_tokens,
+            extra_body=extra_body,
+            depth=depth,
         )
 
     async def generate_structured(
@@ -444,29 +521,51 @@ class LLMClient:
         messages: List[LLMMessage],
         response_format: dict,
         strict: bool = False,
+        tools: Optional[List[type[LLMTool] | LLMDynamicTool]] = None,
         max_tokens: Optional[int] = None,
     ) -> dict:
+        parsed_tools = self.tool_calls_handler.parse_tools(tools)
+
         content = None
         match self.llm_provider:
             case LLMProvider.OPENAI:
                 content = await self._generate_openai_structured(
-                    model, messages, response_format, strict, max_tokens
+                    model=model,
+                    messages=messages,
+                    response_format=response_format,
+                    strict=strict,
+                    tools=parsed_tools,
+                    max_tokens=max_tokens,
                 )
             case LLMProvider.GOOGLE:
                 content = await self._generate_google_structured(
-                    model, messages, response_format, max_tokens
+                    model=model,
+                    messages=messages,
+                    response_format=response_format,
+                    max_tokens=max_tokens,
                 )
             case LLMProvider.ANTHROPIC:
                 content = await self._generate_anthropic_structured(
-                    model, messages, response_format, max_tokens
+                    model=model,
+                    messages=messages,
+                    response_format=response_format,
+                    max_tokens=max_tokens,
                 )
             case LLMProvider.OLLAMA:
                 content = await self._generate_ollama_structured(
-                    model, messages, response_format, strict, max_tokens
+                    model=model,
+                    messages=messages,
+                    response_format=response_format,
+                    strict=strict,
+                    max_tokens=max_tokens,
                 )
             case LLMProvider.CUSTOM:
                 content = await self._generate_custom_structured(
-                    model, messages, response_format, strict, max_tokens
+                    model=model,
+                    messages=messages,
+                    response_format=response_format,
+                    strict=strict,
+                    max_tokens=max_tokens,
                 )
         if content is None:
             raise HTTPException(
@@ -483,49 +582,99 @@ class LLMClient:
         max_tokens: Optional[int] = None,
         tools: Optional[List[dict]] = None,
         extra_body: Optional[dict] = None,
-    ):
+        depth: int = 0,
+    ) -> AsyncGenerator[str, None]:
         client: AsyncOpenAI = self._client
-        async with client.chat.completions.stream(
+
+        tool_calls: List[LLMToolCall] = []
+        current_index = 0
+        current_id = None
+        current_name = None
+        current_arguments = None
+        async for event in await client.chat.completions.create(
             model=model,
             messages=[message.model_dump() for message in messages],
             max_completion_tokens=max_tokens,
+            tools=tools,
             extra_body=extra_body,
-        ) as stream:
-            tool_calls = []
-            async for event in stream:
-                if (
-                    event.type == "tool_calls.function.arguments.delta"
-                    and event.name == "ResponseSchema"
-                ):
-                    yield event.arguments_delta
-                elif event.type == "content.delta":
-                    yield event.delta
-                elif (
-                    event.type == "tool_calls.function.arguments.done"
-                    and event.name != "ResponseSchema"
-                ):
+            stream=True,
+        ):
+            event: OpenAIChatCompletionChunk = event
+            content_chunk = event.choices[0].delta.content
+            if content_chunk:
+                yield content_chunk
+
+            tool_call_chunk = event.choices[0].delta.tool_calls
+            if tool_call_chunk:
+                tool_index = tool_call_chunk[0].index
+                tool_id = tool_call_chunk[0].id
+                tool_name = tool_call_chunk[0].function.name
+                tool_arguments = tool_call_chunk[0].function.arguments
+
+                if current_index != tool_index:
                     tool_calls.append(
-                        LLMToolCall(
-                            id=get_random_uuid(),
-                            name=event.name,
-                            arguments=event.arguments,
+                        OpenAIToolCall(
+                            id=current_id,
+                            type="function",
+                            function=OpenAIToolCallFunction(
+                                name=current_name,
+                                arguments=current_arguments,
+                            ),
                         )
                     )
-            if tool_calls:
-                tool_call_messages = (
-                    await self.tool_calls_handler.handle_tool_calls_openai(tool_calls)
-                )
+                    current_index = tool_index
+                    current_id = tool_id
+                    current_name = tool_name
+                    current_arguments = tool_arguments
+                else:
+                    current_name = tool_name or current_name
+                    current_id = tool_id or current_id
+                    if current_arguments is None:
+                        current_arguments = tool_arguments
+                    else:
+                        current_arguments += tool_arguments
 
-                new_messages = [
-                    *messages,
-                    *tool_call_messages,
-                ]
+        if current_id is not None:
+            tool_calls.append(
+                OpenAIToolCall(
+                    id=current_id,
+                    type="function",
+                    function=OpenAIToolCallFunction(
+                        name=current_name,
+                        arguments=current_arguments,
+                    ),
+                )
+            )
+
+        if tool_calls:
+            tool_call_messages = await self.tool_calls_handler.handle_tool_calls_openai(
+                tool_calls
+            )
+            new_messages = [
+                *messages,
+                LLMAssistantMessage(
+                    role="assistant",
+                    content=None,
+                    tool_calls=[each.model_dump() for each in tool_calls],
+                ),
+                *tool_call_messages,
+            ]
+            async for event in self._stream_openai(
+                model=model,
+                messages=new_messages,
+                max_tokens=max_tokens,
+                tools=tools,
+                extra_body=extra_body,
+                depth=depth + 1,
+            ):
+                yield event
 
     async def _stream_google(
         self,
         model: str,
         messages: List[LLMMessage],
         max_tokens: Optional[int] = None,
+        depth: int = 0,
     ):
         client: genai.Client = self._client
         async for event in iterator_to_async(client.models.generate_content_stream)(
@@ -545,6 +694,7 @@ class LLMClient:
         model: str,
         messages: List[LLMMessage],
         max_tokens: Optional[int] = None,
+        depth: int = 0,
     ):
         client: AsyncAnthropic = self._client
         async with client.messages.stream(
@@ -566,32 +716,61 @@ class LLMClient:
         model: str,
         messages: List[LLMMessage],
         max_tokens: Optional[int] = None,
+        depth: int = 0,
     ):
-        return self._stream_openai(model, messages, max_tokens)
+        return self._stream_openai(
+            model=model, messages=messages, max_tokens=max_tokens, depth=depth
+        )
 
     def _stream_custom(
         self,
         model: str,
         messages: List[LLMMessage],
         max_tokens: Optional[int] = None,
+        depth: int = 0,
     ):
         extra_body = {"enable_thinking": not self.disable_thinking()}
-        return self._stream_openai(model, messages, max_tokens, extra_body)
+        return self._stream_openai(
+            model=model,
+            messages=messages,
+            max_tokens=max_tokens,
+            extra_body=extra_body,
+            depth=depth,
+        )
 
     def stream(
-        self, model: str, messages: List[LLMMessage], max_tokens: Optional[int] = None
+        self,
+        model: str,
+        messages: List[LLMMessage],
+        max_tokens: Optional[int] = None,
+        tools: Optional[List[type[LLMTool] | LLMDynamicTool]] = None,
     ):
+        parsed_tools = self.tool_calls_handler.parse_tools(tools)
+
         match self.llm_provider:
             case LLMProvider.OPENAI:
-                return self._stream_openai(model, messages, max_tokens)
+                return self._stream_openai(
+                    model=model,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    tools=parsed_tools,
+                )
             case LLMProvider.GOOGLE:
-                return self._stream_google(model, messages, max_tokens)
+                return self._stream_google(
+                    model=model, messages=messages, max_tokens=max_tokens
+                )
             case LLMProvider.ANTHROPIC:
-                return self._stream_anthropic(model, messages, max_tokens)
+                return self._stream_anthropic(
+                    model=model, messages=messages, max_tokens=max_tokens
+                )
             case LLMProvider.OLLAMA:
-                return self._stream_ollama(model, messages, max_tokens)
+                return self._stream_ollama(
+                    model=model, messages=messages, max_tokens=max_tokens
+                )
             case LLMProvider.CUSTOM:
-                return self._stream_custom(model, messages, max_tokens)
+                return self._stream_custom(
+                    model=model, messages=messages, max_tokens=max_tokens
+                )
 
     # ? Stream Structured Content
     async def _stream_openai_structured(
@@ -603,58 +782,143 @@ class LLMClient:
         max_tokens: Optional[int] = None,
         tools: Optional[List[dict]] = None,
         extra_body: Optional[dict] = None,
-    ):
+        depth: int = 0,
+    ) -> AsyncGenerator[str, None]:
         client: AsyncOpenAI = self._client
-        use_tool_calls = self.use_tool_calls()
+
         response_schema = response_format
-        if strict:
+        all_tools = [*tools] if tools else None
+
+        use_tool_calls_for_structured_output = (
+            self.use_tool_calls_for_structured_output()
+        )
+        if strict and depth == 0:
             response_schema = ensure_strict_json_schema(
                 response_schema,
                 path=(),
                 root=response_schema,
             )
-        if not use_tool_calls:
-            async with client.chat.completions.stream(
-                model=model,
-                messages=[message.model_dump() for message in messages],
-                max_completion_tokens=max_tokens,
-                response_format=(
-                    {
-                        "type": "json_schema",
-                        "json_schema": {
+
+        if use_tool_calls_for_structured_output and depth == 0:
+            if all_tools is None:
+                all_tools = []
+            all_tools.append(
+                self.tool_calls_handler.parse_tool(
+                    LLMDynamicTool(
+                        name="ResponseSchema",
+                        description="Provide response to the user",
+                        strict=strict,
+                        parameters=response_schema,
+                        handler=do_nothing_async,
+                    )
+                )
+            )
+
+        tool_calls: List[LLMToolCall] = []
+        current_index = 0
+        current_id = None
+        current_name = None
+        current_arguments = None
+
+        has_response_schema_tool_call = False
+        async for event in await client.chat.completions.create(
+            model=model,
+            messages=[message.model_dump() for message in messages],
+            max_completion_tokens=max_tokens,
+            tools=all_tools,
+            response_format=(
+                {
+                    "type": "json_schema",
+                    "json_schema": (
+                        {
                             "name": "ResponseSchema",
                             "strict": strict,
                             "schema": response_schema,
-                        },
-                    }
+                        }
+                    ),
+                }
+                if not use_tool_calls_for_structured_output
+                else None
+            ),
+            extra_body=extra_body,
+            stream=True,
+        ):
+            event: OpenAIChatCompletionChunk = event
+            content_chunk = event.choices[0].delta.content
+            if content_chunk:
+                yield content_chunk
+
+            tool_call_chunk = event.choices[0].delta.tool_calls
+            if tool_call_chunk:
+                tool_index = tool_call_chunk[0].index
+                tool_id = tool_call_chunk[0].id
+                tool_name = tool_call_chunk[0].function.name
+                tool_arguments = tool_call_chunk[0].function.arguments
+
+                if current_index != tool_index:
+                    tool_calls.append(
+                        OpenAIToolCall(
+                            id=current_id,
+                            type="function",
+                            function=OpenAIToolCallFunction(
+                                name=current_name,
+                                arguments=current_arguments,
+                            ),
+                        )
+                    )
+                    current_index = tool_index
+                    current_id = tool_id
+                    current_name = tool_name
+                    current_arguments = tool_arguments
+                else:
+                    current_name = tool_name or current_name
+                    current_id = tool_id or current_id
+                    if current_arguments is None:
+                        current_arguments = tool_arguments
+                    else:
+                        current_arguments += tool_arguments
+
+                if current_name == "ResponseSchema":
+                    if tool_arguments:
+                        yield tool_arguments
+                    has_response_schema_tool_call = True
+
+        if current_id is not None:
+            tool_calls.append(
+                OpenAIToolCall(
+                    id=current_id,
+                    type="function",
+                    function=OpenAIToolCallFunction(
+                        name=current_name,
+                        arguments=current_arguments,
+                    ),
+                )
+            )
+
+        if tool_calls and not has_response_schema_tool_call:
+            tool_call_messages = await self.tool_calls_handler.handle_tool_calls_openai(
+                tool_calls
+            )
+            new_messages = [
+                *messages,
+                LLMAssistantMessage(
+                    role="assistant",
+                    content=None,
+                    tool_calls=[each.model_dump() for each in tool_calls],
                 ),
-                extra_body=extra_body,
-            ) as stream:
-                async for event in stream:
-                    if event.type == "content.delta":
-                        yield event.delta
-        else:
-            async with client.chat.completions.stream(
+                *tool_call_messages,
+            ]
+            async for event in self._stream_openai_structured(
                 model=model,
-                messages=[message.model_dump() for message in messages],
-                max_completion_tokens=max_tokens,
-                tools=[
-                    {
-                        "type": "function",
-                        "function": {
-                            "name": "ResponseSchema",
-                            "description": "A response to the user's message",
-                            "strict": strict,
-                            "parameters": response_format,
-                        },
-                    }
-                ],
-                tool_choice="required",
+                messages=new_messages,
+                max_tokens=max_tokens,
+                strict=strict,
+                tools=all_tools,
+                response_format=response_schema,
                 extra_body=extra_body,
-            ) as stream:
-                async for event in stream:
-                    if event.type == "tool_calls.function.arguments.delta":
-                        yield event.arguments_delta
+                depth=depth + 1,
+            ):
+                yield event
 
     async def _stream_google_structured(
         self,
@@ -662,6 +926,7 @@ class LLMClient:
         messages: List[LLMMessage],
         response_format: dict,
         max_tokens: Optional[int] = None,
+        depth: int = 0,
     ):
         client: genai.Client = self._client
         async for event in iterator_to_async(client.models.generate_content_stream)(
@@ -683,6 +948,7 @@ class LLMClient:
         messages: List[LLMMessage],
         response_format: dict,
         max_tokens: Optional[int] = None,
+        depth: int = 0,
     ):
         client: AsyncAnthropic = self._client
         async with client.messages.stream(
@@ -717,9 +983,15 @@ class LLMClient:
         response_format: dict,
         strict: bool = False,
         max_tokens: Optional[int] = None,
+        depth: int = 0,
     ):
         return self._stream_openai_structured(
-            model, messages, response_format, strict, max_tokens
+            model=model,
+            messages=messages,
+            response_format=response_format,
+            strict=strict,
+            max_tokens=max_tokens,
+            depth=depth,
         )
 
     def _stream_custom_structured(
@@ -729,10 +1001,17 @@ class LLMClient:
         response_format: dict,
         strict: bool = False,
         max_tokens: Optional[int] = None,
+        depth: int = 0,
     ):
         extra_body = {"enable_thinking": not self.disable_thinking()}
         return self._stream_openai_structured(
-            model, messages, response_format, strict, max_tokens, extra_body
+            model=model,
+            messages=messages,
+            response_format=response_format,
+            strict=strict,
+            max_tokens=max_tokens,
+            extra_body=extra_body,
+            depth=depth,
         )
 
     def stream_structured(
@@ -741,33 +1020,67 @@ class LLMClient:
         messages: List[LLMMessage],
         response_format: dict,
         strict: bool = False,
+        tools: Optional[List[type[LLMTool] | LLMDynamicTool]] = None,
         max_tokens: Optional[int] = None,
     ):
+        parsed_tools = self.tool_calls_handler.parse_tools(tools)
+
         match self.llm_provider:
             case LLMProvider.OPENAI:
                 return self._stream_openai_structured(
-                    model, messages, response_format, strict, max_tokens
+                    model=model,
+                    messages=messages,
+                    response_format=response_format,
+                    strict=strict,
+                    tools=parsed_tools,
+                    max_tokens=max_tokens,
                 )
             case LLMProvider.GOOGLE:
                 return self._stream_google_structured(
-                    model, messages, response_format, max_tokens
+                    model=model,
+                    messages=messages,
+                    response_format=response_format,
+                    max_tokens=max_tokens,
                 )
             case LLMProvider.ANTHROPIC:
                 return self._stream_anthropic_structured(
-                    model, messages, response_format, max_tokens
+                    model=model,
+                    messages=messages,
+                    response_format=response_format,
+                    max_tokens=max_tokens,
                 )
             case LLMProvider.OLLAMA:
                 return self._stream_ollama_structured(
-                    model, messages, response_format, strict, max_tokens
+                    model=model,
+                    messages=messages,
+                    response_format=response_format,
+                    strict=strict,
+                    max_tokens=max_tokens,
                 )
             case LLMProvider.CUSTOM:
                 return self._stream_custom_structured(
-                    model, messages, response_format, strict, max_tokens
+                    model=model,
+                    messages=messages,
+                    response_format=response_format,
+                    strict=strict,
+                    max_tokens=max_tokens,
                 )
 
-    # ? Tool call handling
-    def get_tools(self, tools: Optional[List[type[LLMTool] | LLMDynamicTool]] = None):
-        if tools is None:
-            return None
-        parsed_tools = map(self.tool_calls_handler.parse_tool, tools)
-        return list(parsed_tools)
+    # ? Web search
+    def _search_openai(self, query: str) -> str:
+        client: AsyncOpenAI = self._client
+        response = client.responses.create(
+            model="o4-mini",
+            tools=[
+                {
+                    "type": "web_search_preview",
+                    "user_location": {
+                        "type": "approximate",
+                        "country": "GB",
+                        "city": "London",
+                        "region": "London",
+                    },
+                }
+            ],
+            input="What are the best restaurants around Granary Square?",
+        )
