@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Save, X, Eye, Code } from "lucide-react";
+import { Save, X, Code } from "lucide-react";
 import { ProcessedSlide } from "../../types";
+import Editor from 'react-simple-code-editor';
+import { highlight, languages } from 'prismjs';
+import 'prismjs/components/prism-clike';
+import 'prismjs/components/prism-javascript';
+import 'prismjs/components/prism-markup';
+import 'prismjs/components/prism-jsx';
 
 interface HtmlEditorProps {
   slide: ProcessedSlide;
@@ -19,7 +24,6 @@ export const HtmlEditor: React.FC<HtmlEditorProps> = ({
   onCancel,
 }) => {
   const [htmlContent, setHtmlContent] = useState(slide.html || "");
-  const [isPreviewMode, setIsPreviewMode] = useState(false);
 
   useEffect(() => {
     setHtmlContent(slide.html || "");
@@ -45,15 +49,7 @@ export const HtmlEditor: React.FC<HtmlEditorProps> = ({
             <span className="text-purple-800">HTML Editor</span>
           </div>
           <div className="flex gap-2">
-            <Button
-              variant={isPreviewMode ? "default" : "outline"}
-              size="sm"
-              onClick={() => setIsPreviewMode(!isPreviewMode)}
-              className="flex items-center gap-1"
-            >
-              <Eye size={14} />
-              {isPreviewMode ? "Code" : "Preview"}
-            </Button>
+        
             <Button
               variant="outline"
               size="sm"
@@ -73,30 +69,29 @@ export const HtmlEditor: React.FC<HtmlEditorProps> = ({
           </div>
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {isPreviewMode ? (
-          <div className="border rounded-lg p-4 bg-white">
-            <div
-              className="prose max-w-none"
-              dangerouslySetInnerHTML={{ __html: htmlContent }}
-            />
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">
-              Edit HTML Content:
-            </label>
-            <Textarea
-              defaultValue={htmlContent}
-              onBlur={(e) => setHtmlContent(e.target.value)}
-              className="font-mono text-sm h-96 resize-none"
-              placeholder="Enter HTML content here..."
-            />
-            <div className="text-xs text-gray-500">
-              Tip: You can edit the HTML directly. Make sure to maintain proper HTML structure.
-            </div>
-          </div>
-        )}
+      <CardContent className="space-y-4 ">
+          <div
+      dangerouslySetInnerHTML={{
+        __html: htmlContent,
+      }}
+    />
+    <p className="text-base text-gray-800">Edit the HTML code to customize the slide layout.</p>
+         {/* Render code editor */}
+         <div className="container__content_area">
+
+          <Editor
+      value={htmlContent}
+      onValueChange={htmlContent => setHtmlContent(htmlContent)}
+      highlight={htmlContent => highlight(htmlContent, languages.jsx!,'jsx')}
+      padding={10}
+      id="html-editor"
+      name="html-editor"
+      
+      className="container__editor"
+      />
+      </div>
+     
+    
       </CardContent>
     </Card>
   );

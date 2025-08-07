@@ -7,7 +7,7 @@ export const useSlideProcessing = (
   selectedFile: File | null,
   slides: ProcessedSlide[],
   setSlides: React.Dispatch<React.SetStateAction<ProcessedSlide[]>>,
-  fontsData: FontData | null,
+  
   setFontsData: React.Dispatch<React.SetStateAction<FontData | null>>
 ) => {
   const [isProcessingPptx, setIsProcessingPptx] = useState(false);
@@ -44,7 +44,6 @@ export const useSlideProcessing = (
         );
 
         console.log(`Successfully processed slide ${slide.slide_number}`);
-
         // Update slide with success
         setSlides((prev) => {
           const newSlides = prev.map((s, i) =>

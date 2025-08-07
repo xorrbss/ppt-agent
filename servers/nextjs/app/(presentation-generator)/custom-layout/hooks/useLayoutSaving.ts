@@ -20,6 +20,56 @@ export const useLayoutSaving = (
     setIsModalOpen(false);
   }, []);
 
+  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  const convertSlideToReact = async (slide: ProcessedSlide, presentationId: string, FontUrls: string[]) => {
+    const maxRetries = 3;
+    let retryCount = 0;
+
+    while (retryCount < maxRetries) {
+      try {
+        const response = await fetch("/api/v1/ppt/html-to-react/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            html: slide.html,
+          }),
+        });
+
+        const data = await ApiResponseHandler.handleResponse(
+          response,
+          `Failed to convert slide ${slide.slide_number} to React`
+        );
+
+        return {
+          presentation_id: presentationId,
+          layout_id: `${slide.slide_number}`,
+          layout_name: `Slide${slide.slide_number}`,
+          layout_code: data.react_component || data.component_code,
+          fonts: FontUrls,
+        };
+      } catch (error) {
+        retryCount++;
+        console.error(`Error converting slide ${slide.slide_number} (attempt ${retryCount}):`, error);
+        
+        if (retryCount < maxRetries) {
+          toast.error(`Failed to convert slide ${slide.slide_number}. Retrying in 2 minutes...`, {
+            description: `Attempt ${retryCount}/${maxRetries}. Error: ${error instanceof Error ? error.message : "An unexpected error occurred"}`,
+          });
+          
+          // Wait for 2 minutes before retrying
+          await delay(2 * 60 * 1000);
+          
+          toast.info(`Retrying conversion for slide ${slide.slide_number}...`);
+        } else {
+          throw new Error(`Failed to convert slide ${slide.slide_number} after ${maxRetries} attempts: ${error instanceof Error ? error.message : "An unexpected error occurred"}`);
+        }
+      }
+    }
+  };
+
   const saveLayout = useCallback(async (layoutName: string, description: string) => {
     if (!slides.length) {
       toast.error("No slides to save");
@@ -46,41 +96,23 @@ export const useLayoutSaving = (
         }
 
         try {
-          const response = await fetch("/api/v1/ppt/html-to-react/", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              html: slide.html,
-            }),
-          });
-
-          const data = await ApiResponseHandler.handleResponse(
-            response,
-            `Failed to convert slide ${slide.slide_number} to React`
-          );
-
-          reactComponents.push({
-            presentation_id: presentationId,
-            layout_id: `${slide.slide_number}`,
-            layout_name: `Slide${slide.slide_number}`,
-            layout_code: data.react_component || data.component_code,
-            fonts: FontUrls,
-          });
+          const reactComponent = await convertSlideToReact(slide, presentationId, FontUrls);
+          reactComponents.push(reactComponent);
 
           // Update progress
-          toast.info(
+          toast.success(
             `Converted slide ${slide.slide_number} to React component`
           );
         } catch (error) {
           console.error(`Error converting slide ${slide.slide_number}:`, error);
-          toast.error(`Failed to convert slide ${slide.slide_number}`, {
+          toast.error(`Failed to convert slide ${slide.slide_number} after all retries`, {
             description:
               error instanceof Error
                 ? error.message
                 : "An unexpected error occurred",
           });
+          // Continue with other slides even if one fails
+          continue;
         }
       }
 

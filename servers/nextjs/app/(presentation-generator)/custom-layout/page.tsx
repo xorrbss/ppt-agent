@@ -17,6 +17,7 @@ import { SaveLayoutButton } from "./components/SaveLayoutButton";
 import { SaveLayoutModal } from "./components/SaveLayoutModal";
 import EachSlide from "./components/EachSlide/NewEachSlide";
 
+
 const CustomLayoutPage = () => {
   const { refetch } = useLayout();
   
@@ -29,7 +30,6 @@ const CustomLayoutPage = () => {
     selectedFile,
     slides,
     setSlides,
-    fontsData,
     setFontsData
   );
   const { isSavingLayout, isModalOpen, openSaveModal, closeSaveModal, saveLayout } = useLayoutSaving(
@@ -81,6 +81,7 @@ const CustomLayoutPage = () => {
             interactive HTML layouts
           </p>
         </div>
+       
 
         {/* File Upload Section */}
         <FileUploadSection

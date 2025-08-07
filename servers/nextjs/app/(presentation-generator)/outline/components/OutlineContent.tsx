@@ -110,7 +110,7 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
             )}
 
             {/* Empty state */}
-            {!isLoading && outlines && outlines.length === 0 && (
+            {!isStreaming && !isLoading && outlines && outlines.length === 0 && (
                 <div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-200">
                     <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                     <p className="text-gray-600 mb-4">No outlines available</p>
