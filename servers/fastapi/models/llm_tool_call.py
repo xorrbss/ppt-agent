@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, Optional
 from pydantic import BaseModel
 
 
@@ -15,3 +15,8 @@ class OpenAIToolCall(LLMToolCall):
     id: str
     type: Literal["function"] = "function"
     function: OpenAIToolCallFunction
+
+
+class GoogleToolCall(LLMToolCall):
+    name: str
+    arguments: Optional[dict] = None

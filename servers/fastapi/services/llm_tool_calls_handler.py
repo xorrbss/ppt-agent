@@ -4,8 +4,8 @@ import json
 from typing import Any, Callable, Coroutine, List, Optional
 from fastapi import HTTPException
 from enums.llm_provider import LLMProvider
-from models.llm_message import LLMToolCallMessage
-from models.llm_tool_call import OpenAIToolCall
+from models.llm_message import GoogleToolCallMessage, OpenAIToolCallMessage
+from models.llm_tool_call import GoogleToolCall, OpenAIToolCall
 from models.llm_tools import LLMDynamicTool, LLMTool, SearchWebTool
 
 
@@ -79,16 +79,21 @@ class LLMToolCallsHandler:
             },
         }
 
-    def parse_tool_anthropic(self, tool: type[LLMTool] | LLMDynamicTool):
-        pass
-
     def parse_tool_google(self, tool: type[LLMTool] | LLMDynamicTool):
+        parsed = self.parse_tool_openai(tool)
+        return {
+            "name": parsed["function"]["name"],
+            "description": parsed["function"]["description"],
+            "parameters": parsed["function"]["parameters"],
+        }
+
+    def parse_tool_anthropic(self, tool: type[LLMTool] | LLMDynamicTool):
         pass
 
     async def handle_tool_calls_openai(
         self,
         tool_calls: List[OpenAIToolCall],
-    ) -> List[LLMToolCallMessage]:
+    ) -> List[OpenAIToolCallMessage]:
         async_tool_calls_tasks = []
         for tool_call in tool_calls:
             tool_name = tool_call.function.name
@@ -97,19 +102,35 @@ class LLMToolCallsHandler:
 
         tool_call_results: List[str] = await asyncio.gather(*async_tool_calls_tasks)
         tool_call_messages = [
-            LLMToolCallMessage(
-                role="tool",
-                id=tool_call.id,
+            OpenAIToolCallMessage(
                 content=result,
                 tool_call_id=tool_call.id,
-                type=tool_call.type,
+            )
+            for tool_call, result in zip(tool_calls, tool_call_results)
+        ]
+        return tool_call_messages
+
+    async def handle_tool_calls_google(
+        self,
+        tool_calls: List[GoogleToolCall],
+    ) -> List[GoogleToolCallMessage]:
+        async_tool_calls_tasks = []
+        for tool_call in tool_calls:
+            tool_name = tool_call.name
+            tool_handler = self.get_tool_handler(tool_name)
+            async_tool_calls_tasks.append(tool_handler(json.dumps(tool_call.arguments)))
+
+        tool_call_results: List[str] = await asyncio.gather(*async_tool_calls_tasks)
+        tool_call_messages = [
+            GoogleToolCallMessage(
+                name=tool_call.name,
+                response={"result": result},
             )
             for tool_call, result in zip(tool_calls, tool_call_results)
         ]
         return tool_call_messages
 
     # ? Tool call handlers
-
     # Search web tool call handler
     async def search_web_tool_call_handler(self, arguments: str) -> str:
         match self.client.llm_provider:
@@ -127,12 +148,13 @@ class LLMToolCallsHandler:
 
     async def search_web_tool_call_handler_openai(self, arguments: str) -> str:
         args = SearchWebTool.model_validate_json(arguments)
-        return args.query
-
-    async def search_web_tool_call_handler_anthropic(self, arguments: str) -> str:
-        return "test"
+        return await self.client._search_openai(args.query)
 
     async def search_web_tool_call_handler_google(self, arguments: str) -> str:
+        args = SearchWebTool.model_validate_json(arguments)
+        return await self.client._search_google(args.query)
+
+    async def search_web_tool_call_handler_anthropic(self, arguments: str) -> str:
         return "test"
 
     # Get current datetime tool call handler

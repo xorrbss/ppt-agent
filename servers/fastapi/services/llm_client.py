@@ -7,18 +7,27 @@ from openai.types.chat.chat_completion_chunk import (
     ChatCompletionChunk as OpenAIChatCompletionChunk,
 )
 from google import genai
-from google.genai.types import GenerateContentConfig
+from google.genai.types import Content as GoogleContent, Part as GoogleContentPart
+from google.genai.types import GenerateContentConfig, GoogleSearch
+from google.genai.types import Tool as GoogleTool
 from anthropic import AsyncAnthropic
 from anthropic.types import Message as AnthropicMessage
 from anthropic import MessageStreamEvent as AnthropicMessageStreamEvent
 from enums.llm_provider import LLMProvider
 from models.llm_message import (
-    LLMAssistantMessage,
+    GoogleAssistantMessage,
+    GoogleToolCallMessage,
+    OpenAIAssistantMessage,
     LLMMessage,
     LLMSystemMessage,
     LLMUserMessage,
 )
-from models.llm_tool_call import LLMToolCall, OpenAIToolCall, OpenAIToolCallFunction
+from models.llm_tool_call import (
+    GoogleToolCall,
+    LLMToolCall,
+    OpenAIToolCall,
+    OpenAIToolCallFunction,
+)
 from models.llm_tools import LLMDynamicTool, LLMTool
 from services.llm_tool_calls_handler import LLMToolCallsHandler
 from utils.async_iterator import iterator_to_async
@@ -31,9 +40,10 @@ from utils.get_env import (
     get_google_api_key_env,
     get_ollama_url_env,
     get_openai_api_key_env,
+    get_openai_model_env,
     get_tool_calls_env,
 )
-from utils.llm_provider import get_llm_provider
+from utils.llm_provider import get_llm_provider, get_model
 from utils.parsers import parse_bool_or_none
 from utils.randomizers import get_random_uuid
 from utils.schema_utils import ensure_strict_json_schema
@@ -122,12 +132,30 @@ class LLMClient:
                 return message.content
         return ""
 
-    def _get_user_prompts(self, messages: List[LLMMessage]) -> List[str]:
-        return [
-            message.content
-            for message in messages
-            if isinstance(message, LLMUserMessage)
-        ]
+    def _get_google_messages(self, messages: List[LLMMessage]) -> List[str]:
+        contents = []
+        for message in messages:
+            if isinstance(message, LLMUserMessage):
+                contents.append(
+                    GoogleContent(
+                        role="user", parts=[GoogleContentPart(text=message.content)]
+                    )
+                )
+            elif isinstance(message, GoogleAssistantMessage):
+                contents.append(message.content)
+            elif isinstance(message, GoogleToolCallMessage):
+                contents.append(
+                    GoogleContent(
+                        role="user",
+                        parts=[
+                            GoogleContentPart.from_function_response(
+                                name=message.name, response=message.response
+                            )
+                        ],
+                    )
+                )
+
+        return contents
 
     def _get_user_llm_messages(self, messages: List[LLMMessage]) -> List[LLMMessage]:
         return [message for message in messages if isinstance(message, LLMUserMessage)]
@@ -166,7 +194,7 @@ class LLMClient:
             tool_call_messages = await self.tool_calls_handler.handle_tool_calls_openai(
                 parsed_tool_calls
             )
-            assistant_message = LLMAssistantMessage(
+            assistant_message = OpenAIAssistantMessage(
                 role="assistant",
                 content=response.choices[0].message.content,
                 tool_calls=[tool_call.model_dump() for tool_call in parsed_tool_calls],
@@ -191,21 +219,68 @@ class LLMClient:
         self,
         model: str,
         messages: List[LLMMessage],
+        tools: Optional[List[dict]] = None,
         max_tokens: Optional[int] = None,
         depth: int = 0,
-    ):
+    ) -> str | None:
         client: genai.Client = self._client
+
+        google_tools = None
+        if tools:
+            google_tools = [GoogleTool(function_declarations=[tool]) for tool in tools]
+
         response = await asyncio.to_thread(
             client.models.generate_content,
             model=model,
-            contents=self._get_user_prompts(messages),
+            contents=self._get_google_messages(messages),
             config=GenerateContentConfig(
+                tools=google_tools,
                 system_instruction=self._get_system_prompt(messages),
                 response_mime_type="text/plain",
                 max_output_tokens=max_tokens,
             ),
         )
-        return response.text
+
+        content = response.candidates[0].content
+        response_parts = content.parts
+
+        if not response_parts:
+            return None
+
+        text_content = None
+        tool_calls = []
+        for each_part in response_parts:
+            if each_part.function_call:
+                tool_calls.append(
+                    GoogleToolCall(
+                        name=each_part.function_call.name,
+                        arguments=each_part.function_call.args,
+                    )
+                )
+            if each_part.text:
+                text_content = each_part.text
+
+        if tool_calls:
+            tool_call_messages = await self.tool_calls_handler.handle_tool_calls_google(
+                tool_calls
+            )
+            new_messages = [
+                *messages,
+                GoogleAssistantMessage(
+                    role="assistant",
+                    content=content,
+                ),
+                *tool_call_messages,
+            ]
+            return await self._generate_google(
+                model=model,
+                messages=new_messages,
+                max_tokens=max_tokens,
+                tools=tools,
+                depth=depth + 1,
+            )
+
+        return text_content
 
     async def _generate_anthropic(
         self,
@@ -279,7 +354,10 @@ class LLMClient:
                 )
             case LLMProvider.GOOGLE:
                 content = await self._generate_google(
-                    model=model, messages=messages, max_tokens=max_tokens
+                    model=model,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    tools=parsed_tools,
                 )
             case LLMProvider.ANTHROPIC:
                 content = await self._generate_anthropic(
@@ -392,7 +470,7 @@ class LLMClient:
                 )
                 new_messages = [
                     *messages,
-                    LLMAssistantMessage(
+                    OpenAIAssistantMessage(
                         role="assistant",
                         content=response.choices[0].message.content,
                         tool_calls=[each.model_dump() for each in parsed_tool_calls],
@@ -421,25 +499,87 @@ class LLMClient:
         messages: List[LLMMessage],
         response_format: dict,
         max_tokens: Optional[int] = None,
+        tools: Optional[List[dict]] = None,
         depth: int = 0,
-    ):
+    ) -> dict | None:
         client: genai.Client = self._client
+
+        google_tools = None
+        if tools:
+            google_tools = [GoogleTool(function_declarations=[tool]) for tool in tools]
+            google_tools.append(
+                GoogleTool(
+                    function_declarations=[
+                        {
+                            "name": "ResponseSchema",
+                            "description": "Provide response to the user",
+                            "parameters": response_format,
+                        }
+                    ]
+                )
+            )
+
         response = await asyncio.to_thread(
             client.models.generate_content,
             model=model,
-            contents=self._get_user_prompts(messages),
+            contents=self._get_google_messages(messages),
             config=GenerateContentConfig(
+                tools=google_tools,
                 system_instruction=self._get_system_prompt(messages),
-                response_mime_type="application/json",
-                response_json_schema=response_format,
+                response_mime_type="application/json" if not tools else None,
+                response_json_schema=response_format if not tools else None,
                 max_output_tokens=max_tokens,
             ),
         )
-        content = None
-        if response.text:
-            content = json.loads(response.text)
 
-        return content
+        content = response.candidates[0].content
+        response_parts = content.parts
+        text_content = None
+
+        if not response_parts:
+            return None
+
+        tool_calls: List[GoogleToolCall] = []
+        for each_part in response_parts:
+            if each_part.function_call:
+                tool_calls.append(
+                    GoogleToolCall(
+                        name=each_part.function_call.name,
+                        arguments=each_part.function_call.args,
+                    )
+                )
+
+            if each_part.text:
+                text_content = each_part.text
+
+        for each in tool_calls:
+            if each.name == "ResponseSchema":
+                return each.arguments
+
+        if tool_calls:
+            tool_call_messages = await self.tool_calls_handler.handle_tool_calls_google(
+                tool_calls
+            )
+            new_messages = [
+                *messages,
+                GoogleAssistantMessage(
+                    role="assistant",
+                    content=content,
+                ),
+                *tool_call_messages,
+            ]
+            return await self._generate_google_structured(
+                model=model,
+                messages=new_messages,
+                max_tokens=max_tokens,
+                response_format=response_format,
+                tools=tools,
+                depth=depth + 1,
+            )
+
+        if text_content:
+            return json.loads(text_content)
+        return None
 
     async def _generate_anthropic_structured(
         self,
@@ -542,6 +682,7 @@ class LLMClient:
                     model=model,
                     messages=messages,
                     response_format=response_format,
+                    tools=parsed_tools,
                     max_tokens=max_tokens,
                 )
             case LLMProvider.ANTHROPIC:
@@ -652,7 +793,7 @@ class LLMClient:
             )
             new_messages = [
                 *messages,
-                LLMAssistantMessage(
+                OpenAIAssistantMessage(
                     role="assistant",
                     content=None,
                     tool_calls=[each.model_dump() for each in tool_calls],
@@ -673,21 +814,59 @@ class LLMClient:
         self,
         model: str,
         messages: List[LLMMessage],
+        tools: Optional[List[dict]] = None,
         max_tokens: Optional[int] = None,
         depth: int = 0,
-    ):
+    ) -> AsyncGenerator[str, None]:
         client: genai.Client = self._client
+
+        google_tools = None
+        if tools:
+            google_tools = [GoogleTool(function_declarations=[tool]) for tool in tools]
+
+        tool_calls = None
         async for event in iterator_to_async(client.models.generate_content_stream)(
             model=model,
-            contents=self._get_user_prompts(messages),
+            contents=self._get_google_messages(messages),
             config=GenerateContentConfig(
                 system_instruction=self._get_system_prompt(messages),
                 response_mime_type="text/plain",
+                tools=google_tools,
                 max_output_tokens=max_tokens,
             ),
         ):
             if event.text:
                 yield event.text
+
+            if event.function_calls:
+                tool_calls = [
+                    GoogleToolCall(
+                        name=each.name,
+                        arguments=each.args,
+                    )
+                    for each in event.function_calls
+                ]
+
+            if tool_calls:
+                tool_call_messages = (
+                    await self.tool_calls_handler.handle_tool_calls_google(tool_calls)
+                )
+                new_messages = [
+                    *messages,
+                    GoogleAssistantMessage(
+                        role="assistant",
+                        content=event.candidates[0].content,
+                    ),
+                    *tool_call_messages,
+                ]
+                async for event in self._stream_google(
+                    model=model,
+                    messages=new_messages,
+                    max_tokens=max_tokens,
+                    tools=tools,
+                    depth=depth + 1,
+                ):
+                    yield event
 
     async def _stream_anthropic(
         self,
@@ -757,7 +936,10 @@ class LLMClient:
                 )
             case LLMProvider.GOOGLE:
                 return self._stream_google(
-                    model=model, messages=messages, max_tokens=max_tokens
+                    model=model,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    tools=parsed_tools,
                 )
             case LLMProvider.ANTHROPIC:
                 return self._stream_anthropic(
@@ -901,7 +1083,7 @@ class LLMClient:
             )
             new_messages = [
                 *messages,
-                LLMAssistantMessage(
+                OpenAIAssistantMessage(
                     role="assistant",
                     content=None,
                     tool_calls=[each.model_dump() for each in tool_calls],
@@ -926,21 +1108,81 @@ class LLMClient:
         messages: List[LLMMessage],
         response_format: dict,
         max_tokens: Optional[int] = None,
+        tools: Optional[List[dict]] = None,
         depth: int = 0,
     ):
         client: genai.Client = self._client
+
+        google_tools = []
+        if tools:
+            google_tools = [GoogleTool(function_declarations=[tool]) for tool in tools]
+            google_tools.append(
+                GoogleTool(
+                    function_declarations=[
+                        {
+                            "name": "ResponseSchema",
+                            "description": "Provide response to the user",
+                            "parameters": response_format,
+                        }
+                    ]
+                )
+            )
+
+        tool_calls: List[GoogleToolCall] = []
         async for event in iterator_to_async(client.models.generate_content_stream)(
             model=model,
-            contents=self._get_user_prompts(messages),
+            contents=self._get_google_messages(messages),
             config=GenerateContentConfig(
+                tools=google_tools,
                 system_instruction=self._get_system_prompt(messages),
-                response_mime_type="application/json",
-                response_json_schema=response_format,
+                response_mime_type="application/json" if not tools else None,
+                response_json_schema=response_format if not tools else None,
                 max_output_tokens=max_tokens,
             ),
         ):
             if event.text:
                 yield event.text
+
+            if event.function_calls:
+                tool_calls = [
+                    GoogleToolCall(
+                        name=each.name,
+                        arguments=each.args,
+                    )
+                    for each in event.function_calls
+                ]
+
+            has_response_schema_tool_call = False
+            for each in tool_calls:
+                if each.name == "ResponseSchema":
+                    has_response_schema_tool_call = True
+                    if each.arguments:
+                        yield json.dumps(each.arguments)
+
+            if has_response_schema_tool_call:
+                continue
+
+            if tool_calls:
+                tool_call_messages = (
+                    await self.tool_calls_handler.handle_tool_calls_google(tool_calls)
+                )
+                new_messages = [
+                    *messages,
+                    GoogleAssistantMessage(
+                        role="assistant",
+                        content=event.candidates[0].content,
+                    ),
+                    *tool_call_messages,
+                ]
+                async for event in self._stream_google_structured(
+                    model=model,
+                    messages=new_messages,
+                    max_tokens=max_tokens,
+                    response_format=response_format,
+                    tools=tools,
+                    depth=depth + 1,
+                ):
+                    yield event
 
     async def _stream_anthropic_structured(
         self,
@@ -1040,6 +1282,7 @@ class LLMClient:
                     model=model,
                     messages=messages,
                     response_format=response_format,
+                    tools=parsed_tools,
                     max_tokens=max_tokens,
                 )
             case LLMProvider.ANTHROPIC:
@@ -1067,20 +1310,28 @@ class LLMClient:
                 )
 
     # ? Web search
-    def _search_openai(self, query: str) -> str:
+    async def _search_openai(self, query: str) -> str:
         client: AsyncOpenAI = self._client
-        response = client.responses.create(
-            model="o4-mini",
+        response = await client.responses.create(
+            model=get_model(),
             tools=[
                 {
                     "type": "web_search_preview",
-                    "user_location": {
-                        "type": "approximate",
-                        "country": "GB",
-                        "city": "London",
-                        "region": "London",
-                    },
                 }
             ],
-            input="What are the best restaurants around Granary Square?",
+            input=query,
         )
+        return response.output_text
+
+    async def _search_google(self, query: str) -> str:
+        client: genai.Client = self._client
+        grounding_tool = GoogleTool(google_search=GoogleSearch())
+        config = GenerateContentConfig(tools=[grounding_tool])
+
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model=get_model(),
+            contents=query,
+            config=config,
+        )
+        return response.text

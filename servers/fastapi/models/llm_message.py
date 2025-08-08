@@ -1,5 +1,6 @@
-from typing import List, Literal, Optional
+from typing import Any, List, Literal, Optional
 from pydantic import BaseModel
+from google.genai.types import Content as GoogleContent
 
 
 class LLMMessage(BaseModel):
@@ -16,15 +17,24 @@ class LLMSystemMessage(LLMMessage):
     content: str
 
 
-class LLMToolCallMessage(LLMMessage):
-    role: Literal["tool"] = "tool"
-    id: str
-    content: str
-    type: str
-    tool_call_id: str
-
-
-class LLMAssistantMessage(LLMMessage):
+class OpenAIAssistantMessage(LLMMessage):
     role: Literal["assistant"] = "assistant"
     content: str | None = None
     tool_calls: Optional[List[dict]] = None
+
+
+class GoogleAssistantMessage(LLMMessage):
+    role: Literal["assistant"] = "assistant"
+    content: GoogleContent
+
+
+class OpenAIToolCallMessage(LLMMessage):
+    role: Literal["tool"] = "tool"
+    content: str
+    tool_call_id: str
+
+
+class GoogleToolCallMessage(LLMMessage):
+    role: Literal["tool"] = "tool"
+    name: str
+    response: dict
