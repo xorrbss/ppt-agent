@@ -145,8 +145,6 @@ class LLMToolCallsHandler:
         tool_calls: List[AnthropicToolCall],
     ) -> List[AnthropicToolCallMessage]:
         async_tool_calls_tasks = []
-        print("--------------------------------")
-        print(tool_calls)
         for tool_call in tool_calls:
             tool_name = tool_call.name
             tool_handler = self.get_tool_handler(tool_name)
@@ -160,8 +158,6 @@ class LLMToolCallsHandler:
             )
             for tool_call, result in zip(tool_calls, tool_call_results)
         ]
-        print("--------------------------------")
-        print(tool_call_messages)
         return tool_call_messages
 
     # ? Tool call handlers

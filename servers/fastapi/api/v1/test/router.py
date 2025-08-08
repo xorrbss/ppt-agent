@@ -35,7 +35,7 @@ async def test():
 
     text_content = ""
 
-    response = await client.generate_structured(
+    async for chunk in client.stream_structured(
         model=get_model(),
         messages=[
             LLMUserMessage(
@@ -47,6 +47,7 @@ async def test():
             SearchWebTool,
             get_current_datetime_tool,
         ],
-    )
+    ):
+        text_content += chunk
 
-    return {"data": response}
+    return {"data": text_content}
