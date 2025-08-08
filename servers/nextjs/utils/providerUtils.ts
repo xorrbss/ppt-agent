@@ -3,9 +3,7 @@ import { LLMConfig } from "@/types/llm_config";
 export interface OllamaModel {
   label: string;
   value: string;
-  description: string;
   size: string;
-  icon: string;
 }
 
 export interface DownloadingModel {
