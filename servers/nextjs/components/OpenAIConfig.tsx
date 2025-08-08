@@ -13,16 +13,19 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { Switch } from "./ui/switch";
 
 interface OpenAIConfigProps {
   openaiApiKey: string;
   openaiModel: string;
-  onInputChange: (value: string, field: string) => void;
+  webGrounding?: boolean;
+  onInputChange: (value: string | boolean, field: string) => void;
 }
 
 export default function OpenAIConfig({
   openaiApiKey,
   openaiModel,
+  webGrounding,
   onInputChange
 }: OpenAIConfigProps) {
   const [openModelSelect, setOpenModelSelect] = useState(false);
@@ -210,6 +213,23 @@ export default function OpenAIConfig({
           </div>
         </div>
       ) : null}
+
+      {/* Web Grounding Toggle - show at the end, below models dropdown */}
+      <div>
+        <div className="flex items-center justify-between mb-4 bg-green-50 p-2 rounded-sm">
+          <label className="text-sm font-medium text-gray-700">
+            Enable Web Grounding
+          </label>
+          <Switch
+            checked={!!webGrounding}
+            onCheckedChange={(checked) => onInputChange(checked, "web_grounding")}
+          />
+        </div>
+        <p className="mt-2 text-sm text-gray-500 flex items-center gap-2">
+          <span className="block w-1 h-1 rounded-full bg-gray-400"></span>
+          If enabled, the model can use web search grounding when available.
+        </p>
+      </div>
     </div>
   );
 }

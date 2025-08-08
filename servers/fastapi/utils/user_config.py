@@ -22,6 +22,7 @@ from utils.get_env import (
     get_image_provider_env,
     get_pixabay_api_key_env,
     get_extended_reasoning_env,
+    get_web_grounding_env,
 )
 from utils.parsers import parse_bool_or_none
 from utils.set_env import (
@@ -43,6 +44,7 @@ from utils.set_env import (
     set_image_provider_env,
     set_pixabay_api_key_env,
     set_tool_calls_env,
+    set_web_grounding_env,
 )
 
 
@@ -76,12 +78,26 @@ def get_user_config():
         IMAGE_PROVIDER=existing_config.IMAGE_PROVIDER or get_image_provider_env(),
         PIXABAY_API_KEY=existing_config.PIXABAY_API_KEY or get_pixabay_api_key_env(),
         PEXELS_API_KEY=existing_config.PEXELS_API_KEY or get_pexels_api_key_env(),
-        TOOL_CALLS=existing_config.TOOL_CALLS
-        or parse_bool_or_none(get_tool_calls_env()),
-        DISABLE_THINKING=existing_config.DISABLE_THINKING
-        or parse_bool_or_none(get_disable_thinking_env()),
-        EXTENDED_REASONING=existing_config.EXTENDED_REASONING
-        or parse_bool_or_none(get_extended_reasoning_env()),
+        TOOL_CALLS=(
+            existing_config.TOOL_CALLS
+            if existing_config.TOOL_CALLS is not None
+            else (parse_bool_or_none(get_tool_calls_env()) or False)
+        ),
+        DISABLE_THINKING=(
+            existing_config.DISABLE_THINKING
+            if existing_config.DISABLE_THINKING is not None
+            else (parse_bool_or_none(get_disable_thinking_env()) or False)
+        ),
+        EXTENDED_REASONING=(
+            existing_config.EXTENDED_REASONING
+            if existing_config.EXTENDED_REASONING is not None
+            else (parse_bool_or_none(get_extended_reasoning_env()) or False)
+        ),
+        WEB_GROUNDING=(
+            existing_config.WEB_GROUNDING
+            if existing_config.WEB_GROUNDING is not None
+            else (parse_bool_or_none(get_web_grounding_env()) or False)
+        ),
     )
 
 
@@ -122,5 +138,6 @@ def update_env_with_user_config():
     if user_config.DISABLE_THINKING:
         set_disable_thinking_env(str(user_config.DISABLE_THINKING))
     if user_config.EXTENDED_REASONING:
-        if user_config.EXTENDED_REASONING:
-            set_extended_reasoning_env(str(user_config.EXTENDED_REASONING))
+        set_extended_reasoning_env(str(user_config.EXTENDED_REASONING))
+    if user_config.WEB_GROUNDING:
+        set_web_grounding_env(str(user_config.WEB_GROUNDING))

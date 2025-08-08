@@ -149,6 +149,7 @@ export default function LLMProviderSelection({
             <OpenAIConfig
               openaiApiKey={llmConfig.OPENAI_API_KEY || ""}
               openaiModel={llmConfig.OPENAI_MODEL || ""}
+              webGrounding={llmConfig.WEB_GROUNDING || false}
               onInputChange={input_field_changed}
             />
           </TabsContent>
@@ -158,6 +159,7 @@ export default function LLMProviderSelection({
             <GoogleConfig
               googleApiKey={llmConfig.GOOGLE_API_KEY || ""}
               googleModel={llmConfig.GOOGLE_MODEL || ""}
+              webGrounding={llmConfig.WEB_GROUNDING || false}
               onInputChange={input_field_changed}
             />
           </TabsContent>
@@ -168,6 +170,7 @@ export default function LLMProviderSelection({
               anthropicApiKey={llmConfig.ANTHROPIC_API_KEY || ""}
               anthropicModel={llmConfig.ANTHROPIC_MODEL || ""}
               extendedReasoning={llmConfig.EXTENDED_REASONING || false}
+              webGrounding={llmConfig.WEB_GROUNDING || false}
               onInputChange={input_field_changed}
             />
           </TabsContent>

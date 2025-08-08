@@ -1,5 +1,5 @@
 from typing import Optional
-from models.llm_message import LLMMessage
+from models.llm_message import LLMSystemMessage, LLMUserMessage
 from services.llm_client import LLMClient
 from utils.llm_provider import get_model
 
@@ -53,8 +53,8 @@ async def get_edited_slide_html(prompt: str, html: str):
     response = await client.generate(
         model=model,
         messages=[
-            LLMMessage(role="system", content=system_prompt),
-            LLMMessage(role="user", content=get_user_prompt(prompt, html)),
+            LLMSystemMessage(content=system_prompt),
+            LLMUserMessage(content=get_user_prompt(prompt, html)),
         ],
     )
     return extract_html_from_response(response) or html

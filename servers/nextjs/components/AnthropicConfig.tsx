@@ -19,6 +19,7 @@ interface AnthropicConfigProps {
   anthropicApiKey: string;
   anthropicModel: string;
   extendedReasoning: boolean;
+  webGrounding?: boolean;
   onInputChange: (value: string | boolean, field: string) => void;
 }
 
@@ -27,6 +28,7 @@ export default function AnthropicConfig({
   anthropicApiKey,
   anthropicModel,
   extendedReasoning,
+  webGrounding,
   onInputChange,
 }: AnthropicConfigProps) {
   const [openModelSelect, setOpenModelSelect] = useState(false);
@@ -65,7 +67,7 @@ export default function AnthropicConfig({
         const data = await response.json();
         setAvailableModels(data);
         setModelsChecked(true);
-        onInputChange("claude-3-5-sonnet-20241022", "anthropic_model");
+        onInputChange("claude-sonnet-4-20250514", "anthropic_model");
       } else {
         console.error('Failed to fetch models');
         setAvailableModels([]);
@@ -226,6 +228,23 @@ export default function AnthropicConfig({
           </div>
         </div>
       ) : null}
+
+      {/* Web Grounding Toggle - at the end, below models dropdown */}
+      <div>
+        <div className="flex items-center justify-between mb-4 bg-green-50 p-2 rounded-sm">
+          <label className="text-sm font-medium text-gray-700">
+            Enable Web Grounding
+          </label>
+          <Switch
+            checked={!!webGrounding}
+            onCheckedChange={(checked) => onInputChange(checked, "web_grounding")}
+          />
+        </div>
+        <p className="mt-2 text-sm text-gray-500 flex items-center gap-2">
+          <span className="block w-1 h-1 rounded-full bg-gray-400"></span>
+          If enabled, the model can use web search grounding when available.
+        </p>
+      </div>
     </div>
   );
 } 

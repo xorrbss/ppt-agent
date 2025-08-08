@@ -57,6 +57,10 @@ export async function POST(request: Request) {
       userConfig.EXTENDED_REASONING === undefined
         ? existingConfig.EXTENDED_REASONING
         : userConfig.EXTENDED_REASONING,
+    WEB_GROUNDING:
+      userConfig.WEB_GROUNDING === undefined
+        ? existingConfig.WEB_GROUNDING
+        : userConfig.WEB_GROUNDING,
     USE_CUSTOM_URL:
       userConfig.USE_CUSTOM_URL === undefined
         ? existingConfig.USE_CUSTOM_URL
