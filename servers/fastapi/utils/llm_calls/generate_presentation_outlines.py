@@ -4,7 +4,10 @@ from models.llm_message import LLMSystemMessage, LLMUserMessage
 from models.llm_tools import GetCurrentDatetimeTool, SearchWebTool
 from services.llm_client import LLMClient
 from utils.get_dynamic_models import get_presentation_outline_model_with_n_slides
+from utils.get_env import get_web_grounding_env
 from utils.llm_provider import get_model
+from utils.parsers import parse_bool_or_none
+from utils.user_config import get_user_config
 
 system_prompt = """
     You are an expert presentation creator. Generate structured presentations based on user requirements and format them according to the specified JSON schema with markdown content.
@@ -49,11 +52,13 @@ async def generate_ppt_outline(
 
     client = LLMClient()
 
+    tools = [SearchWebTool, GetCurrentDatetimeTool]
+
     async for chunk in client.stream_structured(
         model,
         get_messages(prompt, n_slides, language, content),
         response_model.model_json_schema(),
         strict=True,
-        tools=[SearchWebTool, GetCurrentDatetimeTool],
+        tools=tools if client.enable_web_grounding() else None,
     ):
         yield chunk

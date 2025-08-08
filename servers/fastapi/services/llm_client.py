@@ -44,10 +44,11 @@ from utils.get_env import (
     get_ollama_url_env,
     get_openai_api_key_env,
     get_tool_calls_env,
+    get_web_grounding_env,
 )
 from utils.llm_provider import get_llm_provider, get_model
 from utils.parsers import parse_bool_or_none
-from utils.schema_utils import ensure_strict_json_schema, flatten_json_schema
+from utils.schema_utils import ensure_strict_json_schema
 
 
 class LLMClient:
@@ -61,6 +62,15 @@ class LLMClient:
         if self.llm_provider != LLMProvider.CUSTOM:
             return False
         return parse_bool_or_none(get_tool_calls_env()) or False
+
+    # ? Web Grounding
+    def enable_web_grounding(self) -> bool:
+        if (
+            self.llm_provider == LLMProvider.OLLAMA
+            or self.llm_provider == LLMProvider.CUSTOM
+        ):
+            return False
+        return parse_bool_or_none(get_web_grounding_env()) or False
 
     # ? Disable thinking
     def disable_thinking(self) -> bool:
@@ -569,7 +579,7 @@ class LLMClient:
                 tools=google_tools,
                 system_instruction=self._get_system_prompt(messages),
                 response_mime_type="application/json" if not tools else None,
-                response_schema=response_format if not tools else None,
+                response_json_schema=response_format if not tools else None,
                 max_output_tokens=max_tokens,
             ),
         )
