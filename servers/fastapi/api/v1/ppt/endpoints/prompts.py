@@ -16,13 +16,14 @@ Follow these rules strictly:
 - Make sure that no elements overflow or exceed slide bounding in any way.
 - Properly export shapes as exact SVG.
 - Add relevant font in tailwind to all texts.   
-- Wrap the output code inside these classes: \\\"relative w-full rounded-sm max-w-[1280px] shadow-lg max-h-[720px] aspect-video bg-white relative z-20 mx-auto overflow-hidden\\\". 
+- Wrap the output code inside these classes: \"relative w-full rounded-sm max-w-[1280px] shadow-lg max-h-[720px] aspect-video bg-white relative z-20 mx-auto overflow-hidden\". 
 - For image everywhere use https://images.pexels.com/photos/31527637/pexels-photo-31527637.jpeg
 - Image should never be inside of a SVG.
 - Replace brand icons with a circle of same size with "i" between. Generic icons like "email", "call", etc should remain same.
 - If there is a box/card enclosing a text, make it grow as well when the text grows, so that the text does not overflow the box/card.
 - Give out only HTML and Tailwind code. No other texts or explanations. 
 - Do not give entire HTML structure with head, body, etc. Just give the respective HTML and Tailwind code inside div with above classes.
+- If a list of fonts is provided, you must use the provided fonts (normalized root families) in font-family declarations, prioritizing them over inferred fonts. Use the first matching family wherever applicable.
 """
 
 HTML_TO_REACT_SYSTEM_PROMPT = """

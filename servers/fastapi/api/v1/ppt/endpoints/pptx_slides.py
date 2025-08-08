@@ -24,6 +24,7 @@ class SlideData(BaseModel):
     slide_number: int
     screenshot_url: str
     xml_content: str
+    normalized_fonts: List[str]
 
 
 class FontAnalysisResult(BaseModel):
@@ -36,6 +37,75 @@ class PptxSlidesResponse(BaseModel):
     slides: List[SlideData]
     total_slides: int
     fonts: Optional[FontAnalysisResult] = None
+
+# NEW: Fonts-only router and response for PPTX
+class PptxFontsResponse(BaseModel):
+    success: bool
+    fonts: FontAnalysisResult
+
+PPTX_FONTS_ROUTER = APIRouter(prefix="/pptx-fonts", tags=["PPTX Fonts"])
+
+# NEW: Normalize font family names by removing style/weight/stretch descriptors and splitting camel case
+_STYLE_TOKENS = {
+    # styles
+    "italic", "italics", "ital", "oblique", "roman",
+    # combined style shortcuts
+    "bolditalic", "bolditalics",
+    # weights
+    "thin", "hairline", "extralight", "ultralight", "light", "demilight", "semilight", "book",
+    "regular", "normal", "medium", "semibold", "demibold", "bold", "extrabold", "ultrabold",
+    "black", "extrablack", "ultrablack", "heavy",
+    # width/stretch
+    "narrow", "condensed", "semicondensed", "extracondensed", "ultracondensed",
+    "expanded", "semiexpanded", "extraexpanded", "ultraexpanded",
+}
+# Modifiers commonly used with style tokens
+_STYLE_MODIFIERS = {"semi", "demi", "extra", "ultra"}
+
+def _insert_spaces_in_camel_case(value: str) -> str:
+    # Insert space before capital letters preceded by lowercase or digits (e.g., MontserratBold -> Montserrat Bold)
+    value = re.sub(r"(?<=[a-z0-9])([A-Z])", r" \1", value)
+    # Handle sequences like BoldItalic -> Bold Italic
+    value = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1 \2", value)
+    return value
+
+def normalize_font_family_name(raw_name: str) -> str:
+    if not raw_name:
+        return raw_name
+    # Replace separators with spaces
+    name = raw_name.replace("_", " ").replace("-", " ")
+    # Insert spaces in camel case
+    name = _insert_spaces_in_camel_case(name)
+    # Collapse multiple spaces
+    name = re.sub(r"\s+", " ", name).strip()
+    # Lowercase helper for matching but keep original casing for output
+    lower_name = name.lower()
+    # Quick cut: if the full string ends with a pure style suffix, trim it
+    for style in sorted(_STYLE_TOKENS, key=len, reverse=True):
+        if lower_name.endswith(" " + style):
+            name = name[: -(len(style) + 1)]
+            lower_name = lower_name[: -(len(style) + 1)]
+            break
+    # Tokenize
+    tokens_original = name.split(" ")
+    tokens_filtered: List[str] = []
+    for index, tok in enumerate(tokens_original):
+        lower_tok = tok.lower()
+        # Always keep the first token to avoid stripping families like "Black Ops One"
+        if index == 0:
+            tokens_filtered.append(tok)
+            continue
+        # Drop style tokens and standalone modifiers
+        if lower_tok in _STYLE_TOKENS or lower_tok in _STYLE_MODIFIERS:
+            continue
+        tokens_filtered.append(tok)
+    # If everything except first token was dropped and first token is a style token (unlikely), fallback to original
+    if not tokens_filtered:
+        tokens_filtered = tokens_original
+    normalized = " ".join(tokens_filtered).strip()
+    # Final cleanup of leftover multiple spaces
+    normalized = re.sub(r"\s+", " ", normalized)
+    return normalized
 
 
 def extract_fonts_from_oxml(xml_content: str) -> List[str]:
@@ -143,25 +213,30 @@ async def analyze_fonts_in_all_slides(slide_xmls: List[str]) -> FontAnalysisResu
         FontAnalysisResult with supported and unsupported fonts
     """
     # Extract fonts from all slides
-    all_fonts = set()
+    raw_fonts = set()
     for xml_content in slide_xmls:
         slide_fonts = extract_fonts_from_oxml(xml_content)
-        all_fonts.update(slide_fonts)
+        raw_fonts.update(slide_fonts)
+
+    # Normalize to root families (e.g., "Montserrat Italic" -> "Montserrat")
+    normalized_fonts = {normalize_font_family_name(f) for f in raw_fonts}
+    # Remove empties if any
+    normalized_fonts = {f for f in normalized_fonts if f}
     
-    if not all_fonts:
+    if not normalized_fonts:
         return FontAnalysisResult(
             internally_supported_fonts=[],
             not_supported_fonts=[]
         )
     
-    # Check each font's availability in Google Fonts concurrently
-    tasks = [check_google_font_availability(font) for font in all_fonts]
+    # Check each normalized font's availability in Google Fonts concurrently
+    tasks = [check_google_font_availability(font) for font in normalized_fonts]
     results = await asyncio.gather(*tasks)
     
     internally_supported_fonts = []
     not_supported_fonts = []
     
-    for font, is_available in zip(all_fonts, results):
+    for font, is_available in zip(normalized_fonts, results):
         if is_available:
             formatted_name = font.replace(' ', '+')
             google_fonts_url = f"https://fonts.googleapis.com/css2?family={formatted_name}&display=swap"
@@ -246,10 +321,15 @@ async def process_pptx_slides(
                     # Fallback if screenshot generation failed or file is empty placeholder
                     screenshot_url = "/static/images/placeholder.jpg"
                 
+                # Compute normalized fonts for this slide
+                raw_slide_fonts = extract_fonts_from_oxml(xml_content)
+                normalized_fonts = sorted({normalize_font_family_name(f) for f in raw_slide_fonts if f})
+                
                 slides_data.append(SlideData(
                     slide_number=i,
                     screenshot_url=screenshot_url,
-                    xml_content=xml_content
+                    xml_content=xml_content,
+                    normalized_fonts=normalized_fonts
                 ))
             
             return PptxSlidesResponse(
@@ -258,6 +338,75 @@ async def process_pptx_slides(
                 total_slides=len(slides_data),
                 fonts=font_analysis
             )
+
+# NEW: Fonts-only endpoint leveraging the same font extraction/analysis
+@PPTX_FONTS_ROUTER.post("/process", response_model=PptxFontsResponse)
+async def process_pptx_fonts(
+    pptx_file: UploadFile = File(..., description="PPTX file to analyze fonts from")
+):
+    """
+    Analyze a PPTX file and return only the fonts used in the document.
+
+    Uses the exact same font extraction and analysis utilities as the /pptx-slides endpoint.
+    """
+    # Validate PPTX file
+    if pptx_file.content_type not in POWERPOINT_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type. Expected PPTX file, got {pptx_file.content_type}"
+        )
+
+    # Create temporary directory for processing
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Save uploaded PPTX file
+        pptx_path = os.path.join(temp_dir, "presentation.pptx")
+        with open(pptx_path, "wb") as f:
+            pptx_content = await pptx_file.read()
+            f.write(pptx_content)
+
+        # Extract slide XMLs from PPTX
+        slide_xmls = _extract_slide_xmls(pptx_path, temp_dir)
+
+        # Analyze fonts across all slides (same logic as in /pptx-slides)
+        font_analysis = await analyze_fonts_in_all_slides(slide_xmls)
+
+        return PptxFontsResponse(
+            success=True,
+            fonts=font_analysis,
+        )
+
+def _create_font_alias_config(raw_fonts: List[str]) -> str:
+    """Create a temporary fontconfig configuration that aliases variant family names to normalized root families.
+    Returns the path to the config file.
+    """
+    # Build mapping from raw -> normalized where different
+    mappings: Dict[str, str] = {}
+    for f in raw_fonts:
+        normalized = normalize_font_family_name(f)
+        if normalized and normalized != f:
+            mappings[f] = normalized
+    # Create config only if we have mappings
+    fd, fonts_conf_path = tempfile.mkstemp(prefix="fonts_alias_", suffix=".conf")
+    os.close(fd)
+    with open(fonts_conf_path, "w", encoding="utf-8") as cfg:
+        cfg.write("""<?xml version='1.0'?>
+<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+<fontconfig>
+  <include>/etc/fonts/fonts.conf</include>
+""")
+        for src, dst in mappings.items():
+            cfg.write(f"""
+  <match target="pattern">
+    <test name="family" compare="eq">
+      <string>{src}</string>
+    </test>
+    <edit name="family" mode="assign" binding="strong">
+      <string>{dst}</string>
+    </edit>
+  </match>
+""")
+        cfg.write("\n</fontconfig>\n")
+    return fonts_conf_path
 
 async def _install_fonts(fonts: List[UploadFile], temp_dir: str) -> None:
     """Install provided font files to the system."""
@@ -328,6 +477,15 @@ async def _generate_screenshots(pptx_path: str, temp_dir: str) -> List[str]:
         slide_xmls = _extract_slide_xmls(pptx_path, temp_dir)
         slide_count = len(slide_xmls)
         
+        # Build font alias config to force variant families to resolve to normalized root families
+        raw_fonts: List[str] = []
+        for xml in slide_xmls:
+            raw_fonts.extend(extract_fonts_from_oxml(xml))
+        raw_fonts = list({f for f in raw_fonts if f})
+        fonts_conf_path = _create_font_alias_config(raw_fonts)
+        env = os.environ.copy()
+        env["FONTCONFIG_FILE"] = fonts_conf_path
+        
         print(f"Found {slide_count} slides in presentation")
         
         # Step 1: Convert PPTX to PDF using LibreOffice
@@ -342,7 +500,7 @@ async def _generate_screenshots(pptx_path: str, temp_dir: str) -> List[str]:
                 "--convert-to", "pdf",
                 "--outdir", screenshots_dir,
                 pptx_path
-            ], check=True, capture_output=True, text=True, timeout=500)
+            ], check=True, capture_output=True, text=True, timeout=500, env=env)
             
             print(f"LibreOffice PDF conversion output: {result.stdout}")
             if result.stderr:
@@ -369,7 +527,7 @@ async def _generate_screenshots(pptx_path: str, temp_dir: str) -> List[str]:
                 "-density", "150",
                 actual_pdf_path,
                 os.path.join(screenshots_dir, "slide_%03d.png")
-            ], check=True, capture_output=True, text=True, timeout=500)
+            ], check=True, capture_output=True, text=True, timeout=500, env=env)
             
             print(f"ImageMagick conversion output: {result.stdout}")
             if result.stderr:
