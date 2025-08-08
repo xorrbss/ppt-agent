@@ -1,6 +1,6 @@
 from typing import Optional
 
-from models.llm_message import LLMMessage, LLMSystemMessage, LLMUserMessage
+from models.llm_message import LLMSystemMessage, LLMUserMessage
 from models.llm_tools import GetCurrentDatetimeTool, SearchWebTool
 from services.llm_client import LLMClient
 from utils.get_dynamic_models import get_presentation_outline_model_with_n_slides
@@ -30,11 +30,9 @@ def get_user_prompt(prompt: str, n_slides: int, language: str, content: str):
 def get_messages(prompt: str, n_slides: int, language: str, content: str):
     return [
         LLMSystemMessage(
-            role="system",
             content=system_prompt,
         ),
         LLMUserMessage(
-            role="user",
             content=get_user_prompt(prompt, n_slides, language, content),
         ),
     ]

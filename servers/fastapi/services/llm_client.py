@@ -43,13 +43,11 @@ from utils.get_env import (
     get_google_api_key_env,
     get_ollama_url_env,
     get_openai_api_key_env,
-    get_openai_model_env,
     get_tool_calls_env,
 )
 from utils.llm_provider import get_llm_provider, get_model
 from utils.parsers import parse_bool_or_none
-from utils.randomizers import get_random_uuid
-from utils.schema_utils import ensure_strict_json_schema
+from utils.schema_utils import ensure_strict_json_schema, flatten_json_schema
 
 
 class LLMClient:
@@ -455,10 +453,10 @@ class LLMClient:
                     LLMDynamicTool(
                         name="ResponseSchema",
                         description="Provide response to the user",
-                        strict=strict,
                         parameters=response_schema,
                         handler=do_nothing_async,
-                    )
+                    ),
+                    strict=strict,
                 )
             )
 
@@ -557,7 +555,7 @@ class LLMClient:
                         {
                             "name": "ResponseSchema",
                             "description": "Provide response to the user",
-                            "parameters": response_format,
+                            "parameters_json_schema": response_format,
                         }
                     ]
                 )
@@ -571,7 +569,7 @@ class LLMClient:
                 tools=google_tools,
                 system_instruction=self._get_system_prompt(messages),
                 response_mime_type="application/json" if not tools else None,
-                response_json_schema=response_format if not tools else None,
+                response_schema=response_format if not tools else None,
                 max_output_tokens=max_tokens,
             ),
         )
@@ -1114,10 +1112,10 @@ class LLMClient:
                     LLMDynamicTool(
                         name="ResponseSchema",
                         description="Provide response to the user",
-                        strict=strict,
                         parameters=response_schema,
                         handler=do_nothing_async,
-                    )
+                    ),
+                    strict=strict,
                 )
             )
 
@@ -1235,10 +1233,11 @@ class LLMClient:
         max_tokens: Optional[int] = None,
         tools: Optional[List[dict]] = None,
         depth: int = 0,
-    ):
+    ) -> AsyncGenerator[str, None]:
+
         client: genai.Client = self._client
 
-        google_tools = []
+        google_tools = None
         if tools:
             google_tools = [GoogleTool(function_declarations=[tool]) for tool in tools]
             google_tools.append(
@@ -1247,13 +1246,14 @@ class LLMClient:
                         {
                             "name": "ResponseSchema",
                             "description": "Provide response to the user",
-                            "parameters": response_format,
+                            "parameters_json_schema": response_format,
                         }
                     ]
                 )
             )
 
         tool_calls: List[GoogleToolCall] = []
+        has_response_schema_tool_call = False
         async for event in iterator_to_async(client.models.generate_content_stream)(
             model=model,
             contents=self._get_google_messages(messages),
@@ -1277,7 +1277,6 @@ class LLMClient:
                     for each in event.function_calls
                 ]
 
-            has_response_schema_tool_call = False
             for each in tool_calls:
                 if each.name == "ResponseSchema":
                     has_response_schema_tool_call = True
@@ -1317,7 +1316,7 @@ class LLMClient:
         tools: Optional[List[dict]] = None,
         max_tokens: Optional[int] = None,
         depth: int = 0,
-    ):
+    ) -> AsyncGenerator[str, None]:
         client: AsyncAnthropic = self._client
         async with client.messages.stream(
             model=model,
@@ -1517,3 +1516,19 @@ class LLMClient:
             config=config,
         )
         return response.text
+
+    async def _search_anthropic(self, query: str) -> str:
+        client: AsyncAnthropic = self._client
+
+        response = await client.messages.create(
+            model=get_model(),
+            max_tokens=4000,
+            messages=[{"role": "user", "content": query}],
+            tools=[
+                {"type": "web_search_20250305", "name": "web_search", "max_uses": 1}
+            ],
+        )
+        result = "\n".join(
+            [each.text for each in response.content if each.type == "text"]
+        )
+        return result

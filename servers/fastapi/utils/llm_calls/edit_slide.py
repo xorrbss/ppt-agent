@@ -1,4 +1,4 @@
-from models.llm_message import LLMMessage
+from models.llm_message import LLMSystemMessage, LLMUserMessage
 from models.presentation_layout import SlideLayoutModel
 from models.sql.slide import SlideModel
 from services.llm_client import LLMClient
@@ -41,12 +41,10 @@ def get_messages(
     language: str,
 ):
     return [
-        LLMMessage(
-            role="system",
+        LLMSystemMessage(
             content=system_prompt,
         ),
-        LLMMessage(
-            role="user",
+        LLMUserMessage(
             content=get_user_prompt(prompt, slide_data, language),
         ),
     ]

@@ -1,11 +1,10 @@
-from datetime import datetime
-import json
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from models.llm_message import LLMUserMessage
-from models.llm_tools import LLMDynamicTool, SearchWebTool
+from models.llm_tools import GetCurrentDatetimeTool, SearchWebTool
 from services.llm_client import LLMClient
+from utils.llm_calls.generate_presentation_outlines import generate_ppt_outline
 from utils.llm_provider import get_model
 
 API_V1_TEST_ROUTER = APIRouter(prefix="/api/v1/test", tags=["test"])
@@ -24,30 +23,7 @@ class ResponseContent(BaseModel):
 async def test():
     client = LLMClient()
 
-    async def get_current_datetime_tool_handler(_) -> str:
-        return datetime.now().isoformat()
+    response = await client._search_anthropic("Trending AI tool now")
+    # print(response)
 
-    get_current_datetime_tool = LLMDynamicTool(
-        name="GetDateTimeDynamicTool",
-        description="Get the current date and time",
-        handler=get_current_datetime_tool_handler,
-    )
-
-    text_content = ""
-
-    async for chunk in client.stream_structured(
-        model=get_model(),
-        messages=[
-            LLMUserMessage(
-                content="What is the current date and time ? What is the trending AI tool now ? Use Available tools to get the information."
-            ),
-        ],
-        response_format=ResponseContent.model_json_schema(),
-        tools=[
-            SearchWebTool,
-            get_current_datetime_tool,
-        ],
-    ):
-        text_content += chunk
-
-    return {"data": text_content}
+    return {"data": ""}

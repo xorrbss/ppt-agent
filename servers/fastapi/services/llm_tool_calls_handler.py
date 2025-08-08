@@ -11,6 +11,7 @@ from models.llm_message import (
 )
 from models.llm_tool_call import AnthropicToolCall, GoogleToolCall, OpenAIToolCall
 from models.llm_tools import LLMDynamicTool, LLMTool, SearchWebTool
+from utils.schema_utils import ensure_strict_json_schema, flatten_json_schema
 
 
 class LLMToolCallsHandler:
@@ -73,6 +74,9 @@ class LLMToolCallsHandler:
             description = tool.__doc__ or ""
             parameters = tool.model_json_schema()
 
+        if strict:
+            parameters = ensure_strict_json_schema(parameters, path=(), root=parameters)
+
         return {
             "type": "function",
             "function": {
@@ -85,6 +89,9 @@ class LLMToolCallsHandler:
 
     def parse_tool_google(self, tool: type[LLMTool] | LLMDynamicTool):
         parsed = self.parse_tool_openai(tool)
+        # parsed["function"]["parameters"] = flatten_json_schema(
+        #     parsed["function"]["parameters"]
+        # )
         return {
             "name": parsed["function"]["name"],
             "description": parsed["function"]["description"],
@@ -185,9 +192,10 @@ class LLMToolCallsHandler:
         return await self.client._search_google(args.query)
 
     async def search_web_tool_call_handler_anthropic(self, arguments: str) -> str:
-        return "test"
+        args = SearchWebTool.model_validate_json(arguments)
+        return await self.client._search_anthropic(args.query)
 
     # Get current datetime tool call handler
-    async def get_current_datetime_tool_call_handler(self, arguments: str) -> str:
+    async def get_current_datetime_tool_call_handler(self, _) -> str:
         current_time = datetime.now()
         return f"{current_time.strftime('%A, %B %d, %Y')} at {current_time.strftime('%I:%M:%S %p')}"
