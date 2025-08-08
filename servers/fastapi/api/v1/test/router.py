@@ -13,9 +13,9 @@ API_V1_TEST_ROUTER = APIRouter(prefix="/api/v1/test", tags=["test"])
 
 class ResponseContent(BaseModel):
     trending_ai_tool: str = Field(
-        description="The summary of the trending AI tool in about 150 words",
-        min_length=150,
-        max_length=200,
+        description="The summary of the trending AI tool in about 50 words",
+        min_length=50,
+        max_length=100,
     )
     current_date_time: str
 
@@ -30,13 +30,12 @@ async def test():
     get_current_datetime_tool = LLMDynamicTool(
         name="GetDateTimeDynamicTool",
         description="Get the current date and time",
-        parameters=None,
         handler=get_current_datetime_tool_handler,
     )
 
     text_content = ""
 
-    async for event in client.stream_structured(
+    response = await client.generate_structured(
         model=get_model(),
         messages=[
             LLMUserMessage(
@@ -48,7 +47,6 @@ async def test():
             SearchWebTool,
             get_current_datetime_tool,
         ],
-    ):
-        text_content += event
+    )
 
-    return {"data": text_content}
+    return {"data": response}

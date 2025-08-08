@@ -10,7 +10,7 @@ class LLMDynamicTool(LLMTool):
     name: str
     description: str
     strict: bool = False
-    parameters: Optional[dict] = None
+    parameters: dict = {}
     handler: Callable[..., Coroutine[Any, Any, str]]
 
 

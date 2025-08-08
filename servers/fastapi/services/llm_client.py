@@ -15,6 +15,8 @@ from anthropic.types import Message as AnthropicMessage
 from anthropic import MessageStreamEvent as AnthropicMessageStreamEvent
 from enums.llm_provider import LLMProvider
 from models.llm_message import (
+    AnthropicAssistantMessage,
+    AnthropicUserMessage,
     GoogleAssistantMessage,
     GoogleToolCallMessage,
     OpenAIAssistantMessage,
@@ -23,6 +25,7 @@ from models.llm_message import (
     LLMUserMessage,
 )
 from models.llm_tool_call import (
+    AnthropicToolCall,
     GoogleToolCall,
     LLMToolCall,
     OpenAIToolCall,
@@ -157,8 +160,10 @@ class LLMClient:
 
         return contents
 
-    def _get_user_llm_messages(self, messages: List[LLMMessage]) -> List[LLMMessage]:
-        return [message for message in messages if isinstance(message, LLMUserMessage)]
+    def _get_anthropic_messages(self, messages: List[LLMMessage]) -> List[LLMMessage]:
+        return [
+            message for message in messages if not isinstance(message, LLMSystemMessage)
+        ]
 
     # ? Generate Unstructured Content
     async def _generate_openai(
@@ -287,25 +292,61 @@ class LLMClient:
         model: str,
         messages: List[LLMMessage],
         max_tokens: Optional[int] = None,
+        tools: Optional[List[dict]] = None,
         depth: int = 0,
-    ):
+    ) -> str | None:
         client: AsyncAnthropic = self._client
+
         response: AnthropicMessage = await client.messages.create(
             model=model,
             system=self._get_system_prompt(messages),
             messages=[
                 message.model_dump()
-                for message in self._get_user_llm_messages(messages)
+                for message in self._get_anthropic_messages(messages)
             ],
+            tools=tools,
             max_tokens=max_tokens or 4000,
         )
-        text = ""
+        text_content = None
+        tool_calls: List[AnthropicToolCall] = []
         for content in response.content:
             if content.type == "text" and isinstance(content.text, str):
-                text += content.text
-        if text == "":
-            return None
-        return text
+                text_content = content.text
+
+            if content.type == "tool_use":
+                tool_calls.append(
+                    AnthropicToolCall(
+                        id=content.id,
+                        type=content.type,
+                        name=content.name,
+                        input=content.input,
+                    )
+                )
+
+        if tool_calls:
+            tool_call_messages = (
+                await self.tool_calls_handler.handle_tool_calls_anthropic(tool_calls)
+            )
+            new_messages = [
+                *messages,
+                AnthropicAssistantMessage(
+                    role="assistant",
+                    content=[each.model_dump() for each in tool_calls],
+                ),
+                AnthropicUserMessage(
+                    role="user",
+                    content=[each.model_dump() for each in tool_call_messages],
+                ),
+            ]
+            return await self._generate_anthropic(
+                model=model,
+                messages=new_messages,
+                max_tokens=max_tokens,
+                tools=tools,
+                depth=depth + 1,
+            )
+
+        return text_content
 
     async def _generate_ollama(
         self,
@@ -361,7 +402,10 @@ class LLMClient:
                 )
             case LLMProvider.ANTHROPIC:
                 content = await self._generate_anthropic(
-                    model=model, messages=messages, max_tokens=max_tokens
+                    model=model,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    tools=parsed_tools,
                 )
             case LLMProvider.OLLAMA:
                 content = await self._generate_ollama(
@@ -586,6 +630,7 @@ class LLMClient:
         model: str,
         messages: List[LLMMessage],
         response_format: dict,
+        tools: Optional[List[dict]] = None,
         max_tokens: Optional[int] = None,
         depth: int = 0,
     ):
@@ -595,7 +640,7 @@ class LLMClient:
             system=self._get_system_prompt(messages),
             messages=[
                 message.model_dump()
-                for message in self._get_user_llm_messages(messages)
+                for message in self._get_anthropic_messages(messages)
             ],
             max_tokens=max_tokens or 4000,
             tools=[
@@ -603,19 +648,51 @@ class LLMClient:
                     "name": "ResponseSchema",
                     "description": "A response to the user's message",
                     "input_schema": response_format,
-                }
+                },
+                *(tools or []),
             ],
-            tool_choice={
-                "type": "tool",
-                "name": "ResponseSchema",
-            },
         )
-        content: dict | None = None
-        for content_block in response.content:
-            if content_block.type == "tool_use":
-                content = content_block.input
+        tool_calls: List[AnthropicToolCall] = []
+        for content in response.content:
+            if content.type == "tool_use":
+                tool_calls.append(
+                    AnthropicToolCall(
+                        id=content.id,
+                        type=content.type,
+                        name=content.name,
+                        input=content.input,
+                    )
+                )
 
-        return content
+        for each in tool_calls:
+            if each.name == "ResponseSchema":
+                return each.input
+
+        if tool_calls:
+            tool_call_messages = (
+                await self.tool_calls_handler.handle_tool_calls_anthropic(tool_calls)
+            )
+            new_messages = [
+                *messages,
+                AnthropicAssistantMessage(
+                    role="assistant",
+                    content=[each.model_dump() for each in tool_calls],
+                ),
+                AnthropicUserMessage(
+                    role="user",
+                    content=[each.model_dump() for each in tool_call_messages],
+                ),
+            ]
+            return await self._generate_anthropic_structured(
+                model=model,
+                messages=new_messages,
+                max_tokens=max_tokens,
+                response_format=response_format,
+                tools=tools,
+                depth=depth + 1,
+            )
+
+        return None
 
     async def _generate_ollama_structured(
         self,
@@ -690,6 +767,7 @@ class LLMClient:
                     model=model,
                     messages=messages,
                     response_format=response_format,
+                    tools=parsed_tools,
                     max_tokens=max_tokens,
                 )
             case LLMProvider.OLLAMA:
@@ -873,6 +951,7 @@ class LLMClient:
         model: str,
         messages: List[LLMMessage],
         max_tokens: Optional[int] = None,
+        tools: Optional[List[dict]] = None,
         depth: int = 0,
     ):
         client: AsyncAnthropic = self._client
@@ -881,14 +960,17 @@ class LLMClient:
             system=self._get_system_prompt(messages),
             messages=[
                 message.model_dump()
-                for message in self._get_user_llm_messages(messages)
+                for message in self._get_anthropic_messages(messages)
             ],
             max_tokens=max_tokens or 4000,
+            tools=tools,
         ) as stream:
+            tool_calls: List[AnthropicToolCall] = []
             async for event in stream:
                 event: AnthropicMessageStreamEvent = event
-                if event.type == "text" and isinstance(event.text, str):
-                    yield event.text
+                if event.type == "input_json":
+                    event.partial_json
+                    pass
 
     def _stream_ollama(
         self,

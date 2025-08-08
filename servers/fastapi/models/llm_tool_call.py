@@ -20,3 +20,10 @@ class OpenAIToolCall(LLMToolCall):
 class GoogleToolCall(LLMToolCall):
     name: str
     arguments: Optional[dict] = None
+
+
+class AnthropicToolCall(LLMToolCall):
+    type: Literal["tool_use"] = "tool_use"
+    id: str
+    name: str
+    input: object

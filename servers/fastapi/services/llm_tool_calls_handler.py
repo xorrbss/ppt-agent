@@ -4,8 +4,12 @@ import json
 from typing import Any, Callable, Coroutine, List, Optional
 from fastapi import HTTPException
 from enums.llm_provider import LLMProvider
-from models.llm_message import GoogleToolCallMessage, OpenAIToolCallMessage
-from models.llm_tool_call import GoogleToolCall, OpenAIToolCall
+from models.llm_message import (
+    AnthropicToolCallMessage,
+    GoogleToolCallMessage,
+    OpenAIToolCallMessage,
+)
+from models.llm_tool_call import AnthropicToolCall, GoogleToolCall, OpenAIToolCall
 from models.llm_tools import LLMDynamicTool, LLMTool, SearchWebTool
 
 
@@ -88,7 +92,13 @@ class LLMToolCallsHandler:
         }
 
     def parse_tool_anthropic(self, tool: type[LLMTool] | LLMDynamicTool):
-        pass
+        parsed = self.parse_tool_openai(tool)
+        input_schema = parsed["function"]["parameters"]
+        return {
+            "name": parsed["function"]["name"],
+            "description": parsed["function"]["description"],
+            "input_schema": {"type": "object"} if input_schema == {} else input_schema,
+        }
 
     async def handle_tool_calls_openai(
         self,
@@ -128,6 +138,30 @@ class LLMToolCallsHandler:
             )
             for tool_call, result in zip(tool_calls, tool_call_results)
         ]
+        return tool_call_messages
+
+    async def handle_tool_calls_anthropic(
+        self,
+        tool_calls: List[AnthropicToolCall],
+    ) -> List[AnthropicToolCallMessage]:
+        async_tool_calls_tasks = []
+        print("--------------------------------")
+        print(tool_calls)
+        for tool_call in tool_calls:
+            tool_name = tool_call.name
+            tool_handler = self.get_tool_handler(tool_name)
+            async_tool_calls_tasks.append(tool_handler(json.dumps(tool_call.input)))
+
+        tool_call_results: List[str] = await asyncio.gather(*async_tool_calls_tasks)
+        tool_call_messages = [
+            AnthropicToolCallMessage(
+                content=result,
+                tool_use_id=tool_call.id,
+            )
+            for tool_call, result in zip(tool_calls, tool_call_results)
+        ]
+        print("--------------------------------")
+        print(tool_call_messages)
         return tool_call_messages
 
     # ? Tool call handlers

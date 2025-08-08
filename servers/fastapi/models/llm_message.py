@@ -2,6 +2,8 @@ from typing import Any, List, Literal, Optional
 from pydantic import BaseModel
 from google.genai.types import Content as GoogleContent
 
+from models.llm_tool_call import AnthropicToolCall
+
 
 class LLMMessage(BaseModel):
     pass
@@ -26,6 +28,22 @@ class OpenAIAssistantMessage(LLMMessage):
 class GoogleAssistantMessage(LLMMessage):
     role: Literal["assistant"] = "assistant"
     content: GoogleContent
+
+
+class AnthropicAssistantMessage(LLMMessage):
+    role: Literal["assistant"] = "assistant"
+    content: List[AnthropicToolCall]
+
+
+class AnthropicToolCallMessage(LLMMessage):
+    type: Literal["tool_result"] = "tool_result"
+    tool_use_id: str
+    content: str
+
+
+class AnthropicUserMessage(LLMMessage):
+    role: Literal["user"] = "user"
+    content: List[AnthropicToolCallMessage]
 
 
 class OpenAIToolCallMessage(LLMMessage):
