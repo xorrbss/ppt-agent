@@ -104,7 +104,7 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
   }, [renderSlideContent, slide, isStreaming]);
 
   useEffect(() => {
-    if (isStreaming || loading) {
+    if (loading) {
       return;
     }
     if (slide.layout_group.includes("custom")) {

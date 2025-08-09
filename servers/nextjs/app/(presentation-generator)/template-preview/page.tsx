@@ -108,7 +108,7 @@ const LayoutPreview = () => {
               ))}
               <Card
                 className="cursor-pointer hover:shadow-md transition-all border-blue-500 duration-200 group"
-                onClick={() => router.push(`/custom-layout`)}
+                onClick={() => router.push(`/custom-template`)}
               >
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-3">
