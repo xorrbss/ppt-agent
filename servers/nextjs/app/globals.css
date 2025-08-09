@@ -443,7 +443,7 @@ thead {
 
 .container__content_area {
   tab-size: 4ch;
-  max-height: 400px;
+  /* max-height: 600px; */
   overflow: auto;
   margin: 1.67em 0;
 }

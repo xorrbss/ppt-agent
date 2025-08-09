@@ -397,3 +397,4 @@ import { useDrawingCanvas } from "../../custom-template/hooks/useDrawingCanvas";
     };
 
     export default GroupLayoutPreview;
+

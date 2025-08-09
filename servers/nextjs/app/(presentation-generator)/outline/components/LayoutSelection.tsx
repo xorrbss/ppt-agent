@@ -90,6 +90,22 @@ const LayoutSelection: React.FC<LayoutSelectionProps> = ({
             });
         }
     }, [layoutGroups, selectedLayoutGroup, onSelectLayoutGroup]);
+    useEffect(() => {
+    if (loading) {
+      return;
+    }
+      const existingScript = document.querySelector(
+        'script[src*="tailwindcss.com"]'
+      );
+      if (!existingScript) {
+        const script = document.createElement("script");
+        script.src = "https://cdn.tailwindcss.com";
+        script.async = true;
+        document.head.appendChild(script);
+      }
+    
+  }, []);
+   
 
     if (loading) {
         return (
