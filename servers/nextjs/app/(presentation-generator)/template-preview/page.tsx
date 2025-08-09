@@ -37,6 +37,13 @@ const LayoutPreview = () => {
     settings: getGroupSetting(groupName) || { description: "", ordered: false },
   }));
 
+  const inBuiltGroups = layoutGroups.filter(
+    (g) => !g.groupName.toLowerCase().startsWith("custom-")
+  );
+  const customGroups = layoutGroups.filter((g) =>
+    g.groupName.toLowerCase().startsWith("custom-")
+  );
+
   // Handle loading state
   if (loading) {
     return <LoadingStates type="loading" />;
@@ -65,17 +72,16 @@ const LayoutPreview = () => {
           </div>
         </div>
 
-        {/* Group Navigation Cards */}
-        <div className=" h-full pt-16 flex justify-center items-center">
-          <div className="max-w-7xl mx-auto px-6 py-6">
+        {/* In Built Templates */}
+        <section className="h-full pt-16 flex justify-center items-center">
+          <div className="max-w-7xl mx-auto px-6 py-6 w-full">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">In Built Templates</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {layoutGroups.map((group) => (
+              {inBuiltGroups.map((group) => (
                 <Card
                   key={group.groupName}
                   className="cursor-pointer hover:shadow-md transition-all duration-200 group"
-                  onClick={() =>
-                    router.push(`/template-preview/${group.groupName}`)
-                  }
+                  onClick={() => router.push(`/template-preview/${group.groupName}`)}
                 >
                   <div className="p-6">
                     <div className="flex items-center justify-between mb-3">
@@ -106,28 +112,71 @@ const LayoutPreview = () => {
                   </div>
                 </Card>
               ))}
-              <Card
-                className="cursor-pointer hover:shadow-md transition-all border-blue-500 duration-200 group"
-                onClick={() => router.push(`/custom-template`)}
-              >
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-lg font-semibold text-gray-900 capitalize group-hover:text-blue-600 transition-colors">
-                      Create
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
-                    </div>
-                  </div>
-                  <p className="text-sm text-gray-600 mb-4">
-                    Create a new custom layout
-                  </p>
-                </div>
-              </Card>
             </div>
           </div>
-        </div>
-        {/* <CustomLayout /> */}
+        </section>
+
+        {/* Custom Templates */}
+        <section className="h-full pt-8 pb-16 flex justify-center items-center">
+          <div className="max-w-7xl mx-auto px-6 py-6 w-full">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-gray-900">Custom AI Templates</h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {customGroups.length > 0 ? (
+                customGroups.map((group) => (
+                  <Card
+                    key={group.groupName}
+                    className="cursor-pointer hover:shadow-md transition-all duration-200 group"
+                    onClick={() => router.push(`/template-preview/${group.groupName}`)}
+                  >
+                    <div className="p-6">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-lg font-semibold text-gray-900 capitalize group-hover:text-blue-600 transition-colors">
+                          {group.groupName}
+                        </h3>
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                            {group.layouts.length}
+                          </span>
+                          <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-600 mb-4">
+                        {group.settings.description}
+                      </p>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-500">
+                          {group.layouts.length} layout
+                          {group.layouts.length !== 1 ? "s" : ""}
+                        </span>
+                      </div>
+                    </div>
+                  </Card>
+                ))
+              ) : (
+                <Card
+                  className="cursor-pointer hover:shadow-md transition-all border-blue-500 duration-200 group"
+                  onClick={() => router.push(`/custom-template`)}
+                >
+                  <div className="p-6">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-lg font-semibold text-gray-900 capitalize group-hover:text-blue-600 transition-colors">
+                        Create
+                      </h3>
+                      <div className="flex items-center gap-2">
+                        <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Create your first custom AI template
+                    </p>
+                  </div>
+                </Card>
+              )}
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   );

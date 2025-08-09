@@ -20,17 +20,35 @@ const LayoutSelection: React.FC<LayoutSelectionProps> = ({
         loading
     } = useLayout();
 
+    const [summaryMap, setSummaryMap] = React.useState<Record<string, number>>({});
+
+    useEffect(() => {
+        // Fetch custom templates summary to get last_updated_at for sorting
+        fetch("/api/v1/ppt/layout-management/summary")
+            .then(res => res.json())
+            .then(data => {
+                const map: Record<string, number> = {};
+                if (data && Array.isArray(data.presentations)) {
+                    for (const p of data.presentations) {
+                        // groups are named custom-<presentation_id>
+                        map[`custom-${p.presentation_id}`] = p.last_updated_at ? new Date(p.last_updated_at).getTime() : 0;
+                    }
+                }
+                setSummaryMap(map);
+            })
+            .catch(() => setSummaryMap({}));
+    }, []);
+
     const layoutGroups: LayoutGroup[] = React.useMemo(() => {
         const groups = getAllGroups();
         if (groups.length === 0) return [];
 
         const Groups: LayoutGroup[] = groups.map(groupName => {
-
             const settings = getGroupSetting(groupName);
             return {
                 id: groupName,
                 name: groupName,
-                description: settings?.description || `${groupName} presentation layouts`,
+                description: settings?.description || `${groupName} presentation templates`,
                 ordered: settings?.ordered || false,
                 default: settings?.default || false,
             };
@@ -43,6 +61,16 @@ const LayoutSelection: React.FC<LayoutSelectionProps> = ({
             return a.name.localeCompare(b.name);
         });
     }, [getAllGroups, getLayoutsByGroup, getGroupSetting]);
+
+    const inBuiltGroups = React.useMemo(
+        () => layoutGroups.filter(g => !g.name.toLowerCase().startsWith("custom-")),
+        [layoutGroups]
+    );
+    const customGroups = React.useMemo(() => {
+        const unsorted = layoutGroups.filter(g => g.name.toLowerCase().startsWith("custom-"));
+        // Sort by last_updated_at desc using summaryMap
+        return unsorted.sort((a, b) => (summaryMap[b.name] || 0) - (summaryMap[a.name] || 0));
+    }, [layoutGroups, summaryMap]);
 
     // Auto-select first group when groups are loaded
     useEffect(() => {
@@ -116,16 +144,37 @@ const LayoutSelection: React.FC<LayoutSelectionProps> = ({
     }
 
     return (
-        <div className="space-y-6 mb-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {layoutGroups.map((group) => (
-                    <GroupLayouts
-                        key={group.id}
-                        group={group}
-                        onSelectLayoutGroup={handleLayoutGroupSelection}
-                        selectedLayoutGroup={selectedLayoutGroup}
-                    />
-                ))}
+        <div className="space-y-8 mb-4">
+            {/* In Built Templates */}
+            <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">In Built Templates</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {inBuiltGroups.map((group) => (
+                        <GroupLayouts
+                            key={group.id}
+                            group={group}
+                            onSelectLayoutGroup={handleLayoutGroupSelection}
+                            selectedLayoutGroup={selectedLayoutGroup}
+                        />
+                    ))}
+                </div>
+            </div>
+
+            {/* Custom AI Templates */}
+            <div>
+                <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-lg font-semibold text-gray-900">Custom AI Templates</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {customGroups.map((group) => (
+                        <GroupLayouts
+                            key={group.id}
+                            group={group}
+                            onSelectLayoutGroup={handleLayoutGroupSelection}
+                            selectedLayoutGroup={selectedLayoutGroup}
+                        />
+                    ))}
+                </div>
             </div>
         </div>
     );
