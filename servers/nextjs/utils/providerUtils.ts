@@ -3,9 +3,7 @@ import { LLMConfig } from "@/types/llm_config";
 export interface OllamaModel {
   label: string;
   value: string;
-  description: string;
   size: string;
-  icon: string;
 }
 
 export interface DownloadingModel {
@@ -48,6 +46,7 @@ export const updateLLMConfig = (
     tool_calls: "TOOL_CALLS",
     disable_thinking: "DISABLE_THINKING",
     extended_reasoning: "EXTENDED_REASONING",
+    web_grounding: "WEB_GROUNDING",
   };
 
   const configKey = fieldMappings[field];

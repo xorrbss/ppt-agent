@@ -1,10 +1,10 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { LoadingState, StreamState, LayoutGroup } from "../types/index";
+import { LoadingState, LayoutGroup } from "../types/index";
 
 interface GenerateButtonProps {
     loadingState: LoadingState;
-    streamState: StreamState;
+    streamState: { isStreaming: boolean, isLoading: boolean };
     selectedLayoutGroup: LayoutGroup | null;
     onSubmit: () => void;
 }

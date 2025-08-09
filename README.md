@@ -91,6 +91,7 @@ You may want to directly provide your API KEYS as environment variables and keep
 - **CUSTOM_MODEL=[Custom Model ID]**: Provide this if **LLM** is set to **custom**
 - **TOOL_CALLS=[Enable/Disable Tool Calls on Custom LLM]**: If **true**, **LLM** will use Tool Call instead of Json Schema for Structured Output.
 - **DISABLE_THINKING=[Enable/Disable Thinking on Custom LLM]**: If **true**, Thinking will be disabled.
+- **WEB_GROUNDING=[Enable/Disable Web Search for OpenAI, Google And Anthropic]**: If **true**, LLM will be able to search web for better results.
 
 You can also set the following environment variables to customize the image generation provider and API keys:
 

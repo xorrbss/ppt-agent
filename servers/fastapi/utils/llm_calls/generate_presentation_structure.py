@@ -1,4 +1,4 @@
-from models.llm_message import LLMMessage
+from models.llm_message import LLMSystemMessage, LLMUserMessage
 from models.presentation_layout import PresentationLayoutModel
 from models.presentation_outline_model import PresentationOutlineModel
 from services.llm_client import LLMClient
@@ -11,8 +11,7 @@ def get_messages(
     presentation_layout: PresentationLayoutModel, n_slides: int, data: str
 ):
     return [
-        LLMMessage(
-            role="system",
+        LLMSystemMessage(
             content=f"""
                 You're a professional presentation designer with creative freedom to design engaging presentations.
 
@@ -47,8 +46,7 @@ def get_messages(
                 Select layout index for each of the {n_slides} slides based on what will best serve the presentation's goals.
             """,
         ),
-        LLMMessage(
-            role="user",
+        LLMUserMessage(
             content=f"""
                 {data}
             """,

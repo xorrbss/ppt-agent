@@ -31,6 +31,7 @@ export interface LLMConfig {
   TOOL_CALLS?: boolean;
   DISABLE_THINKING?: boolean;
   EXTENDED_REASONING?: boolean;
+  WEB_GROUNDING?: boolean;
 
   // Only used in UI settings
   USE_CUSTOM_URL?: boolean;

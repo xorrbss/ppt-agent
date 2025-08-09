@@ -81,22 +81,6 @@ def get_pixabay_api_key_env():
     return os.getenv("PIXABAY_API_KEY")
 
 
-def get_redis_host_env():
-    return os.getenv("REDIS_HOST")
-
-
-def get_redis_port_env():
-    return os.getenv("REDIS_PORT")
-
-
-def get_redis_db_env():
-    return os.getenv("REDIS_DB")
-
-
-def get_redis_password_env():
-    return os.getenv("REDIS_PASSWORD")
-
-
 def get_tool_calls_env():
     return os.getenv("TOOL_CALLS")
 
@@ -107,3 +91,7 @@ def get_disable_thinking_env():
 
 def get_extended_reasoning_env():
     return os.getenv("EXTENDED_REASONING")
+
+
+def get_web_grounding_env():
+    return os.getenv("WEB_GROUNDING")

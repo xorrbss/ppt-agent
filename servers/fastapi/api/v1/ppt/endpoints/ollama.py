@@ -64,7 +64,7 @@ async def pull_model(
     # If the model is being pulled, return the model
     if saved_model_status:
         # If the model is being pulled, return the model
-        # ? If the model status is pulled in redis but was not found while listing pulled models,
+        # ? If the model status is pulled in database but was not found while listing pulled models,
         # ? it means the model was deleted and we need to pull it again
         if (
             saved_model_status["status"] == "error"

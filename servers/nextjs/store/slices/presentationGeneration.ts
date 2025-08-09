@@ -18,7 +18,7 @@ interface PresentationGenerationState {
   presentation_id: string | null;
   isLoading: boolean;
   isStreaming: boolean | null;
-  outlines: string[];
+  outlines: { content: string }[];
   error: string | null;
   presentationData: PresentationData | null;
   isSlidesRendered: boolean;
@@ -72,7 +72,7 @@ const presentationGenerationSlice = createSlice({
       state.outlines = [];
     },
     // Set outlines
-    setOutlines: (state, action: PayloadAction<string[]>) => {
+    setOutlines: (state, action: PayloadAction<{ content: string }[]>) => {
       state.outlines = action.payload;
     },
     // Set presentation data
