@@ -35,6 +35,7 @@ const CustomTemplatePage = () => {
   const { isSavingLayout, isModalOpen, openSaveModal, closeSaveModal, saveLayout } = useLayoutSaving(
     slides,
     UploadedFonts,
+    fontsData,
     refetch,
     setSlides
   );

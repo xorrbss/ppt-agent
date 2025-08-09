@@ -33,6 +33,7 @@ const GroupLayoutPreview = () => {
   const [currentFonts, setCurrentFonts] = useState<string[] | undefined>(undefined);
   const [isSaving, setIsSaving] = useState(false);
   const [layoutsMap, setLayoutsMap] = useState<Record<string, { layout_id: string; layout_name: string; layout_code: string; fonts?: string[] }>>({});
+  const [templateMeta, setTemplateMeta] = useState<{ name?: string; description?: string } | null>(null);
 
   const injectFonts = (fontUrls: string[]) => {
     fontUrls.forEach((fontUrl) => {
@@ -55,7 +56,7 @@ const GroupLayoutPreview = () => {
     const loadCustomLayouts = async () => {
       if (!isCustom) return;
       try {
-        const res = await fetch(`/api/v1/ppt/layout-management/get-layouts/${presentationId}`);
+        const res = await fetch(`/api/v1/ppt/template-management/get-templates/${presentationId}`);
         if (!res.ok) return;
         const data = await res.json();
         const map: Record<string, { layout_id: string; layout_name: string; layout_code: string; fonts?: string[] }> = {};
@@ -68,12 +69,13 @@ const GroupLayoutPreview = () => {
           };
         }
         setLayoutsMap(map);
-        // Inject all fonts used by this custom group's layouts
-        // const allFonts: string[] = [];
-        // Object.values(map).forEach((entry) => {
-        //   (entry.fonts || []).forEach((f) => allFonts.push(f));
-        // });
-        injectFonts(map[0].fonts || []);
+        // Set template meta and inject aggregated fonts if provided
+        if (data?.template) {
+          setTemplateMeta({ name: data.template.name, description: data.template.description });
+        }
+        if (Array.isArray(data?.fonts) && data.fonts.length) {
+          injectFonts(data.fonts);
+        }
       } catch (e) {
         // noop
       }
@@ -157,7 +159,7 @@ const GroupLayoutPreview = () => {
           },
         ],
       };
-      const res = await fetch(`/api/v1/ppt/layout-management/save-layouts`, {
+      const res = await fetch(`/api/v1/ppt/template-management/save-templates`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

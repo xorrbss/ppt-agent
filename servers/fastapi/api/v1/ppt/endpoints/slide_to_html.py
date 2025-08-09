@@ -76,6 +76,7 @@ class GetLayoutsResponse(BaseModel):
     layouts: list[LayoutData]
     message: Optional[str] = None
     template: Optional[dict] = None
+    fonts: Optional[List[str]] = None
 
 
 class PresentationSummary(BaseModel):
@@ -820,6 +821,13 @@ async def get_layouts(
             for layout in layouts_db
         ]
         
+        # Aggregate unique fonts across all layouts
+        aggregated_fonts: set[str] = set()
+        for layout in layouts_db:
+            if layout.fonts:
+                aggregated_fonts.update([f for f in layout.fonts if isinstance(f, str)])
+        fonts_list = sorted(list(aggregated_fonts)) if aggregated_fonts else None
+        
         # Fetch template meta
         template_meta = await session.get(TemplateModel, presentation_id)
         template = None
@@ -836,6 +844,7 @@ async def get_layouts(
             layouts=layouts,
             message=f"Retrieved {len(layouts)} layout(s) for presentation {presentation_id}",
             template=template,
+            fonts=fonts_list,
         )
         
     except HTTPException:

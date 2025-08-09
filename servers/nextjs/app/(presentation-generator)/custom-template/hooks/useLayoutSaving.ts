@@ -2,11 +2,12 @@ import { useState, useCallback } from "react";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import { ApiResponseHandler } from "@/app/(presentation-generator)/services/api/api-error-handler";
-import { ProcessedSlide, UploadedFont } from "../types";
+import { ProcessedSlide, UploadedFont, FontData } from "../types";
 
 export const useLayoutSaving = (
   slides: ProcessedSlide[],
   UploadedFonts: UploadedFont[],
+  fontsData: FontData | null,
   refetch: () => void,
   setSlides: React.Dispatch<React.SetStateAction<ProcessedSlide[]>>
 ) => {
@@ -90,8 +91,10 @@ export const useLayoutSaving = (
       const reactComponents: any[] = [];
       const presentationId = uuidv4();
 
-      // Get all uploaded font URLs
-      const FontUrls = UploadedFonts.map((font) => font.fontUrl);
+      // Collect uploaded font URLs and Google Fonts CSS URLs
+      const uploadedFontUrls = UploadedFonts.map((font) => font.fontUrl);
+      const googleFontCssUrls = fontsData?.internally_supported_fonts?.map(f => f.google_fonts_url).filter(Boolean) || [];
+      const FontUrls = Array.from(new Set([...(uploadedFontUrls || []), ...googleFontCssUrls]));
       console.log("FontUrls", FontUrls);
 
       for (let i = 0; i < slides.length; i++) {
@@ -186,7 +189,7 @@ export const useLayoutSaving = (
     } finally {
       setIsSavingLayout(false);
     }
-  }, [slides, UploadedFonts, refetch, closeSaveModal, setSlides]);
+  }, [slides, UploadedFonts, fontsData, refetch, closeSaveModal, setSlides]);
 
   return {
     isSavingLayout,
