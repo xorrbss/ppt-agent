@@ -9,20 +9,20 @@ import { useFontManagement } from "./hooks/useFontManagement";
 import { useFileUpload } from "./hooks/useFileUpload";
 import { useSlideProcessing } from "./hooks/useSlideProcessing";
 import { useLayoutSaving } from "./hooks/useLayoutSaving";
-import { useAnthropicKeyCheck } from "./hooks/useAnthropicKeyCheck";
 import { LoadingSpinner } from "./components/LoadingSpinner";
-import { AnthropicKeyWarning } from "./components/AnthropicKeyWarning";
 import { FileUploadSection } from "./components/FileUploadSection";
 import { SaveLayoutButton } from "./components/SaveLayoutButton";
 import { SaveLayoutModal } from "./components/SaveLayoutModal";
 import EachSlide from "./components/EachSlide/NewEachSlide";
+import { APIKeyWarning } from "./components/APIKeyWarning";
+import { useAPIKeyCheck } from "./hooks/useAPIKeyCheck";
 
 
 const CustomLayoutPage = () => {
   const { refetch } = useLayout();
   
   // Custom hooks for different concerns
-  const { hasAnthropicKey, isAnthropicKeyLoading } = useAnthropicKeyCheck();
+  const { hasRequiredKey, isRequiredKeyLoading } = useAPIKeyCheck();
   const { selectedFile, handleFileSelect, removeFile } = useFileUpload();
   const { slides, setSlides, completedSlides } = useCustomLayout();
   const { fontsData, UploadedFonts, uploadFont, removeFont, getAllUnsupportedFonts, setFontsData } = useFontManagement();
@@ -35,7 +35,8 @@ const CustomLayoutPage = () => {
   const { isSavingLayout, isModalOpen, openSaveModal, closeSaveModal, saveLayout } = useLayoutSaving(
     slides,
     UploadedFonts,
-    refetch
+    refetch,
+    setSlides
   );
 
   const handleProcessSlideToHtml = (slide: any) => {
@@ -58,13 +59,13 @@ const CustomLayoutPage = () => {
   };
 
   // Loading state
-  if (isAnthropicKeyLoading) {
-    return <LoadingSpinner message="Checking Anthropic Key..." />;
+  if (isRequiredKeyLoading) {
+    return <LoadingSpinner message="Checking API Key..." />;
   }
 
   // Anthropic key warning
-  if (!hasAnthropicKey) {
-    return <AnthropicKeyWarning />;
+  if (!hasRequiredKey) {
+    return <APIKeyWarning />;
   }
 
   return (

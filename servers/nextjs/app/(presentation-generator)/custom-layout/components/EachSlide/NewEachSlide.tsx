@@ -1,5 +1,6 @@
+'use client'
+
 import React from "react";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useDrawingCanvas } from "../../hooks/useDrawingCanvas";  
 
@@ -155,36 +156,6 @@ const EachSlide: React.FC<EachSlideProps> = ({
           onTouchEnd={handleTouchEnd}
         />
       </CardContent>
-
-      {/* Action Buttons */}
-      <div className="p-4 pt-0 flex gap-2">
-        <Button
-          onClick={() => {
-            const newWindow = window.open("", "_blank");
-            if (newWindow) {
-              newWindow.document.write(`
-              <!DOCTYPE html>
-              <html lang="en">
-              <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Slide ${slide.slide_number} - HTML Preview</title>
-                <script src="https://cdn.tailwindcss.com"></script>
-              </head>
-              <body>
-                <div class="slide-container">
-                  ${slide.html}
-                </div>
-              </body>
-              </html>`);
-            }
-          }}
-          variant="outline"
-          size="sm"
-        >
-          Open in new tab
-        </Button>
-      </div>
     </Card>
   );
 };

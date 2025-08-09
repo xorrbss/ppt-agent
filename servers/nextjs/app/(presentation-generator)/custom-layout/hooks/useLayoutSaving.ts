@@ -7,7 +7,8 @@ import { ProcessedSlide, UploadedFont } from "../types";
 export const useLayoutSaving = (
   slides: ProcessedSlide[],
   UploadedFonts: UploadedFont[],
-  refetch: () => void
+  refetch: () => void,
+  setSlides: React.Dispatch<React.SetStateAction<ProcessedSlide[]>>
 ) => {
   const [isSavingLayout, setIsSavingLayout] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -80,7 +81,7 @@ export const useLayoutSaving = (
 
     try {
       // Convert each slide HTML to React component
-      const reactComponents = [];
+      const reactComponents: any[] = [];
       const presentationId = uuidv4();
 
       // Get all uploaded font URLs
@@ -94,6 +95,9 @@ export const useLayoutSaving = (
           toast.error(`Slide ${slide.slide_number} has no HTML content`);
           continue;
         }
+
+        // Mark current slide as converting to React
+        setSlides(prev => prev.map((s, idx) => idx === i ? { ...s, convertingToReact: true } : s));
 
         try {
           const reactComponent = await convertSlideToReact(slide, presentationId, FontUrls);
@@ -112,7 +116,9 @@ export const useLayoutSaving = (
                 : "An unexpected error occurred",
           });
           // Continue with other slides even if one fails
-          continue;
+        } finally {
+          // Clear converting flag for this slide
+          setSlides(prev => prev.map((s, idx) => idx === i ? { ...s, convertingToReact: false } : s));
         }
       }
 
@@ -169,7 +175,7 @@ export const useLayoutSaving = (
     } finally {
       setIsSavingLayout(false);
     }
-  }, [slides, UploadedFonts, refetch, closeSaveModal]);
+  }, [slides, UploadedFonts, refetch, closeSaveModal, setSlides]);
 
   return {
     isSavingLayout,
