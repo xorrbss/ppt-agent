@@ -5,8 +5,9 @@ import React, { useState, useEffect } from "react";
 import Wrapper from "@/components/Wrapper";
 import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
 import { PresentationGrid } from "@/app/(presentation-generator)/dashboard/components/PresentationGrid";
+import Header from "./Header";
 
-import Header from "@/components/Header";
+
 
 const DashboardPage: React.FC = () => {
   const [presentations, setPresentations] = useState<any>(null);

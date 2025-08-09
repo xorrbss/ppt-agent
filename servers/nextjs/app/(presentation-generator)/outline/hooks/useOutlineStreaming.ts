@@ -31,13 +31,13 @@ export const useOutlineStreaming = (presentationId: string | null) => {
           const data = JSON.parse(event.data);
           switch (data.type) {
             case "chunk":
-              // console.log('data', data)
+              // 
               accumulatedChunks += data.chunk;
-              // console.log('accumulatedChunks', accumulatedChunks)
+              // 
               try {
                 const repairedJson = jsonrepair(accumulatedChunks);
                 const partialData = JSON.parse(repairedJson);
-                console.log('partialData', partialData)
+                
                 if (partialData.slides) {
                   dispatch(setOutlines(partialData.slides));
                   setIsLoading(false)
@@ -48,7 +48,7 @@ export const useOutlineStreaming = (presentationId: string | null) => {
               break;
 
             case "complete":
-              console.log('complete', data)
+              
               try {
                 const outlinesData: { content: string }[] = data.presentation.outlines.slides;
                 dispatch(setOutlines(outlinesData));
@@ -64,13 +64,13 @@ export const useOutlineStreaming = (presentationId: string | null) => {
               break;
 
             case "closing":
-              console.log('closing', data)
+              
               setIsStreaming(false)
               setIsLoading(false)
               eventSource.close();
               break;
             case "error":
-              console.log('error', data)
+              
               setIsStreaming(false)
               setIsLoading(false)
               eventSource.close();
@@ -84,14 +84,14 @@ export const useOutlineStreaming = (presentationId: string | null) => {
         });
 
         eventSource.onerror = () => {
-          console.log('onerror')
+          
           setIsStreaming(false)
           setIsLoading(false)
           eventSource.close();
           toast.error("Failed to connect to the server. Please try again.");
         };
       } catch (error) {
-        console.log('error', error)
+        
         setIsStreaming(false)
         setIsLoading(false)
         toast.error("Failed to initialize connection");
