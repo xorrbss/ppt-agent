@@ -35,6 +35,7 @@ export const useSlideProcessing = (
           body: JSON.stringify({
             image: slide.screenshot_url,
             xml: slide.xml_content,
+            fonts: slide.normalized_fonts ?? [],
           }),
         });
 

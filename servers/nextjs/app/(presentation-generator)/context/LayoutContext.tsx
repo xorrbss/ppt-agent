@@ -12,6 +12,7 @@ import * as z from "zod";
 import { useDispatch } from "react-redux";
 import { setLayoutLoading } from "@/store/slices/presentationGeneration";
 import * as Babel from "@babel/standalone";
+import * as Recharts from "recharts";
 export interface LayoutInfo {
   id: string;
   name?: string;
@@ -99,14 +100,17 @@ const compileCustomLayout = (layoutCode: string, React: any, z: any) => {
   const factory = new Function(
     "React",
     "_z",
+    "Recharts",
     `
     const z = _z;
+    // Expose commonly used Recharts components to compiled layouts
+    const { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, AreaChart, Area, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } = Recharts || {};
       ${compiled}
 
       /* everything declared in the string is in scope here */
       return {
         __esModule: true,   
-        default: dynamicSlideLayout,
+        default: typeof dynamicSlideLayout !== 'undefined' ? dynamicSlideLayout : (typeof DefaultLayout !== 'undefined' ? DefaultLayout : undefined),
         layoutName,
         layoutId,
         layoutDescription,
@@ -115,7 +119,7 @@ const compileCustomLayout = (layoutCode: string, React: any, z: any) => {
     `
   );
 
-  return factory(React, z);
+  return factory(React, z, Recharts);
 };
 
 export const LayoutProvider: React.FC<{

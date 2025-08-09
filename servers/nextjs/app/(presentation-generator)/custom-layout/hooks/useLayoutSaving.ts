@@ -26,6 +26,11 @@ export const useLayoutSaving = (
     const maxRetries = 3;
     let retryCount = 0;
 
+    console.log("Slide to convert to react", {
+      html: slide.html,
+      image: slide.screenshot_url,
+    })
+
     while (retryCount < maxRetries) {
       try {
         const response = await fetch("/api/v1/ppt/html-to-react/", {
@@ -35,6 +40,7 @@ export const useLayoutSaving = (
           },
           body: JSON.stringify({
             html: slide.html,
+            image: slide.screenshot_url,
           }),
         });
 
