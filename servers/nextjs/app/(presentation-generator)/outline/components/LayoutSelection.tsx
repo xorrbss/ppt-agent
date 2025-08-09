@@ -20,18 +20,22 @@ const LayoutSelection: React.FC<LayoutSelectionProps> = ({
         loading
     } = useLayout();
 
-    const [summaryMap, setSummaryMap] = React.useState<Record<string, number>>({});
+    const [summaryMap, setSummaryMap] = React.useState<Record<string, { lastUpdatedAt?: number; name?: string; description?: string }>>({});
 
     useEffect(() => {
-        // Fetch custom templates summary to get last_updated_at for sorting
-        fetch("/api/v1/ppt/layout-management/summary")
+        // Fetch custom templates summary to get last_updated_at and template meta for sorting and display
+        fetch("/api/v1/ppt/template-management/summary")
             .then(res => res.json())
             .then(data => {
-                const map: Record<string, number> = {};
+                const map: Record<string, { lastUpdatedAt?: number; name?: string; description?: string }> = {};
                 if (data && Array.isArray(data.presentations)) {
                     for (const p of data.presentations) {
-                        // groups are named custom-<presentation_id>
-                        map[`custom-${p.presentation_id}`] = p.last_updated_at ? new Date(p.last_updated_at).getTime() : 0;
+                        const slug = `custom-${p.presentation_id}`;
+                        map[slug] = {
+                            lastUpdatedAt: p.last_updated_at ? new Date(p.last_updated_at).getTime() : 0,
+                            name: p.template?.name,
+                            description: p.template?.description,
+                        };
                     }
                 }
                 setSummaryMap(map);
@@ -45,10 +49,12 @@ const LayoutSelection: React.FC<LayoutSelectionProps> = ({
 
         const Groups: LayoutGroup[] = groups.map(groupName => {
             const settings = getGroupSetting(groupName);
+            const customMeta = summaryMap[groupName];
+            const isCustom = groupName.toLowerCase().startsWith("custom-");
             return {
                 id: groupName,
-                name: groupName,
-                description: settings?.description || `${groupName} presentation templates`,
+                name: isCustom && customMeta?.name ? customMeta.name : groupName,
+                description: (isCustom && customMeta?.description) ? customMeta.description : (settings?.description || `${groupName} presentation templates`),
                 ordered: settings?.ordered || false,
                 default: settings?.default || false,
             };
@@ -60,16 +66,16 @@ const LayoutSelection: React.FC<LayoutSelectionProps> = ({
             if (!a.default && b.default) return 1;
             return a.name.localeCompare(b.name);
         });
-    }, [getAllGroups, getLayoutsByGroup, getGroupSetting]);
+    }, [getAllGroups, getLayoutsByGroup, getGroupSetting, summaryMap]);
 
     const inBuiltGroups = React.useMemo(
-        () => layoutGroups.filter(g => !g.name.toLowerCase().startsWith("custom-")),
+        () => layoutGroups.filter(g => !g.id.toLowerCase().startsWith("custom-")),
         [layoutGroups]
     );
     const customGroups = React.useMemo(() => {
-        const unsorted = layoutGroups.filter(g => g.name.toLowerCase().startsWith("custom-"));
-        // Sort by last_updated_at desc using summaryMap
-        return unsorted.sort((a, b) => (summaryMap[b.name] || 0) - (summaryMap[a.name] || 0));
+        const unsorted = layoutGroups.filter(g => g.id.toLowerCase().startsWith("custom-"));
+        // Sort by last_updated_at desc using summaryMap keyed by slug id
+        return unsorted.sort((a, b) => (summaryMap[b.id]?.lastUpdatedAt || 0) - (summaryMap[a.id]?.lastUpdatedAt || 0));
     }, [layoutGroups, summaryMap]);
 
     // Auto-select first group when groups are loaded

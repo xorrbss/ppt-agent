@@ -86,7 +86,7 @@ import { useDrawingCanvas } from "../../custom-template/hooks/useDrawingCanvas";
         const presentationId = slug.replace('custom-','');
         refetch();
         router.back();
-        const response = await fetch(`/api/v1/ppt/layout-management/delete-layouts/${presentationId}`, {
+        const response = await fetch(`/api/v1/ppt/template-management/delete-templates/${presentationId}`, {
         method: "DELETE",
         }); 
         if (response.ok) {

@@ -12,13 +12,14 @@ from utils.asset_directory_utils import get_images_directory
 from services.database import get_async_session
 from models.sql.presentation_layout_code import PresentationLayoutCodeModel
 from .prompts import GENERATE_HTML_SYSTEM_PROMPT, HTML_TO_REACT_SYSTEM_PROMPT, HTML_EDIT_SYSTEM_PROMPT
+from models.sql.template import TemplateModel
 
 
 # Create separate routers for each functionality
 SLIDE_TO_HTML_ROUTER = APIRouter(prefix="/slide-to-html", tags=["slide-to-html"])
 HTML_TO_REACT_ROUTER = APIRouter(prefix="/html-to-react", tags=["html-to-react"])
 HTML_EDIT_ROUTER = APIRouter(prefix="/html-edit", tags=["html-edit"])
-LAYOUT_MANAGEMENT_ROUTER = APIRouter(prefix="/layout-management", tags=["layout-management"])
+LAYOUT_MANAGEMENT_ROUTER = APIRouter(prefix="/template-management", tags=["template-management"])
 
 
 # Request/Response models for slide-to-html endpoint
@@ -74,12 +75,14 @@ class GetLayoutsResponse(BaseModel):
     success: bool
     layouts: list[LayoutData]
     message: Optional[str] = None
+    template: Optional[dict] = None
 
 
 class PresentationSummary(BaseModel):
     presentation_id: str
     layout_count: int
     last_updated_at: Optional[datetime] = None
+    template: Optional[dict] = None
 
 
 class GetPresentationSummaryResponse(BaseModel):
@@ -94,6 +97,25 @@ class ErrorResponse(BaseModel):
     success: bool = False
     detail: str
     error_code: Optional[str] = None
+
+
+class TemplateCreateRequest(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = None
+
+
+class TemplateCreateResponse(BaseModel):
+    success: bool
+    template: dict
+    message: Optional[str] = None
+
+
+class TemplateInfo(BaseModel):
+    id: str
+    name: Optional[str] = None
+    description: Optional[str] = None
+    created_at: Optional[datetime] = None
 
 
 async def generate_html_from_slide(base64_image: str, media_type: str, xml_content: str, api_key: str, fonts: Optional[List[str]] = None) -> str:
@@ -623,7 +645,7 @@ async def edit_html_with_images_endpoint(
 
 # ENDPOINT 4: Save layouts for a presentation
 @LAYOUT_MANAGEMENT_ROUTER.post(
-    "/save-layouts", 
+    "/save-templates", 
     response_model=SaveLayoutsResponse,
     responses={
         400: {"model": ErrorResponse, "description": "Validation error"},
@@ -739,7 +761,7 @@ async def save_layouts(
 
 # ENDPOINT 5: Get layouts for a presentation
 @LAYOUT_MANAGEMENT_ROUTER.get(
-    "/get-layouts/{presentation_id}", 
+    "/get-templates/{presentation_id}", 
     response_model=GetLayoutsResponse,
     responses={
         400: {"model": ErrorResponse, "description": "Invalid presentation ID"},
@@ -798,10 +820,22 @@ async def get_layouts(
             for layout in layouts_db
         ]
         
+        # Fetch template meta
+        template_meta = await session.get(TemplateModel, presentation_id)
+        template = None
+        if template_meta:
+            template = {
+                "id": template_meta.id,
+                "name": template_meta.name,
+                "description": template_meta.description,
+                "created_at": template_meta.created_at,
+            }
+
         return GetLayoutsResponse(
             success=True,
             layouts=layouts,
-            message=f"Retrieved {len(layouts)} layout(s) for presentation {presentation_id}"
+            message=f"Retrieved {len(layouts)} layout(s) for presentation {presentation_id}",
+            template=template,
         )
         
     except HTTPException:
@@ -823,11 +857,11 @@ async def get_layouts(
     description="Retrieve a summary of all presentations and the number of layouts in each",
     responses={
         200: {"model": GetPresentationSummaryResponse, "description": "Presentations summary retrieved successfully"},
-        500: {"model": ErrorResponse, "description": "Internal server error"}
-    }
+        500: {"model": ErrorResponse, "description": "Internal server error"},
+    },
 )
 async def get_presentations_summary(
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
 ):
     """
     Get summary of all presentations with their layout counts.
@@ -843,16 +877,27 @@ async def get_presentations_summary(
         result = await session.execute(stmt)
         presentation_data = result.all()
         
-        # Convert to response format
-        presentations = [
-            PresentationSummary(
-                presentation_id=row.presentation_id,
-                layout_count=row.layout_count,
-                last_updated_at=row.last_updated_at
+        # Convert to response format with template info if available
+        presentations = []
+        for row in presentation_data:
+            template_meta = await session.get(TemplateModel, row.presentation_id)
+            template = None
+            if template_meta:
+                template = {
+                    "id": template_meta.id,
+                    "name": template_meta.name,
+                    "description": template_meta.description,
+                    "created_at": template_meta.created_at,
+                }
+            presentations.append(
+                PresentationSummary(
+                    presentation_id=row.presentation_id,
+                    layout_count=row.layout_count,
+                    last_updated_at=row.last_updated_at,
+                    template=template,
+                )
             )
-            for row in presentation_data
-        ]
-        
+
         # Calculate totals
         total_presentations = len(presentations)
         total_layouts = sum(p.layout_count for p in presentations)
@@ -862,7 +907,7 @@ async def get_presentations_summary(
             presentations=presentations,
             total_presentations=total_presentations,
             total_layouts=total_layouts,
-            message=f"Retrieved {total_presentations} presentation(s) with {total_layouts} total layout(s)"
+            message=f"Retrieved {total_presentations} presentation(s) with {total_layouts} total layout(s)",
         )
         
     except Exception as e:
@@ -871,3 +916,52 @@ async def get_presentations_summary(
             status_code=500,
             detail=f"Internal server error while retrieving presentations summary: {str(e)}"
         ) 
+
+
+@LAYOUT_MANAGEMENT_ROUTER.post(
+    "/templates",
+    response_model=TemplateCreateResponse,
+    responses={
+        400: {"model": ErrorResponse, "description": "Validation error"},
+        500: {"model": ErrorResponse, "description": "Internal server error"},
+    },
+)
+async def create_template(
+    request: TemplateCreateRequest,
+    session: AsyncSession = Depends(get_async_session),
+):
+    try:
+        if not request.id or not request.name:
+            raise HTTPException(status_code=400, detail="id and name are required")
+
+        # Upsert template by id
+        existing = await session.get(TemplateModel, request.id)
+        if existing:
+            existing.name = request.name
+            existing.description = request.description
+        else:
+            session.add(
+                TemplateModel(
+                    id=request.id, name=request.name, description=request.description
+                )
+            )
+        await session.commit()
+
+        # Read back
+        template = await session.get(TemplateModel, request.id)
+        return TemplateCreateResponse(
+            success=True,
+            template={
+                "id": template.id,
+                "name": template.name,
+                "description": template.description,
+                "created_at": template.created_at,
+            },
+            message="Template saved",
+        )
+    except HTTPException:
+        await session.rollback()
+        raise
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to save template: {str(e)}") 

@@ -134,9 +134,16 @@ export const useLayoutSaving = (
       }
       console.log(reactComponents);
 
+      // First create/update the template metadata
+      await fetch("/api/v1/ppt/template-management/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: presentationId, name: layoutName, description }),
+      });
+
       // Save the layout components to the app_data/layouts folder
       const saveResponse = await fetch(
-        "/api/v1/ppt/layout-management/save-layouts",
+        "/api/v1/ppt/template-management/save-templates",
         {
           method: "POST",
           headers: {
@@ -144,8 +151,6 @@ export const useLayoutSaving = (
           },
           body: JSON.stringify({
             layouts: reactComponents,
-            layout_name: layoutName,
-            description: description,
           }),
         }
       );

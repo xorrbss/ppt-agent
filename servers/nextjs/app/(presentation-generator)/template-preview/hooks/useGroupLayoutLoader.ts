@@ -75,7 +75,7 @@ export const useGroupLayoutLoader = (
       const presentationId = groupSlug.replace("custom-", "");
 
       const customLayoutResponse = await fetch(
-        `/api/v1/ppt/layout-management/get-layouts/${presentationId}`
+        `/api/v1/ppt/template-management/get-templates/${presentationId}`
       );
 
       if (!customLayoutResponse.ok) {
@@ -86,10 +86,11 @@ export const useGroupLayoutLoader = (
 
       const customLayoutsData = await customLayoutResponse.json();
       const allLayouts = customLayoutsData.layouts;
+      const templateMeta = customLayoutsData.template;
 
       const groupLayouts: LayoutInfo[] = [];
       const settings: GroupSetting = {
-        description: `Custom presentation layouts`,
+        description: templateMeta?.description || `Custom presentation layouts`,
         ordered: false,
         default: false,
       };

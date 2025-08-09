@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Home, Trash2 } from "lucide-react";
 import { useLayout } from "@/app/(presentation-generator)/context/LayoutContext";
+
 const GroupLayoutPreview = () => {
   const params = useParams();
   const router = useRouter();
@@ -14,6 +15,8 @@ const GroupLayoutPreview = () => {
 
   const { getFullDataByGroup, loading,refetch } = useLayout();
   const layoutGroup = getFullDataByGroup(slug);
+
+  const [templateMeta, setTemplateMeta] = React.useState<{ name?: string; description?: string } | null>(null);
 
   useEffect(() => {
     const existingScript = document.querySelector(
@@ -24,6 +27,21 @@ const GroupLayoutPreview = () => {
       script.src = "https://cdn.tailwindcss.com";
       script.async = true;
       document.head.appendChild(script);
+    }
+  }, [slug]);
+
+  useEffect(() => {
+    // Load template meta for custom groups
+    if (slug.startsWith("custom-")) {
+      const presentationId = slug.replace("custom-", "");
+      fetch(`/api/v1/ppt/template-management/get-templates/${presentationId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data?.template) {
+            setTemplateMeta({ name: data.template.name, description: data.template.description });
+          }
+        })
+        .catch(() => setTemplateMeta(null));
     }
   }, [slug]);
 
@@ -40,7 +58,7 @@ const GroupLayoutPreview = () => {
     const presentationId = slug.replace('custom-','');
     refetch();
     router.back();
-    const response = await fetch(`/api/v1/ppt/layout-management/delete-layouts/${presentationId}`, {
+    const response = await fetch(`/api/v1/ppt/template-management/delete-templates/${presentationId}`, {
       method: "DELETE",
     }); 
     if (response.ok) {
@@ -79,11 +97,10 @@ const GroupLayoutPreview = () => {
 
           <div className="text-center">
             <h1 className="text-3xl font-bold text-gray-900 capitalize">
-              {layoutGroup[0].groupName} Layouts
+              {templateMeta?.name || layoutGroup[0].groupName} Layouts
             </h1>
             <p className="text-gray-600 mt-2">
-              {layoutGroup.length} layout{layoutGroup.length !== 1 ? "s" : ""} •{" "}
-              {layoutGroup[0].groupName}
+              {layoutGroup.length} layout{layoutGroup.length !== 1 ? "s" : ""} • {templateMeta?.description || layoutGroup[0].groupName}
             </p>
           </div>
          

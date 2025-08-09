@@ -345,7 +345,7 @@ export const LayoutProvider: React.FC<{
     const fullDataByGroup = new Map<string, FullDataInfo[]>();
     try {
       const customGroupResponse = await fetch(
-        "/api/v1/ppt/layout-management/summary"
+        "/api/v1/ppt/template-management/summary"
       );
       const customGroupData = await customGroupResponse.json();
 
@@ -359,7 +359,7 @@ export const LayoutProvider: React.FC<{
         }
         const presentationId = group.presentation_id;
         const customLayoutResponse = await fetch(
-          `/api/v1/ppt/layout-management/get-layouts/${presentationId}`
+          `/api/v1/ppt/template-management/get-templates/${presentationId}`
         );
         const customLayoutsData = await customLayoutResponse.json();
         const allLayout = customLayoutsData.layouts;
