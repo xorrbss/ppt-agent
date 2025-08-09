@@ -23,9 +23,9 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
             setLoading(true)
             setError(null)
 
-            const response = await fetch('/api/layouts')
+            const response = await fetch('/api/templates')
             if (!response.ok) {
-                toast.error('Error loading layouts', {
+                toast.error('Error loading templates', {
                     description: response.statusText,       
                 })
                 return
@@ -38,7 +38,7 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
                 const groupLayouts: LayoutInfo[] = []
 
                 const groupSettings: GroupSetting = groupData.settings ? groupData.settings : {
-                    description: `${groupData.groupName} presentation layouts`,
+                    description: `${groupData.groupName} presentation templates`,
                     ordered: false,
                     default: false
                 }
@@ -50,7 +50,7 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
 
                         if (!module.default) {
                             toast.error(`${layoutName} has no default export`, {
-                                description: 'Please ensure the layout file exports a default component',
+                                description: 'Please ensure the template file exports a default component',
                             })
                             console.warn(`${layoutName} has no default export`)
                             throw new Error(`${layoutName} has no default export`)
@@ -58,14 +58,12 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
 
                         if (!module.Schema) {
                             toast.error(`${layoutName} is missing required Schema export`, {
-                                description: 'Please ensure the layout file exports a Schema',
+                                description: 'Please ensure the template file exports a Schema',
                             })
                             console.error(`${layoutName} is missing required Schema export`)
                             throw new Error(`${layoutName} is missing required Schema export`)
                         }
 
-                        // Use empty object to let schema apply its default values
-                        // User will need to provide actual data when using the layouts
                         const sampleData = module.Schema.parse({})
                         const layoutId = module.layoutId || layoutName.toLowerCase().replace(/layout$/, '')
 
@@ -85,15 +83,12 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
                     } catch (importError) {
                         console.error(`Failed to import ${fileName} from ${groupData.groupName}:`, importError)
 
-                        // Try alternative import path
                         try {
                             const layoutName = fileName.replace('.tsx', '').replace('.ts', '')
                             const module = await import(`@/presentation-layouts/${groupData.groupName}/${layoutName}`)
 
                             if (module.default && module.Schema) {
-                                // Use empty object to let schema apply its default values
                                 const sampleData = module.Schema.parse({})
-                                // if layoutId is not provided, use the layoutName
                                 const layoutId = module.layoutId || layoutName.toLowerCase().replace(/layout$/, '')
 
                                 const layoutInfo: LayoutInfo = {
@@ -108,7 +103,7 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
                                 groupLayouts.push(layoutInfo)
                                 allLayouts.push(layoutInfo)
                             } else {
-                                console.error(`${layoutName} is missing required exports (default component or Schema)`)
+                                console.error(`${layoutName} is missing required exports (default component or Schema)`)                        
                             }
                         } catch (altError) {
                             console.error(`Alternative import also failed for ${fileName} from ${groupData.groupName}:`, altError)
@@ -126,10 +121,10 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
             }
 
             if (allLayouts.length === 0) {
-                toast.error('No valid layouts found', {
-                    description: 'Make sure your layout files export both a default component and a Schema.',
+                toast.error('No valid templates found', {
+                    description: 'Make sure your template files export both a default component and a Schema.',
                 })
-                setError('No valid layouts found. Make sure your layout files export both a default component and a Schema.')
+                setError('No valid templates found. Make sure your template files export both a default component and a Schema.')
             } else {
                 setLayoutGroups(loadedGroups)
                 setLayouts(allLayouts)
@@ -137,8 +132,8 @@ export const useLayoutLoader = (): UseLayoutLoaderReturn => {
             }
 
         } catch (error) {
-            console.error('Error loading layouts:', error)
-            setError(error instanceof Error ? error.message : 'Failed to load layouts')
+            console.error('Error loading templates:', error)
+            setError(error instanceof Error ? error.message : 'Failed to load templates')
         } finally {
             setLoading(false)
         }

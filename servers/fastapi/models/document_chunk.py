@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 
+from models.presentation_outline_model import SlideOutlineModel
+
 
 class DocumentChunk(BaseModel):
     heading: str
@@ -7,5 +9,5 @@ class DocumentChunk(BaseModel):
     heading_index: int
     score: float
 
-    def to_slide_outline(self) -> str:
-        return f"{self.heading}\n{self.content}"
+    def to_slide_outline(self) -> SlideOutlineModel:
+        return SlideOutlineModel(content=f"{self.heading}\n{self.content}")

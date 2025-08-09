@@ -35,3 +35,6 @@ class UserConfig(BaseModel):
     TOOL_CALLS: Optional[bool] = None
     DISABLE_THINKING: Optional[bool] = None
     EXTENDED_REASONING: Optional[bool] = None
+
+    # Web Search
+    WEB_GROUNDING: Optional[bool] = None

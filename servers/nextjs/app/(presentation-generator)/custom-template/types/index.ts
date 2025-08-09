@@ -3,6 +3,7 @@ export interface SlideData {
   slide_number: number;
   screenshot_url: string;
   xml_content: string;
+  normalized_fonts?: string[];
 }
 
 export interface UploadedFont {

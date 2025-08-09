@@ -15,7 +15,7 @@ const DEFAULT_LOADING_STATE: LoadingState = {
 
 export const usePresentationGeneration = (
   presentationId: string | null,
-  outlines: string[] | null,
+  outlines: { content: string }[] | null,
   selectedLayoutGroup: LayoutGroup | null,
   setActiveTab: (tab: string) => void
 ) => {

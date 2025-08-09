@@ -10,6 +10,10 @@ export const APIKeyWarning: React.FC = () => {
           <h1 className="text-xl font-bold text-gray-900">
           Please add "GOOGLE_API_KEY" to enable template creation via AI.
           </h1>
+          <h1 className="text-xl font-bold text-gray-900">Please add your OpenAI API Key to process the layout</h1>
+          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            This feature requires an OpenAI model GPT-5. Configure your key in settings or via environment variables.
+          </p>
         </div>
       </div>
     </div>

@@ -8,8 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Edit, Home, Trash2 } from "lucide-react";
 import { useLayout } from "@/app/(presentation-generator)/context/LayoutContext";
-import { useDrawingCanvas } from "../../custom-layout/hooks/useDrawingCanvas";  
-import { EditControls } from "../../custom-layout/components/EachSlide/EditControls";
+
 import html2canvas from "html2canvas";
 
 const GroupLayoutPreview = () => {
@@ -90,7 +89,7 @@ const GroupLayoutPreview = () => {
       method: "DELETE",
     }); 
     if (response.ok) {
-      router.push("/layout-preview");
+      router.push("/template-preview");
     }
   }
 
@@ -236,7 +235,7 @@ const GroupLayoutPreview = () => {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => router.push("/layout-preview")}
+              onClick={() => router.push("/template-preview")}
               className="flex items-center gap-2"
             >
               <Home className="w-4 h-4" />

@@ -53,22 +53,22 @@ export const SaveLayoutModal: React.FC<SaveLayoutModalProps> = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Save className="w-5 h-5 text-green-600" />
-            Save Layout
+            Save Template
           </DialogTitle>
           <DialogDescription>
-            Enter a name and description for your layout. This will help you identify it later.
+            Enter a name and description for your template. This will help you identify it later.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
             <Label htmlFor="layout-name" className="text-sm font-medium">
-              Layout Name *
+              Template Name *
             </Label>
             <Input
               id="layout-name"
               value={layoutName}
               onChange={(e) => setLayoutName(e.target.value)}
-              placeholder="Enter layout name..."
+              placeholder="Enter template name..."
               disabled={isSaving}
               className="w-full"
             />
@@ -81,7 +81,7 @@ export const SaveLayoutModal: React.FC<SaveLayoutModalProps> = ({
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Enter a description for your layout..."
+              placeholder="Enter a description for your template..."
               disabled={isSaving}
               className="w-full resize-none"
               rows={3}
@@ -109,7 +109,7 @@ export const SaveLayoutModal: React.FC<SaveLayoutModalProps> = ({
             ) : (
               <>
                 <Save className="w-4 h-4 mr-2" />
-                Save Layout
+                Save Template
               </>
             )}
           </Button>

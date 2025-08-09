@@ -4,9 +4,8 @@ from datetime import datetime
 from typing import Optional, List, Dict
 from fastapi import APIRouter, HTTPException, File, UploadFile, Form, Depends
 from pydantic import BaseModel
-from google import genai
-from google.genai import errors
-from google.genai import types
+from openai import OpenAI
+from openai import APIError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func
 from utils.asset_directory_utils import get_images_directory
@@ -26,6 +25,7 @@ LAYOUT_MANAGEMENT_ROUTER = APIRouter(prefix="/layout-management", tags=["layout-
 class SlideToHtmlRequest(BaseModel):
     image: str  # Partial path to image file (e.g., "/app_data/images/uuid/slide_1.png")
     xml: str    # OXML content as text
+    fonts: Optional[List[str]] = None  # Optional normalized root fonts for this slide
 
 class SlideToHtmlResponse(BaseModel):
     success: bool
@@ -42,6 +42,7 @@ class HtmlEditResponse(BaseModel):
 # Request/Response models for html-to-react endpoint
 class HtmlToReactRequest(BaseModel):
     html: str   # HTML content to convert to React component
+    image: Optional[str] = None  # Optional image path to provide visual context
 
 
 class HtmlToReactResponse(BaseModel):
@@ -94,15 +95,16 @@ class ErrorResponse(BaseModel):
     error_code: Optional[str] = None
 
 
-async def generate_html_from_slide(base64_image: str, media_type: str, xml_content: str, api_key: str) -> str:
+async def generate_html_from_slide(base64_image: str, media_type: str, xml_content: str, api_key: str, fonts: Optional[List[str]] = None) -> str:
     """
-    Generate HTML content from slide image and XML using Google Gen AI API.
+    Generate HTML content from slide image and XML using OpenAI GPT-5 Responses API.
     
     Args:
         base64_image: Base64 encoded image data
         media_type: MIME type of the image (e.g., 'image/png')
         xml_content: OXML content as text
-        api_key: Google Gen AI API key
+        api_key: OpenAI API key
+        fonts: Optional list of normalized root font families to prefer in output
     
     Returns:
         Generated HTML content as string
@@ -110,62 +112,51 @@ async def generate_html_from_slide(base64_image: str, media_type: str, xml_conte
     Raises:
         HTTPException: If API call fails or no content is generated
     """
-    print(f"Generating HTML from slide image and XML using Google Gen AI API...")
+    print(f"Generating HTML from slide image and XML using OpenAI GPT-5 Responses API...")
     try:
-        # Initialize Google Gen AI client
-        client = genai.Client(api_key=api_key)
-        
-        # Convert base64 to bytes
-        image_bytes = base64.b64decode(base64_image)
-        
-        print("Starting non-streaming request to Google Gen AI for HTML generation...")
-        
-        # Create content with image and text
-        contents = [
-            types.Part.from_bytes(
-                mime_type=media_type,
-                data=image_bytes,
-            ),
-            types.Part.from_text(text=f"\nOXML: \n\n{xml_content}"),
+        client = OpenAI(api_key=api_key)
+
+        # Compose input for Responses API. Include system prompt, image (separate), OXML and optional fonts text.
+        data_url = f"data:{media_type};base64,{base64_image}"
+        fonts_text = f"\nFONTS (Normalized root families used in this slide, use where it is required): {', '.join(fonts)}" if fonts else ""
+        user_text = f"OXML: \n\n{fonts_text}"
+        input_payload = [
+            {"role": "system", "content": GENERATE_HTML_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "input_image", "image_url": data_url},
+                    {"type": "input_text", "text": user_text},
+                ],
+            },
         ]
-        
-        # Generate content config with thinking enabled
-        generate_content_config = types.GenerateContentConfig(
-            system_instruction=GENERATE_HTML_SYSTEM_PROMPT,
-            max_output_tokens=65536,
-            temperature=1.0,
-            thinking_config=types.ThinkingConfig(
-                thinking_budget=32768,
-            ),
-        )
-        
-        print("Making non-streaming request for HTML generation...")
-        
-        # Generate content in non-streaming mode
-        response = client.models.generate_content(
-            model="gemini-2.5-pro",
-            contents=contents,
-            config=generate_content_config,
+
+        print("Making Responses API request for HTML generation...")
+        response = client.responses.create(
+            model="gpt-5",
+            input=input_payload,
+            reasoning={"effort": "high"},
+            text={"verbosity": "low"},
         )
 
         # Extract the response text
-        html_content = response.text if response.text else ""
+        html_content = getattr(response, "output_text", None) or getattr(response, "text", None) or ""
         
         print(f"Received HTML content length: {len(html_content)}")
         
         if not html_content:
             raise HTTPException(
                 status_code=500,
-                detail="No HTML content generated by Google Gen AI API"
+                detail="No HTML content generated by OpenAI GPT-5"
             )
         
         return html_content
         
-    except errors.APIError as e:
-        print(f"Google API Error: {e}")
+    except APIError as e:
+        print(f"OpenAI API Error: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Google API error during HTML generation: {str(e)}"
+            detail=f"OpenAI API error during HTML generation: {str(e)}"
         )
     except Exception as e:
         # Handle various API errors
@@ -175,27 +166,27 @@ async def generate_html_from_slide(base64_image: str, media_type: str, xml_conte
         if "timeout" in error_msg.lower():
             raise HTTPException(
                 status_code=408,
-                detail=f"Google Gen AI API timeout during HTML generation: {error_msg}"
+                detail=f"OpenAI API timeout during HTML generation: {error_msg}"
             )
         elif "connection" in error_msg.lower():
             raise HTTPException(
                 status_code=503,
-                detail=f"Google Gen AI API connection error during HTML generation: {error_msg}"
+                detail=f"OpenAI API connection error during HTML generation: {error_msg}"
             )
         else:
             raise HTTPException(
                 status_code=500,
-                detail=f"Google Gen AI API error during HTML generation: {error_msg}"
+                detail=f"OpenAI API error during HTML generation: {error_msg}"
             )
 
 
-async def generate_react_component_from_html(html_content: str, api_key: str) -> str:
+async def generate_react_component_from_html(html_content: str, api_key: str, image_base64: Optional[str] = None, media_type: Optional[str] = None) -> str:
     """
-    Convert HTML content to TSX React component using Google Gen AI API.
+    Convert HTML content to TSX React component using OpenAI GPT-5 Responses API.
     
     Args:
         html_content: Generated HTML content
-        api_key: Google Gen AI API key
+        api_key: OpenAI API key
     
     Returns:
         Generated TSX React component code as string
@@ -204,42 +195,36 @@ async def generate_react_component_from_html(html_content: str, api_key: str) ->
         HTTPException: If API call fails or no content is generated
     """
     try:
-        # Initialize Google Gen AI client
-        client = genai.Client(api_key=api_key)
-        
-        print("Starting non-streaming request to Google Gen AI for React component generation...")
-        
-        # Create content with text
-        contents = types.Part.from_text(text=html_content)
-        
-        # Generate content config with thinking enabled
-        generate_content_config = types.GenerateContentConfig(
-            system_instruction=HTML_TO_REACT_SYSTEM_PROMPT,
-            max_output_tokens=65536,
-            temperature=1.0,
-            thinking_config=types.ThinkingConfig(
-                thinking_budget=15000,
-            ),
-        )
-        
-        print("Making non-streaming request for React component...")
-        
-        # Generate content in non-streaming mode
-        response = client.models.generate_content(
-            model="gemini-2.5-pro",
-            contents=contents,
-            config=generate_content_config,
+        client = OpenAI(api_key=api_key)
+
+        print("Making Responses API request for React component generation...")
+
+        # Build payload with optional image
+        content_parts = [{"type": "input_text", "text": f"HTML INPUT:\n{html_content}"}]
+        if image_base64 and media_type:
+            data_url = f"data:{media_type};base64,{image_base64}"
+            content_parts.insert(0, {"type": "input_image", "image_url": data_url})
+
+        input_payload = [
+            {"role": "system", "content": HTML_TO_REACT_SYSTEM_PROMPT},
+            {"role": "user", "content": content_parts},
+        ]
+
+        response = client.responses.create(
+            model="gpt-5",
+            input=input_payload,
+            reasoning={"effort": "minimal"},
+            text={"verbosity": "low"},
         )
 
-        # Extract the response text
-        react_content = response.text if response.text else ""
+        react_content = getattr(response, "output_text", None) or getattr(response, "text", None) or ""
         
         print(f"Received React content length: {len(react_content)}")
         
         if not react_content:
             raise HTTPException(
                 status_code=500,
-                detail="No React component generated by Google Gen AI API"
+                detail="No React component generated by OpenAI GPT-5"
             )
         
         react_content = react_content.replace("```tsx", "").replace("```", "").replace("typescript", "").replace("javascript", "")
@@ -256,11 +241,11 @@ async def generate_react_component_from_html(html_content: str, api_key: str) ->
         print(f"Filtered React content length: {len(filtered_react_content)}")
         
         return filtered_react_content
-    except errors.APIError as e:
-        print(f"Google API Error: {e}")
+    except APIError as e:
+        print(f"OpenAI API Error: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Google API error during React generation: {str(e)}"
+            detail=f"OpenAI API error during React generation: {str(e)}"
         )
     except Exception as e:
         # Handle various API errors
@@ -270,23 +255,23 @@ async def generate_react_component_from_html(html_content: str, api_key: str) ->
         if "timeout" in error_msg.lower():
             raise HTTPException(
                 status_code=408,
-                detail=f"Google Gen AI API timeout during React generation: {error_msg}"
+                detail=f"OpenAI API timeout during React generation: {error_msg}"
             )
         elif "connection" in error_msg.lower():
             raise HTTPException(
                 status_code=503,
-                detail=f"Google Gen AI API connection error during React generation: {error_msg}"
+                detail=f"OpenAI API connection error during React generation: {error_msg}"
             )
         else:
             raise HTTPException(
                 status_code=500,
-                detail=f"Google Gen AI API error during React generation: {error_msg}"
+                detail=f"OpenAI API error during React generation: {error_msg}"
             )
 
 
 async def edit_html_with_images(current_ui_base64: str, sketch_base64: Optional[str], media_type: str, html_content: str, prompt: str, api_key: str) -> str:
     """
-    Edit HTML content based on one or two images and a text prompt using Google Gen AI API.
+    Edit HTML content based on one or two images and a text prompt using OpenAI GPT-5 Responses API.
 
     Args:
         current_ui_base64: Base64 encoded current UI image data
@@ -294,7 +279,7 @@ async def edit_html_with_images(current_ui_base64: str, sketch_base64: Optional[
         media_type: MIME type of the images (e.g., 'image/png')
         html_content: Current HTML content to edit
         prompt: Text prompt describing the changes
-        api_key: Google Gen AI API key
+        api_key: OpenAI API key
     
     Returns:
         Edited HTML content as string
@@ -303,70 +288,50 @@ async def edit_html_with_images(current_ui_base64: str, sketch_base64: Optional[
         HTTPException: If API call fails or no content is generated
     """
     try:
-        # Initialize Google Gen AI client
-        client = genai.Client(api_key=api_key)
-        
-        print("Starting non-streaming request to Google Gen AI for HTML editing...")
-        
-        # Convert base64 images to bytes
-        current_ui_bytes = base64.b64decode(current_ui_base64)
-        
-        # Build content array - always include text and current UI image
-        contents = [
-            types.Part.from_text(text=f"Current HTML to edit:\n\n{html_content}\n\nText prompt for changes: {prompt}"),
-            types.Part.from_bytes(
-                mime_type=media_type,
-                data=current_ui_bytes,
-            )
+        client = OpenAI(api_key=api_key)
+
+        print("Making Responses API request for HTML editing...")
+
+        current_data_url = f"data:{media_type};base64,{current_ui_base64}"
+        sketch_data_url = f"data:{media_type};base64,{sketch_base64}" if sketch_base64 else None
+
+        content_parts = [
+            {"type": "input_image", "image_url": current_data_url},
+            {"type": "input_text", "text": f"CURRENT HTML TO EDIT:\n{html_content}\n\nTEXT PROMPT FOR CHANGES:\n{prompt}"},
         ]
-        
-        # Only add sketch image if provided
-        if sketch_base64:
-            sketch_bytes = base64.b64decode(sketch_base64)
-            contents.append(
-                types.Part.from_bytes(
-                    mime_type=media_type,
-                    data=sketch_bytes,
-                )
-            )
-        
-        # Generate content config with thinking enabled
-        generate_content_config = types.GenerateContentConfig(
-            system_instruction=HTML_EDIT_SYSTEM_PROMPT,
-            max_output_tokens=65536,
-            temperature=1.0,
-            thinking_config=types.ThinkingConfig(
-                thinking_budget=16000,
-            ),
+        if sketch_data_url:
+            # Insert sketch image after current UI image for context
+            content_parts.insert(1, {"type": "input_image", "image_url": sketch_data_url})
+
+        input_payload = [
+            {"role": "system", "content": HTML_EDIT_SYSTEM_PROMPT},
+            {"role": "user", "content": content_parts},
+        ]
+
+        response = client.responses.create(
+            model="gpt-5",
+            input=input_payload,
+            reasoning={"effort": "low"},
+            text={"verbosity": "low"},
         )
-        
-        print("Making non-streaming request for HTML editing...")
-        
-        # Generate content in non-streaming mode
-        response = client.models.generate_content(
-            model="gemini-2.5-pro",
-            contents=contents,
-            config=generate_content_config,
-        )
-        
-        # Extract the response text
-        edited_html = response.text if response.text else ""
+
+        edited_html = getattr(response, "output_text", None) or getattr(response, "text", None) or ""
         
         print(f"Received edited HTML content length: {len(edited_html)}")
         
         if not edited_html:
             raise HTTPException(
                 status_code=500,
-                detail="No edited HTML content generated by Google Gen AI API"
+                detail="No edited HTML content generated by OpenAI GPT-5"
             )
         
         return edited_html
         
-    except errors.APIError as e:
-        print(f"Google API Error: {e}")
+    except APIError as e:
+        print(f"OpenAI API Error: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Google API error during HTML editing: {str(e)}"
+            detail=f"OpenAI API error during HTML editing: {str(e)}"
         )
     except Exception as e:
         # Handle various API errors
@@ -376,17 +341,17 @@ async def edit_html_with_images(current_ui_base64: str, sketch_base64: Optional[
         if "timeout" in error_msg.lower():
             raise HTTPException(
                 status_code=408,
-                detail=f"Google Gen AI API timeout during HTML editing: {error_msg}"
+                detail=f"OpenAI API timeout during HTML editing: {error_msg}"
             )
         elif "connection" in error_msg.lower():
             raise HTTPException(
                 status_code=503,
-                detail=f"Google Gen AI API connection error during HTML editing: {error_msg}"
+                detail=f"OpenAI API connection error during HTML editing: {error_msg}"
             )
         else:
             raise HTTPException(
                 status_code=500,
-                detail=f"Google Gen AI API error during HTML editing: {error_msg}"
+                detail=f"OpenAI API error during HTML editing: {error_msg}"
             )
 
 
@@ -403,12 +368,12 @@ async def convert_slide_to_html(request: SlideToHtmlRequest):
         SlideToHtmlResponse with generated HTML
     """
     try:
-        # Get Google Gen AI API key from environment
-        api_key = os.getenv("GOOGLE_API_KEY")
+        # Get OpenAI API key from environment
+        api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise HTTPException(
                 status_code=500, 
-                detail="GOOGLE_API_KEY environment variable not set"
+                detail="OPENAI_API_KEY environment variable not set"
             )
         
         # Resolve image path to actual file system path
@@ -458,7 +423,8 @@ async def convert_slide_to_html(request: SlideToHtmlRequest):
             base64_image=base64_image,
             media_type=media_type,
             xml_content=request.xml,
-            api_key=api_key
+            api_key=api_key,
+            fonts=request.fonts,
             )
         
         html_content = html_content.replace("```html", "").replace("```", "")
@@ -493,12 +459,12 @@ async def convert_html_to_react(request: HtmlToReactRequest):
         HtmlToReactResponse with generated React component
     """
     try:
-        # Get Google Gen AI API key from environment
-        api_key = os.getenv("GOOGLE_API_KEY")
+        # Get OpenAI API key from environment
+        api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise HTTPException(
                 status_code=500, 
-                detail="GOOGLE_API_KEY environment variable not set"
+                detail="OPENAI_API_KEY environment variable not set"
             )
         
         # Validate HTML content
@@ -508,10 +474,31 @@ async def convert_html_to_react(request: HtmlToReactRequest):
                 detail="HTML content cannot be empty"
             )
         
+        # Optionally resolve image and encode to base64
+        image_b64 = None
+        media_type = None
+        if request.image:
+            image_path = request.image
+            if image_path.startswith("/app_data/images/"):
+                relative_path = image_path[len("/app_data/images/"):]
+                actual_image_path = os.path.join(get_images_directory(), relative_path)
+            elif image_path.startswith("/static/"):
+                relative_path = image_path[len("/static/"):]
+                actual_image_path = os.path.join("static", relative_path)
+            else:
+                actual_image_path = image_path if os.path.isabs(image_path) else os.path.join(get_images_directory(), image_path)
+            if os.path.exists(actual_image_path):
+                with open(actual_image_path, "rb") as f:
+                    image_b64 = base64.b64encode(f.read()).decode("utf-8")
+                ext = os.path.splitext(actual_image_path)[1].lower()
+                media_type = {'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp'}.get(ext, 'image/png')
+        
         # Convert HTML to React component
         react_component = await generate_react_component_from_html(
             html_content=request.html,
-            api_key=api_key
+            api_key=api_key,
+            image_base64=image_b64,
+            media_type=media_type
         )
 
         react_component = react_component.replace("```tsx", "").replace("```", "")
@@ -555,12 +542,12 @@ async def edit_html_with_images_endpoint(
         HtmlEditResponse with edited HTML
     """
     try:
-        # Get Google Gen AI API key from environment
-        api_key = os.getenv("GOOGLE_API_KEY")
+        # Get OpenAI API key from environment
+        api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise HTTPException(
                 status_code=500, 
-                detail="GOOGLE_API_KEY environment variable not set"
+                detail="OPENAI_API_KEY environment variable not set"
             )
         
         # Validate inputs

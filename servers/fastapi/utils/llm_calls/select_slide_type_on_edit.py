@@ -1,4 +1,4 @@
-from models.llm_message import LLMMessage
+from models.llm_message import LLMSystemMessage, LLMUserMessage
 from models.presentation_layout import PresentationLayoutModel, SlideLayoutModel
 from models.slide_layout_index import SlideLayoutIndex
 from models.sql.slide import SlideModel
@@ -13,8 +13,7 @@ def get_messages(
     current_slide_layout: int,
 ):
     return [
-        LLMMessage(
-            role="system",
+        LLMSystemMessage(
             content=f"""
                 Select a Slide Layout index based on provided user prompt and current slide data.
                 {layout.to_string()}
@@ -26,8 +25,7 @@ def get_messages(
                 **Go through all notes and steps and make sure they are followed, including mentioned constraints**
             """,
         ),
-        LLMMessage(
-            role="user",
+        LLMUserMessage(
             content=f"""
                 - User Prompt: {prompt}
                 - Current Slide Data: {slide_data}

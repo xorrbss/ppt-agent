@@ -35,6 +35,7 @@ export const useSlideProcessing = (
           body: JSON.stringify({
             image: slide.screenshot_url,
             xml: slide.xml_content,
+            fonts: slide.normalized_fonts ?? [],
           }),
         });
 
@@ -157,7 +158,10 @@ export const useSlideProcessing = (
       setSlides(initialSlides);
 
       toast.success(
-        `Successfully extracted ${pptxData.slides.length} slides! Converting to HTML...`
+        `Template Processing Finished`,
+        {
+          description: `Please Upload the not supported fonts, and click Extract Template`
+        }
       );
 
       

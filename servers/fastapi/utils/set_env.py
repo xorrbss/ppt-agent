@@ -79,3 +79,7 @@ def set_disable_thinking_env(value):
 
 def set_extended_reasoning_env(value):
     os.environ["EXTENDED_REASONING"] = value
+
+
+def set_web_grounding_env(value):
+    os.environ["WEB_GROUNDING"] = value

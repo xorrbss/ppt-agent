@@ -51,7 +51,7 @@ const OutlinePage: React.FC = () => {
           <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
             <TabsList className="grid w-[50%] mx-auto my-4 grid-cols-2">
               <TabsTrigger value={TABS.OUTLINE}>Outline & Content</TabsTrigger>
-              <TabsTrigger value={TABS.LAYOUTS}>Layout Style</TabsTrigger>
+              <TabsTrigger value={TABS.LAYOUTS}>Select Template</TabsTrigger>
             </TabsList>
 
             <div className="flex-grow w-full overflow-y-auto custom_scrollbar">

@@ -19,7 +19,6 @@ interface OllamaModel {
   label: string;
   value: string;
   size: string;
-  icon: string;
 }
 
 interface OllamaConfigProps {
@@ -128,19 +127,6 @@ export default function OllamaConfig({
                   className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
                 >
                   <div className="flex gap-3 items-center">
-                    {ollamaModel && (
-                      <div className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <img
-                          src={
-                            ollamaModels?.find(
-                              (m) => m.value === ollamaModel
-                            )?.icon
-                          }
-                          alt={`${ollamaModel} icon`}
-                          className="rounded-sm"
-                        />
-                      </div>
-                    )}
                     <span className="text-sm font-medium text-gray-900">
                       {ollamaModel
                         ? ollamaModels?.find(
@@ -189,13 +175,6 @@ export default function OllamaConfig({
                             )}
                           />
                           <div className="flex gap-3 items-center">
-                            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0">
-                              <img
-                                src={model.icon}
-                                alt={`${model.label} icon`}
-                                className="rounded-sm"
-                              />
-                            </div>
                             <div className="flex flex-col space-y-1 flex-1">
                               <div className="flex items-center justify-between gap-2">
                                 <span className="text-sm font-medium text-gray-900 capitalize">

@@ -1,43 +1,27 @@
 "use client";
 
-import Wrapper from "@/components/Wrapper";
 import React from "react";
 import Link from "next/link";
-import BackBtn from "@/components/BackBtn";
-import { usePathname } from "next/navigation";
-import HeaderNav from "@/app/(presentation-generator)/components/HeaderNab";
 import { Layout } from "lucide-react";
-const Header = () => {
-  const pathname = usePathname();
+
+const Header: React.FC = () => {
   return (
-    <div className="bg-[#5146E5] w-full shadow-lg sticky top-0 z-50">
-      <Wrapper>
-        <div className="flex items-center justify-between py-1">
-          <div className="flex items-center gap-3">
-            {pathname !== "/upload" && <BackBtn />}
-            <Link href="/dashboard">
-              <img
-                src="/logo-white.png"
-                alt="Presentation logo"
-                className="h-16"
-              />
-            </Link>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/layout-preview"
-              prefetch={false}
-              className="flex items-center gap-2 px-3 py-2 text-white hover:bg-primary/80 rounded-md transition-colors outline-none"
-              role="menuitem"
-            >
+    <header className="w-full border-b bg-white/60 backdrop-blur supports-[backdrop-filter]:bg-white/60 sticky top-0 z-50">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="flex h-16 items-center justify-between">
+          <Link href="/" className="flex items-center gap-2">
+            <img src="/logo-white.png" alt="Presenton" className="h-6 w-auto" />
+          </Link>
+
+          <nav className="flex items-center gap-4">
+            <Link href="/template-preview" className="inline-flex items-center gap-2 text-gray-700 hover:text-gray-900">
               <Layout className="w-5 h-5" />
-              <span className="text-sm font-medium font-inter">Layouts</span>
+              <span className="text-sm font-medium font-inter">Templates</span>
             </Link>
-            <HeaderNav />
-          </div>
+          </nav>
         </div>
-      </Wrapper>
-    </div>
+      </div>
+    </header>
   );
 };
 

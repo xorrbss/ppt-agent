@@ -18,7 +18,7 @@ import { APIKeyWarning } from "./components/APIKeyWarning";
 import { useAPIKeyCheck } from "./hooks/useAPIKeyCheck";
 
 
-const CustomLayoutPage = () => {
+const CustomTemplatePage = () => {
   const { refetch } = useLayout();
   
   // Custom hooks for different concerns
@@ -66,8 +66,9 @@ const CustomLayoutPage = () => {
   // Anthropic key warning
   if (!hasRequiredKey) {
     return <APIKeyWarning />;
-  }
+ 
 
+  }
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       <Header />
@@ -75,7 +76,7 @@ const CustomLayoutPage = () => {
         {/* Header */}
         <div className="text-center space-y-2 my-6">
           <h1 className="text-4xl font-bold text-gray-900">
-            Custom Layout Processor
+            Custom Template Processor
           </h1>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
             Upload your PPTX file to extract slides and convert them to
@@ -126,7 +127,7 @@ const CustomLayoutPage = () => {
           </div>
         )}
 
-        {/* Floating Save Layout Button */}
+        {/* Floating Save Template Button */}
         {slides.length > 0 && slides.some((s) => s.processed) && (
           <SaveLayoutButton
             onSave={openSaveModal}
@@ -135,7 +136,7 @@ const CustomLayoutPage = () => {
           />
         )}
 
-        {/* Save Layout Modal */}
+        {/* Save Template Modal */}
         <SaveLayoutModal
           isOpen={isModalOpen}
           onClose={closeSaveModal}
@@ -147,4 +148,6 @@ const CustomLayoutPage = () => {
   );
 };
 
-export default CustomLayoutPage;
+export default CustomTemplatePage;
+
+

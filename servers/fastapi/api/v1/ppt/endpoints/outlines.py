@@ -72,6 +72,9 @@ async def stream_outlines(
                 presentation_outlines_json = json.loads(presentation_outlines_text)
             except Exception as e:
                 print(e)
+                with open("./debug/outlines.txt", "w") as f:
+                    f.write(presentation_outlines_text)
+                print(presentation_outlines_text)
                 raise HTTPException(
                     status_code=400,
                     detail="Failed to generate presentation outlines. Please try again.",
@@ -87,7 +90,8 @@ async def stream_outlines(
 
         presentation.outlines = presentation_outlines.model_dump()
         presentation.title = (
-            presentation_outlines.slides[0][:50]
+            presentation_outlines.slides[0]
+            .content[:50]
             .replace("#", "")
             .replace("/", "")
             .replace("\\", "")
