@@ -175,7 +175,11 @@ const SidePanel = ({
                       ? "bg-[#5141e5] hover:bg-[#4638c7]"
                       : "bg-white hover:bg-white"
                       }`}
-                    onClick={() => setActive("grid")}
+                    onClick={() => {
+                      if (!isStreaming) {
+                        setActive("grid")
+                      }
+                    }}
                   >
                     <LayoutList
                       className={`${active === "grid" ? "text-white" : "text-black"
@@ -190,7 +194,11 @@ const SidePanel = ({
                       ? "bg-[#5141e5] hover:bg-[#4638c7]"
                       : "bg-white hover:bg-white"
                       }`}
-                    onClick={() => setActive("list")}
+                    onClick={() =>{
+                      if(!isStreaming){
+                        setActive("list")
+                      }
+                    }}
                   >
                     <ListTree
                       className={`${active === "list" ? "text-white" : "text-black"
