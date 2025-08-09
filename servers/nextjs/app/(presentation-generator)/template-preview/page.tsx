@@ -74,7 +74,7 @@ const LayoutPreview = () => {
                   key={group.groupName}
                   className="cursor-pointer hover:shadow-md transition-all duration-200 group"
                   onClick={() =>
-                    router.push(`/layout-preview/${group.groupName}`)
+                    router.push(`/template-preview/${group.groupName}`)
                   }
                 >
                   <div className="p-6">

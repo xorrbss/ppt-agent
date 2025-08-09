@@ -44,7 +44,7 @@ const GroupLayoutPreview = () => {
       method: "DELETE",
     }); 
     if (response.ok) {
-      router.push("/layout-preview");
+      router.push("/template-preview");
     }
   }
   return (
@@ -66,7 +66,7 @@ const GroupLayoutPreview = () => {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => router.push("/layout-preview")}
+              onClick={() => router.push("/template-preview")}
               className="flex items-center gap-2"
             >
               <Home className="w-4 h-4" />

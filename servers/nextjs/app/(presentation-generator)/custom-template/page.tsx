@@ -125,7 +125,7 @@ const CustomLayoutPage = () => {
           </div>
         )}
 
-        {/* Floating Save Layout Button */}
+        {/* Floating Save Template Button */}
         {slides.length > 0 && slides.some((s) => s.processed) && (
           <SaveLayoutButton
             onSave={openSaveModal}
@@ -134,7 +134,7 @@ const CustomLayoutPage = () => {
           />
         )}
 
-        {/* Save Layout Modal */}
+        {/* Save Template Modal */}
         <SaveLayoutModal
           isOpen={isModalOpen}
           onClose={closeSaveModal}

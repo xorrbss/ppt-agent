@@ -82,10 +82,10 @@ const LayoutSelection: React.FC<LayoutSelectionProps> = ({
             <div className="space-y-6">
                 <div className="text-center py-8">
                     <h5 className="text-lg font-medium mb-2 text-gray-700">
-                        No Layout Styles Available
+                        No Templates Available
                     </h5>
                     <p className="text-gray-600 text-sm">
-                        No presentation layout styles could be loaded. Please try refreshing the page.
+                        No presentation templates could be loaded. Please try refreshing the page.
                     </p>
                 </div>
             </div>
