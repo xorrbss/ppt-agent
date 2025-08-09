@@ -79,6 +79,7 @@ class GetLayoutsResponse(BaseModel):
 class PresentationSummary(BaseModel):
     presentation_id: str
     layout_count: int
+    last_updated_at: Optional[datetime] = None
 
 
 class GetPresentationSummaryResponse(BaseModel):
@@ -830,21 +831,13 @@ async def get_presentations_summary(
 ):
     """
     Get summary of all presentations with their layout counts.
-    
-    Args:
-        session: Database session
-    
-    Returns:
-        GetPresentationSummaryResponse with list of presentations and their layout counts
-    
-    Raises:
-        HTTPException: 500 for server errors
     """
     try:
-        # Query to get presentation_id and count of layouts grouped by presentation_id
+        # Query to get presentation_id, count of layouts, and MAX(updated_at)
         stmt = select(
             PresentationLayoutCodeModel.presentation_id,
-            func.count(PresentationLayoutCodeModel.id).label('layout_count')
+            func.count(PresentationLayoutCodeModel.id).label('layout_count'),
+            func.max(PresentationLayoutCodeModel.updated_at).label('last_updated_at')
         ).group_by(PresentationLayoutCodeModel.presentation_id)
         
         result = await session.execute(stmt)
@@ -854,7 +847,8 @@ async def get_presentations_summary(
         presentations = [
             PresentationSummary(
                 presentation_id=row.presentation_id,
-                layout_count=row.layout_count
+                layout_count=row.layout_count,
+                last_updated_at=row.last_updated_at
             )
             for row in presentation_data
         ]
