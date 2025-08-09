@@ -2,7 +2,7 @@
 
 import React from "react";
 import FontManager from "./components/FontManager";
-import Header from "@/components/Header";
+import Header from "../dashboard/components/Header";
 import { useLayout } from "../context/LayoutContext";
 import { useCustomLayout } from "./hooks/useCustomLayout";
 import { useFontManagement } from "./hooks/useFontManagement";
@@ -78,8 +78,13 @@ const CustomLayoutPage = () => {
           </h1>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
             Upload your PPTX file to extract slides and convert them to
-            interactive HTML layouts
+            template which then can be used to generate AI presentations.
           </p>
+          <div className="max-w-2xl mx-auto mt-2">
+            <div className="inline-block rounded border border-orange-200 bg-orange-50 px-3 py-2 text-sm text-orange-700">
+              AI template generation can take around 5 minutes per slide.
+            </div>
+          </div>
         </div>
        
 
