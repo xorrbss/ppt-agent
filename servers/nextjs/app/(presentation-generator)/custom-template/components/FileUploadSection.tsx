@@ -10,6 +10,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Upload, FileText, X, Loader2 } from "lucide-react";
 import { ProcessedSlide } from "../types";
+import Timer from "./Timer";
 
 interface FileUploadSectionProps {
   selectedFile: File | null;
@@ -96,7 +97,7 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
           </div>
         )}
 
-        <div className="flex gap-3">
+        <div className="flex flex-col gap-1 ">
           <Button
             onClick={processFile}
             disabled={isProcessingPptx || slides.some((s) => s.processing)}
@@ -108,6 +109,7 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
               ? "Select a PPTX file"
               : "Process File"}
           </Button>
+          {isProcessingPptx && <Timer duration={90} />}
         </div>
       </CardContent>
     </Card>

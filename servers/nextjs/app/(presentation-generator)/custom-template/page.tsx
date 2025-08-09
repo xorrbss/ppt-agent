@@ -9,20 +9,20 @@ import { useFontManagement } from "./hooks/useFontManagement";
 import { useFileUpload } from "./hooks/useFileUpload";
 import { useSlideProcessing } from "./hooks/useSlideProcessing";
 import { useLayoutSaving } from "./hooks/useLayoutSaving";
-import { useOpenAIKeyCheck } from "./hooks/useOpenAIKeyCheck";
 import { LoadingSpinner } from "./components/LoadingSpinner";
-import { OpenAIKeyWarning } from "./components/OpenAIKeyWarning";
 import { FileUploadSection } from "./components/FileUploadSection";
 import { SaveLayoutButton } from "./components/SaveLayoutButton";
 import { SaveLayoutModal } from "./components/SaveLayoutModal";
 import EachSlide from "./components/EachSlide/NewEachSlide";
+import { APIKeyWarning } from "./components/APIKeyWarning";
+import { useAPIKeyCheck } from "./hooks/useAPIKeyCheck";
 
 
-const CustomLayoutPage = () => {
+const CustomTemplatePage = () => {
   const { refetch } = useLayout();
   
   // Custom hooks for different concerns
-  const { hasOpenAIKey, isOpenAIKeyLoading } = useOpenAIKeyCheck();
+  const { hasRequiredKey, isRequiredKeyLoading } = useAPIKeyCheck();
   const { selectedFile, handleFileSelect, removeFile } = useFileUpload();
   const { slides, setSlides, completedSlides } = useCustomLayout();
   const { fontsData, UploadedFonts, uploadFont, removeFont, getAllUnsupportedFonts, setFontsData } = useFontManagement();
@@ -35,7 +35,8 @@ const CustomLayoutPage = () => {
   const { isSavingLayout, isModalOpen, openSaveModal, closeSaveModal, saveLayout } = useLayoutSaving(
     slides,
     UploadedFonts,
-    refetch
+    refetch,
+    setSlides
   );
 
   const handleProcessSlideToHtml = (slide: any) => {
@@ -58,15 +59,16 @@ const CustomLayoutPage = () => {
   };
 
   // Loading state
-  if (isOpenAIKeyLoading) {
-    return <LoadingSpinner message="Checking OpenAI API Key..." />;
+  if (isRequiredKeyLoading) {
+    return <LoadingSpinner message="Checking API Key..." />;
   }
 
-  // OpenAI key warning
-  if (!hasOpenAIKey) {
-    return <OpenAIKeyWarning />;
-  }
+  // Anthropic key warning
+  if (!hasRequiredKey) {
+    return <APIKeyWarning />;
+ 
 
+  }
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       <Header />
@@ -74,7 +76,7 @@ const CustomLayoutPage = () => {
         {/* Header */}
         <div className="text-center space-y-2 my-6">
           <h1 className="text-4xl font-bold text-gray-900">
-            Custom Layout Processor
+            Custom Template Processor
           </h1>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
             Upload your PPTX file to extract slides and convert them to
@@ -151,4 +153,6 @@ const CustomLayoutPage = () => {
   );
 };
 
-export default CustomLayoutPage;
+export default CustomTemplatePage;
+
+

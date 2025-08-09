@@ -1,3 +1,4 @@
+'use client'
 import React from "react";
 import { AlertCircle, CheckCircle, Edit, Loader2, Repeat2, Trash, Code } from "lucide-react";
 import ToolTip from "@/components/ToolTip";

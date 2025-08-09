@@ -19,6 +19,7 @@ export interface ProcessedSlide extends SlideData {
   processed?: boolean;
   error?: string;
   modified?: boolean; 
+  convertingToReact?: boolean; // indicates HTML-to-React conversion in progress
 }
 
 export interface FontData {

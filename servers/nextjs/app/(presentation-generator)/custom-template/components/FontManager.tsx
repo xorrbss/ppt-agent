@@ -224,7 +224,7 @@ const FontManager: React.FC<FontManagerProps> = ({
           onClick={processSlideToHtml}
           className="text-xs px-8 py-2 font-semibold bg-blue-600 text-white hover:text-white hover:bg-blue-700 border-blue-600"
           >
-            Extract layouts
+            Extract Template
         </Button>
           </div>
       </CardContent>
