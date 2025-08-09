@@ -9,9 +9,9 @@ import { useFontManagement } from "./hooks/useFontManagement";
 import { useFileUpload } from "./hooks/useFileUpload";
 import { useSlideProcessing } from "./hooks/useSlideProcessing";
 import { useLayoutSaving } from "./hooks/useLayoutSaving";
-import { useAnthropicKeyCheck } from "./hooks/useAnthropicKeyCheck";
+import { useOpenAIKeyCheck } from "./hooks/useOpenAIKeyCheck";
 import { LoadingSpinner } from "./components/LoadingSpinner";
-import { AnthropicKeyWarning } from "./components/AnthropicKeyWarning";
+import { OpenAIKeyWarning } from "./components/OpenAIKeyWarning";
 import { FileUploadSection } from "./components/FileUploadSection";
 import { SaveLayoutButton } from "./components/SaveLayoutButton";
 import { SaveLayoutModal } from "./components/SaveLayoutModal";
@@ -22,7 +22,7 @@ const CustomLayoutPage = () => {
   const { refetch } = useLayout();
   
   // Custom hooks for different concerns
-  const { hasAnthropicKey, isAnthropicKeyLoading } = useAnthropicKeyCheck();
+  const { hasOpenAIKey, isOpenAIKeyLoading } = useOpenAIKeyCheck();
   const { selectedFile, handleFileSelect, removeFile } = useFileUpload();
   const { slides, setSlides, completedSlides } = useCustomLayout();
   const { fontsData, UploadedFonts, uploadFont, removeFont, getAllUnsupportedFonts, setFontsData } = useFontManagement();
@@ -58,13 +58,13 @@ const CustomLayoutPage = () => {
   };
 
   // Loading state
-  if (isAnthropicKeyLoading) {
-    return <LoadingSpinner message="Checking Anthropic Key..." />;
+  if (isOpenAIKeyLoading) {
+    return <LoadingSpinner message="Checking OpenAI API Key..." />;
   }
 
-  // Anthropic key warning
-  if (!hasAnthropicKey) {
-    return <AnthropicKeyWarning />;
+  // OpenAI key warning
+  if (!hasOpenAIKey) {
+    return <OpenAIKeyWarning />;
   }
 
   return (
