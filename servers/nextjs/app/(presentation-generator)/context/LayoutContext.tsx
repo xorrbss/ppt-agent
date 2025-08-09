@@ -69,6 +69,7 @@ export interface LayoutContextType {
   isPreloading: boolean;
   cacheSize: number;
   refetch: () => Promise<void>;
+  getCustomTemplateFonts: (presentationId: string) => string[] | null;
 }
 
 const LayoutContext = createContext<LayoutContextType | undefined>(undefined);
@@ -129,6 +130,7 @@ export const LayoutProvider: React.FC<{
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPreloading, setIsPreloading] = useState(false);
+  const [customTemplateFonts, setCustomTemplateFonts] = useState<Map<string, string[]>>(new Map());
   const dispatch = useDispatch();
 
   const buildData = async (groupedLayoutsData: GroupedLayoutsResponse[]) => {
@@ -336,7 +338,6 @@ export const LayoutProvider: React.FC<{
 
   const LoadCustomLayouts = async () => {
     const layouts: LayoutInfo[] = [];
-
     const layoutsById = new Map<string, LayoutInfo>();
     const layoutsByGroup = new Map<string, Set<string>>();
     const groupSettingsMap = new Map<string, GroupSetting>();
@@ -348,9 +349,9 @@ export const LayoutProvider: React.FC<{
         "/api/v1/ppt/layout-management/summary"
       );
       const customGroupData = await customGroupResponse.json();
-
+      
+      const customFonts = new Map<string, string[]>();
       const customGroup = customGroupData.presentations;
-
       for (const group of customGroup) {
         const groupName = `custom-${group.presentation_id}`;
         fullDataByGroup.set(groupName, []);
@@ -363,6 +364,9 @@ export const LayoutProvider: React.FC<{
         );
         const customLayoutsData = await customLayoutResponse.json();
         const allLayout = customLayoutsData.layouts;
+        
+      
+        
 
         const settings = {
           description: `Custom presentation layouts`,
@@ -401,6 +405,8 @@ export const LayoutProvider: React.FC<{
           if (!layoutCache.has(cacheKey)) {
             layoutCache.set(cacheKey, module.default);
           }
+
+          customFonts.set(presentationId, i.fonts);
 
           const originalLayoutId =
             module.layoutId ||
@@ -447,6 +453,7 @@ export const LayoutProvider: React.FC<{
           groupLayouts.push(layout);
           layouts.push(layout);
         }
+    setCustomTemplateFonts(customFonts);
         // Cache grouped layouts
         groupedLayouts.set(groupName, groupLayouts);
         fullDataByGroup.set(groupName, groupFullData);
@@ -454,6 +461,7 @@ export const LayoutProvider: React.FC<{
     } catch (err: any) {
       console.error("Compilation error:", err);
     }
+ 
 
     return {
       layoutsById,
@@ -548,6 +556,9 @@ export const LayoutProvider: React.FC<{
   const getFullDataByGroup = (groupName: string): FullDataInfo[] => {
     return layoutData?.fullDataByGroup.get(groupName) || [];
   };
+  const getCustomTemplateFonts = (presentationId: string): string[] | null => {
+    return customTemplateFonts.get(presentationId) || null;
+  };
 
   // Load layouts on mount
   useEffect(() => {
@@ -562,6 +573,7 @@ export const LayoutProvider: React.FC<{
     getAllGroups,
     getAllLayouts,
     getFullDataByGroup,
+    getCustomTemplateFonts,
     loading,
     error,
     getLayout,

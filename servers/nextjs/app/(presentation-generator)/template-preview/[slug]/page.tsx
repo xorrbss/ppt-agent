@@ -1,19 +1,85 @@
 "use client";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 // import { useGroupLayoutLoader } from '../hooks/useGroupLayoutLoader'
 import LoadingStates from "../components/LoadingStates";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Home, Trash2 } from "lucide-react";
+import { ArrowLeft, Home, Trash2, Code, Save, X, Pencil } from "lucide-react";
 import { useLayout } from "@/app/(presentation-generator)/context/LayoutContext";
+import Editor from "react-simple-code-editor";
+import { highlight, languages } from "prismjs";
+import "prismjs/components/prism-clike";
+import "prismjs/components/prism-javascript";
+import "prismjs/components/prism-markup";
+import "prismjs/components/prism-jsx";
+import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+
 const GroupLayoutPreview = () => {
   const params = useParams();
   const router = useRouter();
   const slug = params.slug as string;
 
-  const { getFullDataByGroup, loading,refetch } = useLayout();
+  const { getFullDataByGroup, loading, refetch } = useLayout();
   const layoutGroup = getFullDataByGroup(slug);
+
+  const presentationId = slug.replace("custom-", "");
+  const isCustom = slug.includes("custom-");
+
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [currentCode, setCurrentCode] = useState("");
+  const [currentLayoutName, setCurrentLayoutName] = useState("");
+  const [currentLayoutId, setCurrentLayoutId] = useState("");
+  const [currentFonts, setCurrentFonts] = useState<string[] | undefined>(undefined);
+  const [isSaving, setIsSaving] = useState(false);
+  const [layoutsMap, setLayoutsMap] = useState<Record<string, { layout_id: string; layout_name: string; layout_code: string; fonts?: string[] }>>({});
+
+  const injectFonts = (fontUrls: string[]) => {
+    fontUrls.forEach((fontUrl) => {
+      if (!fontUrl) return;
+      const existingStyle = document.querySelector(`style[data-font-url="${fontUrl}"]`);
+      if (existingStyle) return;
+      const fileName = fontUrl.split("/").pop() || "CustomFont";
+      const baseName = fileName.replace(/\.[a-zA-Z0-9]+$/, "");
+      const fontFamily = baseName.replace(/[^A-Za-z0-9_-]/g, "_");
+      const ext = (fileName.split(".").pop() || "ttf").toLowerCase();
+      const format = ext === "otf" ? "opentype" : ext === "woff" ? "woff" : ext === "woff2" ? "woff2" : "truetype";
+      const style = document.createElement("style");
+      style.setAttribute("data-font-url", fontUrl);
+      style.textContent = `@font-face { font-family: '${fontFamily}'; src: url('${fontUrl}') format('${format}'); font-display: swap; }`;
+      document.head.appendChild(style);
+    });
+  };
+
+  useEffect(() => {
+    const loadCustomLayouts = async () => {
+      if (!isCustom) return;
+      try {
+        const res = await fetch(`/api/v1/ppt/layout-management/get-layouts/${presentationId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const map: Record<string, { layout_id: string; layout_name: string; layout_code: string; fonts?: string[] }> = {};
+        for (const l of data.layouts || []) {
+          map[l.layout_name] = {
+            layout_id: l.layout_id,
+            layout_name: l.layout_name,
+            layout_code: l.layout_code,
+            fonts: l.fonts,
+          };
+        }
+        setLayoutsMap(map);
+        // Inject all fonts used by this custom group's layouts
+        // const allFonts: string[] = [];
+        // Object.values(map).forEach((entry) => {
+        //   (entry.fonts || []).forEach((f) => allFonts.push(f));
+        // });
+        injectFonts(map[0].fonts || []);
+      } catch (e) {
+        // noop
+      }
+    };
+    loadCustomLayouts();
+  }, [isCustom, presentationId]);
 
   useEffect(() => {
     const existingScript = document.querySelector(
@@ -26,6 +92,16 @@ const GroupLayoutPreview = () => {
       document.head.appendChild(script);
     }
   }, [slug]);
+
+  // Ensure fonts are injected if layoutsMap changes dynamically
+  useEffect(() => {
+    if (!isCustom) return;
+    const allFonts: string[] = [];
+    Object.values(layoutsMap).forEach((entry) => {
+      (entry.fonts || []).forEach((f) => allFonts.push(f));
+    });
+    if (allFonts.length) injectFonts(allFonts);
+  }, [layoutsMap, isCustom]);
 
   // Handle loading state
   if (loading) {
@@ -47,6 +123,63 @@ const GroupLayoutPreview = () => {
       router.push("/layout-preview");
     }
   }
+
+  const openEditor = (layoutName: string) => {
+    const entry = layoutsMap[layoutName];
+    if (!entry) return;
+    setCurrentLayoutName(entry.layout_name);
+    setCurrentLayoutId(entry.layout_id);
+    setCurrentCode(entry.layout_code || "");
+    setCurrentFonts(entry.fonts);
+    // Make sure fonts for this layout are loaded before editing
+    injectFonts(entry.fonts || []);
+    setEditorOpen(true);
+  };
+
+  const handleCancel = () => {
+    // reset to original code
+    const entry = layoutsMap[currentLayoutName];
+    if (entry) setCurrentCode(entry.layout_code || "");
+    setEditorOpen(false);
+  };
+
+  const handleSave = async () => {
+    try {
+      setIsSaving(true);
+      const payload = {
+        layouts: [
+          {
+            presentation_id: presentationId,
+            layout_id: currentLayoutId,
+            layout_name: currentLayoutName,
+            layout_code: currentCode,
+            fonts: currentFonts,
+          },
+        ],
+      };
+      const res = await fetch(`/api/v1/ppt/layout-management/save-layouts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) return;
+      // update cache map
+      setLayoutsMap((prev) => ({
+        ...prev,
+        [currentLayoutName]: {
+          layout_id: currentLayoutId,
+          layout_name: currentLayoutName,
+          layout_code: currentCode,
+          fonts: currentFonts,
+        },
+      }));
+      await refetch();
+      setEditorOpen(false);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -122,10 +255,22 @@ const GroupLayoutPreview = () => {
                         </span>
                       </div>
                     </div>
-                    <div className="text-right">
+                    <div className="flex items-center gap-2">
                       <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-700">
                         Layout #{index + 1}
                       </div>
+                      {isCustom && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex items-center gap-2 bg-blue-50 border border-blue-400 text-blue-700"
+                          onClick={() => openEditor(fileName)}
+                          disabled={!layoutsMap[fileName]}
+                          title={!layoutsMap[fileName] ? "Loading layout code..." : "Edit layout code"}
+                        >
+                          <Pencil className="w-4 h-4" /> Edit
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -150,6 +295,61 @@ const GroupLayoutPreview = () => {
           </div>
         </div>
       </footer>
+
+      {/* Right-side Sheet Editor */}
+      {isCustom && (
+        <Sheet open={editorOpen} onOpenChange={(open) => { if (!open) handleCancel(); }}>
+          <SheetContent side="right" className="w-full sm:max-w-[860px] p-0">
+            <SheetHeader className="px-6 py-4 border-b">
+              <SheetTitle className="flex items-center justify-between w-full">
+                <span className="flex items-center gap-2 text-purple-800">
+                  <Code className="w-5 h-5 text-purple-600" />
+                  HTML Editor
+                </span>
+              </SheetTitle>
+            </SheetHeader>
+            <div className="space-y-4 px-2 overflow-y-auto h-[85%]">
+              <div className="container__content_area">
+                <Editor
+                  value={currentCode}
+                  onValueChange={(code) => setCurrentCode(code)}
+                  highlight={(code) => highlight(code, languages.jsx!, "jsx")}
+                  padding={10}
+                  id="layout-code-editor"
+                  name="layout-code-editor"
+                  className="container__editor"
+                />
+              </div>
+            </div>
+            <SheetFooter className="px-6 py-4 border-b">
+              <SheetTitle className="flex items-center justify-between w-full">
+                <div></div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCancel}
+                    className="flex items-center gap-1"
+                    disabled={isSaving}
+                  >
+                    <X size={14} />
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleSave}
+                    className="flex items-center gap-1 bg-purple-600 hover:bg-purple-700"
+                    size="sm"
+                    disabled={isSaving}
+                  >
+                    <Save size={14} />
+                    Save HTML
+                  </Button>
+                </div>
+              </SheetTitle>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
+      )}
     </div>
   );
 };

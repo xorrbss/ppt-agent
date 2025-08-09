@@ -13,8 +13,29 @@ const GroupLayouts: React.FC<GroupLayoutsProps> = ({
   onSelectLayoutGroup,
   selectedLayoutGroup,
 }) => {
-  const { getFullDataByGroup } = useLayout();
+  const { getFullDataByGroup,getCustomTemplateFonts } = useLayout();
   const layoutGroup = getFullDataByGroup(group.id);
+  const fonts = getCustomTemplateFonts(group.id.split("custom-")[1]);
+  console.log("fonts here", fonts);
+if(fonts){
+  const injectFonts = (fontUrls: string[]) => {
+    fontUrls.forEach((fontUrl) => {
+      if (!fontUrl) return;
+      const existingStyle = document.querySelector(`style[data-font-url="${fontUrl}"]`);
+      if (existingStyle) return;
+      const fileName = fontUrl.split("/").pop() || "CustomFont";
+      const baseName = fileName.replace(/\.[a-zA-Z0-9]+$/, "");
+      const fontFamily = baseName.replace(/[^A-Za-z0-9_-]/g, "_");
+      const ext = (fileName.split(".").pop() || "ttf").toLowerCase();
+      const format = ext === "otf" ? "opentype" : ext === "woff" ? "woff" : ext === "woff2" ? "woff2" : "truetype";
+      const style = document.createElement("style");
+      style.setAttribute("data-font-url", fontUrl);
+      style.textContent = `@font-face { font-family: '${fontFamily}'; src: url('${fontUrl}') format('${format}'); font-display: swap; }`;
+      document.head.appendChild(style);
+    });
+  };
+  injectFonts(fonts);
+}
   return (
     <div
       onClick={() => onSelectLayoutGroup(group)}
