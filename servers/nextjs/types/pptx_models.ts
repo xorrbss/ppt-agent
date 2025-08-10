@@ -281,6 +281,7 @@ export interface PptxShapeModel {
 }
 
 export interface PptxTextBoxModel extends PptxShapeModel {
+  shape_type: string;
   margin?: PptxSpacingModel;
   fill?: PptxFillModel;
   position: PptxPositionModel;
@@ -289,6 +290,7 @@ export interface PptxTextBoxModel extends PptxShapeModel {
 }
 
 export interface PptxAutoShapeBoxModel extends PptxShapeModel {
+  shape_type: string;
   type?: PptxShapeType;
   margin?: PptxSpacingModel;
   fill?: PptxFillModel;
@@ -301,6 +303,7 @@ export interface PptxAutoShapeBoxModel extends PptxShapeModel {
 }
 
 export interface PptxPictureBoxModel extends PptxShapeModel {
+  shape_type: string;
   position: PptxPositionModel;
   margin?: PptxSpacingModel;
   clip: boolean;
@@ -313,6 +316,7 @@ export interface PptxPictureBoxModel extends PptxShapeModel {
 }
 
 export interface PptxConnectorModel extends PptxShapeModel {
+  shape_type: string;
   type?: PptxConnectorType;
   position: PptxPositionModel;
   thickness: number;

@@ -132,6 +132,7 @@ function convertToTextBox(element: ElementAttributes): PptxTextBoxModel {
   };
 
   return {
+    shape_type: "textbox",
     margin: undefined,
     fill,
     position,
@@ -190,6 +191,7 @@ function convertToAutoShapeBox(element: ElementAttributes): PptxAutoShapeBoxMode
   }
 
   return {
+    shape_type: "autoshape",
     type: shapeType,
     margin: undefined,
     fill,
@@ -220,6 +222,7 @@ function convertToPictureBox(element: ElementAttributes): PptxPictureBoxModel {
   };
 
   return {
+    shape_type: "picture",
     position,
     margin: undefined,
     clip: element.clip ?? true,
@@ -241,6 +244,7 @@ function convertToConnector(element: ElementAttributes): PptxConnectorModel {
   };
 
   return {
+    shape_type: "connector",
     type: PptxConnectorType.STRAIGHT,
     position,
     thickness: element.border?.width ?? 0.5,

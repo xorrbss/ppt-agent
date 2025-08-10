@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Annotated, List, Optional
+from typing import Annotated, List, Literal, Optional
 from annotated_types import Len
 from pydantic import BaseModel
 from pptx.util import Pt
@@ -105,10 +105,11 @@ class PptxPictureModel(BaseModel):
 
 
 class PptxShapeModel(BaseModel):
-    pass
+    shape_type: Literal["textbox", "autoshape", "picture", "connector"]
 
 
 class PptxTextBoxModel(PptxShapeModel):
+    shape_type: Literal["textbox"] = "textbox"
     margin: Optional[PptxSpacingModel] = None
     fill: Optional[PptxFillModel] = None
     position: PptxPositionModel
@@ -117,6 +118,7 @@ class PptxTextBoxModel(PptxShapeModel):
 
 
 class PptxAutoShapeBoxModel(PptxShapeModel):
+    shape_type: Literal["autoshape"] = "autoshape"
     type: MSO_AUTO_SHAPE_TYPE = MSO_AUTO_SHAPE_TYPE.RECTANGLE
     margin: Optional[PptxSpacingModel] = None
     fill: Optional[PptxFillModel] = None
@@ -129,6 +131,7 @@ class PptxAutoShapeBoxModel(PptxShapeModel):
 
 
 class PptxPictureBoxModel(PptxShapeModel):
+    shape_type: Literal["picture"] = "picture"
     position: PptxPositionModel
     margin: Optional[PptxSpacingModel] = None
     clip: bool = True
@@ -141,6 +144,7 @@ class PptxPictureBoxModel(PptxShapeModel):
 
 
 class PptxConnectorModel(PptxShapeModel):
+    shape_type: Literal["connector"] = "connector"
     type: MSO_CONNECTOR_TYPE = MSO_CONNECTOR_TYPE.STRAIGHT
     position: PptxPositionModel
     thickness: float = 0.5
