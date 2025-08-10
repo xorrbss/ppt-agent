@@ -16,9 +16,11 @@ import { SaveLayoutModal } from "./components/SaveLayoutModal";
 import EachSlide from "./components/EachSlide/NewEachSlide";
 import { APIKeyWarning } from "./components/APIKeyWarning";
 import { useAPIKeyCheck } from "./hooks/useAPIKeyCheck";
+import { useRouter } from "next/navigation";
 
 
 const CustomTemplatePage = () => {
+  const router = useRouter();
   const { refetch } = useLayout();
   
   // Custom hooks for different concerns
@@ -39,6 +41,14 @@ const CustomTemplatePage = () => {
     refetch,
     setSlides
   );
+
+  const handleSaveTemplate = async (layoutName: string, description: string): Promise<string | null> => {
+    const id = await saveLayout(layoutName, description);
+    if (id) {
+      router.push(`/template-preview/custom-${id}`);
+    }
+    return id;
+  };
 
   const handleProcessSlideToHtml = (slide: any) => {
     processSlideToHtml(slide,0)
@@ -146,7 +156,7 @@ const CustomTemplatePage = () => {
         <SaveLayoutModal
           isOpen={isModalOpen}
           onClose={closeSaveModal}
-          onSave={saveLayout}
+          onSave={handleSaveTemplate}
           isSaving={isSavingLayout}
         />
       </div>

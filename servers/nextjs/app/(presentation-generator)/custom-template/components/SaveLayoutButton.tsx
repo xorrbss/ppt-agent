@@ -30,7 +30,7 @@ export const SaveLayoutButton: React.FC<SaveLayoutButtonProps> = ({
         ) : (
           <>
             <FileText className="w-5 h-5 mr-2" />
-            Save Template
+            Save as Template
           </>
         )}
       </Button>

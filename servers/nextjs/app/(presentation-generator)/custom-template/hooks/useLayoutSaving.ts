@@ -78,10 +78,10 @@ export const useLayoutSaving = (
     }
   };
 
-  const saveLayout = useCallback(async (layoutName: string, description: string) => {
+  const saveLayout = useCallback(async (layoutName: string, description: string): Promise<string | null> => {
     if (!slides.length) {
       toast.error("No slides to save");
-      return;
+      return null;
     }
 
     setIsSavingLayout(true);
@@ -133,7 +133,7 @@ export const useLayoutSaving = (
 
       if (reactComponents.length === 0) {
         toast.error("No slides were successfully converted");
-        return;
+        return null;
       }
       console.log(reactComponents);
 
@@ -165,7 +165,7 @@ export const useLayoutSaving = (
 
       if (!data.success) {
         toast.error("Failed to save layout components");
-        return;
+        return null;
       }
 
       toast.success("Layout saved successfully");
@@ -178,6 +178,7 @@ export const useLayoutSaving = (
       toast.success(`Layout "${layoutName}" saved successfully`);
       refetch();
       closeSaveModal();
+      return presentationId;
     } catch (error) {
       console.error("Error saving layout:", error);
       toast.error("Failed to save layout", {
@@ -186,6 +187,7 @@ export const useLayoutSaving = (
             ? error.message
             : "An unexpected error occurred",
       });
+      return null;
     } finally {
       setIsSavingLayout(false);
     }

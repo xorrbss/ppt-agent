@@ -12,11 +12,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Loader2, Save } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 interface SaveLayoutModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (layoutName: string, description: string) => void;
+  onSave: (layoutName: string, description: string) => Promise<string | null>;
   isSaving: boolean;
 }
 
@@ -26,15 +27,20 @@ export const SaveLayoutModal: React.FC<SaveLayoutModalProps> = ({
   onSave,
   isSaving,
 }) => {
+  const router = useRouter();
   const [layoutName, setLayoutName] = useState("");
   const [description, setDescription] = useState("");
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!layoutName.trim()) {
       return; // Don't save if name is empty
     }
-    onSave(layoutName.trim(), description.trim());
-    // Reset form
+    const id = await onSave(layoutName.trim(), description.trim());
+    if (id) {
+      // Redirect to the new template preview page
+      router.push(`/template-preview/custom-${id}`);
+    }
+    // Reset form after navigation decision
     setLayoutName("");
     setDescription("");
   };
