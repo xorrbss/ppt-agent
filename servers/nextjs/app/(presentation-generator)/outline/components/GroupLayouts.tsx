@@ -2,6 +2,7 @@ import { CheckCircle } from "lucide-react";
 import React from "react";
 import { LayoutGroup } from "../types/index";
 import { useLayout } from "../../context/LayoutContext";
+import { useFontLoader } from "../../hooks/useFontLoader";
 interface GroupLayoutsProps {
   group: LayoutGroup;
   onSelectLayoutGroup: (group: LayoutGroup) => void;
@@ -16,26 +17,7 @@ const GroupLayouts: React.FC<GroupLayoutsProps> = ({
   const { getFullDataByGroup,getCustomTemplateFonts } = useLayout();
   const layoutGroup = getFullDataByGroup(group.id);
   const fonts = getCustomTemplateFonts(group.id.split("custom-")[1]);
-if(fonts){
-  const injectFonts = (fontUrls: string[]) => {
-    console.log('font are applied',fontUrls);
-    fontUrls.forEach((fontUrl) => {
-      if (!fontUrl) return;
-      const existingStyle = document.querySelector(`style[data-font-url="${fontUrl}"]`);
-      if (existingStyle) return;
-      const fileName = fontUrl.split("/").pop() || "CustomFont";
-      const baseName = fileName.replace(/\.[a-zA-Z0-9]+$/, "");
-      const fontFamily = baseName.replace(/[^A-Za-z0-9_-]/g, "_");
-      const ext = (fileName.split(".").pop() || "ttf").toLowerCase();
-      const format = ext === "otf" ? "opentype" : ext === "woff" ? "woff" : ext === "woff2" ? "woff2" : "truetype";
-      const style = document.createElement("style");
-      style.setAttribute("data-font-url", fontUrl);
-      style.textContent = `@font-face { font-family: '${fontFamily}'; src: url('${fontUrl}') format('${format}'); font-display: swap; }`;
-      document.head.appendChild(style);
-    });
-  };
-  injectFonts(fonts);
-}
+  useFontLoader(fonts || []);
   return (
     <div
       onClick={() => onSelectLayoutGroup(group)}
@@ -51,7 +33,7 @@ if(fonts){
         </div>
       )}
 
-      <div className="mb-3">
+      <div className="mb-3 ">
         <h6 className="text-base capitalize font-medium text-gray-900 mb-1">
           {group.name}
         </h6>
