@@ -312,7 +312,7 @@ async def generate_presentation_api(
     prompt: Annotated[str, Body()],
     n_slides: Annotated[int, Body()] = 8,
     language: Annotated[str, Body()] = "English",
-    layout: Annotated[str, Body()] = "general",
+    template: Annotated[str, Body()] = "general",
     files: Annotated[Optional[List[UploadFile]], File()] = None,
     export_as: Annotated[Literal["pptx", "pdf"], Body()] = "pptx",
     sql_session: AsyncSession = Depends(get_async_session),
@@ -376,7 +376,7 @@ async def generate_presentation_api(
     print(f"Generated {total_outlines} outlines for the presentation")
 
     # 4. Parse Layouts
-    layout_model = await get_layout_by_name(layout)
+    layout_model = await get_layout_by_name(template)
     total_slide_layouts = len(layout_model.slides)
 
     # 5. Generate Structure
