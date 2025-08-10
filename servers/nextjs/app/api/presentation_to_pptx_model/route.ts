@@ -179,7 +179,7 @@ const convertSvgToPng = async (element_attibutes: ElementAttributes) => {
 
   const svgBuffer = Buffer.from(svgHtml);
   const pngBuffer = await sharp(svgBuffer)
-    .resize(Math.round(element_attibutes.position?.width ?? 10), Math.round(element_attibutes.position?.height ?? 10))
+    .resize(Math.round(element_attibutes.position!.width!), Math.round(element_attibutes.position!.height!))
     .toFormat('png')
     .toBuffer();
   return pngBuffer;
@@ -259,6 +259,10 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
         width: attributes.position.width,
         height: attributes.position.height,
       };
+    }
+
+    if (attributes.position === undefined || attributes.position.width === undefined || attributes.position.height === undefined || attributes.position.width === 0 || attributes.position.height === 0) {
+      continue;
     }
 
     if (attributes.tagName === 'svg' || attributes.tagName === 'canvas' || attributes.tagName === 'table') {
