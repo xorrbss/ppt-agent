@@ -1,3 +1,4 @@
+import type React from "react";
 // Types for Custom Layout functionality
 export interface SlideData {
   slide_number: number;
@@ -85,9 +86,9 @@ export interface SlideContentDisplayProps {
   slide: ProcessedSlide;
   isEditMode: boolean;
   isHtmlEditMode: boolean;
-  slideContentRef: React.RefObject<HTMLDivElement | null>;
-  slideDisplayRef: React.RefObject<HTMLDivElement | null>;
-  canvasRef: React.RefObject<HTMLCanvasElement | null>;
+  slideContentRef: React.RefObject<HTMLDivElement>;
+  slideDisplayRef: React.RefObject<HTMLDivElement>;
+  canvasRef: React.RefObject<HTMLCanvasElement>;
   canvasDimensions: { width: number; height: number };
   strokeWidth: number;
   strokeColor: string;

@@ -3,7 +3,13 @@ FROM python:3.11-slim-bookworm
 # Install Node.js and npm
 RUN apt-get update && apt-get install -y \
     nginx \
-    curl
+    curl \
+    libreoffice \
+    fontconfig \
+    imagemagick
+
+RUN sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /etc/ImageMagick-6/policy.xml
+
 
 # Install Node.js 20 using NodeSource repository
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \

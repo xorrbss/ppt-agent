@@ -12,7 +12,7 @@ export const useSlideEdit = (
   const [isUpdating, setIsUpdating] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [slideHtml, setSlideHtml] = useState("");
-  const slideContentRef = useRef<HTMLDivElement | null>(null);
+  const slideContentRef = useRef<HTMLDivElement>(null);
 
   // Load Tailwind CSS dynamically for slide content
   useEffect(() => {
@@ -90,7 +90,7 @@ export const useSlideEdit = (
   };
 
   const handleSave = async (
-    slideDisplayRef: React.RefObject<HTMLDivElement |null>,
+    slideDisplayRef: React.RefObject<HTMLDivElement>,
     didYourDraw: boolean
   ) => {
     if (

@@ -23,7 +23,7 @@ const GenerateButton: React.FC<GenerateButtonProps> = ({
     const getButtonText = () => {
         if (loadingState.isLoading) return loadingState.message;
         if (streamState.isLoading || streamState.isStreaming) return "Loading...";
-        if (!selectedLayoutGroup) return "Select a Templae";
+        if (!selectedLayoutGroup) return "Select a Template";
         return "Generate Presentation";
     };
 
