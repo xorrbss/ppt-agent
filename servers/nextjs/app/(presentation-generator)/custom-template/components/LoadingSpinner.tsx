@@ -1,6 +1,6 @@
 import React from "react";
 import { Loader2 } from "lucide-react";
-import Header from "@/components/Header";
+import Header from "@/app/(presentation-generator)/dashboard/components/Header";
 
 interface LoadingSpinnerProps {
   message: string;

@@ -120,13 +120,13 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
         }}
         className="flex flex-1 relative pt-6"
       >
-        <SidePanel
+        {!isStreaming &&<SidePanel
           selectedSlide={selectedSlide}
           onSlideClick={handleSlideClick}
           loading={loading}
           isMobilePanelOpen={isMobilePanelOpen}
           setIsMobilePanelOpen={setIsMobilePanelOpen}
-        />
+        />}
 
         <div className="flex-1 h-[calc(100vh-100px)] overflow-y-auto">
           <div

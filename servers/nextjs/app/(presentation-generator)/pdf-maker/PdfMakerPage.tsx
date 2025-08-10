@@ -21,7 +21,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
   );
   const [error, setError] = useState(false);
   useEffect(() => {
-    if (presentationData?.slides[0].layout_group.includes("custom")) {
+    if (presentationData?.slides[0].layout.includes("custom")) {
       const existingScript = document.querySelector(
         'script[src*="tailwindcss.com"]'
       );
@@ -104,7 +104,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
                   presentationData.slides.length > 0 &&
                   presentationData.slides.map((slide: any, index: number) => (
                     <div key={index} className="w-full">
-                      {renderSlideContent(slide, false)}
+                      {renderSlideContent(slide, true)}
                     </div>
                   ))}
               </>
