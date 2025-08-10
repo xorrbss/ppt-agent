@@ -256,6 +256,7 @@ const SidePanel = ({
                             selectedSlide={selectedSlide}
                             onSlideClick={onSlideClick}
                           />
+                         
                         ))}
                     </div>
                   </SortableContext>
