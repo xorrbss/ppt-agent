@@ -14,6 +14,7 @@ from models.sql.ollama_pull_status import OllamaPullStatus
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from models.sql.presentation_layout_code import PresentationLayoutCodeModel
+from models.sql.template import TemplateModel
 from utils.get_env import get_app_data_directory_env, get_database_url_env
 
 
@@ -70,10 +71,11 @@ async def create_db_and_tables():
                     SlideModel.__table__,
                     KeyValueSqlModel.__table__,
                     ImageAsset.__table__,
-                    PresentationLayoutCodeModel.__table__,
-                ],
-            )
-        )
+                                        PresentationLayoutCodeModel.__table__,
+                    TemplateModel.__table__,
+                 ],
+             )
+         )
 
     async with container_db_engine.begin() as conn:
         await conn.run_sync(

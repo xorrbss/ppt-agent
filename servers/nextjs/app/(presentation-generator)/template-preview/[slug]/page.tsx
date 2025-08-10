@@ -33,6 +33,7 @@ const GroupLayoutPreview = () => {
   const [currentFonts, setCurrentFonts] = useState<string[] | undefined>(undefined);
   const [isSaving, setIsSaving] = useState(false);
   const [layoutsMap, setLayoutsMap] = useState<Record<string, { layout_id: string; layout_name: string; layout_code: string; fonts?: string[] }>>({});
+  const [templateMeta, setTemplateMeta] = useState<{ name?: string; description?: string } | null>(null);
 
   const injectFonts = (fontUrls: string[]) => {
     fontUrls.forEach((fontUrl) => {
@@ -55,7 +56,7 @@ const GroupLayoutPreview = () => {
     const loadCustomLayouts = async () => {
       if (!isCustom) return;
       try {
-        const res = await fetch(`/api/v1/ppt/layout-management/get-layouts/${presentationId}`);
+        const res = await fetch(`/api/v1/ppt/template-management/get-templates/${presentationId}`);
         if (!res.ok) return;
         const data = await res.json();
         const map: Record<string, { layout_id: string; layout_name: string; layout_code: string; fonts?: string[] }> = {};
@@ -68,12 +69,13 @@ const GroupLayoutPreview = () => {
           };
         }
         setLayoutsMap(map);
-        // Inject all fonts used by this custom group's layouts
-        // const allFonts: string[] = [];
-        // Object.values(map).forEach((entry) => {
-        //   (entry.fonts || []).forEach((f) => allFonts.push(f));
-        // });
-        injectFonts(map[0].fonts || []);
+        // Set template meta and inject aggregated fonts if provided
+        if (data?.template) {
+          setTemplateMeta({ name: data.template.name, description: data.template.description });
+        }
+        if (Array.isArray(data?.fonts) && data.fonts.length) {
+          injectFonts(data.fonts);
+        }
       } catch (e) {
         // noop
       }
@@ -116,7 +118,7 @@ const GroupLayoutPreview = () => {
     const presentationId = slug.replace('custom-','');
     refetch();
     router.back();
-    const response = await fetch(`/api/v1/ppt/layout-management/delete-layouts/${presentationId}`, {
+    const response = await fetch(`/api/v1/ppt/template-management/delete-templates/${presentationId}`, {
       method: "DELETE",
     }); 
     if (response.ok) {
@@ -157,7 +159,7 @@ const GroupLayoutPreview = () => {
           },
         ],
       };
-      const res = await fetch(`/api/v1/ppt/layout-management/save-layouts`, {
+      const res = await fetch(`/api/v1/ppt/template-management/save-templates`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -212,11 +214,10 @@ const GroupLayoutPreview = () => {
 
           <div className="text-center">
             <h1 className="text-3xl font-bold text-gray-900 capitalize">
-              {layoutGroup[0].groupName} Layouts
+              {templateMeta?.name || layoutGroup[0].groupName} Layouts
             </h1>
             <p className="text-gray-600 mt-2">
-              {layoutGroup.length} layout{layoutGroup.length !== 1 ? "s" : ""} •{" "}
-              {layoutGroup[0].groupName}
+              {layoutGroup.length} layout{layoutGroup.length !== 1 ? "s" : ""} • {templateMeta?.description || layoutGroup[0].groupName}
             </p>
           </div>
          

@@ -97,8 +97,7 @@ const FontManager: React.FC<FontManagerProps> = ({
           Font Management
         </CardTitle>
         <p className="text-sm text-gray-600">
-          Manage fonts across all slides. Upload fonts once and they'll be
-          available for all slides.
+          We couldn't load these fonts automatically. Please upload them manually. Make sure naem of the font should be exactly as shown. 
         </p>
       </CardHeader>
       <CardContent className="space-y-6">
