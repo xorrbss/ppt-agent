@@ -9,15 +9,14 @@ import { useFontManagement } from "./hooks/useFontManagement";
 import { useFileUpload } from "./hooks/useFileUpload";
 import { useSlideProcessing } from "./hooks/useSlideProcessing";
 import { useLayoutSaving } from "./hooks/useLayoutSaving";
+import { useAPIKeyCheck } from "./hooks/useAPIKeyCheck";
+import { useRouter } from "next/navigation";
 import { LoadingSpinner } from "./components/LoadingSpinner";
 import { FileUploadSection } from "./components/FileUploadSection";
 import { SaveLayoutButton } from "./components/SaveLayoutButton";
 import { SaveLayoutModal } from "./components/SaveLayoutModal";
 import EachSlide from "./components/EachSlide/NewEachSlide";
 import { APIKeyWarning } from "./components/APIKeyWarning";
-import { useAPIKeyCheck } from "./hooks/useAPIKeyCheck";
-import { useRouter } from "next/navigation";
-
 
 const CustomTemplatePage = () => {
   const router = useRouter();

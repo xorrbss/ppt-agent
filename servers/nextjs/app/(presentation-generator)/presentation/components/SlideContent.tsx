@@ -107,7 +107,8 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
     if (loading) {
       return;
     }
-    if (slide.layout_group.includes("custom")) {
+    if (slide.layout.includes("custom")) {
+     
       const existingScript = document.querySelector(
         'script[src*="tailwindcss.com"]'
       );

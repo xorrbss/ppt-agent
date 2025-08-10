@@ -16,9 +16,9 @@ const GroupLayouts: React.FC<GroupLayoutsProps> = ({
   const { getFullDataByGroup,getCustomTemplateFonts } = useLayout();
   const layoutGroup = getFullDataByGroup(group.id);
   const fonts = getCustomTemplateFonts(group.id.split("custom-")[1]);
-  console.log("fonts here", fonts);
 if(fonts){
   const injectFonts = (fontUrls: string[]) => {
+    console.log('font are applied',fontUrls);
     fontUrls.forEach((fontUrl) => {
       if (!fontUrl) return;
       const existingStyle = document.querySelector(`style[data-font-url="${fontUrl}"]`);
