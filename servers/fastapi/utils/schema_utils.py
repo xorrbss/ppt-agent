@@ -186,11 +186,13 @@ def flatten_json_schema(schema: dict) -> dict:
             # If node is a pure $ref (or combined with extra fields), inline it
             if "$ref" in node:
                 ref_value = node["$ref"]
-                assert isinstance(ref_value, str), f"Received non-string $ref - {ref_value}"
+                assert isinstance(
+                    ref_value, str
+                ), f"Received non-string $ref - {ref_value}"
                 resolved = resolve_ref(root=root_schema, ref=ref_value)
-                assert isinstance(resolved, dict), (
-                    f"Expected `$ref: {ref_value}` to resolve to a dictionary but got {type(resolved)}"
-                )
+                assert isinstance(
+                    resolved, dict
+                ), f"Expected `$ref: {ref_value}` to resolve to a dictionary but got {type(resolved)}"
                 # Merge: referenced first, then overlay current (excluding $ref)
                 merged: dict[str, Any] = deepcopy(resolved)
                 for key, value in node.items():
@@ -205,7 +207,10 @@ def flatten_json_schema(schema: dict) -> dict:
                 if key in ("$defs", "definitions"):
                     continue
                 if key == "properties" and isinstance(value, dict):
-                    flattened[key] = {prop_key: _flatten(prop_val) for prop_key, prop_val in value.items()}
+                    flattened[key] = {
+                        prop_key: _flatten(prop_val)
+                        for prop_key, prop_val in value.items()
+                    }
                 elif key in ("items", "contains", "additionalProperties", "not"):
                     if isinstance(value, dict):
                         flattened[key] = _flatten(value)
@@ -213,10 +218,14 @@ def flatten_json_schema(schema: dict) -> dict:
                         flattened[key] = [_flatten(v) for v in value]
                     else:
                         flattened[key] = value
-                elif key in ("allOf", "anyOf", "oneOf", "prefixItems") and isinstance(value, list):
+                elif key in ("allOf", "anyOf", "oneOf", "prefixItems") and isinstance(
+                    value, list
+                ):
                     flattened[key] = [_flatten(v) for v in value]
                 else:
-                    flattened[key] = _flatten(value) if isinstance(value, (dict, list)) else value
+                    flattened[key] = (
+                        _flatten(value) if isinstance(value, (dict, list)) else value
+                    )
             return flattened
         if isinstance(node, list):
             return [_flatten(v) for v in node]
@@ -228,6 +237,33 @@ def flatten_json_schema(schema: dict) -> dict:
         result.pop("$defs", None)
         result.pop("definitions", None)
     return result
+
+
+def remove_titles_from_schema(schema: dict) -> dict[str, Any]:
+
+    def _strip_titles(node: Any) -> Any:
+        if isinstance(node, dict):
+            rebuilt: dict[str, Any] = {}
+            for key, value in node.items():
+                # Preserve properties named "title" under the JSON Schema "properties" mapping
+                if key == "properties" and isinstance(value, dict):
+                    rebuilt[key] = {
+                        prop_name: _strip_titles(prop_schema)
+                        for prop_name, prop_schema in value.items()
+                    }
+                    continue
+
+                # Remove schema metadata field "title" elsewhere
+                if key == "title":
+                    continue
+
+                rebuilt[key] = _strip_titles(value)
+            return rebuilt
+        if isinstance(node, list):
+            return [_strip_titles(item) for item in node]
+        return node
+
+    return _strip_titles(deepcopy(schema))
 
 
 # ? Not used

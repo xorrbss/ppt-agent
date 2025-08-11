@@ -18,6 +18,7 @@ class OpenAIToolCall(LLMToolCall):
 
 
 class GoogleToolCall(LLMToolCall):
+    id: Optional[str] = None
     name: str
     arguments: Optional[dict] = None
 
