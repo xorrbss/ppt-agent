@@ -54,5 +54,6 @@ class OpenAIToolCallMessage(LLMMessage):
 
 class GoogleToolCallMessage(LLMMessage):
     role: Literal["tool"] = "tool"
+    id: Optional[str] = None
     name: str
     response: dict

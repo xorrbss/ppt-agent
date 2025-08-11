@@ -11,7 +11,11 @@ from models.llm_message import (
 )
 from models.llm_tool_call import AnthropicToolCall, GoogleToolCall, OpenAIToolCall
 from models.llm_tools import LLMDynamicTool, LLMTool, SearchWebTool
-from utils.schema_utils import ensure_strict_json_schema, flatten_json_schema
+from utils.schema_utils import (
+    ensure_strict_json_schema,
+    flatten_json_schema,
+    remove_titles_from_schema,
+)
 
 
 class LLMToolCallsHandler:
@@ -89,8 +93,12 @@ class LLMToolCallsHandler:
 
     def parse_tool_google(self, tool: type[LLMTool] | LLMDynamicTool):
         parsed = self.parse_tool_openai(tool)
-        parsed["function"]["parameters"] = flatten_json_schema(
-            parsed["function"]["parameters"]
+        parsed["function"]["parameters"] = (
+            remove_titles_from_schema(
+                flatten_json_schema(parsed["function"]["parameters"])
+            )
+            if parsed["function"]["parameters"]
+            else {}
         )
         return {
             "name": parsed["function"]["name"],
@@ -138,8 +146,10 @@ class LLMToolCallsHandler:
             async_tool_calls_tasks.append(tool_handler(json.dumps(tool_call.arguments)))
 
         tool_call_results: List[str] = await asyncio.gather(*async_tool_calls_tasks)
+
         tool_call_messages = [
             GoogleToolCallMessage(
+                id=tool_call.id,
                 name=tool_call.name,
                 response={"result": result},
             )

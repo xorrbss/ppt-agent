@@ -54,7 +54,11 @@ from utils.get_env import (
 )
 from utils.llm_provider import get_llm_provider, get_model
 from utils.parsers import parse_bool_or_none
-from utils.schema_utils import ensure_strict_json_schema, flatten_json_schema
+from utils.schema_utils import (
+    ensure_strict_json_schema,
+    flatten_json_schema,
+    remove_titles_from_schema,
+)
 
 
 class LLMClient:
@@ -149,13 +153,14 @@ class LLMClient:
                 return message.content
         return ""
 
-    def _get_google_messages(self, messages: List[LLMMessage]) -> List[str]:
+    def _get_google_messages(self, messages: List[LLMMessage]) -> List[GoogleContent]:
         contents = []
         for message in messages:
             if isinstance(message, LLMUserMessage):
                 contents.append(
                     GoogleContent(
-                        role="user", parts=[GoogleContentPart(text=message.content)]
+                        role=message.role,
+                        parts=[GoogleContentPart(text=message.content)],
                     )
                 )
             elif isinstance(message, GoogleAssistantMessage):
@@ -166,7 +171,8 @@ class LLMClient:
                         role="user",
                         parts=[
                             GoogleContentPart.from_function_response(
-                                name=message.name, response=message.response
+                                name=message.name,
+                                response=message.response,
                             )
                         ],
                     )
@@ -272,6 +278,7 @@ class LLMClient:
             if each_part.function_call:
                 tool_calls.append(
                     GoogleToolCall(
+                        id=each_part.function_call.id,
                         name=each_part.function_call.name,
                         arguments=each_part.function_call.args,
                     )
@@ -571,7 +578,9 @@ class LLMClient:
                         {
                             "name": "ResponseSchema",
                             "description": "Provide response to the user",
-                            "parameters": flatten_json_schema(response_format),
+                            "parameters": remove_titles_from_schema(
+                                flatten_json_schema(response_format)
+                            ),
                         }
                     ]
                 )
@@ -611,6 +620,7 @@ class LLMClient:
             if each_part.function_call:
                 tool_calls.append(
                     GoogleToolCall(
+                        id=each_part.function_call.id,
                         name=each_part.function_call.name,
                         arguments=each_part.function_call.args,
                     )
@@ -925,7 +935,8 @@ class LLMClient:
         if tools:
             google_tools = [GoogleTool(function_declarations=[tool]) for tool in tools]
 
-        tool_calls = None
+        generated_contents = []
+        tool_calls: List[GoogleToolCall] = []
         async for event in iterator_to_async(client.models.generate_content_stream)(
             model=model,
             contents=self._get_google_messages(messages),
@@ -936,38 +947,47 @@ class LLMClient:
                 max_output_tokens=max_tokens,
             ),
         ):
-            if event.text:
-                yield event.text
+            if not (event.candidates and event.candidates[0].content):
+                continue
 
-            if event.function_calls:
-                tool_calls = [
-                    GoogleToolCall(
-                        name=each.name,
-                        arguments=each.args,
+            generated_contents.append(event.candidates[0].content)
+
+            for each_part in event.candidates[0].content.parts:
+                if each_part.text:
+                    yield each_part.text
+
+                if each_part.function_call:
+                    tool_calls.append(
+                        GoogleToolCall(
+                            id=each_part.function_call.id,
+                            name=each_part.function_call.name,
+                            arguments=each_part.function_call.args,
+                        )
                     )
-                    for each in event.function_calls
-                ]
 
-            if tool_calls:
-                tool_call_messages = (
-                    await self.tool_calls_handler.handle_tool_calls_google(tool_calls)
-                )
-                new_messages = [
-                    *messages,
+        if tool_calls:
+            tool_call_messages = await self.tool_calls_handler.handle_tool_calls_google(
+                tool_calls
+            )
+            new_messages = [
+                *messages,
+                *[
                     GoogleAssistantMessage(
                         role="assistant",
-                        content=event.candidates[0].content,
-                    ),
-                    *tool_call_messages,
-                ]
-                async for event in self._stream_google(
-                    model=model,
-                    messages=new_messages,
-                    max_tokens=max_tokens,
-                    tools=tools,
-                    depth=depth + 1,
-                ):
-                    yield event
+                        content=each,
+                    )
+                    for each in generated_contents
+                ],
+                *tool_call_messages,
+            ]
+            async for event in self._stream_google(
+                model=model,
+                messages=new_messages,
+                max_tokens=max_tokens,
+                tools=tools,
+                depth=depth + 1,
+            ):
+                yield event
 
     async def _stream_anthropic(
         self,
@@ -979,6 +999,7 @@ class LLMClient:
     ):
         client: AsyncAnthropic = self._client
 
+        tool_calls: List[AnthropicToolCall] = []
         async with client.messages.stream(
             model=model,
             system=self._get_system_prompt(messages),
@@ -989,7 +1010,6 @@ class LLMClient:
             max_tokens=max_tokens or 4000,
             tools=tools,
         ) as stream:
-            tool_calls: List[AnthropicToolCall] = []
             async for event in stream:
                 event: AnthropicMessageStreamEvent = event
 
@@ -1009,31 +1029,29 @@ class LLMClient:
                         )
                     )
 
-            if tool_calls:
-                tool_call_messages = (
-                    await self.tool_calls_handler.handle_tool_calls_anthropic(
-                        tool_calls
-                    )
-                )
-                new_messages = [
-                    *messages,
-                    AnthropicAssistantMessage(
-                        role="assistant",
-                        content=[each.model_dump() for each in tool_calls],
-                    ),
-                    AnthropicUserMessage(
-                        role="user",
-                        content=[each.model_dump() for each in tool_call_messages],
-                    ),
-                ]
-                async for event in self._stream_anthropic(
-                    model=model,
-                    messages=new_messages,
-                    max_tokens=max_tokens,
-                    tools=tools,
-                    depth=depth + 1,
-                ):
-                    yield event
+        if tool_calls:
+            tool_call_messages = (
+                await self.tool_calls_handler.handle_tool_calls_anthropic(tool_calls)
+            )
+            new_messages = [
+                *messages,
+                AnthropicAssistantMessage(
+                    role="assistant",
+                    content=[each.model_dump() for each in tool_calls],
+                ),
+                AnthropicUserMessage(
+                    role="user",
+                    content=[each.model_dump() for each in tool_call_messages],
+                ),
+            ]
+            async for event in self._stream_anthropic(
+                model=model,
+                messages=new_messages,
+                max_tokens=max_tokens,
+                tools=tools,
+                depth=depth + 1,
+            ):
+                yield event
 
     def _stream_ollama(
         self,
@@ -1271,17 +1289,22 @@ class LLMClient:
                         {
                             "name": "ResponseSchema",
                             "description": "Provide response to the user",
-                            "parameters": flatten_json_schema(response_format),
+                            "parameters": remove_titles_from_schema(
+                                flatten_json_schema(response_format)
+                            ),
                         }
                     ]
                 )
             )
 
+        parsed_messages = self._get_google_messages(messages)
+
+        generated_contents = []
         tool_calls: List[GoogleToolCall] = []
         has_response_schema_tool_call = False
         async for event in iterator_to_async(client.models.generate_content_stream)(
             model=model,
-            contents=self._get_google_messages(messages),
+            contents=parsed_messages,
             config=GenerateContentConfig(
                 tools=google_tools,
                 tool_config=(
@@ -1299,6 +1322,11 @@ class LLMClient:
                 max_output_tokens=max_tokens,
             ),
         ):
+            if not (event.candidates and event.candidates[0].content):
+                continue
+
+            generated_contents.append(event.candidates[0].content)
+
             for each_part in event.candidates[0].content.parts:
                 if each_part.text:
                     yield each_part.text
@@ -1311,6 +1339,7 @@ class LLMClient:
 
                     tool_calls.append(
                         GoogleToolCall(
+                            id=each_part.function_call.id,
                             name=each_part.function_call.name,
                             arguments=each_part.function_call.args,
                         )
@@ -1322,10 +1351,13 @@ class LLMClient:
             )
             new_messages = [
                 *messages,
-                GoogleAssistantMessage(
-                    role="assistant",
-                    content=event.candidates[0].content,
-                ),
+                *[
+                    GoogleAssistantMessage(
+                        role="assistant",
+                        content=each,
+                    )
+                    for each in generated_contents
+                ],
                 *tool_call_messages,
             ]
             async for event in self._stream_google_structured(
@@ -1348,6 +1380,9 @@ class LLMClient:
         depth: int = 0,
     ) -> AsyncGenerator[str, None]:
         client: AsyncAnthropic = self._client
+
+        tool_calls: List[AnthropicToolCall] = []
+        has_response_schema_tool_call = False
         async with client.messages.stream(
             model=model,
             system=self._get_system_prompt(messages),
@@ -1365,11 +1400,10 @@ class LLMClient:
                 *(tools or []),
             ],
         ) as stream:
-            tool_calls: List[AnthropicToolCall] = []
-            has_response_schema_tool_call = False
             is_response_schema_tool_call_started = False
             async for event in stream:
                 event: AnthropicMessageStreamEvent = event
+
                 if (
                     event.type == "content_block_start"
                     and event.content_block.type == "tool_use"
@@ -1385,9 +1419,6 @@ class LLMClient:
                 ):
                     yield event.delta.partial_json
 
-                if has_response_schema_tool_call:
-                    continue
-
                 if (
                     event.type == "content_block_stop"
                     and event.content_block.type == "tool_use"
@@ -1401,32 +1432,30 @@ class LLMClient:
                         )
                     )
 
-            if tool_calls:
-                tool_call_messages = (
-                    await self.tool_calls_handler.handle_tool_calls_anthropic(
-                        tool_calls
-                    )
-                )
-                new_messages = [
-                    *messages,
-                    AnthropicAssistantMessage(
-                        role="assistant",
-                        content=[each.model_dump() for each in tool_calls],
-                    ),
-                    AnthropicUserMessage(
-                        role="user",
-                        content=[each.model_dump() for each in tool_call_messages],
-                    ),
-                ]
-                async for event in self._stream_anthropic_structured(
-                    model=model,
-                    messages=new_messages,
-                    max_tokens=max_tokens,
-                    response_format=response_format,
-                    tools=tools,
-                    depth=depth + 1,
-                ):
-                    yield event
+        if tool_calls and not has_response_schema_tool_call:
+            tool_call_messages = (
+                await self.tool_calls_handler.handle_tool_calls_anthropic(tool_calls)
+            )
+            new_messages = [
+                *messages,
+                AnthropicAssistantMessage(
+                    role="assistant",
+                    content=[each.model_dump() for each in tool_calls],
+                ),
+                AnthropicUserMessage(
+                    role="user",
+                    content=[each.model_dump() for each in tool_call_messages],
+                ),
+            ]
+            async for event in self._stream_anthropic_structured(
+                model=model,
+                messages=new_messages,
+                max_tokens=max_tokens,
+                response_format=response_format,
+                tools=tools,
+                depth=depth + 1,
+            ):
+                yield event
 
     def _stream_ollama_structured(
         self,
