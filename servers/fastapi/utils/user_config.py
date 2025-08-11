@@ -133,11 +133,11 @@ def update_env_with_user_config():
         set_pixabay_api_key_env(user_config.PIXABAY_API_KEY)
     if user_config.PEXELS_API_KEY:
         set_pexels_api_key_env(user_config.PEXELS_API_KEY)
-    if user_config.TOOL_CALLS:
+    if user_config.TOOL_CALLS is not None:
         set_tool_calls_env(str(user_config.TOOL_CALLS))
-    if user_config.DISABLE_THINKING:
+    if user_config.DISABLE_THINKING is not None:
         set_disable_thinking_env(str(user_config.DISABLE_THINKING))
-    if user_config.EXTENDED_REASONING:
+    if user_config.EXTENDED_REASONING is not None:
         set_extended_reasoning_env(str(user_config.EXTENDED_REASONING))
-    if user_config.WEB_GROUNDING:
+    if user_config.WEB_GROUNDING is not None:
         set_web_grounding_env(str(user_config.WEB_GROUNDING))
