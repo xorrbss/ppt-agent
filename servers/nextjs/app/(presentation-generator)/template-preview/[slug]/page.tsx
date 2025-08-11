@@ -1,7 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-// import { useGroupLayoutLoader } from '../hooks/useGroupLayoutLoader'
 import LoadingStates from "../components/LoadingStates";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,6 +13,7 @@ import "prismjs/components/prism-javascript";
 import "prismjs/components/prism-markup";
 import "prismjs/components/prism-jsx";
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { useFontLoader } from "../../hooks/useFontLoader";
 
 const GroupLayoutPreview = () => {
   const params = useParams();
@@ -35,22 +35,7 @@ const GroupLayoutPreview = () => {
   const [layoutsMap, setLayoutsMap] = useState<Record<string, { layout_id: string; layout_name: string; layout_code: string; fonts?: string[] }>>({});
   const [templateMeta, setTemplateMeta] = useState<{ name?: string; description?: string } | null>(null);
 
-  const injectFonts = (fontUrls: string[]) => {
-    fontUrls.forEach((fontUrl) => {
-      if (!fontUrl) return;
-      const existingStyle = document.querySelector(`style[data-font-url="${fontUrl}"]`);
-      if (existingStyle) return;
-      const fileName = fontUrl.split("/").pop() || "CustomFont";
-      const baseName = fileName.replace(/\.[a-zA-Z0-9]+$/, "");
-      const fontFamily = baseName.replace(/[^A-Za-z0-9_-]/g, "_");
-      const ext = (fileName.split(".").pop() || "ttf").toLowerCase();
-      const format = ext === "otf" ? "opentype" : ext === "woff" ? "woff" : ext === "woff2" ? "woff2" : "truetype";
-      const style = document.createElement("style");
-      style.setAttribute("data-font-url", fontUrl);
-      style.textContent = `@font-face { font-family: '${fontFamily}'; src: url('${fontUrl}') format('${format}'); font-display: swap; }`;
-      document.head.appendChild(style);
-    });
-  };
+ 
 
   useEffect(() => {
     const loadCustomLayouts = async () => {
@@ -74,7 +59,7 @@ const GroupLayoutPreview = () => {
           setTemplateMeta({ name: data.template.name, description: data.template.description });
         }
         if (Array.isArray(data?.fonts) && data.fonts.length) {
-          injectFonts(data.fonts);
+          useFontLoader(data.fonts);
         }
       } catch (e) {
         // noop
@@ -102,7 +87,7 @@ const GroupLayoutPreview = () => {
     Object.values(layoutsMap).forEach((entry) => {
       (entry.fonts || []).forEach((f) => allFonts.push(f));
     });
-    if (allFonts.length) injectFonts(allFonts);
+    if (allFonts.length) useFontLoader(allFonts);
   }, [layoutsMap, isCustom]);
 
   // Handle loading state
@@ -134,7 +119,7 @@ const GroupLayoutPreview = () => {
     setCurrentCode(entry.layout_code || "");
     setCurrentFonts(entry.fonts);
     // Make sure fonts for this layout are loaded before editing
-    injectFonts(entry.fonts || []);
+    useFontLoader(entry.fonts || []);
     setEditorOpen(true);
   };
 

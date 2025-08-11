@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import FontManager from "./components/FontManager";
 import Header from "../dashboard/components/Header";
 import { useLayout } from "../context/LayoutContext";
@@ -67,6 +67,18 @@ const CustomTemplatePage = () => {
       )
     );
   };
+ useEffect(() => {
+    const existingScript = document.querySelector(
+      'script[src*="tailwindcss.com"]'
+    );
+    if (!existingScript) {
+      const script = document.createElement("script");
+      script.src = "https://cdn.tailwindcss.com";
+      script.async = true;
+      document.head.appendChild(script);
+    }
+  }, []);
+
 
   // Loading state
   if (isRequiredKeyLoading) {

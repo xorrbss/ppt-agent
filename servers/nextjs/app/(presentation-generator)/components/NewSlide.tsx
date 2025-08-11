@@ -2,7 +2,6 @@ import React from "react";
 import { useDispatch } from "react-redux";
 import { addNewSlide } from "@/store/slices/presentationGeneration";
 import { Loader2 } from "lucide-react";
-// import { useGroupLayoutLoader } from '@/app/layout-preview/hooks/useGroupLayoutLoader';
 import { useLayout, FullDataInfo } from "../context/LayoutContext";
 import { v4 as uuidv4 } from "uuid";
 import { Trash2 } from 'lucide-react';

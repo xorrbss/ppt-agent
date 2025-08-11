@@ -9,17 +9,28 @@ import { AlertCircle } from "lucide-react";
 import { useGroupLayouts } from "../hooks/useGroupLayouts";
 import { setPresentationData } from "@/store/slices/presentationGeneration";
 import { DashboardApi } from "../services/api/dashboard";
+import { useLayout } from "../context/LayoutContext";
+import { useFontLoader } from "../hooks/useFontLoader";
 
 
 
 const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
   const { renderSlideContent, loading } = useGroupLayouts();
   const [contentLoading, setContentLoading] = useState(true);
+  const {getCustomTemplateFonts} = useLayout()
   const dispatch = useDispatch();
   const { presentationData } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
   const [error, setError] = useState(false);
+  useEffect(() => {
+    if(!loading && presentationData?.slides && presentationData?.slides.length > 0){  
+      const presentation_id = presentationData?.slides[0].layout.split(":")[0].split("custom-")[1];
+    const fonts = getCustomTemplateFonts(presentation_id);
+  
+    useFontLoader(fonts || []);
+  }
+  }, [presentationData,loading]);
   useEffect(() => {
     if (presentationData?.slides[0].layout.includes("custom")) {
       const existingScript = document.querySelector(
@@ -51,6 +62,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
       setContentLoading(false);
     }
   };
+  
   // Regular view
   return (
     <div className="flex overflow-hidden flex-col">
