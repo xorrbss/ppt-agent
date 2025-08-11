@@ -16,3 +16,4 @@ generated_models
 nltk
 chroma
 container.db
+.next-build

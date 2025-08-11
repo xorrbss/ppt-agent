@@ -171,7 +171,7 @@ export const LayoutProvider: React.FC<{
             const file = fileName.replace(".tsx", "").replace(".ts", "");
 
             const module = await import(
-              `@/presentation-layouts/${groupData.groupName}/${file}`
+              `@/presentation-templates/${groupData.groupName}/${file}`
             );
 
             if (!module.default) {
@@ -503,7 +503,7 @@ export const LayoutProvider: React.FC<{
     // Create and cache layout if not available
     const file = fileInfo.fileName.replace(".tsx", "").replace(".ts", "");
     const Layout = dynamic(
-      () => import(`@/presentation-layouts/${fileInfo.groupName}/${file}`),
+      () => import(`@/presentation-templates/${fileInfo.groupName}/${file}`),
       {
         loading: () => (
           <div className="w-full aspect-[16/9] bg-gray-100 animate-pulse rounded-lg" />

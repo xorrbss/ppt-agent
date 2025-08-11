@@ -233,7 +233,7 @@ export const useGroupLayoutLoader = (
         try {
           const layoutName = fileName.replace(".tsx", "").replace(".ts", "");
           const module = await import(
-            `@/presentation-layouts/${targetGroupData.groupName}/${layoutName}`
+            `@/presentation-templates/${targetGroupData.groupName}/${layoutName}`
           );
 
           if (!module.default) {
@@ -280,7 +280,7 @@ export const useGroupLayoutLoader = (
           try {
             const layoutName = fileName.replace(".tsx", "").replace(".ts", "");
             const module = await import(
-              `@/presentation-layouts/${targetGroupData.groupName}/${layoutName}`
+              `@/presentation-templates/${targetGroupData.groupName}/${layoutName}`
             );
 
             if (module.default && module.Schema) {
