@@ -5,10 +5,10 @@ import { GroupSetting } from '@/app/(presentation-generator)/template-preview/ty
 
 export async function GET() {
     try {
-        // Get the path to the presentation-layouts directory
-        const layoutsDirectory = path.join(process.cwd(), 'presentation-layouts')
+        // Get the path to the presentation-templates directory
+        const layoutsDirectory = path.join(process.cwd(), 'presentation-templates')
         
-        // Read all directories in the presentation-layouts directory
+        // Read all directories in the presentation-templates directory
         const items = await fs.readdir(layoutsDirectory, { withFileTypes: true })
         
         // Filter for directories (layout groups) and exclude files
@@ -67,9 +67,9 @@ export async function GET() {
         
         return NextResponse.json(allLayouts)
     } catch (error) {
-        console.error('Error reading presentation-layouts directory:', error)
+        console.error('Error reading presentation-templates directory:', error)
         return NextResponse.json(
-            { error: 'Failed to read presentation-layouts directory' },
+            { error: 'Failed to read presentation-templates directory' },
             { status: 500 }
         )
     }
