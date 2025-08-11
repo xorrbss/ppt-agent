@@ -35,7 +35,7 @@
 
 Presenton gives you complete control over your AI presentation workflow. Choose your models, customize your experience, and keep your data private.
 
-* ✅ **Custom Layouts & Themes** — Create unlimited presentation designs with HTML and Tailwind CSS
+* ✅ **Custom Templates & Themes** — Create unlimited presentation designs with HTML and Tailwind CSS
 * ✅ **Flexible Generation** — Build presentations from prompts or uploaded documents
 * ✅ **Export Ready** — Save as PowerPoint (PPTX) and PDF with professional formatting
 * ✅ **Bring Your Own Key** — Use your own API keys for OpenAI, Google Gemini, Anthropic Claude, or any compatible provider. Only pay for what you use, no hidden fees or subscriptions.
