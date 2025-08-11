@@ -89,9 +89,9 @@ class LLMToolCallsHandler:
 
     def parse_tool_google(self, tool: type[LLMTool] | LLMDynamicTool):
         parsed = self.parse_tool_openai(tool)
-        # parsed["function"]["parameters"] = flatten_json_schema(
-        #     parsed["function"]["parameters"]
-        # )
+        parsed["function"]["parameters"] = flatten_json_schema(
+            parsed["function"]["parameters"]
+        )
         return {
             "name": parsed["function"]["name"],
             "description": parsed["function"]["description"],
