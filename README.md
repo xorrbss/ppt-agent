@@ -161,7 +161,7 @@ Content-Type: `multipart/form-data`
 | prompt | string | Yes | The main topic or prompt for generating the presentation |
 | n_slides | integer | No | Number of slides to generate (default: 8, min: 5, max: 15) |
 | language | string | No | Language for the presentation (default: "English") |
-| template | string | No | Presentation theme (default: "general"). Available options: "classic", "general", "modern", "professional" + Custom templates |
+| template | string | No | Presentation template (default: "general"). Available options: "classic", "general", "modern", "professional" + Custom templates |
 | documents | File[] | No | Optional list of document files to include in the presentation. Supported file types: PDF, TXT, PPTX, DOCX |
 | export_as | string | No | Export format ("pptx" or "pdf", default: "pptx") |
 
