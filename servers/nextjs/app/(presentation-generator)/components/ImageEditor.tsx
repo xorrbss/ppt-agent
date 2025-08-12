@@ -15,6 +15,7 @@ import { PresentationGenerationApi } from "../services/api/presentation-generati
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { PreviousGeneratedImagesResponse } from "../services/api/params";
+import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 interface ImageEditorProps {
   initialImage: string | null;
   imageIdx?: number;
@@ -90,6 +91,7 @@ const ImageEditor = ({
 
   const getPreviousGeneratedImage = async () => {
     try {
+      trackEvent(MixpanelEvent.ImageEditor_GetPreviousGeneratedImages_API_Call);
       const response =
         await PresentationGenerationApi.getPreviousGeneratedImages();
       setPreviousGeneratedImages(response);
@@ -187,6 +189,7 @@ const ImageEditor = ({
     try {
       setIsGenerating(true);
       setError(null);
+      trackEvent(MixpanelEvent.ImageEditor_GenerateImage_API_Call);
       const response = await PresentationGenerationApi.generateImage({
         prompt: prompt,
       });
@@ -228,6 +231,7 @@ const ImageEditor = ({
       const formData = new FormData();
       formData.append("file", file);
 
+      trackEvent(MixpanelEvent.ImageEditor_UploadImage_API_Call);
       const response = await fetch("/api/upload-image", {
         method: "POST",
         body: formData,

@@ -9,10 +9,11 @@ import {
   checkIfSelectedOllamaModelIsPulled,
   pullOllamaModel,
 } from "@/utils/providerUtils";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import LLMProviderSelection from "@/components/LLMSelection";
 import Header from "../dashboard/components/Header";
 import { LLMConfig } from "@/types/llm_config";
+import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 
 // Button state interface
 interface ButtonState {
@@ -26,6 +27,8 @@ interface ButtonState {
 
 const SettingsPage = () => {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const userConfigState = useSelector((state: RootState) => state.userConfig);
   const [llmConfig, setLlmConfig] = useState<LLMConfig>(
     userConfigState.llm_config
@@ -61,6 +64,8 @@ const SettingsPage = () => {
   }, [downloadingModel?.downloaded, downloadingModel?.size]);
 
   const handleSaveConfig = async () => {
+    const query = searchParams?.toString();
+    trackEvent(MixpanelEvent.Settings_SaveConfiguration_Button_Clicked, { pathname, query });
     try {
       setButtonState(prev => ({
         ...prev,
@@ -68,13 +73,16 @@ const SettingsPage = () => {
         isDisabled: true,
         text: "Saving Configuration...",
       }));
+      trackEvent(MixpanelEvent.Settings_SaveConfiguration_API_Call);
       await handleSaveLLMConfig(llmConfig);
       if (llmConfig.LLM === "ollama" && llmConfig.OLLAMA_MODEL) {
+        trackEvent(MixpanelEvent.Settings_CheckOllamaModelPulled_API_Call);
         const isPulled = await checkIfSelectedOllamaModelIsPulled(
           llmConfig.OLLAMA_MODEL
         );
         if (!isPulled) {
           setShowDownloadModal(true);
+          trackEvent(MixpanelEvent.Settings_DownloadOllamaModel_API_Call);
           await handleModelDownload();
         }
       }
@@ -85,6 +93,7 @@ const SettingsPage = () => {
         isDisabled: false,
         text: "Save Configuration",
       }));
+      trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/upload" });
       router.push("/upload");
     } catch (error) {
       toast.info(error instanceof Error ? error.message : "Failed to save configuration");

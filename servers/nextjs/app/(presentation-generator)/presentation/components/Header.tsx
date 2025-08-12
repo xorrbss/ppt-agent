@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import React, { useState } from "react";
 import Wrapper from "@/components/Wrapper";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   Popover,
   PopoverContent,
@@ -29,6 +29,7 @@ import HeaderNav from "../../components/HeaderNab";
 import PDFIMAGE from "@/public/pdf.svg";
 import PPTXIMAGE from "@/public/pptx.svg";
 import Image from "next/image";
+import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 
 const Header = ({
   presentation_id,
@@ -40,6 +41,8 @@ const Header = ({
   const [open, setOpen] = useState(false);
   const [showLoader, setShowLoader] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
 
   const { presentationData, isStreaming } = useSelector(
@@ -59,13 +62,16 @@ const Header = ({
       setOpen(false);
       setShowLoader(true);
       // Save the presentation data before exporting
+      trackEvent(MixpanelEvent.Header_UpdatePresentationContent_API_Call);
       await PresentationGenerationApi.updatePresentationContent(presentationData);
 
 
+      trackEvent(MixpanelEvent.Header_GetPptxModel_API_Call);
       const pptx_model = await get_presentation_pptx_model(presentation_id);
       if (!pptx_model) {
         throw new Error("Failed to get presentation PPTX model");
       }
+      trackEvent(MixpanelEvent.Header_ExportAsPPTX_API_Call);
       const pptx_path = await PresentationGenerationApi.exportAsPPTX(pptx_model);
       if (pptx_path) {
         // window.open(pptx_path, '_self');
@@ -92,8 +98,10 @@ const Header = ({
       setOpen(false);
       setShowLoader(true);
       // Save the presentation data before exporting
+      trackEvent(MixpanelEvent.Header_UpdatePresentationContent_API_Call);
       await PresentationGenerationApi.updatePresentationContent(presentationData);
 
+      trackEvent(MixpanelEvent.Header_ExportAsPDF_API_Call);
       const response = await fetch('/api/export-as-pdf', {
         method: 'POST',
         body: JSON.stringify({
@@ -136,14 +144,22 @@ const Header = ({
   const ExportOptions = ({ mobile }: { mobile: boolean }) => (
     <div className={`space-y-2 max-md:mt-4 ${mobile ? "" : "bg-white"} rounded-lg`}>
       <Button
-        onClick={handleExportPdf}
+        onClick={() => {
+          const query = searchParams?.toString();
+          trackEvent(MixpanelEvent.Header_Export_PDF_Button_Clicked, { pathname, query });
+          handleExportPdf();
+        }}
         variant="ghost"
         className={`pb-4 border-b rounded-none border-gray-300 w-full flex justify-start text-[#5146E5] ${mobile ? "bg-white py-6 border-none rounded-lg" : ""}`} >
         <Image src={PDFIMAGE} alt="pdf export" width={30} height={30} />
         Export as PDF
       </Button>
       <Button
-        onClick={handleExportPptx}
+        onClick={() => {
+          const query = searchParams?.toString();
+          trackEvent(MixpanelEvent.Header_Export_PPTX_Button_Clicked, { pathname, query });
+          handleExportPptx();
+        }}
         variant="ghost"
         className={`w-full flex justify-start text-[#5146E5] ${mobile ? "bg-white py-6" : ""}`}
       >
@@ -159,7 +175,11 @@ const Header = ({
     <div className="flex flex-col lg:flex-row items-center gap-4">
       {/* Present Button */}
       <Button
-        onClick={() => router.push(`?id=${presentation_id}&mode=present&slide=${currentSlide || 0}`)}
+        onClick={() => {
+          const to = `?id=${presentation_id}&mode=present&slide=${currentSlide || 0}`;
+          trackEvent(MixpanelEvent.Navigation, { from: pathname, to });
+          router.push(to);
+        }}
         variant="ghost"
         className="border border-white font-bold text-white rounded-[32px] transition-all duration-300 group"
       >

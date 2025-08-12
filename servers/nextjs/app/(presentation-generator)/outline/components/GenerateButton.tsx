@@ -1,4 +1,6 @@
 import React from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { Button } from "@/components/ui/button";
 import { LoadingState, LayoutGroup } from "../types/index";
 
@@ -15,6 +17,9 @@ const GenerateButton: React.FC<GenerateButtonProps> = ({
     selectedLayoutGroup,
     onSubmit
 }) => {
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
+
     const isDisabled =
         loadingState.isLoading ||
         streamState.isLoading ||
@@ -30,7 +35,11 @@ const GenerateButton: React.FC<GenerateButtonProps> = ({
     return (
         <Button
             disabled={isDisabled}
-            onClick={onSubmit}
+            onClick={() => {
+                const query = searchParams?.toString();
+                trackEvent(MixpanelEvent.Generate_Presentation_Button_Clicked, { pathname, query });
+                onSubmit();
+            }}
             className="bg-[#5146E5] w-full rounded-lg text-base sm:text-lg py-4 sm:py-6 font-instrument_sans font-semibold hover:bg-[#5146E5]/80 text-white disabled:opacity-50 disabled:cursor-not-allowed"
         >
             <svg
