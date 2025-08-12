@@ -46,7 +46,6 @@ Presenton gives you complete control over your AI presentation workflow. Choose 
 * ✅ **Versatile Image Generation** — Choose from DALL-E 3, Gemini Flash, Pexels, or Pixabay
 * ✅ **Rich Media Support** — Icons, charts, and custom graphics for professional presentations
 * ✅ **Runs Locally** — All processing happens on your device, no cloud dependencies
-* ✅ **Privacy-First** — Zero tracking, no data stored by us, complete data sovereignty
 * ✅ **API Deployment** — Host as your own API service for your team
 * ✅ **Fully Open-Source** — Apache 2.0 licensed, inspect, modify, and contribute
 * ✅ **Docker Ready** — One-command deployment with GPU support for local models
@@ -102,6 +101,10 @@ You can also set the following environment variables to customize the image gene
 - **PIXABAY_API_KEY=[Your Pixabay API Key]**: Required if using **pixabay** as the image provider.
 - **GOOGLE_API_KEY=[Your Google API Key]**: Required if using **gemini_flash** as the image provider.
 - **OPENAI_API_KEY=[Your OpenAI API Key]**: Required if using **dall-e-3** as the image provider.
+
+You can disable anonymous tracking using the following environment variable:
+- **DISABLE_ANONYMOUS_TRACKING=[true/false]**: Set this to **true** to disable anonymous usage tracking.
+
 
 > **Note:** You can freely choose both the LLM (text generation) and the image provider. Supported image providers: **pexels**, **pixabay**, **gemini_flash** (Google), and **dall-e-3** (OpenAI).
 
