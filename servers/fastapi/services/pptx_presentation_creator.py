@@ -1,6 +1,9 @@
 import os
 from typing import List, Optional
 from lxml import etree
+from services.html_to_text_runs_service import (
+    parse_html_text_to_text_runs as parse_inline_html_to_runs,
+)
 
 from pptx import Presentation
 from pptx.shapes.autoshape import Shape
@@ -276,7 +279,7 @@ class PptxPresentationCreator:
 
         text_runs = []
         if paragraph_model.text:
-            text_runs = self.parse_markdown_text_to_text_runs(
+            text_runs = self.parse_html_text_to_text_runs(
                 paragraph_model.font, paragraph_model.text
             )
         elif paragraph_model.text_runs:
@@ -286,78 +289,8 @@ class PptxPresentationCreator:
             text_run = paragraph.add_run()
             self.populate_text_run(text_run, text_run_model)
 
-    def parse_markdown_text_to_text_runs(self, font: PptxFontModel, text: str):
-        text_runs = []
-        for line in text.split("\n"):
-            current_pos = 0
-            while current_pos < len(line):
-                # Check for bold and italic (***text***)
-                if (
-                    line[current_pos:].startswith("***")
-                    and "***" in line[current_pos + 3 :]
-                ):
-                    end_pos = line.find("***", current_pos + 3)
-                    text_content = line[current_pos + 3 : end_pos]
-                    font_json = font.model_dump()
-                    font_json["bold"] = True
-                    font_json["italic"] = True
-                    font_json["font_weight"] = 700  # Set font weight to bold
-                    text_runs.append(
-                        PptxTextRunModel(
-                            text=text_content, font=PptxFontModel(**font_json)
-                        )
-                    )
-                    current_pos = end_pos + 3
-                # Check for bold (**text**)
-                elif (
-                    line[current_pos:].startswith("**")
-                    and "**" in line[current_pos + 2 :]
-                ):
-                    end_pos = line.find("**", current_pos + 2)
-                    text_content = line[current_pos + 2 : end_pos]
-                    font_json = font.model_dump()
-                    font_json["bold"] = True
-                    font_json["font_weight"] = 700  # Set font weight to bold
-                    text_runs.append(
-                        PptxTextRunModel(
-                            text=text_content, font=PptxFontModel(**font_json)
-                        )
-                    )
-                    current_pos = end_pos + 2
-                # Check for italic (*text*)
-                elif (
-                    line[current_pos:].startswith("__")
-                    and "__" in line[current_pos + 2 :]
-                ):
-                    end_pos = line.find("__", current_pos + 2)
-                    text_content = line[current_pos + 2 : end_pos]
-                    font_json = font.model_dump()
-                    font_json["italic"] = True
-                    text_runs.append(
-                        PptxTextRunModel(
-                            text=text_content, font=PptxFontModel(**font_json)
-                        )
-                    )
-                    current_pos = end_pos + 2
-                else:
-                    # Find the next formatting marker or end of line
-                    next_marker = float("inf")
-                    for marker in ["***", "**", "__"]:
-                        pos = line.find(marker, current_pos)
-                        if pos != -1:
-                            next_marker = min(next_marker, pos)
-
-                    end_pos = next_marker if next_marker != float("inf") else len(line)
-                    text_content = line[current_pos:end_pos]
-                    if text_content:  # Only add non-empty text
-                        text_runs.append(PptxTextRunModel(text=text_content, font=font))
-                    current_pos = end_pos
-
-            # Add newline if not the last line
-            if line != text.split("\n")[-1]:
-                text_runs.append(PptxTextRunModel(text="\n"))
-
-        return text_runs
+    def parse_html_text_to_text_runs(self, font: Optional[PptxFontModel], text: str):
+        return parse_inline_html_to_runs(text, font)
 
     def populate_text_run(self, text_run: _Run, text_run_model: PptxTextRunModel):
         text_run.text = text_run_model.text
@@ -527,6 +460,20 @@ class PptxPresentationCreator:
         font.italic = font_model.italic
         font.size = Pt(font_model.size)
         font.bold = font_model.font_weight >= 600
+        if font_model.underline is not None:
+            font.underline = bool(font_model.underline)
+        if font_model.strike is not None:
+            self.apply_strike_to_font(font, font_model.strike)
+
+    def apply_strike_to_font(self, font: Font, strike: Optional[bool]):
+        try:
+            rPr = font._element
+            if strike is True:
+                rPr.set("strike", "sngStrike")
+            elif strike is False:
+                rPr.set("strike", "noStrike")
+        except Exception as e:
+            print(f"Could not apply strikethrough: {e}")
 
     def save(self, path: str):
         self._ppt.save(path)
