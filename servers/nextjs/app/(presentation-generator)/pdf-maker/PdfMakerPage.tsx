@@ -115,7 +115,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
                   presentationData.slides &&
                   presentationData.slides.length > 0 &&
                   presentationData.slides.map((slide: any, index: number) => (
-                    <div key={index} className="w-full">
+                    <div key={index} className="w-full" data-speaker-note={slide.speaker_note}>
                       {renderSlideContent(slide, true)}
                     </div>
                   ))}

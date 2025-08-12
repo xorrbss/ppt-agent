@@ -61,7 +61,8 @@ export function convertElementAttributesToPptxSlides(
     }).filter(Boolean);
 
     const slide: PptxSlideModel = {
-      shapes: shapes as (PptxTextBoxModel | PptxAutoShapeBoxModel | PptxConnectorModel | PptxPictureBoxModel)[]
+      shapes: shapes as (PptxTextBoxModel | PptxAutoShapeBoxModel | PptxConnectorModel | PptxPictureBoxModel)[],
+      note: slideAttributes.speakerNote
     };
 
     if (slideAttributes.backgroundColor) {

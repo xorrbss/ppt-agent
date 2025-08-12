@@ -147,6 +147,9 @@ class PptxPresentationCreator:
         if slide_model.background:
             self.apply_fill_to_shape(slide.background, slide_model.background)
 
+        if slide_model.note:
+            slide.notes_slide.notes_text_frame.text = slide_model.note
+
         for shape_model in slide_model.shapes:
             model_type = type(shape_model)
 

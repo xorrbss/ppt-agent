@@ -12,6 +12,7 @@ class SlideModel(SQLModel, table=True):
     index: int
     content: dict = Field(sa_column=Column(JSON))
     html_content: Optional[str]
+    speaker_note: str
     properties: Optional[dict] = Field(sa_column=Column(JSON))
 
     def get_new_slide(self, presentation_id: str, content: Optional[dict] = None):
@@ -21,6 +22,7 @@ class SlideModel(SQLModel, table=True):
             layout_group=self.layout_group,
             layout=self.layout,
             index=self.index,
+            speaker_note=self.speaker_note,
             content=content or self.content,
             properties=self.properties,
         )
