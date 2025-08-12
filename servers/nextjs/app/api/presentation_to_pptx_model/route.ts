@@ -261,8 +261,27 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
       };
     }
 
+    // Ignore elements with no size (width or height)
     if (attributes.position === undefined || attributes.position.width === undefined || attributes.position.height === undefined || attributes.position.width === 0 || attributes.position.height === 0) {
       continue;
+    }
+
+    // If element is paragraph and contains only inline formatting tags, don't go deeper
+    if (attributes.tagName === 'p') {
+      const innerElementTagNames = await childElementHandle.evaluate((el) => {
+        return Array.from(el.querySelectorAll('*')).map((e) => e.tagName.toLowerCase());
+      });
+
+      const allowedInlineTags = new Set(['strong', 'u', 'em', 'code', 's']);
+      const hasOnlyAllowedInlineTags = innerElementTagNames.every((tag) => allowedInlineTags.has(tag));
+
+      if (innerElementTagNames.length > 0 && hasOnlyAllowedInlineTags) {
+        attributes.innerText = await childElementHandle.evaluate((el) => {
+          return el.innerHTML;
+        });
+        allResults.push({ attributes, depth });
+        continue;
+      }
     }
 
     if (attributes.tagName === 'svg' || attributes.tagName === 'canvas' || attributes.tagName === 'table') {
@@ -272,11 +291,10 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
 
     allResults.push({ attributes, depth });
 
-    //? If the element is a canvas, or table, we don't need to go deeper
+    // If the element is a canvas, or table, we don't need to go deeper
     if (attributes.should_screenshot && attributes.tagName !== 'svg') {
       continue;
     }
-
 
     const childResults = await getAllChildElementsAttributes({
       element: childElementHandle,
