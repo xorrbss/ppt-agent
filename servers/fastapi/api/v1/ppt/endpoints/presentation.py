@@ -221,6 +221,7 @@ async def stream_presentation(
                 layout_group=layout.name,
                 layout=slide_layout.id,
                 index=i,
+                speaker_note=slide_content.get("__speaker_note__", ""),
                 content=slide_content,
             )
             slides.append(slide)

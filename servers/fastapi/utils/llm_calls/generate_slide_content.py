@@ -3,7 +3,7 @@ from models.presentation_layout import SlideLayoutModel
 from models.presentation_outline_model import SlideOutlineModel
 from services.llm_client import LLMClient
 from utils.llm_provider import get_model
-from utils.schema_utils import remove_fields_from_schema
+from utils.schema_utils import add_field_in_schema, remove_fields_from_schema
 
 system_prompt = """
     Generate structured slide based on provided outline, follow mentioned steps and notes and provide structured output.
@@ -11,6 +11,7 @@ system_prompt = """
     # Steps
     1. Analyze the outline.
     2. Generate structured slide based on the outline.
+    3. Generate speaker note that is simple, clear, concise and to the point.
 
     # Notes
     - Slide body should not use words like "This slide", "This presentation".
@@ -19,6 +20,7 @@ system_prompt = """
     - Provide query to search icon on "__icon_query__" property.
     - Only use markdown to highlight important points.
     - Make sure to follow language guidelines.
+    - Speaker note should be normal text, not markdown.
     **Strictly follow the max and min character limit for every property in the slide.**
 """
 
@@ -56,6 +58,18 @@ async def get_slide_content_from_type_and_outline(
 
     response_schema = remove_fields_from_schema(
         slide_layout.json_schema, ["__image_url__", "__icon_url__"]
+    )
+    response_schema = add_field_in_schema(
+        response_schema,
+        {
+            "__speaker_note__": {
+                "type": "string",
+                "minLength": 100,
+                "maxLength": 250,
+                "description": "Speaker note for the slide",
+            }
+        },
+        True,
     )
 
     response = await client.generate_structured(
