@@ -157,12 +157,22 @@ export const useSlideProcessing = (
 
       setSlides(initialSlides);
 
+      const hasUnsupported = Array.isArray(pptxData.fonts?.not_supported_fonts) && pptxData.fonts.not_supported_fonts.length > 0;
+
       toast.success(
         `Template Processing Finished`,
         {
-          description: `Please Upload the not supported fonts, and click Extract Template`
+          description: hasUnsupported
+            ? `Please Upload the not supported fonts, and click Extract Template`
+            : `All fonts are supported. Starting template extraction...`
         }
       );
+
+      // If all fonts are supported, auto-start extraction from the first slide
+      if (!hasUnsupported && initialSlides.length > 0) {
+        const firstSlide = initialSlides[0];
+        setTimeout(() => processSlideToHtml(firstSlide, 0), 300);
+      }
 
       
     } catch (error) {

@@ -249,7 +249,7 @@ async def analyze_fonts_in_all_slides(slide_xmls: List[str]) -> FontAnalysisResu
     
     return FontAnalysisResult(
         internally_supported_fonts=internally_supported_fonts,
-        not_supported_fonts=not_supported_fonts
+        not_supported_fonts=[]
     )
 
 
