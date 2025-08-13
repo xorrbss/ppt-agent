@@ -9,7 +9,7 @@ import {
   checkIfSelectedOllamaModelIsPulled,
   pullOllamaModel,
 } from "@/utils/providerUtils";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import LLMProviderSelection from "@/components/LLMSelection";
 import Header from "../dashboard/components/Header";
 import { LLMConfig } from "@/types/llm_config";
@@ -28,7 +28,6 @@ interface ButtonState {
 const SettingsPage = () => {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const userConfigState = useSelector((state: RootState) => state.userConfig);
   const [llmConfig, setLlmConfig] = useState<LLMConfig>(
     userConfigState.llm_config
@@ -64,8 +63,7 @@ const SettingsPage = () => {
   }, [downloadingModel?.downloaded, downloadingModel?.size]);
 
   const handleSaveConfig = async () => {
-    const query = searchParams?.toString();
-    trackEvent(MixpanelEvent.Settings_SaveConfiguration_Button_Clicked, { pathname, query });
+    trackEvent(MixpanelEvent.Settings_SaveConfiguration_Button_Clicked, { pathname });
     try {
       setButtonState(prev => ({
         ...prev,

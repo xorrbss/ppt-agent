@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import React, { useState } from "react";
 import Wrapper from "@/components/Wrapper";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import {
   Popover,
   PopoverContent,
@@ -42,7 +42,6 @@ const Header = ({
   const [showLoader, setShowLoader] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
 
 
   const { presentationData, isStreaming } = useSelector(
@@ -145,8 +144,7 @@ const Header = ({
     <div className={`space-y-2 max-md:mt-4 ${mobile ? "" : "bg-white"} rounded-lg`}>
       <Button
         onClick={() => {
-          const query = searchParams?.toString();
-          trackEvent(MixpanelEvent.Header_Export_PDF_Button_Clicked, { pathname, query });
+          trackEvent(MixpanelEvent.Header_Export_PDF_Button_Clicked, { pathname });
           handleExportPdf();
         }}
         variant="ghost"
@@ -156,8 +154,7 @@ const Header = ({
       </Button>
       <Button
         onClick={() => {
-          const query = searchParams?.toString();
-          trackEvent(MixpanelEvent.Header_Export_PPTX_Button_Clicked, { pathname, query });
+          trackEvent(MixpanelEvent.Header_Export_PPTX_Button_Clicked, { pathname });
           handleExportPptx();
         }}
         variant="ghost"

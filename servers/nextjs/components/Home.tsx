@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Download, CheckCircle, X } from "lucide-react";
+import { Loader2, Download, CheckCircle } from "lucide-react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import { handleSaveLLMConfig } from "@/utils/storeHelpers";
@@ -13,7 +13,7 @@ import {
 } from "@/utils/providerUtils";
 import { LLMConfig } from "@/types/llm_config";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 // Button state interface
 interface ButtonState {
@@ -28,7 +28,6 @@ interface ButtonState {
 export default function Home() {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const config = useSelector((state: RootState) => state.userConfig);
   const [llmConfig, setLlmConfig] = useState<LLMConfig>(config.llm_config);
 
@@ -56,9 +55,7 @@ export default function Home() {
   }, [downloadingModel?.downloaded, downloadingModel?.size]);
 
   const handleSaveConfig = async () => {
-    // Track button click with pathname and searchParams
-    const query = searchParams?.toString();
-    trackEvent(MixpanelEvent.Home_SaveConfiguration_Button_Clicked, { pathname, query });
+    trackEvent(MixpanelEvent.Home_SaveConfiguration_Button_Clicked, { pathname });
     try {
       setButtonState(prev => ({
         ...prev,

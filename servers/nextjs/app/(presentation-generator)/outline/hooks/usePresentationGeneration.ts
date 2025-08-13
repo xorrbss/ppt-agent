@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { clearPresentationData } from "@/store/slices/presentationGeneration";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import { LayoutGroup, LoadingState, TABS } from "../types/index";
+import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
 
 const DEFAULT_LOADING_STATE: LoadingState = {
   message: "",
@@ -37,7 +38,7 @@ export const usePresentationGeneration = (
       });
       return false;
     }
-    if(!selectedLayoutGroup.slides.length){
+    if (!selectedLayoutGroup.slides.length) {
       toast.error("No Slide Schema found", {
         description: "Please select a Group before generating presentation",
       });
@@ -63,7 +64,7 @@ export const usePresentationGeneration = (
     }
     if (!validateInputs()) return;
 
-    
+
 
     setLoadingState({
       message: "Generating presentation data...",
@@ -74,8 +75,9 @@ export const usePresentationGeneration = (
 
     try {
       const layoutData = prepareLayoutData();
- 
+
       if (!layoutData) return;
+      trackEvent(MixpanelEvent.Presentation_Prepare_API_Call);
       const response = await PresentationGenerationApi.presentationPrepare({
         presentation_id: presentationId,
         outlines: outlines,
@@ -84,7 +86,7 @@ export const usePresentationGeneration = (
 
       if (response) {
         dispatch(clearPresentationData());
-          router.replace(`/presentation?id=${presentationId}&stream=true`);
+        router.replace(`/presentation?id=${presentationId}&stream=true`);
       }
     } catch (error: any) {
       console.error('Error In Presentation Generation(prepare).', error);

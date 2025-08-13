@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { useParams, useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useParams, useRouter, usePathname } from "next/navigation";
 import LoadingStates from "../components/LoadingStates";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,6 @@ const GroupLayoutPreview = () => {
   const router = useRouter();
   const slug = params.slug as string;
   const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   const { getFullDataByGroup, loading, refetch } = useLayout();
   const layoutGroup = getFullDataByGroup(slug);
@@ -181,8 +180,7 @@ const GroupLayoutPreview = () => {
               variant="outline"
               size="sm"
               onClick={() => {
-                const query = searchParams?.toString?.() as string | undefined;
-                trackEvent(MixpanelEvent.TemplatePreview_Back_Button_Clicked, { pathname, query });
+                trackEvent(MixpanelEvent.TemplatePreview_Back_Button_Clicked, { pathname });
                 router.back();
               }}
               className="flex items-center gap-2"
@@ -194,8 +192,7 @@ const GroupLayoutPreview = () => {
               variant="outline"
               size="sm"
               onClick={() => {
-                const query = searchParams?.toString?.() as string | undefined;
-                trackEvent(MixpanelEvent.TemplatePreview_All_Groups_Button_Clicked, { pathname, query });
+                trackEvent(MixpanelEvent.TemplatePreview_All_Groups_Button_Clicked, { pathname });
                 router.push("/template-preview");
               }}
               className="flex items-center gap-2"
@@ -204,8 +201,7 @@ const GroupLayoutPreview = () => {
               All Groups
             </Button>
              {slug.includes('custom-') && <button className=" border border-red-200 flex justify-center items-center gap-2 text-red-700 px-4 py-1 rounded-md" onClick={() => {
-            const query = searchParams?.toString?.() as string | undefined;
-            trackEvent(MixpanelEvent.TemplatePreview_Delete_Templates_Button_Clicked, { pathname, query });
+            trackEvent(MixpanelEvent.TemplatePreview_Delete_Templates_Button_Clicked, { pathname });
             trackEvent(MixpanelEvent.TemplatePreview_Delete_Templates_API_Call);
             deleteLayouts();
           }}><Trash2 className="w-4 h-4" />Delete</button>}
@@ -265,8 +261,7 @@ const GroupLayoutPreview = () => {
                           size="sm"
                           className="flex items-center gap-2 bg-blue-50 border border-blue-400 text-blue-700"
                           onClick={() => {
-                            const query = searchParams?.toString?.() as string | undefined;
-                            trackEvent(MixpanelEvent.TemplatePreview_Open_Editor_Button_Clicked, { pathname, query });
+                            trackEvent(MixpanelEvent.TemplatePreview_Open_Editor_Button_Clicked, { pathname });
                             openEditor(fileName);
                           }}
                           disabled={!layoutsMap[fileName]}

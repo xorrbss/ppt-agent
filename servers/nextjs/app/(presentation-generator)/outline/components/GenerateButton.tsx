@@ -1,5 +1,5 @@
 import React from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { Button } from "@/components/ui/button";
 import { LoadingState, LayoutGroup } from "../types/index";
@@ -18,7 +18,6 @@ const GenerateButton: React.FC<GenerateButtonProps> = ({
     onSubmit
 }) => {
     const pathname = usePathname();
-    const searchParams = useSearchParams();
 
     const isDisabled =
         loadingState.isLoading ||
@@ -36,8 +35,13 @@ const GenerateButton: React.FC<GenerateButtonProps> = ({
         <Button
             disabled={isDisabled}
             onClick={() => {
-                const query = searchParams?.toString();
-                trackEvent(MixpanelEvent.Generate_Presentation_Button_Clicked, { pathname, query });
+                if (!streamState.isLoading && !streamState.isStreaming) {
+                    if (!selectedLayoutGroup) {
+                        trackEvent(MixpanelEvent.Outline_Select_Template_Button_Clicked, { pathname });
+                    } else {
+                        trackEvent(MixpanelEvent.Outline_Generate_Presentation_Button_Clicked, { pathname });
+                    }
+                }
                 onSubmit();
             }}
             className="bg-[#5146E5] w-full rounded-lg text-base sm:text-lg py-4 sm:py-6 font-instrument_sans font-semibold hover:bg-[#5146E5]/80 text-white disabled:opacity-50 disabled:cursor-not-allowed"

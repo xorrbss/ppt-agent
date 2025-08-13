@@ -8,7 +8,7 @@ import SidePanel from "./SidePanel";
 import SlideContent from "./SlideContent";
 import Header from "./Header";
 import { Button } from "@/components/ui/button";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { AlertCircle, Loader2 } from "lucide-react";
 import Help from "./Help";
@@ -26,7 +26,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   presentation_id,
 }) => {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   // State management
   const [loading, setLoading] = useState(true);
   const [selectedSlide, setSelectedSlide] = useState(0);
@@ -114,7 +113,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
           <p className="text-center mb-4">
             We couldn't load your presentation. Please try again.
           </p>
-          <Button onClick={() => { const query = searchParams?.toString(); trackEvent(MixpanelEvent.PresentationPage_Refresh_Page_Button_Clicked, { pathname, query }); window.location.reload(); }}>Refresh Page</Button>
+          <Button onClick={() => { trackEvent(MixpanelEvent.PresentationPage_Refresh_Page_Button_Clicked, { pathname }); window.location.reload(); }}>Refresh Page</Button>
         </div>
       </div>
     );
