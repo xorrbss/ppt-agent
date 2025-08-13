@@ -11,7 +11,7 @@
 
 "use client";
 import React, { useState } from "react";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useDispatch } from "react-redux";
 import { clearOutlines, setPresentationId } from "@/store/slices/presentationGeneration";
 import { ConfigurationSelects } from "./ConfigurationSelects";
@@ -39,7 +39,6 @@ interface LoadingState {
 const UploadPage = () => {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const dispatch = useDispatch();
 
   // State management

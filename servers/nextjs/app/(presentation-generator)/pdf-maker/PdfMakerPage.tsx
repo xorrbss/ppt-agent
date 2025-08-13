@@ -5,7 +5,7 @@ import { RootState } from "@/store/store";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { AlertCircle } from "lucide-react";
 import { useGroupLayouts } from "../hooks/useGroupLayouts";
@@ -19,7 +19,6 @@ import { useFontLoader } from "../hooks/useFontLoader";
 const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
   const { renderSlideContent, loading } = useGroupLayouts();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [contentLoading, setContentLoading] = useState(true);
   const { getCustomTemplateFonts } = useLayout()
   const dispatch = useDispatch();
@@ -87,7 +86,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
             <Button
               className="mt-4 bg-red-500 text-white hover:bg-red-600 focus:ring-4 focus:ring-red-300"
               onClick={() => {
-                trackEvent(MixpanelEvent.PdfMaker_Retry_Button_Clicked, { pathname, query: searchParams?.toString() });
+                trackEvent(MixpanelEvent.PdfMaker_Retry_Button_Clicked, { pathname });
                 window.location.reload();
               }}
             >
