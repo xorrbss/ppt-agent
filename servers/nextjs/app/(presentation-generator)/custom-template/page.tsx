@@ -82,7 +82,6 @@ const CustomTemplatePage = () => {
     }
   }, []);
 
-
   // Loading state
   if (isRequiredKeyLoading) {
     return <LoadingSpinner message="Checking API Key..." />;
