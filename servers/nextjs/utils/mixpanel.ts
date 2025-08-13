@@ -57,7 +57,7 @@ export type MixpanelProps = Record<string, unknown>;
 declare global {
   interface Window {
     __mixpanel_initialized?: boolean;
-    __mixpanel_tracking_enabled?: boolean;
+    __mixpanel_telemetry_enabled?: boolean;
   }
 }
 
@@ -67,28 +67,28 @@ function canUseMixpanel(): boolean {
 
 let trackingCheckPromise: Promise<boolean> | null = null;
 
-async function ensureTrackingStatus(): Promise<boolean> {
+async function ensureTelemetryStatus(): Promise<boolean> {
   if (typeof window === 'undefined') return false;
-  if (typeof window.__mixpanel_tracking_enabled === 'boolean') {
-    return window.__mixpanel_tracking_enabled;
+  if (typeof window.__mixpanel_telemetry_enabled === 'boolean') {
+    return window.__mixpanel_telemetry_enabled;
   }
   if (!trackingCheckPromise) {
-    trackingCheckPromise = fetch('/api/tracking-status')
+    trackingCheckPromise = fetch('/api/telemetry-status')
       .then(async (res) => {
         try {
           const data = await res.json();
-          const enabled = Boolean(data?.trackingEnabled);
-          window.__mixpanel_tracking_enabled = enabled;
+          const enabled = Boolean(data?.telemetryEnabled);
+          window.__mixpanel_telemetry_enabled = enabled;
           return enabled;
         } catch {
           // If the API response is malformed, default to enabling tracking
-          window.__mixpanel_tracking_enabled = true;
+          window.__mixpanel_telemetry_enabled = true;
           return true;
         }
       })
       .catch(() => {
         // If the API call fails, default to enabling tracking
-        window.__mixpanel_tracking_enabled = true;
+        window.__mixpanel_telemetry_enabled = true;
         return true;
       });
   }
@@ -98,8 +98,8 @@ async function ensureTrackingStatus(): Promise<boolean> {
 export function initMixpanel(): void {
   if (!canUseMixpanel()) return;
   if (window.__mixpanel_initialized) return;
-  // Ensure tracking is allowed before initializing
-  void ensureTrackingStatus().then((enabled) => {
+  // Ensure telemetry is allowed before initializing
+  void ensureTelemetryStatus().then((enabled) => {
     if (!enabled) return;
     if (window.__mixpanel_initialized) return;
     mixpanel.init(MIXPANEL_TOKEN as string, { track_pageview: false });
@@ -110,7 +110,7 @@ export function initMixpanel(): void {
 
 export function track(eventName: string, props?: Record<string, unknown>): void {
   if (!canUseMixpanel()) return;
-  if (typeof window !== 'undefined' && window.__mixpanel_tracking_enabled === false) {
+  if (typeof window !== 'undefined' && window.__mixpanel_telemetry_enabled === false) {
     return;
   }
   if (!window.__mixpanel_initialized) {
@@ -126,7 +126,7 @@ export function trackEvent(event: MixpanelEvent, props?: MixpanelProps): void {
 
 export function getDistinctId(): string | undefined {
   if (!canUseMixpanel()) return undefined;
-  if (typeof window !== 'undefined' && window.__mixpanel_tracking_enabled === false) {
+  if (typeof window !== 'undefined' && window.__mixpanel_telemetry_enabled === false) {
     return undefined;
   }
   if (!window.__mixpanel_initialized) {
@@ -139,7 +139,7 @@ export function getDistinctId(): string | undefined {
 
 export function identifyAnonymous(): void {
   if (!canUseMixpanel()) return;
-  if (typeof window !== 'undefined' && window.__mixpanel_tracking_enabled === false) {
+  if (typeof window !== 'undefined' && window.__mixpanel_telemetry_enabled === false) {
     return;
   }
   if (!window.__mixpanel_initialized) {

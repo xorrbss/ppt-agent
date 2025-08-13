@@ -104,8 +104,8 @@ You can also set the following environment variables to customize the image gene
 - **GOOGLE_API_KEY=[Your Google API Key]**: Required if using **gemini_flash** as the image provider.
 - **OPENAI_API_KEY=[Your OpenAI API Key]**: Required if using **dall-e-3** as the image provider.
 
-You can disable anonymous tracking using the following environment variable:
-- **DISABLE_ANONYMOUS_TRACKING=[true/false]**: Set this to **true** to disable anonymous usage tracking.
+You can disable anonymous telemetry using the following environment variable:
+- **DISABLE_ANONYMOUS_TELEMETRY=[true/false]**: Set this to **true** to disable anonymous telemetry.
 
 
 > **Note:** You can freely choose both the LLM (text generation) and the image provider. Supported image providers: **pexels**, **pixabay**, **gemini_flash** (Google), and **dall-e-3** (OpenAI).
