@@ -429,6 +429,7 @@ async def generate_presentation_api(
             layout_group=layout_model.name,
             layout=slide_layout.id,
             index=i,
+            speaker_note=slide_content.get("__speaker_note__", ""),
             content=slide_content,
         )
         async_asset_generation_tasks.append(
