@@ -387,11 +387,7 @@ class LLMClient:
         max_tokens: Optional[int] = None,
         depth: int = 0,
     ):
-        extra_body = (
-            {"enable_thinking": False}
-            if self.disable_thinking()
-            else None
-        )
+        extra_body = {"enable_thinking": False} if self.disable_thinking() else None
         return await self._generate_openai(
             model=model,
             messages=messages,
@@ -758,11 +754,7 @@ class LLMClient:
         max_tokens: Optional[int] = None,
         depth: int = 0,
     ):
-        extra_body = (
-            {"enable_thinking": False}
-            if self.disable_thinking()
-            else None
-        )
+        extra_body = {"enable_thinking": False} if self.disable_thinking() else None
         return await self._generate_openai_structured(
             model=model,
             messages=messages,
@@ -860,6 +852,9 @@ class LLMClient:
             stream=True,
         ):
             event: OpenAIChatCompletionChunk = event
+            if not event.choices:
+                continue
+
             content_chunk = event.choices[0].delta.content
             if content_chunk:
                 yield content_chunk
@@ -1079,11 +1074,7 @@ class LLMClient:
         max_tokens: Optional[int] = None,
         depth: int = 0,
     ):
-        extra_body = (
-            {"enable_thinking": False}
-            if self.disable_thinking()
-            else None
-        )
+        extra_body = {"enable_thinking": False} if self.disable_thinking() else None
         return self._stream_openai(
             model=model,
             messages=messages,
@@ -1204,6 +1195,9 @@ class LLMClient:
             stream=True,
         ):
             event: OpenAIChatCompletionChunk = event
+            if not event.choices:
+                continue
+
             content_chunk = event.choices[0].delta.content
             if content_chunk:
                 yield content_chunk
@@ -1496,11 +1490,7 @@ class LLMClient:
         max_tokens: Optional[int] = None,
         depth: int = 0,
     ):
-        extra_body = (
-            {"enable_thinking": False}
-            if self.disable_thinking()
-            else None
-        )
+        extra_body = {"enable_thinking": False} if self.disable_thinking() else None
         return self._stream_openai_structured(
             model=model,
             messages=messages,
