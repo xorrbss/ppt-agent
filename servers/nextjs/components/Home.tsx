@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Download, CheckCircle, X } from "lucide-react";
+import { Loader2, Download, CheckCircle } from "lucide-react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import { handleSaveLLMConfig } from "@/utils/storeHelpers";
@@ -12,6 +12,8 @@ import {
   pullOllamaModel,
 } from "@/utils/providerUtils";
 import { LLMConfig } from "@/types/llm_config";
+import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
+import { usePathname } from "next/navigation";
 
 // Button state interface
 interface ButtonState {
@@ -25,6 +27,7 @@ interface ButtonState {
 
 export default function Home() {
   const router = useRouter();
+  const pathname = usePathname();
   const config = useSelector((state: RootState) => state.userConfig);
   const [llmConfig, setLlmConfig] = useState<LLMConfig>(config.llm_config);
 
@@ -52,6 +55,7 @@ export default function Home() {
   }, [downloadingModel?.downloaded, downloadingModel?.size]);
 
   const handleSaveConfig = async () => {
+    trackEvent(MixpanelEvent.Home_SaveConfiguration_Button_Clicked, { pathname });
     try {
       setButtonState(prev => ({
         ...prev,
@@ -59,11 +63,17 @@ export default function Home() {
         isDisabled: true,
         text: "Saving Configuration..."
       }));
+      // API: save config
+      trackEvent(MixpanelEvent.Home_SaveConfiguration_API_Call);
       await handleSaveLLMConfig(llmConfig);
       if (llmConfig.LLM === "ollama" && llmConfig.OLLAMA_MODEL) {
+        // API: check model pulled
+        trackEvent(MixpanelEvent.Home_CheckOllamaModelPulled_API_Call);
         const isPulled = await checkIfSelectedOllamaModelIsPulled(llmConfig.OLLAMA_MODEL);
         if (!isPulled) {
           setShowDownloadModal(true);
+          // API: download model
+          trackEvent(MixpanelEvent.Home_DownloadOllamaModel_API_Call);
           await handleModelDownload();
         }
       }
@@ -74,6 +84,8 @@ export default function Home() {
         isDisabled: false,
         text: "Save Configuration"
       }));
+      // Track navigation from -> to
+      trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/upload" });
       router.push("/upload");
     } catch (error) {
       toast.info(error instanceof Error ? error.message : "Failed to save configuration");

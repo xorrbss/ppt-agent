@@ -14,7 +14,6 @@ from utils.llm_calls.edit_slide_html import get_edited_slide_html
 from utils.llm_calls.select_slide_type_on_edit import get_slide_layout_from_prompt
 from utils.process_slides import process_old_and_new_slides_and_fetch_assets
 from utils.randomizers import get_random_uuid
-from utils.schema_utils import remove_fields_from_schema
 
 
 SLIDE_ROUTER = APIRouter(prefix="/slide", tags=["Slide"])
@@ -59,6 +58,7 @@ async def edit_slide(
     sql_session.add(slide)
     slide.content = edited_slide_content
     slide.layout = slide_layout.id
+    slide.speaker_note = edited_slide_content.get("__speaker_note__", "")
     sql_session.add_all(new_assets)
     await sql_session.commit()
 

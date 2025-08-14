@@ -17,6 +17,8 @@ import {
   updateSlide,
 } from "@/store/slices/presentationGeneration";
 import { useGroupLayouts } from "../../hooks/useGroupLayouts";
+import { usePathname } from "next/navigation";
+import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import NewSlide from "../../components/NewSlide";
 
 interface SlideContentProps {
@@ -35,6 +37,7 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
 
   // Use the centralized group layouts hook
   const { renderSlideContent, loading } = useGroupLayouts();
+  const pathname = usePathname();
 
   const handleSubmit = async () => {
     const element = document.getElementById(
@@ -48,6 +51,7 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
     setIsUpdating(true);
 
     try {
+      trackEvent(MixpanelEvent.Slide_Edit_API_Call);
       const response = await PresentationGenerationApi.editSlide(
         slide.id,
         value
@@ -68,6 +72,7 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
   };
   const onDeleteSlide = async () => {
     try {
+      trackEvent(MixpanelEvent.Slide_Delete_API_Call);
       dispatch(deletePresentationSlide(slide.index));
     } catch (error: any) {
       console.error("Error deleting slide:", error);
@@ -108,7 +113,7 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
       return;
     }
     if (slide.layout.includes("custom")) {
-     
+
       const existingScript = document.querySelector(
         'script[src*="tailwindcss.com"]'
       );
@@ -149,7 +154,10 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
               <ToolTip content="Add new slide below">
                 {!isStreaming && !loading && (
                   <div
-                    onClick={() => setShowNewSlideSelection(true)}
+                    onClick={() => {
+                      trackEvent(MixpanelEvent.Slide_Add_New_Slide_Button_Clicked, { pathname });
+                      setShowNewSlideSelection(true);
+                    }}
                     className="  bg-white shadow-md w-[80px] py-2 border hover:border-[#5141e5] duration-300  flex items-center justify-center rounded-lg cursor-pointer mx-auto"
                   >
                     <PlusIcon className="text-gray-500 text-base cursor-pointer" />
@@ -169,7 +177,10 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
           {!isStreaming && !loading && (
             <ToolTip content="Delete slide">
               <div
-                onClick={onDeleteSlide}
+                onClick={() => {
+                  trackEvent(MixpanelEvent.Slide_Delete_Slide_Button_Clicked, { pathname });
+                  onDeleteSlide();
+                }}
                 className="absolute top-2 z-20 sm:top-4 right-2 sm:right-4 hidden md:block  transition-transform"
               >
                 <Trash2 className="text-gray-500 text-xl cursor-pointer" />
@@ -219,9 +230,11 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
                       <button
                         disabled={isUpdating}
                         type="submit"
-                        className={`bg-gradient-to-r from-[#9034EA] to-[#5146E5] rounded-[32px] px-4 py-2 text-white flex items-center justify-end gap-2 ml-auto ${
-                          isUpdating ? "opacity-70 cursor-not-allowed" : ""
-                        }`}
+                        className={`bg-gradient-to-r from-[#9034EA] to-[#5146E5] rounded-[32px] px-4 py-2 text-white flex items-center justify-end gap-2 ml-auto ${isUpdating ? "opacity-70 cursor-not-allowed" : ""
+                          }`}
+                        onClick={() => {
+                          trackEvent(MixpanelEvent.Slide_Update_From_Prompt_Button_Clicked, { pathname });
+                        }}
                       >
                         {isUpdating ? "Updating..." : "Update"}
                         <SendHorizontal className="w-4 sm:w-5 h-4 sm:h-5" />

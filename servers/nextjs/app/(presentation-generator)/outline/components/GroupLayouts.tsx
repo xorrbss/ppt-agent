@@ -1,5 +1,7 @@
 import { CheckCircle } from "lucide-react";
 import React from "react";
+import { usePathname } from "next/navigation";
+import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { LayoutGroup } from "../types/index";
 import { useLayout } from "../../context/LayoutContext";
 import { useFontLoader } from "../../hooks/useFontLoader";
@@ -18,9 +20,13 @@ const GroupLayouts: React.FC<GroupLayoutsProps> = ({
   const layoutGroup = getFullDataByGroup(group.id);
   const fonts = getCustomTemplateFonts(group.id.split("custom-")[1]);
   useFontLoader(fonts || []);
+  const pathname = usePathname();
   return (
     <div
-      onClick={() => onSelectLayoutGroup(group)}
+      onClick={() => {
+        trackEvent(MixpanelEvent.Group_Layout_Selected_Clicked, { pathname });
+        onSelectLayoutGroup(group);
+      }}
       className={`relative p-4 rounded-lg border cursor-pointer transition-all duration-200 ${
         selectedLayoutGroup?.id === group.id
           ? "border-blue-500 bg-blue-50 shadow-md"

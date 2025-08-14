@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import { Roboto, Instrument_Sans } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
+import MixpanelInitializer from "./MixpanelInitializer";
 import { LayoutProvider } from "./(presentation-generator)/context/LayoutContext";
 import { Toaster } from "@/components/ui/sonner";
 const inter = localFont({
@@ -85,9 +86,11 @@ export default function RootLayout({
         className={`${inter.variable} ${roboto.variable} ${instrument_sans.variable} antialiased`}
       >
         <Providers>
-          <LayoutProvider>
-            {children}
-          </LayoutProvider>
+          <MixpanelInitializer>
+            <LayoutProvider>
+              {children}
+            </LayoutProvider>
+          </MixpanelInitializer>
         </Providers>
         <Toaster position="top-center" />
       </body>

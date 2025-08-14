@@ -14,20 +14,7 @@ export const useSlideEdit = (
   const [slideHtml, setSlideHtml] = useState("");
   const slideContentRef = useRef<HTMLDivElement>(null);
 
-  // Load Tailwind CSS dynamically for slide content
-  useEffect(() => {
-    if (slide.processed && slide.html) {
-      const existingScript = document.querySelector(
-        'script[src*="tailwindcss.com"]'
-      );
-      if (!existingScript) {
-        const script = document.createElement("script");
-        script.src = "https://cdn.tailwindcss.com";
-        script.async = true;
-        document.head.appendChild(script);
-      }
-    }
-  }, [slide.processed, slide.html]);
+
 
   // Set up canvas when entering edit mode
   useEffect(() => {

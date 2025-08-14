@@ -45,6 +45,48 @@ def remove_fields_from_schema(schema: dict, fields_to_remove: List[str]):
     return schema
 
 
+def add_field_in_schema(schema: dict, field: dict, required: bool = False) -> dict:
+
+    if not isinstance(field, dict) or len(field) != 1:
+        raise ValueError(
+            "`field` must be a dict with exactly one entry: {name: schema_dict}"
+        )
+
+    field_name, field_schema = next(iter(field.items()))
+    if not isinstance(field_name, str):
+        raise TypeError("Field name must be a string")
+    if not isinstance(field_schema, dict):
+        raise TypeError("Field schema must be a dictionary")
+
+    updated_schema: dict = deepcopy(schema)
+
+    root_properties = updated_schema.get("properties")
+    if not isinstance(root_properties, dict):
+        updated_schema["properties"] = {}
+        root_properties = updated_schema["properties"]
+
+    root_properties[field_name] = field_schema
+
+    # Update root-level required based on the flag
+    existing_required = updated_schema.get("required")
+    if not isinstance(existing_required, list):
+        existing_required = []
+
+    if required:
+        if field_name not in existing_required:
+            existing_required.append(field_name)
+    else:
+        if field_name in existing_required:
+            existing_required = [name for name in existing_required if name != field_name]
+
+    if existing_required:
+        updated_schema["required"] = existing_required
+    else:
+        updated_schema.pop("required", None)
+
+    return updated_schema
+
+
 # From OpenAI
 def ensure_strict_json_schema(
     json_schema: object,

@@ -57,6 +57,8 @@ class PptxFontModel(BaseModel):
     italic: bool = False
     color: str = "000000"
     font_weight: Optional[int] = 400
+    underline: Optional[bool] = None
+    strike: Optional[bool] = None
 
 
 class PptxFillModel(BaseModel):
@@ -154,6 +156,7 @@ class PptxConnectorModel(PptxShapeModel):
 
 class PptxSlideModel(BaseModel):
     background: Optional[PptxFillModel] = None
+    note: Optional[str] = None
     shapes: List[
         PptxTextBoxModel
         | PptxAutoShapeBoxModel

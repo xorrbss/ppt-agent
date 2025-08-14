@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import FontManager from "./components/FontManager";
 import Header from "../dashboard/components/Header";
 import { useLayout } from "../context/LayoutContext";
@@ -10,16 +10,18 @@ import { useFileUpload } from "./hooks/useFileUpload";
 import { useSlideProcessing } from "./hooks/useSlideProcessing";
 import { useLayoutSaving } from "./hooks/useLayoutSaving";
 import { useAPIKeyCheck } from "./hooks/useAPIKeyCheck";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { LoadingSpinner } from "./components/LoadingSpinner";
 import { FileUploadSection } from "./components/FileUploadSection";
 import { SaveLayoutButton } from "./components/SaveLayoutButton";
 import { SaveLayoutModal } from "./components/SaveLayoutModal";
 import EachSlide from "./components/EachSlide/NewEachSlide";
 import { APIKeyWarning } from "./components/APIKeyWarning";
+import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 
 const CustomTemplatePage = () => {
   const router = useRouter();
+  const pathname = usePathname();
   const { refetch } = useLayout();
   
   // Custom hooks for different concerns
@@ -42,6 +44,7 @@ const CustomTemplatePage = () => {
   );
 
   const handleSaveTemplate = async (layoutName: string, description: string): Promise<string | null> => {
+    trackEvent(MixpanelEvent.CustomTemplate_Save_Templates_API_Call);
     const id = await saveLayout(layoutName, description);
     if (id) {
       router.push(`/template-preview/custom-${id}`);
@@ -67,6 +70,17 @@ const CustomTemplatePage = () => {
       )
     );
   };
+ useEffect(() => {
+    const existingScript = document.querySelector(
+      'script[src*="tailwindcss.com"]'
+    );
+    if (!existingScript) {
+      const script = document.createElement("script");
+      script.src = "https://cdn.tailwindcss.com";
+      script.async = true;
+      document.head.appendChild(script);
+    }
+  }, []);
 
   // Loading state
   if (isRequiredKeyLoading) {

@@ -31,9 +31,9 @@ export async function GET(request: NextRequest) {
     [browser, page] = await getBrowserAndPage(id);
     const screenshotsDir = getScreenshotsDir();
 
-    const slides = await getSlides(page);
+    const { slides, speakerNotes } = await getSlidesAndSpeakerNotes(page);
     const slides_attributes = await getSlidesAttributes(slides, screenshotsDir);
-    await postProcessSlidesAttributes(slides_attributes, screenshotsDir);
+    await postProcessSlidesAttributes(slides_attributes, screenshotsDir, speakerNotes);
     const slides_pptx_models = convertElementAttributesToPptxSlides(slides_attributes);
     const presentation_pptx_model: PptxPresentationModel = {
       slides: slides_pptx_models,
@@ -100,8 +100,8 @@ function getScreenshotsDir() {
   return screenshotsDir;
 }
 
-async function postProcessSlidesAttributes(slidesAttributes: SlideAttributesResult[], screenshotsDir: string) {
-  for (const slideAttributes of slidesAttributes) {
+async function postProcessSlidesAttributes(slidesAttributes: SlideAttributesResult[], screenshotsDir: string, speakerNotes: string[]) {
+  for (const [index, slideAttributes] of slidesAttributes.entries()) {
     for (const element of slideAttributes.elements) {
       if (element.should_screenshot) {
         const screenshotPath = await screenshotElement(element, screenshotsDir);
@@ -111,6 +111,7 @@ async function postProcessSlidesAttributes(slidesAttributes: SlideAttributesResu
         element.element = undefined;
       }
     }
+    slideAttributes.speakerNote = speakerNotes[index];
   }
 }
 
@@ -190,15 +191,15 @@ async function getSlidesAttributes(slides: ElementHandle<Element>[], screenshots
   const slideAttributes = await Promise.all(
     slides.map((slide) => getAllChildElementsAttributes({ element: slide, screenshotsDir }))
   );
-
   return slideAttributes;
 }
 
 
-async function getSlides(page: Page) {
+async function getSlidesAndSpeakerNotes(page: Page) {
   const slides_wrapper = await getSlidesWrapper(page);
+  const speakerNotes = await getSpeakerNotes(slides_wrapper);
   const slides = await slides_wrapper.$$(":scope > div > div");
-  return slides;
+  return { slides, speakerNotes };
 }
 
 async function getSlidesWrapper(page: Page): Promise<ElementHandle<Element>> {
@@ -207,6 +208,12 @@ async function getSlidesWrapper(page: Page): Promise<ElementHandle<Element>> {
     throw new ApiError("Presentation slides not found");
   }
   return slides_wrapper;
+}
+
+async function getSpeakerNotes(slides_wrapper: ElementHandle<Element>) {
+  return await slides_wrapper.evaluate((el) => {
+    return Array.from(el.querySelectorAll('[data-speaker-note]')).map((el) => el.getAttribute('data-speaker-note') || "");
+  });
 }
 
 async function getAllChildElementsAttributes({ element, rootRect = null, depth = 0, inheritedFont, inheritedBackground, inheritedBorderRadius, inheritedZIndex, inheritedOpacity, screenshotsDir }: GetAllChildElementsAttributesArgs): Promise<SlideAttributesResult> {
@@ -261,8 +268,27 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
       };
     }
 
+    // Ignore elements with no size (width or height)
     if (attributes.position === undefined || attributes.position.width === undefined || attributes.position.height === undefined || attributes.position.width === 0 || attributes.position.height === 0) {
       continue;
+    }
+
+    // If element is paragraph and contains only inline formatting tags, don't go deeper
+    if (attributes.tagName === 'p') {
+      const innerElementTagNames = await childElementHandle.evaluate((el) => {
+        return Array.from(el.querySelectorAll('*')).map((e) => e.tagName.toLowerCase());
+      });
+
+      const allowedInlineTags = new Set(['strong', 'u', 'em', 'code', 's']);
+      const hasOnlyAllowedInlineTags = innerElementTagNames.every((tag) => allowedInlineTags.has(tag));
+
+      if (innerElementTagNames.length > 0 && hasOnlyAllowedInlineTags) {
+        attributes.innerText = await childElementHandle.evaluate((el) => {
+          return el.innerHTML;
+        });
+        allResults.push({ attributes, depth });
+        continue;
+      }
     }
 
     if (attributes.tagName === 'svg' || attributes.tagName === 'canvas' || attributes.tagName === 'table') {
@@ -272,11 +298,10 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
 
     allResults.push({ attributes, depth });
 
-    //? If the element is a canvas, or table, we don't need to go deeper
+    // If the element is a canvas, or table, we don't need to go deeper
     if (attributes.should_screenshot && attributes.tagName !== 'svg') {
       continue;
     }
-
 
     const childResults = await getAllChildElementsAttributes({
       element: childElementHandle,

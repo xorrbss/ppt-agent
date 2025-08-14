@@ -5,21 +5,35 @@ import { RootState } from "@/store/store";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { usePathname } from "next/navigation";
+import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { AlertCircle } from "lucide-react";
 import { useGroupLayouts } from "../hooks/useGroupLayouts";
 import { setPresentationData } from "@/store/slices/presentationGeneration";
 import { DashboardApi } from "../services/api/dashboard";
+import { useLayout } from "../context/LayoutContext";
+import { useFontLoader } from "../hooks/useFontLoader";
 
 
 
 const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
   const { renderSlideContent, loading } = useGroupLayouts();
+  const pathname = usePathname();
   const [contentLoading, setContentLoading] = useState(true);
+  const { getCustomTemplateFonts } = useLayout()
   const dispatch = useDispatch();
   const { presentationData } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
   const [error, setError] = useState(false);
+  useEffect(() => {
+    if (!loading && presentationData?.slides && presentationData?.slides.length > 0) {
+      const presentation_id = presentationData?.slides[0].layout.split(":")[0].split("custom-")[1];
+      const fonts = getCustomTemplateFonts(presentation_id);
+
+      useFontLoader(fonts || []);
+    }
+  }, [presentationData, loading]);
   useEffect(() => {
     if (presentationData?.slides[0].layout.includes("custom")) {
       const existingScript = document.querySelector(
@@ -51,6 +65,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
       setContentLoading(false);
     }
   };
+
   // Regular view
   return (
     <div className="flex overflow-hidden flex-col">
@@ -70,7 +85,10 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
             </p>
             <Button
               className="mt-4 bg-red-500 text-white hover:bg-red-600 focus:ring-4 focus:ring-red-300"
-              onClick={() => window.location.reload()}
+              onClick={() => {
+                trackEvent(MixpanelEvent.PdfMaker_Retry_Button_Clicked, { pathname });
+                window.location.reload();
+              }}
             >
               Retry
             </Button>
@@ -83,10 +101,10 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
             className="mx-auto flex flex-col items-center  overflow-hidden  justify-center   "
           >
             {!presentationData ||
-            loading ||
-            contentLoading ||
-            !presentationData?.slides ||
-            presentationData?.slides.length === 0 ? (
+              loading ||
+              contentLoading ||
+              !presentationData?.slides ||
+              presentationData?.slides.length === 0 ? (
               <div className="relative w-full h-[calc(100vh-120px)] mx-auto ">
                 <div className=" ">
                   {Array.from({ length: 2 }).map((_, index) => (
@@ -103,7 +121,8 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
                   presentationData.slides &&
                   presentationData.slides.length > 0 &&
                   presentationData.slides.map((slide: any, index: number) => (
-                    <div key={index} className="w-full">
+                    // [data-speaker-note] is used to extract the speaker note from the slide for export to pptx
+                    <div key={index} className="w-full" data-speaker-note={slide.note}>
                       {renderSlideContent(slide, true)}
                     </div>
                   ))}

@@ -1,11 +1,12 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import LoadingStates from "./components/LoadingStates";
 import { Card } from "@/components/ui/card";
 import { ExternalLink } from "lucide-react";
 import Header from "@/app/(presentation-generator)/dashboard/components/Header";
 import { useLayout } from "../context/LayoutContext";
+import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 
 const LayoutPreview = () => {
   const {
@@ -17,6 +18,7 @@ const LayoutPreview = () => {
     error,
   } = useLayout();
   const router = useRouter();
+  const pathname = usePathname();
 
   const [summaryMap, setSummaryMap] = useState<Record<string, { lastUpdatedAt?: number; name?: string; description?: string }>>({});
 
@@ -114,7 +116,10 @@ const LayoutPreview = () => {
                   <Card
                     key={group.groupName}
                     className="cursor-pointer hover:shadow-md transition-all duration-200 group"
-                    onClick={() => router.push(`/template-preview/${group.groupName}`)}
+                    onClick={() => {
+                      trackEvent(MixpanelEvent.Navigation, { from: pathname, to: `/template-preview/${group.groupName}` });
+                      router.push(`/template-preview/${group.groupName}`)
+                    }}
                   >
                     <div className="p-6">
                       <div className="flex items-center justify-between mb-3">
@@ -166,7 +171,10 @@ const LayoutPreview = () => {
                     <Card
                       key={group.groupName}
                       className="cursor-pointer hover:shadow-md transition-all duration-200 group"
-                      onClick={() => router.push(`/template-preview/${group.groupName}`)}
+                      onClick={() => {
+                        trackEvent(MixpanelEvent.Navigation, { from: pathname, to: `/template-preview/${group.groupName}` });
+                        router.push(`/template-preview/${group.groupName}`)
+                      }}
                     >
                       <div className="p-6">
                         <div className="flex items-center justify-between mb-3">
@@ -196,7 +204,10 @@ const LayoutPreview = () => {
               ) : (
                 <Card
                   className="cursor-pointer hover:shadow-md transition-all border-blue-500 duration-200 group"
-                  onClick={() => router.push(`/custom-template`)}
+                  onClick={() => {
+                    trackEvent(MixpanelEvent.Navigation, { from: pathname, to: `/custom-template` });
+                    router.push(`/custom-template`)
+                  }}
                 >
                   <div className="p-6">
                     <div className="flex items-center justify-between mb-3">

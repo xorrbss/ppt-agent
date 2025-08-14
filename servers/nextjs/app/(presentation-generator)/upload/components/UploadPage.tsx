@@ -11,7 +11,7 @@
 
 "use client";
 import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useDispatch } from "react-redux";
 import { clearOutlines, setPresentationId } from "@/store/slices/presentationGeneration";
 import { ConfigurationSelects } from "./ConfigurationSelects";
@@ -25,6 +25,7 @@ import { PresentationGenerationApi } from "../../services/api/presentation-gener
 import { OverlayLoader } from "@/components/ui/overlay-loader";
 import Wrapper from "@/components/Wrapper";
 import { setPptGenUploadState } from "@/store/slices/presentationGenUpload";
+import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 
 // Types for loading state
 interface LoadingState {
@@ -37,6 +38,7 @@ interface LoadingState {
 
 const UploadPage = () => {
   const router = useRouter();
+  const pathname = usePathname();
   const dispatch = useDispatch();
 
   // State management
@@ -115,6 +117,7 @@ const UploadPage = () => {
     let documents = [];
 
     if (files.length > 0) {
+      trackEvent(MixpanelEvent.Upload_Upload_Documents_API_Call);
       const uploadResponse = await PresentationGenerationApi.uploadDoc(files);
       documents = uploadResponse;
     }
@@ -122,9 +125,8 @@ const UploadPage = () => {
     const promises: Promise<any>[] = [];
 
     if (documents.length > 0) {
-      promises.push(
-        PresentationGenerationApi.decomposeDocuments(documents)
-      );
+      trackEvent(MixpanelEvent.Upload_Decompose_Documents_API_Call);
+      promises.push(PresentationGenerationApi.decomposeDocuments(documents));
     }
     const responses = await Promise.all(promises);
     dispatch(setPptGenUploadState({
@@ -132,6 +134,7 @@ const UploadPage = () => {
       files: responses,
     }));
     dispatch(clearOutlines())
+    trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/documents-preview" });
     router.push("/documents-preview");
   };
 
@@ -147,6 +150,7 @@ const UploadPage = () => {
     });
 
     // Use the first available layout group for direct generation
+    trackEvent(MixpanelEvent.Upload_Create_Presentation_API_Call);
     const createResponse = await PresentationGenerationApi.createPresentation({
       prompt: config?.prompt ?? "",
       n_slides: config?.slides ? parseInt(config.slides) : null,
@@ -156,6 +160,7 @@ const UploadPage = () => {
 
     dispatch(setPresentationId(createResponse.id));
     dispatch(clearOutlines())
+    trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/outline" });
     router.push("/outline");
   };
 
