@@ -104,19 +104,28 @@ const startServers = async () => {
     console.error("FastAPI process failed to start:", err);
   });
 
-  // const appmcpProcess = spawn(
-  //   "python",
-  //   ["mcp_server.py", "--port", appmcpPort.toString()],
-  //   {
-  //     cwd: fastapiDir,
-  //     stdio: "inherit",
-  //     env: process.env,
-  //   },
-  // );
+  const appmcpProcess = spawn(
+    "python",
+    [
+      "mcp_server.py",
+      "--port",
+      appmcpPort.toString(),
+      "--api-base-url",
+      `http://127.0.0.1:${fastapiPort}`,
+      "--openapi-path",
+      "/openapi.json",
+    ],
+    {
+      cwd: fastapiDir,
+      stdio: "inherit",
+      env: process.env,
+    },
+  );
 
-  // appmcpProcess.on("error", (err) => {
-  //   console.error("App MCP process failed to start:", err);
-  // });
+  appmcpProcess.on("error", (err) => {
+    console.error("App MCP process failed to start:", err);
+  });
+
 
   const nextjsProcess = spawn(
     "npm",

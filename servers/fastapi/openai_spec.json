@@ -1,0 +1,160 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+      "title": "FastAPI",
+      "version": "0.1.0"
+    },
+    "paths": {
+      "/api/v1/ppt/presentation/generate": {
+        "post": {
+          "tags": ["Presentation"],
+          "summary": "Generate Presenatation MCP",
+          "operationId": "presentation_generator",
+          "requestBody": {
+            "content": {
+              "multipart/form-data": {
+                "schema": {
+                  "$ref": "#/components/schemas/Body_generate_presentation_api_api_v1_ppt_presentation_generate_post"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/PresentationPathAndEditPath"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "components": {
+      "schemas": {
+        "Body_generate_presentation_api_api_v1_ppt_presentation_generate_post": {
+          "properties": {
+            "prompt": {
+              "type": "string",
+              "title": "Prompt"
+            },
+            "n_slides": {
+              "type": "integer",
+              "title": "N Slides",
+              "default": 8
+            },
+            "language": {
+              "type": "string",
+              "title": "Language",
+              "default": "English"
+            },
+            "template": {
+              "type": "string",
+              "title": "Template",
+              "default": "general"
+            },
+            "files": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Files"
+            },
+            "export_as": {
+              "type": "string",
+              "enum": ["pptx", "pdf"],
+              "title": "Export As",
+              "default": "pptx"
+            }
+          },
+          "type": "object",
+          "required": ["prompt"],
+          "title": "Body_generate_presentation_api_api_v1_ppt_presentation_generate_post"
+        },
+        "PresentationPathAndEditPath": {
+          "properties": {
+            "presentation_id": {
+              "type": "string",
+              "title": "Presentation Id"
+            },
+            "path": {
+              "type": "string",
+              "title": "Path"
+            },
+            "edit_path": {
+              "type": "string",
+              "title": "Edit Path"
+            }
+          },
+          "type": "object",
+          "required": ["presentation_id", "path", "edit_path"],
+          "title": "PresentationPathAndEditPath"
+        },
+        "HTTPValidationError": {
+          "properties": {
+            "detail": {
+              "items": {
+                "$ref": "#/components/schemas/ValidationError"
+              },
+              "type": "array",
+              "title": "Detail"
+            }
+          },
+          "type": "object",
+          "title": "HTTPValidationError"
+        },
+        "ValidationError": {
+          "properties": {
+            "loc": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ]
+              },
+              "type": "array",
+              "title": "Location"
+            },
+            "msg": {
+              "type": "string",
+              "title": "Message"
+            },
+            "type": {
+              "type": "string",
+              "title": "Error Type"
+            }
+          },
+          "type": "object",
+          "required": ["loc", "msg", "type"],
+          "title": "ValidationError"
+        }
+      }
+    }
+  }
