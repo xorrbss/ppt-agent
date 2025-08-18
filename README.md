@@ -54,7 +54,7 @@ Presenton gives you complete control over your AI presentation workflow. Choose 
 * ✅ **Docker Ready** — One-command deployment with GPU support for local models
 
 ## Presenton Cloud
-We're launching Presenton Cloud which will make it very easy to create presentations through UI, API and MCP. Join our (waitlist)[https://presenton.ai] for early beta. 
+We're launching Presenton Cloud which will make it very easy to create presentations through UI, API and MCP. Join our [waitlist](https://presenton.ai) for early beta. 
 
 ## Deploy on Cloud (one click deployment)
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/presenton-ai-presentations?referralCode=ubp0kk)
