@@ -41,6 +41,7 @@ Presenton gives you complete control over your AI presentation workflow. Choose 
 * ✅ **AI Template Generation** — Create presentation templates from existing Powerpoint documents.
 * ✅ **Flexible Generation** — Build presentations from prompts or uploaded documents
 * ✅ **Export Ready** — Save as PowerPoint (PPTX) and PDF with professional formatting
+* ✅ **Built-In MCP Server** — Generate presentations over Model Context Protocol
 * ✅ **Bring Your Own Key** — Use your own API keys for OpenAI, Google Gemini, Anthropic Claude, or any compatible provider. Only pay for what you use, no hidden fees or subscriptions.
 * ✅ **Ollama Integration** — Run open-source models locally with full privacy
 * ✅ **OpenAI API Compatible** — Connect to any OpenAI-compatible endpoint with your own models
