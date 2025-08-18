@@ -172,16 +172,22 @@ const LayoutSelection: React.FC<LayoutSelectionProps> = ({
                 <div className="flex items-center justify-between mb-3">
                     <h3 className="text-lg font-semibold text-gray-900">Custom AI Templates</h3>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {customGroups.map((group) => (
-                        <GroupLayouts
-                            key={group.id}
-                            group={group}
-                            onSelectLayoutGroup={handleLayoutGroupSelection}
-                            selectedLayoutGroup={selectedLayoutGroup}
-                        />
-                    ))}
-                </div>
+                {customGroups.length === 0 ? (
+                    <div className="text-sm text-gray-600 py-2">
+                        No custom templates. Create one from "Create Template" menu.
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {customGroups.map((group) => (
+                            <GroupLayouts
+                                key={group.id}
+                                group={group}
+                                onSelectLayoutGroup={handleLayoutGroupSelection}
+                                selectedLayoutGroup={selectedLayoutGroup}
+                            />
+                        ))}
+                    </div>
+                )}
             </div>
         </div>
     );
