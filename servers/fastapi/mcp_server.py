@@ -9,6 +9,9 @@ import httpx
 from fastmcp import FastMCP
 import json
 
+with open("openai_spec.json", "r") as f:
+    openapi_spec = json.load(f)
+
 
 async def main():
     try:
@@ -17,18 +20,7 @@ async def main():
         parser.add_argument(
             "--port", type=int, default=8001, help="Port for the MCP HTTP server"
         )
-        parser.add_argument(
-            "--api-base-url",
-            type=str,
-            default="http://127.0.0.1:8000",
-            help="Base URL of the FastAPI server to wrap (e.g., http://127.0.0.1:8000)",
-        )
-        parser.add_argument(
-            "--openapi-path",
-            type=str,
-            default="/openapi.json",
-            help="Path to the OpenAPI JSON on the FastAPI server",
-        )
+
         parser.add_argument(
             "--name",
             type=str,
@@ -37,14 +29,11 @@ async def main():
         )
         args = parser.parse_args()
         print(
-            f"DEBUG: Parsed args - port={args.port}, api_base_url={args.api_base_url}, openapi_path={args.openapi_path}"
+            f"DEBUG: Parsed args - port={args.port}"
         )
 
-        with open("openai_spec.json", "r") as f:
-            openapi_spec = json.load(f)
-
         # Create an HTTP client that the MCP server will use to call the API
-        api_client = httpx.AsyncClient(base_url=args.api_base_url, timeout=60.0)
+        api_client = httpx.AsyncClient(base_url="http://127.0.0.1:8000", timeout=60.0)
 
         # Build MCP server from OpenAPI
         print("DEBUG: Creating FastMCP server from OpenAPI spec...")

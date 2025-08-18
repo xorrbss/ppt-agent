@@ -110,10 +110,6 @@ const startServers = async () => {
       "mcp_server.py",
       "--port",
       appmcpPort.toString(),
-      "--api-base-url",
-      `http://127.0.0.1:${fastapiPort}`,
-      "--openapi-path",
-      "/openapi.json",
     ],
     {
       cwd: fastapiDir,
