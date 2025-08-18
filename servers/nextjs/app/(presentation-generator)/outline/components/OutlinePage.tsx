@@ -61,6 +61,8 @@ const OutlinePage: React.FC = () => {
                     outlines={outlines}
                     isLoading={streamState.isLoading}
                     isStreaming={streamState.isStreaming}
+                    activeSlideIndex={streamState.activeSlideIndex}
+                    highestActiveIndex={streamState.highestActiveIndex}
                     onDragEnd={handleDragEnd}
                     onAddSlide={handleAddSlide}
                   />

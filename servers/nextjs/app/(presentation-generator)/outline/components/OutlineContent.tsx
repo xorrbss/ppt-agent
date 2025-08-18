@@ -23,6 +23,8 @@ interface OutlineContentProps {
     outlines: { content: string }[] | null;
     isLoading: boolean;
     isStreaming: boolean;
+    activeSlideIndex: number | null;
+    highestActiveIndex: number;
     onDragEnd: (event: any) => void;
     onAddSlide: () => void;
 }
@@ -31,6 +33,8 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
     outlines,
     isLoading,
     isStreaming,
+    activeSlideIndex,
+    highestActiveIndex,
     onDragEnd,
     onAddSlide
 }) => {
@@ -102,6 +106,8 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
                                 index={index + 1}
                                 slideOutline={item}
                                 isStreaming={isStreaming}
+                                isActiveStreaming={activeSlideIndex === index}
+                                isStableStreaming={highestActiveIndex >= 0 && index < highestActiveIndex}
                             />
                         ))
                         ) :
@@ -115,6 +121,8 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
                                     index={index + 1}
                                     slideOutline={item}
                                     isStreaming={isStreaming}
+                                    isActiveStreaming={false}
+                                    isStableStreaming={false}
                                 />
                             ))}
                         </SortableContext>}
