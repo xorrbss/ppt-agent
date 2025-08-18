@@ -6,7 +6,8 @@ import { useDispatch, useSelector } from "react-redux"
 import { deleteSlideOutline, setOutlines } from "@/store/slices/presentationGeneration"
 import ToolTip from "@/components/ToolTip"
 import MarkdownEditor from "../../components/MarkdownEditor"
-import { useEffect } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { marked } from "marked"
 
 
 interface OutlineItemProps {
@@ -15,12 +16,16 @@ interface OutlineItemProps {
     },
     index: number
     isStreaming: boolean
+    isActiveStreaming?: boolean
+    isStableStreaming?: boolean
 }
 
 export function OutlineItem({
     index,
     slideOutline,
     isStreaming,
+    isActiveStreaming = false,
+    isStableStreaming = false,
 }: OutlineItemProps) {
     const {
         outlines,
@@ -73,6 +78,42 @@ export function OutlineItem({
         dispatch(deleteSlideOutline({ index: index - 1 }))
 
     }
+
+    // Throttled markdown rendering only for the active streaming item to avoid flicker
+    const [renderedHtml, setRenderedHtml] = useState<string>("")
+    const throttleRef = useRef<number | null>(null)
+    useEffect(() => {
+        if (!isStreaming || !isActiveStreaming) return
+        const content = slideOutline.content || ""
+        // Throttle updates to ~60ms to reduce reflows/flicker
+        if (throttleRef.current) {
+            window.clearTimeout(throttleRef.current)
+        }
+        throttleRef.current = window.setTimeout(() => {
+            try {
+                setRenderedHtml(marked.parse(content) as string)
+            } catch {
+                setRenderedHtml("")
+            }
+        }, 60)
+        return () => {
+            if (throttleRef.current) {
+                window.clearTimeout(throttleRef.current)
+            }
+        }
+    }, [isStreaming, isActiveStreaming, slideOutline.content])
+
+    // Memoized stable HTML for previous (already completed) items during streaming
+    const stableHtml = useMemo(() => {
+        if (!isStreaming || isActiveStreaming) return null
+        if (!isStableStreaming) return null
+        try {
+            return marked.parse(slideOutline.content || "") as string
+        } catch {
+            return null
+        }
+    }, [isStreaming, isActiveStreaming, isStableStreaming, slideOutline.content])
+
     return (
         <div className="mb-2">
             {/* Main Title Row */}
@@ -99,15 +140,27 @@ export function OutlineItem({
                 {/* Main Title Input - Add onFocus handler */}
                 <div id={`outline-item-${index}`} className="flex flex-col basis-full gap-2">
                     {/* Editable Markdown Content */}
-                    {isStreaming ? <p
-                        className="text-sm  flex-1 font-normal"
-                    >
-                        {slideOutline.content || ''}
-                    </p> : <MarkdownEditor
-                        key={index}
-                        content={slideOutline.content || ''}
-                        onChange={(content) => handleSlideChange(content)}
-                    />}
+                    {isStreaming ? (
+                        isActiveStreaming ? (
+                            <div
+                                className="text-sm flex-1 font-normal prose prose-sm max-w-none"
+                                dangerouslySetInnerHTML={{ __html: renderedHtml || "" }}
+                            />
+                        ) : stableHtml ? (
+                            <div
+                                className="text-sm flex-1 font-normal prose prose-sm max-w-none"
+                                dangerouslySetInnerHTML={{ __html: stableHtml }}
+                            />
+                        ) : (
+                            <p className="text-sm  flex-1 font-normal">{slideOutline.content || ''}</p>
+                        )
+                    ) : (
+                        <MarkdownEditor
+                            key={index}
+                            content={slideOutline.content || ''}
+                            onChange={(content) => handleSlideChange(content)}
+                        />
+                    )}
 
                 </div>
 

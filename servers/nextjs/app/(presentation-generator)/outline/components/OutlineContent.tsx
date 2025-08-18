@@ -15,7 +15,7 @@ import {
 } from "@dnd-kit/sortable";
 import { OutlineItem } from "./OutlineItem";
 import { Button } from "@/components/ui/button";
-import { FileText } from "lucide-react";
+import { FileText, Loader2 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 
@@ -23,6 +23,8 @@ interface OutlineContentProps {
     outlines: { content: string }[] | null;
     isLoading: boolean;
     isStreaming: boolean;
+    activeSlideIndex: number | null;
+    highestActiveIndex: number;
     onDragEnd: (event: any) => void;
     onAddSlide: () => void;
 }
@@ -31,6 +33,8 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
     outlines,
     isLoading,
     isStreaming,
+    activeSlideIndex,
+    highestActiveIndex,
     onDragEnd,
     onAddSlide
 }) => {
@@ -45,6 +49,14 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
 
     return (
         <div className="space-y-6 font-instrument_sans">
+            {isLoading && (!outlines || outlines.length === 0) && (
+                <div className="flex items-center justify-center">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 text-blue-600 px-2 py-0.5 text-xs">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Thinking
+                    </span>
+                </div>
+            )}
             {/* <div className="flex items-center justify-between">
                 <h5 className="text-lg font-medium">
                     Presentation Outline
@@ -94,6 +106,8 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
                                 index={index + 1}
                                 slideOutline={item}
                                 isStreaming={isStreaming}
+                                isActiveStreaming={activeSlideIndex === index}
+                                isStableStreaming={highestActiveIndex >= 0 && index < highestActiveIndex}
                             />
                         ))
                         ) :
@@ -107,6 +121,8 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
                                     index={index + 1}
                                     slideOutline={item}
                                     isStreaming={isStreaming}
+                                    isActiveStreaming={false}
+                                    isStableStreaming={false}
                                 />
                             ))}
                         </SortableContext>}
