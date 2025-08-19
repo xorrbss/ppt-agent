@@ -58,9 +58,11 @@ export function removeUUID(fileName: string) {
 
 
 
-export function sanitizeFilename(input: string, replacement = '') {
+export function sanitizeFilename(input: string | null | undefined, replacement = '') {
+  // Start with a safe base string to avoid calling string methods on null/undefined
+  let sanitized = (input ?? '').toString();
   // Remove any null bytes first
-  let sanitized = input.replace(/\0/g, '');
+  sanitized = sanitized.replace(/\0/g, '');
   
   // Remove or replace path traversal sequences
   sanitized = sanitized.replace(/\.\./g, replacement);

@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
 
   browser.close();
 
-  const sanitizedTitle = sanitizeFilename(title);
+  const sanitizedTitle = sanitizeFilename(title ?? 'presentation');
   const destinationPath = path.join(process.env.APP_DATA_DIRECTORY!, 'exports', `${sanitizedTitle}.pdf`);
   await fs.promises.mkdir(path.dirname(destinationPath), { recursive: true });
   await fs.promises.writeFile(destinationPath, pdfBuffer);
