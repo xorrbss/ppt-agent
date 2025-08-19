@@ -19,7 +19,7 @@ async def download_file(
         filename = os.path.basename(parsed_url.path)
 
         if not filename or "." not in filename:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(trust_env=True) as session:
                 async with session.head(url, headers=headers) as response:
                     if response.status == 200:
                         content_disposition = response.headers.get(
@@ -41,7 +41,7 @@ async def download_file(
         filename = filename or get_random_uuid()
         save_path = os.path.join(save_directory, filename)
 
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(trust_env=True) as session:
             async with session.get(url, headers=headers) as response:
                 if response.status == 200:
                     with open(save_path, "wb") as file:

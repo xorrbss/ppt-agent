@@ -111,7 +111,7 @@ class ImageGenerationService:
         return image_path
 
     async def get_image_from_pexels(self, prompt: str) -> str:
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(trust_env=True) as session:
             response = await session.get(
                 f"https://api.pexels.com/v1/search?query={prompt}&per_page=1",
                 headers={"Authorization": f"{get_pexels_api_key_env()}"},
@@ -121,7 +121,7 @@ class ImageGenerationService:
             return image_url
 
     async def get_image_from_pixabay(self, prompt: str) -> str:
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(trust_env=True) as session:
             response = await session.get(
                 f"https://pixabay.com/api/?key={get_pixabay_api_key_env()}&q={prompt}&image_type=photo&per_page=3"
             )
