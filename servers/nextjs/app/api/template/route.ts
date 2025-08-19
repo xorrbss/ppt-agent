@@ -16,9 +16,11 @@ export async function GET(request: Request) {
     browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox", "--disable-web-security"] });
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 720 });
-    await page.goto(schemaPageUrl, { waitUntil: "networkidle0", timeout: 80000 });
+    page.setDefaultNavigationTimeout(300000);
+    page.setDefaultTimeout(300000);
+    await page.goto(schemaPageUrl, { waitUntil: "networkidle0", timeout: 300000 });
 
-    await page.waitForSelector("[data-layouts]", { timeout: 30000 });
+    await page.waitForSelector("[data-layouts]", { timeout: 300000 });
 
     const { dataLayouts, dataGroupSettings } = await page.$eval(
       "[data-layouts]",
