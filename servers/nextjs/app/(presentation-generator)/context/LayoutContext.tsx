@@ -378,80 +378,167 @@ export const LayoutProvider: React.FC<{
         const groupLayouts: LayoutInfo[] = [];
         const groupFullData: FullDataInfo[] = [];
 
-        for (const i of allLayout) {
-          /* ---------- 1. compile JSX to plain script ------------------ */
-          const module = compileCustomLayout(i.layout_code, React, z);
-
-          if (!module.default) {
-            toast.error(`Custom Layout has no default export`, {
-              description:
-                "Please ensure the layout file exports a default component",
-            });
-            console.warn(`❌ Custom Layout has no default export`);
-            continue;
-          }
-
-          if (!module.Schema) {
-            toast.error(`Custom Layout has no Schema export`, {
-              description: "Please ensure the layout file exports a Schema",
-            });
-            console.warn(`❌ Custom Layout has no Schema export`);
-            continue;
-          }
-          const cacheKey = createCacheKey(
-            `custom-${presentationId}`,
-            i.layout_name
+        // Helper to create an inline error component for this specific slide
+        const createErrorComponent = (title: string, message: string): React.ComponentType<{ data: any }> => {
+          const ErrorSlide: React.FC<{ data: any }> = () => (
+            <div className="aspect-video w-full h-full bg-red-50 text-red-700 flex flex-col items-start justify-start p-4 space-y-2">
+              <div className="text-sm font-semibold">{title}</div>
+              <pre className="text-xs whitespace-pre-wrap break-words max-h-full overflow-auto bg-red-100 rounded-md p-2 border border-red-200">{message}</pre>
+            </div>
           );
-          if (!layoutCache.has(cacheKey)) {
-            layoutCache.set(cacheKey, module.default);
+          ErrorSlide.displayName = "CustomTemplateErrorSlide";
+          return ErrorSlide;
+        };
+
+        for (const i of allLayout) {
+          try {
+            /* ---------- 1. compile JSX to plain script ------------------ */
+            const module = compileCustomLayout(i.layout_code, React, z);
+
+            // Determine identifiers even if subsequent steps fail
+            const originalLayoutId =
+              (module && (module as any).layoutId) ||
+              i.layout_name.toLowerCase().replace(/layout$/, "");
+            const uniqueKey = `${`custom-${presentationId}`}:${originalLayoutId}`;
+            const layoutName =
+              (module && (module as any).layoutName) ||
+              i.layout_name.replace(/([A-Z])/g, " $1").trim();
+            const layoutDescription =
+              (module && (module as any).layoutDescription) ||
+              `${layoutName} layout for presentations`;
+
+            let fullData: FullDataInfo | null = null;
+            let jsonSchema: any = null;
+            let componentToUse: React.ComponentType<{ data: any } | any> | null = null;
+            let sampleData: any = {};
+
+            // Validate exports
+            if (!module || !(module as any).default) {
+              const errorComp = createErrorComponent(
+                `Invalid export in ${i.layout_name}`,
+                "Default export not found. Please export a default React component."
+              );
+              componentToUse = errorComp;
+              jsonSchema = {};
+            } else if (!(module as any).Schema) {
+              const errorComp = createErrorComponent(
+                `Schema missing in ${i.layout_name}`,
+                "Schema export not found. Please export a Zod Schema as 'Schema'."
+              );
+              componentToUse = errorComp;
+              jsonSchema = {};
+            } else {
+              // Cache valid component
+              const cacheKey = createCacheKey(
+                `custom-${presentationId}`,
+                i.layout_name
+              );
+              if (!layoutCache.has(cacheKey)) {
+                layoutCache.set(cacheKey, (module as any).default);
+              }
+              componentToUse = (module as any).default;
+
+              // Build schema and sample data with guards
+              try {
+                jsonSchema = z.toJSONSchema((module as any).Schema, {
+                  override: (ctx) => {
+                    delete ctx.jsonSchema.default;
+                  },
+                });
+              } catch (schemaErr: any) {
+                const errorComp = createErrorComponent(
+                  `Schema generation failed for ${i.layout_name}`,
+                  schemaErr?.message || String(schemaErr)
+                );
+                componentToUse = errorComp;
+                jsonSchema = {};
+              }
+
+              if (componentToUse !== null && componentToUse !== (module as any).default) {
+                // componentToUse already replaced with error component
+                sampleData = {};
+              } else {
+                try {
+                  sampleData = (module as any).Schema.parse({});
+                } catch (parseErr: any) {
+                  const errorComp = createErrorComponent(
+                    `Schema.parse failed for ${i.layout_name}`,
+                    parseErr?.message || String(parseErr)
+                  );
+                  componentToUse = errorComp;
+                  sampleData = {};
+                  jsonSchema = jsonSchema || {};
+                }
+              }
+            }
+
+            customFonts.set(presentationId, i.fonts);
+
+            const layout: LayoutInfo = {
+              id: uniqueKey,
+              name: layoutName,
+              description: layoutDescription,
+              json_schema: jsonSchema,
+              groupName: groupName,
+            };
+
+            fullData = {
+              name: layoutName,
+              component: componentToUse as React.ComponentType<any>,
+              schema: jsonSchema,
+              sampleData: sampleData,
+              fileName: i.layout_name,
+              groupName: groupName,
+              layoutId: uniqueKey,
+            };
+
+            groupFullData.push(fullData);
+
+            layoutsById.set(uniqueKey, layout);
+            layoutsByGroup.get(groupName)!.add(uniqueKey);
+            fileMap.set(uniqueKey, {
+              fileName: i.layout_name,
+              groupName: groupName,
+            });
+            groupLayouts.push(layout);
+            layouts.push(layout);
+          } catch (e: any) {
+            // Handle compilation/runtime errors during transformation
+            const uniqueKey = `${`custom-${presentationId}`}:${i.layout_name.toLowerCase().replace(/layout$/, "")}`;
+            const layoutName = i.layout_name.replace(/([A-Z])/g, " $1").trim();
+            const errorComp = createErrorComponent(
+              `Compilation error in ${i.layout_name}`,
+              e?.message || String(e)
+            );
+
+            const layout: LayoutInfo = {
+              id: uniqueKey,
+              name: layoutName,
+              description: `Failed to compile ${i.layout_name}`,
+              json_schema: {},
+              groupName: groupName,
+            };
+
+            const fullData: FullDataInfo = {
+              name: layoutName,
+              component: errorComp,
+              schema: {},
+              sampleData: {},
+              fileName: i.layout_name,
+              groupName: groupName,
+              layoutId: uniqueKey,
+            };
+
+            groupFullData.push(fullData);
+            layoutsById.set(uniqueKey, layout);
+            layoutsByGroup.get(groupName)!.add(uniqueKey);
+            fileMap.set(uniqueKey, {
+              fileName: i.layout_name,
+              groupName: groupName,
+            });
+            groupLayouts.push(layout);
+            layouts.push(layout);
           }
-
-          customFonts.set(presentationId, i.fonts);
-
-          const originalLayoutId =
-            module.layoutId ||
-            i.layout_name.toLowerCase().replace(/layout$/, "");
-          const uniqueKey = `${`custom-${presentationId}`}:${originalLayoutId}`;
-          const layoutName =
-            module.layoutName ||
-            i.layout_name.replace(/([A-Z])/g, " $1").trim();
-          const layoutDescription =
-            module.layoutDescription ||
-            `${layoutName} layout for presentations`;
-
-          const jsonSchema = z.toJSONSchema(module.Schema, {
-            override: (ctx) => {
-              delete ctx.jsonSchema.default;
-            },
-          });
-
-          const layout: LayoutInfo = {
-            id: uniqueKey,
-            name: layoutName,
-            description: layoutDescription,
-            json_schema: jsonSchema,
-            groupName: groupName,
-          };
-          const sampleData = module.Schema.parse({});
-          const fullData: FullDataInfo = {
-            name: layoutName,
-            component: module.default,
-            schema: jsonSchema,
-            sampleData: sampleData,
-            fileName: i.layout_name,
-            groupName: groupName,
-            layoutId: uniqueKey,
-          };
-          groupFullData.push(fullData);
-
-          layoutsById.set(uniqueKey, layout);
-          layoutsByGroup.get(groupName)!.add(uniqueKey);
-          fileMap.set(uniqueKey, {
-            fileName: i.layout_name,
-            groupName: groupName,
-          });
-          groupLayouts.push(layout);
-          layouts.push(layout);
         }
     setCustomTemplateFonts(customFonts);
         // Cache grouped layouts

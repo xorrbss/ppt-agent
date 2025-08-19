@@ -17,6 +17,7 @@ const LayoutSelection: React.FC<LayoutSelectionProps> = ({
         getLayoutsByGroup,
         getGroupSetting,
         getAllGroups,
+        getFullDataByGroup,
         loading
     } = useLayout();
 
@@ -47,7 +48,14 @@ const LayoutSelection: React.FC<LayoutSelectionProps> = ({
         const groups = getAllGroups();
         if (groups.length === 0) return [];
 
-        const Groups: LayoutGroup[] = groups.map(groupName => {
+        const Groups: LayoutGroup[] = groups
+            .filter(groupName => {
+                // Filter out groups that contain any errored layouts (from custom templates compile/parse errors)
+                const fullData = getFullDataByGroup(groupName);
+                const hasErroredLayouts = fullData.some(fd => (fd as any)?.component?.displayName === "CustomTemplateErrorSlide");
+                return !hasErroredLayouts;
+            })
+            .map(groupName => {
             const settings = getGroupSetting(groupName);
             const customMeta = summaryMap[groupName];
             const isCustom = groupName.toLowerCase().startsWith("custom-");
@@ -66,7 +74,7 @@ const LayoutSelection: React.FC<LayoutSelectionProps> = ({
             if (!a.default && b.default) return 1;
             return a.name.localeCompare(b.name);
         });
-    }, [getAllGroups, getLayoutsByGroup, getGroupSetting, summaryMap]);
+    }, [getAllGroups, getLayoutsByGroup, getGroupSetting, getFullDataByGroup, summaryMap]);
 
     const inBuiltGroups = React.useMemo(
         () => layoutGroups.filter(g => !g.id.toLowerCase().startsWith("custom-")),
