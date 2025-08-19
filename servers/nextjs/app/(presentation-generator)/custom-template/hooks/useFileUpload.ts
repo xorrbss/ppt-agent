@@ -10,8 +10,11 @@ export const useFileUpload = () => {
       if (!file) return;
 
       // Validate file type
-      if (!file.name.toLowerCase().endsWith(".pptx")) {
-        toast.error("Please select a valid PPTX file");
+      const lowerName = file.name.toLowerCase();
+      const isPptx = lowerName.endsWith(".pptx");
+      const isPdf = lowerName.endsWith(".pdf");
+      if (!isPptx && !isPdf) {
+        toast.error("Please select a valid PDF or PPTX file");
         return;
       }
 
