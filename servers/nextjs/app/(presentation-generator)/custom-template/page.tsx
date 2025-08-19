@@ -103,8 +103,8 @@ const CustomTemplatePage = () => {
             Custom Template Processor
           </h1>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Upload your PPTX file to extract slides and convert them to
-            template which then can be used to generate AI presentations.
+            Upload your PDF or PPTX file to extract slides and convert them to
+            a template which you can use to generate AI presentations.
           </p>
           <div className="max-w-2xl mx-auto mt-2">
             <div className="inline-block rounded border border-orange-200 bg-orange-50 px-3 py-2 text-sm text-orange-700">

@@ -10,15 +10,18 @@ export const useFileUpload = () => {
       if (!file) return;
 
       // Validate file type
-      if (!file.name.toLowerCase().endsWith(".pptx")) {
-        toast.error("Please select a valid PPTX file");
+      const lowerName = file.name.toLowerCase();
+      const isPptx = lowerName.endsWith(".pptx");
+      const isPdf = lowerName.endsWith(".pdf");
+      if (!isPptx && !isPdf) {
+        toast.error("Please select a valid PDF or PPTX file");
         return;
       }
 
-      // Validate file size (50MB limit)
-      const maxSize = 50 * 1024 * 1024; // 50MB
+      // Validate file size (100MB limit)
+      const maxSize = 100 * 1024 * 1024; // 100MB
       if (file.size > maxSize) {
-        toast.error("File size must be less than 50MB");
+        toast.error("File size must be less than 100MB");
         return;
       }
 

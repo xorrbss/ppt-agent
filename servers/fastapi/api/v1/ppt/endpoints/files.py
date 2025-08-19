@@ -20,7 +20,7 @@ async def upload_files(files: Optional[List[UploadFile]]):
 
     temp_dir = TEMP_FILE_SERVICE.create_temp_dir(get_random_uuid())
 
-    validate_files(files, True, True, 50, UPLOAD_ACCEPTED_FILE_TYPES)
+    validate_files(files, True, True, 100, UPLOAD_ACCEPTED_FILE_TYPES)
 
     temp_files: List[str] = []
     if files:

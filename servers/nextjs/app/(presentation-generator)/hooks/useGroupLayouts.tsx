@@ -3,6 +3,7 @@ import React, { useMemo } from "react";
 import { useDispatch } from "react-redux";
 import { useLayout } from "../context/LayoutContext";
 import EditableLayoutWrapper from "../components/EditableLayoutWrapper";
+import SlideErrorBoundary from "../components/SlideErrorBoundary";
 import TiptapTextReplacer from "../components/TiptapTextReplacer";
 import { updateSlideContent } from "../../../store/slices/presentationGeneration";
 import { Loader2 } from "lucide-react";
@@ -66,7 +67,6 @@ export const useGroupLayouts = () => {
                 dataPath: string,
                 slideIndex?: number
               ) => {
-                // Dispatch Redux action to update slide content
                 if (dataPath && slideIndex !== undefined) {
                   dispatch(
                     updateSlideContent({
@@ -78,12 +78,18 @@ export const useGroupLayouts = () => {
                 }
               }}
             >
-              <Layout data={slide.content} />
+              <SlideErrorBoundary label={`Slide ${slide.index + 1}`}>
+                <Layout data={slide.content} />
+              </SlideErrorBoundary>
             </TiptapTextReplacer>
           </EditableLayoutWrapper>
         );
       }
-      return <Layout data={slide.content} />;
+      return (
+        <SlideErrorBoundary label={`Slide ${slide.index + 1}`}>
+          <Layout data={slide.content} />
+        </SlideErrorBoundary>
+      );
     };
   }, [getGroupLayout, dispatch]);
 

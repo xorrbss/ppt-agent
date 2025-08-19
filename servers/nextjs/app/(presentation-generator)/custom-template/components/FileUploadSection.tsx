@@ -36,10 +36,10 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Upload className="w-5 h-5" />
-          Upload PPTX File
+          Upload PDF or PPTX File
         </CardTitle>
         <CardDescription>
-          Select a PowerPoint file (.pptx) to process. Maximum file size: 50MB
+          Select a PDF or PowerPoint file (.pdf or .pptx) to process. Maximum file size: 100MB
         </CardDescription>
         {slides.length > 0 && (
           <div className="flex items-center justify-end gap-2">
@@ -56,12 +56,12 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
             <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <Label htmlFor="file-upload" className="cursor-pointer">
               <span className="text-lg font-medium text-gray-700">
-                Click to upload a PPTX file
+                Click to upload a PDF or PPTX file
               </span>
               <input
                 id="file-upload"
                 type="file"
-                accept=".pptx"
+                accept=".pdf,.pptx"
                 onChange={handleFileSelect}
                 className="opacity-0 w-full h-full cursor-pointer absolute top-0 left-0 z-10"
               />
@@ -106,7 +106,7 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
             {isProcessingPptx
               ? "Extracting Slides..."
               : !selectedFile
-              ? "Select a PPTX file"
+              ? "Select a PDF or PPTX file"
               : "Process File"}
           </Button>
           {isProcessingPptx && <Timer duration={90} />}

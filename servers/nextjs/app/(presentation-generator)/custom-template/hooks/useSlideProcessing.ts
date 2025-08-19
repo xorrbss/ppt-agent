@@ -115,10 +115,10 @@ export const useSlideProcessing = (
     []
   );
 
-  // Process PPTX file to extract slides
+  // Process PDF or PPTX file to extract slides
   const processFile = useCallback(async () => {
     if (!selectedFile) {
-      toast.error("Please select a PPTX file first");
+      toast.error("Please select a PDF or PPTX file first");
       return;
     }
 
@@ -126,30 +126,51 @@ export const useSlideProcessing = (
       setIsProcessingPptx(true);
 
       const formData = new FormData();
-      formData.append("pptx_file", selectedFile);
+      const fileName = selectedFile.name.toLowerCase();
+      const isPdf = fileName.endsWith(".pdf");
+      const isPptx = fileName.endsWith(".pptx");
 
-      const pptxResponse = await fetch("/api/v1/ppt/pptx-slides/process", {
-        method: "POST",
-        body: formData,
-      });
-      const pptxData = await ApiResponseHandler.handleResponse(
-        pptxResponse,
-        "Failed to process PPTX file"
-      );
-
-      if (!pptxData.success || !pptxData.slides?.length) {
-        throw new Error("No slides found in the PPTX file");
+      let slidesResponseData: any = null;
+      if (isPdf) {
+        formData.append("pdf_file", selectedFile);
+        const pdfResponse = await fetch("/api/v1/ppt/pdf-slides/process", {
+          method: "POST",
+          body: formData,
+        });
+        slidesResponseData = await ApiResponseHandler.handleResponse(
+          pdfResponse,
+          "Failed to process PDF file"
+        );
+      } else if (isPptx) {
+        formData.append("pptx_file", selectedFile);
+        const pptxResponse = await fetch("/api/v1/ppt/pptx-slides/process", {
+          method: "POST",
+          body: formData,
+        });
+        slidesResponseData = await ApiResponseHandler.handleResponse(
+          pptxResponse,
+          "Failed to process PPTX file"
+        );
+      } else {
+        throw new Error("Unsupported file type. Please upload a PDF or PPTX file.");
       }
 
-      // Extract fonts data from the response
-      if (pptxData.fonts) {
-        setFontsData(pptxData.fonts);
+      if (!slidesResponseData.success || !slidesResponseData.slides?.length) {
+        throw new Error("No slides found in the uploaded file");
       }
 
-      // Initialize slides with skeleton state
-      const initialSlides: ProcessedSlide[] = pptxData.slides.map(
+      // Extract fonts data only for PPTX where available
+      if (slidesResponseData.fonts) {
+        setFontsData(slidesResponseData.fonts);
+      }
+
+      // Initialize slides with skeleton state; for PDF, xml/fonts won't exist
+      const initialSlides: ProcessedSlide[] = slidesResponseData.slides.map(
         (slide: any) => ({
-          ...slide,
+          slide_number: slide.slide_number,
+          screenshot_url: slide.screenshot_url,
+          xml_content: slide.xml_content ?? "",
+          normalized_fonts: slide.normalized_fonts ?? [],
           processing: false,
           processed: false,
         })
@@ -157,7 +178,7 @@ export const useSlideProcessing = (
 
       setSlides(initialSlides);
 
-      const hasUnsupported = Array.isArray(pptxData.fonts?.not_supported_fonts) && pptxData.fonts.not_supported_fonts.length > 0;
+      const hasUnsupported = Array.isArray(slidesResponseData.fonts?.not_supported_fonts) && slidesResponseData.fonts.not_supported_fonts.length > 0;
 
       toast.success(
         `Template Processing Finished`,
