@@ -20,8 +20,10 @@ export async function POST(req: NextRequest) {
   });
   const page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 720 });
+  page.setDefaultNavigationTimeout(300000);
+  page.setDefaultTimeout(300000);
 
-  await page.goto(`http://localhost/pdf-maker?id=${id}`, { waitUntil: 'networkidle0', timeout: 180000 });
+  await page.goto(`http://localhost/pdf-maker?id=${id}`, { waitUntil: 'networkidle0', timeout: 300000 });
 
   await page.waitForFunction('() => document.readyState === "complete"')
 
@@ -47,7 +49,7 @@ export async function POST(req: NextRequest) {
         return (loadedElements / totalElements) >= 0.99;
       }
       `,
-      { timeout: 10000 }
+      { timeout: 300000 }
     );
 
     await new Promise(resolve => setTimeout(resolve, 1000));

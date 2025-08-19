@@ -22,12 +22,14 @@ export async function GET(request: Request) {
     });
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 720 });
+    page.setDefaultNavigationTimeout(300000);
+    page.setDefaultTimeout(300000);
     await page.goto(schemaPageUrl, {
       waitUntil: "networkidle0",
-      timeout: 80000,
+      timeout: 300000,
     });
     
-    await page.waitForSelector("[data-layouts]", { timeout: 30000 });
+    await page.waitForSelector("[data-layouts]", { timeout: 300000 });
 
     // Extract both data-layouts and data-group-settings attributes
     const { dataLayouts, dataGroupSettings } = await page.$eval(
