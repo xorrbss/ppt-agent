@@ -39,7 +39,7 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
           Upload PDF or PPTX File
         </CardTitle>
         <CardDescription>
-          Select a PDF or PowerPoint file (.pdf or .pptx) to process. Maximum file size: 50MB
+          Select a PDF or PowerPoint file (.pdf or .pptx) to process. Maximum file size: 100MB
         </CardDescription>
         {slides.length > 0 && (
           <div className="flex items-center justify-end gap-2">

@@ -18,10 +18,10 @@ export const useFileUpload = () => {
         return;
       }
 
-      // Validate file size (50MB limit)
-      const maxSize = 50 * 1024 * 1024; // 50MB
+      // Validate file size (100MB limit)
+      const maxSize = 100 * 1024 * 1024; // 100MB
       if (file.size > maxSize) {
-        toast.error("File size must be less than 50MB");
+        toast.error("File size must be less than 100MB");
         return;
       }
 
