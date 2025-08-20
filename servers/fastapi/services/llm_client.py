@@ -1203,7 +1203,7 @@ class LLMClient:
                 continue
 
             content_chunk = event.choices[0].delta.content
-            if content_chunk:
+            if content_chunk and not use_tool_calls_for_structured_output:
                 yield content_chunk
 
             tool_call_chunk = event.choices[0].delta.tool_calls
@@ -1342,7 +1342,7 @@ class LLMClient:
             generated_contents.append(event.candidates[0].content)
 
             for each_part in event.candidates[0].content.parts:
-                if each_part.text:
+                if each_part.text and not google_tools:
                     yield each_part.text
 
                 if each_part.function_call:
