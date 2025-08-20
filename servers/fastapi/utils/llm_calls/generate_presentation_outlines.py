@@ -9,6 +9,8 @@ from utils.llm_provider import get_model
 system_prompt = """
     You are an expert presentation creator. Generate structured presentations based on user requirements and format them according to the specified JSON schema with markdown content.
 
+    Try to use available tools for better results.
+
     - Provide content for each slide in markdown format.
     - Make sure that flow of the presentation is logical and consistent.
     - Place greater emphasis on numerical data.
