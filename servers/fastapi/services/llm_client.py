@@ -1328,7 +1328,11 @@ class LLMClient:
                 max_output_tokens=max_tokens,
             ),
         ):
-            if not (event.candidates and event.candidates[0].content):
+            if not (
+                event.candidates
+                and event.candidates[0].content
+                and event.candidates[0].content.parts
+            ):
                 continue
 
             generated_contents.append(event.candidates[0].content)

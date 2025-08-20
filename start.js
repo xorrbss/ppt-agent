@@ -113,7 +113,7 @@ const startServers = async () => {
     ],
     {
       cwd: fastapiDir,
-      stdio: "inherit",
+      stdio: "ignore",
       env: process.env,
     },
   );
@@ -151,7 +151,7 @@ const startServers = async () => {
     console.error("Ollama process failed to start:", err);
   });
 
-  
+
 
   // Keep the Node process alive until both servers exit
   const exitCode = await Promise.race([
