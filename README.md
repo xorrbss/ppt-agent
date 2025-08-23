@@ -160,9 +160,7 @@ Endpoint: `/api/v1/ppt/presentation/generate`
 
 Method: `POST`
 
-Content-Type: `multipart/form-data`
-
-> **Note**: Make sure to set `Content-Type` as `multipart/form-data` and not `application/json`.
+Content-Type: `application/json`
 
 #### Request Body
 
