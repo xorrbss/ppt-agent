@@ -172,7 +172,6 @@ Content-Type: `multipart/form-data`
 | n_slides | integer | No | Number of slides to generate (default: 8, min: 5, max: 15) |
 | language | string | No | Language for the presentation (default: "English") |
 | template | string | No | Presentation template (default: "general"). Available options: "classic", "general", "modern", "professional" + Custom templates |
-| documents | File[] | No | Optional list of document files to include in the presentation. Supported file types: PDF, TXT, PPTX, DOCX |
 | export_as | string | No | Export format ("pptx" or "pdf", default: "pptx") |
 
 #### Response
@@ -189,11 +188,14 @@ Content-Type: `multipart/form-data`
 
 ```bash
 curl -X POST http://localhost:5000/api/v1/ppt/presentation/generate \
-  -F "prompt=Introduction to Machine Learning" \
-  -F "n_slides=5" \
-  -F "language=English" \
-  -F "template=general" \
-  -F "export_as=pptx"
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Introduction to Machine Learning",
+    "n_slides": 5,
+    "language": "English",
+    "template": "general",
+    "export_as": "pptx"
+  }'
 ```
 
 #### Example Response
