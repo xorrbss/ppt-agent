@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { Loader2, PlusIcon, Trash2, WandSparkles } from "lucide-react";
+import { Loader2, PlusIcon, Trash2, WandSparkles, StickyNote } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -174,6 +174,7 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
               presentationId={presentationId}
             />
           )}
+         
           {!isStreaming && !loading && (
             <ToolTip content="Delete slide">
               <div
@@ -240,6 +241,28 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
                         <SendHorizontal className="w-4 sm:w-5 h-4 sm:h-5" />
                       </button>
                     </form>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+          )}
+          {/* Speaker Notes */}
+          {!isStreaming && slide?.speaker_note && (
+            <div className="absolute top-2 z-20 sm:top-4 right-8 sm:right-12 hidden md:block transition-transform">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <div className=" cursor-pointer ">
+                    <ToolTip content="Show speaker notes">
+                      <StickyNote className="text-xl text-gray-500" />
+                    </ToolTip>
+                  </div>
+                </PopoverTrigger>
+                <PopoverContent side="left" align="start" sideOffset={10} className="w-[320px] z-30">
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-gray-600">Speaker notes</p>
+                    <div className="text-sm text-gray-800 whitespace-pre-wrap max-h-64 overflow-auto">
+                      {slide.speaker_note}
+                    </div>
                   </div>
                 </PopoverContent>
               </Popover>
