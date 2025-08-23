@@ -32,5 +32,7 @@ export interface Slide {
   icons: string[] | null;
   graph_id: string | null;
   presentation?: string;
+  speaker_note?: string;
+
   content: SlideContent;
 }
