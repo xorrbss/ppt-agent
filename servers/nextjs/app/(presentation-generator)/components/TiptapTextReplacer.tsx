@@ -80,6 +80,12 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
         setProcessedElements((prev) => new Set(prev).add(htmlElement));
         // Render TiptapText
         const root = ReactDOM.createRoot(tiptapContainer);
+        // Tag the container so we can update just this node on slideData changes
+        if (dataPath?.path) {
+          tiptapContainer.setAttribute("data-tiptap-path", dataPath.path);
+        }
+        tiptapContainer.setAttribute("data-tiptap-tag", htmlElement.tagName);
+        tiptapContainer.setAttribute("data-tiptap-value", trimmedText);
         root.render(
           <TiptapText
             content={trimmedText}
@@ -248,7 +254,8 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
       if (text.length < 2) return true;
 
       // Skip elements that look like numbers or single characters (might be icons/UI)
-      if (/^[0-9]+$/.test(text) || text.length === 1) return true;
+      // if (/^[0-9]+$/.test(text) || text.length === 1) return true;
+      if (text.length <3) return true;
 
       return false;
     };
@@ -290,13 +297,60 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
     };
 
     // Replace text elements after a short delay to ensure DOM is ready
-    const timer = setTimeout(replaceTextElements, 500);
+    const timer = setTimeout(replaceTextElements, 1000);
 
     return () => {
       clearTimeout(timer);
     };
   }, [slideData, slideIndex]);
 
+  // Update only the changed editors when slideData changes
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const getNestedValue = (data: any, path: string): string => {
+      if (!data) return "";
+      const keys = path.split(/[.\[\]]+/).filter(Boolean);
+      let current: any = data;
+      for (const key of keys) {
+        if (current == null) return "";
+        if (isNaN(Number(key))) current = current[key];
+        else current = current[Number(key)];
+      }
+      return typeof current === "string" ? current : "";
+    };
+
+    const nodes = containerRef.current.querySelectorAll<HTMLElement>(
+      '[data-tiptap-path]'
+    );
+    nodes.forEach((node) => {
+      const path = node.getAttribute('data-tiptap-path');
+      if (!path) return;
+      const nextValue = getNestedValue(slideData, path);
+      const prevValue = node.getAttribute('data-tiptap-value') || '';
+      if (nextValue === prevValue) return;
+
+      const root = (node as any).__tiptapRoot as ReactDOM.Root | undefined;
+      const originalEl = (node as any).__tiptapElement as HTMLElement | undefined;
+      const tag = node.getAttribute('data-tiptap-tag') || 'P';
+      if (!root || !originalEl) return;
+
+      node.setAttribute('data-tiptap-value', nextValue);
+      root.render(
+        <TiptapText
+          key={`${path}:${nextValue}`}
+          content={nextValue}
+          element={originalEl}
+          tag={tag}
+          onContentChange={(content: string) => {
+            if (path && onContentChange) onContentChange(content, path, slideIndex);
+            node.setAttribute('data-tiptap-value', content);
+          }}
+          placeholder="Enter text..."
+        />
+      );
+    });
+  }, [slideData, slideIndex, onContentChange]);
   return (
     <div ref={containerRef} className="tiptap-text-replacer">
       {children}
