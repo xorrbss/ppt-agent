@@ -20,7 +20,9 @@ system_prompt = """
     - Only use markdown to highlight important points.
     - Make sure to follow language guidelines.
     - Speaker note should be normal text, not markdown.
-    **Strictly follow the max and min character limit for every property in the slide.**
+    - Strictly follow the max and min character limit for every property in the slide.
+    - Never ever go over the max character limit. Limit your narration to make sure you never go over the max character limit.
+    - Number of items should not be more than max number of items specified in slide schema. If you have to put multiple points then merge them to obey max numebr of items.
 
     # Image and Icon Output Format
     image: {

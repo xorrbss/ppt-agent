@@ -40,7 +40,10 @@ from utils.llm_calls.generate_presentation_structure import (
 from utils.llm_calls.generate_slide_content import (
     get_slide_content_from_type_and_outline,
 )
-from utils.process_slides import process_slide_and_fetch_assets
+from utils.process_slides import (
+    process_slide_add_placeholder_assets,
+    process_slide_and_fetch_assets,
+)
 from utils.randomizers import get_random_uuid
 
 
@@ -225,6 +228,9 @@ async def stream_presentation(
                 content=slide_content,
             )
             slides.append(slide)
+
+            # This will mutate slide and add placeholder assets
+            process_slide_add_placeholder_assets(slide)
 
             # This will mutate slide
             async_assets_generation_tasks.append(
