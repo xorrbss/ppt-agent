@@ -122,7 +122,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
                   presentationData.slides.length > 0 &&
                   presentationData.slides.map((slide: any, index: number) => (
                     // [data-speaker-note] is used to extract the speaker note from the slide for export to pptx
-                    <div key={index} className="w-full" data-speaker-note={slide.note}>
+                    <div key={index} className="w-full" data-speaker-note={slide.speaker_note}>
                       {renderSlideContent(slide, true)}
                     </div>
                   ))}
