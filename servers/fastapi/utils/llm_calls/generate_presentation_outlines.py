@@ -1,7 +1,8 @@
+from datetime import datetime
 from typing import Optional
 
 from models.llm_message import LLMSystemMessage, LLMUserMessage
-from models.llm_tools import GetCurrentDatetimeTool, SearchWebTool
+from models.llm_tools import SearchWebTool
 from services.llm_client import LLMClient
 from utils.get_dynamic_models import get_presentation_outline_model_with_n_slides
 from utils.llm_provider import get_model
@@ -26,6 +27,7 @@ def get_user_prompt(prompt: str, n_slides: int, language: str, content: str):
         - Prompt: {prompt}
         - Output Language: {language}
         - Number of Slides: {n_slides}
+        - Current Date and Time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
         - Additional Information: {content}
     """
 
@@ -52,13 +54,11 @@ async def generate_ppt_outline(
 
     client = LLMClient()
 
-    tools = [SearchWebTool, GetCurrentDatetimeTool]
-
     async for chunk in client.stream_structured(
         model,
         get_messages(prompt, n_slides, language, content),
         response_model.model_json_schema(),
         strict=True,
-        tools=tools if client.enable_web_grounding() else None,
+        tools=[SearchWebTool] if client.enable_web_grounding() else None,
     ):
         yield chunk
