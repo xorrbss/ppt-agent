@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.presentation_outline_model import PresentationOutlineModel
 from models.sql.presentation import PresentationModel
 from models.sse_response import SSECompleteResponse, SSEResponse, SSEStatusResponse
-from services import TEMP_FILE_SERVICE
+from services.temp_file_service import TEMP_FILE_SERVICE
 from services.database import get_async_session
 from services.documents_loader import DocumentsLoader
 from services.score_based_chunker import ScoreBasedChunker

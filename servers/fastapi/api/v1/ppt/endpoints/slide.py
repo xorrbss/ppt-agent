@@ -1,4 +1,3 @@
-import importlib
 from typing import Annotated, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,7 +5,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from services.database import get_async_session
-from services.icon_finder_service import IconFinderService
 from services.image_generation_service import ImageGenerationService
 from utils.asset_directory_utils import get_images_directory
 from utils.llm_calls.edit_slide import get_edited_slide_content
@@ -42,12 +40,10 @@ async def edit_slide(
     )
 
     image_generation_service = ImageGenerationService(get_images_directory())
-    icon_finder_service = IconFinderService()
 
     # This will mutate edited_slide_content
     new_assets = await process_old_and_new_slides_and_fetch_assets(
         image_generation_service,
-        icon_finder_service,
         slide.content,
         edited_slide_content,
     )
