@@ -108,20 +108,22 @@ async def get_all_presentations(sql_session: AsyncSession = Depends(get_async_se
 
 @PRESENTATION_ROUTER.post("/create", response_model=PresentationModel)
 async def create_presentation(
-    prompt: Annotated[str, Body()],
+    content: Annotated[str, Body()],
     n_slides: Annotated[int, Body()],
     language: Annotated[str, Body()],
     file_paths: Annotated[Optional[List[str]], Body()] = None,
+    instruction: Annotated[Optional[str], Body()] = None,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
     presentation_id = get_random_uuid()
 
     presentation = PresentationModel(
         id=presentation_id,
-        prompt=prompt,
+        content=content,
         n_slides=n_slides,
         language=language,
         file_paths=file_paths,
+        instruction=instruction,
     )
 
     sql_session.add(presentation)
@@ -157,6 +159,7 @@ async def prepare_presentation(
             await generate_presentation_structure(
                 presentation_outline=presentation_outline_model,
                 presentation_layout=layout,
+                instruction=presentation.instruction,
             )
         )
 
@@ -216,7 +219,10 @@ async def stream_presentation(
             slide_layout = layout.slides[slide_layout_index]
 
             slide_content = await get_slide_content_from_type_and_outline(
-                slide_layout, outline.slides[i], presentation.language
+                slide_layout,
+                outline.slides[i],
+                presentation.language,
+                presentation.instruction,
             )
 
             slide = SlideModel(
@@ -341,10 +347,11 @@ async def generate_presentation_api(
     if not presentation_outlines:
         presentation_outlines_text = ""
         async for chunk in generate_ppt_outline(
-            request.prompt,
+            request.content,
             request.n_slides,
             request.language,
             additional_context,
+            request.instruction,
         ):
             presentation_outlines_text += chunk
 
@@ -376,6 +383,7 @@ async def generate_presentation_api(
             await generate_presentation_structure(
                 presentation_outlines,
                 layout_model,
+                request.instruction,
             )
         )
 
@@ -391,12 +399,13 @@ async def generate_presentation_api(
     # 6. Create PresentationModel
     presentation = PresentationModel(
         id=presentation_id,
-        prompt=request.prompt,
+        content=request.content,
         n_slides=request.n_slides,
         language=request.language,
         outlines=presentation_outlines.model_dump(),
         layout=layout_model.model_dump(),
         structure=presentation_structure.model_dump(),
+        instruction=request.instruction,
     )
 
     image_generation_service = ImageGenerationService(get_images_directory())
@@ -409,7 +418,7 @@ async def generate_presentation_api(
         slide_layout = layout_model.slides[slide_layout_index]
         print(f"Generating content for slide {i} with layout {slide_layout.id}")
         slide_content = await get_slide_content_from_type_and_outline(
-            slide_layout, outlines[i], request.language
+            slide_layout, outlines[i], request.language, request.instruction
         )
         slide = SlideModel(
             presentation=presentation_id,

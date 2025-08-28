@@ -49,7 +49,10 @@ async def stream_outlines(
                         slides=[chunk.to_slide_outline() for chunk in chunks]
                     )
                 except Exception as e:
-                    print(e)
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Failed to generate presentation outlines. Please try again.",
+                    )
             else:
                 additional_context = "\n\n".join(documents)
 
@@ -60,6 +63,7 @@ async def stream_outlines(
                 presentation.n_slides,
                 presentation.language,
                 additional_context,
+                presentation.instruction,
             ):
                 # Give control to the event loop
                 await asyncio.sleep(0)

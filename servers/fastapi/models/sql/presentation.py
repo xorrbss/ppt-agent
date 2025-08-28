@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import List, Optional
-from sqlalchemy import JSON, Column, DateTime
+from sqlalchemy import JSON, Column, DateTime, String
 from sqlmodel import Field, SQLModel
 
 from models.presentation_layout import PresentationLayoutModel
@@ -11,7 +11,7 @@ from utils.randomizers import get_random_uuid
 
 class PresentationModel(SQLModel, table=True):
     id: str = Field(primary_key=True)
-    prompt: str
+    content: str
     n_slides: int
     language: str
     title: Optional[str] = None
@@ -21,11 +21,12 @@ class PresentationModel(SQLModel, table=True):
     updated_at: datetime = Field(sa_column=Column(DateTime, default=datetime.now))
     layout: Optional[dict] = Field(sa_column=Column(JSON), default=None)
     structure: Optional[dict] = Field(sa_column=Column(JSON), default=None)
+    instruction: Optional[str] = Field(sa_column=Column(String), default=None)
 
     def get_new_presentation(self):
         return PresentationModel(
             id=get_random_uuid(),
-            prompt=self.prompt,
+            content=self.content,
             n_slides=self.n_slides,
             language=self.language,
             title=self.title,
@@ -33,6 +34,7 @@ class PresentationModel(SQLModel, table=True):
             outlines=self.outlines,
             layout=self.layout,
             structure=self.structure,
+            instruction=self.instruction,
         )
 
     def get_presentation_outline(self):

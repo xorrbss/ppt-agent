@@ -3,7 +3,10 @@ from pydantic import BaseModel, Field
 
 
 class GeneratePresentationRequest(BaseModel):
-    prompt: str = Field(..., description="The prompt for generating the presentation")
+    content: str = Field(..., description="The content for generating the presentation")
+    instruction: Optional[str] = Field(
+        default=None, description="The instruction for generating the presentation"
+    )
     n_slides: int = Field(default=8, description="Number of slides to generate")
     language: str = Field(
         default="English", description="Language for the presentation"

@@ -12,7 +12,7 @@ from models.sql.slide import SlideModel
 
 class PresentationWithSlides(BaseModel):
     id: str
-    prompt: str
+    content: str
     n_slides: int
     language: str
     title: Optional[str] = None
@@ -21,6 +21,7 @@ class PresentationWithSlides(BaseModel):
     updated_at: datetime
     layout: Optional[PresentationLayoutModel]
     structure: Optional[PresentationStructureModel]
+    instruction: Optional[str] = None
     slides: List[SlideModel]
 
     def to_presentation_model(self) -> PresentationModel:
