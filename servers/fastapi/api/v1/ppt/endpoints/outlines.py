@@ -38,7 +38,7 @@ async def stream_outlines(
             documents_loader = DocumentsLoader(file_paths=presentation.file_paths)
             await documents_loader.load_documents(temp_dir)
             documents = documents_loader.documents
-            if documents:
+            if documents and len(documents) == 1:
                 additional_context = documents[0]
                 chunker = ScoreBasedChunker()
                 try:
@@ -50,6 +50,8 @@ async def stream_outlines(
                     )
                 except Exception as e:
                     print(e)
+            else:
+                additional_context = "\n\n".join(documents)
 
         if not presentation_outlines:
             presentation_outlines_text = ""
