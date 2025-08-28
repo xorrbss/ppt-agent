@@ -1,3 +1,4 @@
+from datetime import datetime
 from models.llm_message import LLMSystemMessage, LLMUserMessage
 from models.presentation_layout import SlideLayoutModel
 from models.presentation_outline_model import SlideOutlineModel
@@ -16,17 +17,28 @@ system_prompt = """
     # Notes
     - Slide body should not use words like "This slide", "This presentation".
     - Rephrase the slide body to make it flow naturally.
-    - Provide prompt to generate image on "__image_prompt__" property.
-    - Provide query to search icon on "__icon_query__" property.
     - Only use markdown to highlight important points.
     - Make sure to follow language guidelines.
     - Speaker note should be normal text, not markdown.
-    **Strictly follow the max and min character limit for every property in the slide.**
+    - Strictly follow the max and min character limit for every property in the slide.
+    - Never ever go over the max character limit. Limit your narration to make sure you never go over the max character limit.
+    - Number of items should not be more than max number of items specified in slide schema. If you have to put multiple points then merge them to obey max numebr of items.
+
+    # Image and Icon Output Format
+    image: {
+        __image_prompt__: string,
+    }
+    icon: {
+        __icon_query__: string,
+    }
 """
 
 
 def get_user_prompt(outline: str, language: str):
     return f"""
+        ## Current Date and Time
+        {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+
         ## Icon Query And Image Prompt Language
         English
 
