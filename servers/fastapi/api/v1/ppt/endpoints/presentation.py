@@ -2,7 +2,7 @@ import asyncio
 import json
 import os
 import random
-from typing import Annotated, List, Literal, Optional
+from typing import Annotated, List, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy import delete
@@ -21,7 +21,6 @@ from models.presentation_structure_model import PresentationStructureModel
 from models.presentation_with_slides import PresentationWithSlides
 
 from utils.get_layout_by_name import get_layout_by_name
-from services.icon_finder_service import IconFinderService
 from services.image_generation_service import ImageGenerationService
 from utils.dict_utils import deep_update
 from utils.export_utils import export_presentation
@@ -30,7 +29,7 @@ from models.sql.slide import SlideModel
 from models.sse_response import SSECompleteResponse, SSEResponse
 
 from services.database import get_async_session
-from services import TEMP_FILE_SERVICE
+from services.temp_file_service import TEMP_FILE_SERVICE
 from models.sql.presentation import PresentationModel
 from services.pptx_presentation_creator import PptxPresentationCreator
 from utils.asset_directory_utils import get_exports_directory, get_images_directory
@@ -197,7 +196,6 @@ async def stream_presentation(
         )
 
     image_generation_service = ImageGenerationService(get_images_directory())
-    icon_finder_service = IconFinderService()
 
     async def inner():
         structure = presentation.get_structure()
@@ -234,9 +232,7 @@ async def stream_presentation(
 
             # This will mutate slide
             async_assets_generation_tasks.append(
-                process_slide_and_fetch_assets(
-                    image_generation_service, icon_finder_service, slide
-                )
+                process_slide_and_fetch_assets(image_generation_service, slide)
             )
 
             yield SSEResponse(
@@ -386,7 +382,6 @@ async def generate_presentation_api(
     )
 
     image_generation_service = ImageGenerationService(get_images_directory())
-    icon_finder_service = IconFinderService()
     async_asset_generation_tasks = []
 
     # 7. Generate slide content and save slides
@@ -407,9 +402,7 @@ async def generate_presentation_api(
             content=slide_content,
         )
         async_asset_generation_tasks.append(
-            process_slide_and_fetch_assets(
-                image_generation_service, icon_finder_service, slide
-            )
+            process_slide_and_fetch_assets(image_generation_service, slide)
         )
         slides.append(slide)
         slide_contents.append(slide_content)

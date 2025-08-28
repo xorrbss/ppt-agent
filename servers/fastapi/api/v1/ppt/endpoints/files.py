@@ -5,7 +5,7 @@ from fastapi import APIRouter, Body, File, UploadFile
 
 from constants.documents import UPLOAD_ACCEPTED_FILE_TYPES
 from models.decomposed_file_info import DecomposedFileInfo
-from services import TEMP_FILE_SERVICE
+from services.temp_file_service import TEMP_FILE_SERVICE
 from services.documents_loader import DocumentsLoader
 from utils.randomizers import get_random_uuid
 from utils.validators import validate_files

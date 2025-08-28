@@ -65,3 +65,6 @@ class TempFileService:
 
     def cleanup_base_dir(self):
         self.cleanup_temp_dir(self.base_dir)
+
+
+TEMP_FILE_SERVICE = TempFileService()

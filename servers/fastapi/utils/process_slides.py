@@ -3,7 +3,7 @@ from typing import List, Tuple
 from models.image_prompt import ImagePrompt
 from models.sql.image_asset import ImageAsset
 from models.sql.slide import SlideModel
-from services.icon_finder_service import IconFinderService
+from services.icon_finder_service import ICON_FINDER_SERVICE
 from services.image_generation_service import ImageGenerationService
 from utils.asset_directory_utils import get_images_directory
 from utils.dict_utils import get_dict_at_path, get_dict_paths_with_key, set_dict_at_path
@@ -11,7 +11,6 @@ from utils.dict_utils import get_dict_at_path, get_dict_paths_with_key, set_dict
 
 async def process_slide_and_fetch_assets(
     image_generation_service: ImageGenerationService,
-    icon_finder_service: IconFinderService,
     slide: SlideModel,
 ) -> List[ImageAsset]:
 
@@ -33,7 +32,7 @@ async def process_slide_and_fetch_assets(
     for icon_path in icon_paths:
         __icon_query__parent = get_dict_at_path(slide.content, icon_path)
         async_tasks.append(
-            icon_finder_service.search_icons(__icon_query__parent["__icon_query__"])
+            ICON_FINDER_SERVICE.search_icons(__icon_query__parent["__icon_query__"])
         )
 
     results = await asyncio.gather(*async_tasks)
@@ -60,7 +59,6 @@ async def process_slide_and_fetch_assets(
 
 async def process_old_and_new_slides_and_fetch_assets(
     image_generation_service: ImageGenerationService,
-    icon_finder_service: IconFinderService,
     old_slide_content: dict,
     new_slide_content: dict,
 ) -> List[ImageAsset]:
@@ -138,7 +136,7 @@ async def process_old_and_new_slides_and_fetch_assets(
             continue
 
         async_icon_fetch_tasks.append(
-            icon_finder_service.search_icons(new_icon["__icon_query__"])
+            ICON_FINDER_SERVICE.search_icons(new_icon["__icon_query__"])
         )
         new_icons_fetch_status.append(True)
 
