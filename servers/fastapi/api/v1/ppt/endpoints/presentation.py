@@ -20,6 +20,8 @@ from models.presentation_layout import PresentationLayoutModel
 from models.presentation_structure_model import PresentationStructureModel
 from models.presentation_with_slides import PresentationWithSlides
 
+from services.documents_loader import DocumentsLoader
+from services.score_based_chunker import ScoreBasedChunker
 from utils.get_layout_by_name import get_layout_by_name
 from services.image_generation_service import ImageGenerationService
 from utils.dict_utils import deep_update
@@ -321,6 +323,21 @@ async def generate_presentation_api(
     presentation_outlines = None
     additional_context = ""
 
+    # Process files
+    if request.files:
+        documents_loader = DocumentsLoader(file_paths=request.files)
+        await documents_loader.load_documents()
+        documents = documents_loader.documents
+        if documents and len(documents) == 1:
+            additional_context = documents[0]
+            chunker = ScoreBasedChunker()
+            chunks = await chunker.get_n_chunks(documents[0], request.n_slides)
+            presentation_outlines = PresentationOutlineModel(
+                slides=[chunk.to_slide_outline() for chunk in chunks]
+            )
+        elif documents:
+            additional_context = "\n\n".join(documents)
+
     if not presentation_outlines:
         presentation_outlines_text = ""
         async for chunk in generate_ppt_outline(
@@ -331,15 +348,16 @@ async def generate_presentation_api(
         ):
             presentation_outlines_text += chunk
 
-    try:
-        presentation_outlines_json = json.loads(presentation_outlines_text)
-    except Exception as e:
-        print(e)
-        raise HTTPException(
-            status_code=400,
-            detail="Failed to generate presentation outlines. Please try again.",
-        )
-    presentation_outlines = PresentationOutlineModel(**presentation_outlines_json)
+        try:
+            presentation_outlines_json = json.loads(presentation_outlines_text)
+        except Exception as e:
+            print(e)
+            raise HTTPException(
+                status_code=400,
+                detail="Failed to generate presentation outlines. Please try again.",
+            )
+        presentation_outlines = PresentationOutlineModel(**presentation_outlines_json)
+
     outlines = presentation_outlines.slides[: request.n_slides]
     total_outlines = len(outlines)
 
