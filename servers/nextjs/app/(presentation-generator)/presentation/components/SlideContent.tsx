@@ -20,6 +20,7 @@ import { useGroupLayouts } from "../../hooks/useGroupLayouts";
 import { usePathname } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import NewSlide from "../../components/NewSlide";
+import { addToHistory } from "@/store/slices/undoRedoSlice";
 
 interface SlideContentProps {
   slide: any;
@@ -73,7 +74,13 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
   const onDeleteSlide = async () => {
     try {
       trackEvent(MixpanelEvent.Slide_Delete_API_Call);
+      // Add current state to past
+       dispatch(addToHistory({
+        slides: presentationData?.slides,
+        actionType: "DELETE_SLIDE"
+      }));
       dispatch(deletePresentationSlide(slide.index));
+     
     } catch (error: any) {
       console.error("Error deleting slide:", error);
       toast.error("Error deleting slide.", {

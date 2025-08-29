@@ -13,22 +13,21 @@ import {
   Code,
 } from "lucide-react";
 
+
 interface TiptapTextProps {
   content: string;
+ 
   onContentChange?: (content: string) => void;
   className?: string;
   placeholder?: string;
-  element?: HTMLElement;
-  tag?: "H1" | "H2" | "H3" | "H4" | "H5" | "H6" | "P" | "SPAN" | "DIV" | any;
+ 
 }
 
 const TiptapText: React.FC<TiptapTextProps> = ({
   content,
-  element,
   onContentChange,
   className = "",
   placeholder = "Enter text...",
-  tag = "p",
 }) => {
   const editor = useEditor({
     extensions: [StarterKit, Markdown, Underline],
@@ -41,6 +40,8 @@ const TiptapText: React.FC<TiptapTextProps> = ({
       },
     },
     onBlur: ({ editor }) => {
+      // const element = editor?.options.element;
+      // element?.classList.add("tiptap-text-edited");
       const markdown = editor?.storage.markdown.getMarkdown();
       if (onContentChange) {
         onContentChange(markdown);
@@ -52,10 +53,15 @@ const TiptapText: React.FC<TiptapTextProps> = ({
 
   // Update editor content when content prop changes
   useEffect(() => {
-    if (editor && content !== editor.getText()) {
-      editor.commands.setContent(content || placeholder);
+    if (!editor) return;
+    // Compare against current plain text to avoid unnecessary updates
+    const currentText = editor?.storage.markdown.getMarkdown();
+    if ((content || "") !== currentText) {
+      editor.commands.setContent(content || "");
     }
-  }, [content, editor, placeholder]);
+  }, [content, editor]);
+
+ 
 
   if (!editor) {
     return <div className={className}>{content || placeholder}</div>;
