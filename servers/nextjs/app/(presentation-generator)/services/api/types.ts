@@ -23,3 +23,9 @@ export interface DeplotResponse {
     presentation_id: string;
     charts: ChartAssignmentResponse;
 }
+
+export interface ImageAssetResponse {
+  message:string;
+  path:string;
+  id:string;
+}

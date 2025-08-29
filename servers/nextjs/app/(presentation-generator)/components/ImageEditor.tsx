@@ -9,13 +9,15 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Wand2, Upload } from "lucide-react";
+import { Wand2, Upload, Loader2, Delete, Trash } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PresentationGenerationApi } from "../services/api/presentation-generation";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { PreviousGeneratedImagesResponse } from "../services/api/params";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
+import { ImagesApi } from "../services/api/images";
+import { ImageAssetResponse } from "../services/api/types";
 interface ImageEditorProps {
   initialImage: string | null;
   imageIdx?: number;
@@ -49,7 +51,8 @@ const ImageEditor = ({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(true);
-
+  const [uploadedImages, setUploadedImages] = useState<ImageAssetResponse[]>([]);
+  const [uploadedImagesLoading, setUploadedImagesLoading] = useState(false);
   // Focus point and object fit for image editing
   const [isFocusPointMode, setIsFocusPointMode] = useState(false);
   const [focusPoint, setFocusPoint] = useState(
@@ -82,6 +85,7 @@ const ImageEditor = ({
 
   // Handle close with animation
   const handleClose = () => {
+
     setIsOpen(false);
     // Delay the actual close to allow animation to complete
     setTimeout(() => {
@@ -223,35 +227,48 @@ const ImageEditor = ({
       setUploadError("Please upload an image file");
       return;
     }
-
     try {
       setIsUploading(true);
       setUploadError(null);
-
-      const formData = new FormData();
-      formData.append("file", file);
-
       trackEvent(MixpanelEvent.ImageEditor_UploadImage_API_Call);
-      const response = await fetch("/api/upload-image", {
-        method: "POST",
-        body: formData,
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || "Upload failed");
-      }
-
-      setUploadedImageUrl(result.filePath);
-    } catch (err) {
+      const result = await ImagesApi.uploadImage(file);
+      setUploadedImageUrl(result.path);
+    } catch (err:any) {
       setUploadError("Failed to upload image. Please try again.");
-      console.error("Upload error:", err);
+      toast.error(err.message || "Failed to upload image. Please try again.");
+      console.log("Upload error:", err.message);
     } finally {
       setIsUploading(false);
     }
   };
 
+  const getUploadedImages = async () => {
+    try {
+      setUploadedImagesLoading(true);
+      const result = await ImagesApi.getUploadedImages();
+      setUploadedImages(result);
+    } catch (err:any) {
+      toast.error(err.message || "Failed to get uploaded images. Please try again.");
+      console.log("Get uploaded images error:", err.message);
+    } finally {
+      setUploadedImagesLoading(false);
+    }
+  };
+  const handleTabChange = (value: string) => {
+    if (value === "upload") {
+      getUploadedImages();
+    }
+  };
+
+  const handleDeleteImage = async (image_id: string) => {
+    try {
+      const result = await ImagesApi.deleteImage(image_id);
+      setUploadedImages(uploadedImages.filter((image) => image.id !== image_id));
+      toast.success(result.message || "Image deleted successfully");
+    } catch (err:any) {
+      toast.error(err.message || "Failed to delete image. Please try again.");
+    }
+  };
   return (
     <div className="image-editor-container">
       <Sheet open={isOpen} onOpenChange={() => handleClose()}>
@@ -266,7 +283,7 @@ const ImageEditor = ({
           </SheetHeader>
 
           <div className="mt-6">
-            <Tabs defaultValue="generate" className="w-full">
+            <Tabs defaultValue="generate" className="w-full" onValueChange={handleTabChange}>
               <TabsList className="grid bg-blue-100 border border-blue-300 w-full grid-cols-3 mx-auto">
                 <TabsTrigger className="font-medium" value="generate">
                   AI Generate
@@ -445,6 +462,44 @@ const ImageEditor = ({
                       </div>
                     </div>
                   )}
+                  <div>
+                    <h3 className="text-sm font-medium mb-2">Uploaded Images:</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      {uploadedImagesLoading ? (
+                        <div className="flex items-center justify-center">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        </div>
+                      ) : (
+                        uploadedImages.map((image) => (
+                          <div>
+                            <div
+                              onClick={() =>
+                                handleImageChange(image.path)
+                              }
+                              className="cursor-pointer group aspect-[4/3] rounded-lg overflow-hidden relative border border-gray-200"
+                            >
+                              <Trash className="absolute group-hover:opacity-100 opacity-0 transition-opacity z-10 w-4 h-4 top-2 right-2 text-red-500" onClick={(e) =>{
+                                e.stopPropagation();
+                                handleDeleteImage(image.id)
+                              }}/>
+                              <img
+                                src={image.path}
+                                alt="Uploaded preview"
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                              />
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-200" />
+                              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <span className="bg-white/90 px-3 py-1 rounded-full text-xs font-medium">
+                                  Use
+                                </span>
+                              </div>
+                            </div>
+                          
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
                 </div>
               </TabsContent>
               <TabsContent value="edit" className="mt-4 space-y-4">

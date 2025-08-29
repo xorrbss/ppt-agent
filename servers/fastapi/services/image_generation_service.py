@@ -68,6 +68,7 @@ class ImageGenerationService:
                 elif os.path.exists(image_path):
                     return ImageAsset(
                         path=image_path,
+                        is_uploaded=False,
                         extras={
                             "prompt": prompt.prompt,
                             "theme_prompt": prompt.theme_prompt,

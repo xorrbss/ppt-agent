@@ -15,5 +15,6 @@ class ImageAsset(SQLModel, table=True):
             DateTime(timezone=True), nullable=False, default=get_current_utc_datetime
         ),
     )
+    is_uploaded: bool = Field(default=False)
     path: str
     extras: Optional[dict] = Field(sa_column=Column(JSON), default=None)
