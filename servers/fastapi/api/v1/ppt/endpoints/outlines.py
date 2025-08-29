@@ -67,6 +67,7 @@ async def stream_outlines(
                 presentation.tone,
                 presentation.verbosity,
                 presentation.instructions,
+                True,
             ):
                 # Give control to the event loop
                 await asyncio.sleep(0)
