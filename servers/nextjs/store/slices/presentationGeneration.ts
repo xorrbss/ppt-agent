@@ -262,8 +262,6 @@ const presentationGenerationSlice = createSlice({
             current[Number(finalKey)] = updatedValue;
           }
 
-          // Add debugging
-          console.log('Redux: Updated slide image at path:', path, 'with URL:', url);
         };
 
         // Update the slide image

@@ -22,6 +22,7 @@ import { PresentationPageProps } from "../types";
 import LoadingState from "./LoadingState";
 import { useLayout } from "../../context/LayoutContext";
 import { useFontLoader } from "../../hooks/useFontLoader";
+import { usePresentationUndoRedo } from "../hooks/PresentationUndoRedo";
 const PresentationPage: React.FC<PresentationPageProps> = ({
   presentation_id,
 }) => {
@@ -73,6 +74,8 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     setError,
     fetchUserSlides
   );
+
+  usePresentationUndoRedo();
 
   const onSlideChange = (newSlide: number) => {
     handleSlideChange(newSlide, presentationData);
@@ -141,7 +144,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
           isMobilePanelOpen={isMobilePanelOpen}
           setIsMobilePanelOpen={setIsMobilePanelOpen}
         />
-
+        
         <div className="flex-1 h-[calc(100vh-100px)] overflow-y-auto">
           <div
             id="presentation-slides-wrapper"

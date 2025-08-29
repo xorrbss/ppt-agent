@@ -1,8 +1,9 @@
 'use client'
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '@/store/store';
 import { PresentationGenerationApi } from '../../services/api/presentation-generation';
+import { addToHistory } from '@/store/slices/undoRedoSlice';
 
 interface UseAutoSaveOptions {
     debounceMs?: number;
@@ -10,9 +11,10 @@ interface UseAutoSaveOptions {
 }
 
 export const useAutoSave = ({
-    debounceMs = 2000,
+    debounceMs = 1000,
     enabled = true,
 }: UseAutoSaveOptions = {}) => {
+    const dispatch = useDispatch();
     const { presentationData, isStreaming, isLoading, isLayoutLoading } = useSelector(
         (state: RootState) => state.presentationGeneration
     );
@@ -66,6 +68,11 @@ export const useAutoSave = ({
 
         // Trigger debounced save
         debouncedSave(presentationData);
+       
+        dispatch(addToHistory({
+            slides: presentationData.slides,
+            actionType: "AUTO_SAVE"
+        }));
 
         // Cleanup timeout on unmount
         return () => {
@@ -74,8 +81,10 @@ export const useAutoSave = ({
             }
         };
     }, [presentationData, enabled, debouncedSave]);
-
+    
     return {
         isSaving,
     };
 }; 
+
+

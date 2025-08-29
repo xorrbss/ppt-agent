@@ -1,8 +1,10 @@
-import { useCallback, useEffect } from "react";
+import { useCallback } from "react";
 import { useDispatch } from "react-redux";
 import { toast } from "sonner";
 import { setPresentationData } from "@/store/slices/presentationGeneration";
 import { DashboardApi } from '../../services/api/dashboard';
+import { addToHistory, clearHistory } from "@/store/slices/undoRedoSlice";
+
 
 export const usePresentationData = (
   presentationId: string,
@@ -16,6 +18,11 @@ export const usePresentationData = (
       const data = await DashboardApi.getPresentation(presentationId);
       if (data) {
         dispatch(setPresentationData(data));
+        dispatch(clearHistory());
+        dispatch(addToHistory({
+          slides: data.slides,
+          actionType: "initial_load"
+        }));
         setLoading(false);
       }
     } catch (error) {
