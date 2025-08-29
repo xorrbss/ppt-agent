@@ -1,5 +1,6 @@
 import asyncio
 import json
+import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +19,7 @@ OUTLINES_ROUTER = APIRouter(prefix="/outlines", tags=["Outlines"])
 
 @OUTLINES_ROUTER.get("/stream")
 async def stream_outlines(
-    presentation_id: str, sql_session: AsyncSession = Depends(get_async_session)
+    presentation_id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session)
 ):
     presentation = await sql_session.get(PresentationModel, presentation_id)
 
@@ -59,11 +60,13 @@ async def stream_outlines(
         if not presentation_outlines:
             presentation_outlines_text = ""
             async for chunk in generate_ppt_outline(
-                presentation.prompt,
+                presentation.content,
                 presentation.n_slides,
                 presentation.language,
                 additional_context,
-                presentation.instruction,
+                presentation.tone,
+                presentation.verbosity,
+                presentation.instructions,
             ):
                 # Give control to the event loop
                 await asyncio.sleep(0)

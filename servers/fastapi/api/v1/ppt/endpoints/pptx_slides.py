@@ -13,7 +13,7 @@ import xml.etree.ElementTree as ET
 import re
 
 from utils.asset_directory_utils import get_images_directory
-from utils.randomizers import get_random_uuid
+import uuid
 from constants.documents import POWERPOINT_TYPES
 
 
@@ -308,8 +308,8 @@ async def process_pptx_slides(
             
             # Move screenshots to images directory and generate URLs
             images_dir = get_images_directory()
-            presentation_id = get_random_uuid()
-            presentation_images_dir = os.path.join(images_dir, presentation_id)
+            presentation_id = uuid.uuid4()
+            presentation_images_dir = os.path.join(images_dir, str(presentation_id))
             os.makedirs(presentation_images_dir, exist_ok=True)
             
             slides_data = []

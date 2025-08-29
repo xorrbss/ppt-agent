@@ -8,9 +8,22 @@ from utils.llm_provider import get_model
 from utils.schema_utils import add_field_in_schema, remove_fields_from_schema
 
 
-def get_system_prompt(instruction: Optional[str] = None):
+def get_system_prompt(
+    tone: Optional[str] = None,
+    verbosity: Optional[str] = None,
+    instructions: Optional[str] = None,
+):
     return f"""
         Generate structured slide based on provided outline, follow mentioned steps and notes and provide structured output.
+
+        {"# User Instructions:" if instructions else ""}
+        {instructions or ""}
+
+        {"# Tone:" if tone else ""}
+        {tone or ""}
+
+        {"# Verbosity:" if verbosity else ""}
+        {verbosity or ""}
 
         # Steps
         1. Analyze the outline.
@@ -35,8 +48,6 @@ def get_system_prompt(instruction: Optional[str] = None):
             __icon_query__: string,
         }}
 
-        {"# User Instruction:" if instruction else ""}
-        {instruction or ""}
     """
 
 
@@ -56,11 +67,17 @@ def get_user_prompt(outline: str, language: str):
     """
 
 
-def get_messages(outline: str, language: str, instruction: Optional[str] = None):
+def get_messages(
+    outline: str,
+    language: str,
+    tone: Optional[str] = None,
+    verbosity: Optional[str] = None,
+    instructions: Optional[str] = None,
+):
 
     return [
         LLMSystemMessage(
-            content=get_system_prompt(instruction),
+            content=get_system_prompt(tone, verbosity, instructions),
         ),
         LLMUserMessage(
             content=get_user_prompt(outline, language),
@@ -72,7 +89,9 @@ async def get_slide_content_from_type_and_outline(
     slide_layout: SlideLayoutModel,
     outline: SlideOutlineModel,
     language: str,
-    instruction: Optional[str] = None,
+    tone: Optional[str] = None,
+    verbosity: Optional[str] = None,
+    instructions: Optional[str] = None,
 ):
     client = LLMClient()
     model = get_model()
@@ -98,7 +117,9 @@ async def get_slide_content_from_type_and_outline(
         messages=get_messages(
             outline.content,
             language,
-            instruction,
+            tone,
+            verbosity,
+            instructions,
         ),
         response_format=response_schema,
         strict=False,

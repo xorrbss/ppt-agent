@@ -8,11 +8,24 @@ from utils.get_dynamic_models import get_presentation_outline_model_with_n_slide
 from utils.llm_provider import get_model
 
 
-def get_system_prompt(instruction: Optional[str] = None):
+def get_system_prompt(
+    tone: Optional[str] = None,
+    verbosity: Optional[str] = None,
+    instructions: Optional[str] = None,
+):
     return f"""
         You are an expert presentation creator. Generate structured presentations based on user requirements and format them according to the specified JSON schema with markdown content.
 
         Try to use available tools for better results.
+
+        {"# User Instruction:" if instructions else ""}
+        {instructions or ""}
+
+        {"# Tone:" if tone else ""}
+        {tone or ""}
+
+        {"# Verbosity:" if verbosity else ""}
+        {verbosity or ""}
 
         - Provide content for each slide in markdown format.
         - Make sure that flow of the presentation is logical and consistent.
@@ -20,9 +33,6 @@ def get_system_prompt(instruction: Optional[str] = None):
         - If Additional Information is provided, divide it into slides.
         - Make sure no images are provided in the content.
         - Make sure that content follows language guidelines.
-
-        {"# User Instruction:" if instruction else ""}
-        {instruction or ""}
     """
 
 
@@ -47,11 +57,13 @@ def get_messages(
     n_slides: int,
     language: str,
     additional_context: Optional[str] = None,
-    instruction: Optional[str] = None,
+    tone: Optional[str] = None,
+    verbosity: Optional[str] = None,
+    instructions: Optional[str] = None,
 ):
     return [
         LLMSystemMessage(
-            content=get_system_prompt(instruction),
+            content=get_system_prompt(tone, verbosity, instructions),
         ),
         LLMUserMessage(
             content=get_user_prompt(content, n_slides, language, additional_context),
@@ -64,7 +76,10 @@ async def generate_ppt_outline(
     n_slides: int,
     language: Optional[str] = None,
     additional_context: Optional[str] = None,
-    instruction: Optional[str] = None,
+    tone: Optional[str] = None,
+    verbosity: Optional[str] = None,
+    instructions: Optional[str] = None,
+    web_search: bool = False,
 ):
     model = get_model()
     response_model = get_presentation_outline_model_with_n_slides(n_slides)
@@ -78,10 +93,14 @@ async def generate_ppt_outline(
             n_slides,
             language,
             additional_context,
-            instruction,
+            tone,
+            verbosity,
+            instructions,
         ),
         response_model.model_json_schema(),
         strict=True,
-        tools=[SearchWebTool] if client.enable_web_grounding() else None,
+        tools=(
+            [SearchWebTool] if (client.enable_web_grounding() and web_search) else None
+        ),
     ):
         yield chunk

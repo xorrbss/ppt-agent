@@ -12,7 +12,7 @@ def get_messages(
     presentation_layout: PresentationLayoutModel,
     n_slides: int,
     data: str,
-    instruction: Optional[str] = None,
+    instructions: Optional[str] = None,
 ):
     return [
         LLMSystemMessage(
@@ -47,8 +47,8 @@ def get_messages(
 
                 **Trust your design instincts. Focus on creating the most effective presentation for the content and audience.**
 
-                {"# User Instruction:" if instruction else ""}
-                {instruction or ""}
+                {"# User Instruction:" if instructions else ""}
+                {instructions or ""}
 
                 Select layout index for each of the {n_slides} slides based on what will best serve the presentation's goals.
             """,
@@ -64,7 +64,7 @@ def get_messages(
 async def generate_presentation_structure(
     presentation_outline: PresentationOutlineModel,
     presentation_layout: PresentationLayoutModel,
-    instruction: Optional[str] = None,
+    instructions: Optional[str] = None,
 ) -> PresentationStructureModel:
 
     client = LLMClient()
@@ -79,7 +79,7 @@ async def generate_presentation_structure(
             presentation_layout,
             len(presentation_outline.slides),
             presentation_outline.to_string(),
-            instruction,
+            instructions,
         ),
         response_format=response_model.model_json_schema(),
         strict=True,

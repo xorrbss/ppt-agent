@@ -1,3 +1,5 @@
+from datetime import datetime
+from typing import Optional
 from models.llm_message import LLMSystemMessage, LLMUserMessage
 from models.presentation_layout import SlideLayoutModel
 from models.sql.slide import SlideModel
@@ -5,9 +7,23 @@ from services.llm_client import LLMClient
 from utils.llm_provider import get_model
 from utils.schema_utils import add_field_in_schema, remove_fields_from_schema
 
-system_prompt = """
+
+def get_system_prompt(
+    tone: Optional[str] = None,
+    verbosity: Optional[str] = None,
+    instructions: Optional[str] = None,
+):
+    return f"""
     Edit Slide data and speaker note based on provided prompt, follow mentioned steps and notes and provide structured output.
 
+    {"# User Instruction:" if instructions else ""}
+    {instructions or ""}
+
+    {"# Tone:" if tone else ""}
+    {tone or ""}
+
+    {"# Verbosity:" if verbosity else ""}
+    {verbosity or ""}
 
     # Notes
     - Provide output in language mentioned in **Input**.
@@ -19,13 +35,16 @@ system_prompt = """
     - Speaker note should be simple, clear, concise and to the point.
 
     **Go through all notes and steps and make sure they are followed, including mentioned constraints**
-"""
+    """
 
 
 def get_user_prompt(prompt: str, slide_data: dict, language: str):
     return f"""
         ## Icon Query And Image Prompt Language
         English
+
+        ## Current Date and Time
+        {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
         ## Slide Content Language
         {language}
@@ -42,10 +61,13 @@ def get_messages(
     prompt: str,
     slide_data: dict,
     language: str,
+    tone: Optional[str] = None,
+    verbosity: Optional[str] = None,
+    instructions: Optional[str] = None,
 ):
     return [
         LLMSystemMessage(
-            content=system_prompt,
+            content=get_system_prompt(tone, verbosity, instructions),
         ),
         LLMUserMessage(
             content=get_user_prompt(prompt, slide_data, language),
@@ -58,6 +80,9 @@ async def get_edited_slide_content(
     slide: SlideModel,
     language: str,
     slide_layout: SlideLayoutModel,
+    tone: Optional[str] = None,
+    verbosity: Optional[str] = None,
+    instructions: Optional[str] = None,
 ):
     model = get_model()
 
@@ -80,7 +105,9 @@ async def get_edited_slide_content(
     client = LLMClient()
     response = await client.generate_structured(
         model=model,
-        messages=get_messages(prompt, slide.content, language),
+        messages=get_messages(
+            prompt, slide.content, language, tone, verbosity, instructions
+        ),
         response_format=response_schema,
         strict=False,
     )

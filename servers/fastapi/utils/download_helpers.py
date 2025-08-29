@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 
 import aiohttp
 
-from utils.randomizers import get_random_uuid
+import uuid
 
 
 async def download_file(
@@ -36,9 +36,9 @@ async def download_file(
                                     content_type.split(";")[0]
                                 )
                                 if extension:
-                                    filename = f"{get_random_uuid()}{extension}"
+                                    filename = f"{uuid.uuid4()}{extension}"
 
-        filename = filename or get_random_uuid()
+        filename = filename or str(uuid.uuid4())
         save_path = os.path.join(save_directory, filename)
 
         async with aiohttp.ClientSession(trust_env=True) as session:
