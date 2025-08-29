@@ -52,7 +52,7 @@ export const useLayoutSaving = (
         );
 
         return {
-          presentation_id: presentationId,
+          presentation: presentationId,
           layout_id: `${slide.slide_number}`,
           layout_name: `Slide${slide.slide_number}`,
           layout_code: data.react_component || data.component_code,
@@ -144,7 +144,6 @@ export const useLayoutSaving = (
         body: JSON.stringify({ id: presentationId, name: layoutName, description }),
       });
 
-      // Save the layout components to the app_data/layouts folder
       const saveResponse = await fetch(
         "/api/v1/ppt/template-management/save-templates",
         {
