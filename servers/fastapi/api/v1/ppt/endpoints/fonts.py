@@ -6,7 +6,7 @@ from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, File, UploadFile
 from pydantic import BaseModel
 from utils.asset_directory_utils import get_app_data_directory_env
-from utils.randomizers import get_random_uuid
+import uuid
 
 try:
     from fontTools.ttLib import TTFont
@@ -157,7 +157,7 @@ async def upload_font(
         # Generate unique filename to avoid conflicts
         file_ext = os.path.splitext(font_file.filename)[1].lower()
         base_name = os.path.splitext(font_file.filename)[0]
-        unique_filename = f"{base_name}_{get_random_uuid()[:8]}{file_ext}"
+        unique_filename = f"{base_name}_{str(uuid.uuid4())[:8]}{file_ext}"
         
         # Get fonts directory
         fonts_dir = get_fonts_directory()

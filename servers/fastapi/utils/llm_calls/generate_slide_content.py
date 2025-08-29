@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 from models.llm_message import LLMSystemMessage, LLMUserMessage
 from models.presentation_layout import SlideLayoutModel
 from models.presentation_outline_model import SlideOutlineModel
@@ -6,32 +7,48 @@ from services.llm_client import LLMClient
 from utils.llm_provider import get_model
 from utils.schema_utils import add_field_in_schema, remove_fields_from_schema
 
-system_prompt = """
-    Generate structured slide based on provided outline, follow mentioned steps and notes and provide structured output.
 
-    # Steps
-    1. Analyze the outline.
-    2. Generate structured slide based on the outline.
-    3. Generate speaker note that is simple, clear, concise and to the point.
+def get_system_prompt(
+    tone: Optional[str] = None,
+    verbosity: Optional[str] = None,
+    instructions: Optional[str] = None,
+):
+    return f"""
+        Generate structured slide based on provided outline, follow mentioned steps and notes and provide structured output.
 
-    # Notes
-    - Slide body should not use words like "This slide", "This presentation".
-    - Rephrase the slide body to make it flow naturally.
-    - Only use markdown to highlight important points.
-    - Make sure to follow language guidelines.
-    - Speaker note should be normal text, not markdown.
-    - Strictly follow the max and min character limit for every property in the slide.
-    - Never ever go over the max character limit. Limit your narration to make sure you never go over the max character limit.
-    - Number of items should not be more than max number of items specified in slide schema. If you have to put multiple points then merge them to obey max numebr of items.
+        {"# User Instructions:" if instructions else ""}
+        {instructions or ""}
 
-    # Image and Icon Output Format
-    image: {
-        __image_prompt__: string,
-    }
-    icon: {
-        __icon_query__: string,
-    }
-"""
+        {"# Tone:" if tone else ""}
+        {tone or ""}
+
+        {"# Verbosity:" if verbosity else ""}
+        {verbosity or ""}
+
+        # Steps
+        1. Analyze the outline.
+        2. Generate structured slide based on the outline.
+        3. Generate speaker note that is simple, clear, concise and to the point.
+
+        # Notes
+        - Slide body should not use words like "This slide", "This presentation".
+        - Rephrase the slide body to make it flow naturally.
+        - Only use markdown to highlight important points.
+        - Make sure to follow language guidelines.
+        - Speaker note should be normal text, not markdown.
+        - Strictly follow the max and min character limit for every property in the slide.
+        - Never ever go over the max character limit. Limit your narration to make sure you never go over the max character limit.
+        - Number of items should not be more than max number of items specified in slide schema. If you have to put multiple points then merge them to obey max numebr of items.
+
+        # Image and Icon Output Format
+        image: {{
+            __image_prompt__: string,
+        }}
+        icon: {{
+            __icon_query__: string,
+        }}
+
+    """
 
 
 def get_user_prompt(outline: str, language: str):
@@ -50,11 +67,17 @@ def get_user_prompt(outline: str, language: str):
     """
 
 
-def get_messages(outline: str, language: str):
+def get_messages(
+    outline: str,
+    language: str,
+    tone: Optional[str] = None,
+    verbosity: Optional[str] = None,
+    instructions: Optional[str] = None,
+):
 
     return [
         LLMSystemMessage(
-            content=system_prompt,
+            content=get_system_prompt(tone, verbosity, instructions),
         ),
         LLMUserMessage(
             content=get_user_prompt(outline, language),
@@ -63,7 +86,12 @@ def get_messages(outline: str, language: str):
 
 
 async def get_slide_content_from_type_and_outline(
-    slide_layout: SlideLayoutModel, outline: SlideOutlineModel, language: str
+    slide_layout: SlideLayoutModel,
+    outline: SlideOutlineModel,
+    language: str,
+    tone: Optional[str] = None,
+    verbosity: Optional[str] = None,
+    instructions: Optional[str] = None,
 ):
     client = LLMClient()
     model = get_model()
@@ -89,6 +117,9 @@ async def get_slide_content_from_type_and_outline(
         messages=get_messages(
             outline.content,
             language,
+            tone,
+            verbosity,
+            instructions,
         ),
         response_format=response_schema,
         strict=False,

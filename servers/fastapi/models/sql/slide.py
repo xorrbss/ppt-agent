@@ -1,24 +1,28 @@
 from typing import Optional
+import uuid
+from sqlalchemy import ForeignKey
 from sqlmodel import Field, Column, JSON, SQLModel
-
-from utils.randomizers import get_random_uuid
 
 
 class SlideModel(SQLModel, table=True):
-    id: str = Field(primary_key=True, default_factory=get_random_uuid)
-    presentation: str
+    __tablename__ = "slides"
+
+    id: uuid.UUID = Field(primary_key=True, default_factory=uuid.uuid4)
+    presentation: uuid.UUID = Field(
+        sa_column=Column(ForeignKey("presentations.id", ondelete="CASCADE"), index=True)
+    )
     layout_group: str
     layout: str
     index: int
     content: dict = Field(sa_column=Column(JSON))
     html_content: Optional[str]
-    speaker_note: str
+    speaker_note: Optional[str] = None
     properties: Optional[dict] = Field(sa_column=Column(JSON))
 
-    def get_new_slide(self, presentation_id: str, content: Optional[dict] = None):
+    def get_new_slide(self, presentation: uuid.UUID, content: Optional[dict] = None):
         return SlideModel(
-            id=get_random_uuid(),
-            presentation=presentation_id,
+            id=uuid.uuid4(),
+            presentation=presentation,
             layout_group=self.layout_group,
             layout=self.layout,
             index=self.index,

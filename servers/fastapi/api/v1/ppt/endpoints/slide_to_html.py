@@ -2,6 +2,7 @@ import os
 import base64
 from datetime import datetime
 from typing import Optional, List, Dict
+from uuid import UUID
 from fastapi import APIRouter, HTTPException, File, UploadFile, Form, Depends
 from pydantic import BaseModel
 from openai import OpenAI
@@ -54,7 +55,7 @@ class HtmlToReactResponse(BaseModel):
 
 # Request/Response models for layout management endpoints
 class LayoutData(BaseModel):
-    presentation_id: str  # UUID of the presentation
+    presentation: UUID  # UUID of the presentation
     layout_id: str        # Unique identifier for the layout
     layout_name: str      # Display name of the layout
     layout_code: str      # TSX/React component code for the layout
@@ -80,7 +81,7 @@ class GetLayoutsResponse(BaseModel):
 
 
 class PresentationSummary(BaseModel):
-    presentation_id: str
+    presentation_id: UUID
     layout_count: int
     last_updated_at: Optional[datetime] = None
     template: Optional[dict] = None
@@ -101,7 +102,7 @@ class ErrorResponse(BaseModel):
 
 
 class TemplateCreateRequest(BaseModel):
-    id: str
+    id: UUID
     name: str
     description: Optional[str] = None
 
@@ -113,7 +114,7 @@ class TemplateCreateResponse(BaseModel):
 
 
 class TemplateInfo(BaseModel):
-    id: str
+    id: UUID
     name: Optional[str] = None
     description: Optional[str] = None
     created_at: Optional[datetime] = None
@@ -688,7 +689,7 @@ async def save_layouts(
         
         for i, layout_data in enumerate(request.layouts):
             # Validate individual layout data
-            if not layout_data.presentation_id or not layout_data.presentation_id.strip():
+            if not layout_data.presentation or not str(layout_data.presentation).strip():
                 raise HTTPException(
                     status_code=400,
                     detail=f"Layout {i+1}: presentation_id cannot be empty"
@@ -714,7 +715,7 @@ async def save_layouts(
             
             # Check if layout already exists for this presentation and layout_id
             stmt = select(PresentationLayoutCodeModel).where(
-                PresentationLayoutCodeModel.presentation_id == layout_data.presentation_id,
+                PresentationLayoutCodeModel.presentation == layout_data.presentation,
                 PresentationLayoutCodeModel.layout_id == layout_data.layout_id
             )
             result = await session.execute(stmt)
@@ -729,7 +730,7 @@ async def save_layouts(
             else:
                 # Create new layout
                 new_layout = PresentationLayoutCodeModel(
-                    presentation_id=layout_data.presentation_id,
+                    presentation=layout_data.presentation,
                     layout_id=layout_data.layout_id,
                     layout_name=layout_data.layout_name,
                     layout_code=layout_data.layout_code,
@@ -762,7 +763,7 @@ async def save_layouts(
 
 # ENDPOINT 5: Get layouts for a presentation
 @LAYOUT_MANAGEMENT_ROUTER.get(
-    "/get-templates/{presentation_id}", 
+    "/get-templates/{presentation}", 
     response_model=GetLayoutsResponse,
     responses={
         400: {"model": ErrorResponse, "description": "Invalid presentation ID"},
@@ -771,14 +772,14 @@ async def save_layouts(
     }
 )
 async def get_layouts(
-    presentation_id: str,
+    presentation: UUID,
     session: AsyncSession = Depends(get_async_session)
 ):
     """
     Retrieve all layouts for a specific presentation.
     
     Args:
-        presentation_id: UUID of the presentation
+        presentation: UUID of the presentation
         session: Database session
     
     Returns:
@@ -789,7 +790,7 @@ async def get_layouts(
     """
     try:
         # Validate presentation_id format (basic UUID check)
-        if not presentation_id or len(presentation_id.strip()) == 0:
+        if not presentation or len(str(presentation).strip()) == 0:
             raise HTTPException(
                 status_code=400,
                 detail="Presentation ID cannot be empty"
@@ -797,7 +798,7 @@ async def get_layouts(
         
         # Query layouts for the given presentation_id
         stmt = select(PresentationLayoutCodeModel).where(
-            PresentationLayoutCodeModel.presentation_id == presentation_id
+            PresentationLayoutCodeModel.presentation == presentation
         )
         result = await session.execute(stmt)
         layouts_db = result.scalars().all()
@@ -806,13 +807,13 @@ async def get_layouts(
         if not layouts_db:
             raise HTTPException(
                 status_code=404,
-                detail=f"No layouts found for presentation ID: {presentation_id}"
+                detail=f"No layouts found for presentation ID: {presentation}"
             )
         
         # Convert to response format
         layouts = [
             LayoutData(
-                presentation_id=layout.presentation_id,
+                presentation=layout.presentation,
                 layout_id=layout.layout_id,
                 layout_name=layout.layout_name,
                 layout_code=layout.layout_code,
@@ -829,7 +830,7 @@ async def get_layouts(
         fonts_list = sorted(list(aggregated_fonts)) if aggregated_fonts else None
         
         # Fetch template meta
-        template_meta = await session.get(TemplateModel, presentation_id)
+        template_meta = await session.get(TemplateModel, presentation)
         template = None
         if template_meta:
             template = {
@@ -842,7 +843,7 @@ async def get_layouts(
         return GetLayoutsResponse(
             success=True,
             layouts=layouts,
-            message=f"Retrieved {len(layouts)} layout(s) for presentation {presentation_id}",
+            message=f"Retrieved {len(layouts)} layout(s) for presentation {presentation}",
             template=template,
             fonts=fonts_list,
         )
@@ -851,7 +852,7 @@ async def get_layouts(
         # Re-raise HTTP exceptions as-is
         raise
     except Exception as e:
-        print(f"Error retrieving layouts for presentation {presentation_id}: {str(e)}")
+        print(f"Error retrieving layouts for presentation {presentation}: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Internal server error while retrieving layouts: {str(e)}"
@@ -878,10 +879,10 @@ async def get_presentations_summary(
     try:
         # Query to get presentation_id, count of layouts, and MAX(updated_at)
         stmt = select(
-            PresentationLayoutCodeModel.presentation_id,
+            PresentationLayoutCodeModel.presentation,
             func.count(PresentationLayoutCodeModel.id).label('layout_count'),
             func.max(PresentationLayoutCodeModel.updated_at).label('last_updated_at')
-        ).group_by(PresentationLayoutCodeModel.presentation_id)
+        ).group_by(PresentationLayoutCodeModel.presentation)
         
         result = await session.execute(stmt)
         presentation_data = result.all()
@@ -889,7 +890,7 @@ async def get_presentations_summary(
         # Convert to response format with template info if available
         presentations = []
         for row in presentation_data:
-            template_meta = await session.get(TemplateModel, row.presentation_id)
+            template_meta = await session.get(TemplateModel, row.presentation)
             template = None
             if template_meta:
                 template = {
@@ -900,7 +901,7 @@ async def get_presentations_summary(
                 }
             presentations.append(
                 PresentationSummary(
-                    presentation_id=row.presentation_id,
+                    presentation=row.presentation,
                     layout_count=row.layout_count,
                     last_updated_at=row.last_updated_at,
                     template=template,

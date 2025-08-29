@@ -43,7 +43,7 @@ from utils.image_utils import (
     round_image_corners,
     set_image_opacity,
 )
-from utils.randomizers import get_random_uuid
+import uuid
 
 BLANK_SLIDE_LAYOUT = 6
 
@@ -216,7 +216,7 @@ class PptxPresentationCreator:
                 image = invert_image(image)
             if picture_model.opacity:
                 image = set_image_opacity(image, picture_model.opacity)
-            image_path = os.path.join(self._temp_dir, f"{get_random_uuid()}.png")
+            image_path = os.path.join(self._temp_dir, f"{uuid.uuid4()}.png")
             image.save(image_path)
 
         margined_position = self.get_margined_position(

@@ -1,6 +1,7 @@
 from typing import Annotated, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+import uuid
 
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
@@ -11,7 +12,7 @@ from utils.llm_calls.edit_slide import get_edited_slide_content
 from utils.llm_calls.edit_slide_html import get_edited_slide_html
 from utils.llm_calls.select_slide_type_on_edit import get_slide_layout_from_prompt
 from utils.process_slides import process_old_and_new_slides_and_fetch_assets
-from utils.randomizers import get_random_uuid
+import uuid
 
 
 SLIDE_ROUTER = APIRouter(prefix="/slide", tags=["Slide"])
@@ -19,7 +20,7 @@ SLIDE_ROUTER = APIRouter(prefix="/slide", tags=["Slide"])
 
 @SLIDE_ROUTER.post("/edit")
 async def edit_slide(
-    id: Annotated[str, Body()],
+    id: Annotated[uuid.UUID, Body()],
     prompt: Annotated[str, Body()],
     sql_session: AsyncSession = Depends(get_async_session),
 ):
@@ -49,7 +50,7 @@ async def edit_slide(
     )
 
     # Always assign a new unique id to the slide
-    slide.id = get_random_uuid()
+    slide.id = uuid.uuid4()
 
     sql_session.add(slide)
     slide.content = edited_slide_content
@@ -63,7 +64,7 @@ async def edit_slide(
 
 @SLIDE_ROUTER.post("/edit-html", response_model=SlideModel)
 async def edit_slide_html(
-    id: Annotated[str, Body()],
+    id: Annotated[uuid.UUID, Body()],
     prompt: Annotated[str, Body()],
     html: Annotated[Optional[str], Body()] = None,
     sql_session: AsyncSession = Depends(get_async_session),
@@ -80,7 +81,7 @@ async def edit_slide_html(
 
     # Always assign a new unique id to the slide
     # This is to ensure that the nextjs can track slide updates
-    slide.id = get_random_uuid()
+    slide.id = uuid.uuid4()
 
     sql_session.add(slide)
     slide.html_content = edited_slide_html
