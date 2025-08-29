@@ -1,5 +1,6 @@
 import asyncio
 import json
+import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.presentation_outline_model import PresentationOutlineModel
 from models.sql.presentation import PresentationModel
 from models.sse_response import SSECompleteResponse, SSEResponse, SSEStatusResponse
-from services import TEMP_FILE_SERVICE
+from services.temp_file_service import TEMP_FILE_SERVICE
 from services.database import get_async_session
 from services.documents_loader import DocumentsLoader
 from services.score_based_chunker import ScoreBasedChunker
@@ -18,7 +19,7 @@ OUTLINES_ROUTER = APIRouter(prefix="/outlines", tags=["Outlines"])
 
 @OUTLINES_ROUTER.get("/stream")
 async def stream_outlines(
-    presentation_id: str, sql_session: AsyncSession = Depends(get_async_session)
+    presentation_id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session)
 ):
     presentation = await sql_session.get(PresentationModel, presentation_id)
 
@@ -38,7 +39,7 @@ async def stream_outlines(
             documents_loader = DocumentsLoader(file_paths=presentation.file_paths)
             await documents_loader.load_documents(temp_dir)
             documents = documents_loader.documents
-            if documents:
+            if documents and len(documents) == 1:
                 additional_context = documents[0]
                 chunker = ScoreBasedChunker()
                 try:
@@ -49,15 +50,23 @@ async def stream_outlines(
                         slides=[chunk.to_slide_outline() for chunk in chunks]
                     )
                 except Exception as e:
-                    print(e)
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Failed to generate presentation outlines. Please try again.",
+                    )
+            else:
+                additional_context = "\n\n".join(documents)
 
         if not presentation_outlines:
             presentation_outlines_text = ""
             async for chunk in generate_ppt_outline(
-                presentation.prompt,
+                presentation.content,
                 presentation.n_slides,
                 presentation.language,
                 additional_context,
+                presentation.tone,
+                presentation.verbosity,
+                presentation.instructions,
             ):
                 # Give control to the event loop
                 await asyncio.sleep(0)

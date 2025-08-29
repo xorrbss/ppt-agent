@@ -138,7 +138,7 @@ const GroupLayoutPreview = () => {
       const payload = {
         layouts: [
           {
-            presentation_id: presentationId,
+            presentation: presentationId,
             layout_id: currentLayoutId,
             layout_name: currentLayoutName,
             layout_code: currentCode,

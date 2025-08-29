@@ -1,8 +1,9 @@
 from pydantic import BaseModel
+import uuid
 
 
 class PresentationAndPath(BaseModel):
-    presentation_id: str
+    presentation_id: uuid.UUID
     path: str
 
 

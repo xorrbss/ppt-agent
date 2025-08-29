@@ -1,31 +1,48 @@
 from datetime import datetime
 from typing import List, Optional
-from sqlalchemy import JSON, Column, DateTime
+import uuid
+from sqlalchemy import JSON, Column, DateTime, String
 from sqlmodel import Field, SQLModel
 
 from models.presentation_layout import PresentationLayoutModel
 from models.presentation_outline_model import PresentationOutlineModel
 from models.presentation_structure_model import PresentationStructureModel
-from utils.randomizers import get_random_uuid
+from utils.datetime_utils import get_current_utc_datetime
 
 
 class PresentationModel(SQLModel, table=True):
-    id: str = Field(primary_key=True)
-    prompt: str
+    __tablename__ = "presentations"
+
+    id: uuid.UUID = Field(primary_key=True, default_factory=uuid.uuid4)
+    content: str
     n_slides: int
     language: str
     title: Optional[str] = None
     file_paths: Optional[List[str]] = Field(sa_column=Column(JSON), default=None)
     outlines: Optional[dict] = Field(sa_column=Column(JSON), default=None)
-    created_at: datetime = Field(sa_column=Column(DateTime, default=datetime.now))
-    updated_at: datetime = Field(sa_column=Column(DateTime, default=datetime.now))
+    created_at: datetime = Field(
+        sa_column=Column(
+            DateTime(timezone=True), nullable=False, default=get_current_utc_datetime
+        ),
+    )
+    updated_at: datetime = Field(
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            default=get_current_utc_datetime,
+            onupdate=get_current_utc_datetime,
+        ),
+    )
     layout: Optional[dict] = Field(sa_column=Column(JSON), default=None)
     structure: Optional[dict] = Field(sa_column=Column(JSON), default=None)
+    instructions: Optional[str] = Field(sa_column=Column(String), default=None)
+    tone: Optional[str] = Field(sa_column=Column(String), default=None)
+    verbosity: Optional[str] = Field(sa_column=Column(String), default=None)
 
     def get_new_presentation(self):
         return PresentationModel(
-            id=get_random_uuid(),
-            prompt=self.prompt,
+            id=uuid.uuid4(),
+            content=self.content,
             n_slides=self.n_slides,
             language=self.language,
             title=self.title,
@@ -33,6 +50,7 @@ class PresentationModel(SQLModel, table=True):
             outlines=self.outlines,
             layout=self.layout,
             structure=self.structure,
+            instructions=self.instructions,
         )
 
     def get_presentation_outline(self):

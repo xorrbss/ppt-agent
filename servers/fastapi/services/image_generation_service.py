@@ -15,7 +15,7 @@ from utils.image_provider import (
     is_gemini_flash_selected,
     is_dalle3_selected,
 )
-from utils.randomizers import get_random_uuid
+import uuid
 
 
 class ImageGenerationService:
@@ -104,7 +104,7 @@ class ImageGenerationService:
             if part.text is not None:
                 print(part.text)
             elif part.inline_data is not None:
-                image_path = os.path.join(output_directory, f"{get_random_uuid()}.jpg")
+                image_path = os.path.join(output_directory, f"{uuid.uuid4()}.jpg")
                 with open(image_path, "wb") as f:
                     f.write(part.inline_data.data)
 
