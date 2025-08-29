@@ -149,7 +149,7 @@ const DocumentsPreviewPage: React.FC = () => {
       trackEvent(MixpanelEvent.DocumentsPreview_Create_Presentation_API_Call);
       const createResponse = await PresentationGenerationApi.createPresentation(
         {
-          prompt: config?.prompt ?? "",
+          content: config?.prompt ?? "",
           n_slides: config?.slides ? parseInt(config.slides) : null,
           file_paths: documentPaths,
           language: config?.language ?? "",
