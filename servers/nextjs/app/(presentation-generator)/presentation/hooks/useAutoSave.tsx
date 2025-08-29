@@ -4,7 +4,6 @@ import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '@/store/store';
 import { PresentationGenerationApi } from '../../services/api/presentation-generation';
 import { addToHistory } from '@/store/slices/undoRedoSlice';
-import { Slide } from '../../types/slide';
 
 interface UseAutoSaveOptions {
     debounceMs?: number;
@@ -12,7 +11,7 @@ interface UseAutoSaveOptions {
 }
 
 export const useAutoSave = ({
-    debounceMs = 2000,
+    debounceMs = 1000,
     enabled = true,
 }: UseAutoSaveOptions = {}) => {
     const dispatch = useDispatch();
@@ -69,6 +68,7 @@ export const useAutoSave = ({
 
         // Trigger debounced save
         debouncedSave(presentationData);
+       
         dispatch(addToHistory({
             slides: presentationData.slides,
             actionType: "AUTO_SAVE"
@@ -81,7 +81,7 @@ export const useAutoSave = ({
             }
         };
     }, [presentationData, enabled, debouncedSave]);
-
+    
     return {
         isSaving,
     };

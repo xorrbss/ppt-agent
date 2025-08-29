@@ -144,7 +144,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
           isMobilePanelOpen={isMobilePanelOpen}
           setIsMobilePanelOpen={setIsMobilePanelOpen}
         />
-
+        
         <div className="flex-1 h-[calc(100vh-100px)] overflow-y-auto">
           <div
             id="presentation-slides-wrapper"

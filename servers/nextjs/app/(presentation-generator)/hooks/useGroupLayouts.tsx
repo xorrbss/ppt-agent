@@ -32,6 +32,7 @@ export const useGroupLayouts = () => {
   // Render slide content with group validation, automatic Tiptap text editing, and editable images/icons
   const renderSlideContent = useMemo(() => {
     return (slide: any, isEditMode: boolean) => {
+     
       const Layout = getGroupLayout(slide.layout, slide.layout_group);
       if (loading) {
         return (

@@ -3,6 +3,12 @@
 import React, { useRef, useEffect, useState, ReactNode } from "react";
 import ReactDOM from "react-dom/client";
 import TiptapText from "./TiptapText";
+import { useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import { Markdown } from "tiptap-markdown";
+import Underline from "@tiptap/extension-underline";
+
+const extensions = [StarterKit, Markdown, Underline];
 
 interface TiptapTextReplacerProps {
   children: ReactNode;
@@ -21,10 +27,17 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
   slideIndex,
   onContentChange = () => {},
 }) => {
+
+  
+
   const containerRef = useRef<HTMLDivElement>(null);
   const [processedElements, setProcessedElements] = useState(
     new Set<HTMLElement>()
   );
+  // Track created React roots to update content when slideData changes
+  const rootsRef = useRef<
+    Map<HTMLElement, { root: any; dataPath: string;  fallbackText: string }>
+  >(new Map());
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -38,6 +51,7 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
         const htmlElement = element as HTMLElement;
 
         // Skip if already processed
+       
         if (
           processedElements.has(htmlElement) ||
           htmlElement.classList.contains("tiptap-text-editor") ||
@@ -46,6 +60,7 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
           return;
         }
 
+        // console.log("htmlElement", htmlElement);
         // Skip if element is inside an ignored element tree
         if (isInIgnoredElementTree(htmlElement)) return;
 
@@ -55,10 +70,10 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
 
         // Check if element has meaningful text content
         if (!trimmedText || trimmedText.length <= 2) return;
-
+        
         // Skip elements that contain other elements with text (to avoid double processing)
         if (hasTextChildren(htmlElement)) return;
-
+        
         // Skip certain element types that shouldn't be editable
         if (shouldSkipElement(htmlElement)) return;
 
@@ -72,7 +87,7 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
         const tiptapContainer = document.createElement("div");
         tiptapContainer.style.cssText = allStyles || "";
         tiptapContainer.className = Array.from(allClasses).join(" ");
-
+    
         // Replace the element
         htmlElement.parentNode?.replaceChild(tiptapContainer, htmlElement);
         // Mark as processed
@@ -80,17 +95,19 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
         setProcessedElements((prev) => new Set(prev).add(htmlElement));
         // Render TiptapText
         const root = ReactDOM.createRoot(tiptapContainer);
-        // Tag the container so we can update just this node on slideData changes
-        if (dataPath?.path) {
-          tiptapContainer.setAttribute("data-tiptap-path", dataPath.path);
-        }
-        tiptapContainer.setAttribute("data-tiptap-tag", htmlElement.tagName);
-        tiptapContainer.setAttribute("data-tiptap-value", trimmedText);
+        const initialContent = dataPath.path
+          ? getValueByPath(slideData, dataPath.path) ?? trimmedText
+          : trimmedText;
+        rootsRef.current.set(tiptapContainer, {
+          root,
+          dataPath: dataPath.path,
+        
+          fallbackText: trimmedText,
+        });
         root.render(
           <TiptapText
-            content={trimmedText}
-            element={htmlElement}
-            tag={htmlElement.tagName}
+            content={initialContent}
+           
             onContentChange={(content: string) => {
               if (dataPath && onContentChange) {
                 onContentChange(content, dataPath.path, slideIndex);
@@ -102,6 +119,34 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
       });
     };
 
+  
+    // Replace text elements after a short delay to ensure DOM is ready
+    const timer = setTimeout(replaceTextElements, 1000);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [slideData, slideIndex]);
+  
+  // When slideData changes, update existing editors' content using the stored dataPath
+  useEffect(() => {
+    if (!rootsRef.current || rootsRef.current.size === 0) return;
+    rootsRef.current.forEach(({ root, dataPath,  fallbackText }) => {
+      const newContent = dataPath ? getValueByPath(slideData, dataPath) ?? fallbackText : fallbackText;
+      root.render(
+        <TiptapText
+          content={newContent}
+          onContentChange={(content: string) => {
+            if (dataPath && onContentChange) {
+              onContentChange(content, dataPath, slideIndex);
+            }
+          }}
+          placeholder="Enter text..."
+        />
+      );
+    });
+  }, [slideData, slideIndex]);
+  // helper functions
     // Function to check if element is inside an ignored element tree
     const isInIgnoredElementTree = (element: HTMLElement): boolean => {
       // List of element types that should be ignored entirely with all their children
@@ -187,6 +232,21 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
         currentElement = currentElement.parentElement;
       }
       return false;
+    };
+
+    // Resolve nested values by path like "a.b[0].c"
+    const getValueByPath = (obj: any, path: string): any => {
+      if (!obj || !path) return undefined;
+      const tokens = path
+        .replace(/\[(\d+)\]/g, ".$1")
+        .split(".")
+        .filter(Boolean);
+      let current: any = obj;
+      for (const token of tokens) {
+        if (current == null) return undefined;
+        current = current[token as keyof typeof current];
+      }
+      return current;
     };
 
     // Helper function to get only direct text content (not from children)
@@ -296,61 +356,7 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
       return { path: "", originalText: "" };
     };
 
-    // Replace text elements after a short delay to ensure DOM is ready
-    const timer = setTimeout(replaceTextElements, 1000);
 
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [slideData, slideIndex]);
-
-  // Update only the changed editors when slideData changes
-  useEffect(() => {
-    if (!containerRef.current) return;
-
-    const getNestedValue = (data: any, path: string): string => {
-      if (!data) return "";
-      const keys = path.split(/[.\[\]]+/).filter(Boolean);
-      let current: any = data;
-      for (const key of keys) {
-        if (current == null) return "";
-        if (isNaN(Number(key))) current = current[key];
-        else current = current[Number(key)];
-      }
-      return typeof current === "string" ? current : "";
-    };
-
-    const nodes = containerRef.current.querySelectorAll<HTMLElement>(
-      '[data-tiptap-path]'
-    );
-    nodes.forEach((node) => {
-      const path = node.getAttribute('data-tiptap-path');
-      if (!path) return;
-      const nextValue = getNestedValue(slideData, path);
-      const prevValue = node.getAttribute('data-tiptap-value') || '';
-      if (nextValue === prevValue) return;
-
-      const root = (node as any).__tiptapRoot as ReactDOM.Root | undefined;
-      const originalEl = (node as any).__tiptapElement as HTMLElement | undefined;
-      const tag = node.getAttribute('data-tiptap-tag') || 'P';
-      if (!root || !originalEl) return;
-
-      node.setAttribute('data-tiptap-value', nextValue);
-      root.render(
-        <TiptapText
-          key={`${path}:${nextValue}`}
-          content={nextValue}
-          element={originalEl}
-          tag={tag}
-          onContentChange={(content: string) => {
-            if (path && onContentChange) onContentChange(content, path, slideIndex);
-            node.setAttribute('data-tiptap-value', content);
-          }}
-          placeholder="Enter text..."
-        />
-      );
-    });
-  }, [slideData, slideIndex, onContentChange]);
   return (
     <div ref={containerRef} className="tiptap-text-replacer">
       {children}
