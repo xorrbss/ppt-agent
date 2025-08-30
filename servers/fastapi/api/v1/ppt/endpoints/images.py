@@ -1,5 +1,5 @@
 from typing import List
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, UploadFile, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -42,7 +42,7 @@ async def get_generated_images(sql_session: AsyncSession = Depends(get_async_ses
         )
         return images
     except Exception as e:
-        return {"error": f"Failed to retrieve generated images: {str(e)}"}
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve generated images: {str(e)}")
 
 @IMAGES_ROUTER.post("/upload-image")
 async def upload_image(file: UploadFile = File(...), sql_session: AsyncSession = Depends(get_async_session)):
@@ -57,7 +57,7 @@ async def upload_image(file: UploadFile = File(...), sql_session: AsyncSession =
             "id": str(image_asset.id),
         }
     except Exception as e:
-        return {"error": f"Failed to upload image: {str(e)}"}
+        raise HTTPException(status_code=500, detail=f"Failed to upload image: {str(e)}")
 
 @IMAGES_ROUTER.get("/uploaded", response_model=List[ImageAsset])
 async def get_uploaded_images(sql_session: AsyncSession = Depends(get_async_session)):
@@ -67,7 +67,7 @@ async def get_uploaded_images(sql_session: AsyncSession = Depends(get_async_sess
         )
         return images
     except Exception as e:
-        return {"error": f"Failed to retrieve uploaded images: {str(e)}"}
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve uploaded images: {str(e)}")
     
     
 @IMAGES_ROUTER.delete("/uploaded-image/{image_id}")
@@ -76,13 +76,13 @@ async def delete_image(image_id: uuid.UUID, sql_session: AsyncSession = Depends(
         # Fetch the asset to get its actual file path
         image = await sql_session.get(ImageAsset, image_id)
         if not image:
-            return {"error": "Image not found"}
+            raise HTTPException(status_code=404, detail="Image not found")
 
         service = ImageUploadService(get_uploads_directory())
         await service.delete_image(image.path)
 
         await sql_session.delete(image)
         await sql_session.commit()
-        return {"success": True, "message": "Image deleted successfully"}
+        return {"message": "Image deleted successfully"}
     except Exception as e:
-        return {"error": f"Failed to delete image: {str(e)}"}
+        raise HTTPException(status_code=500, detail=f"Failed to delete image: {str(e)}")

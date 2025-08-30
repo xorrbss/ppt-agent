@@ -471,7 +471,7 @@ const ImageEditor = ({
                         </div>
                       ) : (
                         uploadedImages.map((image) => (
-                          <div>
+                          <div key={image.id}>
                             <div
                               onClick={() =>
                                 handleImageChange(image.path)

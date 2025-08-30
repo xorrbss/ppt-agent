@@ -89,9 +89,11 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
         tiptapContainer.className = Array.from(allClasses).join(" ");
     
         // Replace the element
-        htmlElement.parentNode?.replaceChild(tiptapContainer, htmlElement);
+        if(htmlElement.parentNode) {
+        htmlElement.parentNode.replaceChild(tiptapContainer, htmlElement);
         // Mark as processed
         htmlElement.innerHTML = "";
+        }
         setProcessedElements((prev) => new Set(prev).add(htmlElement));
         // Render TiptapText
         const root = ReactDOM.createRoot(tiptapContainer);

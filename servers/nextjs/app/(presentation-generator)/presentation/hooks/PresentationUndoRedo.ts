@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import { finishUndoRedo, redo, undo } from "@/store/slices/undoRedoSlice";
@@ -12,6 +13,56 @@ export const usePresentationUndoRedo = () => {
     const dispatch = useDispatch();
     const undoRedoState = useSelector((state: RootState) => state.undoRedo);
     const { presentationData } = useSelector((state: RootState) => state.presentationGeneration);
+
+    const canUndo = undoRedoState.past.length > 0;
+    const canRedo = undoRedoState.future.length > 0;
+    console.log(canUndo, canRedo);
+
+    const onUndo = useCallback(() => {
+      if (!canUndo) return;
+
+      const previousState = undoRedoState.past[undoRedoState.past.length - 1];
+
+      dispatch(undo());
+
+      if (previousState) {
+        const newSlides = JSON.parse(JSON.stringify(previousState.slides));
+
+        dispatch(
+          setPresentationData({
+            ...presentationData!,
+            slides: newSlides,
+          })
+        );
+      }
+
+      setTimeout(() => {
+        dispatch(finishUndoRedo());
+      }, 100);
+    }, [canUndo, dispatch, presentationData, undoRedoState.past]);
+
+    const onRedo = useCallback(() => {
+      if (!canRedo) return;
+
+      const nextState = undoRedoState.future[0];
+
+      dispatch(redo());
+
+      if (nextState) {
+        const newSlides = JSON.parse(JSON.stringify(nextState.slides));
+
+        dispatch(
+          setPresentationData({
+            ...presentationData!,
+            slides: newSlides,
+          })
+        );
+      }
+
+      setTimeout(() => {
+        dispatch(finishUndoRedo());
+      }, 100);
+    }, [canRedo, dispatch, presentationData, undoRedoState.future]);
 
      // Handle undo
   useKeyboardShortcut(
@@ -81,4 +132,6 @@ export const usePresentationUndoRedo = () => {
     },
     [undoRedoState.future, presentationData]
   );
+
+  return { onUndo, onRedo, canUndo, canRedo };
 }

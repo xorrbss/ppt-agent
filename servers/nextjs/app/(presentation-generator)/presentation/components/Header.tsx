@@ -4,6 +4,9 @@ import {
   SquareArrowOutUpRight,
   Play,
   Loader2,
+  Redo2 ,
+  Undo2,
+  RefreshCcw,
 } from "lucide-react";
 import React, { useState } from "react";
 import Wrapper from "@/components/Wrapper";
@@ -15,7 +18,7 @@ import {
 } from "@/components/ui/popover";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import { OverlayLoader } from "@/components/ui/overlay-loader";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 
 import Link from "next/link";
 
@@ -30,6 +33,10 @@ import PDFIMAGE from "@/public/pdf.svg";
 import PPTXIMAGE from "@/public/pptx.svg";
 import Image from "next/image";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
+import { usePresentationUndoRedo } from "../hooks/PresentationUndoRedo";
+import ToolTip from "@/components/ToolTip";
+import { clearPresentationData } from "@/store/slices/presentationGeneration";
+import { clearHistory } from "@/store/slices/undoRedoSlice";
 
 const Header = ({
   presentation_id,
@@ -42,11 +49,14 @@ const Header = ({
   const [showLoader, setShowLoader] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
+  const dispatch = useDispatch();
 
 
   const { presentationData, isStreaming } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
+
+  const { onUndo, onRedo, canUndo, canRedo } = usePresentationUndoRedo();
 
   const get_presentation_pptx_model = async (id: string): Promise<PptxPresentationModel> => {
     const response = await fetch(`/api/presentation_to_pptx_model?id=${id}`);
@@ -127,6 +137,12 @@ const Header = ({
       setShowLoader(false);
     }
   };
+  const handleReGenerate = () => {
+    dispatch(clearPresentationData());
+    dispatch(clearHistory())
+    trackEvent(MixpanelEvent.Header_ReGenerate_Button_Clicked, { pathname });
+    router.push(`/presentation?id=${presentation_id}&stream=true`);
+  };
   const downloadLink = (path: string) => {
     // if we have popup access give direct download if not redirect to the path
     if (window.opener) {
@@ -170,6 +186,33 @@ const Header = ({
 
   const MenuItems = ({ mobile }: { mobile: boolean }) => (
     <div className="flex flex-col lg:flex-row items-center gap-4">
+      {/* undo redo */}
+      <button onClick={handleReGenerate} disabled={isStreaming || !presentationData} className="text-white  disabled:opacity-50" >
+      
+        Re-Generate
+      </button>
+      <div className="flex items-center gap-2 ">
+        <ToolTip content="Undo">
+        <button disabled={!canUndo} className="text-white disabled:opacity-50" onClick={() => {
+          onUndo();
+        }}>
+
+          <Undo2 className="w-6 h-6 " />
+          
+        </button>
+          </ToolTip>
+          <ToolTip content="Redo">
+
+        <button disabled={!canRedo} className="text-white disabled:opacity-50" onClick={() => {
+          onRedo();
+        }}>
+          <Redo2 className="w-6 h-6 " />
+         
+        </button>
+          </ToolTip>
+
+      </div>
+
       {/* Present Button */}
       <Button
         onClick={() => {

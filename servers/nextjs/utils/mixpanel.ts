@@ -50,6 +50,7 @@ export enum MixpanelEvent {
   ImageEditor_GetPreviousGeneratedImages_API_Call = 'Image Editor Get Previous Generated Images API Call',
   ImageEditor_GenerateImage_API_Call = 'Image Editor Generate Image API Call',
   ImageEditor_UploadImage_API_Call = 'Image Editor Upload Image API Call',
+  Header_ReGenerate_Button_Clicked = 'Header ReGenerate Button Clicked',
 }
 
 export type MixpanelProps = Record<string, unknown>;

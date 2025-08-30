@@ -79,7 +79,6 @@ async def delete_presentation(
     if not presentation:
         raise HTTPException(404, "Presentation not found")
 
-    await sql_session.execute(delete(SlideModel).where(SlideModel.presentation == id))
     await sql_session.delete(presentation)
     await sql_session.commit()
 
@@ -205,6 +204,8 @@ async def stream_presentation(
             status_code=400,
             detail="Outlines can not be empty",
         )
+    await sql_session.execute(delete(SlideModel).where(SlideModel.presentation == presentation_id))
+    await sql_session.commit()
 
     image_generation_service = ImageGenerationService(get_images_directory())
 
