@@ -3,6 +3,7 @@ from models.llm_message import LLMSystemMessage, LLMUserMessage
 from models.presentation_layout import PresentationLayoutModel
 from models.presentation_outline_model import PresentationOutlineModel
 from services.llm_client import LLMClient
+from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_provider import get_model
 from utils.get_dynamic_models import get_presentation_structure_model_with_n_slides
 from models.presentation_structure_model import PresentationStructureModel
@@ -73,15 +74,18 @@ async def generate_presentation_structure(
         len(presentation_outline.slides)
     )
 
-    response = await client.generate_structured(
-        model=model,
-        messages=get_messages(
-            presentation_layout,
-            len(presentation_outline.slides),
-            presentation_outline.to_string(),
-            instructions,
-        ),
-        response_format=response_model.model_json_schema(),
-        strict=True,
-    )
-    return PresentationStructureModel(**response)
+    try:
+        response = await client.generate_structured(
+            model=model,
+            messages=get_messages(
+                presentation_layout,
+                len(presentation_outline.slides),
+                presentation_outline.to_string(),
+                instructions,
+            ),
+            response_format=response_model.model_json_schema(),
+            strict=True,
+        )
+        return PresentationStructureModel(**response)
+    except Exception as e:
+        raise handle_llm_client_exceptions(e)

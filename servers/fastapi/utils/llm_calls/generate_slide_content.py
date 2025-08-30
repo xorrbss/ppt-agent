@@ -4,6 +4,7 @@ from models.llm_message import LLMSystemMessage, LLMUserMessage
 from models.presentation_layout import SlideLayoutModel
 from models.presentation_outline_model import SlideOutlineModel
 from services.llm_client import LLMClient
+from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_provider import get_model
 from utils.schema_utils import add_field_in_schema, remove_fields_from_schema
 
@@ -112,16 +113,20 @@ async def get_slide_content_from_type_and_outline(
         True,
     )
 
-    response = await client.generate_structured(
-        model=model,
-        messages=get_messages(
-            outline.content,
-            language,
-            tone,
-            verbosity,
-            instructions,
-        ),
-        response_format=response_schema,
-        strict=False,
-    )
-    return response
+    try:
+        response = await client.generate_structured(
+            model=model,
+            messages=get_messages(
+                outline.content,
+                language,
+                tone,
+                verbosity,
+                instructions,
+            ),
+            response_format=response_schema,
+            strict=False,
+        )
+        return response
+
+    except Exception as e:
+        raise handle_llm_client_exceptions(e)

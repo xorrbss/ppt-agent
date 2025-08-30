@@ -30,7 +30,7 @@ from utils.dict_utils import deep_update
 from utils.export_utils import export_presentation
 from utils.llm_calls.generate_presentation_outlines import generate_ppt_outline
 from models.sql.slide import SlideModel
-from models.sse_response import SSECompleteResponse, SSEResponse
+from models.sse_response import SSECompleteResponse, SSEErrorResponse, SSEResponse
 
 from services.database import get_async_session
 from services.temp_file_service import TEMP_FILE_SERVICE
@@ -224,14 +224,18 @@ async def stream_presentation(
         for i, slide_layout_index in enumerate(structure.slides):
             slide_layout = layout.slides[slide_layout_index]
 
-            slide_content = await get_slide_content_from_type_and_outline(
-                slide_layout,
-                outline.slides[i],
-                presentation.language,
-                presentation.tone,
-                presentation.verbosity,
-                presentation.instructions,
-            )
+            try:
+                slide_content = await get_slide_content_from_type_and_outline(
+                    slide_layout,
+                    outline.slides[i],
+                    presentation.language,
+                    presentation.tone,
+                    presentation.verbosity,
+                    presentation.instructions,
+                )
+            except HTTPException as e:
+                yield SSEErrorResponse(detail=e.detail).to_string()
+                return
 
             slide = SlideModel(
                 presentation=presentation_id,
@@ -372,6 +376,10 @@ async def generate_presentation_api(
             request.instructions,
             request.web_search,
         ):
+
+            if isinstance(chunk, HTTPException):
+                raise chunk
+
             presentation_outlines_text += chunk
 
         try:
