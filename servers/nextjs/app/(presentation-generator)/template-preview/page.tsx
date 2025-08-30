@@ -13,7 +13,7 @@ const LayoutPreview = () => {
     getAllGroups,
     getLayoutsByGroup,
     getGroupSetting,
-
+    getFullDataByGroup,
     loading,
     error,
   } = useLayout();
@@ -112,6 +112,7 @@ const LayoutPreview = () => {
                 const meta = summaryMap[group.groupName];
                 const displayName = isCustom && meta?.name ? meta.name : group.groupName;
                 const displayDescription = isCustom && meta?.description ? meta.description : group.settings.description;
+                const layoutGroup = getFullDataByGroup(group.groupName);
                 return (
                   <Card
                     key={group.groupName}
@@ -121,6 +122,7 @@ const LayoutPreview = () => {
                       router.push(`/template-preview/${group.groupName}`)
                     }}
                   >
+                   
                     <div className="p-6">
                       <div className="flex items-center justify-between mb-3">
                         <h3 className="text-lg font-semibold text-gray-900 capitalize group-hover:text-blue-600 transition-colors">
@@ -136,17 +138,28 @@ const LayoutPreview = () => {
                       <p className="text-sm text-gray-600 mb-4">
                         {displayDescription}
                       </p>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-gray-500">
-                          {group.layouts.length} layout
-                          {group.layouts.length !== 1 ? "s" : ""}
-                        </span>
-                        {group.settings.default && (
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            Default
-                          </span>
-                        )}
-                      </div>
+                      <div className="grid grid-cols-2 gap-2 mb-3 ">
+        {layoutGroup &&
+          layoutGroup?.slice(0, 4).map((layout: any, index: number) => {
+            const {
+              component: LayoutComponent,
+              sampleData,
+              layoutId,
+              groupName,
+            } = layout;
+            return (
+              <div
+                key={`${groupName}-${index}`}
+                className=" relative border border-gray-200 cursor-pointer overflow-hidden aspect-video"
+              >
+                <div className="absolute cursor-pointer bg-transparent z-40 top-0 left-0 w-full h-full" />
+                <div className="transform scale-[0.2] flex justify-center items-center origin-top-left  w-[500%] h-[500%]">
+                  <LayoutComponent data={sampleData} />
+                </div>
+              </div>
+            );
+          })}
+      </div>
                     </div>
                   </Card>
                 );
