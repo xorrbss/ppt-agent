@@ -1,6 +1,7 @@
 from typing import Optional
 from models.llm_message import LLMSystemMessage, LLMUserMessage
 from services.llm_client import LLMClient
+from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_provider import get_model
 
 system_prompt = """
@@ -50,14 +51,17 @@ async def get_edited_slide_html(prompt: str, html: str):
     model = get_model()
 
     client = LLMClient()
-    response = await client.generate(
-        model=model,
-        messages=[
-            LLMSystemMessage(content=system_prompt),
-            LLMUserMessage(content=get_user_prompt(prompt, html)),
-        ],
-    )
-    return extract_html_from_response(response) or html
+    try:
+        response = await client.generate(
+            model=model,
+            messages=[
+                LLMSystemMessage(content=system_prompt),
+                LLMUserMessage(content=get_user_prompt(prompt, html)),
+            ],
+        )
+        return extract_html_from_response(response) or html
+    except Exception as e:
+        raise handle_llm_client_exceptions(e)
 
 
 def extract_html_from_response(response_text: str) -> Optional[str]:

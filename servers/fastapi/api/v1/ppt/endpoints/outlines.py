@@ -7,7 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.presentation_outline_model import PresentationOutlineModel
 from models.sql.presentation import PresentationModel
-from models.sse_response import SSECompleteResponse, SSEResponse, SSEStatusResponse
+from models.sse_response import (
+    SSECompleteResponse,
+    SSEErrorResponse,
+    SSEResponse,
+    SSEStatusResponse,
+)
 from services.temp_file_service import TEMP_FILE_SERVICE
 from services.database import get_async_session
 from services.documents_loader import DocumentsLoader
@@ -71,6 +76,10 @@ async def stream_outlines(
             ):
                 # Give control to the event loop
                 await asyncio.sleep(0)
+
+                if isinstance(chunk, HTTPException):
+                    yield SSEErrorResponse(detail=chunk.detail).to_string()
+                    return
 
                 yield SSEResponse(
                     event="response",

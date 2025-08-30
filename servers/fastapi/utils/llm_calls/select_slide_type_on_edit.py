@@ -3,6 +3,7 @@ from models.presentation_layout import PresentationLayoutModel, SlideLayoutModel
 from models.slide_layout_index import SlideLayoutIndex
 from models.sql.slide import SlideModel
 from services.llm_client import LLMClient
+from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_provider import get_model
 
 
@@ -46,16 +47,20 @@ async def get_slide_layout_from_prompt(
 
     slide_layout_index = layout.get_slide_layout_index(slide.layout)
 
-    response = await client.generate_structured(
-        model=model,
-        messages=get_messages(
-            prompt,
-            slide.content,
-            layout,
-            slide_layout_index,
-        ),
-        response_format=SlideLayoutIndex.model_json_schema(),
-        strict=True,
-    )
-    index = SlideLayoutIndex(**response).index
-    return layout.slides[index]
+    try:
+        response = await client.generate_structured(
+            model=model,
+            messages=get_messages(
+                prompt,
+                slide.content,
+                layout,
+                slide_layout_index,
+            ),
+            response_format=SlideLayoutIndex.model_json_schema(),
+            strict=True,
+        )
+        index = SlideLayoutIndex(**response).index
+        return layout.slides[index]
+
+    except Exception as e:
+        raise handle_llm_client_exceptions(e)

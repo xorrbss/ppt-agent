@@ -5,6 +5,7 @@ from models.llm_message import LLMSystemMessage, LLMUserMessage
 from models.llm_tools import SearchWebTool
 from services.llm_client import LLMClient
 from utils.get_dynamic_models import get_presentation_outline_model_with_n_slides
+from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_provider import get_model
 
 
@@ -86,21 +87,26 @@ async def generate_ppt_outline(
 
     client = LLMClient()
 
-    async for chunk in client.stream_structured(
-        model,
-        get_messages(
-            content,
-            n_slides,
-            language,
-            additional_context,
-            tone,
-            verbosity,
-            instructions,
-        ),
-        response_model.model_json_schema(),
-        strict=True,
-        tools=(
-            [SearchWebTool] if (client.enable_web_grounding() and web_search) else None
-        ),
-    ):
-        yield chunk
+    try:
+        async for chunk in client.stream_structured(
+            model,
+            get_messages(
+                content,
+                n_slides,
+                language,
+                additional_context,
+                tone,
+                verbosity,
+                instructions,
+            ),
+            response_model.model_json_schema(),
+            strict=True,
+            tools=(
+                [SearchWebTool]
+                if (client.enable_web_grounding() and web_search)
+                else None
+            ),
+        ):
+            yield chunk
+    except Exception as e:
+        yield handle_llm_client_exceptions(e)
