@@ -204,8 +204,6 @@ async def stream_presentation(
             status_code=400,
             detail="Outlines can not be empty",
         )
-    await sql_session.execute(delete(SlideModel).where(SlideModel.presentation == presentation_id))
-    await sql_session.commit()
 
     image_generation_service = ImageGenerationService(get_images_directory())
 
@@ -270,6 +268,12 @@ async def stream_presentation(
         generated_assets = []
         for assets_list in generated_assets_lists:
             generated_assets.extend(assets_list)
+
+        # Moved this here to make sure new slides are generated before deleting the old ones
+        await sql_session.execute(
+            delete(SlideModel).where(SlideModel.presentation == presentation_id)
+        )
+        await sql_session.commit()
 
         sql_session.add(presentation)
         sql_session.add_all(slides)
