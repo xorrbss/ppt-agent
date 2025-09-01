@@ -55,11 +55,9 @@ async def stream_outlines(
                         slides=[chunk.to_slide_outline() for chunk in chunks]
                     )
                 except Exception as e:
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Failed to generate presentation outlines. Please try again.",
-                    )
-            else:
+                    pass
+
+            elif documents:
                 additional_context = "\n\n".join(documents)
 
         if not presentation_outlines:
