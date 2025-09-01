@@ -362,10 +362,14 @@ async def generate_presentation_api(
         if documents and len(documents) == 1:
             additional_context = documents[0]
             chunker = ScoreBasedChunker()
-            chunks = await chunker.get_n_chunks(documents[0], request.n_slides)
-            presentation_outlines = PresentationOutlineModel(
-                slides=[chunk.to_slide_outline() for chunk in chunks]
-            )
+            try:
+                chunks = await chunker.get_n_chunks(documents[0], request.n_slides)
+                presentation_outlines = PresentationOutlineModel(
+                    slides=[chunk.to_slide_outline() for chunk in chunks]
+                )
+            except Exception as e:
+                pass
+
         elif documents:
             additional_context = "\n\n".join(documents)
 
