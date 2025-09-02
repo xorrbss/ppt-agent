@@ -49,7 +49,9 @@ export function OutlineItem({
         if (isStreaming) return;
         const newData = outlines?.map((each, idx) => {
             if (idx === index - 1) {
-                return newOutline
+                return {
+                    content: newOutline
+                }
             }
             return each;
         });
