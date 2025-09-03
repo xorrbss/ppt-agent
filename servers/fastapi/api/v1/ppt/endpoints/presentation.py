@@ -293,35 +293,43 @@ async def stream_presentation(
     return StreamingResponse(inner(), media_type="text/event-stream")
 
 
-@PRESENTATION_ROUTER.put("/update", response_model=PresentationWithSlides)
+@PRESENTATION_ROUTER.patch("/update", response_model=PresentationWithSlides)
 async def update_presentation(
-    presentation_with_slides: Annotated[PresentationWithSlides, Body()],
+    id: Annotated[uuid.UUID, Body()],
+    n_slides: Annotated[Optional[int], Body()] = None,
+    title: Annotated[Optional[str], Body()] = None,
+    slides: Annotated[Optional[List[SlideModel]], Body()] = None,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
-    updated_presentation = presentation_with_slides.to_presentation_model()
-    updated_slides = presentation_with_slides.slides
-
-    presentation = await sql_session.get(PresentationModel, updated_presentation.id)
+    presentation = await sql_session.get(PresentationModel, id)
     if not presentation:
         raise HTTPException(status_code=404, detail="Presentation not found")
 
-    presentation.sqlmodel_update(updated_presentation)
+    presentation_update_dict = {}
+    if n_slides:
+        presentation_update_dict["n_slides"] = n_slides
+    if title:
+        presentation_update_dict["title"] = title
 
-    await sql_session.execute(
-        delete(SlideModel).where(SlideModel.presentation == updated_presentation.id)
-    )
+    if n_slides or title:
+        presentation.sqlmodel_update(presentation_update_dict)
 
-    # Just to make sure id is UUID
-    for slide in updated_slides:
-        slide.presentation = uuid.UUID(slide.presentation)
-        slide.id = uuid.UUID(slide.id)
+    if slides:
+        # Just to make sure id is UUID
+        for slide in slides:
+            slide.presentation = uuid.UUID(slide.presentation)
+            slide.id = uuid.UUID(slide.id)
 
-    sql_session.add_all(updated_slides)
+        await sql_session.execute(
+            delete(SlideModel).where(SlideModel.presentation == presentation.id)
+        )
+        sql_session.add_all(slides)
+
     await sql_session.commit()
 
     return PresentationWithSlides(
         **presentation.model_dump(),
-        slides=updated_slides,
+        slides=slides or [],
     )
 
 

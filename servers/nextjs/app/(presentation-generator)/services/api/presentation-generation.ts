@@ -113,7 +113,7 @@ export class PresentationGenerationApi {
       const response = await fetch(
         `/api/v1/ppt/presentation/update`,
         {
-          method: "PUT",
+          method: "PATCH",
           headers: getHeader(),
           body: JSON.stringify(body),
           cache: "no-cache",
