@@ -886,7 +886,7 @@ class LLMClient:
                     current_id = tool_id or current_id
                     if current_arguments is None:
                         current_arguments = tool_arguments
-                    else:
+                    elif tool_arguments:
                         current_arguments += tool_arguments
 
         if current_id is not None:
@@ -1233,7 +1233,7 @@ class LLMClient:
                     current_id = tool_id or current_id
                     if current_arguments is None:
                         current_arguments = tool_arguments
-                    else:
+                    elif tool_arguments:
                         current_arguments += tool_arguments
 
                 if current_name == "ResponseSchema":
