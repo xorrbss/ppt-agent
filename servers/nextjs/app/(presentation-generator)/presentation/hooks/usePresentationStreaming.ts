@@ -30,7 +30,7 @@ export const usePresentationStreaming = (
       trackEvent(MixpanelEvent.Presentation_Stream_API_Call);
 
       eventSource = new EventSource(
-        `/api/v1/ppt/presentation/stream?presentation_id=${presentationId}`
+        `/api/v1/ppt/presentation/stream/${presentationId}`
       );
 
       eventSource.addEventListener("response", (event) => {

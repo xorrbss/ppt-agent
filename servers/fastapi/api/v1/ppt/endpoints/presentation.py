@@ -11,10 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from models.generate_presentation_request import GeneratePresentationRequest
 from models.presentation_and_path import PresentationPathAndEditPath
-from models.presentation_from_template import (
-    EditPresentationRequest,
-    GetPresentationUsingTemplateRequest,
-)
+from models.presentation_from_template import EditPresentationRequest
 from models.presentation_outline_model import (
     PresentationOutlineModel,
     SlideOutlineModel,
@@ -29,7 +26,6 @@ from models.presentation_with_slides import (
 )
 
 from services.documents_loader import DocumentsLoader
-from services.score_based_chunker import ScoreBasedChunker
 from utils.get_layout_by_name import get_layout_by_name
 from services.image_generation_service import ImageGenerationService
 from utils.dict_utils import deep_update

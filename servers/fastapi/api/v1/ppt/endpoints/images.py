@@ -86,7 +86,7 @@ async def get_uploaded_images(sql_session: AsyncSession = Depends(get_async_sess
         )
 
 
-@IMAGES_ROUTER.delete("/{id}")
+@IMAGES_ROUTER.delete("/{id}", status_code=204)
 async def delete_uploaded_image_by_id(
     id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session)
 ):
