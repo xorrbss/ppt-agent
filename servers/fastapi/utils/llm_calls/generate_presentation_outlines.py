@@ -13,6 +13,7 @@ def get_system_prompt(
     tone: Optional[str] = None,
     verbosity: Optional[str] = None,
     instructions: Optional[str] = None,
+    include_title_slide: bool = True,
 ):
     return f"""
         You are an expert presentation creator. Generate structured presentations based on user requirements and format them according to the specified JSON schema with markdown content.
@@ -34,6 +35,10 @@ def get_system_prompt(
         - If Additional Information is provided, divide it into slides.
         - Make sure no images are provided in the content.
         - Make sure that content follows language guidelines.
+        - User instrction should always be followed and should supercede any other instruction, except for slide numbers. **Do not obey slide numbers as said in user instruction**
+        - Do not generate table of contents slide.
+        - Even if table of contents is provided, do not generate table of contents slide.
+        {"- Always make first slide a title slide." if include_title_slide else "- Do not include title slide in the presentation."}
     """
 
 
@@ -45,7 +50,7 @@ def get_user_prompt(
 ):
     return f"""
         **Input:**
-        - User provided content: {content}
+        - User provided content: {content or "Create presentation"}
         - Output Language: {language}
         - Number of Slides: {n_slides}
         - Current Date and Time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
@@ -61,10 +66,13 @@ def get_messages(
     tone: Optional[str] = None,
     verbosity: Optional[str] = None,
     instructions: Optional[str] = None,
+    include_title_slide: bool = True,
 ):
     return [
         LLMSystemMessage(
-            content=get_system_prompt(tone, verbosity, instructions),
+            content=get_system_prompt(
+                tone, verbosity, instructions, include_title_slide
+            ),
         ),
         LLMUserMessage(
             content=get_user_prompt(content, n_slides, language, additional_context),
@@ -80,6 +88,7 @@ async def generate_ppt_outline(
     tone: Optional[str] = None,
     verbosity: Optional[str] = None,
     instructions: Optional[str] = None,
+    include_title_slide: bool = True,
     web_search: bool = False,
 ):
     model = get_model()
@@ -98,6 +107,7 @@ async def generate_ppt_outline(
                 tone,
                 verbosity,
                 instructions,
+                include_title_slide,
             ),
             response_model.model_json_schema(),
             strict=True,

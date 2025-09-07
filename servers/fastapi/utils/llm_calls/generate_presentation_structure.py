@@ -51,6 +51,39 @@ def get_messages(
                 {"# User Instruction:" if instructions else ""}
                 {instructions or ""}
 
+                User intruction should be taken into account while creating the presentation structure, except for number of slides.
+
+                Select layout index for each of the {n_slides} slides based on what will best serve the presentation's goals.
+            """,
+        ),
+        LLMUserMessage(
+            content=f"""
+                {data}
+            """,
+        ),
+    ]
+
+
+def get_messages_for_slides_markdown(
+    presentation_layout: PresentationLayoutModel,
+    n_slides: int,
+    data: str,
+    instructions: Optional[str] = None,
+):
+    return [
+        LLMSystemMessage(
+            content=f"""
+                You're a professional presentation designer with creative freedom to design engaging presentations.
+
+                {"# User Instruction:" if instructions else ""}
+                {instructions or ""}
+
+                {presentation_layout.to_string()}
+
+                Select layout that best matches the content of the slides.
+
+                User intruction should be taken into account while creating the presentation structure, except for number of slides.
+
                 Select layout index for each of the {n_slides} slides based on what will best serve the presentation's goals.
             """,
         ),
@@ -66,6 +99,7 @@ async def generate_presentation_structure(
     presentation_outline: PresentationOutlineModel,
     presentation_layout: PresentationLayoutModel,
     instructions: Optional[str] = None,
+    using_slides_markdown: bool = False,
 ) -> PresentationStructureModel:
 
     client = LLMClient()
@@ -77,11 +111,20 @@ async def generate_presentation_structure(
     try:
         response = await client.generate_structured(
             model=model,
-            messages=get_messages(
-                presentation_layout,
-                len(presentation_outline.slides),
-                presentation_outline.to_string(),
-                instructions,
+            messages=(
+                get_messages_for_slides_markdown(
+                    presentation_layout,
+                    len(presentation_outline.slides),
+                    presentation_outline.to_string(),
+                    instructions,
+                )
+                if using_slides_markdown
+                else get_messages(
+                    presentation_layout,
+                    len(presentation_outline.slides),
+                    presentation_outline.to_string(),
+                    instructions,
+                )
             ),
             response_format=response_model.model_json_schema(),
             strict=True,

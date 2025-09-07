@@ -1,8 +1,9 @@
 import asyncio
 import json
+import math
 import os
 import random
-from typing import Annotated, List, Optional
+from typing import Annotated, List, Literal, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy import delete
@@ -10,11 +11,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from models.generate_presentation_request import GeneratePresentationRequest
 from models.presentation_and_path import PresentationPathAndEditPath
-from models.presentation_from_template import GetPresentationUsingTemplateRequest
+from models.presentation_from_template import (
+    EditPresentationRequest,
+    GetPresentationUsingTemplateRequest,
+)
 from models.presentation_outline_model import (
     PresentationOutlineModel,
     SlideOutlineModel,
 )
+from enums.tone import Tone
+from enums.verbosity import Verbosity
 from models.pptx_models import PptxPresentationModel
 from models.presentation_layout import PresentationLayoutModel
 from models.presentation_structure_model import PresentationStructureModel
@@ -43,6 +49,7 @@ from utils.llm_calls.generate_presentation_structure import (
 from utils.llm_calls.generate_slide_content import (
     get_slide_content_from_type_and_outline,
 )
+from utils.ppt_utils import select_toc_or_list_slide_layout_index
 from utils.process_slides import (
     process_slide_add_placeholder_assets,
     process_slide_and_fetch_assets,
@@ -53,7 +60,32 @@ import uuid
 PRESENTATION_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
 
 
-@PRESENTATION_ROUTER.get("", response_model=PresentationWithSlides)
+@PRESENTATION_ROUTER.get("/all", response_model=List[PresentationWithSlides])
+async def get_all_presentations(sql_session: AsyncSession = Depends(get_async_session)):
+    presentations_with_slides = []
+
+    query = (
+        select(PresentationModel, SlideModel)
+        .join(
+            SlideModel,
+            (SlideModel.presentation == PresentationModel.id) & (SlideModel.index == 0),
+        )
+        .order_by(PresentationModel.created_at.desc())
+    )
+
+    results = await sql_session.execute(query)
+    rows = results.all()
+    presentations_with_slides = [
+        PresentationWithSlides(
+            **presentation.model_dump(),
+            slides=[first_slide],
+        )
+        for presentation, first_slide in rows
+    ]
+    return presentations_with_slides
+
+
+@PRESENTATION_ROUTER.get("/{id}", response_model=PresentationWithSlides)
 async def get_presentation(
     id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session)
 ):
@@ -71,7 +103,7 @@ async def get_presentation(
     )
 
 
-@PRESENTATION_ROUTER.delete("", status_code=204)
+@PRESENTATION_ROUTER.delete("/{id}", status_code=204)
 async def delete_presentation(
     id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session)
 ):
@@ -83,41 +115,27 @@ async def delete_presentation(
     await sql_session.commit()
 
 
-@PRESENTATION_ROUTER.get("/all", response_model=List[PresentationWithSlides])
-async def get_all_presentations(sql_session: AsyncSession = Depends(get_async_session)):
-    presentations_with_slides = []
-    presentations = await sql_session.scalars(select(PresentationModel))
-
-    async def inner(presentation: PresentationModel, sql_session: AsyncSession):
-        first_slide = await sql_session.scalar(
-            select(SlideModel)
-            .where(SlideModel.presentation == presentation.id)
-            .where(SlideModel.index == 0)
-        )
-        if not first_slide:
-            return None
-        return PresentationWithSlides(
-            **presentation.model_dump(),
-            slides=[first_slide],
-        )
-
-    tasks = [inner(p, sql_session) for p in presentations]
-    results = await asyncio.gather(*tasks)
-    presentations_with_slides = [r for r in results if r is not None]
-    return presentations_with_slides
-
-
 @PRESENTATION_ROUTER.post("/create", response_model=PresentationModel)
 async def create_presentation(
     content: Annotated[str, Body()],
     n_slides: Annotated[int, Body()],
     language: Annotated[str, Body()],
     file_paths: Annotated[Optional[List[str]], Body()] = None,
-    tone: Annotated[Optional[str], Body()] = None,
-    verbosity: Annotated[Optional[str], Body()] = None,
+    tone: Annotated[Tone, Body()] = Tone.DEFAULT,
+    verbosity: Annotated[Verbosity, Body()] = Verbosity.STANDARD,
     instructions: Annotated[Optional[str], Body()] = None,
+    include_table_of_contents: Annotated[bool, Body()] = False,
+    include_title_slide: Annotated[bool, Body()] = True,
+    web_search: Annotated[bool, Body()] = False,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
+
+    if include_table_of_contents and n_slides < 3:
+        raise HTTPException(
+            status_code=400,
+            detail="Number of slides cannot be less than 3 if table of contents is included",
+        )
+
     presentation_id = uuid.uuid4()
 
     presentation = PresentationModel(
@@ -126,9 +144,12 @@ async def create_presentation(
         n_slides=n_slides,
         language=language,
         file_paths=file_paths,
-        tone=tone,
-        verbosity=verbosity,
+        tone=tone.value,
+        verbosity=verbosity.value,
         instructions=instructions,
+        include_table_of_contents=include_table_of_contents,
+        include_title_slide=include_title_slide,
+        web_search=web_search,
     )
 
     sql_session.add(presentation)
@@ -177,6 +198,42 @@ async def prepare_presentation(
         if presentation_structure.slides[index] >= total_slide_layouts:
             presentation_structure.slides[index] = random_slide_index
 
+    if presentation.include_table_of_contents:
+        n_toc_slides = presentation.n_slides - total_outlines
+        toc_slide_layout_index = select_toc_or_list_slide_layout_index(layout)
+        if toc_slide_layout_index != -1:
+            outline_index = 1 if presentation.include_title_slide else 0
+            for i in range(n_toc_slides):
+                outlines_to = outline_index + 10
+                if total_outlines == outlines_to:
+                    outlines_to -= 1
+
+                presentation_structure.slides.insert(
+                    i + 1 if presentation.include_title_slide else i,
+                    toc_slide_layout_index,
+                )
+                toc_outline = f"Table of Contents\n\n"
+
+                for outline in presentation_outline_model.slides[
+                    outline_index:outlines_to
+                ]:
+                    page_number = (
+                        outline_index - i + n_toc_slides + 1
+                        if presentation.include_title_slide
+                        else outline_index - i + n_toc_slides
+                    )
+                    toc_outline += f"Slide page number: {page_number}\n Slide Content: {outline.content[:100]}\n\n"
+                    outline_index += 1
+
+                outline_index += 1
+
+                presentation_outline_model.slides.insert(
+                    i + 1 if presentation.include_title_slide else i,
+                    SlideOutlineModel(
+                        content=toc_outline,
+                    ),
+                )
+
     sql_session.add(presentation)
     presentation.outlines = presentation_outline_model.model_dump(mode="json")
     presentation.title = title or presentation.title
@@ -187,11 +244,11 @@ async def prepare_presentation(
     return presentation
 
 
-@PRESENTATION_ROUTER.get("/stream", response_model=PresentationWithSlides)
+@PRESENTATION_ROUTER.get("/stream/{id}", response_model=PresentationWithSlides)
 async def stream_presentation(
-    presentation_id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session)
+    id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session)
 ):
-    presentation = await sql_session.get(PresentationModel, presentation_id)
+    presentation = await sql_session.get(PresentationModel, id)
     if not presentation:
         raise HTTPException(status_code=404, detail="Presentation not found")
     if not presentation.structure:
@@ -237,7 +294,7 @@ async def stream_presentation(
                 return
 
             slide = SlideModel(
-                presentation=presentation_id,
+                presentation=id,
                 layout_group=layout.name,
                 layout=slide_layout.id,
                 index=i,
@@ -271,7 +328,7 @@ async def stream_presentation(
 
         # Moved this here to make sure new slides are generated before deleting the old ones
         await sql_session.execute(
-            delete(SlideModel).where(SlideModel.presentation == presentation_id)
+            delete(SlideModel).where(SlideModel.presentation == id)
         )
         await sql_session.commit()
 
@@ -334,7 +391,7 @@ async def update_presentation(
 
 
 @PRESENTATION_ROUTER.post("/export/pptx", response_model=str)
-async def create_pptx(
+async def export_presentation_as_pptx(
     pptx_model: Annotated[PptxPresentationModel, Body()],
 ):
     temp_dir = TEMP_FILE_SERVICE.create_temp_dir()
@@ -351,6 +408,31 @@ async def create_pptx(
     return pptx_path
 
 
+@PRESENTATION_ROUTER.post("/export", response_model=PresentationPathAndEditPath)
+async def export_presentation_as_pptx_or_pdf(
+    id: Annotated[uuid.UUID, Body(description="Presentation ID to export")],
+    export_as: Annotated[
+        Literal["pptx", "pdf"], Body(description="Format to export the presentation as")
+    ] = "pptx",
+    sql_session: AsyncSession = Depends(get_async_session),
+):
+    presentation = await sql_session.get(PresentationModel, id)
+
+    if not presentation:
+        raise HTTPException(status_code=404, detail="Presentation not found")
+
+    presentation_and_path = await export_presentation(
+        id,
+        presentation.title or str(uuid.uuid4()),
+        export_as,
+    )
+
+    return PresentationPathAndEditPath(
+        **presentation_and_path.model_dump(),
+        edit_path=f"/presentation?id={id}",
+    )
+
+
 @PRESENTATION_ROUTER.post("/generate", response_model=PresentationPathAndEditPath)
 async def generate_presentation_api(
     request: GeneratePresentationRequest,
@@ -358,39 +440,47 @@ async def generate_presentation_api(
 ):
     presentation_id = uuid.uuid4()
 
-    # 3. Generate Outlines
-    presentation_outlines = None
-    additional_context = ""
+    using_slides_markdown = False
 
-    # Process files
-    if request.files:
-        documents_loader = DocumentsLoader(file_paths=request.files)
-        await documents_loader.load_documents()
-        documents = documents_loader.documents
-        if documents and len(documents) == 1:
-            additional_context = documents[0]
-            chunker = ScoreBasedChunker()
-            try:
-                chunks = await chunker.get_n_chunks(documents[0], request.n_slides)
-                presentation_outlines = PresentationOutlineModel(
-                    slides=[chunk.to_slide_outline() for chunk in chunks]
+    if request.slides_markdown:
+        using_slides_markdown = True
+        request.n_slides = len(request.slides_markdown)
+
+    if not using_slides_markdown:
+        additional_context = ""
+
+        if request.files:
+            documents_loader = DocumentsLoader(file_paths=request.files)
+            await documents_loader.load_documents()
+            documents = documents_loader.documents
+            if documents:
+                additional_context = "\n\n".join(documents)
+
+        # Finding number of slides to generate by considering table of contents
+        n_slides_to_generate = request.n_slides
+        if request.include_table_of_contents:
+            needed_toc_count = math.ceil(
+                (
+                    (request.n_slides - 1)
+                    if request.include_title_slide
+                    else request.n_slides
                 )
-            except Exception as e:
-                pass
+                / 10
+            )
+            n_slides_to_generate -= math.ceil(
+                (request.n_slides - needed_toc_count) / 10
+            )
 
-        elif documents:
-            additional_context = "\n\n".join(documents)
-
-    if not presentation_outlines:
         presentation_outlines_text = ""
         async for chunk in generate_ppt_outline(
             request.content,
-            request.n_slides,
+            n_slides_to_generate,
             request.language,
             additional_context,
-            request.tone,
-            request.verbosity,
+            request.tone.value,
+            request.verbosity.value,
             request.instructions,
+            request.include_title_slide,
             request.web_search,
         ):
 
@@ -408,18 +498,25 @@ async def generate_presentation_api(
                 detail="Failed to generate presentation outlines. Please try again.",
             )
         presentation_outlines = PresentationOutlineModel(**presentation_outlines_json)
+        total_outlines = n_slides_to_generate
 
-    outlines = presentation_outlines.slides[: request.n_slides]
-    total_outlines = len(outlines)
+    else:
+        # Setting outlines to slides markdown
+        presentation_outlines = PresentationOutlineModel(
+            slides=[
+                SlideOutlineModel(content=slide) for slide in request.slides_markdown
+            ]
+        )
+        total_outlines = len(request.slides_markdown)
 
     print("-" * 40)
     print(f"Generated {total_outlines} outlines for the presentation")
 
-    # 4. Parse Layouts
+    # Parse Layouts
     layout_model = await get_layout_by_name(request.template)
     total_slide_layouts = len(layout_model.slides)
 
-    # 5. Generate Structure
+    # Generate Structure
     if layout_model.ordered:
         presentation_structure = layout_model.to_presentation_structure()
     else:
@@ -428,6 +525,7 @@ async def generate_presentation_api(
                 presentation_outlines,
                 layout_model,
                 request.instructions,
+                using_slides_markdown,
             )
         )
 
@@ -440,7 +538,42 @@ async def generate_presentation_api(
         if presentation_structure.slides[index] >= total_slide_layouts:
             presentation_structure.slides[index] = random_slide_index
 
-    # 6. Create PresentationModel
+    # Injecting table of contents to the presentation structure and outlines
+    if request.include_table_of_contents and not using_slides_markdown:
+        n_toc_slides = request.n_slides - total_outlines
+        toc_slide_layout_index = select_toc_or_list_slide_layout_index(layout_model)
+        if toc_slide_layout_index != -1:
+            outline_index = 1 if request.include_title_slide else 0
+            for i in range(n_toc_slides):
+                outlines_to = outline_index + 10
+                if total_outlines == outlines_to:
+                    outlines_to -= 1
+
+                presentation_structure.slides.insert(
+                    i + 1 if request.include_title_slide else i,
+                    toc_slide_layout_index,
+                )
+                toc_outline = f"Table of Contents\n\n"
+
+                for outline in presentation_outlines.slides[outline_index:outlines_to]:
+                    page_number = (
+                        outline_index - i + n_toc_slides + 1
+                        if request.include_title_slide
+                        else outline_index - i + n_toc_slides
+                    )
+                    toc_outline += f"Slide page number: {page_number}\n Slide Content: {outline.content[:100]}\n\n"
+                    outline_index += 1
+
+                outline_index += 1
+
+                presentation_outlines.slides.insert(
+                    i + 1 if request.include_title_slide else i,
+                    SlideOutlineModel(
+                        content=toc_outline,
+                    ),
+                )
+
+    # Create PresentationModel
     presentation = PresentationModel(
         id=presentation_id,
         content=request.content,
@@ -474,10 +607,10 @@ async def generate_presentation_api(
         content_tasks = [
             get_slide_content_from_type_and_outline(
                 slide_layouts[i],
-                outlines[i],
+                presentation_outlines.slides[i],
                 request.language,
-                request.tone,
-                request.verbosity,
+                request.tone.value,
+                request.verbosity.value,
                 request.instructions,
             )
             for i in range(start, end)
@@ -530,14 +663,57 @@ async def generate_presentation_api(
     )
 
 
-@PRESENTATION_ROUTER.post("/from-template", response_model=PresentationPathAndEditPath)
-async def from_template(
-    data: Annotated[GetPresentationUsingTemplateRequest, Body()],
+@PRESENTATION_ROUTER.post("/edit", response_model=PresentationPathAndEditPath)
+async def edit_presentation_with_new_content(
+    data: Annotated[EditPresentationRequest, Body()],
     sql_session: AsyncSession = Depends(get_async_session),
 ):
     presentation = await sql_session.get(PresentationModel, data.presentation_id)
     if not presentation:
         raise HTTPException(status_code=404, detail="Presentation not found")
+
+    slides = await sql_session.scalars(
+        select(SlideModel).where(SlideModel.presentation == data.presentation_id)
+    )
+
+    new_slides = []
+    slides_to_delete = []
+    for each_slide in slides:
+        updated_content = None
+        new_slide_data = list(filter(lambda x: x.index == each_slide.index, data.data))
+        if new_slide_data:
+            updated_content = deep_update(each_slide.content, new_slide_data[0].content)
+            new_slides.append(
+                each_slide.get_new_slide(presentation.id, updated_content)
+            )
+            slides_to_delete.append(each_slide.id)
+
+    await sql_session.execute(
+        delete(SlideModel).where(SlideModel.id.in_(slides_to_delete))
+    )
+
+    sql_session.add_all(new_slides)
+    await sql_session.commit()
+
+    presentation_and_path = await export_presentation(
+        presentation.id, presentation.title or str(uuid.uuid4()), data.export_as
+    )
+
+    return PresentationPathAndEditPath(
+        **presentation_and_path.model_dump(),
+        edit_path=f"/presentation?id={presentation.id}",
+    )
+
+
+@PRESENTATION_ROUTER.post("/derive", response_model=PresentationPathAndEditPath)
+async def derive_presentation_from_existing_one(
+    data: Annotated[EditPresentationRequest, Body()],
+    sql_session: AsyncSession = Depends(get_async_session),
+):
+    presentation = await sql_session.get(PresentationModel, data.presentation_id)
+    if not presentation:
+        raise HTTPException(status_code=404, detail="Presentation not found")
+
     slides = await sql_session.scalars(
         select(SlideModel).where(SlideModel.presentation == data.presentation_id)
     )

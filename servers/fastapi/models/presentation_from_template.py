@@ -8,7 +8,7 @@ class SlideContentUpdate(BaseModel):
     content: dict
 
 
-class GetPresentationUsingTemplateRequest(BaseModel):
+class EditPresentationRequest(BaseModel):
     presentation_id: uuid.UUID
     data: List[SlideContentUpdate]
     export_as: Literal["pptx", "pdf"] = "pptx"
