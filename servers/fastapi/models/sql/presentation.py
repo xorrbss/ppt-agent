@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List, Optional
 import uuid
 from sqlalchemy import JSON, Column, DateTime, String
-from sqlmodel import Field, SQLModel
+from sqlmodel import Boolean, Field, SQLModel
 
 from models.presentation_layout import PresentationLayoutModel
 from models.presentation_outline_model import PresentationOutlineModel
@@ -38,6 +38,9 @@ class PresentationModel(SQLModel, table=True):
     instructions: Optional[str] = Field(sa_column=Column(String), default=None)
     tone: Optional[str] = Field(sa_column=Column(String), default=None)
     verbosity: Optional[str] = Field(sa_column=Column(String), default=None)
+    include_table_of_contents: bool = Field(sa_column=Column(Boolean), default=False)
+    include_title_slide: bool = Field(sa_column=Column(Boolean), default=True)
+    web_search: bool = Field(sa_column=Column(Boolean), default=False)
 
     def get_new_presentation(self):
         return PresentationModel(
@@ -51,6 +54,10 @@ class PresentationModel(SQLModel, table=True):
             layout=self.layout,
             structure=self.structure,
             instructions=self.instructions,
+            tone=self.tone,
+            verbosity=self.verbosity,
+            include_table_of_contents=self.include_table_of_contents,
+            include_title_slide=self.include_title_slide,
         )
 
     def get_presentation_outline(self):
