@@ -32,7 +32,7 @@ const teamSlideSchema = z.object({
             position: 'CEO',
             description: 'Strategic leader with 15+ years experience in digital transformation and business growth.',
             image: {
-                __image_url__: 'https://images.unsplash.com/photo-1494790108755-2616b612994a?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
+                __image_url__: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
                 __image_prompt__: 'Professional businesswoman CEO headshot'
             }
         },
@@ -92,18 +92,25 @@ const TeamSlideLayout: React.FC<TeamSlideLayoutProps> = ({ data: slideData }) =>
 
     return (
         <>
-            {/* Import Google Fonts */}
-            <link
-                href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
-                rel="stylesheet"
-            />
-
+           
+            
             <div
                 className="w-full rounded-sm max-w-[1280px] shadow-lg max-h-[720px] aspect-video bg-white relative z-20 mx-auto overflow-hidden"
                 style={{
-                    fontFamily: 'Poppins, sans-serif'
+                    fontFamily: 'var(--heading-font-family,Inter)',
+                    background:"var(--card-background-color,#ffffff)"
                 }}
             >
+                {(slideData as any)?.__companyName__ && (
+                    <div className="absolute top-0 left-0 right-0 px-8 sm:px-12 lg:px-20 pt-4">
+                        <div className="flex items-center gap-4">
+                            <span className="text-sm sm:text-base font-semibold" style={{ color: 'var(--text-heading-color, #111827)' }}>
+                                {(slideData as any)?.__companyName__ || 'Company Name'}
+                            </span>
+                            <div className="h-[2px] flex-1 opacity-70" style={{ backgroundColor: 'var(--text-heading-color, #111827)' }}></div>
+                        </div>
+                    </div>
+                )}
                 {/* Decorative Wave Pattern */}
                 <div className="absolute bottom-0 left-0 w-80 h-40 opacity-10 overflow-hidden">
                     <svg className="w-full h-full" viewBox="0 0 300 150" fill="none">
@@ -113,19 +120,19 @@ const TeamSlideLayout: React.FC<TeamSlideLayoutProps> = ({ data: slideData }) =>
                 </div>
 
                 {/* Main Content */}
-                <div className="relative z-10 flex h-full px-8 sm:px-12 lg:px-20 pb-8">
+                <div className="relative z-10 flex h-full px-8 sm:px-12 lg:px-20 pt-12 pb-8">
                     {/* Left Section - Title and Company Description */}
                     <div className="flex-1 flex flex-col justify-center pr-8 space-y-6">
                         {/* Title */}
-                        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight">
+                        <h1 style={{ color: "var(--text-heading-color,#111827)" }} className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight">
                             {slideData?.title || 'Our Team Members'}
                         </h1>
 
                         {/* Purple accent line */}
-                        <div className="w-20 h-1 bg-purple-600"></div>
+                        <div style={{background:"var(--primary-accent-color,#9333ea)"}} className="w-20 h-1 bg-purple-600"></div>
 
                         {/* Company Description */}
-                        <p className="text-base sm:text-lg text-gray-700 leading-relaxed">
+                        <p style={{color:"var(--text-body-color,#4b5563)"}} className="text-base sm:text-lg text-gray-700 leading-relaxed">
                             {slideData?.companyDescription || 'Ginyard International Co. is a leading provider of innovative digital solutions tailored for businesses. Our mission is to empower organizations to achieve their goals through cutting-edge technology and strategic partnerships.'}
                         </p>
                     </div>
@@ -136,7 +143,7 @@ const TeamSlideLayout: React.FC<TeamSlideLayoutProps> = ({ data: slideData }) =>
                             {teamMembers.map((member, index) => (
                                 <div key={index} className="text-center space-y-3">
                                     {/* Member Photo */}
-                                    <div className="w-32 h-32 mx-auto rounded-lg overflow-hidden shadow-md">
+                                    <div className="w-32 h-32 mx-auto rounded-lg overflow-hidden shadow-md" style={{background:"var(--tertiary-accent-color,#e5e7eb)"}}>
                                         <img
                                             src={member.image.__image_url__ || ''}
                                             alt={member.image.__image_prompt__ || member.name}
@@ -146,13 +153,13 @@ const TeamSlideLayout: React.FC<TeamSlideLayoutProps> = ({ data: slideData }) =>
 
                                     {/* Member Info */}
                                     <div>
-                                        <h3 className="text-lg font-semibold text-gray-900">
+                                        <h3 style={{color:"var(--text-heading-color,#111827)"}} className="text-lg font-semibold text-gray-900">
                                             {member.name}
                                         </h3>
-                                        <p className="text-sm font-medium text-gray-600 italic mb-2">
+                                        <p style={{color:"var(--text-body-color,#4b5563)"}} className="text-sm font-medium text-gray-600 italic mb-2">
                                             {member.position}
                                         </p>
-                                        <p className="text-xs text-gray-600 leading-relaxed px-2">
+                                        <p style={{color:"var(--text-body-color,#4b5563)"}} className="text-xs text-gray-600 leading-relaxed px-2">
                                             {member.description}
                                         </p>
                                     </div>
