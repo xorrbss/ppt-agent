@@ -49,16 +49,30 @@ export class PresentationGenerationApi {
     }
   }
  
-    static async createPresentation({
+   static async createPresentation({
     content,
     n_slides,
     file_paths,
     language,
+    tone,
+    verbosity,
+    instructions,
+    include_table_of_contents,
+    include_title_slide,
+    web_search,
+    image_type,
   }: {
     content: string;
     n_slides: number | null;
     file_paths?: string[];
     language: string | null;
+    tone?: string | null;
+    verbosity?: string | null;
+    instructions?: string | null;
+    include_table_of_contents?: boolean;
+    include_title_slide?: boolean;
+    web_search?: boolean;
+    image_type?: string | null;
   }) {
     try {
       const response = await fetch(
@@ -71,6 +85,13 @@ export class PresentationGenerationApi {
             n_slides,
             file_paths,
             language,
+            tone,
+            verbosity,
+            instructions,
+            include_table_of_contents,
+            include_title_slide,
+            web_search,
+            image_type,
           }),
           cache: "no-cache",
         }

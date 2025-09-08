@@ -147,12 +147,19 @@ const DocumentsPreviewPage: React.FC = () => {
         (fileItem: FileItem) => fileItem.file_path
       );
       trackEvent(MixpanelEvent.DocumentsPreview_Create_Presentation_API_Call);
-      const createResponse = await PresentationGenerationApi.createPresentation(
+       const createResponse = await PresentationGenerationApi.createPresentation(
         {
           content: config?.prompt ?? "",
           n_slides: config?.slides ? parseInt(config.slides) : null,
           file_paths: documentPaths,
           language: config?.language ?? "",
+          tone: config?.tone,
+          verbosity: config?.verbosity,
+          instructions: config?.instructions || null,
+          include_table_of_contents: !!config?.includeTableOfContents,
+          include_title_slide: !!config?.includeTitleSlide,
+          web_search: !!config?.webSearch,
+          image_type: config?.imageType,
         }
       );
 
