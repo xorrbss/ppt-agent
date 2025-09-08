@@ -5,7 +5,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ImageType, LanguageType, PresentationConfig, ToneType, VerbosityType } from "../type";
+import {  LanguageType, PresentationConfig, ToneType, VerbosityType } from "../type";
 import { useState } from "react";
 import { Check, ChevronsUpDown, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -201,7 +201,6 @@ export function ConfigurationSelects({
   const [advancedDraft, setAdvancedDraft] = useState({
     tone: config.tone,
     verbosity: config.verbosity,
-    imageType: config.imageType,
     instructions: config.instructions,
     includeTableOfContents: config.includeTableOfContents,
     includeTitleSlide: config.includeTitleSlide,
@@ -213,7 +212,6 @@ export function ConfigurationSelects({
       setAdvancedDraft({
         tone: config.tone,
         verbosity: config.verbosity,
-        imageType: config.imageType,
         instructions: config.instructions,
         includeTableOfContents: config.includeTableOfContents,
         includeTitleSlide: config.includeTitleSlide,
@@ -226,7 +224,6 @@ export function ConfigurationSelects({
   const handleSaveAdvanced = () => {
     onConfigChange("tone", advancedDraft.tone);
     onConfigChange("verbosity", advancedDraft.verbosity);
-    onConfigChange("imageType", advancedDraft.imageType);
     onConfigChange("instructions", advancedDraft.instructions);
     onConfigChange("includeTableOfContents", advancedDraft.includeTableOfContents);
     onConfigChange("includeTitleSlide", advancedDraft.includeTitleSlide);
@@ -308,26 +305,7 @@ export function ConfigurationSelects({
               </Select>
             </div>
 
-            {/* Image Type */}
-            <div className="w-full flex flex-col gap-2">
-              <label className="text-sm font-semibold text-gray-700">Image type</label>
-              <p className="text-xs text-gray-500">Choose whether images should be stock photos or AI-generated.</p>
-              <Select
-                value={advancedDraft.imageType}
-                onValueChange={(value) => setAdvancedDraft((prev) => ({ ...prev, imageType: value as ImageType }))}
-              >
-                <SelectTrigger className="w-full font-instrument_sans capitalize font-medium bg-blue-100 border-blue-200 focus-visible:ring-blue-300">
-                  <SelectValue placeholder="Select image type" />
-                </SelectTrigger>
-                <SelectContent className="font-instrument_sans">
-                  {Object.values(ImageType).map((imageType) => (
-                    <SelectItem key={imageType} value={imageType} className="text-sm font-medium capitalize ">
-                      {imageType}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+           
 
             {/* Toggles */}
             <div className="w-full flex flex-col gap-2 p-3 rounded-md bg-blue-100 border-blue-200">
