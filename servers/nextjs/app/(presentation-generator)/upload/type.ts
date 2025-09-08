@@ -124,7 +124,6 @@ export interface PresentationConfig {
   prompt: string;
   tone: ToneType;
   verbosity: VerbosityType;
-  imageType: ImageType;
   instructions: string;
   includeTableOfContents: boolean;
   includeTitleSlide: boolean;
@@ -146,7 +145,3 @@ export enum VerbosityType {
   Text_Heavy = "text-heavy",
 }
 
-export enum ImageType {
-  Stock = "stock",
-  AIGenerated = "ai-generated",
-}

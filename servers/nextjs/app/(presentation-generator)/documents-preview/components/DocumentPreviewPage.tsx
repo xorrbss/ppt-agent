@@ -159,7 +159,6 @@ const DocumentsPreviewPage: React.FC = () => {
           include_table_of_contents: !!config?.includeTableOfContents,
           include_title_slide: !!config?.includeTitleSlide,
           web_search: !!config?.webSearch,
-          image_type: config?.imageType,
         }
       );
 

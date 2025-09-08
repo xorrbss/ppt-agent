@@ -16,7 +16,7 @@ import { useDispatch } from "react-redux";
 import { clearOutlines, setPresentationId } from "@/store/slices/presentationGeneration";
 import { ConfigurationSelects } from "./ConfigurationSelects";
 import { PromptInput } from "./PromptInput";
-import { ImageType, LanguageType, PresentationConfig, ToneType, VerbosityType } from "../type";
+import {  LanguageType, PresentationConfig, ToneType, VerbosityType } from "../type";
 import SupportingDoc from "./SupportingDoc";
 import { Button } from "@/components/ui/button";
 import { ChevronRight } from "lucide-react";
@@ -49,7 +49,6 @@ const UploadPage = () => {
     prompt: "",
     tone: ToneType.Default,
     verbosity: VerbosityType.Standard,
-    imageType: ImageType.Stock,
     instructions: "",
     includeTableOfContents: false,
     includeTitleSlide: false,
@@ -169,7 +168,6 @@ const UploadPage = () => {
       include_table_of_contents: !!config?.includeTableOfContents,
       include_title_slide: !!config?.includeTitleSlide,
       web_search: !!config?.webSearch,
-      image_type: config?.imageType,
     });
 
 
