@@ -10,7 +10,7 @@ const metricsSlideSchema = z.object({
         description: "Main title of the slide",
     }),
     metrics: z.array(z.object({
-        label: z.string().min(2).max(100).meta({
+        label: z.string().min(2).max(50).meta({
             description: "Metric label/title"
         }),
         value: z.string().min(1).max(10).meta({
@@ -77,17 +77,25 @@ const MetricsSlideLayout: React.FC<MetricsSlideLayoutProps> = ({ data: slideData
     return (
         <>
             {/* Import Google Fonts */}
-            <link
-                href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
-                rel="stylesheet"
-            />
+           
 
             <div
                 className="w-full rounded-sm max-w-[1280px] shadow-lg max-h-[720px] aspect-video bg-white relative z-20 mx-auto overflow-hidden flex flex-col"
                 style={{
-                    fontFamily: 'Poppins, sans-serif'
+                    fontFamily: 'var(--heading-font-family,Inter)',
+                    background:"var(--card-background-color,#ffffff)"
                 }}
             >
+                {(slideData as any)?.__companyName__ && (
+                    <div className="absolute top-0 left-0 right-0 px-8 sm:px-12 lg:px-20 pt-4">
+                        <div className="flex items-center gap-4">
+                            <span className="text-sm sm:text-base font-semibold" style={{ color: 'var(--text-heading-color, #111827)' }}>
+                                {(slideData as any)?.__companyName__ || 'Company Name'}
+                            </span>
+                            <div className="h-[2px] flex-1 opacity-70" style={{ backgroundColor: 'var(--text-heading-color, #111827)' }}></div>
+                        </div>
+                    </div>
+                )}
                 {/* Decorative Wave Patterns */}
                 <div className="absolute top-0 left-0 w-64 h-full opacity-10 overflow-hidden">
                     <svg className="w-full h-full" viewBox="0 0 200 400" fill="none">
@@ -108,11 +116,11 @@ const MetricsSlideLayout: React.FC<MetricsSlideLayoutProps> = ({ data: slideData
 
 
                 {/* Main Content */}
-                <div className="relative z-10 px-8 sm:px-12 lg:px-20 pb-12 flex-1 flex flex-col justify-center">
+                <div className="relative z-10 px-8 sm:px-12 lg:px-20 pt-10 pb-12 flex-1 flex flex-col justify-center">
                     <div className="space-y-12">
                         {/* Title */}
                         <div className="text-center">
-                            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900">
+                            <h1 style={{ color: "var(--text-heading-color,#111827)" }} className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900">
                                 {slideData?.title || 'Company Traction'}
                             </h1>
                         </div>
@@ -124,23 +132,22 @@ const MetricsSlideLayout: React.FC<MetricsSlideLayoutProps> = ({ data: slideData
                                 {metrics.map((metric, index) => (
                                     <div key={index} className={`text-center space-y-4 ${getItemClasses(metrics.length)}`}>
                                         {/* Label */}
-                                        <div className="text-sm text-gray-600 font-medium">
+                                        <div className="text-sm text-gray-600 font-medium" style={{color:"var(--text-body-color,#ffffff)"}}>
                                             {metric.label}
                                         </div>
 
                                         {/* Large Metric Value */}
-                                        <div className="text-4xl sm:text-5xl lg:text-6xl font-bold text-purple-600">
+                                        <div style={{color:"var(--text-heading-color,#9333ea)"}} className="text-4xl sm:text-5xl lg:text-6xl font-bold text-purple-600">
                                             {metric.value}
                                         </div>
 
                                         {/* Description Box */}
                                         <div
                                             className="bg-purple-50 rounded-lg p-4 lg:p-5 text-center mt-4"
-                                            style={{
-                                                backgroundColor: 'rgba(139, 92, 246, 0.08)'
-                                            }}
+                                            style={{background:"var(--primary-accent-color,#9333ea)"}}
+                                            
                                         >
-                                            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
+                                            <p style={{color:"var(--text-body-color,#ffffff)"}} className="text-xs sm:text-sm text-gray-700 leading-relaxed">
                                                 {metric.description}
                                             </p>
                                         </div>

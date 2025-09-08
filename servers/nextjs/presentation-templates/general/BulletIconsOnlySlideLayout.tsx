@@ -1,10 +1,11 @@
 import React from 'react'
 import * as z from "zod";
 import { ImageSchema, IconSchema } from '@/presentation-templates/defaultSchemes';
+import { RemoteSvgIcon } from '@/app/hooks/useRemoteSvgIcon';
 
 export const layoutId = 'bullet-icons-only-slide'
 export const layoutName = 'Bullet Icons Only'
-export const layoutDescription = 'A slide layout with title, grid of bullet points with icons (no descriptions), and a supporting image.'
+export const layoutDescription = 'A slide layout with title, grid of bullet points (title and description) with icons, and a supporting image.'
 
 const bulletIconsOnlySlideSchema = z.object({
     title: z.string().min(3).max(40).default('Solutions').meta({
@@ -29,7 +30,7 @@ const bulletIconsOnlySlideSchema = z.object({
             title: 'Custom Software',
             subtitle: 'We create tailored software to optimize processes and boost efficiency.',
             icon: {
-                __icon_url__: '/static/icons/placeholder.png',
+                __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/code-bold.svg',
                 __icon_query__: 'code software development'
             }
         },
@@ -37,7 +38,7 @@ const bulletIconsOnlySlideSchema = z.object({
             title: 'Digital Consulting',
             subtitle: 'Our consultants guide organizations in leveraging the latest technologies.',
             icon: {
-                __icon_url__: '/static/icons/placeholder.png',
+                __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/users-four-bold.svg',
                 __icon_query__: 'users consulting team'
             }
         },
@@ -45,7 +46,7 @@ const bulletIconsOnlySlideSchema = z.object({
             title: 'Support Services',
             subtitle: 'We provide ongoing support to help businesses adapt and maintain performance.',
             icon: {
-                __icon_url__: '/static/icons/placeholder.png',
+                __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/headphones-bold.svg',
                 __icon_query__: 'headphones support service'
             }
         },
@@ -53,7 +54,7 @@ const bulletIconsOnlySlideSchema = z.object({
             title: 'Scalable Marketing',
             subtitle: 'Our data-driven strategies help businesses expand their reach and engagement.',
             icon: {
-                __icon_url__: '/static/icons/placeholder.png',
+                __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/code-bold.svg',
                 __icon_query__: 'trending up marketing growth'
             }
         }
@@ -87,17 +88,26 @@ const BulletIconsOnlySlideLayout: React.FC<BulletIconsOnlySlideLayoutProps> = ({
     return (
         <>
             {/* Import Google Fonts */}
-            <link
-                href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
-                rel="stylesheet"
-            />
+            
+            
 
             <div
                 className="w-full rounded-sm max-w-[1280px] shadow-lg max-h-[720px] aspect-video bg-white relative z-20 mx-auto overflow-hidden"
                 style={{
-                    fontFamily: 'Poppins, sans-serif'
+                    fontFamily: 'var(--heading-font-family,Inter)',
+                    background:"var(--card-background-color,#ffffff)"
                 }}
             >
+                {/* {(slideData as any)?.__companyName__ && ( */}
+                    <div className="absolute top-0 left-0 right-0 px-8 sm:px-12 lg:px-20 pt-4">
+                        <div className="flex items-center gap-4">
+                            <span className="text-sm sm:text-base font-semibold" style={{ color: 'var(--text-heading-color, #111827)' }}>
+                                {(slideData as any)?.__companyName__ || 'Company Name'}
+                            </span>
+                            <div className="h-[2px] flex-1 opacity-70" style={{ backgroundColor: 'var(--text-heading-color, #111827)' }}></div>
+                        </div>
+                    </div>
+                {/* )} */}
                 {/* Decorative Wave Patterns */}
                 <div className="absolute top-0 left-0 w-32 h-full opacity-10 overflow-hidden">
                     <svg className="w-full h-full" viewBox="0 0 100 400" fill="none">
@@ -113,11 +123,11 @@ const BulletIconsOnlySlideLayout: React.FC<BulletIconsOnlySlideLayoutProps> = ({
                 </div>
 
                 {/* Main Content */}
-                <div className="relative z-10 flex h-full px-8 sm:px-12 lg:px-20 pt-8 pb-8">
+                <div className="relative z-10 flex h-full px-8 sm:px-12 lg:px-20 pt-12 pb-8">
                     {/* Left Section - Title and Bullet Points */}
                     <div className="flex-1 flex flex-col pr-8">
                         {/* Title */}
-                        <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold text-gray-900 mb-8">
+                        <h1 style={{ color: "var(--text-heading-color,#111827)" }} className="text-5xl sm:text-6xl lg:text-7xl font-bold text-gray-900 mb-8">
                             {slideData?.title || 'Solutions'}
                         </h1>
 
@@ -126,24 +136,26 @@ const BulletIconsOnlySlideLayout: React.FC<BulletIconsOnlySlideLayoutProps> = ({
                             {bulletPoints.map((bullet, index) => (
                                 <div
                                     key={index}
-                                    className={`flex items-start space-x-4 p-4 rounded-lg transition-all duration-200 hover:bg-gray-50`}
+                                    className={`flex items-start space-x-4 p-4 rounded-lg`}
                                 >
                                     {/* Icon */}
-                                    <div className="flex-shrink-0 w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center">
-                                        <img
-                                            src={bullet.icon.__icon_url__}
-                                            alt={bullet.icon.__icon_query__}
-                                            className="w-6 h-6 object-contain brightness-0 invert"
+                                    <div style={{background:"var(--primary-accent-color,#9333ea)"}} className="flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center">
+                                        <RemoteSvgIcon
+                                            url={bullet.icon.__icon_url__}
+                                            strokeColor={"currentColor"}
+                                            className="w-6 h-6"
+                                            color="var(--text-heading-color,#ffffff)"
+                                            title={bullet.icon.__icon_query__}
                                         />
                                     </div>
 
                                     {/* Content */}
                                     <div className="flex-1">
-                                        <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-1">
+                                        <h3 style={{color:"var(--text-heading-color,#111827)"}} className="text-lg sm:text-xl font-semibold text-gray-900 mb-1">
                                             {bullet.title}
                                         </h3>
                                         {bullet.subtitle && (
-                                            <p className="text-sm text-gray-700 leading-relaxed">
+                                            <p style={{color:"var(--text-body-color,#4b5563)"}} className="text-sm text-gray-700 leading-relaxed">
                                                 {bullet.subtitle}
                                             </p>
                                         )}
@@ -156,14 +168,14 @@ const BulletIconsOnlySlideLayout: React.FC<BulletIconsOnlySlideLayoutProps> = ({
                     {/* Right Section - Image */}
                     <div className="flex-shrink-0 w-96 flex items-center justify-center relative">
                         {/* Decorative Elements */}
-                        <div className="absolute top-8 right-8 text-purple-600 opacity-60">
+                        <div style={{color:"var(--primary-accent-color,#9333ea)"}} className="absolute top-8 right-8 text-purple-600 opacity-60">
                             <svg width="32" height="32" viewBox="0 0 32 32" fill="currentColor">
                                 <path d="M16 0l4.12 8.38L28 12l-7.88 3.62L16 24l-4.12-8.38L4 12l7.88-3.62L16 0z" />
                             </svg>
                         </div>
 
                         <div className="absolute top-16 left-8 opacity-20">
-                            <svg width="80" height="20" viewBox="0 0 80 20" className="text-purple-600">
+                            <svg width="80" height="20" viewBox="0 0 80 20" className="text-purple-600" style={{color:"var(--primary-accent-color,#9333ea)"}}>
                                 <path
                                     d="M0 10 Q20 0 40 10 T80 10"
                                     stroke="currentColor"

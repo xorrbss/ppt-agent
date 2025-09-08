@@ -1,6 +1,7 @@
 import React from 'react'
 import * as z from "zod";
 import { IconSchema } from '@/presentation-templates/defaultSchemes';
+import { RemoteSvgIcon } from '@/app/hooks/useRemoteSvgIcon';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, AreaChart, Area, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Cell, ResponsiveContainer } from "recharts";
 
@@ -64,7 +65,7 @@ const chartWithBulletsSlideSchema = z.object({
             title: 'Total Addressable Market',
             description: 'Companies can use TAM to plan future expansion and investment.',
             icon: {
-                __icon_url__: '/static/icons/placeholder.png',
+                __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/chart-line-up-bold.svg',
                 __icon_query__: 'target market scope'
             }
         },
@@ -72,7 +73,7 @@ const chartWithBulletsSlideSchema = z.object({
             title: 'Serviceable Available Market',
             description: 'Indicates more measurable market segments for sales efforts.',
             icon: {
-                __icon_url__: '/static/icons/placeholder.png',
+                __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/chart-line-up-bold.svg',
                 __icon_query__: 'pie chart analysis'
             }
         },
@@ -80,7 +81,7 @@ const chartWithBulletsSlideSchema = z.object({
             title: 'Serviceable Obtainable Market',
             description: 'Help companies plan development strategies according to the market.',
             icon: {
-                __icon_url__: '/static/icons/placeholder.png',
+                __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/chart-line-up-bold.svg',
                 __icon_query__: 'trending up growth'
             }
         }
@@ -120,7 +121,7 @@ const BULLET_COLORS = [
 const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = ({ data: slideData }) => {
     const chartData = slideData?.chartData?.data || [];
     const chartType = slideData?.chartData?.type;
-    const color = slideData?.color || '#3b82f6';
+    const color = slideData?.color || 'var(--primary-accent-color,#9333ea)';
     const xAxis = chartType === 'scatter' ? 'x' : 'name';
     const yAxis = chartType === 'scatter' ? 'y' : 'value';
     const showLegend = slideData?.showLegend || false;
@@ -128,6 +129,14 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
     const bulletPoints = slideData?.bulletPoints || []
 
     const renderChart = () => {
+        const renderPieLabel = (props: any) => {
+            const { name, percent, x, y, textAnchor } = props;
+            return (
+                <text x={x} y={y} textAnchor={textAnchor} fill="var(--text-body-color,#4b5563)" fontSize={12}>
+                    {`${name} ${(percent * 100).toFixed(0)}%`}
+                </text>
+            );
+        };
         const commonProps = {
             data: chartData,
             margin: { top: 20, right: 30, left: 40, bottom: 60 },
@@ -137,9 +146,9 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
             case 'bar':
                 return (
                     <BarChart {...commonProps}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey={xAxis} />
-                        <YAxis />
+                        <CartesianGrid strokeDasharray="3 3" stroke={color} />
+                        <XAxis dataKey={xAxis} tick={{ fill: 'var(--text-body-color,#4b5563)', fontWeight: 600 }} />
+                        <YAxis tick={{ fill: 'var(--text-body-color,#4b5563)', fontWeight: 600 }} />
                         {showTooltip && <ChartTooltip content={<ChartTooltipContent />} />}
                         {showLegend && <ChartLegend content={<ChartLegendContent />} />}
                         <Bar dataKey={yAxis} fill={color} radius={[4, 4, 0, 0]} />
@@ -149,9 +158,9 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
             case 'line':
                 return (
                     <LineChart {...commonProps}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey={xAxis} />
-                        <YAxis />
+                        <CartesianGrid strokeDasharray="3 3" stroke={color} />
+                        <XAxis dataKey={xAxis} tick={{ fill: 'var(--text-body-color,#4b5563)', fontWeight: 600 }} />
+                        <YAxis tick={{ fill: 'var(--text-body-color,#4b5563)', fontWeight: 600 }} />
                         {showTooltip && <ChartTooltip content={<ChartTooltipContent />} />}
                         {showLegend && <ChartLegend content={<ChartLegendContent />} />}
                         <Line
@@ -167,9 +176,9 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
             case 'area':
                 return (
                     <AreaChart {...commonProps}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey={xAxis} />
-                        <YAxis />
+                        <CartesianGrid strokeDasharray="3 3" stroke={color} />
+                        <XAxis dataKey={xAxis} tick={{ fill: 'var(--text-body-color,#4b5563)', fontWeight: 600 }} />
+                        <YAxis tick={{ fill: 'var(--text-body-color,#4b5563)', fontWeight: 600 }} />
                         {showTooltip && <ChartTooltip content={<ChartTooltipContent />} />}
                         {showLegend && <ChartLegend content={<ChartLegendContent />} />}
                         <Area
@@ -194,10 +203,10 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
                             outerRadius={70}
                             fill={color}
                             dataKey={yAxis}
-                            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                            label={renderPieLabel}
                         >
-                            {chartData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                            {chartData.map((_, index) => (
+                                <Cell key={`cell-${index}`} fill={color} />
                             ))}
                         </Pie>
                     </PieChart>
@@ -206,9 +215,9 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
             case 'scatter':
                 return (
                     <ScatterChart {...commonProps}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey={xAxis} type="number" />
-                        <YAxis dataKey={yAxis} type="number" />
+                        <CartesianGrid strokeDasharray="3 3" stroke={color} />
+                        <XAxis dataKey={xAxis} type="number" tick={{ fill: 'var(--text-body-color,#4b5563)', fontWeight: 600 }} />
+                        <YAxis dataKey={yAxis} type="number" tick={{ fill: 'var(--text-body-color,#4b5563)', fontWeight: 600 }} />
                         {showTooltip && <ChartTooltip content={<ChartTooltipContent />} />}
                         {showLegend && <ChartLegend content={<ChartLegendContent />} />}
                         <Scatter dataKey="value" fill={color} />
@@ -222,34 +231,42 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
 
     return (
         <>
-            {/* Import Google Fonts */}
-            <link
-                href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
-                rel="stylesheet"
-            />
+       
+           
 
             <div
                 className="w-full rounded-sm max-w-[1280px] shadow-lg max-h-[720px] aspect-video bg-white relative z-20 mx-auto overflow-hidden"
                 style={{
-                    fontFamily: 'Poppins, sans-serif'
+                    fontFamily: 'var(--heading-font-family,Inter)',
+                    background:"var(--card-background-color,#ffffff)"
                 }}
             >
+                {(slideData as any)?.__companyName__ && (
+                    <div className="absolute top-0 left-0 right-0 px-8 sm:px-12 lg:px-20 pt-4">
+                        <div className="flex items-center gap-4">
+                            <span className="text-sm sm:text-base font-semibold" style={{ color: 'var(--text-heading-color, #111827)' }}>
+                                {(slideData as any)?.__companyName__ || 'Company Name'}
+                            </span>
+                            <div className="h-[2px] flex-1 opacity-70" style={{ backgroundColor: 'var(--text-heading-color, #111827)' }}></div>
+                        </div>
+                    </div>
+                )}
                 {/* Main Content */}
                 <div className="flex h-full px-8 sm:px-12 lg:px-20 pt-8 pb-8">
                     {/* Left Section - Title, Description, Chart */}
                     <div className="flex-1 flex flex-col pr-8">
                         {/* Title */}
-                        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-4">
+                        <h1 style={{ color: "var(--text-heading-color,#111827)" }} className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-4">
                             {slideData?.title || 'Market Size'}
                         </h1>
 
                         {/* Description */}
-                        <p className="text-base text-gray-700 leading-relaxed mb-8">
+                        <p style={{color:"var(--text-body-color,#4b5563)"}} className="text-base text-gray-700 leading-relaxed mb-8">
                             {slideData?.description || 'Businesses face challenges with outdated technology and rising costs, limiting efficiency and growth in competitive markets.'}
                         </p>
 
                         {/* Chart Container */}
-                        <div className="flex-1 bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+                        <div  className="flex-1 rounded-lg shadow-sm border border-gray-100 p-4" style={{ background: 'var(--primary-accent-color,#F5F8FE)' }}>
                             <ChartContainer config={chartConfig} className="h-full w-full">
                                 {renderChart()}
                             </ChartContainer>
@@ -263,25 +280,27 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
                                 key={index}
                                 className="rounded-2xl p-6 text-white"
                                 style={{
-                                    backgroundColor: BULLET_COLORS[index % BULLET_COLORS.length]
+                                    backgroundColor: 'var(--primary-accent-color,#9333ea)'
                                 }}
                             >
                                 {/* Icon and Title */}
                                 <div className="flex items-center space-x-3 mb-3">
-                                    <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
-                                        <img
-                                            src={bullet.icon.__icon_url__}
-                                            alt={bullet.icon.__icon_query__}
-                                            className="w-5 h-5 object-contain brightness-0 invert"
+                                    <div style={{background:"var(--primary-accent-color,#9333ea)"}} className="w-8 h-8 rounded-lg flex items-center justify-center">
+                                        <RemoteSvgIcon
+                                            url={bullet.icon.__icon_url__}
+                                            strokeColor={"currentColor"}
+                                            className="w-5 h-5"
+                                            color="var(--text-heading-color,#ffffff)"
+                                            title={bullet.icon.__icon_query__}
                                         />
                                     </div>
-                                    <h3 className="text-lg font-semibold">
+                                    <h3 style={{color:"var(--text-heading-color,#ffffff)"}} className="text-lg font-semibold">
                                         {bullet.title}
                                     </h3>
                                 </div>
 
                                 {/* Description */}
-                                <p className="text-sm leading-relaxed opacity-90">
+                                <p style={{color:"var(--text-body-color,#ffffff)"}} className="text-sm leading-relaxed opacity-90">
                                     {bullet.description}
                                 </p>
                             </div>
