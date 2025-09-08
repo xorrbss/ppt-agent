@@ -119,7 +119,34 @@ export enum LanguageType {
 }
 
 export interface PresentationConfig {
-  slides: "5" | "8" | "10" | "12" | "15" | null;
+  slides: string | null;
   language: LanguageType | null;
   prompt: string;
+  tone: ToneType;
+  verbosity: VerbosityType;
+  imageType: ImageType;
+  instructions: string;
+  includeTableOfContents: boolean;
+  includeTitleSlide: boolean;
+  webSearch: boolean;
+}
+
+export enum ToneType {
+  Default = "default",
+  Casual = "casual",
+  Professional = "professional",
+  Funny = "funny",
+  Educational = "educational",
+  Sales_Pitch = "sales_pitch",
+}
+
+export enum VerbosityType {
+  Concise = "concise",
+  Standard = "standard",
+  Text_Heavy = "text-heavy",
+}
+
+export enum ImageType {
+  Stock = "stock",
+  AIGenerated = "ai-generated",
 }
