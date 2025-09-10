@@ -54,9 +54,10 @@ Presenton gives you complete control over your AI presentation workflow. Choose 
 * ✅ **Docker Ready** — One-command deployment with GPU support for local models
 
 ## Presenton Cloud
-<p align="center">
+<a href="https://presenton.ai" target="_blank" align="center">
+  
   <img src="readme_assets/cloud-banner.png" height="350" alt="Presenton Logo" />
-</p>
+</a>
 
 ## Deploy on Cloud (one click deployment)
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/presenton-ai-presentations?referralCode=ubp0kk)
