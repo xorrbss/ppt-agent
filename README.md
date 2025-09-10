@@ -59,10 +59,6 @@ Presenton gives you complete control over your AI presentation workflow. Choose 
   <img src="readme_assets/cloud-banner.png" height="350" alt="Presenton Logo" />
 </a>
 
-## Deploy on Cloud (one click deployment)
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/presenton-ai-presentations?referralCode=ubp0kk)
-
-
 ## Running Presenton Docker
 
 #### 1. Start Presenton
