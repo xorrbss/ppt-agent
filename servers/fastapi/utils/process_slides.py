@@ -182,5 +182,5 @@ def process_slide_add_placeholder_assets(slide: SlideModel):
 
     for icon_path in icon_paths:
         icon_dict = get_dict_at_path(slide.content, icon_path)
-        icon_dict["__icon_url__"] = "/static/icons/placeholder.png"
+        icon_dict["__icon_url__"] = "/static/icons/placeholder.svg"
         set_dict_at_path(slide.content, icon_path, icon_dict)
