@@ -3,6 +3,7 @@ import json
 import math
 import os
 import random
+import traceback
 from typing import Annotated, List, Literal, Optional
 import dirtyjson
 from fastapi import APIRouter, Body, Depends, HTTPException
@@ -494,7 +495,7 @@ async def generate_presentation_api(
                 dirtyjson.loads(presentation_outlines_text)
             )
         except Exception as e:
-            print(e)
+            traceback.print_exc()
             raise HTTPException(
                 status_code=400,
                 detail="Failed to generate presentation outlines. Please try again.",
