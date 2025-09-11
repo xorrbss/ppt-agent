@@ -41,12 +41,13 @@ export async function GET(request: Request) {
     });
 
     await page.waitForSelector("[data-layouts]", { timeout: 300000 });
+    await page.waitForSelector("[data-settings]", { timeout: 300000 });
 
     const { dataLayouts, dataGroupSettings } = await page.$eval(
       "[data-layouts]",
       (el) => ({
         dataLayouts: el.getAttribute("data-layouts"),
-        dataGroupSettings: el.getAttribute("data-group-settings"),
+        dataGroupSettings: el.getAttribute("data-settings"),
       })
     );
 

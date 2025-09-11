@@ -1,6 +1,7 @@
 import asyncio
 import json
 import math
+import traceback
 import uuid
 import dirtyjson
 from fastapi import APIRouter, Depends, HTTPException
@@ -83,8 +84,11 @@ async def stream_outlines(
             presentation_outlines_text += chunk
 
         try:
-            presentation_outlines_json = dict(dirtyjson.loads(presentation_outlines_text))
+            presentation_outlines_json = dict(
+                dirtyjson.loads(presentation_outlines_text)
+            )
         except Exception as e:
+            traceback.print_exc()
             raise HTTPException(
                 status_code=400,
                 detail="Failed to generate presentation outlines. Please try again.",
