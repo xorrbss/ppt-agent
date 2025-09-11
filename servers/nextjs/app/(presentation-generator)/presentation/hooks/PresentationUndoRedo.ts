@@ -16,7 +16,6 @@ export const usePresentationUndoRedo = () => {
 
     const canUndo = undoRedoState.past.length > 0;
     const canRedo = undoRedoState.future.length > 0;
-    console.log(canUndo, canRedo);
 
     const onUndo = useCallback(() => {
       if (!canUndo) return;

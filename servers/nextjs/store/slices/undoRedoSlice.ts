@@ -33,6 +33,7 @@ const undoRedoSlice = createSlice({
   initialState,
   reducers: {
     addToHistory: (state, action: PayloadAction<{slides: Slide[], actionType: string}>) => {
+    
       // Skip if undo/redo is in progress
       if (state.isUndoRedoInProgress) {
         return;
@@ -48,15 +49,14 @@ const undoRedoSlice = createSlice({
           timestamp: Date.now(),
           actionType: action.payload.actionType
         };
-       
         return;
       }
-      
+     
       // Skip if slides are identical
       if (JSON.stringify(state.present.slides) === JSON.stringify(newSlides)) {
         return;
       }
-      
+    
       // Add current state to past
       state.past.push(state.present);
       
@@ -127,6 +127,7 @@ const undoRedoSlice = createSlice({
     clearHistory: (state) => {
       state.past = [];
       state.future = [];
+      state.present = null;
       // Keep present
     }
   }

@@ -144,6 +144,7 @@ export function useRemoteSvgIcon(url?: string, options: RemoteSvgOptions = {}) {
         return;
       }
       try {
+       
         const res = await fetch(url);
         if (!res.ok) {
           throw new Error(`HTTP ${res.status}`);
@@ -200,5 +201,3 @@ export const RemoteSvgIcon: React.FC<{
     />
   );
 };
-
-
