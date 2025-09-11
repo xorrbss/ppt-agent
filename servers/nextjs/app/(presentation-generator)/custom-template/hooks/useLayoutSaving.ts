@@ -135,7 +135,6 @@ export const useLayoutSaving = (
         toast.error("No slides were successfully converted");
         return null;
       }
-      console.log(reactComponents);
 
       // First create/update the template metadata
       await fetch("/api/v1/ppt/template-management/templates", {

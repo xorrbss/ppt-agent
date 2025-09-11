@@ -901,7 +901,7 @@ async def get_presentations_summary(
                 }
             presentations.append(
                 PresentationSummary(
-                    presentation=row.presentation,
+                    presentation_id=row.presentation,
                     layout_count=row.layout_count,
                     last_updated_at=row.last_updated_at,
                     template=template,
