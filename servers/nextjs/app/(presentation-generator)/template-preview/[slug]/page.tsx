@@ -109,7 +109,7 @@ const GroupLayoutPreview = () => {
       method: "DELETE",
     }); 
     if (response.ok) {
-      router.push("/layout-preview");
+      router.push("/template-preview");
     }
   }
 
