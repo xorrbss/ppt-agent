@@ -2,6 +2,7 @@ import asyncio
 import json
 import math
 import uuid
+import dirtyjson
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -82,7 +83,7 @@ async def stream_outlines(
             presentation_outlines_text += chunk
 
         try:
-            presentation_outlines_json = json.loads(presentation_outlines_text)
+            presentation_outlines_json = dict(dirtyjson.loads(presentation_outlines_text))
         except Exception as e:
             raise HTTPException(
                 status_code=400,

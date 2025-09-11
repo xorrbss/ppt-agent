@@ -39,6 +39,8 @@ def get_system_prompt(
         - Do not generate table of contents slide.
         - Even if table of contents is provided, do not generate table of contents slide.
         {"- Always make first slide a title slide." if include_title_slide else "- Do not include title slide in the presentation."}
+
+        **Search web to get latest information about the topic**
     """
 
 

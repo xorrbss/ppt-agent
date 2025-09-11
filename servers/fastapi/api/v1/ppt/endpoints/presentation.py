@@ -4,6 +4,7 @@ import math
 import os
 import random
 from typing import Annotated, List, Literal, Optional
+import dirtyjson
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy import delete
@@ -486,7 +487,7 @@ async def generate_presentation_api(
             presentation_outlines_text += chunk
 
         try:
-            presentation_outlines_json = json.loads(presentation_outlines_text)
+            presentation_outlines_json = dict(dirtyjson.loads(presentation_outlines_text))
         except Exception as e:
             print(e)
             raise HTTPException(

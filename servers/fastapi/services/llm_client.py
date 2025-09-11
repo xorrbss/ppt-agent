@@ -1,4 +1,5 @@
 import asyncio
+import dirtyjson
 import json
 from typing import AsyncGenerator, List, Optional
 from fastapi import HTTPException
@@ -554,7 +555,7 @@ class LLMClient:
                 )
         if content:
             if depth == 0:
-                return json.loads(content)
+                return dict(dirtyjson.loads(content))
             return content
         return None
 
@@ -655,7 +656,7 @@ class LLMClient:
             )
 
         if text_content:
-            return json.loads(text_content)
+            return dict(dirtyjson.loads(text_content))
         return None
 
     async def _generate_anthropic_structured(

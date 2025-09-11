@@ -11,6 +11,7 @@ dependencies = [
     "anthropic>=0.60.0",
     "asyncpg>=0.30.0",
     "chromadb>=1.0.15",
+    "dirtyjson>=1.0.8",
     "docling>=2.43.0",
     "fastapi[standard]>=0.116.1",
     "fastmcp>=2.11.0",
