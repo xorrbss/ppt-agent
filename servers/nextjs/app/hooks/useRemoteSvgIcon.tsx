@@ -144,6 +144,7 @@ export function useRemoteSvgIcon(url?: string, options: RemoteSvgOptions = {}) {
         return;
       }
       try {
+       
         const res = await fetch(url);
         if (!res.ok) {
           throw new Error(`HTTP ${res.status}`);
@@ -188,7 +189,7 @@ export const RemoteSvgIcon: React.FC<{
   title?: string;
   color?: string;
 }> = ({ url, strokeColor, fillColor, className, title, color }) => {
-  const { svgMarkup } = useRemoteSvgIcon(url, { strokeColor, fillColor, className, title, color });
+  const { svgMarkup } = useRemoteSvgIcon(`http://localhost:5000${url}`, { strokeColor, fillColor, className, title, color });
   if (!svgMarkup) return null;
   return (
     <span
@@ -200,5 +201,3 @@ export const RemoteSvgIcon: React.FC<{
     />
   );
 };
-
-

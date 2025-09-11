@@ -12,6 +12,7 @@ interface EditableLayoutWrapperProps {
     slideData: any;
     isEditMode?: boolean;
     properties?: any;
+    
 }
 
 interface EditableElement {
@@ -20,14 +21,15 @@ interface EditableElement {
     src: string;
     dataPath: string;
     data: any;
-    element: HTMLImageElement;
+    element: HTMLImageElement | SVGElement;
 }
 
 const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
     children,
     slideIndex,
     slideData,
-    properties
+    properties,
+    
 }) => {
     const dispatch = useDispatch();
     const containerRef = useRef<HTMLDivElement>(null);
@@ -72,25 +74,37 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
     /**
      * Finds the best matching data path for a specific DOM element
      */
-    const findBestDataPath = (targetUrl: string, imgElement: HTMLImageElement, data: any): { path: string; type: 'image' | 'icon'; data: any } | null => {
+    const findBestDataPath = (targetUrl: string, imgElement: HTMLImageElement | SVGElement, data: any): { path: string; type: 'image' | 'icon'; data: any } | null => {
         const allMatches = findAllDataPaths(targetUrl, data);
 
         if (allMatches.length === 0) return null;
         if (allMatches.length === 1) return allMatches[0];
 
-        // If multiple matches, use DOM position to find the correct one
-        const allImagesInContainer = containerRef.current?.querySelectorAll('img') || [];
-        const imgIndex = Array.from(allImagesInContainer).indexOf(imgElement);
+        // If multiple matches, use DOM position to find the correct one across images and svgs
+        const getElementSourceUrl = (el: Element): string | null => {
+            if (el instanceof HTMLImageElement) {
+                return el.src || null;
+            }
+            if (el instanceof SVGElement) {
+                const wrapperWithUrl = (el as unknown as HTMLElement).closest('[data-path]') as HTMLElement | null;
+                return wrapperWithUrl?.getAttribute('data-path') || null;
+            }
+            return null;
+        };
+
+        const allMediaInContainer = containerRef.current?.querySelectorAll('img, svg') || [] as unknown as NodeListOf<Element>;
+        const imgIndex = Array.from(allMediaInContainer).indexOf(imgElement as Element);
 
         // Find images with the same URL pattern
-        const sameUrlImages: HTMLImageElement[] = [];
-        allImagesInContainer.forEach((img) => {
-            if (isMatchingUrl((img as HTMLImageElement).src, targetUrl)) {
-                sameUrlImages.push(img as HTMLImageElement);
+        const sameUrlElements: Element[] = [];
+        allMediaInContainer.forEach((el) => {
+            const elUrl = getElementSourceUrl(el);
+            if (elUrl && isMatchingUrl(elUrl, targetUrl)) {
+                sameUrlElements.push(el);
             }
         });
 
-        const sameUrlIndex = sameUrlImages.indexOf(imgElement);
+        const sameUrlIndex = sameUrlElements.indexOf(imgElement as Element);
 
         // Try to match based on position in the same URL group
         if (sameUrlIndex >= 0 && sameUrlIndex < allMatches.length) {
@@ -156,6 +170,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
         if (!containerRef.current) return;
 
         const imgElements = containerRef.current.querySelectorAll('img:not([data-editable-processed])');
+        const svgElements = containerRef.current.querySelectorAll('svg:not([data-editable-processed])');
         const newEditableElements: EditableElement[] = [];
 
         imgElements.forEach((img, index) => {
@@ -230,6 +245,75 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                 }
             }
         });
+        
+        // Process SVG icons
+        svgElements.forEach((svg, index) => {
+            const svgEl = svg as SVGElement;
+            const wrapperWithUrl = (svgEl as unknown as HTMLElement).closest('[data-path]') as HTMLElement | null;
+            const src = wrapperWithUrl?.getAttribute('data-path') || '';
+
+            if (src) {
+                const result = findBestDataPath(src, svgEl, slideData);
+
+                if (result && result.type === 'icon') {
+                    const { path: dataPath, data } = result;
+
+                    // Mark as processed to prevent re-processing
+                    svgEl.setAttribute('data-editable-processed', 'true');
+
+                    // Add a unique identifier to help with debugging
+                    svgEl.setAttribute('data-editable-id', `${slideIndex}-icon-${dataPath}-svg-${index}`);
+
+                    const editableElement: EditableElement = {
+                        id: `${slideIndex}-icon-${dataPath}-svg-${index}`,
+                        type: 'icon',
+                        src,
+                        dataPath,
+                        data,
+                        element: svgEl
+                    };
+
+                    newEditableElements.push(editableElement);
+
+                    // Add click handler directly to the svg
+                    const clickHandler = (e: Event) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setActiveEditor(editableElement);
+                    };
+
+                    svgEl.addEventListener('click', clickHandler);
+
+                    // Add hover effects without changing layout
+                    (svgEl as unknown as HTMLElement).style.cursor = 'pointer';
+                    (svgEl as unknown as HTMLElement).style.transition = 'opacity 0.2s, transform 0.2s';
+
+                    const mouseEnterHandler = () => {
+                        (svgEl as unknown as HTMLElement).style.opacity = '0.8';
+                    };
+
+                    const mouseLeaveHandler = () => {
+                        (svgEl as unknown as HTMLElement).style.opacity = '1';
+                    };
+
+                    svgEl.addEventListener('mouseenter', mouseEnterHandler as any);
+                    svgEl.addEventListener('mouseleave', mouseLeaveHandler as any);
+
+                    // Store cleanup functions
+                    (svgEl as any)._editableCleanup = () => {
+                        svgEl.removeEventListener('click', clickHandler);
+                        svgEl.removeEventListener('mouseenter', mouseEnterHandler as any);
+                        svgEl.removeEventListener('mouseleave', mouseLeaveHandler as any);
+                        (svgEl as unknown as HTMLElement).style.cursor = '';
+                        (svgEl as unknown as HTMLElement).style.transition = '';
+                        (svgEl as unknown as HTMLElement).style.opacity = '';
+                        (svgEl as unknown as HTMLElement).style.transform = '';
+                        svgEl.removeAttribute('data-editable-processed');
+                    };
+                }
+            }
+        });
+
 
         setEditableElements(prev => [...prev, ...newEditableElements]);
     };
@@ -250,7 +334,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
     useEffect(() => {
         const timer = setTimeout(() => {
             findAndProcessImages();
-        }, 300);
+        }, 400);
 
         return () => {
             clearTimeout(timer);
@@ -263,17 +347,18 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
         if (!containerRef.current) return;
 
         const observer = new MutationObserver((mutations) => {
-            const hasNewImages = mutations.some(mutation =>
+            const hasNewMedia = mutations.some(mutation =>
                 Array.from(mutation.addedNodes).some(node =>
                     node.nodeType === Node.ELEMENT_NODE &&
                     (
                         (node as Element).tagName === 'IMG' ||
-                        (node as Element).querySelector('img:not([data-editable-processed])')
+                        (node as Element).tagName === 'SVG' ||
+                        (node as Element).querySelector('img:not([data-editable-processed]), svg:not([data-editable-processed])')
                     )
                 )
             );
 
-            if (hasNewImages) {
+            if (hasNewMedia) {
                 setTimeout(findAndProcessImages, 100);
             }
         });
@@ -301,7 +386,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
 
 
             // Update the DOM element immediately for visual feedback
-            activeEditor.element.src = newImageUrl;
+            (activeEditor.element as HTMLImageElement).src = newImageUrl;
 
             // Update Redux store
             dispatch(updateSlideImage({
@@ -317,10 +402,8 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
      * Handles icon change from IconsEditor
      */
     const handleIconChange = (newIconUrl: string, query?: string) => {
+        console.log('newIconUrl', newIconUrl);
         if (activeEditor && activeEditor.element) {
-            // Update the DOM element immediately for visual feedback
-            activeEditor.element.src = newIconUrl;
-
             // Update Redux store
             dispatch(updateSlideIcon({
                 slideIndex,
@@ -353,7 +436,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
     };
 
     return (
-        <div ref={containerRef} className="editable-layout-wrapper">
+        <div ref={containerRef} className="editable-layout-wrapper w-full ">
             {children}
 
             {/* Render ImageEditor when an image is being edited */}
@@ -386,4 +469,3 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
 };
 
 export default EditableLayoutWrapper;
-
