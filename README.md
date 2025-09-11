@@ -165,11 +165,19 @@ Content-Type: `application/json`
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| prompt | string | Yes | The main topic or prompt for generating the presentation |
-| n_slides | integer | No | Number of slides to generate (default: 8, min: 5, max: 15) |
+| content | string | Yes | The content for generating the presentation |
+| slides_markdown | string[] \| null | No | The markdown for the slides |
+| instructions | string \| null | No | The instruction for generating the presentation |
+| tone | string | No | The tone to use for the text (default: "default"). Available options: "default", "casual", "professional", "funny", "educational", "sales_pitch" |
+| verbosity | string | No | How verbose the text should be (default: "standard"). Available options: "concise", "standard", "text-heavy" |
+| web_search | boolean | No | Whether to enable web search (default: false) |
+| n_slides | integer | No | Number of slides to generate (default: 8) |
 | language | string | No | Language for the presentation (default: "English") |
-| template | string | No | Presentation template (default: "general"). Available options: "classic", "general", "modern", "professional" + Custom templates |
-| export_as | string | No | Export format ("pptx" or "pdf", default: "pptx") |
+| template | string | No | Template to use for the presentation (default: "general") |
+| include_table_of_contents | boolean | No | Whether to include a table of contents (default: false) |
+| include_title_slide | boolean | No | Whether to include a title slide (default: true) |
+| files | string[] \| null | No | Files to use for the presentation. Use /api/v1/ppt/files/upload to upload files |
+| export_as | string | No | Export format (default: "pptx"). Available options: "pptx", "pdf" |
 
 #### Response
 
@@ -187,7 +195,7 @@ Content-Type: `application/json`
 curl -X POST http://localhost:5000/api/v1/ppt/presentation/generate \
   -H "Content-Type: application/json" \
   -d '{
-    "prompt": "Introduction to Machine Learning",
+    "content": "Introduction to Machine Learning",
     "n_slides": 5,
     "language": "English",
     "template": "general",
@@ -200,7 +208,7 @@ curl -X POST http://localhost:5000/api/v1/ppt/presentation/generate \
 ```json
 {
   "presentation_id": "d3000f96-096c-4768-b67b-e99aed029b57",
-  "path": "/static/user_data/d3000f96-096c-4768-b67b-e99aed029b57/Introduction_to_Machine_Learning.pptx",
+  "path": "/app_data/d3000f96-096c-4768-b67b-e99aed029b57/Introduction_to_Machine_Learning.pptx",
   "edit_path": "/presentation?id=d3000f96-096c-4768-b67b-e99aed029b57"
 }
 ```

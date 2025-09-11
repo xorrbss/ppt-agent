@@ -55,7 +55,7 @@ async def export_presentation(
             async with session.post(
                 "http://localhost/api/export-as-pdf",
                 json={
-                    "id": presentation_id,
+                    "id": str(presentation_id),
                     "title": sanitize_filename(title or str(uuid.uuid4())),
                 },
             ) as response:

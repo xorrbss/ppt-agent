@@ -105,7 +105,8 @@ const compileCustomLayout = (layoutCode: string, React: any, z: any) => {
     `
     const z = _z;
     // Expose commonly used Recharts components to compiled layouts
-    const { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, AreaChart, Area, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } = Recharts || {};
+        const { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, AreaChart, Area, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ComposedChart, ScatterChart, Scatter, FunnelChart, Funnel, TreemapChart, Treemap, SankeyChart, Sankey, RadialBarChart, RadialBar, ReferenceLine, ReferenceDot, ReferenceArea, Brush, ErrorBar, LabelList, Label } = Recharts || {};
+
       ${compiled}
 
       /* everything declared in the string is in scope here */
@@ -127,7 +128,7 @@ export const LayoutProvider: React.FC<{
   children: ReactNode;
 }> = ({ children }) => {
   const [layoutData, setLayoutData] = useState<LayoutData | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isPreloading, setIsPreloading] = useState(false);
   const [customTemplateFonts, setCustomTemplateFonts] = useState<Map<string, string[]>>(new Map());
@@ -273,7 +274,7 @@ export const LayoutProvider: React.FC<{
       setError(null);
       dispatch(setLayoutLoading(true));
 
-      const layoutResponse = await fetch("/api/layouts");
+      const layoutResponse = await fetch("/api/templates");
 
       if (!layoutResponse.ok) {
         throw new Error(

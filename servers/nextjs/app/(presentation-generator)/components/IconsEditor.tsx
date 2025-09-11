@@ -70,6 +70,7 @@ const IconsEditor = ({
     if (onIconChange) {
       onIconChange(newIcon, searchQuery || icon_prompt?.[0] || '');
     }
+    handleClose();
   };
 
   // Handle close with animation
@@ -80,6 +81,7 @@ const IconsEditor = ({
       onClose?.();
     }, 300); // Match the Sheet animation duration
   };
+  
 
   return (
     <div className="icons-editor-container">
@@ -145,7 +147,7 @@ const IconsEditor = ({
                       className="w-12 h-12 cursor-pointer group relative rounded-lg overflow-hidden hover:bg-gray-100 p-2 transition-colors"
                     >
                       <img
-                        src={getStaticFileUrl(iconSrc)}
+                        src={iconSrc}
                         alt={`Icon ${idx + 1}`}
                         className="w-full h-full object-contain"
                       />

@@ -10,5 +10,5 @@ class SlideContentUpdate(BaseModel):
 
 class EditPresentationRequest(BaseModel):
     presentation_id: uuid.UUID
-    data: List[SlideContentUpdate]
+    slides: List[SlideContentUpdate]
     export_as: Literal["pptx", "pdf"] = "pptx"

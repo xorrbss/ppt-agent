@@ -4,6 +4,7 @@ import math
 import os
 import random
 from typing import Annotated, List, Literal, Optional
+import dirtyjson
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy import delete
@@ -45,7 +46,10 @@ from utils.llm_calls.generate_presentation_structure import (
 from utils.llm_calls.generate_slide_content import (
     get_slide_content_from_type_and_outline,
 )
-from utils.ppt_utils import select_toc_or_list_slide_layout_index
+from utils.ppt_utils import (
+    get_presentation_title_from_outlines,
+    select_toc_or_list_slide_layout_index,
+)
 from utils.process_slides import (
     process_slide_add_placeholder_assets,
     process_slide_and_fetch_assets,
@@ -486,7 +490,9 @@ async def generate_presentation_api(
             presentation_outlines_text += chunk
 
         try:
-            presentation_outlines_json = json.loads(presentation_outlines_text)
+            presentation_outlines_json = dict(
+                dirtyjson.loads(presentation_outlines_text)
+            )
         except Exception as e:
             print(e)
             raise HTTPException(
@@ -575,6 +581,7 @@ async def generate_presentation_api(
         content=request.content,
         n_slides=request.n_slides,
         language=request.language,
+        title=get_presentation_title_from_outlines(presentation_outlines),
         outlines=presentation_outlines.model_dump(),
         layout=layout_model.model_dump(),
         structure=presentation_structure.model_dump(),
@@ -676,7 +683,9 @@ async def edit_presentation_with_new_content(
     slides_to_delete = []
     for each_slide in slides:
         updated_content = None
-        new_slide_data = list(filter(lambda x: x.index == each_slide.index, data.data))
+        new_slide_data = list(
+            filter(lambda x: x.index == each_slide.index, data.slides)
+        )
         if new_slide_data:
             updated_content = deep_update(each_slide.content, new_slide_data[0].content)
             new_slides.append(
@@ -718,7 +727,9 @@ async def derive_presentation_from_existing_one(
     new_slides = []
     for each_slide in slides:
         updated_content = None
-        new_slide_data = list(filter(lambda x: x.index == each_slide.index, data.data))
+        new_slide_data = list(
+            filter(lambda x: x.index == each_slide.index, data.slides)
+        )
         if new_slide_data:
             updated_content = deep_update(each_slide.content, new_slide_data[0].content)
         new_slides.append(

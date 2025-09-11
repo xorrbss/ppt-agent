@@ -95,13 +95,19 @@ class DocumentsLoader:
     def load_powerpoint(self, file_path: str) -> str:
         return self.docling_service.parse_to_markdown(file_path)
 
-    def get_page_images_from_pdf(self, file_path: str, temp_dir: str):
+    @classmethod
+    def get_page_images_from_pdf(cls, file_path: str, temp_dir: str) -> List[str]:
         with pdfplumber.open(file_path) as pdf:
+            images = []
             for page in pdf.pages:
-                img = page.to_image(resolution=300)
-                img.save(os.path.join(temp_dir, f"page_{page.page_number}.png"))
+                img = page.to_image(resolution=150)
+                image_path = os.path.join(temp_dir, f"page_{page.page_number}.png")
+                img.save(image_path)
+                images.append(image_path)
+            return images
 
-    async def get_page_images_from_pdf_async(self, file_path: str, temp_dir: str):
+    @classmethod
+    async def get_page_images_from_pdf_async(cls, file_path: str, temp_dir: str):
         return await asyncio.to_thread(
-            self.get_page_images_from_pdf, file_path, temp_dir
+            cls.get_page_images_from_pdf, file_path, temp_dir
         )

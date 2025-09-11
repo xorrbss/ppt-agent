@@ -50,7 +50,7 @@ class IconFinderService:
             query_texts=[query],
             n_results=k,
         )
-        return [f"/static/icons/bold/{each}.png" for each in result["ids"][0]]
+        return [f"/static/icons/bold/{each}.svg" for each in result["ids"][0]]
 
 
 ICON_FINDER_SERVICE = IconFinderService()

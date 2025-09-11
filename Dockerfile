@@ -6,9 +6,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     libreoffice \
     fontconfig \
-    imagemagick
-
-RUN sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /etc/ImageMagick-6/policy.xml
+    chromium
 
 
 # Install Node.js 20 using NodeSource repository
@@ -22,7 +20,7 @@ WORKDIR /app
 # Set environment variables
 ENV APP_DATA_DIRECTORY=/app_data
 ENV TEMP_DIRECTORY=/tmp/presenton
-# ENV PYTHONPATH="${PYTHONPATH}:/app/servers/fastapi"
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 
 # Install ollama
@@ -31,7 +29,7 @@ RUN curl -fsSL https://ollama.com/install.sh | sh
 # Install dependencies for FastAPI
 RUN pip install aiohttp aiomysql aiosqlite asyncpg fastapi[standard] \
     pathvalidate pdfplumber chromadb sqlmodel \
-    anthropic google-genai openai fastmcp
+    anthropic google-genai openai fastmcp dirtyjson
 RUN pip install docling --extra-index-url https://download.pytorch.org/whl/cpu
 
 # Install dependencies for Next.js
@@ -39,8 +37,6 @@ WORKDIR /app/servers/nextjs
 COPY servers/nextjs/package.json servers/nextjs/package-lock.json ./
 RUN npm install
 
-# Install chrome for puppeteer
-RUN npx puppeteer browsers install chrome@136.0.7103.92 --install-deps
 
 # Copy Next.js app
 COPY servers/nextjs/ /app/servers/nextjs/

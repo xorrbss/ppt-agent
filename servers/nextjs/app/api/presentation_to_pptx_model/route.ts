@@ -1,26 +1,33 @@
 import { ApiError } from "@/models/errors";
 import { NextRequest, NextResponse } from "next/server";
 import puppeteer, { Browser, ElementHandle, Page } from "puppeteer";
-import { ElementAttributes, SlideAttributesResult } from "@/types/element_attibutes";
+import {
+  ElementAttributes,
+  SlideAttributesResult,
+} from "@/types/element_attibutes";
 import { convertElementAttributesToPptxSlides } from "@/utils/pptx_models_utils";
 import { PptxPresentationModel } from "@/types/pptx_models";
 import fs from "fs";
 import path from "path";
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from "uuid";
 import sharp from "sharp";
 
 interface GetAllChildElementsAttributesArgs {
   element: ElementHandle<Element>;
-  rootRect?: { left: number; top: number; width: number; height: number } | null;
+  rootRect?: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null;
   depth?: number;
-  inheritedFont?: ElementAttributes['font'];
-  inheritedBackground?: ElementAttributes['background'];
+  inheritedFont?: ElementAttributes["font"];
+  inheritedBackground?: ElementAttributes["background"];
   inheritedBorderRadius?: number[];
   inheritedZIndex?: number;
   inheritedOpacity?: number;
   screenshotsDir: string;
 }
-
 
 export async function GET(request: NextRequest) {
   let browser: Browser | null = null;
@@ -33,8 +40,13 @@ export async function GET(request: NextRequest) {
 
     const { slides, speakerNotes } = await getSlidesAndSpeakerNotes(page);
     const slides_attributes = await getSlidesAttributes(slides, screenshotsDir);
-    await postProcessSlidesAttributes(slides_attributes, screenshotsDir, speakerNotes);
-    const slides_pptx_models = convertElementAttributesToPptxSlides(slides_attributes);
+    await postProcessSlidesAttributes(
+      slides_attributes,
+      screenshotsDir,
+      speakerNotes
+    );
+    const slides_pptx_models =
+      convertElementAttributesToPptxSlides(slides_attributes);
     const presentation_pptx_model: PptxPresentationModel = {
       slides: slides_pptx_models,
     };
@@ -48,7 +60,10 @@ export async function GET(request: NextRequest) {
     if (error instanceof ApiError) {
       return NextResponse.json(error, { status: 400 });
     }
-    return NextResponse.json({ detail: `Internal server error: ${error.message}` }, { status: 500 });
+    return NextResponse.json(
+      { detail: `Internal server error: ${error.message}` },
+      { status: 500 }
+    );
   }
 }
 
@@ -62,13 +77,19 @@ async function getPresentationId(request: NextRequest) {
 
 async function getBrowserAndPage(id: string): Promise<[Browser, Page]> {
   const browser = await puppeteer.launch({
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
     headless: true,
     args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--disable-web-security',
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--disable-web-security",
+      "--disable-background-timer-throttling",
+      "--disable-backgrounding-occluded-windows",
+      "--disable-renderer-backgrounding",
+      "--disable-features=TranslateUI",
+      "--disable-ipc-flooding-protection",
     ],
   });
 
@@ -92,24 +113,30 @@ async function closeBrowserAndPage(browser: Browser | null, page: Page | null) {
 function getScreenshotsDir() {
   const tempDir = process.env.TEMP_DIRECTORY;
   if (!tempDir) {
-    console.warn('TEMP_DIRECTORY environment variable not set, skipping screenshot');
-    throw new ApiError('TEMP_DIRECTORY environment variable not set');
+    console.warn(
+      "TEMP_DIRECTORY environment variable not set, skipping screenshot"
+    );
+    throw new ApiError("TEMP_DIRECTORY environment variable not set");
   }
-  const screenshotsDir = path.join(tempDir, 'screenshots');
+  const screenshotsDir = path.join(tempDir, "screenshots");
   if (!fs.existsSync(screenshotsDir)) {
     fs.mkdirSync(screenshotsDir, { recursive: true });
   }
   return screenshotsDir;
 }
 
-async function postProcessSlidesAttributes(slidesAttributes: SlideAttributesResult[], screenshotsDir: string, speakerNotes: string[]) {
+async function postProcessSlidesAttributes(
+  slidesAttributes: SlideAttributesResult[],
+  screenshotsDir: string,
+  speakerNotes: string[]
+) {
   for (const [index, slideAttributes] of slidesAttributes.entries()) {
     for (const element of slideAttributes.elements) {
       if (element.should_screenshot) {
         const screenshotPath = await screenshotElement(element, screenshotsDir);
         element.imageSrc = screenshotPath;
         element.should_screenshot = false;
-        element.objectFit = 'cover';
+        element.objectFit = "cover";
         element.element = undefined;
       }
     }
@@ -117,46 +144,62 @@ async function postProcessSlidesAttributes(slidesAttributes: SlideAttributesResu
   }
 }
 
-async function screenshotElement(element: ElementAttributes, screenshotsDir: string) {
-  const screenshotPath = path.join(screenshotsDir, `${uuidv4()}.png`) as `${string}.png`;
+async function screenshotElement(
+  element: ElementAttributes,
+  screenshotsDir: string
+) {
+  const screenshotPath = path.join(
+    screenshotsDir,
+    `${uuidv4()}.png`
+  ) as `${string}.png`;
 
   // For SVG elements, use convertSvgToPng
-  if (element.tagName === 'svg') {
+  if (element.tagName === "svg") {
     const pngBuffer = await convertSvgToPng(element);
     fs.writeFileSync(screenshotPath, pngBuffer);
     return screenshotPath;
   }
 
   // Hide all elements except the target element and its ancestors
-  await element.element?.evaluate((el) => {
-    const originalOpacities = new Map();
+  await element.element?.evaluate(
+    (el) => {
+      const originalOpacities = new Map();
 
-    const hideAllExcept = (targetElement: Element) => {
-      const allElements = document.querySelectorAll('*');
+      const hideAllExcept = (targetElement: Element) => {
+        const allElements = document.querySelectorAll("*");
 
-      allElements.forEach((elem) => {
-        const computedStyle = window.getComputedStyle(elem);
-        originalOpacities.set(elem, computedStyle.opacity);
+        allElements.forEach((elem) => {
+          const computedStyle = window.getComputedStyle(elem);
+          originalOpacities.set(elem, computedStyle.opacity);
 
-        if (targetElement === elem || targetElement.contains(elem) || elem.contains(targetElement)) {
-          (elem as HTMLElement).style.opacity = computedStyle.opacity || "1";
-          return;
-        }
+          if (
+            targetElement === elem ||
+            targetElement.contains(elem) ||
+            elem.contains(targetElement)
+          ) {
+            (elem as HTMLElement).style.opacity = computedStyle.opacity || "1";
+            return;
+          }
 
-        (elem as HTMLElement).style.opacity = '0';
-      });
-    };
+          (elem as HTMLElement).style.opacity = "0";
+        });
+      };
 
-    hideAllExcept(el);
+      hideAllExcept(el);
 
-    (el as any).__restoreStyles = () => {
-      originalOpacities.forEach((opacity, elem) => {
-        (elem as HTMLElement).style.opacity = opacity;
-      });
-    };
-  }, element.opacity, element.font?.color);
+      (el as any).__restoreStyles = () => {
+        originalOpacities.forEach((opacity, elem) => {
+          (elem as HTMLElement).style.opacity = opacity;
+        });
+      };
+    },
+    element.opacity,
+    element.font?.color
+  );
 
-  const screenshot = await element.element?.screenshot({ path: screenshotPath });
+  const screenshot = await element.element?.screenshot({
+    path: screenshotPath,
+  });
   if (!screenshot) {
     throw new ApiError("Failed to screenshot element");
   }
@@ -171,31 +214,37 @@ async function screenshotElement(element: ElementAttributes, screenshotsDir: str
 }
 
 const convertSvgToPng = async (element_attibutes: ElementAttributes) => {
-  const svgHtml = await element_attibutes.element?.evaluate((el) => {
+  const svgHtml =
+    (await element_attibutes.element?.evaluate((el) => {
+      // Apply font color
+      const fontColor = window.getComputedStyle(el).color;
+      (el as HTMLElement).style.color = fontColor;
 
-    // Apply font color
-    const fontColor = window.getComputedStyle(el).color;
-    (el as HTMLElement).style.color = fontColor;
-
-    return el.outerHTML;
-  }) || '';
+      return el.outerHTML;
+    })) || "";
 
   const svgBuffer = Buffer.from(svgHtml);
   const pngBuffer = await sharp(svgBuffer)
-    .resize(Math.round(element_attibutes.position!.width!), Math.round(element_attibutes.position!.height!))
-    .toFormat('png')
+    .resize(
+      Math.round(element_attibutes.position!.width!),
+      Math.round(element_attibutes.position!.height!)
+    )
+    .toFormat("png")
     .toBuffer();
   return pngBuffer;
-}
+};
 
-
-async function getSlidesAttributes(slides: ElementHandle<Element>[], screenshotsDir: string): Promise<SlideAttributesResult[]> {
+async function getSlidesAttributes(
+  slides: ElementHandle<Element>[],
+  screenshotsDir: string
+): Promise<SlideAttributesResult[]> {
   const slideAttributes = await Promise.all(
-    slides.map((slide) => getAllChildElementsAttributes({ element: slide, screenshotsDir }))
+    slides.map((slide) =>
+      getAllChildElementsAttributes({ element: slide, screenshotsDir })
+    )
   );
   return slideAttributes;
 }
-
 
 async function getSlidesAndSpeakerNotes(page: Page) {
   const slides_wrapper = await getSlidesWrapper(page);
@@ -214,11 +263,23 @@ async function getSlidesWrapper(page: Page): Promise<ElementHandle<Element>> {
 
 async function getSpeakerNotes(slides_wrapper: ElementHandle<Element>) {
   return await slides_wrapper.evaluate((el) => {
-    return Array.from(el.querySelectorAll('[data-speaker-note]')).map((el) => el.getAttribute('data-speaker-note') || "");
+    return Array.from(el.querySelectorAll("[data-speaker-note]")).map(
+      (el) => el.getAttribute("data-speaker-note") || ""
+    );
   });
 }
 
-async function getAllChildElementsAttributes({ element, rootRect = null, depth = 0, inheritedFont, inheritedBackground, inheritedBorderRadius, inheritedZIndex, inheritedOpacity, screenshotsDir }: GetAllChildElementsAttributesArgs): Promise<SlideAttributesResult> {
+async function getAllChildElementsAttributes({
+  element,
+  rootRect = null,
+  depth = 0,
+  inheritedFont,
+  inheritedBackground,
+  inheritedBorderRadius,
+  inheritedZIndex,
+  inheritedOpacity,
+  screenshotsDir,
+}: GetAllChildElementsAttributesArgs): Promise<SlideAttributesResult> {
   if (!rootRect) {
     const rootAttributes = await getElementAttributes(element);
     inheritedFont = rootAttributes.font;
@@ -233,19 +294,25 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
     };
   }
 
-
-  const directChildElementHandles = await element.$$(':scope > *');
+  const directChildElementHandles = await element.$$(":scope > *");
 
   const allResults: { attributes: ElementAttributes; depth: number }[] = [];
 
   for (const childElementHandle of directChildElementHandles) {
     const attributes = await getElementAttributes(childElementHandle);
 
-    if (['style', 'script', 'link', 'meta', 'path'].includes(attributes.tagName)) {
+    if (
+      ["style", "script", "link", "meta", "path"].includes(attributes.tagName)
+    ) {
       continue;
     }
 
-    if (inheritedFont && !attributes.font && attributes.innerText && attributes.innerText.trim().length > 0) {
+    if (
+      inheritedFont &&
+      !attributes.font &&
+      attributes.innerText &&
+      attributes.innerText.trim().length > 0
+    ) {
       attributes.font = inheritedFont;
     }
     if (inheritedBackground && !attributes.background && attributes.shadow) {
@@ -257,11 +324,18 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
     if (inheritedZIndex !== undefined && attributes.zIndex === 0) {
       attributes.zIndex = inheritedZIndex;
     }
-    if (inheritedOpacity !== undefined && (attributes.opacity === undefined || attributes.opacity === 1)) {
+    if (
+      inheritedOpacity !== undefined &&
+      (attributes.opacity === undefined || attributes.opacity === 1)
+    ) {
       attributes.opacity = inheritedOpacity;
     }
 
-    if (attributes.position && attributes.position.left !== undefined && attributes.position.top !== undefined) {
+    if (
+      attributes.position &&
+      attributes.position.left !== undefined &&
+      attributes.position.top !== undefined
+    ) {
       attributes.position = {
         left: attributes.position.left - rootRect!.left,
         top: attributes.position.top - rootRect!.top,
@@ -271,18 +345,28 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
     }
 
     // Ignore elements with no size (width or height)
-    if (attributes.position === undefined || attributes.position.width === undefined || attributes.position.height === undefined || attributes.position.width === 0 || attributes.position.height === 0) {
+    if (
+      attributes.position === undefined ||
+      attributes.position.width === undefined ||
+      attributes.position.height === undefined ||
+      attributes.position.width === 0 ||
+      attributes.position.height === 0
+    ) {
       continue;
     }
 
     // If element is paragraph and contains only inline formatting tags, don't go deeper
-    if (attributes.tagName === 'p') {
+    if (attributes.tagName === "p") {
       const innerElementTagNames = await childElementHandle.evaluate((el) => {
-        return Array.from(el.querySelectorAll('*')).map((e) => e.tagName.toLowerCase());
+        return Array.from(el.querySelectorAll("*")).map((e) =>
+          e.tagName.toLowerCase()
+        );
       });
 
-      const allowedInlineTags = new Set(['strong', 'u', 'em', 'code', 's']);
-      const hasOnlyAllowedInlineTags = innerElementTagNames.every((tag) => allowedInlineTags.has(tag));
+      const allowedInlineTags = new Set(["strong", "u", "em", "code", "s"]);
+      const hasOnlyAllowedInlineTags = innerElementTagNames.every((tag) =>
+        allowedInlineTags.has(tag)
+      );
 
       if (innerElementTagNames.length > 0 && hasOnlyAllowedInlineTags) {
         attributes.innerText = await childElementHandle.evaluate((el) => {
@@ -293,7 +377,11 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
       }
     }
 
-    if (attributes.tagName === 'svg' || attributes.tagName === 'canvas' || attributes.tagName === 'table') {
+    if (
+      attributes.tagName === "svg" ||
+      attributes.tagName === "canvas" ||
+      attributes.tagName === "table"
+    ) {
       attributes.should_screenshot = true;
       attributes.element = childElementHandle;
     }
@@ -301,7 +389,7 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
     allResults.push({ attributes, depth });
 
     // If the element is a canvas, or table, we don't need to go deeper
-    if (attributes.should_screenshot && attributes.tagName !== 'svg') {
+    if (attributes.should_screenshot && attributes.tagName !== "svg") {
       continue;
     }
 
@@ -316,17 +404,24 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
       inheritedOpacity: attributes.opacity || inheritedOpacity,
       screenshotsDir,
     });
-    allResults.push(...childResults.elements.map(attr => ({ attributes: attr, depth: depth + 1 })));
+    allResults.push(
+      ...childResults.elements.map((attr) => ({
+        attributes: attr,
+        depth: depth + 1,
+      }))
+    );
   }
 
   let backgroundColor = inheritedBackground?.color;
   if (depth === 0) {
     const elementsWithRootPosition = allResults.filter(({ attributes }) => {
-      return attributes.position &&
+      return (
+        attributes.position &&
         attributes.position.left === 0 &&
         attributes.position.top === 0 &&
         attributes.position.width === rootRect!.width &&
-        attributes.position.height === rootRect!.height;
+        attributes.position.height === rootRect!.height
+      );
     });
 
     for (const { attributes } of elementsWithRootPosition) {
@@ -337,27 +432,34 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
     }
   }
 
-  const filteredResults = depth === 0 ? allResults.filter(({ attributes }) => {
-    const hasBackground = attributes.background && attributes.background.color;
-    const hasBorder = attributes.border && attributes.border.color;
-    const hasShadow = attributes.shadow && attributes.shadow.color;
-    const hasText = attributes.innerText && attributes.innerText.trim().length > 0;
-    const hasImage = attributes.imageSrc;
-    const isSvg = attributes.tagName === 'svg';
-    const isCanvas = attributes.tagName === 'canvas';
-    const isTable = attributes.tagName === 'table';
+  const filteredResults =
+    depth === 0
+      ? allResults.filter(({ attributes }) => {
+          const hasBackground =
+            attributes.background && attributes.background.color;
+          const hasBorder = attributes.border && attributes.border.color;
+          const hasShadow = attributes.shadow && attributes.shadow.color;
+          const hasText =
+            attributes.innerText && attributes.innerText.trim().length > 0;
+          const hasImage = attributes.imageSrc;
+          const isSvg = attributes.tagName === "svg";
+          const isCanvas = attributes.tagName === "canvas";
+          const isTable = attributes.tagName === "table";
 
-    const occupiesRoot = attributes.position &&
-      attributes.position.left === 0 &&
-      attributes.position.top === 0 &&
-      attributes.position.width === rootRect!.width &&
-      attributes.position.height === rootRect!.height;
+          const occupiesRoot =
+            attributes.position &&
+            attributes.position.left === 0 &&
+            attributes.position.top === 0 &&
+            attributes.position.width === rootRect!.width &&
+            attributes.position.height === rootRect!.height;
 
-    const hasVisualProperties = hasBackground || hasBorder || hasShadow || hasText;
-    const hasSpecialContent = hasImage || isSvg || isCanvas || isTable;
+          const hasVisualProperties =
+            hasBackground || hasBorder || hasShadow || hasText;
+          const hasSpecialContent = hasImage || isSvg || isCanvas || isTable;
 
-    return (hasVisualProperties && !occupiesRoot) || hasSpecialContent;
-  }) : allResults;
+          return (hasVisualProperties && !occupiesRoot) || hasSpecialContent;
+        })
+      : allResults;
 
   if (depth === 0) {
     const sortedElements = filteredResults
@@ -372,10 +474,15 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
         return zIndexB - zIndexA;
       })
       .map(({ attributes }) => {
-        if (attributes.shadow && attributes.shadow.color && (!attributes.background || !attributes.background.color) && backgroundColor) {
+        if (
+          attributes.shadow &&
+          attributes.shadow.color &&
+          (!attributes.background || !attributes.background.color) &&
+          backgroundColor
+        ) {
           attributes.background = {
             color: backgroundColor,
-            opacity: undefined
+            opacity: undefined,
           };
         }
         return attributes;
@@ -383,44 +490,57 @@ async function getAllChildElementsAttributes({ element, rootRect = null, depth =
 
     return {
       elements: sortedElements,
-      backgroundColor
+      backgroundColor,
     };
   } else {
     return {
       elements: filteredResults.map(({ attributes }) => attributes),
-      backgroundColor
+      backgroundColor,
     };
   }
 }
 
-
-async function getElementAttributes(element: ElementHandle<Element>): Promise<ElementAttributes> {
-
+async function getElementAttributes(
+  element: ElementHandle<Element>
+): Promise<ElementAttributes> {
   const attributes = await element.evaluate((el: Element) => {
-
-    function colorToHex(color: string): { hex: string | undefined; opacity: number | undefined } {
-      if (!color || color === 'transparent' || color === 'rgba(0, 0, 0, 0)') {
+    function colorToHex(color: string): {
+      hex: string | undefined;
+      opacity: number | undefined;
+    } {
+      if (!color || color === "transparent" || color === "rgba(0, 0, 0, 0)") {
         return { hex: undefined, opacity: undefined };
       }
 
-      if (color.startsWith('rgba(') || color.startsWith('hsla(')) {
+      if (color.startsWith("rgba(") || color.startsWith("hsla(")) {
         const match = color.match(/rgba?\(([^)]+)\)|hsla?\(([^)]+)\)/);
         if (match) {
           const values = match[1] || match[2];
-          const parts = values.split(',').map(part => part.trim());
+          const parts = values.split(",").map((part) => part.trim());
 
           if (parts.length >= 4) {
             const opacity = parseFloat(parts[3]);
-            const rgbColor = color.replace(/rgba?\(|hsla?\(|\)/g, '').split(',').slice(0, 3).join(',');
-            const rgbString = color.startsWith('rgba') ? `rgb(${rgbColor})` : `hsl(${rgbColor})`;
+            const rgbColor = color
+              .replace(/rgba?\(|hsla?\(|\)/g, "")
+              .split(",")
+              .slice(0, 3)
+              .join(",");
+            const rgbString = color.startsWith("rgba")
+              ? `rgb(${rgbColor})`
+              : `hsl(${rgbColor})`;
 
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
             if (ctx) {
               ctx.fillStyle = rgbString;
               const hexColor = ctx.fillStyle;
-              const hex = hexColor.startsWith('#') ? hexColor.substring(1) : hexColor;
-              const result = { hex, opacity: isNaN(opacity) ? undefined : opacity };
+              const hex = hexColor.startsWith("#")
+                ? hexColor.substring(1)
+                : hexColor;
+              const result = {
+                hex,
+                opacity: isNaN(opacity) ? undefined : opacity,
+              };
 
               return result;
             }
@@ -428,29 +548,31 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
         }
       }
 
-      if (color.startsWith('rgb(') || color.startsWith('hsl(')) {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
+      if (color.startsWith("rgb(") || color.startsWith("hsl(")) {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
         if (ctx) {
           ctx.fillStyle = color;
           const hexColor = ctx.fillStyle;
-          const hex = hexColor.startsWith('#') ? hexColor.substring(1) : hexColor;
+          const hex = hexColor.startsWith("#")
+            ? hexColor.substring(1)
+            : hexColor;
           return { hex, opacity: undefined };
         }
       }
 
-      if (color.startsWith('#')) {
+      if (color.startsWith("#")) {
         const hex = color.substring(1);
         return { hex, opacity: undefined };
       }
 
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
       if (!ctx) return { hex: color, opacity: undefined };
 
       ctx.fillStyle = color;
       const hexColor = ctx.fillStyle;
-      const hex = hexColor.startsWith('#') ? hexColor.substring(1) : hexColor;
+      const hex = hexColor.startsWith("#") ? hexColor.substring(1) : hexColor;
       const result = { hex, opacity: undefined };
 
       return result;
@@ -477,14 +599,12 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
       };
     }
 
-
-
     function parseBackground(computedStyles: CSSStyleDeclaration) {
       const backgroundColorResult = colorToHex(computedStyles.backgroundColor);
 
       const background = {
         color: backgroundColorResult.hex,
-        opacity: backgroundColorResult.opacity
+        opacity: backgroundColorResult.opacity,
       };
 
       // Return undefined if background has no meaningful values
@@ -498,8 +618,7 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
     function parseBackgroundImage(computedStyles: CSSStyleDeclaration) {
       const backgroundImage = computedStyles.backgroundImage;
 
-
-      if (!backgroundImage || backgroundImage === 'none') {
+      if (!backgroundImage || backgroundImage === "none") {
         return undefined;
       }
 
@@ -527,7 +646,11 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
       };
 
       // Return undefined if border has no meaningful values
-      if (!border.color && border.width === undefined && border.opacity === undefined) {
+      if (
+        !border.color &&
+        border.width === undefined &&
+        border.opacity === undefined
+      ) {
         return undefined;
       }
 
@@ -536,7 +659,7 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
 
     function parseShadow(computedStyles: CSSStyleDeclaration) {
       const boxShadow = computedStyles.boxShadow;
-      if (boxShadow !== 'none') {
+      if (boxShadow !== "none") {
       }
       let shadow: {
         offset?: [number, number];
@@ -548,20 +671,20 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
         inset?: boolean;
       } = {};
 
-      if (boxShadow && boxShadow !== 'none') {
+      if (boxShadow && boxShadow !== "none") {
         const shadows: string[] = [];
-        let currentShadow = '';
+        let currentShadow = "";
         let parenCount = 0;
 
         for (let i = 0; i < boxShadow.length; i++) {
           const char = boxShadow[i];
-          if (char === '(') {
+          if (char === "(") {
             parenCount++;
-          } else if (char === ')') {
+          } else if (char === ")") {
             parenCount--;
-          } else if (char === ',' && parenCount === 0) {
+          } else if (char === "," && parenCount === 0) {
             shadows.push(currentShadow.trim());
-            currentShadow = '';
+            currentShadow = "";
             continue;
           }
           currentShadow += char;
@@ -571,27 +694,25 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
           shadows.push(currentShadow.trim());
         }
 
-
-
-        let selectedShadow = '';
+        let selectedShadow = "";
         let bestShadowScore = -1;
 
         for (let i = 0; i < shadows.length; i++) {
           const shadowStr = shadows[i];
 
-          const shadowParts = shadowStr.split(' ');
+          const shadowParts = shadowStr.split(" ");
           const numericParts: number[] = [];
           const colorParts: string[] = [];
           let isInset = false;
-          let currentColor = '';
+          let currentColor = "";
           let inColorFunction = false;
 
           for (let j = 0; j < shadowParts.length; j++) {
             const part = shadowParts[j];
             const trimmedPart = part.trim();
-            if (trimmedPart === '') continue;
+            if (trimmedPart === "") continue;
 
-            if (trimmedPart.toLowerCase() === 'inset') {
+            if (trimmedPart.toLowerCase() === "inset") {
               isInset = true;
               continue;
             }
@@ -603,14 +724,14 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
             }
 
             if (inColorFunction) {
-              currentColor += ' ' + trimmedPart;
+              currentColor += " " + trimmedPart;
 
               const openParens = (currentColor.match(/\(/g) || []).length;
               const closeParens = (currentColor.match(/\)/g) || []).length;
 
               if (openParens <= closeParens) {
                 colorParts.push(currentColor);
-                currentColor = '';
+                currentColor = "";
                 inColorFunction = false;
               }
               continue;
@@ -626,22 +747,29 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
 
           let hasVisibleColor = false;
           if (colorParts.length > 0) {
-            const shadowColor = colorParts.join(' ');
+            const shadowColor = colorParts.join(" ");
             const colorResult = colorToHex(shadowColor);
-            hasVisibleColor = !!(colorResult.hex && colorResult.hex !== '000000' && colorResult.opacity !== 0);
+            hasVisibleColor = !!(
+              colorResult.hex &&
+              colorResult.hex !== "000000" &&
+              colorResult.opacity !== 0
+            );
           }
 
-          const hasNonZeroValues = numericParts.some(value => value !== 0);
+          const hasNonZeroValues = numericParts.some((value) => value !== 0);
 
           let shadowScore = 0;
           if (hasNonZeroValues) {
-            shadowScore += numericParts.filter(value => value !== 0).length;
+            shadowScore += numericParts.filter((value) => value !== 0).length;
           }
           if (hasVisibleColor) {
             shadowScore += 2;
           }
 
-          if ((hasNonZeroValues || hasVisibleColor) && shadowScore > bestShadowScore) {
+          if (
+            (hasNonZeroValues || hasVisibleColor) &&
+            shadowScore > bestShadowScore
+          ) {
             selectedShadow = shadowStr;
             bestShadowScore = shadowScore;
           }
@@ -652,20 +780,19 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
         }
 
         if (selectedShadow) {
-
-          const shadowParts = selectedShadow.split(' ');
+          const shadowParts = selectedShadow.split(" ");
           const numericParts: number[] = [];
           const colorParts: string[] = [];
           let isInset = false;
-          let currentColor = '';
+          let currentColor = "";
           let inColorFunction = false;
 
           for (let i = 0; i < shadowParts.length; i++) {
             const part = shadowParts[i];
             const trimmedPart = part.trim();
-            if (trimmedPart === '') continue;
+            if (trimmedPart === "") continue;
 
-            if (trimmedPart.toLowerCase() === 'inset') {
+            if (trimmedPart.toLowerCase() === "inset") {
               isInset = true;
               continue;
             }
@@ -677,14 +804,14 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
             }
 
             if (inColorFunction) {
-              currentColor += ' ' + trimmedPart;
+              currentColor += " " + trimmedPart;
 
               const openParens = (currentColor.match(/\(/g) || []).length;
               const closeParens = (currentColor.match(/\)/g) || []).length;
 
               if (openParens <= closeParens) {
                 colorParts.push(currentColor);
-                currentColor = '';
+                currentColor = "";
                 inColorFunction = false;
               }
               continue;
@@ -706,7 +833,7 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
 
             // Only create shadow if color is present
             if (colorParts.length > 0) {
-              const shadowColor = colorParts.join(' ');
+              const shadowColor = colorParts.join(" ");
               const shadowColorResult = colorToHex(shadowColor);
 
               if (shadowColorResult.hex) {
@@ -741,8 +868,8 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
       const fontStyle = computedStyles.fontStyle;
 
       let fontName = undefined;
-      if (fontFamily !== 'initial') {
-        const firstFont = fontFamily.split(',')[0].trim().replace(/['"]/g, '');
+      if (fontFamily !== "initial") {
+        const firstFont = fontFamily.split(",")[0].trim().replace(/['"]/g, "");
         fontName = firstFont;
       }
 
@@ -751,11 +878,17 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
         size: isNaN(fontSize) ? undefined : fontSize,
         weight: isNaN(fontWeight) ? undefined : fontWeight,
         color: fontColorResult.hex,
-        italic: fontStyle === 'italic',
+        italic: fontStyle === "italic",
       };
 
       // Return undefined if font has no meaningful values
-      if (!font.name && font.size === undefined && font.weight === undefined && !font.color && !font.italic) {
+      if (
+        !font.name &&
+        font.size === undefined &&
+        font.weight === undefined &&
+        !font.color &&
+        !font.italic
+      ) {
         return undefined;
       }
 
@@ -764,22 +897,28 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
 
     function parseLineHeight(computedStyles: CSSStyleDeclaration, el: Element) {
       const lineHeight = computedStyles.lineHeight;
-      const innerText = el.textContent || '';
+      const innerText = el.textContent || "";
 
       const htmlEl = el as HTMLElement;
 
       const fontSize = parseFloat(computedStyles.fontSize);
       const computedLineHeight = parseFloat(computedStyles.lineHeight);
 
-      const singleLineHeight = !isNaN(computedLineHeight) ? computedLineHeight : fontSize * 1.2;
+      const singleLineHeight = !isNaN(computedLineHeight)
+        ? computedLineHeight
+        : fontSize * 1.2;
 
-      const hasExplicitLineBreaks = innerText.includes('\n') || innerText.includes('\r') || innerText.includes('\r\n');
+      const hasExplicitLineBreaks =
+        innerText.includes("\n") ||
+        innerText.includes("\r") ||
+        innerText.includes("\r\n");
       const hasTextWrapping = htmlEl.offsetHeight > singleLineHeight * 2;
       const hasOverflow = htmlEl.scrollHeight > htmlEl.clientHeight;
 
-      const isMultiline = hasExplicitLineBreaks || hasTextWrapping || hasOverflow;
+      const isMultiline =
+        hasExplicitLineBreaks || hasTextWrapping || hasOverflow;
 
-      if (isMultiline && lineHeight && lineHeight !== 'normal') {
+      if (isMultiline && lineHeight && lineHeight !== "normal") {
         const parsedLineHeight = parseFloat(lineHeight);
         if (!isNaN(parsedLineHeight)) {
           return parsedLineHeight;
@@ -801,7 +940,10 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
         right: isNaN(marginRight) ? undefined : marginRight,
       };
 
-      return (marginObj.top === 0 && marginObj.bottom === 0 && marginObj.left === 0 && marginObj.right === 0)
+      return marginObj.top === 0 &&
+        marginObj.bottom === 0 &&
+        marginObj.left === 0 &&
+        marginObj.right === 0
         ? undefined
         : marginObj;
     }
@@ -818,23 +960,46 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
         right: isNaN(paddingRight) ? undefined : paddingRight,
       };
 
-      return (paddingObj.top === 0 && paddingObj.bottom === 0 && paddingObj.left === 0 && paddingObj.right === 0)
+      return paddingObj.top === 0 &&
+        paddingObj.bottom === 0 &&
+        paddingObj.left === 0 &&
+        paddingObj.right === 0
         ? undefined
         : paddingObj;
     }
 
-    function parseBorderRadius(computedStyles: CSSStyleDeclaration, el: Element) {
+    function parseBorderRadius(
+      computedStyles: CSSStyleDeclaration,
+      el: Element
+    ) {
       const borderRadius = computedStyles.borderRadius;
       let borderRadiusValue;
 
-      if (borderRadius && borderRadius !== '0px') {
-        const radiusParts = borderRadius.split(' ').map(part => parseFloat(part));
+      if (borderRadius && borderRadius !== "0px") {
+        const radiusParts = borderRadius
+          .split(" ")
+          .map((part) => parseFloat(part));
         if (radiusParts.length === 1) {
-          borderRadiusValue = [radiusParts[0], radiusParts[0], radiusParts[0], radiusParts[0]];
+          borderRadiusValue = [
+            radiusParts[0],
+            radiusParts[0],
+            radiusParts[0],
+            radiusParts[0],
+          ];
         } else if (radiusParts.length === 2) {
-          borderRadiusValue = [radiusParts[0], radiusParts[1], radiusParts[0], radiusParts[1]];
+          borderRadiusValue = [
+            radiusParts[0],
+            radiusParts[1],
+            radiusParts[0],
+            radiusParts[1],
+          ];
         } else if (radiusParts.length === 3) {
-          borderRadiusValue = [radiusParts[0], radiusParts[1], radiusParts[2], radiusParts[1]];
+          borderRadiusValue = [
+            radiusParts[0],
+            radiusParts[1],
+            radiusParts[2],
+            radiusParts[1],
+          ];
         } else if (radiusParts.length === 4) {
           borderRadiusValue = radiusParts;
         }
@@ -848,7 +1013,8 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
           borderRadiusValue = borderRadiusValue.map((radius, index) => {
             // For top-left and bottom-right corners, use maxRadiusX
             // For top-right and bottom-left corners, use maxRadiusY
-            const maxRadius = (index === 0 || index === 2) ? maxRadiusX : maxRadiusY;
+            const maxRadius =
+              index === 0 || index === 2 ? maxRadiusX : maxRadiusY;
             return Math.max(0, Math.min(radius, maxRadius));
           });
         }
@@ -858,16 +1024,19 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
     }
 
     function parseShape(el: Element, borderRadiusValue: number[] | undefined) {
-      if (el.tagName.toLowerCase() === 'img') {
-        return borderRadiusValue && borderRadiusValue.length === 4 &&
-          borderRadiusValue.every((radius: number) => radius === 50) ? 'circle' : 'rectangle';
+      if (el.tagName.toLowerCase() === "img") {
+        return borderRadiusValue &&
+          borderRadiusValue.length === 4 &&
+          borderRadiusValue.every((radius: number) => radius === 50)
+          ? "circle"
+          : "rectangle";
       }
       return undefined;
     }
 
     function parseFilters(computedStyles: CSSStyleDeclaration) {
       const filter = computedStyles.filter;
-      if (!filter || filter === 'none') {
+      if (!filter || filter === "none") {
         return undefined;
       }
 
@@ -886,7 +1055,7 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
       // Parse filter functions
       const filterFunctions = filter.match(/[a-zA-Z]+\([^)]*\)/g);
       if (filterFunctions) {
-        filterFunctions.forEach(func => {
+        filterFunctions.forEach((func) => {
           const match = func.match(/([a-zA-Z]+)\(([^)]*)\)/);
           if (match) {
             const filterType = match[1];
@@ -894,31 +1063,31 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
 
             if (!isNaN(value)) {
               switch (filterType) {
-                case 'invert':
+                case "invert":
                   filters.invert = value;
                   break;
-                case 'brightness':
+                case "brightness":
                   filters.brightness = value;
                   break;
-                case 'contrast':
+                case "contrast":
                   filters.contrast = value;
                   break;
-                case 'saturate':
+                case "saturate":
                   filters.saturate = value;
                   break;
-                case 'hue-rotate':
+                case "hue-rotate":
                   filters.hueRotate = value;
                   break;
-                case 'blur':
+                case "blur":
                   filters.blur = value;
                   break;
-                case 'grayscale':
+                case "grayscale":
                   filters.grayscale = value;
                   break;
-                case 'sepia':
+                case "sepia":
                   filters.sepia = value;
                   break;
-                case 'opacity':
+                case "opacity":
                   filters.opacity = value;
                   break;
               }
@@ -952,22 +1121,35 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
 
       const padding = parsePadding(computedStyles);
 
-      const innerText = hasOnlyTextNodes(el) ? (el.textContent || undefined) : undefined;
+      const innerText = hasOnlyTextNodes(el)
+        ? el.textContent || undefined
+        : undefined;
 
       const zIndex = parseInt(computedStyles.zIndex);
       const zIndexValue = isNaN(zIndex) ? 0 : zIndex;
 
-      const textAlign = computedStyles.textAlign as 'left' | 'center' | 'right' | 'justify';
-      const objectFit = computedStyles.objectFit as 'contain' | 'cover' | 'fill' | undefined;
+      const textAlign = computedStyles.textAlign as
+        | "left"
+        | "center"
+        | "right"
+        | "justify";
+      const objectFit = computedStyles.objectFit as
+        | "contain"
+        | "cover"
+        | "fill"
+        | undefined;
 
       const parsedBackgroundImage = parseBackgroundImage(computedStyles);
       const imageSrc = (el as HTMLImageElement).src || parsedBackgroundImage;
 
       const borderRadiusValue = parseBorderRadius(computedStyles, el);
 
-      const shape = parseShape(el, borderRadiusValue) as 'rectangle' | 'circle' | undefined;
+      const shape = parseShape(el, borderRadiusValue) as
+        | "rectangle"
+        | "circle"
+        | undefined;
 
-      const textWrap = computedStyles.whiteSpace !== 'nowrap';
+      const textWrap = computedStyles.whiteSpace !== "nowrap";
 
       const filters = parseFilters(computedStyles);
 
@@ -977,7 +1159,12 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
       return {
         tagName: tagName,
         id: el.id,
-        className: (el.className && typeof el.className === 'string') ? el.className : (el.className ? el.className.toString() : undefined),
+        className:
+          el.className && typeof el.className === "string"
+            ? el.className
+            : el.className
+            ? el.className.toString()
+            : undefined,
         innerText: innerText,
         opacity: elementOpacity,
         background: background,
@@ -988,7 +1175,7 @@ async function getElementAttributes(element: ElementHandle<Element>): Promise<El
         margin: margin,
         padding: padding,
         zIndex: zIndexValue,
-        textAlign: textAlign !== 'left' ? textAlign : undefined,
+        textAlign: textAlign !== "left" ? textAlign : undefined,
         lineHeight: lineHeight,
         borderRadius: borderRadiusValue,
         imageSrc: imageSrc,

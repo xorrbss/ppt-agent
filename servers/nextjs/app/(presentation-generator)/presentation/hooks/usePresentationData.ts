@@ -3,7 +3,7 @@ import { useDispatch } from "react-redux";
 import { toast } from "sonner";
 import { setPresentationData } from "@/store/slices/presentationGeneration";
 import { DashboardApi } from '../../services/api/dashboard';
-import { addToHistory, clearHistory } from "@/store/slices/undoRedoSlice";
+import {  clearHistory } from "@/store/slices/undoRedoSlice";
 
 
 export const usePresentationData = (
@@ -19,10 +19,6 @@ export const usePresentationData = (
       if (data) {
         dispatch(setPresentationData(data));
         dispatch(clearHistory());
-        dispatch(addToHistory({
-          slides: data.slides,
-          actionType: "initial_load"
-        }));
         setLoading(false);
       }
     } catch (error) {
