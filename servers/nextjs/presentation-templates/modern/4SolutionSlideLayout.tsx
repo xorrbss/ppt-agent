@@ -51,7 +51,7 @@ const solutionSlideSchema = z.object({
         icon: {
           __icon_query__: "market innovation",
           __icon_url__:
-            "/static/icons/placeholder.png",
+            "/static/icons/placeholder.svg",
         },
       },
       {
@@ -60,7 +60,7 @@ const solutionSlideSchema = z.object({
         icon: {
           __icon_query__: "industry building",
           __icon_url__:
-            "/static/icons/placeholder.png",
+            "/static/icons/placeholder.svg",
         },
       },
       {
@@ -69,7 +69,7 @@ const solutionSlideSchema = z.object({
         icon: {
           __icon_query__: "SEM data analysis",
           __icon_url__:
-            "/static/icons/placeholder.png",
+            "/static/icons/placeholder.svg",
         },
       },
       {
@@ -78,7 +78,7 @@ const solutionSlideSchema = z.object({
         icon: {
           __icon_query__: "end user impact",
           __icon_url__:
-            "/static/icons/placeholder.png",
+            "/static/icons/placeholder.svg",
         },
       },
     ])
