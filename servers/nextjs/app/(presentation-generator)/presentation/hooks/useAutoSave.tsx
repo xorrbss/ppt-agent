@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '@/store/store';
 import { PresentationGenerationApi } from '../../services/api/presentation-generation';
@@ -14,6 +14,7 @@ export const useAutoSave = ({
     debounceMs = 1000,
     enabled = true,
 }: UseAutoSaveOptions = {}) => {
+   
     const dispatch = useDispatch();
     const { presentationData, isStreaming, isLoading, isLayoutLoading } = useSelector(
         (state: RootState) => state.presentationGeneration
@@ -22,6 +23,7 @@ export const useAutoSave = ({
     const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const lastSavedDataRef = useRef<string>('');
     const [isSaving, setIsSaving] = useState<boolean>(false);
+ 
 
     // Debounced save function
     const debouncedSave = useCallback(async (data: any) => {
@@ -64,27 +66,24 @@ export const useAutoSave = ({
 
     // Effect to trigger auto-save when presentation data changes
     useEffect(() => {
-        if (!enabled || !presentationData || isStreaming || isLoading || isLayoutLoading) return;
-
-        // Trigger debounced save
-        debouncedSave(presentationData);
-       
+        if (!enabled || !presentationData || isStreaming || isLoading || isLayoutLoading ) return;
+        
         dispatch(addToHistory({
             slides: presentationData.slides,
             actionType: "AUTO_SAVE"
         }));
-
+        // Trigger debounced save
+        debouncedSave(presentationData);
+       
         // Cleanup timeout on unmount
         return () => {
             if (saveTimeoutRef.current) {
                 clearTimeout(saveTimeoutRef.current);
             }
         };
-    }, [presentationData, enabled, debouncedSave]);
+    }, [presentationData, enabled, debouncedSave,isLoading, isStreaming, isLayoutLoading]);
     
     return {
         isSaving,
     };
 }; 
-
-

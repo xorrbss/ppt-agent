@@ -189,7 +189,7 @@ export const RemoteSvgIcon: React.FC<{
   title?: string;
   color?: string;
 }> = ({ url, strokeColor, fillColor, className, title, color }) => {
-  const { svgMarkup } = useRemoteSvgIcon(`http://localhost:5000${url}`, { strokeColor, fillColor, className, title, color });
+  const { svgMarkup } = useRemoteSvgIcon(url, { strokeColor, fillColor, className, title, color });
   if (!svgMarkup) return null;
   return (
     <span

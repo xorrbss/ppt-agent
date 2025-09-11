@@ -57,7 +57,6 @@ const LayoutSelection: React.FC<LayoutSelectionProps> = ({
   const layoutGroups: LayoutGroup[] = React.useMemo(() => {
     const groups = getAllGroups();
 
-    console.log("All groups: ", groups);
 
     if (groups.length === 0) return [];
 
