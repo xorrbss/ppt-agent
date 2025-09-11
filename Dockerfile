@@ -6,10 +6,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     libreoffice \
     fontconfig \
-    chromium \
-    imagemagick
-
-RUN sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /etc/ImageMagick-6/policy.xml
+    chromium
 
 
 # Install Node.js 20 using NodeSource repository
