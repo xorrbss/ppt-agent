@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { Check, ChevronsUpDown, Info } from "lucide-react";
 import { Button } from "./ui/button";
+import { Switch } from "./ui/switch";
 import {
   Command,
   CommandEmpty,
@@ -49,6 +50,7 @@ export default function LLMProviderSelection({
 }: LLMProviderSelectionProps) {
   const [llmConfig, setLlmConfig] = useState<LLMConfig>(initialLLMConfig);
   const [openImageProviderSelect, setOpenImageProviderSelect] = useState(false);
+  const isImageGenerationDisabled = llmConfig.DISABLE_IMAGE_GENERATION ?? false;
 
   useEffect(() => {
     onConfigChange(llmConfig);
@@ -62,12 +64,21 @@ export default function LLMProviderSelection({
       (llmConfig.LLM === "custom" && !llmConfig.CUSTOM_MODEL) ||
       (llmConfig.LLM === "anthropic" && !llmConfig.ANTHROPIC_MODEL);
 
-    const needsApiKey =
-      ((llmConfig.IMAGE_PROVIDER === "dall-e-3" || llmConfig.LLM === "openai") && !llmConfig.OPENAI_API_KEY) ||
-      ((llmConfig.IMAGE_PROVIDER === "gemini_flash" || llmConfig.LLM === "google") && !llmConfig.GOOGLE_API_KEY) ||
-      (llmConfig.LLM === "anthropic" && !llmConfig.ANTHROPIC_API_KEY) ||
-      (llmConfig.IMAGE_PROVIDER === "pexels" && !llmConfig.PEXELS_API_KEY) ||
-      (llmConfig.IMAGE_PROVIDER === "pixabay" && !llmConfig.PIXABAY_API_KEY);
+    const needsProviderApiKey =
+      (llmConfig.LLM === "openai" && !llmConfig.OPENAI_API_KEY) ||
+      (llmConfig.LLM === "google" && !llmConfig.GOOGLE_API_KEY) ||
+      (llmConfig.LLM === "anthropic" && !llmConfig.ANTHROPIC_API_KEY);
+
+    const needsImageProviderApiKey =
+      !llmConfig.DISABLE_IMAGE_GENERATION &&
+      (
+        (llmConfig.IMAGE_PROVIDER === "dall-e-3" && !llmConfig.OPENAI_API_KEY) ||
+        (llmConfig.IMAGE_PROVIDER === "gemini_flash" && !llmConfig.GOOGLE_API_KEY) ||
+        (llmConfig.IMAGE_PROVIDER === "pexels" && !llmConfig.PEXELS_API_KEY) ||
+        (llmConfig.IMAGE_PROVIDER === "pixabay" && !llmConfig.PIXABAY_API_KEY)
+      );
+
+    const needsApiKey = needsProviderApiKey || needsImageProviderApiKey;
 
     const needsOllamaUrl = (llmConfig.LLM === "ollama" && !llmConfig.OLLAMA_URL);
 
@@ -101,20 +112,29 @@ export default function LLMProviderSelection({
   }, [llmConfig.USE_CUSTOM_URL]);
 
   useEffect(() => {
-    let updates: any = {};
-    if (!llmConfig.IMAGE_PROVIDER) {
-      if (llmConfig.LLM === "openai") {
-        updates.IMAGE_PROVIDER = "dall-e-3";
-      } else if (llmConfig.LLM === "google") {
-        updates.IMAGE_PROVIDER = "gemini_flash";
-      } else {
-        updates.IMAGE_PROVIDER = "pexels";
+    setLlmConfig((prevConfig) => {
+      const updates: Partial<LLMConfig> = {};
+
+      if (!prevConfig.DISABLE_IMAGE_GENERATION && !prevConfig.IMAGE_PROVIDER) {
+        if (prevConfig.LLM === "openai") {
+          updates.IMAGE_PROVIDER = "dall-e-3";
+        } else if (prevConfig.LLM === "google") {
+          updates.IMAGE_PROVIDER = "gemini_flash";
+        } else {
+          updates.IMAGE_PROVIDER = "pexels";
+        }
       }
-    }
-    if (!llmConfig.OLLAMA_URL) {
-      updates.OLLAMA_URL = "http://localhost:11434";
-    }
-    setLlmConfig({ ...llmConfig, ...updates });
+
+      if (!prevConfig.OLLAMA_URL) {
+        updates.OLLAMA_URL = "http://localhost:11434";
+      }
+
+      if (Object.keys(updates).length === 0) {
+        return prevConfig;
+      }
+
+      return { ...prevConfig, ...updates };
+    });
   }, []);
 
   return (
@@ -198,134 +218,160 @@ export default function LLMProviderSelection({
           </TabsContent>
         </Tabs>
 
-        {/* Image Provider Selection */}
+        {/* Image Generation Toggle */}
         <div className="my-8">
-          <label className="block text-sm font-medium text-gray-700 mb-3">
-            Select Image Provider
-          </label>
-          <div className="w-full">
-            <Popover
-              open={openImageProviderSelect}
-              onOpenChange={setOpenImageProviderSelect}
-            >
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={openImageProviderSelect}
-                  className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
-                >
-                  <div className="flex gap-3 items-center">
-                    <span className="text-sm font-medium text-gray-900">
-                      {llmConfig.IMAGE_PROVIDER
-                        ? IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]?.label ||
-                        llmConfig.IMAGE_PROVIDER
-                        : "Select image provider"}
-                    </span>
-                  </div>
-                  <ChevronsUpDown className="w-4 h-4 text-gray-500" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent
-                className="p-0"
-                align="start"
-                style={{ width: "var(--radix-popover-trigger-width)" }}
-              >
-                <Command>
-                  <CommandInput placeholder="Search provider..." />
-                  <CommandList>
-                    <CommandEmpty>No provider found.</CommandEmpty>
-                    <CommandGroup>
-                      {Object.values(IMAGE_PROVIDERS).map(
-                        (provider, index) => (
-                          <CommandItem
-                            key={index}
-                            value={provider.value}
-                            onSelect={(value) => {
-                              input_field_changed(value, "image_provider");
-                              setOpenImageProviderSelect(false);
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                llmConfig.IMAGE_PROVIDER === provider.value
-                                  ? "opacity-100"
-                                  : "opacity-0"
-                              )}
-                            />
-                            <div className="flex gap-3 items-center">
-                              <div className="flex flex-col space-y-1 flex-1">
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-sm font-medium text-gray-900 capitalize">
-                                    {provider.label}
-                                  </span>
-                                </div>
-                                <span className="text-xs text-gray-600 leading-relaxed">
-                                  {provider.description}
-                                </span>
-                              </div>
-                            </div>
-                          </CommandItem>
-                        )
-                      )}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+          <div className="flex items-center justify-between mb-4 bg-green-50 p-2 rounded-sm">
+            <label className="text-sm font-medium text-gray-700">
+              Disable Image Generation
+            </label>
+            <Switch
+              checked={isImageGenerationDisabled}
+              onCheckedChange={(checked) => {
+                input_field_changed(checked, "disable_image_generation");
+                if (checked) {
+                  setOpenImageProviderSelect(false);
+                }
+              }}
+            />
           </div>
+          <p className="text-sm text-gray-500 flex items-center gap-2">
+            <span className="block w-1 h-1 rounded-full bg-gray-400"></span>
+            When enabled, slides will not include automatically generated images.
+          </p>
         </div>
 
-        {/* Dynamic API Key Input for Image Provider */}
-        {llmConfig.IMAGE_PROVIDER &&
-          IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER] &&
-          (() => {
-            const provider = IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER];
-
-            // Show info message when using same API key as main provider
-            if (provider.value === "dall-e-3" && llmConfig.LLM === "openai") {
-              return <></>;
-            }
-
-            if (provider.value === "gemini_flash" && llmConfig.LLM === "google") {
-              return <></>;
-            }
-
-            // Show API key input for other providers
-            return (
-              <div className="mb-8">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {provider.apiKeyFieldLabel}
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder={`Enter your ${provider.apiKeyFieldLabel}`}
-                    className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                    value={
-                      provider.apiKeyField === "PEXELS_API_KEY"
-                        ? llmConfig.PEXELS_API_KEY || ""
-                        : provider.apiKeyField === "PIXABAY_API_KEY"
-                          ? llmConfig.PIXABAY_API_KEY || ""
-                          : ""
-                    }
-                    onChange={(e) => {
-                      if (provider.apiKeyField === "PEXELS_API_KEY") {
-                        input_field_changed(e.target.value, "pexels_api_key");
-                      } else if (provider.apiKeyField === "PIXABAY_API_KEY") {
-                        input_field_changed(e.target.value, "pixabay_api_key");
-                      }
-                    }}
-                  />
-                </div>
-                <p className="mt-2 text-sm text-gray-500 flex items-center gap-2">
-                  <span className="block w-1 h-1 rounded-full bg-gray-400"></span>
-                  API key for {provider.label} image generation
-                </p>
+        {!isImageGenerationDisabled && (
+          <>
+            {/* Image Provider Selection */}
+            <div className="my-8">
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Select Image Provider
+              </label>
+              <div className="w-full">
+                <Popover
+                  open={openImageProviderSelect}
+                  onOpenChange={setOpenImageProviderSelect}
+                >
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={openImageProviderSelect}
+                      className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
+                    >
+                      <div className="flex gap-3 items-center">
+                        <span className="text-sm font-medium text-gray-900">
+                          {llmConfig.IMAGE_PROVIDER
+                            ? IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]?.label ||
+                            llmConfig.IMAGE_PROVIDER
+                            : "Select image provider"}
+                        </span>
+                      </div>
+                      <ChevronsUpDown className="w-4 h-4 text-gray-500" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="p-0"
+                    align="start"
+                    style={{ width: "var(--radix-popover-trigger-width)" }}
+                  >
+                    <Command>
+                      <CommandInput placeholder="Search provider..." />
+                      <CommandList>
+                        <CommandEmpty>No provider found.</CommandEmpty>
+                        <CommandGroup>
+                          {Object.values(IMAGE_PROVIDERS).map(
+                            (provider, index) => (
+                              <CommandItem
+                                key={index}
+                                value={provider.value}
+                                onSelect={(value) => {
+                                  input_field_changed(value, "image_provider");
+                                  setOpenImageProviderSelect(false);
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    llmConfig.IMAGE_PROVIDER === provider.value
+                                      ? "opacity-100"
+                                      : "opacity-0"
+                                  )}
+                                />
+                                <div className="flex gap-3 items-center">
+                                  <div className="flex flex-col space-y-1 flex-1">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-sm font-medium text-gray-900 capitalize">
+                                        {provider.label}
+                                      </span>
+                                    </div>
+                                    <span className="text-xs text-gray-600 leading-relaxed">
+                                      {provider.description}
+                                    </span>
+                                  </div>
+                                </div>
+                              </CommandItem>
+                            )
+                          )}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
-            );
-          })()}
+            </div>
+
+            {/* Dynamic API Key Input for Image Provider */}
+            {llmConfig.IMAGE_PROVIDER &&
+              IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER] &&
+              (() => {
+                const provider = IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER];
+
+                // Show info message when using same API key as main provider
+                if (provider.value === "dall-e-3" && llmConfig.LLM === "openai") {
+                  return <></>;
+                }
+
+                if (provider.value === "gemini_flash" && llmConfig.LLM === "google") {
+                  return <></>;
+                }
+
+                // Show API key input for other providers
+                return (
+                  <div className="mb-8">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      {provider.apiKeyFieldLabel}
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder={`Enter your ${provider.apiKeyFieldLabel}`}
+                        className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                        value={
+                          provider.apiKeyField === "PEXELS_API_KEY"
+                            ? llmConfig.PEXELS_API_KEY || ""
+                            : provider.apiKeyField === "PIXABAY_API_KEY"
+                              ? llmConfig.PIXABAY_API_KEY || ""
+                              : ""
+                        }
+                        onChange={(e) => {
+                          if (provider.apiKeyField === "PEXELS_API_KEY") {
+                            input_field_changed(e.target.value, "pexels_api_key");
+                          } else if (provider.apiKeyField === "PIXABAY_API_KEY") {
+                            input_field_changed(e.target.value, "pixabay_api_key");
+                          }
+                        }}
+                      />
+                    </div>
+                    <p className="mt-2 text-sm text-gray-500 flex items-center gap-2">
+                      <span className="block w-1 h-1 rounded-full bg-gray-400"></span>
+                      API key for {provider.label} image generation
+                    </p>
+                  </div>
+                );
+              })()}
+          </>
+        )}
 
         {/* Model Information */}
         <div className="mb-8 p-4 bg-blue-50 rounded-lg border border-blue-100">
@@ -348,12 +394,19 @@ export default function LLMProviderSelection({
                         : llmConfig.LLM === "openai"
                           ? llmConfig.OPENAI_MODEL ?? "xxxxx"
                           : "xxxxx"}{" "}
-                for text generation and{" "}
-                {llmConfig.IMAGE_PROVIDER &&
-                  IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]
-                  ? IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER].label
-                  : "xxxxx"}{" "}
-                for images
+                for text generation{" "}
+                {isImageGenerationDisabled ? (
+                  "and image generation is disabled."
+                ) : (
+                  <>
+                    and{" "}
+                    {llmConfig.IMAGE_PROVIDER &&
+                      IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]
+                      ? IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER].label
+                      : "xxxxx"}{" "}
+                    for images
+                  </>
+                )}
               </p>
             </div>
           </div>

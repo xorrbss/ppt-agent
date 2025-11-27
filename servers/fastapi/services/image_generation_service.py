@@ -10,6 +10,7 @@ from utils.download_helpers import download_file
 from utils.get_env import get_pexels_api_key_env
 from utils.get_env import get_pixabay_api_key_env
 from utils.image_provider import (
+    is_image_generation_disabled,
     is_pixels_selected,
     is_pixabay_selected,
     is_gemini_flash_selected,
@@ -19,12 +20,15 @@ import uuid
 
 
 class ImageGenerationService:
-
     def __init__(self, output_directory: str):
         self.output_directory = output_directory
+        self.is_image_generation_disabled = is_image_generation_disabled()
         self.image_gen_func = self.get_image_gen_func()
 
     def get_image_gen_func(self):
+        if self.is_image_generation_disabled:
+            return None
+
         if is_pixabay_selected():
             return self.get_image_from_pixabay
         elif is_pixels_selected():
@@ -46,6 +50,10 @@ class ImageGenerationService:
         otherwise it uses the full image prompt with theme.
         - Output Directory is used for saving the generated image not the stock provider.
         """
+        if self.is_image_generation_disabled:
+            print("Image generation is disabled. Using placeholder image.")
+            return "/static/images/placeholder.jpg"
+
         if not self.image_gen_func:
             print("No image generation function found. Using placeholder image.")
             return "/static/images/placeholder.jpg"

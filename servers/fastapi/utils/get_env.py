@@ -73,6 +73,10 @@ def get_pexels_api_key_env():
     return os.getenv("PEXELS_API_KEY")
 
 
+def get_disable_image_generation_env():
+    return os.getenv("DISABLE_IMAGE_GENERATION")
+
+
 def get_image_provider_env():
     return os.getenv("IMAGE_PROVIDER")
 
