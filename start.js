@@ -138,7 +138,15 @@ const startServers = async () => {
 
   const nextjsProcess = spawn(
     "npm",
-    ["run", isDev ? "dev" : "start", "--", "-p", nextjsPort.toString()],
+    [
+      "run",
+      isDev ? "dev" : "start",
+      "--",
+      "-H",
+      "127.0.0.1",
+      "-p",
+      nextjsPort.toString(),
+    ],
     {
       cwd: nextjsDir,
       stdio: "inherit",
