@@ -23,6 +23,7 @@ export interface LLMConfig {
   CUSTOM_MODEL?: string;
 
   // Image providers
+  DISABLE_IMAGE_GENERATION?: boolean;
   IMAGE_PROVIDER?: string;
   PEXELS_API_KEY?: string;
   PIXABAY_API_KEY?: string;

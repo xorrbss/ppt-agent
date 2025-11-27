@@ -69,6 +69,10 @@ def set_pixabay_api_key_env(value):
     os.environ["PIXABAY_API_KEY"] = value
 
 
+def set_disable_image_generation_env(value):
+    os.environ["DISABLE_IMAGE_GENERATION"] = value
+
+
 def set_tool_calls_env(value):
     os.environ["TOOL_CALLS"] = value
 
