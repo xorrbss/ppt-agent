@@ -61,6 +61,15 @@ export const IMAGE_PROVIDERS: Record<string, ImageProviderOption> = {
     apiKeyField: "GOOGLE_API_KEY",
     apiKeyFieldLabel: "Google API Key"
   },
+  local: {
+    value: "local",
+    label: "Local Image Generation",
+    description: "Use your local AI image server (Stable Diffusion, FLUX, ComfyUI, Fooocus, etc.)",
+    icon: "/icons/local.png",
+    requiresApiKey: false,
+    apiKeyField: "LOCAL_IMAGE_URL",
+    apiKeyFieldLabel: "Local Server URL"
+  },
 };
 
 export const LLM_PROVIDERS: Record<string, LLMProviderOption> = {

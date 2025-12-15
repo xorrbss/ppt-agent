@@ -73,6 +73,8 @@ export const hasValidLLMConfig = (llmConfig: LLMConfig) => {
         return llmConfig.OPENAI_API_KEY && llmConfig.OPENAI_API_KEY !== "";
       case "gemini_flash":
         return llmConfig.GOOGLE_API_KEY && llmConfig.GOOGLE_API_KEY !== "";
+      case "local":
+        return llmConfig.LOCAL_IMAGE_URL && llmConfig.LOCAL_IMAGE_URL !== "";
       default:
         return false;
     }

@@ -32,6 +32,10 @@ class UserConfig(BaseModel):
     PEXELS_API_KEY: Optional[str] = None
     PIXABAY_API_KEY: Optional[str] = None
 
+    # Local Image Generation (Stable Diffusion, FLUX, ComfyUI, Fooocus, etc.)
+    LOCAL_IMAGE_URL: Optional[str] = None
+    LOCAL_IMAGE_MODEL: Optional[str] = None
+
     # Reasoning
     TOOL_CALLS: Optional[bool] = None
     DISABLE_THINKING: Optional[bool] = None

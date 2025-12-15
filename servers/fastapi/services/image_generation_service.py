@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import os
 import aiohttp
 from google import genai
@@ -9,12 +10,15 @@ from models.sql.image_asset import ImageAsset
 from utils.download_helpers import download_file
 from utils.get_env import get_pexels_api_key_env
 from utils.get_env import get_pixabay_api_key_env
+from utils.get_env import get_local_image_url_env
+from utils.get_env import get_local_image_model_env
 from utils.image_provider import (
     is_image_generation_disabled,
     is_pixels_selected,
     is_pixabay_selected,
     is_gemini_flash_selected,
     is_dalle3_selected,
+    is_local_selected,
 )
 import uuid
 
@@ -37,6 +41,8 @@ class ImageGenerationService:
             return self.generate_image_google
         elif is_dalle3_selected():
             return self.generate_image_openai
+        elif is_local_selected():
+            return self.generate_image_local
         return None
 
     def is_stock_provider_selected(self):
@@ -137,3 +143,84 @@ class ImageGenerationService:
             data = await response.json()
             image_url = data["hits"][0]["largeImageURL"]
             return image_url
+
+    async def generate_image_local(self, prompt: str, output_directory: str) -> str:
+        """
+        Generate image using a local image generation server.
+        Supports Automatic1111 WebUI API format (commonly used by many local AI image tools).
+        
+        Compatible with:
+        - Automatic1111 (Stable Diffusion WebUI)
+        - Stable Diffusion WebUI Forge
+        - ComfyUI (with API wrapper)
+        - Fooocus (with API mode)
+        - FLUX-based UIs with compatible API
+        - Any server implementing the /sdapi/v1/txt2img endpoint
+        
+        Args:
+            prompt: The text prompt for image generation
+            output_directory: Directory to save the generated image
+            
+        Returns:
+            Path to the generated image file
+        """
+        local_url = get_local_image_url_env()
+        local_model = get_local_image_model_env()
+        
+        if not local_url:
+            raise ValueError("LOCAL_IMAGE_URL environment variable is not set")
+        
+        # Ensure URL doesn't have trailing slash
+        local_url = local_url.rstrip("/")
+        
+        # Build the API endpoint URL (Automatic1111 compatible format)
+        api_url = f"{local_url}/sdapi/v1/txt2img"
+        
+        # Build the request payload
+        payload = {
+            "prompt": prompt,
+            "negative_prompt": "blurry, bad quality, distorted, ugly, deformed",
+            "steps": 20,
+            "width": 1024,
+            "height": 1024,
+            "cfg_scale": 7,
+            "sampler_name": "Euler a",
+        }
+        
+        # Add model override if specified
+        if local_model:
+            payload["override_settings"] = {
+                "sd_model_checkpoint": local_model
+            }
+        
+        async with aiohttp.ClientSession(trust_env=True) as session:
+            try:
+                response = await session.post(
+                    api_url,
+                    json=payload,
+                    timeout=aiohttp.ClientTimeout(total=300)  # 5 min timeout for generation
+                )
+                
+                if response.status != 200:
+                    error_text = await response.text()
+                    raise Exception(f"Local image API error: {response.status} - {error_text}")
+                
+                data = await response.json()
+                
+                # API returns images as base64 encoded strings
+                if "images" in data and len(data["images"]) > 0:
+                    image_base64 = data["images"][0]
+                    
+                    # Decode base64 and save to file
+                    image_data = base64.b64decode(image_base64)
+                    image_path = os.path.join(output_directory, f"{uuid.uuid4()}.png")
+                    
+                    with open(image_path, "wb") as f:
+                        f.write(image_data)
+                    
+                    return image_path
+                else:
+                    raise Exception("No images returned from local image API")
+                    
+            except aiohttp.ClientError as e:
+                raise Exception(f"Failed to connect to local image server at {local_url}: {str(e)}")
