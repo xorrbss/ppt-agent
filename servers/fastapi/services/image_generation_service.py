@@ -147,15 +147,16 @@ class ImageGenerationService:
     async def generate_image_local(self, prompt: str, output_directory: str) -> str:
         """
         Generate image using a local image generation server.
-        Supports Automatic1111 WebUI API format (commonly used by many local AI image tools).
         
-        Compatible with:
-        - Automatic1111 (Stable Diffusion WebUI)
-        - Stable Diffusion WebUI Forge
-        - ComfyUI (with API wrapper)
-        - Fooocus (with API mode)
-        - FLUX-based UIs with compatible API
-        - Any server implementing the /sdapi/v1/txt2img endpoint
+        User provides the full API URL including the endpoint.
+        Examples:
+        - Automatic1111: http://192.168.1.7:7860/sdapi/v1/txt2img
+        - Fooocus: http://192.168.1.7:7860/v1/generation/text-to-image
+        - Custom: http://192.168.1.7:7860/generate
+        
+        Supports both:
+        - JSON response with base64 images (Automatic1111 style)
+        - Direct binary image response (raw PNG/JPEG)
         
         Args:
             prompt: The text prompt for image generation
@@ -164,19 +165,14 @@ class ImageGenerationService:
         Returns:
             Path to the generated image file
         """
-        local_url = get_local_image_url_env()
+        api_url = get_local_image_url_env()
         local_model = get_local_image_model_env()
         
-        if not local_url:
+        if not api_url:
             raise ValueError("LOCAL_IMAGE_URL environment variable is not set")
         
-        # Ensure URL doesn't have trailing slash
-        local_url = local_url.rstrip("/")
-        
-        # Build the API endpoint URL (Automatic1111 compatible format)
-        api_url = f"{local_url}/sdapi/v1/txt2img"
-        
-        # Build the request payload
+        # Build the request payload (Automatic1111 compatible format)
+        # Most local tools accept similar payload structure
         payload = {
             "prompt": prompt,
             "negative_prompt": "blurry, bad quality, distorted, ugly, deformed",
@@ -205,22 +201,46 @@ class ImageGenerationService:
                     error_text = await response.text()
                     raise Exception(f"Local image API error: {response.status} - {error_text}")
                 
-                data = await response.json()
+                content_type = response.headers.get("Content-Type", "")
                 
-                # API returns images as base64 encoded strings
-                if "images" in data and len(data["images"]) > 0:
-                    image_base64 = data["images"][0]
-                    
-                    # Decode base64 and save to file
-                    image_data = base64.b64decode(image_base64)
-                    image_path = os.path.join(output_directory, f"{uuid.uuid4()}.png")
+                # Handle direct binary image response (image/png, image/jpeg, etc.)
+                if content_type.startswith("image/"):
+                    image_data = await response.read()
+                    # Determine file extension from content type
+                    ext = "png" if "png" in content_type else "jpg"
+                    image_path = os.path.join(output_directory, f"{uuid.uuid4()}.{ext}")
                     
                     with open(image_path, "wb") as f:
                         f.write(image_data)
                     
                     return image_path
+                
+                # Handle JSON response with base64 encoded images
+                data = await response.json()
+                
+                # Check for images in various response formats
+                if "images" in data and len(data["images"]) > 0:
+                    image_base64 = data["images"][0]
+                    # Handle if it's a dict with base64 key
+                    if isinstance(image_base64, dict) and "base64" in image_base64:
+                        image_base64 = image_base64["base64"]
+                elif "image" in data:
+                    image_base64 = data["image"]
+                elif "output" in data:
+                    image_base64 = data["output"]
+                elif "result" in data:
+                    image_base64 = data["result"]
                 else:
-                    raise Exception("No images returned from local image API")
+                    raise Exception(f"No images found in response. Keys: {list(data.keys())}")
+                
+                # Decode base64 and save to file
+                image_data = base64.b64decode(image_base64)
+                image_path = os.path.join(output_directory, f"{uuid.uuid4()}.png")
+                
+                with open(image_path, "wb") as f:
+                    f.write(image_data)
+                
+                return image_path
                     
             except aiohttp.ClientError as e:
-                raise Exception(f"Failed to connect to local image server at {local_url}: {str(e)}")
+                raise Exception(f"Failed to connect to local image server at {api_url}: {str(e)}")

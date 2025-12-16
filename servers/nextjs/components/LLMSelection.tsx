@@ -345,12 +345,12 @@ export default function LLMProviderSelection({
                     <div className="mb-8 space-y-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Local Server URL
+                          Local API URL (Full Endpoint)
                         </label>
                         <div className="relative">
                           <input
                             type="text"
-                            placeholder="http://192.168.1.7:7860"
+                            placeholder="http://192.168.1.7:7860/sdapi/v1/txt2img"
                             className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
                             value={llmConfig.LOCAL_IMAGE_URL || ""}
                             onChange={(e) => {
@@ -358,10 +358,14 @@ export default function LLMProviderSelection({
                             }}
                           />
                         </div>
-                        <p className="mt-2 text-sm text-gray-500 flex items-center gap-2">
-                          <span className="block w-1 h-1 rounded-full bg-gray-400"></span>
-                          URL of your local image generation server (Automatic1111, ComfyUI, Fooocus, FLUX, etc.)
+                        <p className="mt-2 text-sm text-gray-500">
+                          Enter the full API URL including endpoint. Examples:
                         </p>
+                        <ul className="mt-1 text-xs text-gray-500 space-y-0.5 ml-4">
+                          <li>• Automatic1111: <code className="bg-gray-100 px-1 rounded">http://IP:7860/sdapi/v1/txt2img</code></li>
+                          <li>• Fooocus: <code className="bg-gray-100 px-1 rounded">http://IP:7860/v1/generation/text-to-image</code></li>
+                          <li>• Use your machine IP address, not localhost</li>
+                        </ul>
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
