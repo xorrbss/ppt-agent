@@ -93,5 +93,5 @@ def set_local_image_url_env(value):
     os.environ["LOCAL_IMAGE_URL"] = value
 
 
-def set_local_image_model_env(value):
-    os.environ["LOCAL_IMAGE_MODEL"] = value
+def set_local_image_workflow_env(value):
+    os.environ["LOCAL_IMAGE_WORKFLOW"] = value

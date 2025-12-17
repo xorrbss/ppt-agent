@@ -82,13 +82,14 @@ export default function LLMProviderSelection({
 
     const needsOllamaUrl = (llmConfig.LLM === "ollama" && !llmConfig.OLLAMA_URL);
 
-    const needsLocalImageUrl = !llmConfig.DISABLE_IMAGE_GENERATION &&
-      llmConfig.IMAGE_PROVIDER === "local" && !llmConfig.LOCAL_IMAGE_URL;
+    const needsComfyUIConfig = !llmConfig.DISABLE_IMAGE_GENERATION &&
+      llmConfig.IMAGE_PROVIDER === "local" &&
+      (!llmConfig.LOCAL_IMAGE_URL || !llmConfig.LOCAL_IMAGE_WORKFLOW);
 
     setButtonState({
       isLoading: false,
-      isDisabled: needsModelSelection || needsApiKey || needsOllamaUrl || needsLocalImageUrl,
-      text: needsModelSelection ? "Please Select a Model" : needsApiKey ? "Please Enter API Key" : needsOllamaUrl ? "Please Enter Ollama URL" : needsLocalImageUrl ? "Please Enter Local Server URL" : "Save Configuration",
+      isDisabled: needsModelSelection || needsApiKey || needsOllamaUrl || needsComfyUIConfig,
+      text: needsModelSelection ? "Please Select a Model" : needsApiKey ? "Please Enter API Key" : needsOllamaUrl ? "Please Enter Ollama URL" : needsComfyUIConfig ? "Please Configure ComfyUI" : "Save Configuration",
       showProgress: false
     });
 
@@ -339,18 +340,18 @@ export default function LLMProviderSelection({
                   return <></>;
                 }
 
-                // Show Local Image Generation configuration
+                // Show ComfyUI configuration
                 if (provider.value === "local") {
                   return (
                     <div className="mb-8 space-y-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Local API URL (Full Endpoint)
+                          ComfyUI Server URL
                         </label>
                         <div className="relative">
                           <input
                             type="text"
-                            placeholder="http://192.168.1.7:7860/sdapi/v1/txt2img"
+                            placeholder="http://192.168.1.7:8188"
                             className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
                             value={llmConfig.LOCAL_IMAGE_URL || ""}
                             onChange={(e) => {
@@ -358,33 +359,29 @@ export default function LLMProviderSelection({
                             }}
                           />
                         </div>
-                        <p className="mt-2 text-sm text-gray-500">
-                          Enter the full API URL including endpoint. Examples:
+                        <p className="mt-2 text-sm text-gray-500 flex items-center gap-2">
+                          <span className="block w-1 h-1 rounded-full bg-gray-400"></span>
+                          Use your machine IP address (not localhost) when running in Docker
                         </p>
-                        <ul className="mt-1 text-xs text-gray-500 space-y-0.5 ml-4">
-                          <li>• Automatic1111: <code className="bg-gray-100 px-1 rounded">http://IP:7860/sdapi/v1/txt2img</code></li>
-                          <li>• Fooocus: <code className="bg-gray-100 px-1 rounded">http://IP:7860/v1/generation/text-to-image</code></li>
-                          <li>• Use your machine IP address, not localhost</li>
-                        </ul>
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Model Checkpoint (Optional)
+                          Workflow JSON
                         </label>
                         <div className="relative">
-                          <input
-                            type="text"
-                            placeholder="e.g., sd_xl_base_1.0.safetensors or flux1-dev.safetensors"
-                            className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                            value={llmConfig.LOCAL_IMAGE_MODEL || ""}
+                          <textarea
+                            placeholder='Paste your ComfyUI workflow JSON here (export via "Save (API Format)" in ComfyUI)'
+                            className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors font-mono text-xs"
+                            rows={6}
+                            value={llmConfig.LOCAL_IMAGE_WORKFLOW || ""}
                             onChange={(e) => {
-                              input_field_changed(e.target.value, "local_image_model");
+                              input_field_changed(e.target.value, "local_image_workflow");
                             }}
                           />
                         </div>
-                        <p className="mt-2 text-sm text-gray-500 flex items-center gap-2">
-                          <span className="block w-1 h-1 rounded-full bg-gray-400"></span>
-                          Leave empty to use the currently loaded model
+                        <p className="mt-2 text-sm text-gray-500">
+                          Export your workflow from ComfyUI using &quot;Save (API Format)&quot; and paste the JSON here.
+                          The positive prompt node (CLIPTextEncode) will be automatically updated.
                         </p>
                       </div>
                     </div>

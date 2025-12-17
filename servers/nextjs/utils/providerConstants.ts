@@ -63,12 +63,12 @@ export const IMAGE_PROVIDERS: Record<string, ImageProviderOption> = {
   },
   local: {
     value: "local",
-    label: "Local Image Generation",
-    description: "Use your local AI image server (Stable Diffusion, FLUX, ComfyUI, Fooocus, etc.)",
+    label: "ComfyUI",
+    description: "Use your local ComfyUI server with custom workflows",
     icon: "/icons/local.png",
     requiresApiKey: false,
     apiKeyField: "LOCAL_IMAGE_URL",
-    apiKeyFieldLabel: "Local Server URL"
+    apiKeyFieldLabel: "ComfyUI Server URL"
   },
 };
 

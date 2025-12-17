@@ -65,7 +65,7 @@ export async function POST(request: Request) {
     IMAGE_PROVIDER: userConfig.IMAGE_PROVIDER || existingConfig.IMAGE_PROVIDER,
     PEXELS_API_KEY: userConfig.PEXELS_API_KEY || existingConfig.PEXELS_API_KEY,
     LOCAL_IMAGE_URL: userConfig.LOCAL_IMAGE_URL || existingConfig.LOCAL_IMAGE_URL,
-    LOCAL_IMAGE_MODEL: userConfig.LOCAL_IMAGE_MODEL || existingConfig.LOCAL_IMAGE_MODEL,
+    LOCAL_IMAGE_WORKFLOW: userConfig.LOCAL_IMAGE_WORKFLOW || existingConfig.LOCAL_IMAGE_WORKFLOW,
     TOOL_CALLS:
       userConfig.TOOL_CALLS === undefined
         ? existingConfig.TOOL_CALLS

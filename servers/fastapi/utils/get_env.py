@@ -105,5 +105,5 @@ def get_local_image_url_env():
     return os.getenv("LOCAL_IMAGE_URL")
 
 
-def get_local_image_model_env():
-    return os.getenv("LOCAL_IMAGE_MODEL")
+def get_local_image_workflow_env():
+    return os.getenv("LOCAL_IMAGE_WORKFLOW")

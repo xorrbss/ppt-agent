@@ -13,8 +13,8 @@ from utils.get_env import (
     get_google_api_key_env,
     get_google_model_env,
     get_llm_provider_env,
-    get_local_image_model_env,
     get_local_image_url_env,
+    get_local_image_workflow_env,
     get_ollama_model_env,
     get_ollama_url_env,
     get_openai_api_key_env,
@@ -40,8 +40,8 @@ from utils.set_env import (
     set_google_api_key_env,
     set_google_model_env,
     set_llm_provider_env,
-    set_local_image_model_env,
     set_local_image_url_env,
+    set_local_image_workflow_env,
     set_ollama_model_env,
     set_ollama_url_env,
     set_openai_api_key_env,
@@ -90,7 +90,7 @@ def get_user_config():
         PIXABAY_API_KEY=existing_config.PIXABAY_API_KEY or get_pixabay_api_key_env(),
         PEXELS_API_KEY=existing_config.PEXELS_API_KEY or get_pexels_api_key_env(),
         LOCAL_IMAGE_URL=existing_config.LOCAL_IMAGE_URL or get_local_image_url_env(),
-        LOCAL_IMAGE_MODEL=existing_config.LOCAL_IMAGE_MODEL or get_local_image_model_env(),
+        LOCAL_IMAGE_WORKFLOW=existing_config.LOCAL_IMAGE_WORKFLOW or get_local_image_workflow_env(),
         TOOL_CALLS=(
             existing_config.TOOL_CALLS
             if existing_config.TOOL_CALLS is not None
@@ -150,8 +150,8 @@ def update_env_with_user_config():
         set_pexels_api_key_env(user_config.PEXELS_API_KEY)
     if user_config.LOCAL_IMAGE_URL:
         set_local_image_url_env(user_config.LOCAL_IMAGE_URL)
-    if user_config.LOCAL_IMAGE_MODEL:
-        set_local_image_model_env(user_config.LOCAL_IMAGE_MODEL)
+    if user_config.LOCAL_IMAGE_WORKFLOW:
+        set_local_image_workflow_env(user_config.LOCAL_IMAGE_WORKFLOW)
     if user_config.TOOL_CALLS is not None:
         set_tool_calls_env(str(user_config.TOOL_CALLS))
     if user_config.DISABLE_THINKING is not None:
