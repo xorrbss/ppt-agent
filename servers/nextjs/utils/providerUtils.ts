@@ -48,6 +48,8 @@ export const updateLLMConfig = (
     disable_thinking: "DISABLE_THINKING",
     extended_reasoning: "EXTENDED_REASONING",
     web_grounding: "WEB_GROUNDING",
+    local_image_url: "LOCAL_IMAGE_URL",
+    local_image_workflow: "LOCAL_IMAGE_WORKFLOW",
   };
 
   const configKey = fieldMappings[field];

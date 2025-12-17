@@ -3,6 +3,7 @@ from utils.get_env import (
     get_disable_image_generation_env,
     get_google_api_key_env,
     get_image_provider_env,
+    get_local_image_url_env,
     get_openai_api_key_env,
     get_pexels_api_key_env,
     get_pixabay_api_key_env,
@@ -30,6 +31,10 @@ def is_dalle3_selected() -> bool:
     return ImageProvider.DALLE3 == get_selected_image_provider()
 
 
+def is_local_selected() -> bool:
+    return ImageProvider.LOCAL == get_selected_image_provider()
+
+
 def get_selected_image_provider() -> ImageProvider | None:
     """
     Get the selected image provider from environment variables.
@@ -52,5 +57,7 @@ def get_image_provider_api_key() -> str:
         return get_google_api_key_env()
     elif selected_image_provider == ImageProvider.DALLE3:
         return get_openai_api_key_env()
+    elif selected_image_provider == ImageProvider.LOCAL:
+        return get_local_image_url_env()  # Returns URL instead of API key
     else:
         raise ValueError(f"Invalid image provider: {selected_image_provider}")

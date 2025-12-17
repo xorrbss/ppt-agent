@@ -99,3 +99,11 @@ def get_extended_reasoning_env():
 
 def get_web_grounding_env():
     return os.getenv("WEB_GROUNDING")
+
+
+def get_local_image_url_env():
+    return os.getenv("LOCAL_IMAGE_URL")
+
+
+def get_local_image_workflow_env():
+    return os.getenv("LOCAL_IMAGE_WORKFLOW")
