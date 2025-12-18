@@ -16,6 +16,8 @@ from utils.get_env import (
     get_openai_model_env,
     get_pixabay_api_key_env,
     get_pexels_api_key_env,
+    get_comfyui_url_env,
+    get_comfyui_workflow_env,
 )
 from utils.get_env import get_google_api_key_env
 from utils.get_env import get_ollama_model_env
@@ -135,3 +137,10 @@ async def check_llm_and_image_provider_api_or_model_availability():
             openai_api_key = get_openai_api_key_env()
             if not openai_api_key:
                 raise Exception("OPENAI_API_KEY must be provided")
+        elif selected_image_provider == ImageProvider.COMFYUI:
+            comfyui_url = get_comfyui_url_env()
+            if not comfyui_url:
+                raise Exception("COMFYUI_URL must be provided")
+            workflow_json = get_comfyui_workflow_env()
+            if not workflow_json:
+                raise Exception("COMFYUI_WORKFLOW must be provided")

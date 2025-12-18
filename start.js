@@ -96,8 +96,8 @@ const setupUserConfigFromEnv = () => {
       process.env.EXTENDED_REASONING || existingConfig.EXTENDED_REASONING,
     WEB_GROUNDING: process.env.WEB_GROUNDING || existingConfig.WEB_GROUNDING,
     USE_CUSTOM_URL: process.env.USE_CUSTOM_URL || existingConfig.USE_CUSTOM_URL,
-    LOCAL_IMAGE_URL: process.env.LOCAL_IMAGE_URL || existingConfig.LOCAL_IMAGE_URL,
-    LOCAL_IMAGE_WORKFLOW: process.env.LOCAL_IMAGE_WORKFLOW || existingConfig.LOCAL_IMAGE_WORKFLOW,
+    COMFYUI_URL: process.env.COMFYUI_URL || existingConfig.COMFYUI_URL,
+    COMFYUI_WORKFLOW: process.env.COMFYUI_WORKFLOW || existingConfig.COMFYUI_WORKFLOW,
   };
 
   writeFileSync(userConfigPath, JSON.stringify(userConfig));

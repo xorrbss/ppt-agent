@@ -89,9 +89,9 @@ def set_web_grounding_env(value):
     os.environ["WEB_GROUNDING"] = value
 
 
-def set_local_image_url_env(value):
-    os.environ["LOCAL_IMAGE_URL"] = value
+def set_comfyui_url_env(value):
+    os.environ["COMFYUI_URL"] = value
 
 
-def set_local_image_workflow_env(value):
-    os.environ["LOCAL_IMAGE_WORKFLOW"] = value
+def set_comfyui_workflow_env(value):
+    os.environ["COMFYUI_WORKFLOW"] = value

@@ -61,13 +61,13 @@ export const IMAGE_PROVIDERS: Record<string, ImageProviderOption> = {
     apiKeyField: "GOOGLE_API_KEY",
     apiKeyFieldLabel: "Google API Key"
   },
-  local: {
-    value: "local",
+  comfyui: {
+    value: "comfyui",
     label: "ComfyUI",
     description: "Use your local ComfyUI server with custom workflows",
-    icon: "/icons/local.png",
+    icon: "/icons/comfyui.png",
     requiresApiKey: false,
-    apiKeyField: "LOCAL_IMAGE_URL",
+    apiKeyField: "COMFYUI_URL",
     apiKeyFieldLabel: "ComfyUI Server URL"
   },
 };

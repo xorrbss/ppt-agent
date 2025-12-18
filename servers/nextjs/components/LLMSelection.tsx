@@ -83,8 +83,8 @@ export default function LLMProviderSelection({
     const needsOllamaUrl = (llmConfig.LLM === "ollama" && !llmConfig.OLLAMA_URL);
 
     const needsComfyUIConfig = !llmConfig.DISABLE_IMAGE_GENERATION &&
-      llmConfig.IMAGE_PROVIDER === "local" &&
-      (!llmConfig.LOCAL_IMAGE_URL || !llmConfig.LOCAL_IMAGE_WORKFLOW);
+      llmConfig.IMAGE_PROVIDER === "comfyui" &&
+      (!llmConfig.COMFYUI_URL || !llmConfig.COMFYUI_WORKFLOW);
 
     setButtonState({
       isLoading: false,
@@ -341,7 +341,7 @@ export default function LLMProviderSelection({
                 }
 
                 // Show ComfyUI configuration
-                if (provider.value === "local") {
+                if (provider.value === "comfyui") {
                   return (
                     <div className="mb-8 space-y-4">
                       <div>
@@ -353,9 +353,9 @@ export default function LLMProviderSelection({
                             type="text"
                             placeholder="http://192.168.1.7:8188"
                             className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                            value={llmConfig.LOCAL_IMAGE_URL || ""}
+                            value={llmConfig.COMFYUI_URL || ""}
                             onChange={(e) => {
-                              input_field_changed(e.target.value, "local_image_url");
+                              input_field_changed(e.target.value, "comfyui_url");
                             }}
                           />
                         </div>
@@ -370,18 +370,18 @@ export default function LLMProviderSelection({
                         </label>
                         <div className="relative">
                           <textarea
-                            placeholder='Paste your ComfyUI workflow JSON here (export via "Save (API Format)" in ComfyUI)'
+                            placeholder='Paste your ComfyUI workflow JSON here (export via "Export (API)" in ComfyUI)'
                             className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors font-mono text-xs"
                             rows={6}
-                            value={llmConfig.LOCAL_IMAGE_WORKFLOW || ""}
+                            value={llmConfig.COMFYUI_WORKFLOW || ""}
                             onChange={(e) => {
-                              input_field_changed(e.target.value, "local_image_workflow");
+                              input_field_changed(e.target.value, "comfyui_workflow");
                             }}
                           />
                         </div>
                         <p className="mt-2 text-sm text-gray-500">
-                          Export your workflow from ComfyUI using &quot;Save (API Format)&quot; and paste the JSON here.
-                          The positive prompt node (CLIPTextEncode) will be automatically updated.
+                          Export your workflow from ComfyUI using &quot;Export (API)&quot; and paste the JSON here.
+
                         </p>
                       </div>
                     </div>

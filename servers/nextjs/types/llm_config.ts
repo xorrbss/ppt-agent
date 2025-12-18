@@ -28,9 +28,9 @@ export interface LLMConfig {
   PEXELS_API_KEY?: string;
   PIXABAY_API_KEY?: string;
 
-  // Local Image Generation (ComfyUI)
-  LOCAL_IMAGE_URL?: string;
-  LOCAL_IMAGE_WORKFLOW?: string;  // ComfyUI workflow JSON
+  // ComfyUI
+  COMFYUI_URL?: string;
+  COMFYUI_WORKFLOW?: string;
 
   // Other Configs
   TOOL_CALLS?: boolean;

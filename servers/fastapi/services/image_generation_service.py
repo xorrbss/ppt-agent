@@ -11,15 +11,15 @@ from models.sql.image_asset import ImageAsset
 from utils.download_helpers import download_file
 from utils.get_env import get_pexels_api_key_env
 from utils.get_env import get_pixabay_api_key_env
-from utils.get_env import get_local_image_url_env
-from utils.get_env import get_local_image_workflow_env
+from utils.get_env import get_comfyui_url_env
+from utils.get_env import get_comfyui_workflow_env
 from utils.image_provider import (
     is_image_generation_disabled,
     is_pixels_selected,
     is_pixabay_selected,
     is_gemini_flash_selected,
     is_dalle3_selected,
-    is_local_selected,
+    is_comfyui_selected,
 )
 import uuid
 
@@ -42,8 +42,8 @@ class ImageGenerationService:
             return self.generate_image_google
         elif is_dalle3_selected():
             return self.generate_image_openai
-        elif is_local_selected():
-            return self.generate_image_local
+        elif is_comfyui_selected():
+            return self.generate_image_comfyui
         return None
 
     def is_stock_provider_selected(self):
@@ -145,13 +145,13 @@ class ImageGenerationService:
             image_url = data["hits"][0]["largeImageURL"]
             return image_url
 
-    async def generate_image_local(self, prompt: str, output_directory: str) -> str:
+    async def generate_image_comfyui(self, prompt: str, output_directory: str) -> str:
         """
         Generate image using ComfyUI workflow API.
         
         User provides:
-        - LOCAL_IMAGE_URL: ComfyUI server URL (e.g., http://192.168.1.7:8188)
-        - LOCAL_IMAGE_WORKFLOW: Workflow JSON exported from ComfyUI
+        - COMFYUI_URL: ComfyUI server URL (e.g., http://192.168.1.7:8188)
+        - COMFYUI_WORKFLOW: Workflow JSON exported from ComfyUI
         
         The workflow should have a CLIPTextEncode node with "Positive" in the title
         where the prompt will be injected.
@@ -163,14 +163,14 @@ class ImageGenerationService:
         Returns:
             Path to the generated image file
         """
-        comfyui_url = get_local_image_url_env()
-        workflow_json = get_local_image_workflow_env()
+        comfyui_url = get_comfyui_url_env()
+        workflow_json = get_comfyui_workflow_env()
         
         if not comfyui_url:
-            raise ValueError("LOCAL_IMAGE_URL environment variable is not set")
+            raise ValueError("COMFYUI_URL environment variable is not set")
         
         if not workflow_json:
-            raise ValueError("LOCAL_IMAGE_WORKFLOW environment variable is not set. Please provide a ComfyUI workflow JSON.")
+            raise ValueError("COMFYUI_WORKFLOW environment variable is not set. Please provide a ComfyUI workflow JSON.")
         
         # Ensure URL doesn't have trailing slash
         comfyui_url = comfyui_url.rstrip("/")
@@ -200,44 +200,22 @@ class ImageGenerationService:
     
     def _inject_prompt_into_workflow(self, workflow: dict, prompt: str) -> dict:
         """
-        Find the positive prompt node in the workflow and inject the prompt text.
-        Looks for CLIPTextEncode nodes with 'Positive' in the title.
+        Find the prompt node in the workflow and inject the prompt text.
+        Looks for a node with title 'Input Prompt' (case-insensitive).
+        
+        User must rename their prompt node to 'Input Prompt' in ComfyUI.
         """
-        prompt_injected = False
-        
         for node_id, node_data in workflow.items():
-            # Check if this is a CLIPTextEncode node
-            if node_data.get("class_type") == "CLIPTextEncode":
-                meta = node_data.get("_meta", {})
-                title = meta.get("title", "").lower()
-                
-                # Check if it's a positive prompt node
-                if "positive" in title:
-                    if "inputs" in node_data and "text" in node_data["inputs"]:
-                        node_data["inputs"]["text"] = prompt
-                        prompt_injected = True
-                        print(f"Injected prompt into node {node_id}: {title}")
-                        break
+            meta = node_data.get("_meta", {})
+            title = meta.get("title", "").lower()
+            
+            if title == "input prompt":
+                if "inputs" in node_data and "text" in node_data["inputs"]:
+                    node_data["inputs"]["text"] = prompt
+                    print(f"Injected prompt into node {node_id}: {meta.get('title', '')}")
+                    return workflow
         
-        if not prompt_injected:
-            # Fallback: try to find any CLIPTextEncode node with text input
-            for node_id, node_data in workflow.items():
-                if node_data.get("class_type") == "CLIPTextEncode":
-                    if "inputs" in node_data and "text" in node_data["inputs"]:
-                        # Skip if it looks like a negative prompt
-                        meta = node_data.get("_meta", {})
-                        title = meta.get("title", "").lower()
-                        if "negative" in title:
-                            continue
-                        node_data["inputs"]["text"] = prompt
-                        prompt_injected = True
-                        print(f"Injected prompt into node {node_id} (fallback)")
-                        break
-        
-        if not prompt_injected:
-            raise ValueError("Could not find a positive prompt node (CLIPTextEncode) in the workflow")
-        
-        return workflow
+        raise ValueError("Could not find a node with title 'Input Prompt' in the workflow. Please rename your prompt node to 'Input Prompt' in ComfyUI.")
     
     async def _submit_comfyui_workflow(
         self, session: aiohttp.ClientSession, comfyui_url: str, workflow: dict
