@@ -27,6 +27,10 @@ def is_gemini_flash_selected() -> bool:
     return ImageProvider.GEMINI_FLASH == get_selected_image_provider()
 
 
+def is_nanobanana_pro_selected() -> bool:
+    return ImageProvider.NANOBANANA_PRO == get_selected_image_provider()
+
+
 def is_dalle3_selected() -> bool:
     return ImageProvider.DALLE3 == get_selected_image_provider()
 

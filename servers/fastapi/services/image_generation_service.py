@@ -18,6 +18,7 @@ from utils.image_provider import (
     is_pixels_selected,
     is_pixabay_selected,
     is_gemini_flash_selected,
+    is_nanobanana_pro_selected,
     is_dalle3_selected,
     is_comfyui_selected,
 )
@@ -39,7 +40,9 @@ class ImageGenerationService:
         elif is_pixels_selected():
             return self.get_image_from_pexels
         elif is_gemini_flash_selected():
-            return self.generate_image_google
+            return self.generate_image_gemini_flash
+        elif is_nanobanana_pro_selected():
+            return self.generate_image_nanobanana_pro
         elif is_dalle3_selected():
             return self.generate_image_openai
         elif is_comfyui_selected():
@@ -95,10 +98,11 @@ class ImageGenerationService:
             print(f"Error generating image: {e}")
             return "/static/images/placeholder.jpg"
 
-    async def generate_image_openai(self, prompt: str, output_directory: str) -> str:
+    async def generate_image_openai(self, prompt: str, output_directory: str,model: str = "dall-e-3") -> str:
+    
         client = AsyncOpenAI()
         result = await client.images.generate(
-            model="dall-e-3",
+            model=model,
             prompt=prompt,
             n=1,
             quality="standard",
@@ -107,11 +111,12 @@ class ImageGenerationService:
         image_url = result.data[0].url
         return await download_file(image_url, output_directory)
 
-    async def generate_image_google(self, prompt: str, output_directory: str) -> str:
+    async def _generate_image_google(self, prompt: str, output_directory: str, model: str) -> str:
+        """Base method for Google image generation models."""
         client = genai.Client()
         response = await asyncio.to_thread(
             client.models.generate_content,
-            model="gemini-2.5-flash-image-preview",
+            model=model,
             contents=[prompt],
             config=GenerateContentConfig(response_modalities=["TEXT", "IMAGE"]),
         )
@@ -125,6 +130,14 @@ class ImageGenerationService:
                     f.write(part.inline_data.data)
 
         return image_path
+
+    async def generate_image_gemini_flash(self, prompt: str, output_directory: str) -> str:
+        """Generate image using Gemini Flash (gemini-2.5-flash-image-preview)."""
+        return await self._generate_image_google(prompt, output_directory, "gemini-2.5-flash-image-preview")
+
+    async def generate_image_nanobanana_pro(self, prompt: str, output_directory: str) -> str:
+        """Generate image using NanoBanana Pro (gemini-3-pro-image-preview)."""
+        return await self._generate_image_google(prompt, output_directory, "gemini-3-pro-image-preview")
 
     async def get_image_from_pexels(self, prompt: str) -> str:
         async with aiohttp.ClientSession(trust_env=True) as session:
