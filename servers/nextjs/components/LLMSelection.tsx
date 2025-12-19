@@ -74,6 +74,7 @@ export default function LLMProviderSelection({
       (
         (llmConfig.IMAGE_PROVIDER === "dall-e-3" && !llmConfig.OPENAI_API_KEY) ||
         (llmConfig.IMAGE_PROVIDER === "gemini_flash" && !llmConfig.GOOGLE_API_KEY) ||
+        (llmConfig.IMAGE_PROVIDER === "nanobanana_pro" && !llmConfig.GOOGLE_API_KEY) ||
         (llmConfig.IMAGE_PROVIDER === "pexels" && !llmConfig.PEXELS_API_KEY) ||
         (llmConfig.IMAGE_PROVIDER === "pixabay" && !llmConfig.PIXABAY_API_KEY)
       );
@@ -337,6 +338,10 @@ export default function LLMProviderSelection({
                 }
 
                 if (provider.value === "gemini_flash" && llmConfig.LLM === "google") {
+                  return <></>;
+                }
+
+                if (provider.value === "nanobanana_pro" && llmConfig.LLM === "google") {
                   return <></>;
                 }
 

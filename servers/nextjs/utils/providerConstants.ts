@@ -55,7 +55,16 @@ export const IMAGE_PROVIDERS: Record<string, ImageProviderOption> = {
   gemini_flash: {
     value: "gemini_flash",
     label: "Gemini Flash",
-    description: "Google's primary image generation model",
+    description: "Google's fast image generation model",
+    icon: "/icons/google.png",
+    requiresApiKey: true,
+    apiKeyField: "GOOGLE_API_KEY",
+    apiKeyFieldLabel: "Google API Key"
+  },
+  nanobanana_pro: {
+    value: "nanobanana_pro",
+    label: "NanoBanana Pro",
+    description: "Google's advanced image generation (4K, better quality)",
     icon: "/icons/google.png",
     requiresApiKey: true,
     apiKeyField: "GOOGLE_API_KEY",
