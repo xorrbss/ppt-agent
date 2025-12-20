@@ -102,19 +102,21 @@ You may want to directly provide your API KEYS as environment variables and keep
 You can also set the following environment variables to customize the image generation provider and API keys:
 
 - **DISABLE_IMAGE_GENERATION**: If **true**, Image Generation will be disabled for slides.
-- **IMAGE_PROVIDER=[pexels/pixabay/gemini_flash/dall-e-3]**: Select the image provider of your choice.
+- **IMAGE_PROVIDER=[dall-e-3/gpt-image-1.5/gemini_flash/nanobanana_pro/pexels/pixabay/comfyui]**: Select the image provider of your choice.
   - Required if **DISABLE_IMAGE_GENERATION** is not set to **true**.
-  - Defaults to **dall-e-3** for OpenAI models, **gemini_flash** for Google models if not set.
+- **OPENAI_API_KEY=[Your OpenAI API Key]**: Required if using **dall-e-3** or **gpt-image-1.5** as the image provider.
+- **DALL_E_3_QUALITY=[standard/hd]**: Optional quality setting for **dall-e-3** (default: `standard`).
+- **GPT_IMAGE_1_5_QUALITY=[low/medium/high]**: Optional quality setting for **gpt-image-1.5** (default: `medium`).
+- **GOOGLE_API_KEY=[Your Google API Key]**: Required if using **gemini_flash** or **nanobanana_pro** as the image provider.
 - **PEXELS_API_KEY=[Your Pexels API Key]**: Required if using **pexels** as the image provider.
 - **PIXABAY_API_KEY=[Your Pixabay API Key]**: Required if using **pixabay** as the image provider.
-- **GOOGLE_API_KEY=[Your Google API Key]**: Required if using **gemini_flash** as the image provider.
-- **OPENAI_API_KEY=[Your OpenAI API Key]**: Required if using **dall-e-3** as the image provider.
+- **COMFYUI_URL=[Your ComfyUI server URL]** and **COMFYUI_WORKFLOW=[Workflow JSON]**: Required if using **comfyui** to route prompts to a self-hosted ComfyUI workflow.
 
 You can disable anonymous telemetry using the following environment variable:
 
 - **DISABLE_ANONYMOUS_TELEMETRY=[true/false]**: Set this to **true** to disable anonymous telemetry.
 
-> **Note:** You can freely choose both the LLM (text generation) and the image provider. Supported image providers: **pexels**, **pixabay**, **gemini_flash** (Google), and **dall-e-3** (OpenAI).
+> **Note:** You can freely choose both the LLM (text generation) and the image provider. Supported image providers: **dall-e-3**, **gpt-image-1.5** (OpenAI), **gemini_flash**, **nanobanana_pro** (Google), **pexels**, **pixabay**, and **comfyui** (self-hosted).
 
 ### Using OpenAI
 
