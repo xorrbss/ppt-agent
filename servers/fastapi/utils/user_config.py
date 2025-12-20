@@ -10,10 +10,12 @@ from utils.get_env import (
     get_custom_llm_api_key_env,
     get_custom_llm_url_env,
     get_custom_model_env,
+    get_dall_e_3_quality_env,
     get_disable_image_generation_env,
     get_disable_thinking_env,
     get_google_api_key_env,
     get_google_model_env,
+    get_gpt_image_1_5_quality_env,
     get_llm_provider_env,
     get_ollama_model_env,
     get_ollama_url_env,
@@ -36,11 +38,13 @@ from utils.set_env import (
     set_custom_llm_api_key_env,
     set_custom_llm_url_env,
     set_custom_model_env,
+    set_dall_e_3_quality_env,
     set_disable_image_generation_env,
     set_disable_thinking_env,
     set_extended_reasoning_env,
     set_google_api_key_env,
     set_google_model_env,
+    set_gpt_image_1_5_quality_env,
     set_llm_provider_env,
     set_ollama_model_env,
     set_ollama_url_env,
@@ -91,6 +95,9 @@ def get_user_config():
         PEXELS_API_KEY=existing_config.PEXELS_API_KEY or get_pexels_api_key_env(),
         COMFYUI_URL=existing_config.COMFYUI_URL or get_comfyui_url_env(),
         COMFYUI_WORKFLOW=existing_config.COMFYUI_WORKFLOW or get_comfyui_workflow_env(),
+        DALL_E_3_QUALITY=existing_config.DALL_E_3_QUALITY or get_dall_e_3_quality_env(),
+        GPT_IMAGE_1_5_QUALITY=existing_config.GPT_IMAGE_1_5_QUALITY
+        or get_gpt_image_1_5_quality_env(),
         TOOL_CALLS=(
             existing_config.TOOL_CALLS
             if existing_config.TOOL_CALLS is not None
@@ -152,6 +159,10 @@ def update_env_with_user_config():
         set_comfyui_url_env(user_config.COMFYUI_URL)
     if user_config.COMFYUI_WORKFLOW:
         set_comfyui_workflow_env(user_config.COMFYUI_WORKFLOW)
+    if user_config.DALL_E_3_QUALITY:
+        set_dall_e_3_quality_env(user_config.DALL_E_3_QUALITY)
+    if user_config.GPT_IMAGE_1_5_QUALITY:
+        set_gpt_image_1_5_quality_env(user_config.GPT_IMAGE_1_5_QUALITY)
     if user_config.TOOL_CALLS is not None:
         set_tool_calls_env(str(user_config.TOOL_CALLS))
     if user_config.DISABLE_THINKING is not None:

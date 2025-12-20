@@ -50,6 +50,8 @@ export const updateLLMConfig = (
     web_grounding: "WEB_GROUNDING",
     comfyui_url: "COMFYUI_URL",
     comfyui_workflow: "COMFYUI_WORKFLOW",
+    dall_e_3_quality: "DALL_E_3_QUALITY",
+    gpt_image_1_5_quality: "GPT_IMAGE_1_5_QUALITY",
   };
 
   const configKey = fieldMappings[field];
@@ -71,7 +73,7 @@ export const changeProvider = (
 
   // Auto Select appropriate image provider based on the text models
   if (provider === "openai") {
-    newConfig.IMAGE_PROVIDER = "dall-e-3";
+    newConfig.IMAGE_PROVIDER = "gpt-image-1.5";
   } else if (provider === "google") {
     newConfig.IMAGE_PROVIDER = "gemini_flash";
   } else {
