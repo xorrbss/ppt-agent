@@ -1,12 +1,7 @@
 from enums.image_provider import ImageProvider
 from utils.get_env import (
-    get_comfyui_url_env,
     get_disable_image_generation_env,
-    get_google_api_key_env,
     get_image_provider_env,
-    get_openai_api_key_env,
-    get_pexels_api_key_env,
-    get_pixabay_api_key_env,
 )
 from utils.parsers import parse_bool_or_none
 
@@ -35,6 +30,10 @@ def is_dalle3_selected() -> bool:
     return ImageProvider.DALLE3 == get_selected_image_provider()
 
 
+def is_gpt_image_1_5_selected() -> bool:
+    return ImageProvider.GPT_IMAGE_1_5 == get_selected_image_provider()
+
+
 def is_comfyui_selected() -> bool:
     return ImageProvider.COMFYUI == get_selected_image_provider()
 
@@ -49,19 +48,3 @@ def get_selected_image_provider() -> ImageProvider | None:
     if image_provider_env:
         return ImageProvider(image_provider_env)
     return None
-
-
-def get_image_provider_api_key() -> str:
-    selected_image_provider = get_selected_image_provider()
-    if selected_image_provider == ImageProvider.PEXELS:
-        return get_pexels_api_key_env()
-    elif selected_image_provider == ImageProvider.PIXABAY:
-        return get_pixabay_api_key_env()
-    elif selected_image_provider == ImageProvider.GEMINI_FLASH:
-        return get_google_api_key_env()
-    elif selected_image_provider == ImageProvider.DALLE3:
-        return get_openai_api_key_env()
-    elif selected_image_provider == ImageProvider.COMFYUI:
-        return get_comfyui_url_env()  # Returns URL instead of API key
-    else:
-        raise ValueError(f"Invalid image provider: {selected_image_provider}")

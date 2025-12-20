@@ -65,7 +65,12 @@ export async function POST(request: Request) {
     IMAGE_PROVIDER: userConfig.IMAGE_PROVIDER || existingConfig.IMAGE_PROVIDER,
     PEXELS_API_KEY: userConfig.PEXELS_API_KEY || existingConfig.PEXELS_API_KEY,
     COMFYUI_URL: userConfig.COMFYUI_URL || existingConfig.COMFYUI_URL,
-    COMFYUI_WORKFLOW: userConfig.COMFYUI_WORKFLOW || existingConfig.COMFYUI_WORKFLOW,
+    COMFYUI_WORKFLOW:
+      userConfig.COMFYUI_WORKFLOW || existingConfig.COMFYUI_WORKFLOW,
+    DALL_E_3_QUALITY:
+      userConfig.DALL_E_3_QUALITY || existingConfig.DALL_E_3_QUALITY,
+    GPT_IMAGE_1_5_QUALITY:
+      userConfig.GPT_IMAGE_1_5_QUALITY || existingConfig.GPT_IMAGE_1_5_QUALITY,
     TOOL_CALLS:
       userConfig.TOOL_CALLS === undefined
         ? existingConfig.TOOL_CALLS

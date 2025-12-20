@@ -32,6 +32,11 @@ export interface LLMConfig {
   COMFYUI_URL?: string;
   COMFYUI_WORKFLOW?: string;
 
+  // Dalle 3 Quality
+  DALL_E_3_QUALITY?: string;
+  // GPT Image 1.5 Quality
+  GPT_IMAGE_1_5_QUALITY?: string;
+
   // Other Configs
   TOOL_CALLS?: boolean;
   DISABLE_THINKING?: boolean;

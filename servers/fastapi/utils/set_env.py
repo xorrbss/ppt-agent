@@ -95,3 +95,11 @@ def set_comfyui_url_env(value):
 
 def set_comfyui_workflow_env(value):
     os.environ["COMFYUI_WORKFLOW"] = value
+
+
+def set_dall_e_3_quality_env(value):
+    os.environ["DALL_E_3_QUALITY"] = value
+
+
+def set_gpt_image_1_5_quality_env(value):
+    os.environ["GPT_IMAGE_1_5_QUALITY"] = value

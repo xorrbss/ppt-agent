@@ -128,15 +128,22 @@ async def check_llm_and_image_provider_api_or_model_availability():
             if not pixabay_api_key:
                 raise Exception("PIXABAY_API_KEY must be provided")
 
-        elif selected_image_provider == ImageProvider.GEMINI_FLASH:
+        elif (
+            selected_image_provider == ImageProvider.GEMINI_FLASH
+            or selected_image_provider == ImageProvider.NANOBANANA_PRO
+        ):
             google_api_key = get_google_api_key_env()
             if not google_api_key:
                 raise Exception("GOOGLE_API_KEY must be provided")
 
-        elif selected_image_provider == ImageProvider.DALLE3:
+        elif (
+            selected_image_provider == ImageProvider.DALLE3
+            or selected_image_provider == ImageProvider.GPT_IMAGE_1_5
+        ):
             openai_api_key = get_openai_api_key_env()
             if not openai_api_key:
                 raise Exception("OPENAI_API_KEY must be provided")
+
         elif selected_image_provider == ImageProvider.COMFYUI:
             comfyui_url = get_comfyui_url_env()
             if not comfyui_url:

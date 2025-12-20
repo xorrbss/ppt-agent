@@ -16,7 +16,8 @@ export const handleSaveLLMConfig = async (llmConfig: LLMConfig) => {
 
 export const hasValidLLMConfig = (llmConfig: LLMConfig) => {
   if (!llmConfig.LLM) return false;
-  if (!llmConfig.DISABLE_IMAGE_GENERATION && !llmConfig.IMAGE_PROVIDER) return false;
+  if (!llmConfig.DISABLE_IMAGE_GENERATION && !llmConfig.IMAGE_PROVIDER)
+    return false;
 
   const isOpenAIConfigValid =
     llmConfig.OPENAI_MODEL !== "" &&
@@ -71,6 +72,8 @@ export const hasValidLLMConfig = (llmConfig: LLMConfig) => {
         return llmConfig.PIXABAY_API_KEY && llmConfig.PIXABAY_API_KEY !== "";
       case "dall-e-3":
         return llmConfig.OPENAI_API_KEY && llmConfig.OPENAI_API_KEY !== "";
+      case "gpt-image-1.5":
+        return llmConfig.OPENAI_API_KEY && llmConfig.OPENAI_API_KEY !== "";
       case "gemini_flash":
         return llmConfig.GOOGLE_API_KEY && llmConfig.GOOGLE_API_KEY !== "";
       case "nanobanana_pro":
@@ -86,14 +89,14 @@ export const hasValidLLMConfig = (llmConfig: LLMConfig) => {
     llmConfig.LLM === "openai"
       ? isOpenAIConfigValid
       : llmConfig.LLM === "google"
-        ? isGoogleConfigValid
-        : llmConfig.LLM === "anthropic"
-          ? isAnthropicConfigValid
-          : llmConfig.LLM === "ollama"
-            ? isOllamaConfigValid
-            : llmConfig.LLM === "custom"
-              ? isCustomConfigValid
-              : false;
+      ? isGoogleConfigValid
+      : llmConfig.LLM === "anthropic"
+      ? isAnthropicConfigValid
+      : llmConfig.LLM === "ollama"
+      ? isOllamaConfigValid
+      : llmConfig.LLM === "custom"
+      ? isCustomConfigValid
+      : false;
 
   return isLLMConfigValid && isImageConfigValid();
 };

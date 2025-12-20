@@ -26,6 +26,37 @@ import {
 import { IMAGE_PROVIDERS, LLM_PROVIDERS } from "@/utils/providerConstants";
 import { LLMConfig } from "@/types/llm_config";
 
+const DALLE_3_QUALITY_OPTIONS = [
+  {
+    label: "Standard",
+    value: "standard",
+    description: "Faster generation with lower cost",
+  },
+  {
+    label: "HD",
+    value: "hd",
+    description: "Higher quality images with increased cost",
+  },
+];
+
+const GPT_IMAGE_1_5_QUALITY_OPTIONS = [
+  {
+    label: "Low",
+    value: "low",
+    description: "Fastest and most cost-effective",
+  },
+  {
+    label: "Medium",
+    value: "medium",
+    description: "Balanced quality and speed",
+  },
+  {
+    label: "High",
+    value: "high",
+    description: "Best quality with longer generation time",
+  },
+];
+
 // Button state interface
 interface ButtonState {
   isLoading: boolean;
@@ -40,7 +71,9 @@ interface LLMProviderSelectionProps {
   initialLLMConfig: LLMConfig;
   onConfigChange: (config: LLMConfig) => void;
   buttonState: ButtonState;
-  setButtonState: (state: ButtonState | ((prev: ButtonState) => ButtonState)) => void;
+  setButtonState: (
+    state: ButtonState | ((prev: ButtonState) => ButtonState)
+  ) => void;
 }
 
 export default function LLMProviderSelection({
@@ -71,34 +104,87 @@ export default function LLMProviderSelection({
 
     const needsImageProviderApiKey =
       !llmConfig.DISABLE_IMAGE_GENERATION &&
-      (
-        (llmConfig.IMAGE_PROVIDER === "dall-e-3" && !llmConfig.OPENAI_API_KEY) ||
-        (llmConfig.IMAGE_PROVIDER === "gemini_flash" && !llmConfig.GOOGLE_API_KEY) ||
-        (llmConfig.IMAGE_PROVIDER === "nanobanana_pro" && !llmConfig.GOOGLE_API_KEY) ||
+      ((llmConfig.IMAGE_PROVIDER === "dall-e-3" && !llmConfig.OPENAI_API_KEY) ||
+        (llmConfig.IMAGE_PROVIDER === "gpt-image-1.5" &&
+          !llmConfig.OPENAI_API_KEY) ||
+        (llmConfig.IMAGE_PROVIDER === "gemini_flash" &&
+          !llmConfig.GOOGLE_API_KEY) ||
+        (llmConfig.IMAGE_PROVIDER === "nanobanana_pro" &&
+          !llmConfig.GOOGLE_API_KEY) ||
         (llmConfig.IMAGE_PROVIDER === "pexels" && !llmConfig.PEXELS_API_KEY) ||
-        (llmConfig.IMAGE_PROVIDER === "pixabay" && !llmConfig.PIXABAY_API_KEY)
-      );
+        (llmConfig.IMAGE_PROVIDER === "pixabay" && !llmConfig.PIXABAY_API_KEY));
 
     const needsApiKey = needsProviderApiKey || needsImageProviderApiKey;
 
-    const needsOllamaUrl = (llmConfig.LLM === "ollama" && !llmConfig.OLLAMA_URL);
+    const needsOllamaUrl = llmConfig.LLM === "ollama" && !llmConfig.OLLAMA_URL;
 
-    const needsComfyUIConfig = !llmConfig.DISABLE_IMAGE_GENERATION &&
+    const needsComfyUIConfig =
+      !llmConfig.DISABLE_IMAGE_GENERATION &&
       llmConfig.IMAGE_PROVIDER === "comfyui" &&
       (!llmConfig.COMFYUI_URL || !llmConfig.COMFYUI_WORKFLOW);
 
     setButtonState({
       isLoading: false,
-      isDisabled: needsModelSelection || needsApiKey || needsOllamaUrl || needsComfyUIConfig,
-      text: needsModelSelection ? "Please Select a Model" : needsApiKey ? "Please Enter API Key" : needsOllamaUrl ? "Please Enter Ollama URL" : needsComfyUIConfig ? "Please Configure ComfyUI" : "Save Configuration",
-      showProgress: false
+      isDisabled:
+        needsModelSelection ||
+        needsApiKey ||
+        needsOllamaUrl ||
+        needsComfyUIConfig,
+      text: needsModelSelection
+        ? "Please Select a Model"
+        : needsApiKey
+        ? "Please Enter API Key"
+        : needsOllamaUrl
+        ? "Please Enter Ollama URL"
+        : needsComfyUIConfig
+        ? "Please Configure ComfyUI"
+        : "Save Configuration",
+      showProgress: false,
     });
-
   }, [llmConfig]);
 
   const input_field_changed = (new_value: string | boolean, field: string) => {
     const updatedConfig = updateLLMConfig(llmConfig, field, new_value);
     setLlmConfig(updatedConfig);
+  };
+
+  const getApiKeyValue = (field?: string) => {
+    switch (field) {
+      case "OPENAI_API_KEY":
+        return llmConfig.OPENAI_API_KEY || "";
+      case "GOOGLE_API_KEY":
+        return llmConfig.GOOGLE_API_KEY || "";
+      case "ANTHROPIC_API_KEY":
+        return llmConfig.ANTHROPIC_API_KEY || "";
+      case "PEXELS_API_KEY":
+        return llmConfig.PEXELS_API_KEY || "";
+      case "PIXABAY_API_KEY":
+        return llmConfig.PIXABAY_API_KEY || "";
+      default:
+        return "";
+    }
+  };
+
+  const handleApiKeyInputChange = (field: string | undefined, value: string) => {
+    switch (field) {
+      case "OPENAI_API_KEY":
+        input_field_changed(value, "openai_api_key");
+        break;
+      case "GOOGLE_API_KEY":
+        input_field_changed(value, "google_api_key");
+        break;
+      case "ANTHROPIC_API_KEY":
+        input_field_changed(value, "anthropic_api_key");
+        break;
+      case "PEXELS_API_KEY":
+        input_field_changed(value, "pexels_api_key");
+        break;
+      case "PIXABAY_API_KEY":
+        input_field_changed(value, "pixabay_api_key");
+        break;
+      default:
+        break;
+    }
   };
 
   const handleProviderChange = (provider: string) => {
@@ -122,7 +208,7 @@ export default function LLMProviderSelection({
 
       if (!prevConfig.DISABLE_IMAGE_GENERATION && !prevConfig.IMAGE_PROVIDER) {
         if (prevConfig.LLM === "openai") {
-          updates.IMAGE_PROVIDER = "dall-e-3";
+          updates.IMAGE_PROVIDER = "gpt-image-1.5";
         } else if (prevConfig.LLM === "google") {
           updates.IMAGE_PROVIDER = "gemini_flash";
         } else {
@@ -142,6 +228,104 @@ export default function LLMProviderSelection({
     });
   }, []);
 
+  useEffect(() => {
+    setLlmConfig((prevConfig) => {
+      const updates: Partial<LLMConfig> = {};
+
+      if (
+        prevConfig.IMAGE_PROVIDER === "dall-e-3" &&
+        !prevConfig.DALL_E_3_QUALITY
+      ) {
+        updates.DALL_E_3_QUALITY = "standard";
+      }
+
+      if (
+        prevConfig.IMAGE_PROVIDER === "gpt-image-1.5" &&
+        !prevConfig.GPT_IMAGE_1_5_QUALITY
+      ) {
+        updates.GPT_IMAGE_1_5_QUALITY = "medium";
+      }
+
+      if (Object.keys(updates).length === 0) {
+        return prevConfig;
+      }
+
+      return { ...prevConfig, ...updates };
+    });
+  }, [llmConfig.IMAGE_PROVIDER]);
+
+  const renderQualitySelector = () => {
+    if (llmConfig.IMAGE_PROVIDER === "dall-e-3") {
+      return (
+        <div className="mb-8">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            DALL·E 3 Image Quality
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            {DALLE_3_QUALITY_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={cn(
+                  "border rounded-lg p-3 text-left transition-colors",
+                  llmConfig.DALL_E_3_QUALITY === option.value
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-gray-200 hover:border-gray-300"
+                )}
+                onClick={() =>
+                  input_field_changed(option.value, "dall_e_3_quality")
+                }
+              >
+                <div className="text-sm font-medium text-gray-900">
+                  {option.label}
+                </div>
+                <div className="text-xs text-gray-600 mt-1">
+                  {option.description}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (llmConfig.IMAGE_PROVIDER === "gpt-image-1.5") {
+      return (
+        <div className="mb-8">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            GPT Image 1.5 Quality
+          </label>
+          <div className="grid grid-cols-3 gap-3">
+            {GPT_IMAGE_1_5_QUALITY_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={cn(
+                  "border rounded-lg p-3 text-left transition-colors",
+                  llmConfig.GPT_IMAGE_1_5_QUALITY === option.value
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-gray-200 hover:border-gray-300"
+                )}
+                onClick={() =>
+                  input_field_changed(option.value, "gpt_image_1_5_quality")
+                }
+              >
+                <div className="text-sm font-medium text-gray-900">
+                  {option.label}
+                </div>
+                <div className="text-xs text-gray-600 mt-1">
+                  {option.description}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
   return (
     <div className="h-full flex flex-col mt-10">
       {/* Provider Selection - Fixed Header */}
@@ -160,7 +344,6 @@ export default function LLMProviderSelection({
           </TabsList>
         </Tabs>
       </div>
-
 
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto p-6 pt-0 custom_scrollbar">
@@ -241,7 +424,8 @@ export default function LLMProviderSelection({
           </div>
           <p className="text-sm text-gray-500 flex items-center gap-2">
             <span className="block w-1 h-1 rounded-full bg-gray-400"></span>
-            When enabled, slides will not include automatically generated images.
+            When enabled, slides will not include automatically generated
+            images.
           </p>
         </div>
 
@@ -267,8 +451,8 @@ export default function LLMProviderSelection({
                       <div className="flex gap-3 items-center">
                         <span className="text-sm font-medium text-gray-900">
                           {llmConfig.IMAGE_PROVIDER
-                            ? IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]?.label ||
-                            llmConfig.IMAGE_PROVIDER
+                            ? IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]
+                                ?.label || llmConfig.IMAGE_PROVIDER
                             : "Select image provider"}
                         </span>
                       </div>
@@ -326,6 +510,8 @@ export default function LLMProviderSelection({
               </div>
             </div>
 
+            {renderQualitySelector()}
+
             {/* Dynamic API Key Input for Image Provider */}
             {llmConfig.IMAGE_PROVIDER &&
               IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER] &&
@@ -333,15 +519,31 @@ export default function LLMProviderSelection({
                 const provider = IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER];
 
                 // Show info message when using same API key as main provider
-                if (provider.value === "dall-e-3" && llmConfig.LLM === "openai") {
+                if (
+                  provider.value === "dall-e-3" &&
+                  llmConfig.LLM === "openai"
+                ) {
                   return <></>;
                 }
 
-                if (provider.value === "gemini_flash" && llmConfig.LLM === "google") {
+                if (
+                  provider.value === "gpt-image-1.5" &&
+                  llmConfig.LLM === "openai"
+                ) {
                   return <></>;
                 }
 
-                if (provider.value === "nanobanana_pro" && llmConfig.LLM === "google") {
+                if (
+                  provider.value === "gemini_flash" &&
+                  llmConfig.LLM === "google"
+                ) {
+                  return <></>;
+                }
+
+                if (
+                  provider.value === "nanobanana_pro" &&
+                  llmConfig.LLM === "google"
+                ) {
                   return <></>;
                 }
 
@@ -360,13 +562,17 @@ export default function LLMProviderSelection({
                             className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
                             value={llmConfig.COMFYUI_URL || ""}
                             onChange={(e) => {
-                              input_field_changed(e.target.value, "comfyui_url");
+                              input_field_changed(
+                                e.target.value,
+                                "comfyui_url"
+                              );
                             }}
                           />
                         </div>
                         <p className="mt-2 text-sm text-gray-500 flex items-center gap-2">
                           <span className="block w-1 h-1 rounded-full bg-gray-400"></span>
-                          Use your machine IP address (not localhost) when running in Docker
+                          Use your machine IP address (not localhost) when
+                          running in Docker
                         </p>
                       </div>
                       <div>
@@ -380,13 +586,16 @@ export default function LLMProviderSelection({
                             rows={6}
                             value={llmConfig.COMFYUI_WORKFLOW || ""}
                             onChange={(e) => {
-                              input_field_changed(e.target.value, "comfyui_workflow");
+                              input_field_changed(
+                                e.target.value,
+                                "comfyui_workflow"
+                              );
                             }}
                           />
                         </div>
                         <p className="mt-2 text-sm text-gray-500">
-                          Export your workflow from ComfyUI using &quot;Export (API)&quot; and paste the JSON here.
-
+                          Export your workflow from ComfyUI using &quot;Export
+                          (API)&quot; and paste the JSON here.
                         </p>
                       </div>
                     </div>
@@ -404,20 +613,13 @@ export default function LLMProviderSelection({
                         type="text"
                         placeholder={`Enter your ${provider.apiKeyFieldLabel}`}
                         className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                        value={
-                          provider.apiKeyField === "PEXELS_API_KEY"
-                            ? llmConfig.PEXELS_API_KEY || ""
-                            : provider.apiKeyField === "PIXABAY_API_KEY"
-                              ? llmConfig.PIXABAY_API_KEY || ""
-                              : ""
+                        value={getApiKeyValue(provider.apiKeyField)}
+                        onChange={(e) =>
+                          handleApiKeyInputChange(
+                            provider.apiKeyField,
+                            e.target.value
+                          )
                         }
-                        onChange={(e) => {
-                          if (provider.apiKeyField === "PEXELS_API_KEY") {
-                            input_field_changed(e.target.value, "pexels_api_key");
-                          } else if (provider.apiKeyField === "PIXABAY_API_KEY") {
-                            input_field_changed(e.target.value, "pixabay_api_key");
-                          }
-                        }}
                       />
                     </div>
                     <p className="mt-2 text-sm text-gray-500 flex items-center gap-2">
@@ -443,14 +645,14 @@ export default function LLMProviderSelection({
                 {llmConfig.LLM === "ollama"
                   ? llmConfig.OLLAMA_MODEL ?? "xxxxx"
                   : llmConfig.LLM === "custom"
-                    ? llmConfig.CUSTOM_MODEL ?? "xxxxx"
-                    : llmConfig.LLM === "anthropic"
-                      ? llmConfig.ANTHROPIC_MODEL ?? "xxxxx"
-                      : llmConfig.LLM === "google"
-                        ? llmConfig.GOOGLE_MODEL ?? "xxxxx"
-                        : llmConfig.LLM === "openai"
-                          ? llmConfig.OPENAI_MODEL ?? "xxxxx"
-                          : "xxxxx"}{" "}
+                  ? llmConfig.CUSTOM_MODEL ?? "xxxxx"
+                  : llmConfig.LLM === "anthropic"
+                  ? llmConfig.ANTHROPIC_MODEL ?? "xxxxx"
+                  : llmConfig.LLM === "google"
+                  ? llmConfig.GOOGLE_MODEL ?? "xxxxx"
+                  : llmConfig.LLM === "openai"
+                  ? llmConfig.OPENAI_MODEL ?? "xxxxx"
+                  : "xxxxx"}{" "}
                 for text generation{" "}
                 {isImageGenerationDisabled ? (
                   "and image generation is disabled."
@@ -458,7 +660,7 @@ export default function LLMProviderSelection({
                   <>
                     and{" "}
                     {llmConfig.IMAGE_PROVIDER &&
-                      IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]
+                    IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]
                       ? IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER].label
                       : "xxxxx"}{" "}
                     for images
@@ -468,8 +670,7 @@ export default function LLMProviderSelection({
             </div>
           </div>
         </div>
-
       </div>
     </div>
   );
-} 
+}

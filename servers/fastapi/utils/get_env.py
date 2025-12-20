@@ -107,3 +107,13 @@ def get_comfyui_url_env():
 
 def get_comfyui_workflow_env():
     return os.getenv("COMFYUI_WORKFLOW")
+
+
+# Dalle 3 Quality
+def get_dall_e_3_quality_env():
+    return os.getenv("DALL_E_3_QUALITY")
+
+
+# Gpt Image 1.5 Quality
+def get_gpt_image_1_5_quality_env():
+    return os.getenv("GPT_IMAGE_1_5_QUALITY")
