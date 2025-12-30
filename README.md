@@ -102,7 +102,7 @@ You may want to directly provide your API KEYS as environment variables and keep
 You can also set the following environment variables to customize the image generation provider and API keys:
 
 - **DISABLE_IMAGE_GENERATION**: If **true**, Image Generation will be disabled for slides.
-- **IMAGE_PROVIDER=[dall-e-3/gpt-image-1.5/gemini_flash/nanobanana_pro/pexels/pixabay/comfyui]**: Select the image provider of your choice.
+- **IMAGE_PROVIDER=[dall-e-3/gpt-image-1.5/gemini_flash/nanobanana_pro/pexels/pixabay/comfyui/openai_compatible]**: Select the image provider of your choice.
   - Required if **DISABLE_IMAGE_GENERATION** is not set to **true**.
 - **OPENAI_API_KEY=[Your OpenAI API Key]**: Required if using **dall-e-3** or **gpt-image-1.5** as the image provider.
 - **DALL_E_3_QUALITY=[standard/hd]**: Optional quality setting for **dall-e-3** (default: `standard`).
@@ -111,12 +111,13 @@ You can also set the following environment variables to customize the image gene
 - **PEXELS_API_KEY=[Your Pexels API Key]**: Required if using **pexels** as the image provider.
 - **PIXABAY_API_KEY=[Your Pixabay API Key]**: Required if using **pixabay** as the image provider.
 - **COMFYUI_URL=[Your ComfyUI server URL]** and **COMFYUI_WORKFLOW=[Workflow JSON]**: Required if using **comfyui** to route prompts to a self-hosted ComfyUI workflow.
+- **OPENAI_COMPAT_IMAGE_BASE_URL=[Custom Images API URL]**, **OPENAI_COMPAT_IMAGE_API_KEY=[API Key]**, **OPENAI_COMPAT_IMAGE_MODEL=[Model ID]**: Required if using **openai_compatible** to send image requests to any OpenAI-compatible `/v1/images/*` endpoint (LiteLLM, Azure, vLLM gateways, etc.).
 
 You can disable anonymous telemetry using the following environment variable:
 
 - **DISABLE_ANONYMOUS_TELEMETRY=[true/false]**: Set this to **true** to disable anonymous telemetry.
 
-> **Note:** You can freely choose both the LLM (text generation) and the image provider. Supported image providers: **dall-e-3**, **gpt-image-1.5** (OpenAI), **gemini_flash**, **nanobanana_pro** (Google), **pexels**, **pixabay**, and **comfyui** (self-hosted).
+> **Note:** You can freely choose both the LLM (text generation) and the image provider. Supported image providers: **dall-e-3**, **gpt-image-1.5** (OpenAI), **gemini_flash**, **nanobanana_pro** (Google), **pexels**, **pixabay**, **comfyui** (self-hosted), and **openai_compatible** (any OpenAI-compatible Images API).
 
 ### Using OpenAI
 
@@ -147,6 +148,19 @@ docker run -it --name presenton -p 5000:80 -e LLM="anthropic" -e ANTHROPIC_API_K
 ```bash
 docker run -it -p 5000:80 -e CAN_CHANGE_KEYS="false"  -e LLM="custom" -e CUSTOM_LLM_URL="http://*****" -e CUSTOM_LLM_API_KEY="*****" -e CUSTOM_MODEL="llama3.2:3b" -e IMAGE_PROVIDER="pexels" -e  PEXELS_API_KEY="********" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest
 ```
+
+### Using an OpenAI-Compatible Image Provider
+
+```bash
+docker run -it --name presenton -p 5000:80 \
+  -e IMAGE_PROVIDER="openai_compatible" \
+  -e OPENAI_COMPAT_IMAGE_BASE_URL="https://proxy.example.com/v1" \
+  -e OPENAI_COMPAT_IMAGE_API_KEY="******" \
+  -e OPENAI_COMPAT_IMAGE_MODEL="gpt-image-1" \
+  -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest
+```
+
+> This routes all slide image requests through your OpenAI-compatible gateway (LiteLLM, Azure, vLLM, etc.) while keeping the text LLM configuration independent.
 
 #### Running Presenton with GPU Support
 
