@@ -3,11 +3,12 @@ import { usePathname } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { Button } from "@/components/ui/button";
 import { LoadingState, Template } from "../types/index";
+import { TemplateLayoutsWithSettings } from "@/app/presentation-templates";
 
 interface GenerateButtonProps {
   loadingState: LoadingState;
   streamState: { isStreaming: boolean; isLoading: boolean };
-  selectedTemplate: Template | null;
+  selectedTemplate: TemplateLayoutsWithSettings | string | null;
   onSubmit: () => void;
   outlineCount: number;
 }

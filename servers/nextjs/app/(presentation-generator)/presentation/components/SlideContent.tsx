@@ -16,11 +16,11 @@ import {
   deletePresentationSlide,
   updateSlide,
 } from "@/store/slices/presentationGeneration";
-import { useTemplateLayouts } from "../../hooks/useTemplateLayouts";
 import { usePathname } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import NewSlide from "../../components/NewSlide";
 import { addToHistory } from "@/store/slices/undoRedoSlice";
+import { V1ContentRender } from "../../components/V1ContentRender";
 
 interface SlideContentProps {
   slide: any;
@@ -37,7 +37,7 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
   );
 
   // Use the centralized group layouts hook
-  const { renderSlideContent, loading } = useTemplateLayouts();
+
   const pathname = usePathname();
 
   const handleSubmit = async () => {
@@ -110,15 +110,10 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
     }
   }, [presentationData?.slides?.length, isStreaming]);
 
-  // Memoized slide content rendering to prevent unnecessary re-renders
-  const slideContent = useMemo(() => {
-    return renderSlideContent(slide, isStreaming ? false : true); // Enable edit mode for main content
-  }, [renderSlideContent, slide, isStreaming]);
+
 
   useEffect(() => {
-    if (loading) {
-      return;
-    }
+
     if (slide.layout.includes("custom")) {
 
       const existingScript = document.querySelector(
@@ -131,7 +126,7 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
         document.head.appendChild(script);
       }
     }
-  }, [slide, isStreaming, loading]);
+  }, [slide, isStreaming]);
 
   return (
     <>
@@ -147,19 +142,11 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
           data-group={slide.layout_group}
           className={` w-full  group `}
         >
-          {/* render slides */}
-          {loading ? (
-            <div className="flex flex-col bg-white aspect-video items-center justify-center h-full">
-              <Loader2 className="w-8 h-8 animate-spin" />
-            </div>
-          ) : (
-            slideContent
-          )}
-
+          <V1ContentRender slide={slide} isEditMode={true} theme={null} />
           {!showNewSlideSelection && (
             <div className="group-hover:opacity-100 hidden md:block opacity-0 transition-opacity my-4 duration-300">
               <ToolTip content="Add new slide below">
-                {!isStreaming && !loading && (
+                {!isStreaming && (
                   <div
                     onClick={() => {
                       trackEvent(MixpanelEvent.Slide_Add_New_Slide_Button_Clicked, { pathname });
@@ -173,7 +160,7 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
               </ToolTip>
             </div>
           )}
-          {showNewSlideSelection && !loading && (
+          {showNewSlideSelection && (
             <NewSlide
               index={index}
               templateID={`${slide.layout.split(":")[0]}`}
@@ -182,7 +169,7 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
             />
           )}
 
-          {!isStreaming && !loading && (
+          {!isStreaming && (
             <ToolTip content="Delete slide">
               <div
                 onClick={() => {

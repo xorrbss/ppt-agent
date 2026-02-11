@@ -86,10 +86,10 @@ const LoadingStates: React.FC<LoadingStatesProps> = ({ type, message }) => {
 
             <div className="space-y-2">
               <h3 className="text-xl font-semibold text-gray-700">
-                No Template Found
+                No Layouts Found
               </h3>
               <p className="text-gray-500 text-sm leading-relaxed">
-                No valid Template files were discovered. Make sure your layout
+                No valid layout files were discovered. Make sure your layout
                 components export both a default component and a Schema.
               </p>
             </div>
