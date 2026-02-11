@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/popover";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { useTemplateLayouts } from "@/app/(presentation-generator)/hooks/useTemplateLayouts";
+import SlideScale from "../../components/PresentationRender";
 
 export const PresentationCard = ({
   id,
@@ -26,7 +26,7 @@ export const PresentationCard = ({
   onDeleted?: (presentationId: string) => void;
 }) => {
   const router = useRouter();
-  const { renderSlideContent } = useTemplateLayouts();
+
 
 
 
@@ -92,7 +92,7 @@ export const PresentationCard = ({
         >
           <div className="absolute bg-transparent z-40 top-0 left-0 w-full h-full" />
           <div className="transform scale-[0.2] flex justify-center items-center origin-top-left  w-[500%] h-[500%]">
-            {renderSlideContent(slide, false)}
+            <SlideScale slide={slide} />
           </div>
         </div>
 
