@@ -11,7 +11,7 @@ import {
 } from "@/utils/providerUtils";
 import { useRouter, usePathname } from "next/navigation";
 import LLMProviderSelection from "@/components/LLMSelection";
-import Header from "../dashboard/components/Header";
+import Header from "../../(dashboard)/dashboard/components/Header";
 import { LLMConfig } from "@/types/llm_config";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 
@@ -173,11 +173,10 @@ const SettingsPage = () => {
           <button
             onClick={handleSaveConfig}
             disabled={buttonState.isDisabled}
-            className={`w-full font-semibold py-3 px-4 rounded-lg transition-all duration-500 ${
-              buttonState.isDisabled
+            className={`w-full font-semibold py-3 px-4 rounded-lg transition-all duration-500 ${buttonState.isDisabled
                 ? "bg-gray-400 cursor-not-allowed"
                 : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:ring-4 focus:ring-blue-200"
-            } text-white`}
+              } text-white`}
           >
             {buttonState.isLoading ? (
               <div className="flex items-center justify-center gap-2">
