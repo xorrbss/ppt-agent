@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 
 import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
-import { PresentationGrid } from "@/app/(dashboard)/dashboard/components/PresentationGrid";
+import { PresentationGrid } from "@/app/(presentation-generator)/(dashboard)/dashboard/components/PresentationGrid";
 
 
 

@@ -28,23 +28,15 @@ export const CustomTemplateCard = React.memo(function CustomTemplateCard({ templ
 
     return (
         <Card
-            className="cursor-pointer hover:shadow-lg transition-all duration-200 group overflow-hidden"
+            className="cursor-pointer flex flex-col justify-between relative hover:shadow-lg transition-all duration-200 group overflow-hidden"
             onClick={handleOpen}
         >
+
+            <img src="/card_bg.svg" alt="" className="absolute top-0 left-0 w-full h-full object-cover" />
+            <span className="text-xs font-syne absolute top-2 flex gap-1 capitalize  items-center left-2 rounded-[100px]  px-2.5 py-1 bg-[#3A3A3AF5] text-white font-semibold  z-40">
+                Layouts- {template.layoutCount}
+            </span>
             <div className="p-5">
-                <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-lg font-bold text-gray-900">
-                        {template.name}
-                    </h3>
-                    <div className="flex items-center gap-2">
-                        <span className="px-2.5 py-0.5 bg-purple-100 text-purple-800 rounded-full text-sm font-medium">
-                            {template.layoutCount}
-                        </span>
-                        <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-purple-600 transition-colors" />
-                    </div>
-                </div>
-
-
 
                 {/* Layout previews */}
                 <div className="grid grid-cols-2 gap-2">
@@ -58,7 +50,7 @@ export const CustomTemplateCard = React.memo(function CustomTemplateCard({ templ
                                 <Loader2 className="w-4 h-4 text-purple-300 animate-spin" />
                             </div>
                         ))
-                    ) : previewLayouts.length > 0 ? (
+                    ) : previewLayouts.length > 0 && (
                         // Actual layout previews
                         previewLayouts.slice(0, 4).map((layout: CompiledLayout, index: number) => {
                             const LayoutComponent = layout.component;
@@ -77,20 +69,20 @@ export const CustomTemplateCard = React.memo(function CustomTemplateCard({ templ
                                 </div>
                             );
                         })
-                    ) : (
-                        // Empty state placeholders
-                        [...Array(Math.min(4, template.layoutCount))].map((_, index) => (
-                            <div
-                                key={`${template.id}-empty-${index}`}
-                                className="relative bg-gray-100 border border-gray-200 overflow-hidden aspect-video rounded flex items-center justify-center"
-                            >
-                                <span className="text-xs text-gray-400">No preview</span>
-                            </div>
-                        ))
                     )}
                 </div>
 
 
+            </div>
+            <div className="flex items-center justify-between p-5 bg-white border-t border-[#EDEEEF] relative z-40  ">
+                <h3 className="text-sm font-bold text-gray-900">
+                    {template.name}
+                </h3>
+
+                <div className="flex items-center gap-2">
+
+                    <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-purple-600 transition-colors" />
+                </div>
             </div>
         </Card>
     );
@@ -117,26 +109,14 @@ const InbuiltTemplateCard = React.memo(function InbuiltTemplateCard({
     return (
         <Card
             key={template.id}
-            className="cursor-pointer hover:shadow-lg transition-all duration-200 group overflow-hidden"
+            className="cursor-pointer relative hover:shadow-lg transition-all duration-200 group overflow-hidden"
             onClick={handleOpen}
         >
+            <span className="text-xs font-syne absolute top-2 flex gap-1 capitalize  items-center left-2 rounded-[100px]  px-2.5 py-1 bg-[#3A3A3AF5] text-white font-semibold  z-40">
+                Layouts- {template.layouts.length}
+            </span>
+            <img src="/card_bg.svg" alt="" className="absolute top-0 left-0 w-full h-full object-cover" />
             <div className="p-5">
-                <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-xl font-bold text-gray-900 capitalize">
-                        {template.name}
-                    </h3>
-                    <div className="flex items-center gap-2">
-                        <span className="px-2.5 py-0.5 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
-                            {template.layouts.length}
-                        </span>
-                        <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
-                    </div>
-                </div>
-
-                <p className="text-sm text-gray-600 mb-4 line-clamp-2">
-                    {template.description}
-                </p>
-
                 <div className="grid grid-cols-2 gap-2">
                     {previewLayouts.map((layout: TemplateWithData, index: number) => {
                         const LayoutComponent = layout.component;
@@ -155,6 +135,21 @@ const InbuiltTemplateCard = React.memo(function InbuiltTemplateCard({
                             </div>
                         );
                     })}
+                </div>
+            </div>
+            <div className="flex items-center justify-between  p-5 bg-white border-t border-[#EDEEEF] relative z-40 ">
+                <div>
+
+                    <h3 className="text-sm font-bold text-gray-900 capitalize">
+                        {template.name}
+                    </h3>
+                    <p className="text-xs text-gray-600 mb-4 line-clamp-2">
+                        {template.description}
+                    </p>
+                </div>
+                <div className="flex items-center gap-2">
+
+                    <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
                 </div>
             </div>
         </Card>

@@ -1,5 +1,5 @@
 import React from "react";
-import Header from "@/app/(dashboard)/dashboard/components/Header";
+import Header from "@/app/(presentation-generator)/(dashboard)/dashboard/components/Header";
 
 export const APIKeyWarning: React.FC = () => {
   return (

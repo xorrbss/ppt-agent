@@ -13,7 +13,7 @@ import {
   CustomTemplates,
 } from "@/app/hooks/useCustomTemplates";
 import { CompiledLayout } from "@/app/hooks/compileLayout";
-import Header from "../../(dashboard)/dashboard/components/Header";
+import Header from "../(dashboard)/dashboard/components/Header";
 
 // Component for rendering custom template card with lazy-loaded previews
 const CustomTemplateCard = ({ template }: { template: CustomTemplates }) => {

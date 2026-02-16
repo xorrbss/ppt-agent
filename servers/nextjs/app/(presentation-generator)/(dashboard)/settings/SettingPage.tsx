@@ -11,7 +11,7 @@ import {
 } from "@/utils/providerUtils";
 import { useRouter, usePathname } from "next/navigation";
 import LLMProviderSelection from "@/components/LLMSelection";
-import Header from "../../(dashboard)/dashboard/components/Header";
+import Header from "../dashboard/components/Header";
 import { LLMConfig } from "@/types/llm_config";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 
@@ -153,29 +153,32 @@ const SettingsPage = () => {
   }
 
   return (
-    <div className="h-screen bg-gradient-to-b font-instrument_sans from-gray-50 to-white flex flex-col overflow-hidden">
-      <Header />
-      <main className="flex-1 container mx-auto px-4 max-w-3xl overflow-hidden flex flex-col">
-        {/* LLM Selection Component */}
-        <div className="flex-1 overflow-hidden">
-          <LLMProviderSelection
-            initialLLMConfig={llmConfig}
-            onConfigChange={setLlmConfig}
-            buttonState={buttonState}
-            setButtonState={setButtonState}
-          />
-        </div>
+    <div className="h-screen font-instrument_sans flex flex-col overflow-hidden">
+
+      <main className="w-full mx-auto px-4  overflow-hidden flex flex-col">
+
+        <LLMProviderSelection
+          initialLLMConfig={llmConfig}
+          onConfigChange={setLlmConfig}
+          buttonState={buttonState}
+          setButtonState={setButtonState}
+        />
+
       </main>
 
       {/* Fixed Bottom Button */}
       <div className="flex-shrink-0 bg-white border-t border-gray-200 p-4">
-        <div className="container mx-auto max-w-3xl">
+        <div className=" mx-auto ">
           <button
             onClick={handleSaveConfig}
             disabled={buttonState.isDisabled}
+            style={{
+              background: "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
+              color: "#101323",
+            }}
             className={`w-full font-semibold py-3 px-4 rounded-lg transition-all duration-500 ${buttonState.isDisabled
-                ? "bg-gray-400 cursor-not-allowed"
-                : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:ring-4 focus:ring-blue-200"
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:ring-4 focus:ring-blue-200"
               } text-white`}
           >
             {buttonState.isLoading ? (

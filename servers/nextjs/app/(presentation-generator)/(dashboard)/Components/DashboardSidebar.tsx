@@ -26,19 +26,6 @@ const DashboardSidebar = () => {
     const pathname = usePathname();
     const activeTab = pathname.split("?")[0].split("/").pop();
     const router = useRouter();
-    const [mounted, setMounted] = React.useState(false);
-    const [profileMenuOpen, setProfileMenuOpen] = React.useState(false);
-
-
-    React.useEffect(() => {
-        setMounted(true);
-    }, []);
-
-
-    const handleMenuNavigate = (href: string) => {
-        setProfileMenuOpen(false);
-        router.push(href);
-    };
 
 
 

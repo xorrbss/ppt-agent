@@ -14,25 +14,29 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Switch } from "./ui/switch";
+import { LLMConfig } from "@/types/llm_config";
 
 interface OpenAIConfigProps {
   openaiApiKey: string;
   openaiModel: string;
   webGrounding?: boolean;
   onInputChange: (value: string | boolean, field: string) => void;
+  llmConfig: LLMConfig;
 }
 
 export default function OpenAIConfig({
   openaiApiKey,
   openaiModel,
   webGrounding,
-  onInputChange
+  onInputChange,
+  llmConfig
 }: OpenAIConfigProps) {
   const [openModelSelect, setOpenModelSelect] = useState(false);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsChecked, setModelsChecked] = useState(false);
   const [apiKey, setApiKey] = useState(openaiApiKey);
+  const isImageGenerationDisabled = llmConfig.DISABLE_IMAGE_GENERATION ?? false;
 
   const openaiUrl = "https://api.openai.com/v1";
 
@@ -84,152 +88,189 @@ export default function OpenAIConfig({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 ">
       {/* API Key Input */}
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          OpenAI API Key
-        </label>
-        <div className="relative">
-          <input
-            type="text"
-            value={openaiApiKey}
-            onChange={(e) => onApiKeyChange(e.target.value)}
-            className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-            placeholder="Enter your API key"
-          />
-        </div>
-        <p className="mt-2 text-sm text-gray-500 flex items-center gap-2">
-          <span className="block w-1 h-1 rounded-full bg-gray-400"></span>
-          Your API key will be stored locally and never shared
-        </p>
-      </div>
+      <div className="mb-4 flex items-center justify-between bg-white p-10">
+        <div className="">
 
-
-
-      {/* Check for available models button - show when no models checked or no models found */}
-      {(!modelsChecked || (modelsChecked && availableModels.length === 0)) && (
-        <div className="mb-4">
-          <button
-            onClick={fetchAvailableModels}
-            disabled={modelsLoading || !openaiApiKey}
-            className={`w-full py-2.5 px-4 rounded-lg transition-all duration-200 border-2 ${modelsLoading || !openaiApiKey
-              ? "bg-gray-100 border-gray-300 cursor-not-allowed text-gray-500"
-              : "bg-white border-blue-600 text-blue-600 hover:bg-blue-50 focus:ring-2 focus:ring-blue-500/20"
-              }`}
-          >
-            {modelsLoading ? (
-              <div className="flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Checking for models...
-              </div>
-            ) : (
-              "Check for available models"
-            )}
-          </button>
-        </div>
-      )}
-
-      {/* Show message if no models found */}
-      {modelsChecked && availableModels.length === 0 && (
-        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <p className="text-sm text-yellow-800">
-            No models found. Please make sure your API key is valid and has access to OpenAI models.
+          <h3 className="text-xl font-normal text-[#191919]">OpenAI API key</h3>
+          <p className="mt-2 text-sm max-w-[205px] text-gray-500">
+            Your API key will be stored locally and never shared
           </p>
         </div>
-      )}
+        <div className="flex items-center gap-4">
 
-      {/* Model Selection - only show if models are available */}
-      {modelsChecked && availableModels.length > 0 ? (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-3">
-            Select OpenAI Model
-          </label>
-          <div className="w-full">
-            <Popover
-              open={openModelSelect}
-              onOpenChange={setOpenModelSelect}
-            >
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={openModelSelect}
-                  className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
-                >
-                  <div className="flex gap-3 items-center">
-                    <span className="text-sm font-medium text-gray-900">
-                      {openaiModel
-                        ? availableModels.find(model => model === openaiModel) || openaiModel
-                        : "Select a model"}
-                    </span>
-                  </div>
-                  <ChevronsUpDown className="w-4 h-4 text-gray-500" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent
-                className="p-0"
-                align="start"
-                style={{ width: "var(--radix-popover-trigger-width)" }}
+
+          <div className="relative  w-[275px] ">
+            <div className="flex flex-col justify-start gap-2">
+
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                OpenAI API Key
+              </label>
+              <input
+                type="text"
+                value={openaiApiKey}
+                onChange={(e) => onApiKeyChange(e.target.value)}
+                className="w-full px-2 py-3 outline-none border  border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                placeholder="Enter your API key"
+              />
+            </div>
+
+            {/* Check for available models button - show when no models checked or no models found */}
+
+            {(!modelsChecked || (modelsChecked && availableModels.length === 0)) && (
+
+              <button
+                onClick={fetchAvailableModels}
+                disabled={modelsLoading || !openaiApiKey}
+                className={` mt-7 py-2.5 bg-[#F7F6F9] px-3.5 rounded-[48px] text-xs font-semibold text-[#101323] transition-all duration-200 border ${modelsLoading || !openaiApiKey
+                  ? " border-gray-300 cursor-not-allowed text-gray-500"
+                  : " border-[#EDEEEF] text-blue-600 hover:bg-[#E8F0FF]/90 focus:ring-2 focus:ring-blue-500/20"
+                  }`}
               >
-                <Command>
-                  <CommandInput placeholder="Search models..." />
-                  <CommandList>
-                    <CommandEmpty>No model found.</CommandEmpty>
-                    <CommandGroup>
-                      {availableModels.map((model, index) => (
-                        <CommandItem
-                          key={index}
-                          value={model}
-                          onSelect={(value) => {
-                            onInputChange(value, "openai_model");
-                            setOpenModelSelect(false);
-                          }}
-                        >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              openaiModel === model
-                                ? "opacity-100"
-                                : "opacity-0"
-                            )}
-                          />
-                          <div className="flex gap-3 items-center">
-                            <div className="flex flex-col space-y-1 flex-1">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-sm font-medium text-gray-900">
-                                  {model}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+                {modelsLoading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Checking for models...
+                  </span>
+                ) : (
+                  "Check for available models"
+                )}
+              </button>
+
+            )}
+          </div>
+          <div className="w-[295px]">
+            {/* Show message if no models found */}
+            {modelsChecked && availableModels.length === 0 && (
+              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-800">
+                  No models found. Please make sure your API key is valid and has access to OpenAI models.
+                </p>
+              </div>
+            )}
+
+            {/* Model Selection - only show if models are available */}
+            {modelsChecked && availableModels.length > 0 ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Select OpenAI Model
+                </label>
+                <div className="w-full">
+                  <Popover
+                    open={openModelSelect}
+                    onOpenChange={setOpenModelSelect}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={openModelSelect}
+                        className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
+                      >
+                        <div className="flex gap-3 items-center">
+                          <span className="text-sm font-medium text-gray-900">
+                            {openaiModel
+                              ? availableModels.find(model => model === openaiModel) || openaiModel
+                              : "Select a model"}
+                          </span>
+                        </div>
+                        <ChevronsUpDown className="w-4 h-4 text-gray-500" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      className="p-0"
+                      align="start"
+                      style={{ width: "var(--radix-popover-trigger-width)" }}
+                    >
+                      <Command>
+                        <CommandInput placeholder="Search models..." />
+                        <CommandList>
+                          <CommandEmpty>No model found.</CommandEmpty>
+                          <CommandGroup>
+                            {availableModels.map((model, index) => (
+                              <CommandItem
+                                key={index}
+                                value={model}
+                                onSelect={(value) => {
+                                  onInputChange(value, "openai_model");
+                                  setOpenModelSelect(false);
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    openaiModel === model
+                                      ? "opacity-100"
+                                      : "opacity-0"
+                                  )}
+                                />
+                                <div className="flex gap-3 items-center">
+                                  <div className="flex flex-col space-y-1 flex-1">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-sm font-medium text-gray-900">
+                                        {model}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
-      ) : null}
+      </div>
+
+
+
+
+
 
       {/* Web Grounding Toggle - show at the end, below models dropdown */}
-      <div>
-        <div className="flex items-center justify-between mb-4 bg-green-50 p-2 rounded-sm">
-          <label className="text-sm font-medium text-gray-700">
-            Enable Web Grounding
-          </label>
-          <Switch
-            checked={!!webGrounding}
-            onCheckedChange={(checked) => onInputChange(checked, "web_grounding")}
-          />
+      <div className="bg-white flex justify-between items-center p-10 rounded-[12px]">
+        <div>
+          <h4 className="text-xl font-normal text-[#191919]">Model Controls</h4>
+          <p className="mt-2 text-sm max-w-[205px] text-gray-500">
+
+            Configure web access, image generation, and advanced AI features.
+          </p>
         </div>
-        <p className="mt-2 text-sm text-gray-500 flex items-center gap-2">
-          <span className="block w-1 h-1 rounded-full bg-gray-400"></span>
-          If enabled, the model can use web search grounding when available.
-        </p>
+        <div className="flex items-center gap-4">
+
+          <div className="w-[275px]">
+            <div className="flex items-center  mb-4 gap-2.5 ">
+              <Switch
+                checked={!!webGrounding}
+                onCheckedChange={(checked) => onInputChange(checked, "web_grounding")}
+              />
+              <label className="text-sm font-medium text-gray-700">
+                Enable Web Grounding
+              </label>
+            </div>
+            <div className="flex items-center  mb-4 gap-2.5 ">
+              <Switch
+                checked={!!isImageGenerationDisabled}
+                onCheckedChange={(checked) => onInputChange(checked, "disable_image_generation")}
+              />
+              <label className="text-sm font-medium text-gray-700">
+                Disable Image Generation
+              </label>
+            </div>
+
+          </div>
+          <div className="w-[295px]"></div>
+        </div>
+
       </div>
+
+
     </div>
   );
 }
