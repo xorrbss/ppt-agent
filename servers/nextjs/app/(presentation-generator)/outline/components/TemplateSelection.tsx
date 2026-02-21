@@ -1,7 +1,8 @@
 "use client";
 import React, { useEffect } from "react";
 
-import { templates, TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
+import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
+import { templates} from "@/app/presentation-templates";
 import { Card } from "@/components/ui/card";
 import { TemplateWithData } from "@/app/presentation-templates/utils";
 import { CustomTemplates, useCustomTemplateSummaries } from "@/app/hooks/useCustomTemplates";
