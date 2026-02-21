@@ -2,9 +2,9 @@ name: Test All Applications
 
 on:
   push:
-    branches: [ main, develop, master, 'feat/electron-support' ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, develop, master ]
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
