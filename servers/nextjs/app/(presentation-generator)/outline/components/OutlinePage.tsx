@@ -15,7 +15,7 @@ import { useOutlineStreaming } from "../hooks/useOutlineStreaming";
 import { useOutlineManagement } from "../hooks/useOutlineManagement";
 import { usePresentationGeneration } from "../hooks/usePresentationGeneration";
 import TemplateSelection from "./TemplateSelection";
-import { TemplateLayoutsWithSettings } from "@/app/presentation-templates";
+import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
 
 const OutlinePage: React.FC = () => {
   const { presentation_id, outlines } = useSelector(
@@ -48,11 +48,21 @@ const OutlinePage: React.FC = () => {
       />
 
       <Wrapper className="h-full flex flex-col w-full">
-        <div className="flex-grow overflow-y-hidden w-[1200px] mx-auto">
+        <div className="flex-grow overflow-y-hidden w-[1200px] mx-auto mt-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-            <TabsList className="grid w-[50%] mx-auto my-4 grid-cols-2">
-              <TabsTrigger value={TABS.OUTLINE}>Outline & Content</TabsTrigger>
-              <TabsTrigger value={TABS.LAYOUTS}>Select Template</TabsTrigger>
+            <TabsList className="my-4grid h-auto w-fit grid-cols-2 rounded-full border border-[#DFDFE1] bg-[#F8F8F9] p-1.5">
+              <TabsTrigger
+                value={TABS.OUTLINE}
+                className="rounded-full px-5 py-2 text-xs font-medium text-[#2D2D2D] shadow-none data-[state=active]:bg-[#E9E2F8] data-[state=active]:text-[#7E3AF2] data-[state=active]:shadow-none"
+              >
+                Outline & Content
+              </TabsTrigger>
+              <TabsTrigger
+                value={TABS.LAYOUTS}
+                className="relative rounded-full px-5 py-2 text-xs font-medium text-[#2D2D2D] shadow-none before:absolute before:left-0 before:top-1/2 before:h-6 before:w-px before:-translate-y-1/2 before:bg-[#D7D7D8] data-[state=active]:bg-[#E9E2F8] data-[state=active]:text-[#7E3AF2] data-[state=active]:shadow-none"
+              >
+                Select Template
+              </TabsTrigger>
             </TabsList>
 
             <div className="flex-grow w-full mx-auto">

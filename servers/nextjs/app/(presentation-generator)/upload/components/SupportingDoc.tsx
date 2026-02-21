@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useRef, useState } from 'react'
-import { File, X, Upload } from 'lucide-react'
+import { File, X, Upload, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
@@ -112,35 +112,38 @@ const SupportingDoc = ({ files, onFilesChange }: SupportingDocProps) => {
 
 
     return (
-        <div className="w-full">
-            <h2 className="text-[#444] font-instrument_sans pt-4 text-lg mb-4">Supporting Documents</h2>
+        <div className="w-full bg-[#F6F6F9]  px-2.5 py-3.5 rounded-[10px]  ">
+
             <div
                 onClick={() => fileInputRef.current?.click()}
                 className={cn(
-                    "w-full border-2 border-dashed border-gray-400 rounded-lg",
-                    "transition-all duration-300 ease-in-out bg-white",
-                    "min-h-[300px] flex flex-col mb-8",
+                    "w-full border cursor-pointer border-dashed border-[#B8B8C1] rounded-lg",
+                    "transition-all duration-300 ease-in-out ",
+                    " flex flex-col ",
                     isDragging && "border-purple-400 bg-purple-50"
                 )}
                 onDragOver={(e) => handleDragEvents(e, true)}
                 onDragLeave={(e) => handleDragEvents(e, false)}
                 onDrop={handleDrop}
             >
-                <div className="flex-1 flex flex-col items-center justify-center p-6">
-                    <Upload className={cn(
-                        "w-12 h-12 text-gray-400 mb-4",
-                        isDragging && "text-purple-400"
-                    )} />
+                <div className="flex-1 flex  gap-2 items-center justify-center p-6">
+                    <div className='w-[42px] h-[42px] flex justify-center items-center rounded-full bg-[#EBE9FE]' >
+                        <div className='w-[22px] h-[22px] rounded-full bg-[#7A5AF8] flex items-center justify-center text-white'>
+                            <Plus className='w-3 h-3' />
+                        </div>
+                    </div>
+                    <div>
 
-                    <p className="text-gray-600 text-center mb-2">
-                        {isDragging
-                            ? 'Drop your file here'
-                            : 'Drag and drop your file here or click below button'
-                        }
-                    </p>
-                    <p className="text-gray-400 text-sm text-center mb-4">
-                        Supports PDFs, Text files, PPTX, DOCX
-                    </p>
+                        <p className=" text-xs text-[#808080]  ">
+                            {isDragging
+                                ? <span className=' '>Drop your file here</span>
+                                : <span className=' '> <span className=' underline underline-offset-4'>Click to Upload</span> or drag &amp; drop.</span>
+                            }
+                        </p>
+                        <p className="text-gray-400 text-sm text-center mt-1 ">
+                            Supports PDFs, Text files, PPTX, DOCX
+                        </p>
+                    </div>
 
                     <input
                         type="file"
@@ -153,7 +156,7 @@ const SupportingDoc = ({ files, onFilesChange }: SupportingDocProps) => {
                         data-testid="file-upload-input"
                     />
 
-                    <button
+                    {/* <button
                         onClick={(e) => {
                             e.stopPropagation()
                             fileInputRef.current?.click()
@@ -163,7 +166,7 @@ const SupportingDoc = ({ files, onFilesChange }: SupportingDocProps) => {
                             font-medium text-sm"
                     >
                         Choose Files
-                    </button>
+                    </button> */}
                 </div>
 
                 {files.length > 0 && (

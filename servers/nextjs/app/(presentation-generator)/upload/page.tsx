@@ -46,10 +46,10 @@ const page = () => {
     <div className="relative">
       <Header />
       <div className="flex flex-col items-center justify-center  py-8">
-        <h1 className="text-3xl font-semibold font-instrument_sans">
-          Create Presentation{" "}
+        <h1 className="text-3xl font-semibold font-instrument_sans text-[#101323] pb-3.5">
+          AI Presentation
         </h1>
-        {/* <p className='text-sm text-gray-500'>We will generate a presentation for you</p> */}
+        <p className="text-xl font-syne text-[#101323CC]">Choose a design, set preferences, and generate polished slides.</p>
       </div>
 
       <UploadPage />
