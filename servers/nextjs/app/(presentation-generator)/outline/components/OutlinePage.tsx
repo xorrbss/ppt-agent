@@ -15,7 +15,7 @@ import { useOutlineStreaming } from "../hooks/useOutlineStreaming";
 import { useOutlineManagement } from "../hooks/useOutlineManagement";
 import { usePresentationGeneration } from "../hooks/usePresentationGeneration";
 import TemplateSelection from "./TemplateSelection";
-import { TemplateLayoutsWithSettings } from "@/app/presentation-templates";
+import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
 
 const OutlinePage: React.FC = () => {
   const { presentation_id, outlines } = useSelector(

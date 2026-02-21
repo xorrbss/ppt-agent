@@ -6,7 +6,7 @@ import { clearPresentationData } from "@/store/slices/presentationGeneration";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import { Template, LoadingState, TABS } from "../types/index";
 import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
-import { TemplateLayoutsWithSettings } from "@/app/presentation-templates";
+import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
 import { getCustomTemplateDetails } from "@/app/hooks/useCustomTemplates";
 
 const DEFAULT_LOADING_STATE: LoadingState = {
