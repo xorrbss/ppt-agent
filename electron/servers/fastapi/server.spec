@@ -1,4 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
 from PyInstaller.utils.hooks import collect_all
 
 # Collect fastembed dependencies
@@ -28,6 +29,9 @@ datas_docling_ibm, binaries_docling_ibm, hiddenimports_docling_ibm = collect_all
 # collect_all returns empty lists if package not installed, so safe to call conditionally
 datas_docx, binaries_docx, hiddenimports_docx = collect_all('docx')
 
+# fastembed_cache is created at runtime when models are first used; include only if present (e.g. local dev)
+datas_fastembed_cache = [('fastembed_cache', 'fastembed_cache')] if os.path.isdir('fastembed_cache') else []
+
 excludes = []
 
 a = Analysis(
@@ -36,9 +40,8 @@ a = Analysis(
     binaries=binaries_fastembed + binaries_fastembed_vs + binaries_onnx + binaries_pptx + binaries_docx2everything + binaries_greenlet + binaries_docling + binaries_docling_core + binaries_docling_parse + binaries_docling_ibm + binaries_docx,
     datas=[
         ('assets', 'assets'),
-        ('fastembed_cache', 'fastembed_cache'),
         ('static', 'static'),
-    ] + datas_fastembed + datas_fastembed_vs + datas_onnx + datas_pptx + datas_docx2everything + datas_greenlet + datas_docling + datas_docling_core + datas_docling_parse + datas_docling_ibm + datas_docx,
+    ] + datas_fastembed_cache + datas_fastembed + datas_fastembed_vs + datas_onnx + datas_pptx + datas_docx2everything + datas_greenlet + datas_docling + datas_docling_core + datas_docling_parse + datas_docling_ibm + datas_docx,
     hiddenimports=[
         'aiosqlite',
         'sqlite3',

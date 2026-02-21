@@ -3,7 +3,7 @@ import { usePathname } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { Button } from "@/components/ui/button";
 import { LoadingState, Template } from "../types/index";
-import { TemplateLayoutsWithSettings } from "@/app/presentation-templates";
+import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
 
 interface GenerateButtonProps {
   loadingState: LoadingState;
