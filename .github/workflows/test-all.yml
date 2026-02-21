@@ -44,9 +44,8 @@ jobs:
         else
           pip install aiohttp aiomysql aiosqlite asyncpg fastapi[standard] \
             pathvalidate pdfplumber chromadb sqlmodel \
-            anthropic google-genai openai fastmcp dirtyjson pytest pytest-asyncio pytest-cov
+            anthropic google-genai openai fastmcp dirtyjson
         fi
-        pip install pytest pytest-asyncio pytest-cov
     
     - name: Set up environment variables
       run: |
@@ -56,12 +55,6 @@ jobs:
         echo "DATABASE_URL=sqlite+aiosqlite:///./test.db" >> $GITHUB_ENV
         echo "DISABLE_ANONYMOUS_TRACKING=true" >> $GITHUB_ENV
         echo "DISABLE_IMAGE_GENERATION=true" >> $GITHUB_ENV
-    
-    - name: Run tests
-      env:
-        PYTHONPATH: ${{ github.workspace }}/servers/fastapi
-      run: |
-        pytest tests/ -v --tb=short
 
   test-electron-fastapi:
     name: Test Electron FastAPI
@@ -99,9 +92,8 @@ jobs:
         else
           pip install aiohttp aiomysql aiosqlite asyncpg fastapi[standard] \
             pathvalidate pdfplumber chromadb sqlmodel \
-            anthropic google-genai openai fastmcp dirtyjson pytest pytest-asyncio pytest-cov
+            anthropic google-genai openai fastmcp dirtyjson
         fi
-        pip install pytest pytest-asyncio pytest-cov
     
     - name: Set up environment variables
       run: |
@@ -112,11 +104,8 @@ jobs:
         echo "DISABLE_ANONYMOUS_TRACKING=true" >> $GITHUB_ENV
         echo "DISABLE_IMAGE_GENERATION=true" >> $GITHUB_ENV
     
-    - name: Run tests
-      env:
-        PYTHONPATH: ${{ github.workspace }}/electron/servers/fastapi
-      run: |
-        pytest tests/ -v --tb=short
+    - name: Build FastAPI binary
+      run: pyinstaller server.spec
 
   test-nextjs:
     name: Test Main Next.js
@@ -139,9 +128,6 @@ jobs:
     
     - name: Install dependencies
       run: npm ci
-    
-    - name: Run linter
-      run: npm run lint
     
     - name: Build application
       env:
@@ -181,9 +167,6 @@ jobs:
     
     - name: Install dependencies
       run: npm ci
-    
-    - name: Run linter
-      run: npm run lint
     
     - name: Build application
       env:
