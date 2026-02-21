@@ -3,7 +3,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { getHeader } from '@/app/(presentation-generator)/services/api/header';
 import { ApiResponseHandler } from '@/app/(presentation-generator)/services/api/api-error-handler';
-import { ProcessedSlide } from '@/app/custom-template/types';
+import { ProcessedSlide } from '@/app/(presentation-generator)/custom-template/types';
 import { CustomTemplateLayout } from '@/app/hooks/useCustomTemplates';
 
 interface LayoutPayload {
@@ -12,10 +12,16 @@ interface LayoutPayload {
     layout_name: string;
 }
 
+/** Slide state for template preview: ProcessedSlide plus saved layout code and name */
+export type TemplatePreviewSlideState = ProcessedSlide & {
+    react?: string;
+    layout_name?: string;
+};
+
 interface UseTemplateLayoutsAutoSaveOptions {
     templateId: string | null;
     layouts: CustomTemplateLayout[];
-    slideStates: ProcessedSlide[];
+    slideStates: TemplatePreviewSlideState[];
     debounceMs?: number;
     enabled?: boolean;
 }
