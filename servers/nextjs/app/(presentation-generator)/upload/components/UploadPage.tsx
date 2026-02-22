@@ -196,7 +196,7 @@ const UploadPage = () => {
   };
 
   return (
-    <Wrapper className="pb-10 lg:max-w-[70%] xl:max-w-[65%]">
+    <Wrapper className=" pb-10 lg:max-w-[70%] xl:max-w-[65%] ">
       <OverlayLoader
         show={loadingState.isLoading}
         text={loadingState.message}
@@ -211,7 +211,7 @@ const UploadPage = () => {
           onConfigChange={handleConfigChange}
         />
       </div> */}
-      <div className="  w-full mx-auto px-2 md:px-0 ">
+      <div className="  w-full mx-auto px-2 md:px-0 max-w-[720px]  ">
 
         <div
           className='fixed z-0 md:-bottom-[36%] -bottom-[40%] left-0 w-full h-full'

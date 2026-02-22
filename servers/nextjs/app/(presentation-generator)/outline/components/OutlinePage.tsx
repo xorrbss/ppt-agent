@@ -16,6 +16,7 @@ import { useOutlineManagement } from "../hooks/useOutlineManagement";
 import { usePresentationGeneration } from "../hooks/usePresentationGeneration";
 import TemplateSelection from "./TemplateSelection";
 import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
+import { Separator } from "@/components/ui/separator";
 
 const OutlinePage: React.FC = () => {
   const { presentation_id, outlines } = useSelector(
@@ -57,9 +58,10 @@ const OutlinePage: React.FC = () => {
               >
                 Outline & Content
               </TabsTrigger>
+              <Separator orientation="vertical" className="h-6 mx-1" />
               <TabsTrigger
                 value={TABS.LAYOUTS}
-                className="relative rounded-full px-5 py-2 text-xs font-medium text-[#2D2D2D] shadow-none before:absolute before:left-0 before:top-1/2 before:h-6 before:w-px before:-translate-y-1/2 before:bg-[#D7D7D8] data-[state=active]:bg-[#E9E2F8] data-[state=active]:text-[#7E3AF2] data-[state=active]:shadow-none"
+                className="relative rounded-full px-5 py-2 text-xs font-medium text-[#2D2D2D] shadow-none  data-[state=active]:bg-[#E9E2F8] data-[state=active]:text-[#7E3AF2] data-[state=active]:shadow-none"
               >
                 Select Template
               </TabsTrigger>

@@ -1,7 +1,8 @@
 "use client";
 import React, { useEffect } from "react";
 
-import { templates, TemplateLayoutsWithSettings } from "@/app/presentation-templates";
+import { templates } from "@/app/presentation-templates";
+import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
 import { Card } from "@/components/ui/card";
 import { TemplateWithData } from "@/app/presentation-templates/utils";
 import { CustomTemplates, useCustomTemplateSummaries } from "@/app/hooks/useCustomTemplates";
@@ -34,37 +35,26 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = ({
 
   const { templates: customTemplates, loading: customLoading } = useCustomTemplateSummaries();
 
-
-
-
-
   return (
     <div className="space-y-8 mb-4">
       {/* In Built Templates */}
       <div>
         <h3 className="text-lg font-semibold text-gray-900 mb-3">In Built Templates</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {templates.map((template: TemplateLayoutsWithSettings) => {
             const previewLayouts = template.layouts.slice(0, 4);
 
             return (
               <Card
                 key={template.id}
-                className={`${typeof selectedTemplate !== 'string' && selectedTemplate?.id === template.id ? 'border-2 border-blue-500' : ''} cursor-pointer hover:shadow-lg transition-all duration-200 group overflow-hidden relative`}
+                className={`${typeof selectedTemplate !== 'string' && selectedTemplate?.id === template.id ? 'border-2 border-blue-500' : ''} cursor-pointer relative hover:shadow-lg transition-all duration-200 group overflow-hidden`}
                 onClick={() => onSelectTemplate(template)}
               >
+                <span className="text-xs font-syne absolute top-2 flex gap-1 capitalize  items-center left-2 rounded-[100px]  px-2.5 py-1 bg-[#3A3A3AF5] text-white font-semibold  z-40">
+                  Layouts- {template.layouts.length}
+                </span>
+                <img src="/card_bg.svg" alt="" className="absolute top-0 left-0 w-full h-full object-cover" />
                 <div className="p-5">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-xl font-bold text-gray-900 capitalize">
-                      {template.name}
-                    </h3>
-
-                  </div>
-
-                  <p className="text-sm text-gray-600 mb-4 line-clamp-2">
-                    {template.description}
-                  </p>
-
                   <div className="grid grid-cols-2 gap-2">
                     {previewLayouts.map((layout: TemplateWithData, index: number) => {
                       const LayoutComponent = layout.component;
@@ -72,12 +62,11 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = ({
                         <div
                           key={`${template.id}-preview-${index}`}
                           className="relative bg-gray-100 border border-gray-200 overflow-hidden aspect-video rounded"
-                          style={{ contain: 'layout style paint' }}
                         >
                           <div className="absolute inset-0 bg-transparent z-10" />
                           <div
-                            className="transform scale-[0.2] flex justify-center items-center origin-top-left w-[500%] h-[500%]"
-                            style={{ transform: 'scale(0.2) translateZ(0)', backfaceVisibility: 'hidden' }}
+                            className="transform scale-[0.12] origin-top-left"
+                            style={{ width: "833.33%", height: "833.33%" }}
                           >
                             <LayoutComponent data={layout.sampleData} />
                           </div>
@@ -86,12 +75,63 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = ({
                     })}
                   </div>
                 </div>
-                {typeof selectedTemplate !== 'string' && selectedTemplate?.id === template.id && (
-                  <div className="absolute top-0 right-0 bg-blue-500 text-white px-2 py-1 rounded-bl-lg">
-                    Selected
+                <div className="flex items-center justify-between  p-5 bg-white border-t border-[#EDEEEF] relative z-40 ">
+                  <div>
+
+                    <h3 className="text-sm font-bold text-gray-900 capitalize">
+                      {template.name}
+                    </h3>
+                    <p className="text-xs text-gray-600 mb-4 line-clamp-2">
+                      {template.description}
+                    </p>
                   </div>
-                )}
+
+                </div>
               </Card>
+              // <Card
+              //   key={template.id}
+              //   className={`${typeof selectedTemplate !== 'string' && selectedTemplate?.id === template.id ? 'border-2 border-blue-500' : ''} cursor-pointer hover:shadow-lg transition-all duration-200 group overflow-hidden relative`}
+              //   onClick={() => onSelectTemplate(template)}
+              // >
+              //   <div className="p-5">
+              //     <div className="flex items-center justify-between mb-2">
+              //       <h3 className="text-xl font-bold text-gray-900 capitalize">
+              //         {template.name}
+              //       </h3>
+
+              //     </div>
+
+              //     <p className="text-sm text-gray-600 mb-4 line-clamp-2">
+              //       {template.description}
+              //     </p>
+
+              //     <div className="grid grid-cols-2 gap-2">
+              //       {previewLayouts.map((layout: TemplateWithData, index: number) => {
+              //         const LayoutComponent = layout.component;
+              //         return (
+              //           <div
+              //             key={`${template.id}-preview-${index}`}
+              //             className="relative bg-gray-100 border border-gray-200 overflow-hidden aspect-video rounded"
+              //             style={{ contain: 'layout style paint' }}
+              //           >
+              //             <div className="absolute inset-0 bg-transparent z-10" />
+              //             <div
+              //               className="transform scale-[0.2] flex justify-center items-center origin-top-left w-[500%] h-[500%]"
+              //               style={{ transform: 'scale(0.2) translateZ(0)', backfaceVisibility: 'hidden' }}
+              //             >
+              //               <LayoutComponent data={layout.sampleData} />
+              //             </div>
+              //           </div>
+              //         );
+              //       })}
+              //     </div>
+              //   </div>
+              //   {typeof selectedTemplate !== 'string' && selectedTemplate?.id === template.id && (
+              //     <div className="absolute top-0 right-0 bg-blue-500 text-white px-2 py-1 rounded-bl-lg">
+              //       Selected
+              //     </div>
+              //   )}
+              // </Card>
             );
           })}
         </div>
@@ -115,7 +155,7 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = ({
             </p>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2  gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-4  gap-6">
             {customTemplates.map((template: CustomTemplates) => (
 
               <CustomTemplateCard

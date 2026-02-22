@@ -32,22 +32,76 @@ export const CustomTemplateCard = memo(({ template, onSelectTemplate, selectedTe
     const isSelected = selectedTemplate === template.id;
 
     return (
+        // <Card
+        //     className={`${isSelected ? 'border-2 border-blue-500' : ''} cursor-pointer hover:shadow-lg transition-all duration-200 group overflow-hidden relative`}
+        //     style={{ contain: 'layout style paint' }}
+        //     onClick={() => {
+        //         onSelectTemplate(template.id);
+        //     }}
+        // >
+        //     <div className="p-5">
+        //         <div className="flex items-center justify-between mb-2">
+        //             <h3 className="text-xl font-bold text-gray-900">
+        //                 {template.name}
+        //             </h3>
+
+        //         </div>
+
+
+
+        //         {/* Layout previews */}
+        //         <div className="grid grid-cols-2 gap-2">
+        //             {customLoading ? (
+        //                 // Loading placeholders
+        //                 [...Array(Math.min(4, template.layoutCount))].map((_, index) => (
+        //                     <div
+        //                         key={`${template.id}-loading-${index}`}
+        //                         className="relative bg-gradient-to-br from-purple-50 to-blue-50 border border-gray-200 overflow-hidden aspect-video rounded flex items-center justify-center"
+        //                     >
+        //                         <Loader2 className="w-4 h-4 text-purple-300 animate-spin" />
+        //                     </div>
+        //                 ))
+        //             ) : previewLayouts && previewLayouts?.length > 0 ? (
+        //                 // Actual layout previews - using memoized component
+        //                 previewLayouts?.slice(0, 4).map((layout: CompiledLayout, index: number) => (
+        //                     <LayoutPreview
+        //                         key={`${template.id}-preview-${index}`}
+        //                         layout={layout}
+        //                         templateId={template.id}
+        //                         index={index}
+        //                     />
+        //                 ))
+        //             ) : (
+        //                 // Empty state placeholders
+        //                 [...Array(Math.min(4, template.layoutCount))].map((_, index) => (
+        //                     <div
+        //                         key={`${template.id}-empty-${index}`}
+        //                         className="relative bg-gray-100 border border-gray-200 overflow-hidden aspect-video rounded flex items-center justify-center"
+        //                     >
+        //                         <span className="text-xs text-gray-400">No preview</span>
+        //                     </div>
+        //                 ))
+        //             )}
+        //         </div>
+
+
+        //     </div>
+        //     {isSelected && (
+        //         <div className="absolute top-0 right-0 bg-blue-500 text-white px-2 py-1 rounded-bl-lg">
+        //             Selected
+        //         </div>
+        //     )}
+        // </Card>
         <Card
-            className={`${isSelected ? 'border-2 border-blue-500' : ''} cursor-pointer hover:shadow-lg transition-all duration-200 group overflow-hidden relative`}
-            style={{ contain: 'layout style paint' }}
-            onClick={() => {
-                onSelectTemplate(template.id);
-            }}
+            className={`${isSelected ? 'border-2 border-blue-500' : ''} cursor-pointer flex flex-col justify-between relative hover:shadow-lg transition-all duration-200 group overflow-hidden`}
+            onClick={() => onSelectTemplate(template.id)}
         >
+
+            <img src="/card_bg.svg" alt="" className="absolute top-0 left-0 w-full h-full object-cover" />
+            <span className="text-xs font-syne absolute top-2 flex gap-1 capitalize  items-center left-2 rounded-[100px]  px-2.5 py-1 bg-[#3A3A3AF5] text-white font-semibold  z-40">
+                Layouts- {template.layoutCount}
+            </span>
             <div className="p-5">
-                <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-xl font-bold text-gray-900">
-                        {template.name}
-                    </h3>
-
-                </div>
-
-
 
                 {/* Layout previews */}
                 <div className="grid grid-cols-2 gap-2">
@@ -61,36 +115,37 @@ export const CustomTemplateCard = memo(({ template, onSelectTemplate, selectedTe
                                 <Loader2 className="w-4 h-4 text-purple-300 animate-spin" />
                             </div>
                         ))
-                    ) : previewLayouts && previewLayouts?.length > 0 ? (
-                        // Actual layout previews - using memoized component
-                        previewLayouts?.slice(0, 4).map((layout: CompiledLayout, index: number) => (
-                            <LayoutPreview
-                                key={`${template.id}-preview-${index}`}
-                                layout={layout}
-                                templateId={template.id}
-                                index={index}
-                            />
-                        ))
-                    ) : (
-                        // Empty state placeholders
-                        [...Array(Math.min(4, template.layoutCount))].map((_, index) => (
-                            <div
-                                key={`${template.id}-empty-${index}`}
-                                className="relative bg-gray-100 border border-gray-200 overflow-hidden aspect-video rounded flex items-center justify-center"
-                            >
-                                <span className="text-xs text-gray-400">No preview</span>
-                            </div>
-                        ))
+                    ) : previewLayouts.length > 0 && (
+                        // Actual layout previews
+                        previewLayouts.slice(0, 4).map((layout: CompiledLayout, index: number) => {
+                            const LayoutComponent = layout.component;
+                            return (
+                                <div
+                                    key={`${template.id}-preview-${index}`}
+                                    className="relative bg-gray-100 border border-gray-200 overflow-hidden aspect-video rounded"
+                                >
+                                    <div className="absolute inset-0 bg-transparent z-10" />
+                                    <div
+                                        className="transform scale-[0.12] origin-top-left"
+                                        style={{ width: "833.33%", height: "833.33%" }}
+                                    >
+                                        <LayoutComponent data={layout.sampleData} />
+                                    </div>
+                                </div>
+                            );
+                        })
                     )}
                 </div>
 
 
             </div>
-            {isSelected && (
-                <div className="absolute top-0 right-0 bg-blue-500 text-white px-2 py-1 rounded-bl-lg">
-                    Selected
-                </div>
-            )}
+            <div className="flex items-center justify-between p-5 bg-white border-t border-[#EDEEEF] relative z-40  ">
+                <h3 className="text-sm font-bold text-gray-900">
+                    {template.name}
+                </h3>
+
+
+            </div>
         </Card>
     );
 });

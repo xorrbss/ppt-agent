@@ -11,16 +11,16 @@ import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 const Header = () => {
   const pathname = usePathname();
   return (
-    <div className="w-full shadow-lg sticky top-0 z-50">
+    <div className="w-full  sticky top-0 z-50 py-7">
       <Wrapper>
         <div className="flex items-center justify-between py-1">
           <div className="flex items-center gap-3">
             {(pathname !== "/upload" && pathname !== "/dashboard") && <BackBtn />}
             <Link href="/dashboard" onClick={() => trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/dashboard" })}>
               <img
-                src="/logo-white.png"
+                src="/Logo.png"
                 alt="Presentation logo"
-                className="h-16"
+                className="h-[33px]"
               />
             </Link>
           </div>
@@ -29,7 +29,7 @@ const Header = () => {
               href="/custom-template"
               prefetch={false}
               onClick={() => trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/custom-template" })}
-              className="flex items-center gap-2 px-3 py-2 text-white hover:bg-primary/80 rounded-md transition-colors outline-none"
+              className="flex items-center gap-2 px-3 py-2 text-[#101323]  rounded-md transition-colors outline-none"
               role="menuitem"
             >
               <FilePlus2 className="w-5 h-5" />
@@ -39,7 +39,7 @@ const Header = () => {
               href="/template-preview"
               prefetch={false}
               onClick={() => trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/template-preview" })}
-              className="flex items-center gap-2 px-3 py-2 text-white hover:bg-primary/80 rounded-md transition-colors outline-none"
+              className="flex items-center gap-2 px-3 py-2 text-[#101323]  rounded-md transition-colors outline-none"
               role="menuitem"
             >
               <Layout className="w-5 h-5" />

@@ -91,8 +91,9 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
             )}
 
             {/* Outlines content */}
+
             {outlines && outlines.length > 0 && (
-                <div className="bg-[#F9F8F8] p-7 rounded-[20px]">
+                <div className="bg-[#F9F8F8] p-7 rounded-[20px] overflow-y-auto custom_scrollbar">
                     <DndContext
                         sensors={sensors}
                         collisionDetection={closestCenter}
