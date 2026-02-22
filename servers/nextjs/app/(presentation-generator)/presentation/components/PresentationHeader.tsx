@@ -6,6 +6,8 @@ import {
   Loader2,
   Redo2,
   Undo2,
+  RotateCcw,
+  ArrowRightFromLine,
 
 } from "lucide-react";
 import React, { useState } from "react";
@@ -37,17 +39,20 @@ import { usePresentationUndoRedo } from "../hooks/PresentationUndoRedo";
 import ToolTip from "@/components/ToolTip";
 import { clearPresentationData } from "@/store/slices/presentationGeneration";
 import { clearHistory } from "@/store/slices/undoRedoSlice";
+import { Separator } from "@/components/ui/separator";
 
-const Header = ({
+const PresentationHeader = ({
   presentation_id,
+  isPresentationSaving,
   currentSlide,
 }: {
   presentation_id: string;
+  isPresentationSaving: boolean;
   currentSlide?: number;
 }) => {
   const [open, setOpen] = useState(false);
-  const [showLoader, setShowLoader] = useState(false);
   const router = useRouter();
+  const [isExporting, setIsExporting] = useState(false);
   const pathname = usePathname();
   const dispatch = useDispatch();
 
@@ -68,8 +73,7 @@ const Header = ({
     if (isStreaming) return;
 
     try {
-      setOpen(false);
-      setShowLoader(true);
+      setIsExporting(true);
       // Save the presentation data before exporting
       trackEvent(MixpanelEvent.Header_UpdatePresentationContent_API_Call);
       await PresentationGenerationApi.updatePresentationContent(presentationData);
@@ -88,13 +92,12 @@ const Header = ({
       }
     } catch (error) {
       console.error("Export failed:", error);
-      setShowLoader(false);
       toast.error("Having trouble exporting!", {
         description:
           "We are having trouble exporting your presentation. Please try again.",
       });
     } finally {
-      setShowLoader(false);
+      setIsExporting(false);
     }
   };
 
@@ -102,8 +105,7 @@ const Header = ({
     if (isStreaming) return;
 
     try {
-      setOpen(false);
-      setShowLoader(true);
+      setIsExporting(true);
       // Save the presentation data before exporting
       trackEvent(MixpanelEvent.Header_UpdatePresentationContent_API_Call);
       await PresentationGenerationApi.updatePresentationContent(presentationData);
@@ -132,7 +134,7 @@ const Header = ({
           "We are having trouble exporting your presentation. Please try again.",
       });
     } finally {
-      setShowLoader(false);
+      setIsExporting(false);
     }
   };
   const handleReGenerate = () => {
@@ -182,117 +184,79 @@ const Header = ({
     </div>
   );
 
-  const MenuItems = ({ mobile }: { mobile: boolean }) => (
-    <div className="flex flex-col lg:flex-row items-center gap-4">
-      {/* undo redo */}
-      <button onClick={handleReGenerate} disabled={isStreaming || !presentationData} className="text-white  disabled:opacity-50" >
 
-        Re-Generate
-      </button>
-      <div className="flex items-center gap-2 ">
-        <ToolTip content="Undo">
-          <button disabled={!canUndo} className="text-white disabled:opacity-50" onClick={() => {
-            onUndo();
-          }}>
-
-            <Undo2 className="w-6 h-6 " />
-
-          </button>
-        </ToolTip>
-        <ToolTip content="Redo">
-
-          <button disabled={!canRedo} className="text-white disabled:opacity-50" onClick={() => {
-            onRedo();
-          }}>
-            <Redo2 className="w-6 h-6 " />
-
-          </button>
-        </ToolTip>
-
-      </div>
-
-      {/* Present Button */}
-      <Button
-        onClick={() => {
-          const to = `?id=${presentation_id}&mode=present&slide=${currentSlide || 0}`;
-          trackEvent(MixpanelEvent.Navigation, { from: pathname, to });
-          router.push(to);
-        }}
-        variant="ghost"
-        className="border border-white font-bold text-white rounded-[32px] transition-all duration-300 group"
-      >
-        <Play className="w-4 h-4 mr-1 stroke-white group-hover:stroke-black" />
-        Present
-      </Button>
-
-      {/* Desktop Export Button with Popover */}
-
-      <div style={{
-        zIndex: 100
-      }} className="hidden lg:block relative ">
-        <Popover open={open} onOpenChange={setOpen} >
-          <PopoverTrigger asChild>
-            <Button className={`border py-5 text-[#5146E5] font-bold rounded-[32px] transition-all duration-500 hover:border hover:bg-[#5146E5] hover:text-white w-full ${mobile ? "" : "bg-white"}`}>
-              <SquareArrowOutUpRight className="w-4 h-4 mr-1" />
-              Export
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-[250px] space-y-2 py-3 px-2 ">
-            <ExportOptions mobile={false} />
-          </PopoverContent>
-        </Popover>
-      </div>
-
-      {/* Mobile Export Section */}
-      <div className="lg:hidden flex flex-col w-full">
-        <ExportOptions mobile={true} />
-      </div>
-    </div>
-  );
 
   return (
     <>
-      <OverlayLoader
-        show={showLoader}
-        text="Exporting presentation..."
-        showProgress={true}
-        duration={40}
-      />
-      <div
+      <div className="py-7 sticky top-0 bg-white z-50 mb-[17px] pr-[25px] flex justify-between items-center">
+        <h2 className="text-[28px] text-[#101323]  w-[600px] truncate">{presentationData?.title || "Presentation"}</h2>
+        <div className="flex items-center gap-2.5">
 
-        className="bg-[#5146E5] w-full shadow-lg sticky top-0 ">
+          {isPresentationSaving && <div className="flex items-center gap-2">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          </div>}
 
-        <Announcement />
-        <Wrapper className="flex items-center justify-between py-1">
-          <Link href="/dashboard" className="min-w-[162px]">
-            <img
-              className="h-16"
-              src="/logo-white.png"
-              alt="Presentation logo"
-            />
-          </Link>
+          <div className="flex items-center gap-2 bg-[#F6F6F9] px-3.5 h-[38px] border border-[#EDECEC] rounded-[80px]">
 
-          {/* Desktop Menu */}
-          <div className="hidden lg:flex items-center gap-4 2xl:gap-6">
-            {isStreaming && (
-              <Loader2 className="animate-spin text-white font-bold w-6 h-6" />
-            )}
+            <ToolTip content="Regenerate Presentation">
+              <button onClick={handleReGenerate} className="group">
+                <RotateCcw className="w-3.5 h-3.5 text-[#101323] group-hover:text-[#5141e5] duration-300" />
+              </button>
+            </ToolTip>
+            <Separator orientation="vertical" className="h-4" />
+            <ToolTip content="Undo">
+              <button disabled={!canUndo} className=" disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer group" onClick={() => {
+                onUndo();
+              }}>
 
+                <Undo2 className="w-3.5 h-3.5 text-[#101323] group-hover:text-[#5141e5] duration-300" />
 
-            <MenuItems mobile={false} />
-            <HeaderNav />
+              </button>
+            </ToolTip>
+            <Separator orientation="vertical" className="h-4" />
+            <ToolTip content="Redo">
+
+              <button disabled={!canRedo} className=" disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer group" onClick={() => {
+
+                onRedo();
+              }}>
+                <Redo2 className="w-3.5 h-3.5 text-[#101323] group-hover:text-[#5141e5] duration-300" />
+
+              </button>
+            </ToolTip>
+            <Separator orientation="vertical" className="h-4 w-[2px]" />
+            <ToolTip content="Present">
+              <button
+                onClick={() => {
+                  const to = `?id=${presentation_id}&mode=present&slide=${currentSlide || 0}`;
+                  trackEvent(MixpanelEvent.Navigation, { from: pathname, to });
+                  router.push(to);
+                }}
+                disabled={!presentationData?.slides || presentationData?.slides.length === 0} className="cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group">
+                <Play className="w-3.5 h-3.5 text-[#101323] group-hover:text-[#5141e5] duration-300" />
+              </button>
+            </ToolTip>
           </div>
 
-          {/* Mobile Menu */}
-          <div className="lg:hidden flex items-center gap-4">
-            <HeaderNav />
-
-          </div>
-        </Wrapper>
-
+          <Popover open={open} onOpenChange={setOpen} >
+            <PopoverTrigger asChild>
+              <button className="flex  items-center gap-[7px] px-[18px] py-[11px] rounded-[53px] text-sm font-semibold text-[#101323]"
+                style={{
+                  background: "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
+                }}
+                disabled={isExporting}
+              >
+                {isExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Export"} <ArrowRightFromLine />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-[250px] space-y-2 py-3 px-2 ">
+              <ExportOptions mobile={false} />
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
     </>
   );
 };
 
-export default Header;
+export default PresentationHeader;

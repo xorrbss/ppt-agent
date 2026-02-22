@@ -211,7 +211,7 @@ const UploadPage = () => {
           onConfigChange={handleConfigChange}
         />
       </div> */}
-      <div className="  w-full mx-auto px-2 md:px-0 max-w-[720px]  ">
+      <div className="  w-full mx-auto px-2 md:px-0 max-w-[780px]  ">
 
         <div
           className='fixed z-0 md:-bottom-[36%] -bottom-[40%] left-0 w-full h-full'

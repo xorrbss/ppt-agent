@@ -132,7 +132,7 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
     <>
       <div
         id={`slide-${slide.index}`}
-        className=" w-full max-w-[1280px] main-slide flex items-center max-md:mb-4 justify-center relative"
+        className=" w-full  main-slide flex items-center max-md:mb-4 justify-center relative"
       >
         {isStreaming && (
           <Loader2 className="w-8 h-8 absolute right-2 top-2 z-30 text-blue-800 animate-spin" />

@@ -4,10 +4,9 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { clearPresentationData } from "@/store/slices/presentationGeneration";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
-import { Template, LoadingState, TABS } from "../types/index";
-import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
-import { TemplateLayoutsWithSettings } from "@/app/presentation-templates";
+import { LoadingState, TABS } from "../types/index";
 import { getCustomTemplateDetails } from "@/app/hooks/useCustomTemplates";
+import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
 
 const DEFAULT_LOADING_STATE: LoadingState = {
   message: "",
@@ -129,7 +128,7 @@ export const usePresentationGeneration = (
         layout = {
           name: selectedTemplate.id,
           ordered: false,
-          slides: selectedTemplate.layouts.map((layoutItem) => ({
+          slides: selectedTemplate.layouts.map((layoutItem: any) => ({
             id: layoutItem.layoutId,
             name: layoutItem.layoutName,
             description: layoutItem.layoutDescription,
