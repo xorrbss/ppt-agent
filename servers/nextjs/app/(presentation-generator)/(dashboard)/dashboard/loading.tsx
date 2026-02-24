@@ -1,23 +1,26 @@
-import { Skeleton } from '@/components/ui/skeleton'
 import React from 'react'
 
 const loading = () => {
   return (
-    <div className=''>
-
-
-      <div className='container mx-auto px-4 py-8'>
-
-
-        <div className=" mx-auto pb-10 grid xl:grid-cols-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4  ">
-          {
-            Array.from({ length: 8 }).map((_, index) => (
-              <Skeleton key={index} className="h-72 w-full bg-gray-300 aspect-video mx-auto" />
-            ))
-          }
+    <div className="grid grid-cols-1 px-6 mt-10 md:grid-cols-2 lg:grid-cols-4 gap-5 sm:gap-6 w-full">
+      <div className="flex flex-col gap-4 min-h-[200px] cursor-pointer group ring-1 ring-inset ring-slate-200 bg-white/80 rounded-xl items-center justify-center animate-pulse">
+        <div className="rounded-full bg-slate-200 p-4">
+          <div className="w-8 h-8" />
+        </div>
+        <div className="text-center space-y-2">
+          <div className="h-4 bg-slate-200 rounded w-32 mx-auto"></div>
+          <div className="h-3 bg-slate-200 rounded w-48 mx-auto"></div>
         </div>
       </div>
-
+      {[...Array(15)].map((_, i) => (
+        <div key={i} className="flex flex-col gap-4 min-h-[200px] bg-white/70 rounded-lg p-4 animate-pulse">
+          <div className="w-full h-24 bg-gray-200 rounded-lg"></div>
+          <div className="space-y-3">
+            <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+            <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

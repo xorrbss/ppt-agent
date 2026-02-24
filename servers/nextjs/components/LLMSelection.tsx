@@ -34,28 +34,7 @@ interface LLMProviderSelectionProps {
   ) => void;
 }
 
-const LLM_TABS = [
-  {
-    label: 'OpenAI',
-    value: 'openai',
-  },
-  {
-    label: 'Google',
-    value: 'google',
-  },
-  {
-    label: 'Anthropic',
-    value: 'anthropic',
-  },
-  {
-    label: 'Ollama',
-    value: 'ollama',
-  },
-  {
-    label: 'Custom',
-    value: 'custom',
-  },
-];
+
 export default function LLMProviderSelection({
   initialLLMConfig,
   onConfigChange,
@@ -236,23 +215,9 @@ export default function LLMProviderSelection({
 
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Provider Selection - Fixed Header */}
-      <div className="p-1.5 rounded-[41px]  bg-white ">
-        <div className='p-1 rounded-[40px] bg-[#ffffff] w-fit border border-[#EDEEEF] flex items-center justify-center '>
-          {LLM_TABS.map((tab) => (
-            <button key={tab.value} className='px-5  py-2 text-xs font-medium text-[#3A3A3A] rounded-[70px]'
-              onClick={() => { handleProviderChange(tab.value) }}
-              style={{
-                background: tab.value === llmConfig.LLM ? '#F4F3FF' : 'transparent',
-                color: tab.value === llmConfig.LLM ? '#5146E5' : '#3A3A3A'
-              }}
-            >{tab.label}</button>
-          ))}
+    <div className="h-full flex flex-col w-full">
 
-        </div>
 
-      </div>
 
       {/* Scrollable Content */}
       <div className="flex-1 bg-[#F9F8F8] p-7 rounded-[20px] overflow-y-auto  pt-0 custom_scrollbar">

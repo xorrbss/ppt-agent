@@ -69,7 +69,7 @@ export const PresentationGrid = ({
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 mt-10 md:grid-cols-2 lg:grid-cols-4 gap-5 sm:gap-6 w-full">
+      <div className="grid grid-cols-1 px-6 mt-10 md:grid-cols-2 lg:grid-cols-4 gap-5 sm:gap-6 w-full">
         <div className="flex flex-col gap-4 min-h-[200px] cursor-pointer group ring-1 ring-inset ring-slate-200 bg-white/80 rounded-xl items-center justify-center animate-pulse">
           <div className="rounded-full bg-slate-200 p-4">
             <div className="w-8 h-8" />

@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
-import { ExternalLink, Loader2, Plus } from "lucide-react";
+import { ChevronRight, ExternalLink, Loader2, Plus } from "lucide-react";
 import { templates } from "@/app/presentation-templates";
 import { TemplateWithData, TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
 import {
@@ -12,11 +12,12 @@ import {
 } from "@/app/hooks/useCustomTemplates";
 import { CompiledLayout } from "@/app/hooks/compileLayout";
 import CreateCustomTemplate from "./CreateCustomTemplate";
+import Link from "next/link";
 
 // Component for rendering custom template card with lazy-loaded previews
 export const CustomTemplateCard = React.memo(function CustomTemplateCard({ template }: { template: CustomTemplates }) {
     const router = useRouter();
-    const { previewLayouts, loading } = useCustomTemplatePreview(`${template.id}`);
+    const { previewLayouts, loading, totalLayouts } = useCustomTemplatePreview(`${template.id}`);
     const handleOpen = useCallback(() => {
         if (template.id.startsWith('custom-')) {
             router.push(`/template-preview/${template.id}`)
@@ -34,7 +35,7 @@ export const CustomTemplateCard = React.memo(function CustomTemplateCard({ templ
 
             <img src="/card_bg.svg" alt="" className="absolute top-0 left-0 w-full h-full object-cover" />
             <span className="text-xs font-syne absolute top-2 flex gap-1 capitalize  items-center left-2 rounded-[100px]  px-2.5 py-1 bg-[#3A3A3AF5] text-white font-semibold  z-40">
-                Layouts- {template.layoutCount}
+                Layouts- {totalLayouts}
             </span>
             <div className="p-5">
 
@@ -157,7 +158,7 @@ const InbuiltTemplateCard = React.memo(function InbuiltTemplateCard({
 });
 
 const LayoutPreview = () => {
-    const [tab, setTab] = useState<'custom' | 'default'>('custom');
+    const [tab, setTab] = useState<'custom' | 'default'>('default');
     const router = useRouter();
     const { templates: customTemplates, loading: customLoading } = useCustomTemplateSummaries();
 
@@ -191,6 +192,33 @@ const LayoutPreview = () => {
 
     return (
         <div className="min-h-screen ">
+            <div className="sticky top-0 right-0 z-50 py-[28px] px-6   backdrop-blur ">
+                <div className="flex xl:flex-row flex-col gap-6 xl:gap-0 items-center justify-between">
+                    <h3 className=" text-[28px] tracking-[-0.84px] font-unbounded font-normal text-[#101828] flex items-center gap-2">
+                        Templates
+                    </h3>
+                    <div className="flex  gap-2.5 max-sm:w-full max-md:justify-center max-sm:flex-wrap">
+
+
+
+
+                        <Link
+                            href="/custom-template"
+                            className="inline-flex items-center font-inter font-normal gap-2 rounded-xl px-4 py-2.5 text-black text-sm  shadow-sm hover:shadow-md"
+                            aria-label="Create new themes"
+                            style={{
+                                borderRadius: "48px",
+                                background: "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
+                            }}
+                        >
+                            <span className="hidden md:inline">New Template</span>
+                            <span className="md:hidden">New</span>
+                            <ChevronRight className="w-4 h-4" />
+                        </Link>
+
+                    </div>
+                </div>
+            </div>
 
             <div className="l mx-auto px-6 py-8">
                 <div className='p-1 rounded-[40px] bg-[#ffffff] w-fit border border-[#EDEEEF] flex items-center justify-center '>

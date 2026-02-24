@@ -1,17 +1,18 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import {
-  SquareArrowOutUpRight,
   Play,
   Loader2,
   Redo2,
   Undo2,
   RotateCcw,
   ArrowRightFromLine,
+  ExternalLink,
+  MoveUpRight,
+  ArrowUpRight,
 
 } from "lucide-react";
 import React, { useState } from "react";
-import Wrapper from "@/components/Wrapper";
 import { useRouter, usePathname } from "next/navigation";
 import {
   Popover,
@@ -19,27 +20,21 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
-import { OverlayLoader } from "@/components/ui/overlay-loader";
 import { useDispatch, useSelector } from "react-redux";
 
-import Link from "next/link";
 
 import { RootState } from "@/store/store";
 import { toast } from "sonner";
 
 
-import Announcement from "@/components/Announcement";
 import { PptxPresentationModel } from "@/types/pptx_models";
-import HeaderNav from "../../components/HeaderNab";
-import PDFIMAGE from "@/public/pdf.svg";
-import PPTXIMAGE from "@/public/pptx.svg";
-import Image from "next/image";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { usePresentationUndoRedo } from "../hooks/PresentationUndoRedo";
 import ToolTip from "@/components/ToolTip";
 import { clearPresentationData } from "@/store/slices/presentationGeneration";
 import { clearHistory } from "@/store/slices/undoRedoSlice";
 import { Separator } from "@/components/ui/separator";
+import ThemeSelector from "./ThemeSelector";
 
 const PresentationHeader = ({
   presentation_id,
@@ -157,28 +152,35 @@ const PresentationHeader = ({
   };
 
   const ExportOptions = ({ mobile }: { mobile: boolean }) => (
-    <div className={`space-y-2 max-md:mt-4 ${mobile ? "" : "bg-white"} rounded-lg`}>
-      <Button
-        onClick={() => {
-          trackEvent(MixpanelEvent.Header_Export_PDF_Button_Clicked, { pathname });
-          handleExportPdf();
-        }}
-        variant="ghost"
-        className={`pb-4 border-b rounded-none border-gray-300 w-full flex justify-start text-[#5146E5] ${mobile ? "bg-white py-6 border-none rounded-lg" : ""}`} >
-        <Image src={PDFIMAGE} alt="pdf export" width={30} height={30} />
-        Export as PDF
-      </Button>
-      <Button
-        onClick={() => {
-          trackEvent(MixpanelEvent.Header_Export_PPTX_Button_Clicked, { pathname });
-          handleExportPptx();
-        }}
-        variant="ghost"
-        className={`w-full flex justify-start text-[#5146E5] ${mobile ? "bg-white py-6" : ""}`}
-      >
-        <Image src={PPTXIMAGE} alt="pptx export" width={30} height={30} />
-        Export as PPTX
-      </Button>
+    <div className={` rounded-[18px] max-md:mt-4 ${mobile ? "" : "bg-white"}  p-5`}>
+      <p className="text-sm font-medium text-[#19001F]">Export as</p>
+      <div className="my-[18px] h-[1px] bg-[#E8E8E8]" />
+      <div className="space-y-3">
+
+        <Button
+          onClick={() => {
+            trackEvent(MixpanelEvent.Header_Export_PDF_Button_Clicked, { pathname });
+            handleExportPdf();
+          }}
+          variant="ghost"
+          className={`  rounded-none px-0 w-full text-xs flex justify-start text-black hover:bg-transparent ${mobile ? "bg-white py-6 border-none rounded-lg" : ""}`} >
+
+          PDF
+          <ArrowUpRight className="w-3.5 h-3.5" />
+        </Button>
+        <Button
+          onClick={() => {
+            trackEvent(MixpanelEvent.Header_Export_PPTX_Button_Clicked, { pathname });
+            handleExportPptx();
+          }}
+          variant="ghost"
+          className={`w-full flex px-0 justify-start text-xs text-black hover:bg-transparent  ${mobile ? "bg-white py-6" : ""}`}
+        >
+
+          PPTX
+          <ArrowUpRight className="w-3.5 h-3.5" />
+        </Button>
+      </div>
 
 
     </div>
@@ -189,12 +191,13 @@ const PresentationHeader = ({
   return (
     <>
       <div className="py-7 sticky top-0 bg-white z-50 mb-[17px] pr-[25px] flex justify-between items-center">
-        <h2 className="text-[28px] text-[#101323]  w-[600px] truncate">{presentationData?.title || "Presentation"}</h2>
+        <h2 className="text-lg text-[#101323]  w-[600px] truncate">{presentationData?.title || "Presentation"}</h2>
         <div className="flex items-center gap-2.5">
 
           {isPresentationSaving && <div className="flex items-center gap-2">
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
           </div>}
+          <ThemeSelector presentation_id={presentation_id} current_theme={{}} themes={[]} />
 
           <div className="flex items-center gap-2 bg-[#F6F6F9] px-3.5 h-[38px] border border-[#EDECEC] rounded-[80px]">
 
@@ -246,10 +249,10 @@ const PresentationHeader = ({
                 }}
                 disabled={isExporting}
               >
-                {isExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Export"} <ArrowRightFromLine />
+                {isExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Export"} <ArrowRightFromLine className="w-3.5 h-3.5" />
               </button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-[250px] space-y-2 py-3 px-2 ">
+            <PopoverContent align="end" className="w-[200px] rounded-[18px] space-y-2 p-0  ">
               <ExportOptions mobile={false} />
             </PopoverContent>
           </Popover>

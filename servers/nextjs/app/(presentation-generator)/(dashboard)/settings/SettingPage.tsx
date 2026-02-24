@@ -14,6 +14,7 @@ import LLMProviderSelection from "@/components/LLMSelection";
 import Header from "../dashboard/components/Header";
 import { LLMConfig } from "@/types/llm_config";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
+import SettingSideBar from "./SettingSideBar";
 
 // Button state interface
 interface ButtonState {
@@ -28,6 +29,8 @@ interface ButtonState {
 const SettingsPage = () => {
   const router = useRouter();
   const pathname = usePathname();
+  const [mode, setMode] = useState<'nanobanana' | 'presenton'>('presenton')
+  const [selectedProvider, setSelectedProvider] = useState<'text-provider' | 'image-provider'>('text-provider')
   const userConfigState = useSelector((state: RootState) => state.userConfig);
   const [llmConfig, setLlmConfig] = useState<LLMConfig>(
     userConfigState.llm_config
@@ -155,15 +158,30 @@ const SettingsPage = () => {
   return (
     <div className="h-screen font-instrument_sans flex flex-col overflow-hidden">
 
-      <main className="w-full mx-auto px-4  overflow-hidden flex flex-col">
+      <main className="w-full mx-auto gap-6   overflow-hidden flex ">
+        <SettingSideBar mode={mode} setMode={setMode} selectedProvider={selectedProvider} setSelectedProvider={setSelectedProvider} />
+        <div className="w-full">
+          <div className="sticky top-0 right-0 z-50 py-[28px]   backdrop-blur mb-4 ">
+            <div className="flex xl:flex-row flex-col gap-6 xl:gap-0 items-center justify-between">
+              <h3 className=" text-[28px] tracking-[-0.84px] font-unbounded font-normal text-black flex items-center gap-2">
+                Settings
+              </h3>
+              <div className="flex  gap-2.5 max-sm:w-full max-md:justify-center max-sm:flex-wrap">
+              </div>
+            </div>
+          </div>
 
-        <LLMProviderSelection
-          initialLLMConfig={llmConfig}
-          onConfigChange={setLlmConfig}
-          buttonState={buttonState}
-          setButtonState={setButtonState}
-        />
+          {mode === 'nanobanana' && <div className=" w-full bg-[#F9F8F8] p-7 rounded-[20px]">
+            <h4>Nano Banana</h4>
+          </div>}
+          {mode === 'presenton' && <LLMProviderSelection
+            initialLLMConfig={llmConfig}
+            onConfigChange={setLlmConfig}
+            buttonState={buttonState as any}
+            setButtonState={setButtonState as any}
+          />}
 
+        </div>
       </main>
 
       {/* Fixed Bottom Button */}
