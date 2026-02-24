@@ -19,6 +19,7 @@ import GoogleConfig from "./GoogleConfig";
 import AnthropicConfig from "./AnthropicConfig";
 import OllamaConfig from "./OllamaConfig";
 import CustomConfig from "./CustomConfig";
+import CodexConfig from "./CodexConfig";
 import {
   updateLLMConfig,
   changeProvider as changeProviderUtil,
@@ -95,7 +96,8 @@ export default function LLMProviderSelection({
       (llmConfig.LLM === "google" && !llmConfig.GOOGLE_MODEL) ||
       (llmConfig.LLM === "ollama" && !llmConfig.OLLAMA_MODEL) ||
       (llmConfig.LLM === "custom" && !llmConfig.CUSTOM_MODEL) ||
-      (llmConfig.LLM === "anthropic" && !llmConfig.ANTHROPIC_MODEL);
+      (llmConfig.LLM === "anthropic" && !llmConfig.ANTHROPIC_MODEL) ||
+      (llmConfig.LLM === "codex" && !llmConfig.CODEX_MODEL);
 
     const needsProviderApiKey =
       (llmConfig.LLM === "openai" && !llmConfig.OPENAI_API_KEY) ||
@@ -335,12 +337,13 @@ export default function LLMProviderSelection({
           onValueChange={handleProviderChange}
           className="w-full"
         >
-          <TabsList className="grid w-full grid-cols-5 bg-transparent h-10">
+          <TabsList className="grid w-full grid-cols-6 bg-transparent h-10">
             <TabsTrigger value="openai">OpenAI</TabsTrigger>
             <TabsTrigger value="google">Google</TabsTrigger>
             <TabsTrigger value="anthropic">Anthropic</TabsTrigger>
             <TabsTrigger value="ollama">Ollama</TabsTrigger>
             <TabsTrigger value="custom">Custom</TabsTrigger>
+            <TabsTrigger value="codex">ChatGPT</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
@@ -401,6 +404,14 @@ export default function LLMProviderSelection({
               customModel={llmConfig.CUSTOM_MODEL || ""}
               toolCalls={llmConfig.TOOL_CALLS || false}
               disableThinking={llmConfig.DISABLE_THINKING || false}
+              onInputChange={input_field_changed}
+            />
+          </TabsContent>
+
+          {/* ChatGPT / Codex Content */}
+          <TabsContent value="codex" className="mt-6">
+            <CodexConfig
+              codexModel={llmConfig.CODEX_MODEL || ""}
               onInputChange={input_field_changed}
             />
           </TabsContent>
@@ -652,6 +663,8 @@ export default function LLMProviderSelection({
                   ? llmConfig.GOOGLE_MODEL ?? "xxxxx"
                   : llmConfig.LLM === "openai"
                   ? llmConfig.OPENAI_MODEL ?? "xxxxx"
+                  : llmConfig.LLM === "codex"
+                  ? llmConfig.CODEX_MODEL ?? "xxxxx"
                   : "xxxxx"}{" "}
                 for text generation{" "}
                 {isImageGenerationDisabled ? (
