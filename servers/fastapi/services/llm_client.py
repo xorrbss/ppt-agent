@@ -1,7 +1,7 @@
 import asyncio
 import dirtyjson
 import json
-from typing import AsyncGenerator, List, Optional
+from typing import Any, AsyncGenerator, List, Optional, Union
 from fastapi import HTTPException
 from openai import APIStatusError, AsyncOpenAI, OpenAIError
 from openai.types.chat.chat_completion_chunk import (
@@ -39,6 +39,7 @@ from models.llm_tool_call import (
     OpenAIToolCallFunction,
 )
 from models.llm_tools import LLMDynamicTool, LLMTool
+from services.codex_llm import CodexLLMAdapter
 from services.llm_tool_calls_handler import LLMToolCallsHandler
 from utils.async_iterator import iterator_to_async
 from utils.dummy_functions import do_nothing_async
@@ -70,27 +71,6 @@ from utils.schema_utils import (
     flatten_json_schema,
     remove_titles_from_schema,
 )
-
-
-def _to_responses_tools(chat_tools: List[dict]) -> List[dict]:
-    """Convert Chat Completions tool format to flat Responses API format.
-
-    Chat Completions:  {"type": "function", "function": {"name": ..., "description": ..., "parameters": ...}}
-    Responses API:     {"type": "function", "name": ..., "description": ..., "parameters": ...}
-    """
-    result = []
-    for tool in chat_tools:
-        if tool.get("type") != "function":
-            result.append(tool)
-            continue
-        fn = tool.get("function") or tool
-        result.append({
-            "type": "function",
-            "name": fn.get("name", ""),
-            "description": fn.get("description", ""),
-            "parameters": fn.get("parameters", {}),
-        })
-    return result
 
 
 class LLMClient:
@@ -247,431 +227,6 @@ class LLMClient:
             default_headers=default_headers,
             timeout=120.0,
         )
-
-    # -------------------------------------------------------------------------
-    # Codex (Responses API) helpers
-    # -------------------------------------------------------------------------
-
-    def _build_codex_body(
-        self,
-        model: str,
-        messages: List[LLMMessage],
-        tools: Optional[List[dict]] = None,
-    ) -> dict:
-        """Convert LLMMessages to the Responses API request body for Codex."""
-        instructions = None
-        input_messages = []
-
-        for msg in messages:
-            if isinstance(msg, LLMSystemMessage):
-                instructions = msg.content
-            elif isinstance(msg, LLMUserMessage):
-                input_messages.append({
-                    "role": "user",
-                    "content": [{"type": "input_text", "text": msg.content}],
-                })
-            elif isinstance(msg, OpenAIAssistantMessage):
-                # Assistant turn — may carry text or tool-call data
-                text = msg.content or ""
-                if text:
-                    input_messages.append({
-                        "role": "assistant",
-                        "content": [{"type": "output_text", "text": text}],
-                    })
-                # Tool calls from a previous assistant turn are already resolved
-                # via the tool result messages that follow; skip raw tool call data.
-            else:
-                # Generic fallback: treat as user message
-                text = getattr(msg, "content", "") or ""
-                if text:
-                    input_messages.append({
-                        "role": "user",
-                        "content": [{"type": "input_text", "text": text}],
-                    })
-
-        body: dict = {
-            "model": model,
-            "store": False,
-            "stream": True,
-            "text": {"verbosity": "medium"},
-            "include": ["reasoning.encrypted_content"],
-            "tool_choice": "auto",
-            "parallel_tool_calls": True,
-        }
-        if instructions:
-            body["instructions"] = instructions
-        if input_messages:
-            body["input"] = input_messages
-        if tools:
-            # Responses API uses flat format: {"type":"function","name":...}
-            body["tools"] = tools
-
-        return body
-
-    def _codex_event_to_dict(self, event) -> dict:
-        """Convert SDK ResponseStreamEvent to dict for existing consumers."""
-        if hasattr(event, "model_dump"):
-            return event.model_dump()
-        return {
-            "type": getattr(event, "type", None),
-            "delta": getattr(event, "delta", None),
-            "item": getattr(event, "item", None),
-            "message": getattr(event, "message", None),
-            "arguments": getattr(event, "arguments", None),
-            "name": getattr(event, "name", None),
-        }
-
-    async def _stream_codex_raw(
-        self,
-        model: str,
-        messages: List[LLMMessage],
-        tools: Optional[List[dict]] = None,
-    ):
-        """Async generator of raw SSE event dicts from the Codex Responses API."""
-        print(
-            f"Codex raw stream: starting model={model} messages={len(messages)} tools_count={len(tools) if tools else 0}"
-        )
-        client = self._get_codex_client()
-        body = self._build_codex_body(model, messages, tools)
-        create_kwargs = {k: v for k, v in body.items() if k != "stream"}
-
-        try:
-            stream = await client.responses.create(
-                stream=True,
-                **create_kwargs,
-            )
-            print("Codex raw stream: create() returned, iterating events")
-        except (APIStatusError, OpenAIError) as e:
-            status = getattr(e, "status_code", 502)
-            detail = getattr(e, "message", str(e)) or str(e)
-            print(f"Codex raw stream: API error status={status} detail={detail[:200]}")
-            raise HTTPException(
-                status_code=status,
-                detail=f"Codex API error: {detail}"[:400],
-            ) from e
-
-        event_count = 0
-        event_types: dict[str, int] = {}
-        async for event in stream:
-            event_count += 1
-            d = self._codex_event_to_dict(event)
-            et = d.get("type") or "unknown"
-            event_types[et] = event_types.get(et, 0) + 1
-            if event_count <= 3 or et not in (
-                "response.output_text.delta",
-                "response.function_call_arguments.delta",
-            ):
-                print(f"Codex raw stream: event #{event_count} type={et}")
-            yield d
-        print(f"Codex raw stream: finished event_count={event_count} types={event_types}")
-
-    async def _stream_codex(
-        self,
-        model: str,
-        messages: List[LLMMessage],
-        max_tokens: Optional[int] = None,
-        tools: Optional[List[dict]] = None,
-        depth: int = 0,
-    ) -> AsyncGenerator[str, None]:
-        """Stream text from the Codex Responses API, handling tool calls."""
-        # Convert Chat-Completions tool format to flat Responses API format
-        responses_tools = _to_responses_tools(tools) if tools else None
-
-        tool_calls_by_id: dict[str, dict] = {}
-
-        async for event in self._stream_codex_raw(model, messages, responses_tools):
-            event_type = event.get("type", "")
-
-            if event_type == "response.output_text.delta":
-                delta = event.get("delta", "")
-                if delta:
-                    yield delta
-
-            elif event_type == "response.output_item.done":
-                item = event.get("item") or {}
-                if item.get("type") == "function_call":
-                    tool_calls_by_id[item.get("call_id", item.get("id", ""))] = item
-
-            elif event_type in ("response.failed", "error"):
-                msg_text = event.get("message") or str(event)
-                raise HTTPException(status_code=502, detail=f"Codex stream error: {msg_text}")
-
-        if tool_calls_by_id and tools and depth < 5:
-            openai_calls = [
-                OpenAIToolCall(
-                    id=item.get("call_id", item.get("id", "")),
-                    type="function",
-                    function=OpenAIToolCallFunction(
-                        name=item.get("name", ""),
-                        arguments=item.get("arguments", "{}"),
-                    ),
-                )
-                for item in tool_calls_by_id.values()
-            ]
-            tool_call_messages = await self.tool_calls_handler.handle_tool_calls_openai(
-                openai_calls
-            )
-            new_messages = [
-                *messages,
-                OpenAIAssistantMessage(
-                    role="assistant",
-                    content=None,
-                    tool_calls=[tc.model_dump() for tc in openai_calls],
-                ),
-                *tool_call_messages,
-            ]
-            async for chunk in self._stream_codex(
-                model=model,
-                messages=new_messages,
-                max_tokens=max_tokens,
-                tools=tools,
-                depth=depth + 1,
-            ):
-                yield chunk
-
-    async def _generate_codex(
-        self,
-        model: str,
-        messages: List[LLMMessage],
-        max_tokens: Optional[int] = None,
-        tools: Optional[List[dict]] = None,
-        depth: int = 0,
-    ) -> str | None:
-        """Non-streaming text generation via Codex Responses API."""
-        responses_tools = _to_responses_tools(tools) if tools else None
-
-        text_parts: list[str] = []
-        tool_calls_by_id: dict[str, dict] = {}
-
-        async for event in self._stream_codex_raw(model, messages, responses_tools):
-            event_type = event.get("type", "")
-
-            if event_type == "response.output_text.delta":
-                delta = event.get("delta", "")
-                if delta:
-                    text_parts.append(delta)
-
-            elif event_type == "response.output_item.done":
-                item = event.get("item") or {}
-                if item.get("type") == "function_call":
-                    tool_calls_by_id[item.get("call_id", item.get("id", ""))] = item
-
-            elif event_type in ("response.failed", "error"):
-                msg_text = event.get("message") or str(event)
-                raise HTTPException(status_code=502, detail=f"Codex error: {msg_text}")
-
-        if tool_calls_by_id and tools and depth < 5:
-            openai_calls = [
-                OpenAIToolCall(
-                    id=item.get("call_id", item.get("id", "")),
-                    type="function",
-                    function=OpenAIToolCallFunction(
-                        name=item.get("name", ""),
-                        arguments=item.get("arguments", "{}"),
-                    ),
-                )
-                for item in tool_calls_by_id.values()
-            ]
-            tool_call_messages = await self.tool_calls_handler.handle_tool_calls_openai(
-                openai_calls
-            )
-            new_messages = [
-                *messages,
-                OpenAIAssistantMessage(
-                    role="assistant",
-                    content=None,
-                    tool_calls=[tc.model_dump() for tc in openai_calls],
-                ),
-                *tool_call_messages,
-            ]
-            return await self._generate_codex(
-                model=model,
-                messages=new_messages,
-                max_tokens=max_tokens,
-                tools=tools,
-                depth=depth + 1,
-            )
-
-        return "".join(text_parts) or None
-
-    async def _stream_codex_structured(
-        self,
-        model: str,
-        messages: List[LLMMessage],
-        response_format: dict,
-        strict: bool = False,
-        max_tokens: Optional[int] = None,
-        tools: Optional[List[dict]] = None,
-        depth: int = 0,
-    ) -> AsyncGenerator[str, None]:
-        """Stream structured output from Codex via a ResponseSchema tool call."""
-        # Build the ResponseSchema tool in flat Responses API format
-        schema = response_format
-        if strict and depth == 0:
-            schema = ensure_strict_json_schema(schema, path=(), root=schema)
-
-        response_schema_tool = {
-            "type": "function",
-            "name": "ResponseSchema",
-            "description": "Provide response to the user",
-            "parameters": schema,
-        }
-
-        all_tools: list[dict] = [response_schema_tool]
-        if tools:
-            all_tools.extend(_to_responses_tools(tools))
-        print(
-            f"Codex structured stream: start depth={depth} strict={strict} all_tools_count={len(all_tools)}"
-        )
-
-        has_response_schema_call = False
-        tool_calls_by_id: dict[str, dict] = {}
-        current_call_id: Optional[str] = None
-        chunks_yielded = 0
-
-        async for event in self._stream_codex_raw(model, messages, all_tools):
-            event_type = event.get("type", "")
-
-            if event_type == "response.output_item.added":
-                item = event.get("item") or {}
-                if item.get("type") == "function_call" and item.get("name") == "ResponseSchema":
-                    current_call_id = item.get("call_id", item.get("id"))
-                    has_response_schema_call = True
-                    print(f"Codex structured stream: ResponseSchema output_item.added call_id={current_call_id}")
-
-            elif event_type == "response.function_call_arguments.delta":
-                if current_call_id is not None or has_response_schema_call:
-                    delta = event.get("delta", "")
-                    if delta:
-                        chunks_yielded += 1
-                        if chunks_yielded <= 2:
-                            print(f"Codex structured stream: yielding delta #{chunks_yielded} len={len(delta)}")
-                        yield delta
-
-            elif event_type == "response.function_call_arguments.done":
-                # Codex may send full arguments in one .done event instead of deltas
-                if event.get("name") == "ResponseSchema":
-                    arguments = event.get("arguments", "")
-                    if arguments:
-                        chunks_yielded += 1
-                        print(f"Codex structured stream: ResponseSchema function_call_arguments.done len={len(arguments)}")
-                        yield arguments
-
-            elif event_type == "response.output_item.done":
-                item = event.get("item") or {}
-                if item.get("type") == "function_call":
-                    tool_calls_by_id[item.get("call_id", item.get("id", ""))] = item
-                    # Codex may send full arguments only on item done (no deltas)
-                    if item.get("name") == "ResponseSchema":
-                        arguments = item.get("arguments", "")
-                        if arguments:
-                            chunks_yielded += 1
-                            print(f"Codex structured stream: ResponseSchema output_item.done len={len(arguments)}")
-                            yield arguments
-
-            elif event_type == "response.output_text.delta":
-                # Fallback: model returned plain text (e.g. JSON) instead of ResponseSchema tool call
-                delta = event.get("delta", "")
-                if delta:
-                    chunks_yielded += 1
-                    if chunks_yielded <= 2:
-                        print(f"Codex structured stream: yielding output_text delta #{chunks_yielded} len={len(delta)}")
-                    yield delta
-
-            elif event_type in ("response.failed", "error"):
-                msg_text = event.get("message") or str(event)
-                print(f"Codex structured stream: error event type={event_type} message={msg_text[:200]}")
-                raise HTTPException(status_code=502, detail=f"Codex structured error: {msg_text}")
-
-        print(
-            f"Codex structured stream: end depth={depth} has_response_schema_call={has_response_schema_call} chunks_yielded={chunks_yielded} tool_calls_count={len(tool_calls_by_id)}"
-        )
-        # Handle non-ResponseSchema tool calls recursively
-        other_tool_calls = {
-            k: v for k, v in tool_calls_by_id.items()
-            if v.get("name") != "ResponseSchema"
-        }
-        if other_tool_calls and tools and depth < 5:
-            print(f"Codex structured stream: recursing for other_tool_calls count={len(other_tool_calls)}")
-            openai_calls = [
-                OpenAIToolCall(
-                    id=item.get("call_id", item.get("id", "")),
-                    type="function",
-                    function=OpenAIToolCallFunction(
-                        name=item.get("name", ""),
-                        arguments=item.get("arguments", "{}"),
-                    ),
-                )
-                for item in other_tool_calls.values()
-            ]
-            tool_call_messages = await self.tool_calls_handler.handle_tool_calls_openai(
-                openai_calls
-            )
-            new_messages = [
-                *messages,
-                OpenAIAssistantMessage(
-                    role="assistant",
-                    content=None,
-                    tool_calls=[tc.model_dump() for tc in openai_calls],
-                ),
-                *tool_call_messages,
-            ]
-            async for chunk in self._stream_codex_structured(
-                model=model,
-                messages=new_messages,
-                response_format=response_format,
-                strict=strict,
-                max_tokens=max_tokens,
-                tools=tools,
-                depth=depth + 1,
-            ):
-                yield chunk
-
-    async def _generate_codex_structured(
-        self,
-        model: str,
-        messages: List[LLMMessage],
-        response_format: dict,
-        strict: bool = False,
-        max_tokens: Optional[int] = None,
-        tools: Optional[List[dict]] = None,
-        depth: int = 0,
-    ) -> dict | None:
-        """Non-streaming structured output from Codex via ResponseSchema tool.
-        Codex API requires stream=True; we use the same client and stream, then
-        accumulate chunks (from deltas and .done events) and parse the result.
-        """
-        print(f"Codex generate_structured: start depth={depth} strict={strict}")
-        accumulated: list[str] = []
-        async for chunk in self._stream_codex_structured(
-            model=model,
-            messages=messages,
-            response_format=response_format,
-            strict=strict,
-            max_tokens=max_tokens,
-            tools=tools,
-            depth=depth,
-        ):
-            accumulated.append(chunk)
-
-        raw = "".join(accumulated)
-        print(
-            f"Codex generate_structured: accumulated chunks={len(accumulated)} raw_len={len(raw)} depth={depth}"
-        )
-        if not raw:
-            print("Codex generate_structured: no content (raw empty), returning None")
-            return None
-        if depth == 0:
-            try:
-                parsed = dict(dirtyjson.loads(raw))
-                print(f"Codex generate_structured: parsed OK keys={list(parsed.keys())[:10]}")
-                return parsed
-            except Exception as parse_err:
-                print(
-                    f"Codex generate_structured: parse failed raw_preview={raw[:200] if raw else ''} err={parse_err}"
-                )
-                raise
-        return raw
 
     # ? Prompts
     def _get_system_prompt(self, messages: List[LLMMessage]) -> str:
@@ -946,11 +501,14 @@ class LLMClient:
                     tools=parsed_tools,
                 )
             case LLMProvider.CODEX:
-                content = await self._generate_codex(
-                    model=model,
-                    messages=messages,
-                    max_tokens=max_tokens,
-                    tools=parsed_tools,
+                print(
+                    f"LLMClient.generate Codex: model={model} messages={len(messages)} "
+                    f"user_tools={len(parsed_tools) if parsed_tools else 0}"
+                )
+                client = self._get_codex_client()
+                content = await CodexLLMAdapter.generate_codex(
+                    client, model, messages, self.tool_calls_handler,
+                    max_tokens=max_tokens, tools=parsed_tools,
                 )
             case LLMProvider.GOOGLE:
                 content = await self._generate_google(
@@ -1330,18 +888,18 @@ class LLMClient:
                 )
             case LLMProvider.CODEX:
                 print(
-                    f"generate_structured (Codex): model={model} messages={len(messages)} strict={strict}"
+                    f"LLMClient.generate_structured Codex: model={model} messages={len(messages)} "
+                    f"strict={strict} user_tools={len(parsed_tools) if parsed_tools else 0}"
                 )
-                content = await self._generate_codex_structured(
-                    model=model,
-                    messages=messages,
-                    response_format=response_format,
-                    strict=strict,
-                    tools=parsed_tools,
-                    max_tokens=max_tokens,
+                client = self._get_codex_client()
+                content = await CodexLLMAdapter.generate_codex_structured(
+                    client, model, messages, response_format, self.tool_calls_handler,
+                    strict=strict, max_tokens=max_tokens, tools=parsed_tools,
                 )
                 print(
-                    f"generate_structured (Codex): done content_is_none={content is None} content_keys={list(content.keys())[:8] if isinstance(content, dict) else None}"
+                    "LLMClient.generate_structured Codex: done "
+                    f"content_is_none={content is None} "
+                    f"content_keys={list(content.keys())[:8] if isinstance(content, dict) else None}"
                 )
             case LLMProvider.GOOGLE:
                 content = await self._generate_google_structured(
@@ -1661,11 +1219,14 @@ class LLMClient:
                     tools=parsed_tools,
                 )
             case LLMProvider.CODEX:
-                return self._stream_codex(
-                    model=model,
-                    messages=messages,
-                    max_tokens=max_tokens,
-                    tools=parsed_tools,
+                print(
+                    f"LLMClient.stream Codex: model={model} messages={len(messages)} "
+                    f"user_tools={len(parsed_tools) if parsed_tools else 0}"
+                )
+                client = self._get_codex_client()
+                return CodexLLMAdapter.stream_codex(
+                    client, model, messages, self.tool_calls_handler,
+                    max_tokens=max_tokens, tools=parsed_tools,
                 )
             case LLMProvider.GOOGLE:
                 return self._stream_google(
@@ -2094,13 +1655,14 @@ class LLMClient:
                     max_tokens=max_tokens,
                 )
             case LLMProvider.CODEX:
-                return self._stream_codex_structured(
-                    model=model,
-                    messages=messages,
-                    response_format=response_format,
-                    strict=strict,
-                    tools=parsed_tools,
-                    max_tokens=max_tokens,
+                print(
+                    f"LLMClient.stream_structured Codex: model={model} messages={len(messages)} "
+                    f"strict={strict} user_tools={len(parsed_tools) if parsed_tools else 0}"
+                )
+                client = self._get_codex_client()
+                return CodexLLMAdapter.stream_codex_structured(
+                    client, model, messages, response_format, self.tool_calls_handler,
+                    strict=strict, tools=parsed_tools, max_tokens=max_tokens,
                 )
             case LLMProvider.GOOGLE:
                 return self._stream_google_structured(
