@@ -46,7 +46,7 @@ const DashboardPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen  w-full px-6 pb-10">
+    <div className="min-h-screen  w-full px-6 pb-10 relative">
       <div className="sticky top-0 right-0 z-50 py-[28px]   backdrop-blur mb-4 ">
         <div className="flex xl:flex-row flex-col gap-6 xl:gap-0 items-center justify-between">
           <h3 className=" text-[28px] tracking-[-0.84px] font-unbounded font-normal text-[#101828] flex items-center gap-2">
@@ -95,6 +95,14 @@ const DashboardPage: React.FC = () => {
         isLoading={isLoading}
         error={error}
         onPresentationDeleted={removePresentation}
+      />
+      <div
+        className='fixed z-0 bottom-[-16.5rem] left-0 w-full h-full'
+        style={{
+          height: "341px",
+          borderRadius: '1440px',
+          background: 'radial-gradient(5.92% 104.69% at 50% 100%, rgba(122, 90, 248, 0.00) 0%, rgba(255, 255, 255, 0.00) 100%), radial-gradient(50% 50% at 50% 50%, rgba(122, 90, 248, 0.80) 0%, rgba(122, 90, 248, 0.00) 100%)',
+        }}
       />
     </div>
   );

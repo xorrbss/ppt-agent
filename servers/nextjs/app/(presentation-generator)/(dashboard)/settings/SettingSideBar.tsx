@@ -1,5 +1,6 @@
 import React from 'react'
 const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }: { mode: 'nanobanana' | 'presenton', setMode: (mode: 'nanobanana' | 'presenton') => void, selectedProvider: 'text-provider' | 'image-provider', setSelectedProvider: (provider: 'text-provider' | 'image-provider') => void }) => {
+    console.log(mode, selectedProvider)
     return (
         <div className='w-full max-w-[230px] h-screen px-4 pt-[22px] bg-[#F9FAFB]'>
             <p className='text-xs text-black  font-medium border-b mt-[3.15rem]  border-[#E1E1E5] pb-3.5'>FILTER BY:</p>
@@ -26,14 +27,14 @@ const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }
                 </div>
                 <p className='text-[#3A3A3A] text-xs font-medium pb-2.5'>Select Provider</p>
                 {mode === 'presenton' && <div className='space-y-2.5'>
-                    <button className={`bg-white w-full rounded-[6px] p-3 py-4 flex items-center gap-1.5 border border-[#E1E1E5] ${selectedProvider === 'text-provider' ? 'bg-[#F4F3FF] border-[#D9D6FE]' : ''}`} onClick={() => setSelectedProvider('text-provider')}>
+                    <button className={` w-full rounded-[6px] p-3 py-4 flex items-center gap-1.5 border  ${selectedProvider === 'text-provider' ? 'bg-[#F4F3FF] border-[#D9D6FE]' : 'bg-white border-[#E1E1E5]'}`} onClick={() => setSelectedProvider('text-provider')}>
                         <div className='relative w-6 h-6 rounded-full overflow-hidden border border-[#EDEEEF]'>
 
                             <img src='/providers/openai.png' className=' object-cover w-full h-full overflow-hidden' alt='google' />
                         </div>
                         <p className='text-[#191919] text-xs  font-medium' >Text Provider</p>
                     </button>
-                    <button className={`bg-white w-full rounded-[6px] p-3 py-4 flex items-center gap-1.5 border border-[#E1E1E5] ${selectedProvider === 'image-provider' ? 'bg-[#F4F3FF] border-[#D9D6FE]' : ''}`} onClick={() => setSelectedProvider('image-provider')}>
+                    <button className={` w-full rounded-[6px] p-3 py-4 flex items-center gap-1.5 border  ${selectedProvider === 'image-provider' ? 'bg-[#F4F3FF] border-[#D9D6FE]' : 'bg-white border-[#E1E1E5]'}`} onClick={() => setSelectedProvider('image-provider')}>
                         <div className='relative w-6 h-6 rounded-full overflow-hidden border border-[#EDEEEF]'>
                             <img src='/providers/image-provider.png' className=' object-cover w-full h-full overflow-hidden' alt='google' />
                         </div>
@@ -42,7 +43,7 @@ const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }
                 </div>}
                 {
                     mode === 'nanobanana' && <div>
-                        <button className={`bg-white w-full rounded-[6px] p-3 py-4 flex items-center gap-1.5 border border-[#E1E1E5] ${selectedProvider === 'text-provider' ? 'bg-[#F4F3FF] border-[#D9D6FE]' : ''}`}>
+                        <button className={` w-full rounded-[6px] p-3 py-4 flex items-center gap-1.5 border  bg-[#F4F3FF] border-[#D9D6FE]`}>
                             <div className='relative w-6 h-6 rounded-full overflow-hidden border border-[#EDEEEF]'>
 
                                 <img src='/providers/openai.png' className=' object-cover w-full h-full overflow-hidden' alt='google' />
