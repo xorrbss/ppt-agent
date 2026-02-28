@@ -87,6 +87,11 @@ export async function POST(request: Request) {
       userConfig.WEB_GROUNDING === undefined
         ? existingConfig.WEB_GROUNDING
         : userConfig.WEB_GROUNDING,
+    CODEX_MODEL: userConfig.CODEX_MODEL || existingConfig.CODEX_MODEL,
+    CODEX_ACCESS_TOKEN: existingConfig.CODEX_ACCESS_TOKEN,
+    CODEX_REFRESH_TOKEN: existingConfig.CODEX_REFRESH_TOKEN,
+    CODEX_TOKEN_EXPIRES: existingConfig.CODEX_TOKEN_EXPIRES,
+    CODEX_ACCOUNT_ID: existingConfig.CODEX_ACCOUNT_ID,
     USE_CUSTOM_URL:
       userConfig.USE_CUSTOM_URL === undefined
         ? existingConfig.USE_CUSTOM_URL

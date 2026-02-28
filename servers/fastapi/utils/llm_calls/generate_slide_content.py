@@ -125,20 +125,28 @@ async def get_slide_content_from_type_and_outline(
         True,
     )
 
+    messages = get_messages(
+        outline.content,
+        language,
+        tone,
+        verbosity,
+        instructions,
+    )
+    print(
+        f"get_slide_content_from_type_and_outline: model={model} outline_len={len(outline.content or '')} language={language}"
+    )
     try:
         response = await client.generate_structured(
             model=model,
-            messages=get_messages(
-                outline.content,
-                language,
-                tone,
-                verbosity,
-                instructions,
-            ),
+            messages=messages,
             response_format=response_schema,
             strict=False,
+        )
+        print(
+            f"get_slide_content_from_type_and_outline: response is None={response is None} keys={list(response.keys())[:6] if isinstance(response, dict) else None}"
         )
         return response
 
     except Exception as e:
+        print(f"get_slide_content_from_type_and_outline: exception={e}")
         raise handle_llm_client_exceptions(e)

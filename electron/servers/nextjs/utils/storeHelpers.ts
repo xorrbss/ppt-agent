@@ -67,6 +67,11 @@ export const hasValidLLMConfig = (llmConfig: LLMConfig) => {
     llmConfig.CUSTOM_MODEL !== null &&
     llmConfig.CUSTOM_MODEL !== undefined;
 
+  const isCodexConfigValid =
+    llmConfig.CODEX_MODEL !== "" &&
+    llmConfig.CODEX_MODEL !== null &&
+    llmConfig.CODEX_MODEL !== undefined;
+
   const shouldValidateImages = !llmConfig.DISABLE_IMAGE_GENERATION;
 
   const isImageConfigValid = () => {
@@ -104,6 +109,8 @@ export const hasValidLLMConfig = (llmConfig: LLMConfig) => {
       ? isOllamaConfigValid
       : llmConfig.LLM === "custom"
       ? isCustomConfigValid
+      : llmConfig.LLM === "codex"
+      ? isCodexConfigValid
       : false;
 
   return isLLMConfigValid && isImageConfigValid();

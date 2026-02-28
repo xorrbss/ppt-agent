@@ -69,6 +69,11 @@ interface UserConfig {
   COMFYUI_WORKFLOW?: string,
   DALL_E_3_QUALITY?: string,
   GPT_IMAGE_1_5_QUALITY?: string,
+  CODEX_MODEL?: string,
+  CODEX_ACCESS_TOKEN?: string,
+  CODEX_REFRESH_TOKEN?: string,
+  CODEX_TOKEN_EXPIRES?: string,
+  CODEX_ACCOUNT_ID?: string,
 }
 
 interface IPCStatus {
