@@ -117,3 +117,34 @@ export const LLM_PROVIDERS: Record<string, LLMProviderOption> = {
     description: "Custom LLM",
   },
 };
+
+export const DALLE_3_QUALITY_OPTIONS = [
+  {
+    label: "Standard",
+    value: "standard",
+    description: "Faster generation with lower cost",
+  },
+  {
+    label: "HD",
+    value: "hd",
+    description: "Higher quality images with increased cost",
+  },
+];
+
+export const GPT_IMAGE_1_5_QUALITY_OPTIONS = [
+  {
+    label: "Low",
+    value: "low",
+    description: "Fastest and most cost-effective",
+  },
+  {
+    label: "Medium",
+    value: "medium",
+    description: "Balanced quality and speed",
+  },
+  {
+    label: "High",
+    value: "high",
+    description: "Best quality with longer generation time",
+  },
+];

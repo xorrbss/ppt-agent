@@ -15,6 +15,8 @@ import Header from "../dashboard/components/Header";
 import { LLMConfig } from "@/types/llm_config";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import SettingSideBar from "./SettingSideBar";
+import TextProvider from "./TextProvider";
+import ImageProvider from "./ImageProvider";
 
 // Button state interface
 interface ButtonState {
@@ -174,12 +176,18 @@ const SettingsPage = () => {
           {mode === 'nanobanana' && <div className=" w-full bg-[#F9F8F8] p-7 rounded-[20px]">
             <h4>Nano Banana</h4>
           </div>}
-          {mode === 'presenton' && <LLMProviderSelection
-            initialLLMConfig={llmConfig}
-            onConfigChange={setLlmConfig}
-            buttonState={buttonState as any}
-            setButtonState={setButtonState as any}
+          {mode === 'presenton' && selectedProvider === 'text-provider' && <TextProvider
+
+
+            onInputChange={(value, field) => {
+              setLlmConfig(prev => ({
+                ...prev,
+                [field]: value
+              }));
+            }}
+            llmConfig={llmConfig}
           />}
+          {mode === 'presenton' && selectedProvider === 'image-provider' && <ImageProvider llmConfig={llmConfig} setLlmConfig={setLlmConfig} />}
 
         </div>
       </main>
