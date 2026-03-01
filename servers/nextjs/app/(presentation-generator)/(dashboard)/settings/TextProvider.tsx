@@ -4,8 +4,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { LLMConfig } from '@/types/llm_config';
-import { Check, ChevronsUpDown, Loader2 } from 'lucide-react';
-import React, { useEffect, useState } from 'react'
+import { LLM_PROVIDERS } from '@/utils/providerConstants';
+import { Check, ChevronsUpDown, Loader2, Eye, EyeOff } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner';
 
 
@@ -21,50 +22,168 @@ const TextProvider = ({
 }: OpenAIConfigProps
 
 ) => {
+    const [openProviderSelect, setOpenProviderSelect] = useState(false);
     const [openModelSelect, setOpenModelSelect] = useState(false);
     const [availableModels, setAvailableModels] = useState<string[]>([]);
     const [modelsLoading, setModelsLoading] = useState(false);
     const [modelsChecked, setModelsChecked] = useState(false);
-    const [apiKey, setApiKey] = useState('');
+    const [showApiKey, setShowApiKey] = useState(false);
+    const isFirstRender = useRef(true);
 
-    const openaiUrl = "https://api.openai.com/v1";
+    const selectedProvider = (llmConfig.LLM || 'openai') as keyof typeof LLM_PROVIDERS;
+    const selectedProviderMeta = LLM_PROVIDERS[selectedProvider];
+    const currentModelField = useMemo(() => {
+        switch (selectedProvider) {
+            case 'openai':
+                return 'OPENAI_MODEL';
+            case 'google':
+                return 'GOOGLE_MODEL';
+            case 'anthropic':
+                return 'ANTHROPIC_MODEL';
+            case 'ollama':
+                return 'OLLAMA_MODEL';
+            case 'custom':
+                return 'CUSTOM_MODEL';
+            default:
+                return '';
+        }
+    }, [selectedProvider]);
+
+    const currentApiKeyField = useMemo(() => {
+        switch (selectedProvider) {
+            case 'openai':
+                return 'OPENAI_API_KEY';
+            case 'google':
+                return 'GOOGLE_API_KEY';
+            case 'anthropic':
+                return 'ANTHROPIC_API_KEY';
+            case 'custom':
+                return 'CUSTOM_LLM_API_KEY';
+            default:
+                return '';
+        }
+    }, [selectedProvider]);
+
+    const currentModel = currentModelField ? ((llmConfig as Record<string, unknown>)[currentModelField] as string || '') : '';
+    const currentApiKey = currentApiKeyField ? ((llmConfig as Record<string, unknown>)[currentApiKeyField] as string || '') : '';
+    const currentCustomUrl = llmConfig.CUSTOM_LLM_URL || '';
+    const currentOllamaUrl = llmConfig.OLLAMA_URL || '';
+    const modelLabel = selectedProviderMeta?.label || selectedProvider;
 
     useEffect(() => {
+        if (isFirstRender.current) {
+            isFirstRender.current = false;
+            return;
+        }
+
         setAvailableModels([]);
         setModelsChecked(false);
-        onInputChange("", "openai_model");
-    }, [apiKey]);
+        if (currentModelField) {
+            onInputChange('', currentModelField);
+        }
+    }, [selectedProvider, currentApiKey, currentCustomUrl, currentOllamaUrl]);
 
-    const onApiKeyChange = (value: string) => {
-        setApiKey(value);
-        onInputChange(value, "openai_api_key");
+    const onApiKeyChange = (llm: keyof typeof LLM_PROVIDERS, value: string) => {
+        if (llm === 'ollama') {
+            onInputChange(value, 'OLLAMA_URL');
+            return;
+        }
+
+        const keyField =
+            llm === 'openai'
+                ? 'OPENAI_API_KEY'
+                : llm === 'google'
+                    ? 'GOOGLE_API_KEY'
+                    : llm === 'anthropic'
+                        ? 'ANTHROPIC_API_KEY'
+                        : llm === 'custom'
+                            ? 'CUSTOM_LLM_API_KEY'
+                            : '';
+        if (keyField) {
+            onInputChange(value, keyField);
+        }
     };
 
     const fetchAvailableModels = async () => {
-        // if (!'openaiApiKey') return;
+        if (selectedProvider === 'openai' && !currentApiKey) return;
+        if (selectedProvider === 'google' && !currentApiKey) return;
+        if (selectedProvider === 'anthropic' && !currentApiKey) return;
+        if (selectedProvider === 'custom' && !currentCustomUrl) return;
 
         setModelsLoading(true);
         try {
-            const response = await fetch('/api/v1/ppt/openai/models/available', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    url: openaiUrl,
-                    api_key: 'openaiApiKey'
-                }),
-            });
+            let response: Response;
+            if (selectedProvider === 'google') {
+                response = await fetch('/api/v1/ppt/google/models/available', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        api_key: currentApiKey
+                    }),
+                });
+            } else if (selectedProvider === 'anthropic') {
+                response = await fetch('/api/v1/ppt/anthropic/models/available', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        api_key: currentApiKey
+                    }),
+                });
+            } else if (selectedProvider === 'ollama') {
+                response = await fetch('/api/v1/ppt/ollama/models/supported');
+            } else {
+                response = await fetch('/api/v1/ppt/openai/models/available', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        url: selectedProvider === 'custom' ? currentCustomUrl : selectedProviderMeta?.url || '',
+                        api_key: currentApiKey
+                    }),
+                });
+            }
 
             if (response.ok) {
                 const data = await response.json();
-                setAvailableModels(data);
+                const normalizedModels: string[] = selectedProvider === 'ollama'
+                    ? Array.isArray(data)
+                        ? data.map((model: { value?: string; label?: string }) => model.value || model.label || '').filter(Boolean)
+                        : []
+                    : Array.isArray(data)
+                        ? data
+                        : [];
+
+                setAvailableModels(normalizedModels);
                 setModelsChecked(true);
-                onInputChange("gpt-4.1", "openai_model");
+
+                if (normalizedModels.length > 0 && currentModelField) {
+                    if (currentModel && normalizedModels.includes(currentModel)) {
+                        onInputChange(currentModel, currentModelField);
+                        return;
+                    }
+
+                    const preferredDefault =
+                        selectedProvider === 'openai'
+                            ? 'gpt-4.1'
+                            : selectedProvider === 'google'
+                                ? 'models/gemini-2.5-flash'
+                                : selectedProvider === 'anthropic'
+                                    ? 'claude-sonnet-4-20250514'
+                                    : normalizedModels[0];
+
+                    const nextModel = normalizedModels.includes(preferredDefault) ? preferredDefault : normalizedModels[0];
+                    onInputChange(nextModel, currentModelField);
+                }
             } else {
                 console.error('Failed to fetch models');
                 setAvailableModels([]);
                 setModelsChecked(true);
+                toast.error(`Failed to fetch ${modelLabel} models`);
             }
         } catch (error) {
             console.error('Error fetching models:', error);
@@ -75,6 +194,12 @@ const TextProvider = ({
             setModelsLoading(false);
         }
     };
+
+    useEffect(() => {
+        if (selectedProvider === 'ollama' && !modelsChecked && !modelsLoading) {
+            fetchAvailableModels();
+        }
+    }, [selectedProvider, modelsChecked, modelsLoading]);
     return (
         <div className="space-y-6 bg-[#F9F8F8] p-7 rounded-[20px] ">
             {/* API Key Input */}
@@ -94,32 +219,139 @@ const TextProvider = ({
                         Choosing where text contets come from
                     </p>
                 </div>
-                <div className="flex items-center gap-4">
-                    <div className="relative  w-[275px] ">
-                        <div className="flex flex-col justify-start gap-2">
+                <div className="flex items-start gap-4 justify-end">
+                    <div className="relative  w-[205px] ">
+                        <div className="flex flex-col justify-start ">
 
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                OpenAI API Key
+                                Select Text Provider
                             </label>
-                            <input
-                                type="text"
-                                value={'openaiApiKey'}
-                                onChange={(e) => onApiKeyChange(e.target.value)}
-                                className="w-full px-2 py-3 outline-none border  border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                                placeholder="Enter your API key"
-                            />
+                            <Popover
+                                open={openProviderSelect}
+                                onOpenChange={setOpenProviderSelect}
+                            >
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        aria-expanded={openProviderSelect}
+                                        className="w-[205px] h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
+                                    >
+                                        <div className="flex gap-3 items-center">
+                                            <span className="text-sm font-medium text-gray-900">
+                                                {llmConfig.LLM
+                                                    ? LLM_PROVIDERS[llmConfig.LLM]
+                                                        ?.label || llmConfig.LLM
+                                                    : "Select text provider"}
+                                            </span>
+                                        </div>
+                                        <ChevronsUpDown className="w-4 h-4 text-gray-500" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent
+                                    className="p-0"
+                                    align="start"
+                                    style={{ width: "var(--radix-popover-trigger-width)" }}
+                                >
+                                    <Command>
+                                        <CommandInput placeholder="Search provider..." />
+                                        <CommandList>
+                                            <CommandEmpty>No provider found.</CommandEmpty>
+                                            <CommandGroup>
+                                                {Object.values(LLM_PROVIDERS).map(
+                                                    (provider, index) => (
+                                                        <CommandItem
+                                                            key={index}
+                                                            value={provider.value}
+                                                            onSelect={(value) => {
+                                                                onInputChange(value, "LLM");
+                                                                setOpenProviderSelect(false);
+                                                            }}
+                                                        >
+                                                            <Check
+                                                                className={cn(
+                                                                    "mr-2 h-4 w-4",
+                                                                    llmConfig.LLM === provider.value
+                                                                        ? "opacity-100"
+                                                                        : "opacity-0"
+                                                                )}
+                                                            />
+                                                            <div className="flex gap-3 items-center">
+                                                                <div className="flex flex-col space-y-1 flex-1">
+                                                                    <div className="flex items-center justify-between gap-2">
+                                                                        <span className="text-sm font-medium text-gray-900 capitalize">
+                                                                            {provider.label}
+                                                                        </span>
+                                                                    </div>
+                                                                    <span className="text-xs text-gray-600 leading-relaxed">
+                                                                        {provider.description}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </CommandItem>
+                                                    )
+                                                )}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
                         </div>
 
-                        {/* Check for available models button - show when no models checked or no models found */}
 
-                        {(!modelsChecked || (modelsChecked && availableModels.length === 0)) && (
+                    </div>
+                    <div className="relative flex flex-col justify-end  items-end w-[205px] ">
+                        <div className="flex flex-col justify-start ">
+                            <label className="block text-sm font-medium capitalize text-gray-700 mb-2">
+                                {selectedProvider === 'ollama' ? 'Ollama URL' : selectedProvider === 'custom' ? 'Custom LLM API Key' : `${llmConfig.LLM} API Key`}
+                            </label>
+                            <div className="relative">
+                                <input
+                                    type={selectedProvider === 'ollama' ? 'text' : showApiKey ? 'text' : 'password'}
+
+                                    value={selectedProvider === 'ollama' ? currentOllamaUrl : currentApiKey}
+                                    onChange={(e) => onApiKeyChange(selectedProvider, e.target.value)}
+                                    className="w-full px-2 py-3 outline-none border  border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                    placeholder={selectedProvider === 'ollama' ? 'http://localhost:11434' : `Enter your ${llmConfig.LLM} API key`}
+                                />
+                                {selectedProvider !== 'ollama' && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowApiKey((prev) => !prev)}
+                                        className='absolute right-2 top-1/2 -translate-y-1/2 bg-white px-2 py-1 cursor-pointer'
+                                    >
+                                        {showApiKey ? <Eye className='w-4 h-4 text-gray-500' /> : <EyeOff className='w-4 h-4 text-gray-500' />}
+                                    </button>
+                                )}
+                            </div>
+                            {selectedProvider === 'custom' && (
+                                <input
+                                    type="text"
+                                    value={currentCustomUrl}
+                                    onChange={(e) => onInputChange(e.target.value, 'CUSTOM_LLM_URL')}
+                                    className="w-full mt-2 px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                    placeholder="OpenAI-compatible URL"
+                                />
+                            )}
+
+
+                        </div>
+
+
+                        {selectedProvider !== 'ollama' && (!modelsChecked || (modelsChecked && availableModels.length === 0)) && (
 
                             <button
                                 onClick={fetchAvailableModels}
-                                // disabled={modelsLoading || !'openaiApiKey'}
-                                className={` mt-7 py-2.5 bg-[#F7F6F9] px-3.5 rounded-[48px] text-xs font-semibold text-[#101323] transition-all duration-200 border ${modelsLoading
+                                disabled={
+                                    modelsLoading ||
+                                    (selectedProvider === 'openai' && !currentApiKey) ||
+                                    (selectedProvider === 'google' && !currentApiKey) ||
+                                    (selectedProvider === 'anthropic' && !currentApiKey) ||
+                                    (selectedProvider === 'custom' && !currentCustomUrl)
+                                }
+                                className={`mt-4 py-2.5 bg-[#EDEEEF] px-3.5 w-fit  rounded-[48px] text-xs font-semibold text-[#101323] transition-all duration-200 border ${modelsLoading
                                     ? " border-gray-300 cursor-not-allowed text-gray-500"
-                                    : " border-[#EDEEEF] text-blue-600 hover:bg-[#E8F0FF]/90 focus:ring-2 focus:ring-blue-500/20"
+                                    : " border-[#EDEEEF] text-[#101323] hover:bg-[#E8F0FF]/90 focus:ring-2 focus:ring-blue-500/20"
                                     }`}
                             >
                                 {modelsLoading ? (
@@ -128,27 +360,20 @@ const TextProvider = ({
                                         Checking for models...
                                     </span>
                                 ) : (
-                                    "Check for available models"
+                                    "Check models"
                                 )}
                             </button>
 
                         )}
                     </div>
-                    <div className="w-[295px]">
-                        {/* Show message if no models found */}
-                        {modelsChecked && availableModels.length === 0 && (
-                            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                                <p className="text-sm text-yellow-800">
-                                    No models found. Please make sure your API key is valid and has access to OpenAI models.
-                                </p>
-                            </div>
-                        )}
 
-                        {/* Model Selection - only show if models are available */}
-                        {modelsChecked && availableModels.length > 0 ? (
+
+                    {/* Model Selection - only show if models are available */}
+                    {modelsChecked && availableModels.length > 0 ? (
+                        <div className="w-[205px]">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-3">
-                                    Select OpenAI Model
+                                    {selectedProvider === 'ollama' ? 'Choose a supported model' : `Select ${modelLabel} Model`}
                                 </label>
                                 <div className="w-full">
                                     <Popover
@@ -162,13 +387,12 @@ const TextProvider = ({
                                                 aria-expanded={openModelSelect}
                                                 className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
                                             >
-                                                <div className="flex gap-3 items-center">
-                                                    <span className="text-sm font-medium text-gray-900">
-                                                        {/* {'openaiModel'
-                                                            ? availableModels.find(model => model === 'openaiModel') || 'openaiModel'
-                                                            : "Select a model"} */}
-                                                    </span>
-                                                </div>
+                                                <span className="text-sm truncate font-medium text-gray-900">
+                                                    {currentModel
+                                                        ? availableModels.find(model => model === currentModel) || currentModel
+                                                        : "Select a model"}
+                                                </span>
+
                                                 <ChevronsUpDown className="w-4 h-4 text-gray-500" />
                                             </Button>
                                         </PopoverTrigger>
@@ -187,14 +411,16 @@ const TextProvider = ({
                                                                 key={index}
                                                                 value={model}
                                                                 onSelect={(value) => {
-                                                                    onInputChange(value, "openai_model");
+                                                                    if (currentModelField) {
+                                                                        onInputChange(value, currentModelField);
+                                                                    }
                                                                     setOpenModelSelect(false);
                                                                 }}
                                                             >
                                                                 <Check
                                                                     className={cn(
                                                                         "mr-2 h-4 w-4",
-                                                                        'openaiModel' === model
+                                                                        currentModel === model
                                                                             ? "opacity-100"
                                                                             : "opacity-0"
                                                                     )}
@@ -217,10 +443,18 @@ const TextProvider = ({
                                     </Popover>
                                 </div>
                             </div>
-                        ) : null}
-                    </div>
+                        </div>
+                    ) : null}
                 </div>
             </div>
+            {/* Show message if no models found */}
+            {modelsChecked && availableModels.length === 0 && (
+                <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <p className="text-sm text-yellow-800">
+                        No models found. Please make sure your provider credentials are valid and the selected provider is reachable.
+                    </p>
+                </div>
+            )}
 
 
             {/* Web Grounding Toggle - show at the end, below models dropdown */}
@@ -237,8 +471,8 @@ const TextProvider = ({
                     <div className="w-[275px]">
                         <div className="flex items-center  mb-4 gap-2.5 ">
                             <Switch
-                                checked={true}
-                                onCheckedChange={(checked) => onInputChange(checked, "")}
+                                checked={!!llmConfig.WEB_GROUNDING}
+                                onCheckedChange={(checked) => onInputChange(checked, "WEB_GROUNDING")}
                             />
                             <label className="text-sm font-medium text-gray-700">
                                 Enable Web Grounding

@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { Loader2, Download, CheckCircle } from "lucide-react";
+import { Loader2, Download, CheckCircle, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { RootState } from "@/store/store";
 import { useSelector } from "react-redux";
@@ -10,8 +10,6 @@ import {
   pullOllamaModel,
 } from "@/utils/providerUtils";
 import { useRouter, usePathname } from "next/navigation";
-import LLMProviderSelection from "@/components/LLMSelection";
-import Header from "../dashboard/components/Header";
 import { LLMConfig } from "@/types/llm_config";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import SettingSideBar from "./SettingSideBar";
@@ -157,8 +155,17 @@ const SettingsPage = () => {
     return null;
   }
 
+
   return (
-    <div className="h-screen font-instrument_sans flex flex-col overflow-hidden">
+    <div className="h-screen font-instrument_sans flex flex-col overflow-hidden relative">
+      <div
+        className='fixed z-0 bottom-[-14.5rem] left-0 w-full h-full'
+        style={{
+          height: "341px",
+          borderRadius: '1440px',
+          background: 'radial-gradient(5.92% 104.69% at 50% 100%, rgba(122, 90, 248, 0.00) 0%, rgba(255, 255, 255, 0.00) 100%), radial-gradient(50% 50% at 50% 50%, rgba(122, 90, 248, 0.80) 0%, rgba(122, 90, 248, 0.00) 100%)',
+        }}
+      />
 
       <main className="w-full mx-auto gap-6   overflow-hidden flex ">
         <SettingSideBar mode={mode} setMode={setMode} selectedProvider={selectedProvider} setSelectedProvider={setSelectedProvider} />
@@ -168,8 +175,7 @@ const SettingsPage = () => {
               <h3 className=" text-[28px] tracking-[-0.84px] font-unbounded font-normal text-black flex items-center gap-2">
                 Settings
               </h3>
-              <div className="flex  gap-2.5 max-sm:w-full max-md:justify-center max-sm:flex-wrap">
-              </div>
+
             </div>
           </div>
 
@@ -193,30 +199,29 @@ const SettingsPage = () => {
       </main>
 
       {/* Fixed Bottom Button */}
-      <div className="flex-shrink-0 bg-white border-t border-gray-200 p-4">
-        <div className=" mx-auto ">
-          <button
-            onClick={handleSaveConfig}
-            disabled={buttonState.isDisabled}
-            style={{
-              background: "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
-              color: "#101323",
-            }}
-            className={`w-full font-semibold py-3 px-4 rounded-lg transition-all duration-500 ${buttonState.isDisabled
-              ? "bg-gray-400 cursor-not-allowed"
-              : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:ring-4 focus:ring-blue-200"
-              } text-white`}
-          >
-            {buttonState.isLoading ? (
-              <div className="flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                {buttonState.text}
-              </div>
-            ) : (
-              buttonState.text
-            )}
-          </button>
-        </div>
+      <div className=" mx-auto fixed bottom-20 right-5 ">
+        <button
+          onClick={handleSaveConfig}
+          disabled={buttonState.isDisabled}
+          style={{
+            background: "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
+            color: "#101323",
+          }}
+          className={`w-full flex items-center justify-center gap-2 font-semibold py-3 px-5 rounded-[58px] transition-all duration-500 ${buttonState.isDisabled
+            ? "bg-gray-400 cursor-not-allowed"
+            : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:ring-4 focus:ring-blue-200"
+            } text-white`}
+        >
+          {buttonState.isLoading ? (
+            <div className="flex items-center justify-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              {buttonState.text}
+            </div>
+          ) : (
+            buttonState.text
+          )}
+          <ChevronRight className="w-4 h-4" />
+        </button>
       </div>
 
       {/* Download Progress Modal */}

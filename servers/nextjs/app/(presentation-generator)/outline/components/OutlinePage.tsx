@@ -40,7 +40,7 @@ const OutlinePage: React.FC = () => {
 
 
   return (
-    <div className="h-[calc(100vh-72px)]">
+    <div className="">
       <div
         className='fixed z-0 bottom-[-16.5rem] left-0 w-full h-full'
         style={{
@@ -56,8 +56,8 @@ const OutlinePage: React.FC = () => {
         duration={loadingState.duration}
       />
 
-      <Wrapper className="h-full  flex flex-col w-full">
-        <div className="flex-grow w-full overflow-y-hidden  mx-auto mt-6">
+      <Wrapper className="h-full  flex flex-col w-full relative">
+        <div className="flex-grow w-full overflow-y-hidden   mx-auto mt-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
             <TabsList className="my-4 h-auto w-fit  rounded-full border border-[#DFDFE1] bg-[#F8F8F9] p-1.5">
               <TabsTrigger
@@ -101,11 +101,9 @@ const OutlinePage: React.FC = () => {
               </TabsContent>
             </div>
           </Tabs>
-        </div>
+          {/* Fixed Button */}
 
-        {/* Fixed Button */}
-        <div className="py-4 border-t border-gray-200">
-          <div className="max-w-[1200px] mx-auto">
+          <div className="absolute bottom-36 -right-10 z-50">
             <GenerateButton
               outlineCount={outlines.length}
               loadingState={loadingState}
@@ -115,6 +113,9 @@ const OutlinePage: React.FC = () => {
             />
           </div>
         </div>
+
+
+
       </Wrapper>
     </div>
   );

@@ -22,6 +22,7 @@ export interface LLMProviderOption {
   description?: string;
   model_value?: string;
   model_label?: string;
+  url?: string;
 }
 
 export const IMAGE_PROVIDERS: Record<string, ImageProviderOption> = {
@@ -95,16 +96,19 @@ export const LLM_PROVIDERS: Record<string, LLMProviderOption> = {
     value: "openai",
     label: "OpenAI",
     description: "OpenAI's latest text generation model",
+    url: "https://api.openai.com/v1",
   },
   google: {
     value: "google",
     label: "Google",
     description: "Google's primary text generation model",
+    url: "https://api.google.com/v1",
   },
   anthropic: {
     value: "anthropic",
     label: "Anthropic",
     description: "Anthropic's Claude models",
+    url: "https://api.anthropic.com/v1",
   },
   ollama: {
     value: "ollama",

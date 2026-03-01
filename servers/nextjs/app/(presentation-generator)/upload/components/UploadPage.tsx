@@ -18,16 +18,14 @@ import { PromptInput } from "./PromptInput";
 import { LanguageType, PresentationConfig, ToneType, VerbosityType } from "../type";
 import SupportingDoc from "./SupportingDoc";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, GitPullRequestCreate, UploadIcon } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import { OverlayLoader } from "@/components/ui/overlay-loader";
 import Wrapper from "@/components/Wrapper";
 import { setPptGenUploadState } from "@/store/slices/presentationGenUpload";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
-import { LanguageSelector } from "./LanguageSelector";
-import AdvanceSettings from "./AdvanceSettings";
-import NumberOfSlide from "./NumberOfSlide";
+import { ConfigurationSelects } from "./ConfigurationSelects";
 
 // Types for loading state
 interface LoadingState {
@@ -196,15 +194,7 @@ const UploadPage = () => {
   };
 
   return (
-    <Wrapper className=" pb-10 lg:max-w-[70%] xl:max-w-[65%] relative ">
-      <div
-        className='fixed z-0 bottom-[-16.5rem] left-0 w-full h-full'
-        style={{
-          height: "341px",
-          borderRadius: '1440px',
-          background: 'radial-gradient(5.92% 104.69% at 50% 100%, rgba(122, 90, 248, 0.00) 0%, rgba(255, 255, 255, 0.00) 100%), radial-gradient(50% 50% at 50% 50%, rgba(122, 90, 248, 0.80) 0%, rgba(122, 90, 248, 0.00) 100%)',
-        }}
-      />
+    <Wrapper className="pb-10 lg:max-w-[70%] xl:max-w-[65%]">
       <OverlayLoader
         show={loadingState.isLoading}
         text={loadingState.message}
@@ -212,99 +202,56 @@ const UploadPage = () => {
         duration={loadingState.duration}
         extra_info={loadingState.extra_info}
       />
-      {/* <div className="flex flex-col gap-4 md:items-center md:flex-row justify-between py-4">
-        <p></p>
-        <ConfigurationSelects
-          config={config}
-          onConfigChange={handleConfigChange}
-        />
-      </div> */}
-      <div className="  w-full mx-auto px-2 md:px-0 max-w-[780px]  ">
+      <div className="rounded-2xl border border-slate-200/70 bg-white/80 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60" >
+        <div className="flex flex-col gap-4 md:items-center md:flex-row justify-between p-4">
+          <div >
+            <h2 className="text-lg font-unbounded tracking-tight text-slate-900">Configuration</h2>
+            <p className="text-sm text-slate-500">Choose slides, tone, and language preferences.</p>
+          </div>
+          <ConfigurationSelects
+            config={config}
+            onConfigChange={handleConfigChange}
+          />
+        </div>
+        <div className="border-t border-slate-200/70" />
 
-        <div
-          className='fixed z-0 md:-bottom-[36%] -bottom-[40%] left-0 w-full h-full'
-          style={{
-            height: "341px",
-            borderRadius: '1440px',
-            background: 'radial-gradient(5.92% 104.69% at 50% 100%, rgba(122, 90, 248, 0.00) 0%, rgba(255, 255, 255, 0.00) 100%), radial-gradient(50% 50% at 50% 50%, rgba(122, 90, 248, 0.80) 0%, rgba(122, 90, 248, 0.00) 100%)',
-          }}
-        />
+        <div className="p-4 md:p-6">
+          <h3 className="text-base font-normal font-unbounded text-slate-900 mb-2">Content</h3>
+          <div className="relative">
+            <PromptInput
+              value={config.prompt}
+              onChange={(value) => handleConfigChange("prompt", value)}
+              data-testid="prompt-input"
+            />
+          </div>
+        </div>
+        <div className="border-t border-slate-200/70" />
+        <div className="p-4 md:p-6">
+          <h3 className="text-base font-normal font-unbounded text-slate-900 mb-2">Attachments (optional)</h3>
 
-        <div className=' w-max ml-9  rounded-tl-[28px] rounded-tr-[28px] flex items-center bg-[#FAFAFF]  px-2.5 pt-2.5 pb-1'
-          style={{
-            boxShadow: '0 0 16px 0 rgba(80, 71, 230, 0.12)',
 
-          }}
-        >
+          <SupportingDoc
+            files={[...files]}
+            onFilesChange={setFiles}
+            data-testid="file-upload-input"
+          />
+        </div>
+        <div className="border-t border-slate-200/70" />
 
-          <div className={`flex justify-center gap-1 py-2.5 pl-2 pr-3 cursor-pointer bg-white  rounded-[80px] `}
-
-            style={{
-              boxShadow: '0 0 4px 0 rgba(0, 0, 0, 0.06)',
-            }}
+        <div className="p-4 md:p-6">
+          <Button
+            onClick={handleGeneratePresentation}
+            className="w-full rounded-[28px] flex items-center justify-center py-5 bg-[#5141e5] text-white font-instrument_sans font-semibold text-lg hover:bg-[#5141e5]/85 focus-visible:ring-2 focus-visible:ring-[#5141e5]/40"
+            data-testid="next-button"
           >
-            <GitPullRequestCreate className={`w-4 h-4 text-[#6938EF]`} />
-            <p className='text-xs font-medium text-black'>Create Presentation</p>
-          </div>
+            <span>Generate Presentation</span>
+            <ChevronRight className="!w-5 !h-5 ml-1.5" />
+          </Button>
         </div>
-        <div className=" w-full bg-[#FAFAFF] rounded-[28px] p-2.5 "
-          style={{
-            boxShadow: '0 0 16px 0 rgba(80, 71, 230, 0.12)',
-            clipPath: 'inset(0px -28px -28px -28px)',
-          }}
-        >
-          <div className="bg-[#FEFEFF] rounded-[18px] p-2 border border-[#EDEEEF] ">
-            <div className="py-2.5 space-y-2.5">
 
-              <PromptInput
-                value={config.prompt}
-                onChange={(value) => handleConfigChange("prompt", value)}
-                data-testid="prompt-input"
-              />
-
-              <SupportingDoc
-                files={[...files]}
-                onFilesChange={setFiles}
-                data-testid="file-upload-input"
-              />
-            </div>
-            <div className="mt-2 flex justify-between gap-4">
-
-              <div className=" flex  items-stretch gap-3">
-
-                <LanguageSelector
-                  value={config.language}
-                  onValueChange={(value) => handleConfigChange("language", value)}
-
-                />
-                <AdvanceSettings
-                  config={config}
-                  onConfigChange={handleConfigChange}
-                />
-              </div>
-              <div>
-                <Button
-                  onClick={handleGeneratePresentation}
-                  style={{
-                    background: "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
-                  }}
-                  className="w-full rounded-[32px] flex items-center justify-center px-4 py-2.5  text-[#101323] font-instrument_sans font-semibold"
-                  data-testid="next-button"
-                >
-                  <span>Next</span>
-                  <ChevronRight className="!w-6 !h-6" />
-                </Button>
-              </div>
-            </div>
-          </div>
-
-        </div>
 
 
       </div>
-
-
-
     </Wrapper>
   );
 };

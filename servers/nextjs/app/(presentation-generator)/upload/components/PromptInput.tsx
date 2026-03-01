@@ -1,42 +1,32 @@
 import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
 
-
 interface PromptInputProps {
   value: string;
   onChange: (value: string) => void;
-
 }
 
-export function PromptInput({
-  value,
-  onChange,
+export function PromptInput({ value, onChange }: PromptInputProps) {
+  const [showHint, setShowHint] = useState(false);
 
-}: PromptInputProps) {
+  const handleChange = (val: string) => {
+    setShowHint(val.length > 0);
+    onChange(val);
+  };
 
   return (
+    <div className="space-y-2">
+      <div className="relative">
+        <Textarea
+          value={value}
+          rows={5}
+          onChange={(e) => handleChange(e.target.value)}
+          placeholder="Tell us about your presentation"
+          data-testid="prompt-input"
+          className={`py-4 px-5 border-2 font-medium font-instrument_sans text-base min-h-[150px] max-h-[300px] border-[#5146E5] focus-visible:ring-offset-0  focus-visible:ring-[#5146E5] overflow-y-auto  custom_scrollbar  `}
+        />
+      </div>
 
-
-    <Textarea
-      value={value}
-      rows={3}
-      name="prompt"
-      id="prompt"
-      aria-label="Prompt"
-      aria-describedby="prompt-description"
-      aria-required="true"
-      aria-invalid="false"
-      aria-autocomplete="list"
-      aria-controls="prompt-list"
-      aria-expanded="false"
-      aria-haspopup="listbox"
-      autoFocus={true}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder="Tell us about your presentation"
-      data-testid="prompt-input"
-      className={`py-3.5 px-2.5 rounded-[10px] border-none bg-[#F6F6F9] placeholder:text-[#B3B3B3] font-medium font-instrument_sans text-base  max-h-[300px]  focus-visible:ring-offset-0  focus-visible:ring-0 overflow-y-auto  custom_scrollbar  `}
-    />
-
-
+    </div>
   );
 }

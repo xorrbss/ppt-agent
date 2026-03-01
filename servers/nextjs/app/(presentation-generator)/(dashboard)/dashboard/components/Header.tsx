@@ -18,35 +18,13 @@ const Header = () => {
             {/* {(pathname !== "/upload" && pathname !== "/dashboard") && <BackBtn />} */}
             <Link href="/dashboard" onClick={() => trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/dashboard" })}>
               <img
-                src="/Logo.png"
+                src="/logo-with-bg.png"
                 alt="Presentation logo"
                 className="h-[33px]"
               />
             </Link>
           </div>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/custom-template"
-              prefetch={false}
-              onClick={() => trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/custom-template" })}
-              className="flex items-center gap-2 px-3 py-2 text-[#101323]  rounded-md transition-colors outline-none"
-              role="menuitem"
-            >
-              <FilePlus2 className="w-5 h-5" />
-              <span className="text-sm font-medium font-inter">Create Template</span>
-            </Link>
-            <Link
-              href="/template-preview"
-              prefetch={false}
-              onClick={() => trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/template-preview" })}
-              className="flex items-center gap-2 px-3 py-2 text-[#101323]  rounded-md transition-colors outline-none"
-              role="menuitem"
-            >
-              <Layout className="w-5 h-5" />
-              <span className="text-sm font-medium font-inter">Templates</span>
-            </Link>
-            <HeaderNav />
-          </div>
+
         </div>
       </Wrapper>
     </div>
