@@ -66,6 +66,7 @@ from utils.set_env import (
 from utils.llm_provider import get_llm_provider, get_model
 from utils.parsers import parse_bool_or_none
 from utils.schema_utils import (
+    ensure_array_schemas_have_items,
     ensure_strict_json_schema,
     flatten_json_schema,
     remove_titles_from_schema,
@@ -702,6 +703,7 @@ class LLMClient:
                 path=(),
                 root=response_schema,
             )
+        response_schema = ensure_array_schemas_have_items(response_schema)
         if use_tool_calls_for_structured_output and depth == 0:
             if all_tools is None:
                 all_tools = []
@@ -1599,6 +1601,7 @@ class LLMClient:
                 path=(),
                 root=response_schema,
             )
+        response_schema = ensure_array_schemas_have_items(response_schema)
 
         if use_tool_calls_for_structured_output and depth == 0:
             if all_tools is None:
@@ -1793,28 +1796,16 @@ class LLMClient:
         """
         client: AsyncOpenAI = self._client
         response_schema = response_format
-        # Apply strict schema once at root
+        # Apply strict schema once at root (includes array "items" fix in ensure_strict_json_schema).
         if strict and depth == 0:
             response_schema = ensure_strict_json_schema(
                 response_schema,
                 path=(),
                 root=response_schema,
             )
-
-        # Codex Responses API requires all array schemas to specify `items`.
-        def _fix_arrays(node: Any) -> Any:
-            if isinstance(node, dict):
-                # Add default items for arrays missing them
-                if node.get("type") == "array" and "items" not in node:
-                    node["items"] = {"type": "string"}
-                for key, value in list(node.items()):
-                    node[key] = _fix_arrays(value)
-            elif isinstance(node, list):
-                for idx, value in enumerate(node):
-                    node[idx] = _fix_arrays(value)
-            return node
-
-        response_schema = _fix_arrays(response_schema)
+        # When we didn't run ensure_strict_json_schema, fix arrays for Codex API (strict=False or depth > 0).
+        else:
+            response_schema = ensure_array_schemas_have_items(response_schema)
 
         # Responses API tool format: flat {type, name, description, parameters}
         response_schema_tool = {

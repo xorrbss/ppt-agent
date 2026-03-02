@@ -134,11 +134,25 @@ def ensure_strict_json_schema(
 
     # arrays
     # { 'type': 'array', 'items': {...} }
+    # OpenAI requires array schemas to have "items". Zod tuples may emit prefixItems only.
     items = json_schema.get("items")
     if isinstance(items, dict):
         json_schema["items"] = ensure_strict_json_schema(
             items, path=(*path, "items"), root=root
         )
+    elif typ == "array":
+        prefix_items = json_schema.get("prefixItems")
+        if (
+            isinstance(prefix_items, list)
+            and len(prefix_items) > 0
+            and isinstance(prefix_items[0], dict)
+        ):
+            json_schema["items"] = ensure_strict_json_schema(
+                prefix_items[0], path=(*path, "items"), root=root
+            )
+            json_schema.pop("prefixItems", None)
+        else:
+            json_schema["items"] = {"type": "string"}
 
     # unions
     any_of = json_schema.get("anyOf")
@@ -279,6 +293,34 @@ def flatten_json_schema(schema: dict) -> dict:
         result.pop("$defs", None)
         result.pop("definitions", None)
     return result
+
+
+def ensure_array_schemas_have_items(schema: dict) -> dict[str, Any]:
+    """
+    Recursively ensure every JSON schema node with type="array" has an "items" key.
+    Codex Responses API requires array schemas to specify items. Mutates a deep copy.
+    """
+    result = deepcopy(schema)
+
+    def _is_array_schema_type(type_value: Any) -> bool:
+        if type_value == "array":
+            return True
+        if isinstance(type_value, list):
+            return "array" in type_value
+        return False
+
+    def _ensure(node: Any) -> Any:
+        if isinstance(node, dict):
+            if _is_array_schema_type(node.get("type")) and "items" not in node:
+                node["items"] = {"type": "string"}
+            for key, value in list(node.items()):
+                node[key] = _ensure(value)
+        elif isinstance(node, list):
+            for idx, value in enumerate(node):
+                node[idx] = _ensure(value)
+        return node
+
+    return _ensure(result)
 
 
 def remove_titles_from_schema(schema: dict) -> dict[str, Any]:
