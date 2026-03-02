@@ -27,7 +27,7 @@ import MarkdownRenderer from "./MarkdownRenderer";
 import { getIconFromFile } from "../../utils/others";
 import { ChevronRight, PanelRightOpen, X } from "lucide-react";
 import ToolTip from "@/components/ToolTip";
-import Header from "@/app/(presentation-generator)/dashboard/components/Header";
+import Header from "@/app/(presentation-generator)/(dashboard)/dashboard/components/Header";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 
 // Types
@@ -147,7 +147,7 @@ const DocumentsPreviewPage: React.FC = () => {
         (fileItem: FileItem) => fileItem.file_path
       );
       trackEvent(MixpanelEvent.DocumentsPreview_Create_Presentation_API_Call);
-       const createResponse = await PresentationGenerationApi.createPresentation(
+      const createResponse = await PresentationGenerationApi.createPresentation(
         {
           content: config?.prompt ?? "",
           n_slides: config?.slides ? parseInt(config.slides) : null,
@@ -240,9 +240,8 @@ const DocumentsPreviewPage: React.FC = () => {
                 <div
                   key={key}
                   onClick={() => updateSelectedDocument(key)}
-                  className={`${
-                    selectedDocument === key ? "border border-blue-500" : ""
-                  } flex p-2 rounded-sm gap-2 items-center cursor-pointer`}
+                  className={`${selectedDocument === key ? "border border-blue-500" : ""
+                    } flex p-2 rounded-sm gap-2 items-center cursor-pointer`}
                 >
                   <img
                     className="h-6 w-6 border border-gray-200"

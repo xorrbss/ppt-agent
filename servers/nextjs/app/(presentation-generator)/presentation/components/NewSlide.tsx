@@ -2,9 +2,8 @@
 import React, { useEffect, useState, memo, useCallback } from "react";
 import { useDispatch } from "react-redux";
 import { addNewSlide } from "@/store/slices/presentationGeneration";
-import { Loader2 } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
-import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getCustomTemplateDetails } from "@/app/hooks/useCustomTemplates";
 import { getTemplatesByTemplateName } from "@/app/presentation-templates";
@@ -95,7 +94,7 @@ const NewSlideV1 = ({
       <div className="my-6 w-full bg-gray-50 p-8 max-w-[1280px]">
         <div className="flex justify-between items-center mb-8">
           <h2 className="text-2xl font-semibold">Select a Slide Layout</h2>
-          <Trash2
+          <X
             onClick={() => setShowNewSlideSelection(false)}
             className="text-gray-500 text-2xl cursor-pointer"
           />
@@ -111,7 +110,7 @@ const NewSlideV1 = ({
     <div className="my-6 w-full bg-gray-50 p-8 max-w-[1280px]">
       <div className="flex justify-between items-center  mb-8">
         <h2 className="text-2xl font-semibold">Select a Slide Layout</h2>
-        <Trash2
+        <X
           onClick={() => setShowNewSlideSelection(false)}
           className="text-gray-500 text-2xl cursor-pointer"
         />

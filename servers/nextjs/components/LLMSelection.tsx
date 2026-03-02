@@ -1,19 +1,5 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
-import { Check, ChevronsUpDown, Info } from "lucide-react";
-import { Button } from "./ui/button";
-import { Switch } from "./ui/switch";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "./ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import { cn } from "@/lib/utils";
 import OpenAIConfig from "./OpenAIConfig";
 import GoogleConfig from "./GoogleConfig";
 import AnthropicConfig from "./AnthropicConfig";
@@ -24,39 +10,11 @@ import {
   updateLLMConfig,
   changeProvider as changeProviderUtil,
 } from "@/utils/providerUtils";
-import { IMAGE_PROVIDERS, LLM_PROVIDERS } from "@/utils/providerConstants";
 import { LLMConfig } from "@/types/llm_config";
+import ImageSelectionConfig from "./ImageSelectionConfig";
 
-const DALLE_3_QUALITY_OPTIONS = [
-  {
-    label: "Standard",
-    value: "standard",
-    description: "Faster generation with lower cost",
-  },
-  {
-    label: "HD",
-    value: "hd",
-    description: "Higher quality images with increased cost",
-  },
-];
 
-const GPT_IMAGE_1_5_QUALITY_OPTIONS = [
-  {
-    label: "Low",
-    value: "low",
-    description: "Fastest and most cost-effective",
-  },
-  {
-    label: "Medium",
-    value: "medium",
-    description: "Balanced quality and speed",
-  },
-  {
-    label: "High",
-    value: "high",
-    description: "Best quality with longer generation time",
-  },
-];
+
 
 // Button state interface
 interface ButtonState {
@@ -77,6 +35,7 @@ interface LLMProviderSelectionProps {
   ) => void;
 }
 
+
 export default function LLMProviderSelection({
   initialLLMConfig,
   onConfigChange,
@@ -85,7 +44,6 @@ export default function LLMProviderSelection({
   const [llmConfig, setLlmConfig] = useState<LLMConfig>(initialLLMConfig);
   const [openImageProviderSelect, setOpenImageProviderSelect] = useState(false);
   const isImageGenerationDisabled = llmConfig.DISABLE_IMAGE_GENERATION ?? false;
-
   useEffect(() => {
     onConfigChange(llmConfig);
   }, [llmConfig]);
@@ -135,12 +93,12 @@ export default function LLMProviderSelection({
       text: needsModelSelection
         ? "Please Select a Model"
         : needsApiKey
-        ? "Please Enter API Key"
-        : needsOllamaUrl
-        ? "Please Enter Ollama URL"
-        : needsComfyUIConfig
-        ? "Please Configure ComfyUI"
-        : "Save Configuration",
+          ? "Please Enter API Key"
+          : needsOllamaUrl
+            ? "Please Enter Ollama URL"
+            : needsComfyUIConfig
+              ? "Please Configure ComfyUI"
+              : "Save Configuration",
       showProgress: false,
     });
   }, [llmConfig]);
@@ -256,77 +214,7 @@ export default function LLMProviderSelection({
     });
   }, [llmConfig.IMAGE_PROVIDER]);
 
-  const renderQualitySelector = () => {
-    if (llmConfig.IMAGE_PROVIDER === "dall-e-3") {
-      return (
-        <div className="mb-8">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            DALL·E 3 Image Quality
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            {DALLE_3_QUALITY_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className={cn(
-                  "border rounded-lg p-3 text-left transition-colors",
-                  llmConfig.DALL_E_3_QUALITY === option.value
-                    ? "border-blue-500 bg-blue-50"
-                    : "border-gray-200 hover:border-gray-300"
-                )}
-                onClick={() =>
-                  input_field_changed(option.value, "dall_e_3_quality")
-                }
-              >
-                <div className="text-sm font-medium text-gray-900">
-                  {option.label}
-                </div>
-                <div className="text-xs text-gray-600 mt-1">
-                  {option.description}
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      );
-    }
 
-    if (llmConfig.IMAGE_PROVIDER === "gpt-image-1.5") {
-      return (
-        <div className="mb-8">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            GPT Image 1.5 Quality
-          </label>
-          <div className="grid grid-cols-3 gap-3">
-            {GPT_IMAGE_1_5_QUALITY_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className={cn(
-                  "border rounded-lg p-3 text-left transition-colors",
-                  llmConfig.GPT_IMAGE_1_5_QUALITY === option.value
-                    ? "border-blue-500 bg-blue-50"
-                    : "border-gray-200 hover:border-gray-300"
-                )}
-                onClick={() =>
-                  input_field_changed(option.value, "gpt_image_1_5_quality")
-                }
-              >
-                <div className="text-sm font-medium text-gray-900">
-                  {option.label}
-                </div>
-                <div className="text-xs text-gray-600 mt-1">
-                  {option.description}
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      );
-    }
-
-    return null;
-  };
 
   return (
     <div className="h-full flex flex-col mt-10">
@@ -418,7 +306,16 @@ export default function LLMProviderSelection({
         </Tabs>
 
         {/* Image Generation Toggle */}
-        <div className="my-8">
+        <ImageSelectionConfig
+          isImageGenerationDisabled={isImageGenerationDisabled}
+          openImageProviderSelect={openImageProviderSelect}
+          setOpenImageProviderSelect={setOpenImageProviderSelect}
+          llmConfig={llmConfig}
+          input_field_changed={input_field_changed}
+          getApiKeyValue={getApiKeyValue}
+          handleApiKeyInputChange={handleApiKeyInputChange}
+        />
+        {/* <div className="my-8">
           <div className="flex items-center justify-between mb-4 bg-green-50 p-2 rounded-sm">
             <label className="text-sm font-medium text-gray-700">
               Disable Image Generation
@@ -438,213 +335,12 @@ export default function LLMProviderSelection({
             When enabled, slides will not include automatically generated
             images.
           </p>
-        </div>
+        </div> */}
 
-        {!isImageGenerationDisabled && (
-          <>
-            {/* Image Provider Selection */}
-            <div className="my-8">
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Select Image Provider
-              </label>
-              <div className="w-full">
-                <Popover
-                  open={openImageProviderSelect}
-                  onOpenChange={setOpenImageProviderSelect}
-                >
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={openImageProviderSelect}
-                      className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
-                    >
-                      <div className="flex gap-3 items-center">
-                        <span className="text-sm font-medium text-gray-900">
-                          {llmConfig.IMAGE_PROVIDER
-                            ? IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]
-                                ?.label || llmConfig.IMAGE_PROVIDER
-                            : "Select image provider"}
-                        </span>
-                      </div>
-                      <ChevronsUpDown className="w-4 h-4 text-gray-500" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    className="p-0"
-                    align="start"
-                    style={{ width: "var(--radix-popover-trigger-width)" }}
-                  >
-                    <Command>
-                      <CommandInput placeholder="Search provider..." />
-                      <CommandList>
-                        <CommandEmpty>No provider found.</CommandEmpty>
-                        <CommandGroup>
-                          {Object.values(IMAGE_PROVIDERS).map(
-                            (provider, index) => (
-                              <CommandItem
-                                key={index}
-                                value={provider.value}
-                                onSelect={(value) => {
-                                  input_field_changed(value, "image_provider");
-                                  setOpenImageProviderSelect(false);
-                                }}
-                              >
-                                <Check
-                                  className={cn(
-                                    "mr-2 h-4 w-4",
-                                    llmConfig.IMAGE_PROVIDER === provider.value
-                                      ? "opacity-100"
-                                      : "opacity-0"
-                                  )}
-                                />
-                                <div className="flex gap-3 items-center">
-                                  <div className="flex flex-col space-y-1 flex-1">
-                                    <div className="flex items-center justify-between gap-2">
-                                      <span className="text-sm font-medium text-gray-900 capitalize">
-                                        {provider.label}
-                                      </span>
-                                    </div>
-                                    <span className="text-xs text-gray-600 leading-relaxed">
-                                      {provider.description}
-                                    </span>
-                                  </div>
-                                </div>
-                              </CommandItem>
-                            )
-                          )}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
 
-            {renderQualitySelector()}
-
-            {/* Dynamic API Key Input for Image Provider */}
-            {llmConfig.IMAGE_PROVIDER &&
-              IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER] &&
-              (() => {
-                const provider = IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER];
-
-                // Show info message when using same API key as main provider
-                if (
-                  provider.value === "dall-e-3" &&
-                  llmConfig.LLM === "openai"
-                ) {
-                  return <></>;
-                }
-
-                if (
-                  provider.value === "gpt-image-1.5" &&
-                  llmConfig.LLM === "openai"
-                ) {
-                  return <></>;
-                }
-
-                if (
-                  provider.value === "gemini_flash" &&
-                  llmConfig.LLM === "google"
-                ) {
-                  return <></>;
-                }
-
-                if (
-                  provider.value === "nanobanana_pro" &&
-                  llmConfig.LLM === "google"
-                ) {
-                  return <></>;
-                }
-
-                // Show ComfyUI configuration
-                if (provider.value === "comfyui") {
-                  return (
-                    <div className="mb-8 space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          ComfyUI Server URL
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="text"
-                            placeholder="http://192.168.1.7:8188"
-                            className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                            value={llmConfig.COMFYUI_URL || ""}
-                            onChange={(e) => {
-                              input_field_changed(
-                                e.target.value,
-                                "comfyui_url"
-                              );
-                            }}
-                          />
-                        </div>
-                        <p className="mt-2 text-sm text-gray-500 flex items-center gap-2">
-                          <span className="block w-1 h-1 rounded-full bg-gray-400"></span>
-                          Use your machine IP address (not localhost) when
-                          running in Docker
-                        </p>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Workflow JSON
-                        </label>
-                        <div className="relative">
-                          <textarea
-                            placeholder='Paste your ComfyUI workflow JSON here (export via "Export (API)" in ComfyUI)'
-                            className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors font-mono text-xs"
-                            rows={6}
-                            value={llmConfig.COMFYUI_WORKFLOW || ""}
-                            onChange={(e) => {
-                              input_field_changed(
-                                e.target.value,
-                                "comfyui_workflow"
-                              );
-                            }}
-                          />
-                        </div>
-                        <p className="mt-2 text-sm text-gray-500">
-                          Export your workflow from ComfyUI using &quot;Export
-                          (API)&quot; and paste the JSON here.
-                        </p>
-                      </div>
-                    </div>
-                  );
-                }
-
-                // Show API key input for other providers
-                return (
-                  <div className="mb-8">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      {provider.apiKeyFieldLabel}
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        placeholder={`Enter your ${provider.apiKeyFieldLabel}`}
-                        className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                        value={getApiKeyValue(provider.apiKeyField)}
-                        onChange={(e) =>
-                          handleApiKeyInputChange(
-                            provider.apiKeyField,
-                            e.target.value
-                          )
-                        }
-                      />
-                    </div>
-                    <p className="mt-2 text-sm text-gray-500 flex items-center gap-2">
-                      <span className="block w-1 h-1 rounded-full bg-gray-400"></span>
-                      API key for {provider.label} image generation
-                    </p>
-                  </div>
-                );
-              })()}
-          </>
-        )}
 
         {/* Model Information */}
-        <div className="mb-8 p-4 bg-blue-50 rounded-lg border border-blue-100">
+        {/* <div className="mb-8 p-4 bg-blue-50 rounded-lg border border-blue-100">
           <div className="flex items-start gap-3">
             <Info className="w-5 h-5 text-blue-500 mt-0.5" />
             <div>
@@ -673,7 +369,7 @@ export default function LLMProviderSelection({
                   <>
                     and{" "}
                     {llmConfig.IMAGE_PROVIDER &&
-                    IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]
+                      IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]
                       ? IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER].label
                       : "xxxxx"}{" "}
                     for images
@@ -682,7 +378,28 @@ export default function LLMProviderSelection({
               </p>
             </div>
           </div>
-        </div>
+        </div> */}
+        {/* <button
+          onClick={handleSaveConfig}
+          disabled={buttonState.isDisabled}
+          style={{
+            background: "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
+            color: "#101323",
+          }}
+          className={`w-full font-semibold py-3 px-4 rounded-lg transition-all duration-500 ${buttonState.isDisabled
+            ? "bg-gray-400 cursor-not-allowed"
+            : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:ring-4 focus:ring-blue-200"
+            } text-white`}
+        >
+          {buttonState.isLoading ? (
+            <div className="flex items-center justify-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              {buttonState.text}
+            </div>
+          ) : (
+            buttonState.text
+          )}
+        </button> */}
       </div>
     </div>
   );

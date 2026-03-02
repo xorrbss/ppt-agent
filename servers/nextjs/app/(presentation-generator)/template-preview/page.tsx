@@ -5,15 +5,19 @@ import { Card } from "@/components/ui/card";
 import { ExternalLink, Loader2, Plus } from "lucide-react";
 
 import { templates } from "@/app/presentation-templates";
+<<<<<<< feat/revamp_design
+import { TemplateLayoutsWithSettings, TemplateWithData } from "@/app/presentation-templates/utils";
+=======
 import type { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
 import { TemplateWithData } from "@/app/presentation-templates/utils";
+>>>>>>> main
 import {
   useCustomTemplateSummaries,
   useCustomTemplatePreview,
   CustomTemplates,
 } from "@/app/hooks/useCustomTemplates";
 import { CompiledLayout } from "@/app/hooks/compileLayout";
-import Header from "../dashboard/components/Header";
+import Header from "../(dashboard)/dashboard/components/Header";
 
 // Component for rendering custom template card with lazy-loaded previews
 const CustomTemplateCard = ({ template }: { template: CustomTemplates }) => {

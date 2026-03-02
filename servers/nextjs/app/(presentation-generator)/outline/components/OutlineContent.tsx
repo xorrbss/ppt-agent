@@ -91,41 +91,30 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
             )}
 
             {/* Outlines content */}
+
             {outlines && outlines.length > 0 && (
-                <div>
+                <div className="bg-[#F9F8F8] p-7 rounded-[20px] overflow-y-auto custom_scrollbar">
                     <DndContext
                         sensors={sensors}
                         collisionDetection={closestCenter}
                         onDragEnd={onDragEnd}
                     >
-                        {isStreaming ? (
-
-                           outlines.map((item, index) => (
-                            <OutlineItem
-                                key={`slide-${index}`}
-                                index={index + 1}
-                                slideOutline={item}
-                                isStreaming={isStreaming}
-                                isActiveStreaming={activeSlideIndex === index}
-                                isStableStreaming={highestActiveIndex >= 0 && index < highestActiveIndex}
-                            />
-                        ))
-                        ) :
-                            <SortableContext
-                            items={outlines?.map((item, index) => ({ id: `slide-${index}` })) || []}
+                        <SortableContext
+                            items={outlines.map((_, index) => `slide-${index}`)}
                             strategy={verticalListSortingStrategy}
                         >
-                            {outlines?.map((item, index) => (
+                            {outlines.map((item, index) => (
                                 <OutlineItem
                                     key={`slide-${index}`}
+                                    sortableId={`slide-${index}`}
                                     index={index + 1}
                                     slideOutline={item}
                                     isStreaming={isStreaming}
-                                    isActiveStreaming={false}
-                                    isStableStreaming={false}
+                                    isActiveStreaming={activeSlideIndex === index}
+                                    isStableStreaming={highestActiveIndex >= 0 && index < highestActiveIndex}
                                 />
                             ))}
-                        </SortableContext>}
+                        </SortableContext>
                     </DndContext>
 
                     <Button

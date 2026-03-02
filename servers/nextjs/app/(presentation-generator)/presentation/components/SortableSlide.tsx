@@ -10,7 +10,7 @@ interface SortableSlideProps {
     selectedSlide: number;
     onSlideClick: (index: any) => void;
 }
-const SCALE = 0.2;
+const SCALE = 0.125;
 
 export function SortableSlide({ slide, index, selectedSlide, onSlideClick }: SortableSlideProps) {
     const searchParams = useSearchParams();
@@ -55,7 +55,7 @@ export function SortableSlide({ slide, index, selectedSlide, onSlideClick }: Sor
             {...attributes}
             {...listeners}
             onClick={handleClick}
-            className={` cursor-pointer border-[3px] relative  p-1 shadow-lg   rounded-md transition-all duration-200 ${selectedSlide === index ? ' border-[#5141e5]' : 'border-gray-300'
+            className={` cursor-pointer border relative  p-1    rounded-[12px] transition-all duration-200 ${selectedSlide === index ? ' border-[#5141e5]' : 'border-[#EDEEEF]'
                 }`}
         >
 

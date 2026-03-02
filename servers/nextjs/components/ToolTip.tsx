@@ -3,9 +3,9 @@ import { TooltipProvider } from '@radix-ui/react-tooltip'
 import React from 'react'
 import { TooltipContent, TooltipTrigger, } from './ui/tooltip'
 
-const ToolTip = ({ children, content }: { children: React.ReactNode, content: string }) => {
+const ToolTip = ({ children, content, className }: { children: React.ReactNode, content: string, className?: string }) => {
     return (
-        <div>
+        <div className={className}>
             <TooltipProvider delayDuration={100}>
                 <Tooltip>
                     <TooltipTrigger asChild>

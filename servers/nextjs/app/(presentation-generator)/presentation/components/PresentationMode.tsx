@@ -6,10 +6,13 @@ import {
   X,
   Minimize2,
   Maximize2,
+  StickyNote,
+  EyeOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Slide } from "../types/slide";
-import { V1ContentRender } from "./V1ContentRender";
+import { Slide } from "../../types/slide";
+import { V1ContentRender } from "../../components/V1ContentRender";
+
 
 
 interface PresentationModeProps {
@@ -38,6 +41,11 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
     return null;
   }
 
+  const [showSpeakerNotes, setShowSpeakerNotes] = useState(true);
+  const currentSpeakerNote = useMemo(
+    () => slides[currentSlide]?.speaker_note?.trim() || "",
+    [slides, currentSlide]
+  );
 
 
   const recomputeScale = useCallback(() => {
@@ -89,6 +97,10 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
         case "f":
         case "F":
           onFullscreenToggle();
+          break;
+        case "n":
+        case "N":
+          setShowSpeakerNotes((prev) => !prev);
           break;
       }
     },
@@ -223,24 +235,70 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
         </>
       )}
 
-      {/* Slides (all mounted, only current visible) */}
-      <div className={`flex-1 flex items-center justify-center ${isFullscreen ? "p-0" : "p-8"}`}>
-        <div className="w-full h-full flex items-center justify-center relative" >
-          <div
-            className={` rounded-sm font-inter relative w-full h-full flex items-center justify-center`}
-
-          >
-            {slides.length > 0 && slides.map((slide, index) => (
-              <div
-                key={slide.id}
-                className={index === currentSlide ? " w-full h-full flex items-center justify-center" : "hidden w-full h-full"}
-              >
-                <V1ContentRender slide={slide} isEditMode={true} />
-              </div>
-            ))}
-          </div>
+      {/* Centered 16:9 stage for consistent alignment in normal + fullscreen modes */}
+      <div className={`flex-1 min-h-0 flex items-center justify-center ${isFullscreen ? "px-6 py-8 md:px-10 md:py-12" : "p-8"}`}>
+        <div
+          className="relative rounded-sm font-inter"
+          style={{
+            aspectRatio: "16 / 9",
+            width: isFullscreen
+              ? "min(90vw, calc(88vh * 16 / 9))"
+              : "min(calc(100vw - 4rem), calc((100vh - 4rem) * 16 / 9))",
+            maxHeight: isFullscreen ? "88vh" : "calc(100vh - 4rem)",
+          }}
+        >
+          {slides.length > 0 && slides.map((slide, index) => (
+            <div
+              key={slide.id}
+              className={index === currentSlide ? "h-full w-full" : "hidden h-full w-full"}
+            >
+              <V1ContentRender slide={slide} isEditMode={true} />
+            </div>
+          ))}
         </div>
       </div>
+
+      {currentSpeakerNote && (
+        <div className="presentation-controls absolute bottom-4 right-4 z-50">
+          {showSpeakerNotes ? (
+            <div className="w-[360px] max-w-[50vw] rounded-xl border border-black/10 bg-white/95 shadow-xl backdrop-blur-sm">
+              <div className="flex items-center justify-between border-b border-black/10 px-3 py-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-gray-800">
+                  <StickyNote className="h-4 w-4" />
+                  Speaker notes
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowSpeakerNotes(false);
+                  }}
+                  className="h-8 px-2 text-gray-600 hover:bg-black/5 hover:text-gray-800"
+                >
+                  <EyeOff className="mr-1 h-4 w-4" />
+                  Hide
+                </Button>
+              </div>
+              <div className="max-h-[28vh] overflow-auto whitespace-pre-wrap px-3 py-2 text-sm text-gray-700">
+                {currentSpeakerNote}
+              </div>
+            </div>
+          ) : (
+            <Button
+              variant="secondary"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowSpeakerNotes(true);
+              }}
+              className="h-9 rounded-full border border-black/10 bg-white/95 px-3 text-gray-800 shadow-md hover:bg-white"
+            >
+              <StickyNote className="mr-2 h-4 w-4" />
+              Show notes
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 };

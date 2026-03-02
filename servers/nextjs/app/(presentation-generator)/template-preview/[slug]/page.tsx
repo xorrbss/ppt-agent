@@ -8,7 +8,7 @@ import { ArrowLeft, Home, Loader2, Trash2 } from "lucide-react";
 import { useFontLoader } from "../../hooks/useFontLoader";
 import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
 import TemplateService from "../../services/api/template";
-import Header from "../../dashboard/components/Header";
+import Header from "../../(dashboard)/dashboard/components/Header";
 import { toast } from "sonner";
 import { CustomTemplateLayout, useCustomTemplateDetails } from "@/app/hooks/useCustomTemplates";
 import { templates as templateGroups, getTemplatesByTemplateName } from "@/app/presentation-templates";
