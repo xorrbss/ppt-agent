@@ -55,7 +55,7 @@ class LLMToolCallsHandler:
             self.dynamic_tools.append(tool)
 
         match self.client.llm_provider:
-            case LLMProvider.OPENAI | LLMProvider.OLLAMA | LLMProvider.CUSTOM:
+            case LLMProvider.OPENAI | LLMProvider.OLLAMA | LLMProvider.CUSTOM | LLMProvider.CODEX:
                 return self.parse_tool_openai(tool, strict)
             case LLMProvider.ANTHROPIC:
                 return self.parse_tool_anthropic(tool)
@@ -63,7 +63,7 @@ class LLMToolCallsHandler:
                 return self.parse_tool_google(tool)
             case _:
                 raise ValueError(
-                    f"LLM provider must be either openai, anthropic, or google"
+                    f"LLM provider must be one of: openai, anthropic, google, codex"
                 )
 
     def parse_tool_openai(

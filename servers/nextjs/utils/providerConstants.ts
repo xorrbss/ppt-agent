@@ -120,6 +120,11 @@ export const LLM_PROVIDERS: Record<string, LLMProviderOption> = {
     label: "Custom",
     description: "Custom LLM",
   },
+  codex: {
+    value: "codex",
+    label: "ChatGPT",
+    description: "ChatGPT Plus/Pro via OAuth",
+  },
 };
 
 export const DALLE_3_QUALITY_OPTIONS = [

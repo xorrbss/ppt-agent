@@ -5,6 +5,7 @@ import GoogleConfig from "./GoogleConfig";
 import AnthropicConfig from "./AnthropicConfig";
 import OllamaConfig from "./OllamaConfig";
 import CustomConfig from "./CustomConfig";
+import CodexConfig from "./CodexConfig";
 import {
   updateLLMConfig,
   changeProvider as changeProviderUtil,
@@ -53,7 +54,8 @@ export default function LLMProviderSelection({
       (llmConfig.LLM === "google" && !llmConfig.GOOGLE_MODEL) ||
       (llmConfig.LLM === "ollama" && !llmConfig.OLLAMA_MODEL) ||
       (llmConfig.LLM === "custom" && !llmConfig.CUSTOM_MODEL) ||
-      (llmConfig.LLM === "anthropic" && !llmConfig.ANTHROPIC_MODEL);
+      (llmConfig.LLM === "anthropic" && !llmConfig.ANTHROPIC_MODEL) ||
+      (llmConfig.LLM === "codex" && !llmConfig.CODEX_MODEL);
 
     const needsProviderApiKey =
       (llmConfig.LLM === "openai" && !llmConfig.OPENAI_API_KEY) ||
@@ -215,67 +217,93 @@ export default function LLMProviderSelection({
 
 
   return (
-    <div className="h-full flex flex-col w-full">
-
-
+    <div className="h-full flex flex-col mt-10">
+      {/* Provider Selection - Fixed Header */}
+      <div className="p-2 rounded-2xl border border-gray-200">
+        <Tabs
+          value={llmConfig.LLM || "openai"}
+          onValueChange={handleProviderChange}
+          className="w-full"
+        >
+          <TabsList className="grid w-full grid-cols-6 bg-transparent h-10">
+            <TabsTrigger value="openai">OpenAI</TabsTrigger>
+            <TabsTrigger value="google">Google</TabsTrigger>
+            <TabsTrigger value="anthropic">Anthropic</TabsTrigger>
+            <TabsTrigger value="ollama">Ollama</TabsTrigger>
+            <TabsTrigger value="custom">Custom</TabsTrigger>
+            <TabsTrigger value="codex">ChatGPT</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
 
       {/* Scrollable Content */}
-      <div className="flex-1 bg-[#F9F8F8] p-7 rounded-[20px] overflow-y-auto  pt-0 custom_scrollbar">
+      <div className="flex-1 overflow-y-auto p-6 pt-0 custom_scrollbar">
+        <Tabs
+          value={llmConfig.LLM || "openai"}
+          onValueChange={handleProviderChange}
+          className="w-full"
+        >
+          {/* OpenAI Content */}
+          <TabsContent value="openai" className="mt-6">
+            <OpenAIConfig
+              openaiApiKey={llmConfig.OPENAI_API_KEY || ""}
+              openaiModel={llmConfig.OPENAI_MODEL || ""}
+              webGrounding={llmConfig.WEB_GROUNDING || false}
+              onInputChange={input_field_changed}
+            />
+          </TabsContent>
 
-        {/* OpenAI Content */}
-        {llmConfig.LLM === "openai" && <div className="mt-6">
-          <OpenAIConfig
-            openaiApiKey={llmConfig.OPENAI_API_KEY || ""}
-            openaiModel={llmConfig.OPENAI_MODEL || ""}
-            webGrounding={llmConfig.WEB_GROUNDING || false}
-            onInputChange={input_field_changed}
-            llmConfig={llmConfig}
-          />
-        </div>}
+          {/* Google Content */}
+          <TabsContent value="google" className="mt-6">
+            <GoogleConfig
+              googleApiKey={llmConfig.GOOGLE_API_KEY || ""}
+              googleModel={llmConfig.GOOGLE_MODEL || ""}
+              webGrounding={llmConfig.WEB_GROUNDING || false}
+              onInputChange={input_field_changed}
+            />
+          </TabsContent>
 
-        {/* Google Content */}
-        {llmConfig.LLM === "google" && <div className="mt-6">
-          <GoogleConfig
-            googleApiKey={llmConfig.GOOGLE_API_KEY || ""}
-            googleModel={llmConfig.GOOGLE_MODEL || ""}
-            webGrounding={llmConfig.WEB_GROUNDING || false}
-            onInputChange={input_field_changed}
-          />
-        </div>}
+          {/* Anthropic Content */}
+          <TabsContent value="anthropic" className="mt-6">
+            <AnthropicConfig
+              anthropicApiKey={llmConfig.ANTHROPIC_API_KEY || ""}
+              anthropicModel={llmConfig.ANTHROPIC_MODEL || ""}
+              extendedReasoning={llmConfig.EXTENDED_REASONING || false}
+              webGrounding={llmConfig.WEB_GROUNDING || false}
+              onInputChange={input_field_changed}
+            />
+          </TabsContent>
 
-        {/* Anthropic Content */}
-        {llmConfig.LLM === "anthropic" && <div className="mt-6">
-          <AnthropicConfig
-            anthropicApiKey={llmConfig.ANTHROPIC_API_KEY || ""}
-            anthropicModel={llmConfig.ANTHROPIC_MODEL || ""}
-            extendedReasoning={llmConfig.EXTENDED_REASONING || false}
-            webGrounding={llmConfig.WEB_GROUNDING || false}
-            onInputChange={input_field_changed}
-          />
-        </div>}
+          {/* Ollama Content */}
+          <TabsContent value="ollama" className="mt-6">
+            <OllamaConfig
+              ollamaModel={llmConfig.OLLAMA_MODEL || ""}
+              ollamaUrl={llmConfig.OLLAMA_URL || ""}
+              useCustomUrl={llmConfig.USE_CUSTOM_URL || false}
+              onInputChange={input_field_changed}
+            />
+          </TabsContent>
 
-        {/* Ollama Content */}
-        {llmConfig.LLM === "ollama" && <div className="mt-6">
-          <OllamaConfig
-            ollamaModel={llmConfig.OLLAMA_MODEL || ""}
-            ollamaUrl={llmConfig.OLLAMA_URL || ""}
-            useCustomUrl={llmConfig.USE_CUSTOM_URL || false}
-            onInputChange={input_field_changed}
-          />
-        </div>}
+          {/* Custom Content */}
+          <TabsContent value="custom" className="mt-6">
+            <CustomConfig
+              customLlmUrl={llmConfig.CUSTOM_LLM_URL || ""}
+              customLlmApiKey={llmConfig.CUSTOM_LLM_API_KEY || ""}
+              customModel={llmConfig.CUSTOM_MODEL || ""}
+              toolCalls={llmConfig.TOOL_CALLS || false}
+              disableThinking={llmConfig.DISABLE_THINKING || false}
+              onInputChange={input_field_changed}
+            />
+          </TabsContent>
 
-        {/* Custom Content */}
-        {llmConfig.LLM === "custom" && <div className="mt-6">
-          <CustomConfig
-            customLlmUrl={llmConfig.CUSTOM_LLM_URL || ""}
-            customLlmApiKey={llmConfig.CUSTOM_LLM_API_KEY || ""}
-            customModel={llmConfig.CUSTOM_MODEL || ""}
-            toolCalls={llmConfig.TOOL_CALLS || false}
-            disableThinking={llmConfig.DISABLE_THINKING || false}
-            onInputChange={input_field_changed}
-          />
-        </div>}
-
+          {/* ChatGPT / Codex Content */}
+          <TabsContent value="codex" className="mt-6">
+            <CodexConfig
+              codexModel={llmConfig.CODEX_MODEL || ""}
+              onInputChange={input_field_changed}
+            />
+          </TabsContent>
+        </Tabs>
 
         {/* Image Generation Toggle */}
         <ImageSelectionConfig
@@ -324,14 +352,16 @@ export default function LLMProviderSelection({
                 {llmConfig.LLM === "ollama"
                   ? llmConfig.OLLAMA_MODEL ?? "xxxxx"
                   : llmConfig.LLM === "custom"
-                    ? llmConfig.CUSTOM_MODEL ?? "xxxxx"
-                    : llmConfig.LLM === "anthropic"
-                      ? llmConfig.ANTHROPIC_MODEL ?? "xxxxx"
-                      : llmConfig.LLM === "google"
-                        ? llmConfig.GOOGLE_MODEL ?? "xxxxx"
-                        : llmConfig.LLM === "openai"
-                          ? llmConfig.OPENAI_MODEL ?? "xxxxx"
-                          : "xxxxx"}{" "}
+                  ? llmConfig.CUSTOM_MODEL ?? "xxxxx"
+                  : llmConfig.LLM === "anthropic"
+                  ? llmConfig.ANTHROPIC_MODEL ?? "xxxxx"
+                  : llmConfig.LLM === "google"
+                  ? llmConfig.GOOGLE_MODEL ?? "xxxxx"
+                  : llmConfig.LLM === "openai"
+                  ? llmConfig.OPENAI_MODEL ?? "xxxxx"
+                  : llmConfig.LLM === "codex"
+                  ? llmConfig.CODEX_MODEL ?? "xxxxx"
+                  : "xxxxx"}{" "}
                 for text generation{" "}
                 {isImageGenerationDisabled ? (
                   "and image generation is disabled."

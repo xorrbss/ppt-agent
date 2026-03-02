@@ -7,6 +7,8 @@ services:
     ports:
       # You can replace 5000 with any other port number of your choice to run Presenton on a different port number.
       - "5000:80"
+      # Required for Codex OAuth callback (OpenAI redirects browser directly to localhost:1455)
+      - "1455:1455"
     volumes:
       - ./app_data:/app_data
     environment:
@@ -23,6 +25,7 @@ services:
       - CUSTOM_LLM_URL=${CUSTOM_LLM_URL}
       - CUSTOM_LLM_API_KEY=${CUSTOM_LLM_API_KEY}
       - CUSTOM_MODEL=${CUSTOM_MODEL}
+      - CODEX_MODEL=${CODEX_MODEL}
       - PEXELS_API_KEY=${PEXELS_API_KEY}
       - EXTENDED_REASONING=${EXTENDED_REASONING}
       - TOOL_CALLS=${TOOL_CALLS}
@@ -48,6 +51,8 @@ services:
     ports:
       # You can replace 5000 with any other port number of your choice to run Presenton on a different port number.
       - "5000:80"
+      # Required for Codex OAuth callback (OpenAI redirects browser directly to localhost:1455)
+      - "1455:1455"
     volumes:
       - ./app_data:/app_data
     environment:
@@ -64,6 +69,7 @@ services:
       - CUSTOM_LLM_URL=${CUSTOM_LLM_URL}
       - CUSTOM_LLM_API_KEY=${CUSTOM_LLM_API_KEY}
       - CUSTOM_MODEL=${CUSTOM_MODEL}
+      - CODEX_MODEL=${CODEX_MODEL}
       - PEXELS_API_KEY=${PEXELS_API_KEY}
       - EXTENDED_REASONING=${EXTENDED_REASONING}
       - TOOL_CALLS=${TOOL_CALLS}
@@ -80,6 +86,8 @@ services:
       dockerfile: Dockerfile.dev
     ports:
       - "5000:80"
+      # Required for Codex OAuth callback (OpenAI redirects browser directly to localhost:1455)
+      - "1455:1455"
     volumes:
       - .:/app
       - ./app_data:/app_data
@@ -97,6 +105,7 @@ services:
       - CUSTOM_LLM_URL=${CUSTOM_LLM_URL}
       - CUSTOM_LLM_API_KEY=${CUSTOM_LLM_API_KEY}
       - CUSTOM_MODEL=${CUSTOM_MODEL}
+      - CODEX_MODEL=${CODEX_MODEL}
       - PEXELS_API_KEY=${PEXELS_API_KEY}
       - EXTENDED_REASONING=${EXTENDED_REASONING}
       - TOOL_CALLS=${TOOL_CALLS}
@@ -120,6 +129,8 @@ services:
               capabilities: [gpu]
     ports:
       - "5000:80"
+      # Required for Codex OAuth callback (OpenAI redirects browser directly to localhost:1455)
+      - "1455:1455"
     volumes:
       - .:/app
       - ./app_data:/app_data
@@ -137,6 +148,7 @@ services:
       - CUSTOM_LLM_URL=${CUSTOM_LLM_URL}
       - CUSTOM_LLM_API_KEY=${CUSTOM_LLM_API_KEY}
       - CUSTOM_MODEL=${CUSTOM_MODEL}
+      - CODEX_MODEL=${CODEX_MODEL}
       - PEXELS_API_KEY=${PEXELS_API_KEY}
       - EXTENDED_REASONING=${EXTENDED_REASONING}
       - TOOL_CALLS=${TOOL_CALLS}

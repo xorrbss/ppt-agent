@@ -16,7 +16,10 @@ import { useOutlineManagement } from "../hooks/useOutlineManagement";
 import { usePresentationGeneration } from "../hooks/usePresentationGeneration";
 import TemplateSelection from "./TemplateSelection";
 import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
+<<<<<<< feat/revamp_design
 import { Separator } from "@/components/ui/separator";
+=======
+>>>>>>> main
 
 const OutlinePage: React.FC = () => {
   const { presentation_id, outlines } = useSelector(

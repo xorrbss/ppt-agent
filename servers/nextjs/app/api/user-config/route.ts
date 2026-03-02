@@ -91,6 +91,11 @@ export async function POST(request: Request) {
       userConfig.USE_CUSTOM_URL === undefined
         ? existingConfig.USE_CUSTOM_URL
         : userConfig.USE_CUSTOM_URL,
+    CODEX_MODEL: userConfig.CODEX_MODEL || existingConfig.CODEX_MODEL,
+    CODEX_ACCESS_TOKEN: existingConfig.CODEX_ACCESS_TOKEN,
+    CODEX_REFRESH_TOKEN: existingConfig.CODEX_REFRESH_TOKEN,
+    CODEX_TOKEN_EXPIRES: existingConfig.CODEX_TOKEN_EXPIRES,
+    CODEX_ACCOUNT_ID: existingConfig.CODEX_ACCOUNT_ID,
   };
   fs.writeFileSync(userConfigPath, JSON.stringify(mergedConfig));
   return NextResponse.json(mergedConfig);
