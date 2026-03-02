@@ -12,6 +12,7 @@ import {
 } from "@/utils/providerUtils";
 import { LLMConfig } from "@/types/llm_config";
 import ImageSelectionConfig from "./ImageSelectionConfig";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 
 

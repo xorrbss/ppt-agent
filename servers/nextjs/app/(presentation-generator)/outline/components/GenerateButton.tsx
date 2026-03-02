@@ -4,10 +4,7 @@ import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { Button } from "@/components/ui/button";
 import { LoadingState, Template } from "../types/index";
 import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
-<<<<<<< feat/revamp_design
 import { ChevronRight } from "lucide-react";
-=======
->>>>>>> main
 
 interface GenerateButtonProps {
   loadingState: LoadingState;
