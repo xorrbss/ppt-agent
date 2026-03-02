@@ -3,13 +3,13 @@ import React, { useState } from "react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import { Skeleton } from "@/components/ui/skeleton";
-import PresentationMode from "../../components/PresentationMode";
+import PresentationMode from "./PresentationMode";
 import SidePanel from "./SidePanel";
 import SlideContent from "./SlideContent";
 import { Button } from "@/components/ui/button";
 import { usePathname } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import {
   usePresentationStreaming,
   usePresentationData,
@@ -79,7 +79,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     handleSlideChange(newSlide, presentationData);
   };
 
-
   // useEffect(() => {
   //   if(!loading && !isStreaming && presentationData?.slides && presentationData?.slides.length > 0){  
   //     const presentation_id = presentationData?.slides[0].layout.split(":")[0].split("custom-")[1];
@@ -132,6 +131,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
           <SidePanel
             selectedSlide={selectedSlide}
             onSlideClick={handleSlideClick}
+            presentationId={presentation_id}
             loading={loading}
 
           />

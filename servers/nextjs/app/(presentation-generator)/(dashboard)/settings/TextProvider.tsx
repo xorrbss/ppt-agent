@@ -5,7 +5,7 @@ import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { LLMConfig } from '@/types/llm_config';
 import { LLM_PROVIDERS } from '@/utils/providerConstants';
-import { Check, ChevronsUpDown, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Check, ChevronsUpDown, Loader2, Eye, EyeOff, ChevronUp } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner';
 
@@ -245,7 +245,7 @@ const TextProvider = ({
                                                     : "Select text provider"}
                                             </span>
                                         </div>
-                                        <ChevronsUpDown className="w-4 h-4 text-gray-500" />
+                                        <ChevronUp className="w-4 h-4 text-gray-500" />
                                     </Button>
                                 </PopoverTrigger>
                                 <PopoverContent
@@ -393,7 +393,7 @@ const TextProvider = ({
                                                         : "Select a model"}
                                                 </span>
 
-                                                <ChevronsUpDown className="w-4 h-4 text-gray-500" />
+                                                <ChevronUp className="w-4 h-4 text-gray-500" />
                                             </Button>
                                         </PopoverTrigger>
                                         <PopoverContent

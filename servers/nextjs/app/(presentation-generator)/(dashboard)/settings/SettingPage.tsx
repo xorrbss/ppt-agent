@@ -15,6 +15,7 @@ import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import SettingSideBar from "./SettingSideBar";
 import TextProvider from "./TextProvider";
 import ImageProvider from "./ImageProvider";
+import { IMAGE_PROVIDERS, LLM_PROVIDERS } from "@/utils/providerConstants";
 
 // Button state interface
 interface ButtonState {
@@ -156,6 +157,31 @@ const SettingsPage = () => {
   }
 
 
+  const textProviderKey = llmConfig.LLM || "openai";
+  const textProviderLabel =
+    LLM_PROVIDERS[textProviderKey]?.label || textProviderKey;
+  const selectedTextModel =
+    textProviderKey === "openai"
+      ? llmConfig.OPENAI_MODEL
+      : textProviderKey === "google"
+        ? llmConfig.GOOGLE_MODEL
+        : textProviderKey === "anthropic"
+          ? llmConfig.ANTHROPIC_MODEL
+          : textProviderKey === "ollama"
+            ? llmConfig.OLLAMA_MODEL
+            : textProviderKey === "custom"
+              ? llmConfig.CUSTOM_MODEL
+              : "";
+  const textSummary = selectedTextModel
+    ? `${textProviderLabel} (${selectedTextModel})`
+    : textProviderLabel;
+
+  const imageSummary = llmConfig.DISABLE_IMAGE_GENERATION
+    ? "Image generation disabled"
+    : llmConfig.IMAGE_PROVIDER
+      ? IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]?.label || llmConfig.IMAGE_PROVIDER
+      : "No image provider";
+
   return (
     <div className="h-screen font-instrument_sans flex flex-col overflow-hidden relative">
       <div
@@ -171,10 +197,13 @@ const SettingsPage = () => {
         <SettingSideBar mode={mode} setMode={setMode} selectedProvider={selectedProvider} setSelectedProvider={setSelectedProvider} />
         <div className="w-full">
           <div className="sticky top-0 right-0 z-50 py-[28px]   backdrop-blur mb-4 ">
-            <div className="flex xl:flex-row flex-col gap-6 xl:gap-0 items-center justify-between">
+            <div className="flex  gap-3 items-center ">
               <h3 className=" text-[28px] tracking-[-0.84px] font-unbounded font-normal text-black flex items-center gap-2">
                 Settings
               </h3>
+              <p className="text-[10px] px-2.5 py-0.5 rounded-[50px] text-[#7A5AF8] border border-[#EDEEEF]  font-medium ">
+                {textSummary} · {imageSummary}
+              </p>
 
             </div>
           </div>

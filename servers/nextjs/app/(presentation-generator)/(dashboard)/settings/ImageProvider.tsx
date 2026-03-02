@@ -7,11 +7,12 @@ import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { LLMConfig } from '@/types/llm_config'
 import { DALLE_3_QUALITY_OPTIONS, GPT_IMAGE_1_5_QUALITY_OPTIONS, IMAGE_PROVIDERS } from '@/utils/providerConstants'
-import { Check, ChevronsUpDown } from 'lucide-react'
+import { Check, ChevronUp, Eye, EyeOff } from 'lucide-react'
 import React, { useState } from 'react'
 
 const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setLlmConfig: (config: any) => void }) => {
     const [openImageProviderSelect, setOpenImageProviderSelect] = useState(false);
+    const [showApiKey, setShowApiKey] = useState(false);
     const isImageGenerationDisabled = llmConfig.DISABLE_IMAGE_GENERATION ?? false;
     const handleChangeImageGenerationDisabled = (value: boolean) => {
         setLlmConfig((prev: any) => ({
@@ -173,7 +174,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                                                     : "Select image provider"}
                                                             </span>
                                                         </div>
-                                                        <ChevronsUpDown className="w-4 h-4 text-gray-500" />
+                                                        <ChevronUp className="w-4 h-4 text-gray-500" />
                                                     </Button>
                                                 </PopoverTrigger>
                                                 <PopoverContent
@@ -277,7 +278,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                                     </label>
                                                     <div className="relative">
                                                         <input
-                                                            type="text"
+                                                            type={showApiKey ? 'text' : 'password'}
                                                             placeholder={`Enter your ${provider.apiKeyFieldLabel}`}
                                                             className="w-full px-4 py-2.5 h-12 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
                                                             value={getFieldValue(provider.apiKeyField)}
@@ -288,6 +289,13 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                                                 )
                                                             }
                                                         />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowApiKey((prev) => !prev)}
+                                                            className='absolute right-2 top-1/2 -translate-y-1/2 bg-white px-2 py-1 cursor-pointer'
+                                                        >
+                                                            {showApiKey ? <Eye className='w-4 h-4 text-gray-500' /> : <EyeOff className='w-4 h-4 text-gray-500' />}
+                                                        </button>
                                                     </div>
 
                                                 </div>

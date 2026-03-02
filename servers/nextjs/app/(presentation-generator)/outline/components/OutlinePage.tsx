@@ -57,7 +57,7 @@ const OutlinePage: React.FC = () => {
       />
 
       <Wrapper className="h-full  flex flex-col w-full relative">
-        <div className="flex-grow w-full overflow-y-hidden   mx-auto mt-6">
+        <div className="flex-grow w-full overflow-y-hidden   mx-auto ">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
             <TabsList className="my-4 h-auto w-fit  rounded-full border border-[#DFDFE1] bg-[#F8F8F9] p-1.5">
               <TabsTrigger

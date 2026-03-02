@@ -18,9 +18,9 @@ import {
 } from "@/store/slices/presentationGeneration";
 import { usePathname } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
-import NewSlide from "../../components/NewSlide";
 import { addToHistory } from "@/store/slices/undoRedoSlice";
 import { V1ContentRender } from "../../components/V1ContentRender";
+import NewSlide from "./NewSlide";
 
 interface SlideContentProps {
   slide: any;

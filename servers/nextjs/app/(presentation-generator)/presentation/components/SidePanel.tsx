@@ -1,5 +1,5 @@
 "use client";
-import React, { } from "react";
+import React, { useState } from "react";
 import { Plus } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store/store";
@@ -22,10 +22,12 @@ import { SortableSlide } from "./SortableSlide";
 import SlideScale from "../../components/PresentationRender";
 import { Separator } from "@/components/ui/separator";
 import { useRouter } from "next/navigation";
+import NewSlide from "./NewSlide";
 
 interface SidePanelProps {
   selectedSlide: number;
   onSlideClick: (index: number) => void;
+  presentationId: string;
 
   loading: boolean;
 }
@@ -33,17 +35,31 @@ interface SidePanelProps {
 const SidePanel = ({
   selectedSlide,
   onSlideClick,
+  presentationId,
 
   loading,
 }: SidePanelProps) => {
 
   const router = useRouter();
+  const [showNewSlideSelection, setShowNewSlideSelection] = useState(false);
 
   const { presentationData, isStreaming } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
 
   const dispatch = useDispatch();
+
+  const lastSlideIndex = presentationData?.slides?.length
+    ? presentationData.slides.length - 1
+    : 0;
+  const lastSlideTemplateId = presentationData?.slides?.[lastSlideIndex]?.layout
+    ? presentationData.slides[lastSlideIndex].layout.split(":")[0]
+    : "";
+
+  const handleAddSlideClick = () => {
+    if (!presentationData?.slides?.length || isStreaming) return;
+    setShowNewSlideSelection(true);
+  };
 
 
 
@@ -174,12 +190,28 @@ const SidePanel = ({
 
           </DndContext>
 
-          <button className=" pt-6 gap-2  flex flex-col  py-2  duration-300  items-center justify-center rounded-lg cursor-pointer mx-auto">
+          <button
+            type="button"
+            onClick={handleAddSlideClick}
+            className="pt-6 gap-2 flex flex-col py-2 duration-300 items-center justify-center rounded-lg cursor-pointer mx-auto"
+          >
             <Plus className="w-3.5 h-3.5" />
             <span className="text-[11px] font-normal text-[#000000]">Add Slide</span>
           </button>
         </div>
       </div>
+      {showNewSlideSelection && lastSlideTemplateId && (
+        <div className="fixed inset-0 z-[60] bg-black/50 overflow-y-auto p-4">
+          <div className="min-h-full flex items-start justify-center py-8">
+            <NewSlide
+              index={lastSlideIndex}
+              templateID={lastSlideTemplateId}
+              setShowNewSlideSelection={setShowNewSlideSelection}
+              presentationId={presentationId}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
