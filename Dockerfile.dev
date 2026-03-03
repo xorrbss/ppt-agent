@@ -6,7 +6,8 @@ RUN apt-get update && apt-get install -y \
   curl \
   libreoffice \
   fontconfig \
-  chromium
+  chromium \
+  zstd
 
 # Install Node.js 20 using NodeSource repository
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
@@ -24,7 +25,7 @@ ENV TEMP_DIRECTORY=/tmp/presenton
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Install ollama
-# RUN curl -fsSL http://ollama.com/install.sh | sh
+RUN curl -fsSL http://ollama.com/install.sh | sh
 
 # Install dependencies for FastAPI
 RUN pip install aiohttp aiomysql aiosqlite asyncpg fastapi[standard] \

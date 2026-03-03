@@ -49,6 +49,7 @@ Presenton gives you complete control over your AI presentation workflow. Choose 
 - ✅ **Fully Open-Source** — Apache 2.0 licensed, inspect, modify, and contribute
 - ✅ **Docker Ready** — One-command deployment with GPU support for local models
 - ✅ **Electron Desktop App** — Run Presenton as a native desktop application on Windows, macOS, and Linux (no browser required)
+- ✅ **Sign in with ChatGPT** — Use your free or paid ChatGPT account to sign in and start creating presentations instantly — no separate API key required
 
 ## Presenton Cloud
 
@@ -68,7 +69,7 @@ You can run Presenton in two ways: **Docker** for a one-command setup without in
 ##### Linux/MacOS (Bash/Zsh Shell):
 
 ```bash
-docker run -it --name presenton -p 5000:80 -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest
+docker run -it --name presenton -p 5000:80  -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest
 ```
 
 ##### Windows (PowerShell):
@@ -82,6 +83,22 @@ docker run -it --name presenton -p 5000:80 -v "${PWD}\app_data:/app_data" ghcr.i
 Open http://localhost:5000 on browser of your choice to use Presenton.
 
 > **Note: You can replace 5000 with any other port number of your choice to run Presenton on a different port number.**
+
+#### (Optional) Enable Codex Auth — Sign in with ChatGPT
+
+If you want to sign in with your free or paid ChatGPT account, also expose port `1455` for Codex auth support:
+
+##### Linux/MacOS:
+
+```bash
+docker run -it --name presenton -p 5000:80 -p 1455:1455 -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest
+```
+
+##### Windows (PowerShell):
+
+```bash
+docker run -it --name presenton -p 5000:80 -p 1455:1455 -v "${PWD}\app_data:/app_data" ghcr.io/presenton/presenton:latest
+```
 
 ### Option 2: Electron (Desktop App)
 
