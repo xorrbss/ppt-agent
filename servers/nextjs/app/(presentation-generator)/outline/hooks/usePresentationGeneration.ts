@@ -8,7 +8,6 @@ import { Template, LoadingState, TABS } from "../types/index";
 import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
 import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
 import { getCustomTemplateDetails } from "@/app/hooks/useCustomTemplates";
-import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
 
 const DEFAULT_LOADING_STATE: LoadingState = {
   message: "",
