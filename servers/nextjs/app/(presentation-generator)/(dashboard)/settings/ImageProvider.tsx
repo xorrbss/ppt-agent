@@ -122,9 +122,9 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                 <ToolTip content="Enable/Disable Image Generation" className='flex justify-end items-center'>
                     <div className='flex justify-end items-center'>
                         <Switch
-                            checked={isImageGenerationDisabled}
+                            checked={!isImageGenerationDisabled}
                             className=''
-                            onCheckedChange={(checked) => handleChangeImageGenerationDisabled(checked)}
+                            onCheckedChange={(checked) => handleChangeImageGenerationDisabled(!checked)}
                         />
                     </div>
 

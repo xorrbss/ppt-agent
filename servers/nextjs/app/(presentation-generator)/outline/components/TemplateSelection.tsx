@@ -2,12 +2,13 @@
 import React, { useEffect, useMemo, useCallback, memo } from "react";
 
 import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
-import { templates} from "@/app/presentation-templates";
+import { templates } from "@/app/presentation-templates";
 import { Card } from "@/components/ui/card";
 import { TemplateWithData } from "@/app/presentation-templates/utils";
 import { CustomTemplates, useCustomTemplateSummaries } from "@/app/hooks/useCustomTemplates";
 import { Loader2 } from "lucide-react";
 import { CustomTemplateCard } from "./CustomTemplateCard";
+import CreateCustomTemplate from "../../(dashboard)/templates/components/CreateCustomTemplate";
 
 // Memoized layout preview for built-in templates
 const BuiltInLayoutPreview = memo(({ layout, templateId, index }: {
@@ -137,12 +138,10 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = memo(({
     }
     if (customTemplates.length === 0) {
       return (
-        <Card className="p-8 text-center">
-          <p className="text-gray-500">No custom templates yet.</p>
-          <p className="text-sm text-gray-400 mt-2">
-            Custom templates you create will appear here.
-          </p>
-        </Card>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+
+          <CreateCustomTemplate />
+        </div>
       );
     }
     return (

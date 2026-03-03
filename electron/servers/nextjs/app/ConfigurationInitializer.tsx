@@ -32,7 +32,7 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
 
   const fetchUserConfigState = async () => {
     setIsLoading(true);
-    
+
     let canChangeKeys = false;
     if (typeof window !== 'undefined' && (window as any).electron) {
       // Electron mode: use IPC
@@ -74,13 +74,13 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
       }
       dispatch(setLLMConfig(llmConfig));
       const isValid = hasValidLLMConfig(llmConfig);
-      
+
       // Allow access to pdf-maker without LLM configuration (needed for PPTX export)
       if (route.startsWith('/pdf-maker')) {
         setIsLoading(false);
         return;
       }
-      
+
       if (isValid) {
         // Check if the selected Ollama model is pulled
         if (llmConfig.LLM === 'ollama' && llmConfig.OLLAMA_MODEL) {
@@ -134,12 +134,12 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
           api_key: llmConfig.CUSTOM_LLM_API_KEY,
         }),
       });
-      
+
       if (!response.ok) {
         console.error('Custom model check failed with status:', response.status);
         return false;
       }
-      
+
       const data = await response.json();
       return data.includes(llmConfig.CUSTOM_MODEL);
     } catch (error) {

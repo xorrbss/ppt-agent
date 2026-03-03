@@ -468,7 +468,7 @@ const TextProvider = ({
                 </div>
                 <div className="flex items-center gap-4">
 
-                    <div className="w-[275px]">
+                    <div className="w-[205px]">
                         <div className="flex items-center  mb-4 gap-2.5 ">
                             <Switch
                                 checked={!!llmConfig.WEB_GROUNDING}
@@ -481,8 +481,9 @@ const TextProvider = ({
 
 
                     </div>
-                    <div className="w-[295px]"></div>
+                    {/* <div className="w-[295px]"></div> */}
                 </div>
+
 
             </div>
 

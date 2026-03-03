@@ -76,7 +76,6 @@ const ThemeSelector = ({ presentation_id, current_theme, themes: allThemes }: { 
         dispatch(updateTheme(null))
     }
 
-    console.log('presentation data', presentationData)
 
     return (
         <Popover>

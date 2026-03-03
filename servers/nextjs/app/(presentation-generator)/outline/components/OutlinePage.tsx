@@ -57,7 +57,7 @@ const OutlinePage: React.FC = () => {
       />
 
       <Wrapper className="h-full  flex flex-col w-full relative">
-        <div className="flex-grow w-full overflow-y-hidden   mx-auto ">
+        <div className="flex-grow w-full hidden-scrollbar   mx-auto ">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
             <TabsList className="my-4 h-auto w-fit  rounded-full border border-[#DFDFE1] bg-[#F8F8F9] p-1.5">
               <TabsTrigger
@@ -76,7 +76,7 @@ const OutlinePage: React.FC = () => {
             </TabsList>
 
             <div className="flex-grow w-full mx-auto">
-              <TabsContent value={TABS.OUTLINE} className="h-[calc(100vh-16rem)] overflow-y-auto custom_scrollbar"
+              <TabsContent value={TABS.OUTLINE} className="h-[calc(100vh-16rem)] overflow-y-auto hide-scrollbar"
               >
                 <div>
                   <OutlineContent
@@ -91,7 +91,7 @@ const OutlinePage: React.FC = () => {
                 </div>
               </TabsContent>
 
-              <TabsContent value={TABS.LAYOUTS} className="h-[calc(100vh-16rem)] overflow-y-auto custom_scrollbar">
+              <TabsContent value={TABS.LAYOUTS} className="h-[calc(100vh-16rem)] overflow-y-auto hide-scrollbar">
                 <div>
                   <TemplateSelection
                     selectedTemplate={selectedTemplate}
@@ -103,7 +103,7 @@ const OutlinePage: React.FC = () => {
           </Tabs>
           {/* Fixed Button */}
 
-          <div className="absolute bottom-36 -right-10 z-50">
+          <div className="absolute bottom-0 -right-10 z-50">
             <GenerateButton
               outlineCount={outlines.length}
               loadingState={loadingState}

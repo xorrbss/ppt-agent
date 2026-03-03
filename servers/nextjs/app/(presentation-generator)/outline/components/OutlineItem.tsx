@@ -119,12 +119,12 @@ export function OutlineItem({
     }, [isStreaming, isActiveStreaming, isStableStreaming, slideOutline.content])
 
     return (
-        <div className="mb-4 bg-white rounded-[12px] shadow-sm p-10 relative">
+        <div className="mb-4 bg-white rounded-[12px] group shadow-sm p-10 relative">
 
             <div
                 ref={setNodeRef}
                 style={style}
-                className={`flex items-start gap-3 md:gap-4   rounded-[8px] ${isDragging ? "opacity-50" : ""}`}
+                className={`flex items-start gap-3 md:gap-4    rounded-[8px] ${isDragging ? "opacity-50" : ""}`}
             >
 
                 <div
@@ -165,7 +165,7 @@ export function OutlineItem({
                 </div>
 
 
-                <div className="absolute -top-3 -right-3 flex gap-1 sm:gap-2 items-center">
+                <div className="hidden group-hover:flex absolute -top-3 -right-3 gap-1 sm:gap-2 items-center">
 
                     <ToolTip content="Delete Slide">
                         <button
