@@ -7,12 +7,11 @@ import {
   Undo2,
   RotateCcw,
   ArrowRightFromLine,
-  ExternalLink,
-  MoveUpRight,
+
   ArrowUpRight,
 
 } from "lucide-react";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   Popover,
@@ -35,6 +34,9 @@ import { clearPresentationData } from "@/store/slices/presentationGeneration";
 import { clearHistory } from "@/store/slices/undoRedoSlice";
 import { Separator } from "@/components/ui/separator";
 import ThemeSelector from "./ThemeSelector";
+import { DEFAULT_THEMES } from "../../(dashboard)/theme/components/ThemePanel/constants";
+import ThemeApi from "../../services/api/theme";
+import { Theme } from "../../services/api/types";
 
 const PresentationHeader = ({
   presentation_id,
@@ -48,6 +50,8 @@ const PresentationHeader = ({
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const [isExporting, setIsExporting] = useState(false);
+  const [themes, setThemes] = useState<Theme[]>([]);
+
   const pathname = usePathname();
   const dispatch = useDispatch();
 
@@ -55,6 +59,22 @@ const PresentationHeader = ({
   const { presentationData, isStreaming } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [customThemes] = await Promise.all([
+          ThemeApi.getThemes(),
+        ]);
+        setThemes([...customThemes, ...DEFAULT_THEMES]);
+      } catch (e: any) {
+        toast.error(e?.message || "Failed to load themes");
+      }
+    };
+    if (themes.length === 0) {
+      load();
+    }
+  }, []);
 
   const { onUndo, onRedo, canUndo, canRedo } = usePresentationUndoRedo();
 
@@ -188,6 +208,7 @@ const PresentationHeader = ({
 
 
 
+
   return (
     <>
       <div className="py-7 sticky top-0 bg-white z-50 mb-[17px] pr-[25px] flex justify-between items-center">
@@ -197,7 +218,7 @@ const PresentationHeader = ({
           {isPresentationSaving && <div className="flex items-center gap-2">
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
           </div>}
-          {/* <ThemeSelector presentation_id={presentation_id} current_theme={{}} themes={[]} /> */}
+          <ThemeSelector presentation_id={presentation_id} current_theme={presentationData?.theme || {}} themes={themes} />
 
           <div className="flex items-center gap-2 bg-[#F6F6F9] px-3.5 h-[38px] border border-[#EDECEC] rounded-[80px]">
 

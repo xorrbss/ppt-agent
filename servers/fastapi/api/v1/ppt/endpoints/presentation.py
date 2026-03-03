@@ -7,7 +7,7 @@ import random
 import traceback
 from typing import Annotated, List, Literal, Optional, Tuple
 import dirtyjson
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Path
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Path, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -138,6 +138,7 @@ async def create_presentation(
     include_table_of_contents: Annotated[bool, Body()] = False,
     include_title_slide: Annotated[bool, Body()] = True,
     web_search: Annotated[bool, Body()] = False,
+    theme: Annotated[Optional[dict], Body()] = None,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
 
@@ -161,6 +162,7 @@ async def create_presentation(
         include_table_of_contents=include_table_of_contents,
         include_title_slide=include_title_slide,
         web_search=web_search,
+        theme=theme,
     )
 
     sql_session.add(presentation)
@@ -363,9 +365,11 @@ async def stream_presentation(
 
 @PRESENTATION_ROUTER.patch("/update", response_model=PresentationWithSlides)
 async def update_presentation(
+    request: Request,
     id: Annotated[uuid.UUID, Body()],
     n_slides: Annotated[Optional[int], Body()] = None,
     title: Annotated[Optional[str], Body()] = None,
+    theme: Annotated[Optional[dict], Body()] = None,
     slides: Annotated[Optional[List[SlideModel]], Body()] = None,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
@@ -374,12 +378,16 @@ async def update_presentation(
         raise HTTPException(status_code=404, detail="Presentation not found")
 
     presentation_update_dict = {}
+    request_body = await request.json()
+    theme_provided = "theme" in request_body
     if n_slides:
         presentation_update_dict["n_slides"] = n_slides
     if title:
         presentation_update_dict["title"] = title
+    if theme_provided:
+        presentation_update_dict["theme"] = theme
 
-    if n_slides or title:
+    if n_slides or title or theme_provided:
         presentation.sqlmodel_update(presentation_update_dict)
 
     if slides:

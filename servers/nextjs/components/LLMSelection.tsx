@@ -12,7 +12,7 @@ import {
 } from "@/utils/providerUtils";
 import { LLMConfig } from "@/types/llm_config";
 import ImageSelectionConfig from "./ImageSelectionConfig";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 
 
@@ -247,6 +247,7 @@ export default function LLMProviderSelection({
           {/* OpenAI Content */}
           <TabsContent value="openai" className="mt-6">
             <OpenAIConfig
+              llmConfig={llmConfig}
               openaiApiKey={llmConfig.OPENAI_API_KEY || ""}
               openaiModel={llmConfig.OPENAI_MODEL || ""}
               webGrounding={llmConfig.WEB_GROUNDING || false}
