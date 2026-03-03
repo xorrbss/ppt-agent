@@ -3,14 +3,16 @@ import React, { useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Palette } from 'lucide-react';
 
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { updateTheme } from '@/store/slices/presentationGeneration';
 import { useRouter } from 'next/navigation';
 import { useFontLoader } from '../../hooks/useFontLoad';
+import { RootState } from '@/store/store';
 const ThemeSelector = ({ presentation_id, current_theme, themes: allThemes }: { presentation_id: string, current_theme: any, themes: any[] }) => {
     const [currentTheme, setCurrentTheme] = useState<any>(current_theme)
     const dispatch = useDispatch()
     const router = useRouter()
+    const { presentationData } = useSelector((state: RootState) => state.presentationGeneration)
     const applyTheme = async (theme: any) => {
         const element = document.getElementById('presentation-slides-wrapper')
         if (!element) return;
@@ -44,6 +46,7 @@ const ThemeSelector = ({ presentation_id, current_theme, themes: allThemes }: { 
         // Apply fonts to preview container
         element.style.setProperty('font-family', `"${theme.data.fonts.textFont.name}"`)
         element.style.setProperty('--heading-font-family', `"${theme.data.fonts.textFont.name}"`)
+        element.style.setProperty('--body-font-family', `"${theme.data.fonts.textFont.name}"`)
 
         dispatch(updateTheme(theme))
     }
@@ -70,9 +73,10 @@ const ThemeSelector = ({ presentation_id, current_theme, themes: allThemes }: { 
     const resetTheme = async () => {
         clearTheme();
 
-        dispatch(updateTheme({} as any))
+        dispatch(updateTheme(null))
     }
 
+    console.log('presentation data', presentationData)
 
     return (
         <Popover>

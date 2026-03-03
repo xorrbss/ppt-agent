@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     AsyncSession,
 )
+from sqlalchemy import text
 from sqlmodel import SQLModel
 
 from models.sql.async_presentation_generation_status import (
@@ -66,6 +67,12 @@ async def create_db_and_tables():
                 ],
             )
         )
+        # Lightweight schema migration for existing DBs: ensure `presentations.theme` exists.
+        if database_url.startswith("sqlite"):
+            result = await conn.execute(text("PRAGMA table_info(presentations)"))
+            column_names = {row[1] for row in result.fetchall()}
+            if "theme" not in column_names:
+                await conn.execute(text("ALTER TABLE presentations ADD COLUMN theme JSON"))
 
     async with container_db_engine.begin() as conn:
         await conn.run_sync(

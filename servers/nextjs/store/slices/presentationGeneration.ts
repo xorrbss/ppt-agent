@@ -13,7 +13,7 @@ export interface PresentationData {
   n_slides: number;
   title: string;
   slides: any;
-  theme: Theme;
+  theme: Theme | null;
 }
 
 interface PresentationGenerationState {
@@ -379,7 +379,7 @@ const presentationGenerationSlice = createSlice({
         }
       }
     },
-    updateTheme: (state, action: PayloadAction<Theme>) => {
+    updateTheme: (state, action: PayloadAction<Theme | null>) => {
       if (state.presentationData) {
         state.presentationData['theme'] = action.payload;
       }

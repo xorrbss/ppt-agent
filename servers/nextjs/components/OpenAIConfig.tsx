@@ -33,10 +33,10 @@ export default function OpenAIConfig({
 }: OpenAIConfigProps) {
   const [openModelSelect, setOpenModelSelect] = useState(false);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
-  const [modelsLoading, setModelsLoading] = useState(false);
-  const [modelsChecked, setModelsChecked] = useState(false);
-  const [apiKey, setApiKey] = useState(openaiApiKey);
-  const isImageGenerationDisabled = llmConfig.DISABLE_IMAGE_GENERATION ?? false;
+const [modelsLoading, setModelsLoading] = useState(false);
+const [modelsChecked, setModelsChecked] = useState(false);
+const [apiKey, setApiKey] = useState(openaiApiKey);
+const isImageGenerationDisabled = llmConfig?.DISABLE_IMAGE_GENERATION ?? false;
 
   const openaiUrl = "https://api.openai.com/v1";
 

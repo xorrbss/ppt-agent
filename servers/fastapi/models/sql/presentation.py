@@ -35,6 +35,7 @@ class PresentationModel(SQLModel, table=True):
     )
     layout: Optional[dict] = Field(sa_column=Column(JSON), default=None)
     structure: Optional[dict] = Field(sa_column=Column(JSON), default=None)
+    theme: Optional[dict] = Field(sa_column=Column(JSON), default=None)
     instructions: Optional[str] = Field(sa_column=Column(String), default=None)
     tone: Optional[str] = Field(sa_column=Column(String), default=None)
     verbosity: Optional[str] = Field(sa_column=Column(String), default=None)
@@ -53,6 +54,7 @@ class PresentationModel(SQLModel, table=True):
             outlines=self.outlines,
             layout=self.layout,
             structure=self.structure,
+            theme=self.theme,
             instructions=self.instructions,
             tone=self.tone,
             verbosity=self.verbosity,

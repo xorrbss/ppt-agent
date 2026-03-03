@@ -7,7 +7,7 @@ import random
 import traceback
 from typing import Annotated, List, Literal, Optional, Tuple
 import dirtyjson
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Path
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Path, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -138,6 +138,7 @@ async def create_presentation(
     include_table_of_contents: Annotated[bool, Body()] = False,
     include_title_slide: Annotated[bool, Body()] = True,
     web_search: Annotated[bool, Body()] = False,
+    theme: Annotated[Optional[dict], Body()] = None,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
 
@@ -161,6 +162,7 @@ async def create_presentation(
         include_table_of_contents=include_table_of_contents,
         include_title_slide=include_title_slide,
         web_search=web_search,
+        theme=theme,
     )
 
     sql_session.add(presentation)
@@ -317,9 +319,9 @@ async def stream_presentation(
             # This will mutate slide and add placeholder assets
             process_slide_add_placeholder_assets(slide)
 
-            # This will mutate slide
+            # This will mutate slide - start task immediately so it runs in parallel with next slide LLM generation
             async_assets_generation_tasks.append(
-                process_slide_and_fetch_assets(image_generation_service, slide)
+                asyncio.create_task(process_slide_and_fetch_assets(image_generation_service, slide))
             )
 
             yield SSEResponse(
@@ -363,9 +365,11 @@ async def stream_presentation(
 
 @PRESENTATION_ROUTER.patch("/update", response_model=PresentationWithSlides)
 async def update_presentation(
+    request: Request,
     id: Annotated[uuid.UUID, Body()],
     n_slides: Annotated[Optional[int], Body()] = None,
     title: Annotated[Optional[str], Body()] = None,
+    theme: Annotated[Optional[dict], Body()] = None,
     slides: Annotated[Optional[List[SlideModel]], Body()] = None,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
@@ -374,12 +378,16 @@ async def update_presentation(
         raise HTTPException(status_code=404, detail="Presentation not found")
 
     presentation_update_dict = {}
+    request_body = await request.json()
+    theme_provided = "theme" in request_body
     if n_slides:
         presentation_update_dict["n_slides"] = n_slides
     if title:
         presentation_update_dict["title"] = title
+    if theme_provided:
+        presentation_update_dict["theme"] = theme
 
-    if n_slides or title:
+    if n_slides or title or theme_provided:
         presentation.sqlmodel_update(presentation_update_dict)
 
     if slides:
@@ -716,9 +724,9 @@ async def generate_presentation_handler(
                 slides.append(slide)
                 batch_slides.append(slide)
 
-            # Start asset fetch tasks for just-generated slides so they run while next batch is processed
+            # Start asset fetch tasks immediately so they run in parallel with next batch's LLM calls
             asset_tasks = [
-                process_slide_and_fetch_assets(image_generation_service, slide)
+                asyncio.create_task(process_slide_and_fetch_assets(image_generation_service, slide))
                 for slide in batch_slides
             ]
             async_assets_generation_tasks.extend(asset_tasks)
