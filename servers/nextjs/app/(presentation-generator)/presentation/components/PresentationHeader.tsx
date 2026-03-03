@@ -37,6 +37,7 @@ import ThemeSelector from "./ThemeSelector";
 import { DEFAULT_THEMES } from "../../(dashboard)/theme/components/ThemePanel/constants";
 import ThemeApi from "../../services/api/theme";
 import { Theme } from "../../services/api/types";
+import MarkdownRenderer from "@/components/MarkDownRender";
 
 const PresentationHeader = ({
   presentation_id,
@@ -181,6 +182,7 @@ const PresentationHeader = ({
           onClick={() => {
             trackEvent(MixpanelEvent.Header_Export_PDF_Button_Clicked, { pathname });
             handleExportPdf();
+            setOpen(false);
           }}
           variant="ghost"
           className={`  rounded-none px-0 w-full text-xs flex justify-start text-black hover:bg-transparent ${mobile ? "bg-white py-6 border-none rounded-lg" : ""}`} >
@@ -192,6 +194,7 @@ const PresentationHeader = ({
           onClick={() => {
             trackEvent(MixpanelEvent.Header_Export_PPTX_Button_Clicked, { pathname });
             handleExportPptx();
+            setOpen(false);
           }}
           variant="ghost"
           className={`w-full flex px-0 justify-start text-xs text-black hover:bg-transparent  ${mobile ? "bg-white py-6" : ""}`}
@@ -212,7 +215,7 @@ const PresentationHeader = ({
   return (
     <>
       <div className="py-7 sticky top-0 bg-white z-50 mb-[17px] pr-[25px] flex justify-between items-center">
-        <h2 className="text-lg text-[#101323]  w-[600px] truncate">{presentationData?.title || "Presentation"}</h2>
+        <h2 className="text-lg text-[#101323] "><MarkdownRenderer content={presentationData?.title || "Presentation"} className="mb-0  w-[600px] truncate text-sm text-[#101323] " /></h2>
         <div className="flex items-center gap-2.5">
 
           {isPresentationSaving && <div className="flex items-center gap-2">
