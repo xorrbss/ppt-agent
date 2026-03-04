@@ -99,6 +99,8 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
 
     const currentApiKey = currentApiKeyField ? ((llmConfig as Record<string, unknown>)[currentApiKeyField] as string || '') : '';
     const currentModel = currentModelField ? ((llmConfig as Record<string, unknown>)[currentModelField] as string || '') : '';
+    const currentOllamaUrl = llmConfig.OLLAMA_URL || '';
+    const useCustomOllamaUrl = !!llmConfig.USE_CUSTOM_URL;
 
     const fetchAvailableModels = async () => {
         if (llmConfig.LLM === 'openai' && !currentApiKey) return;
@@ -309,6 +311,11 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
         return 0;
     }, [downloadingModel?.downloaded, downloadingModel?.size]);
 
+    useEffect(() => {
+        if (llmConfig.LLM === 'ollama' && !modelsChecked && !modelsLoading) {
+            fetchAvailableModels();
+        }
+    }, [llmConfig.LLM, modelsChecked, modelsLoading]);
 
     return (
         <div className='w-full max-w-[640px] font-syne'>
@@ -414,31 +421,77 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                     </div>
                     <div className="relative flex flex-col justify-end  items-end  w-full ">
                         <div className="flex flex-col justify-start w-full ">
-                            <label className="block text-sm font-medium capitalize text-gray-700 mb-2">
-                                {llmConfig.LLM === 'ollama' ? 'Ollama URL' : llmConfig.LLM === 'custom' ? 'Custom LLM API Key' : `${llmConfig.LLM} API Key`}
-                            </label>
-                            <div className="relative">
-                                <input
-                                    type={llmConfig.LLM === 'ollama' ? 'text' : showApiKey ? 'text' : 'password'}
-
-                                    value={llmConfig.LLM === 'ollama' ? llmConfig.OLLAMA_URL : currentApiKey}
-                                    onChange={(e) => setLlmConfig(prev => ({
-                                        ...prev,
-                                        [currentApiKeyField]: e.target.value
-                                    }))}
-                                    className="w-full px-2 py-3 outline-none border  border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                                    placeholder={llmConfig.LLM === 'ollama' ? 'http://localhost:11434' : `Enter your ${llmConfig.LLM} API key`}
-                                />
-                                {llmConfig.LLM !== 'ollama' && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowApiKey((prev) => !prev)}
-                                        className='absolute right-2 top-1/2 -translate-y-1/2 bg-white px-2 py-1 cursor-pointer'
-                                    >
-                                        {showApiKey ? <Eye className='w-4 h-4 text-gray-500' /> : <EyeOff className='w-4 h-4 text-gray-500' />}
-                                    </button>
-                                )}
-                            </div>
+                            {llmConfig.LLM === 'ollama' ? (
+                                <>
+                                    {!useCustomOllamaUrl ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => setLlmConfig(prev => ({
+                                                ...prev,
+                                                USE_CUSTOM_URL: true,
+                                                OLLAMA_URL: prev.OLLAMA_URL || 'http://localhost:11434'
+                                            }))}
+                                            className="mt-8 py-2.5 bg-[#EDEEEF] px-3.5 w-fit rounded-[48px] text-xs font-semibold text-[#101323] transition-all duration-200 border border-[#EDEEEF] hover:bg-[#E8F0FF]/90 focus:ring-2 focus:ring-blue-500/20"
+                                        >
+                                            Use Ollama URL
+                                        </button>
+                                    ) : (
+                                        <>
+                                            <label className="block text-sm font-medium capitalize text-gray-700 mb-2">
+                                                Ollama URL
+                                            </label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={currentOllamaUrl}
+                                                    onChange={(e) => setLlmConfig(prev => ({
+                                                        ...prev,
+                                                        OLLAMA_URL: e.target.value
+                                                    }))}
+                                                    className="w-full px-2 py-3 outline-none border  border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                                    placeholder="http://localhost:11434"
+                                                />
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setLlmConfig(prev => ({
+                                                    ...prev,
+                                                    USE_CUSTOM_URL: false,
+                                                    OLLAMA_URL: 'http://localhost:11434'
+                                                }))}
+                                                className="mt-2 text-xs font-medium text-[#4B5563] underline underline-offset-2"
+                                            >
+                                                Use default Ollama URL
+                                            </button>
+                                        </>
+                                    )}
+                                </>
+                            ) : (
+                                <>
+                                    <label className="block text-sm font-medium capitalize text-gray-700 mb-2">
+                                        {llmConfig.LLM === 'custom' ? 'Custom LLM API Key' : `${llmConfig.LLM} API Key`}
+                                    </label>
+                                    <div className="relative">
+                                        <input
+                                            type={showApiKey ? 'text' : 'password'}
+                                            value={currentApiKey}
+                                            onChange={(e) => setLlmConfig(prev => ({
+                                                ...prev,
+                                                [currentApiKeyField]: e.target.value
+                                            }))}
+                                            className="w-full px-2 py-3 outline-none border  border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            placeholder={`Enter your ${llmConfig.LLM} API key`}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowApiKey((prev) => !prev)}
+                                            className='absolute right-2 top-1/2 -translate-y-1/2 bg-white px-2 py-1 cursor-pointer'
+                                        >
+                                            {showApiKey ? <Eye className='w-4 h-4 text-gray-500' /> : <EyeOff className='w-4 h-4 text-gray-500' />}
+                                        </button>
+                                    </div>
+                                </>
+                            )}
                             {llmConfig.LLM === 'custom' && (
                                 <input
                                     type="text"
@@ -579,7 +632,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                     <div className='flex justify-end items-center'>
                         <Switch
                             checked={!llmConfig.DISABLE_IMAGE_GENERATION}
-                            className=''
+                            className='data-[state=checked]:bg-[#4791FF] data-[state=unchecked]:bg-gray-400'
                             onCheckedChange={(checked) => setLlmConfig(prev => ({
                                 ...prev,
                                 DISABLE_IMAGE_GENERATION: !checked

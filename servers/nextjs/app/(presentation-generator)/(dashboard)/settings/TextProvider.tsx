@@ -5,7 +5,7 @@ import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { LLMConfig } from '@/types/llm_config';
 import { LLM_PROVIDERS } from '@/utils/providerConstants';
-import { Check, ChevronsUpDown, Loader2, Eye, EyeOff, ChevronUp } from 'lucide-react';
+import { Check, Loader2, Eye, EyeOff, ChevronUp } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner';
 
@@ -68,6 +68,7 @@ const TextProvider = ({
     const currentApiKey = currentApiKeyField ? ((llmConfig as Record<string, unknown>)[currentApiKeyField] as string || '') : '';
     const currentCustomUrl = llmConfig.CUSTOM_LLM_URL || '';
     const currentOllamaUrl = llmConfig.OLLAMA_URL || '';
+    const useCustomOllamaUrl = !!llmConfig.USE_CUSTOM_URL;
     const modelLabel = selectedProviderMeta?.label || selectedProvider;
 
     useEffect(() => {
@@ -304,28 +305,71 @@ const TextProvider = ({
                     </div>
                     <div className="relative flex flex-col justify-end  items-end w-[205px] ">
                         <div className="flex flex-col justify-start ">
-                            <label className="block text-sm font-medium capitalize text-gray-700 mb-2">
-                                {selectedProvider === 'ollama' ? 'Ollama URL' : selectedProvider === 'custom' ? 'Custom LLM API Key' : `${llmConfig.LLM} API Key`}
-                            </label>
-                            <div className="relative">
-                                <input
-                                    type={selectedProvider === 'ollama' ? 'text' : showApiKey ? 'text' : 'password'}
-
-                                    value={selectedProvider === 'ollama' ? currentOllamaUrl : currentApiKey}
-                                    onChange={(e) => onApiKeyChange(selectedProvider, e.target.value)}
-                                    className="w-full px-2 py-3 outline-none border  border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                                    placeholder={selectedProvider === 'ollama' ? 'http://localhost:11434' : `Enter your ${llmConfig.LLM} API key`}
-                                />
-                                {selectedProvider !== 'ollama' && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowApiKey((prev) => !prev)}
-                                        className='absolute right-2 top-1/2 -translate-y-1/2 bg-white px-2 py-1 cursor-pointer'
-                                    >
-                                        {showApiKey ? <Eye className='w-4 h-4 text-gray-500' /> : <EyeOff className='w-4 h-4 text-gray-500' />}
-                                    </button>
-                                )}
-                            </div>
+                            {selectedProvider === 'ollama' ? (
+                                <>
+                                    {!useCustomOllamaUrl ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                onInputChange(true, 'USE_CUSTOM_URL');
+                                                if (!currentOllamaUrl) {
+                                                    onInputChange('http://localhost:11434', 'OLLAMA_URL');
+                                                }
+                                            }}
+                                            className="mt-8 py-2.5 bg-[#EDEEEF] px-3.5 w-fit rounded-[48px] text-xs font-semibold text-[#101323] transition-all duration-200 border border-[#EDEEEF] hover:bg-[#E8F0FF]/90 focus:ring-2 focus:ring-blue-500/20"
+                                        >
+                                            Use Ollama URL
+                                        </button>
+                                    ) : (
+                                        <>
+                                            <label className="block text-sm font-medium capitalize text-gray-700 mb-2">
+                                                Ollama URL
+                                            </label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={currentOllamaUrl}
+                                                    onChange={(e) => onApiKeyChange(selectedProvider, e.target.value)}
+                                                    className="w-full px-2 py-3 outline-none border  border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                                    placeholder="http://localhost:11434"
+                                                />
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    onInputChange(false, 'USE_CUSTOM_URL');
+                                                    onInputChange('http://localhost:11434', 'OLLAMA_URL');
+                                                }}
+                                                className="mt-2 text-xs font-medium text-[#4B5563] underline underline-offset-2"
+                                            >
+                                                Use default Ollama URL
+                                            </button>
+                                        </>
+                                    )}
+                                </>
+                            ) : (
+                                <>
+                                    <label className="block text-sm font-medium capitalize text-gray-700 mb-2">
+                                        {selectedProvider === 'custom' ? 'Custom LLM API Key' : `${llmConfig.LLM} API Key`}
+                                    </label>
+                                    <div className="relative">
+                                        <input
+                                            type={showApiKey ? 'text' : 'password'}
+                                            value={currentApiKey}
+                                            onChange={(e) => onApiKeyChange(selectedProvider, e.target.value)}
+                                            className="w-full px-2 py-3 outline-none border  border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            placeholder={`Enter your ${llmConfig.LLM} API key`}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowApiKey((prev) => !prev)}
+                                            className='absolute right-2 top-1/2 -translate-y-1/2 bg-white px-2 py-1 cursor-pointer'
+                                        >
+                                            {showApiKey ? <Eye className='w-4 h-4 text-gray-500' /> : <EyeOff className='w-4 h-4 text-gray-500' />}
+                                        </button>
+                                    </div>
+                                </>
+                            )}
                             {selectedProvider === 'custom' && (
                                 <input
                                     type="text"
