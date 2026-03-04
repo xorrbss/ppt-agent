@@ -6,6 +6,7 @@ import { startFastApiServer, startNextJsServer } from "./utils/servers";
 import { ChildProcessByStdio } from "child_process";
 import { appDataDir, baseDir, ensureDirectoriesExist, fastapiDir, isDev, localhost, nextjsDir, tempDir, userConfigPath, userDataDir } from "./utils/constants";
 import { setupIpcHandlers } from "./ipc";
+import { checkLibreOfficeBeforeWindow, getSofficePath } from "./utils/libreoffice-check";
 
 
 var win: BrowserWindow | undefined;
@@ -63,6 +64,9 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         APP_DATA_DIRECTORY: appDataDir,
         TEMP_DIRECTORY: tempDir,
         USER_CONFIG_PATH: userConfigPath,
+        // Resolved by libreoffice-check.ts at startup; lets Python invoke the
+        // exact binary path instead of relying on the system PATH.
+        SOFFICE_PATH: getSofficePath(),
       },
       isDev,
     );
@@ -100,7 +104,12 @@ async function stopServers() {
 app.whenReady().then(async () => {
   // Ensure all required directories exist before starting
   ensureDirectoriesExist();
-  
+
+  // Guard: verify LibreOffice is available before showing the main window.
+  // If it is missing, the user is prompted to download it or exit.
+  const shouldContinue = await checkLibreOfficeBeforeWindow();
+  if (!shouldContinue) return;
+
   createWindow();
   win?.loadFile(path.join(baseDir, "resources/ui/homepage/index.html"));
 
