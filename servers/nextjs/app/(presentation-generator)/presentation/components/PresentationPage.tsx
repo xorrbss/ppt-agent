@@ -103,7 +103,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-gray-100">
+      <div className="flex flex-col items-center justify-center h-screen bg-gray-100 font-syne">
         <div
           className="bg-white border border-red-300 text-red-700 px-6 py-8 rounded-lg shadow-lg flex flex-col items-center"
           role="alert"
@@ -120,7 +120,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   }
 
   return (
-    <div className="h-screen overflow-hidden ">
+    <div className="h-screen overflow-hidden font-syne ">
       <div
         style={{
           background: "#ffffff",

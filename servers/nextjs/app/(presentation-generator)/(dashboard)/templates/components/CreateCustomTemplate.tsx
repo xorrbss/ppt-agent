@@ -9,7 +9,7 @@ const CreateCustomTemplate = () => {
             onClick={() => {
                 router.push('/custom-template')
             }}
-            className='w-full rounded-xl border border-[#EDEEEF] cursor-pointer'>
+            className='w-full rounded-xl border border-[#EDEEEF] cursor-pointer font-syne'>
             <div className='relative h-[215px] flex justify-center items-center '>
                 <img src="/card_bg.svg" alt="" className="absolute top-0 z-[1] left-0 w-full h-full object-cover" />
                 <div className='w-[36px] h-[36px] relative z-[4]  rounded-full bg-[#7A5AF8] flex items-center justify-center'

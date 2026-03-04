@@ -14,7 +14,7 @@ import { toast } from "sonner";
 
 import { useFontLoader } from "@/app/(presentation-generator)/hooks/useFontLoader";
 import SlideScale from "@/app/(presentation-generator)/components/PresentationRender";
-import MarkdownRenderer from "@/app/(presentation-generator)/documents-preview/components/MarkdownRenderer";
+import MarkdownRenderer from "@/components/MarkDownRender";
 
 export const PresentationCard = ({
   id,
@@ -28,7 +28,7 @@ export const PresentationCard = ({
   onDeleted?: (presentationId: string) => void;
 }) => {
   const router = useRouter();
-  // useFontLoader(presentation.fonts || []);
+  useFontLoader(presentation.fonts || []);
   const handlePreview = (e: React.MouseEvent) => {
     e.preventDefault();
     router.push(`/presentation?id=${id}&type=standard`);
@@ -57,7 +57,7 @@ export const PresentationCard = ({
     <Card
       suppressHydrationWarning={true}
       onClick={handlePreview}
-      className="bg-[#F8FBFB] shadow-none sm:shadow-none  presentation-card rounded-[12px] p-0 group hover:shadow-md transition-all duration-500 slide-theme cursor-pointer overflow-hidden flex flex-col"
+      className="bg-[#F8FBFB] font-syne shadow-none sm:shadow-none  presentation-card rounded-[12px] p-0 group hover:shadow-md transition-all duration-500 slide-theme cursor-pointer overflow-hidden flex flex-col"
     >
       <div suppressHydrationWarning={true} className="flex flex-col flex-1 relative z-40">
         {/* <p className=" text-xs font-syne absolute top-2 flex gap-1 capitalize  items-center left-2 rounded-[100px]  px-2.5 py-1 bg-[#3A3A3AF5] text-white font-semibold  z-40 ">
@@ -75,7 +75,7 @@ export const PresentationCard = ({
           <div className="flex items-center justify-between gap-7 w-full">
             <div className="flex flex-col items-start gap-1">
               <div className="text-sm text-[#191919] font-semibold  overflow-hidden line-clamp-2">
-                {<MarkdownRenderer content={title} />}
+                <MarkdownRenderer content={title} className="text-sm mb-0 text-[#191919] font-semibold  overflow-hidden line-clamp-2" />
               </div>
               <p className="text-[#808080] text-sm font-syne">
                 {new Date(presentation?.created_at).toLocaleDateString()}

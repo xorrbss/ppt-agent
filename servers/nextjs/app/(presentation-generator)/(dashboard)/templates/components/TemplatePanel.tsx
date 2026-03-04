@@ -191,7 +191,7 @@ const LayoutPreview = () => {
     );
 
     return (
-        <div className="min-h-screen  relative">
+        <div className="min-h-screen  relative font-syne">
             <div
                 className='fixed z-0 bottom-[-16.5rem] left-0 w-full h-full'
                 style={{
@@ -212,8 +212,8 @@ const LayoutPreview = () => {
 
                         <Link
                             href="/custom-template"
-                            className="inline-flex items-center font-inter font-normal gap-2 rounded-xl px-4 py-2.5 text-black text-sm  shadow-sm hover:shadow-md"
-                            aria-label="Create new themes"
+                            className="inline-flex items-center font-syne font-semibold gap-2 rounded-xl px-4 py-2.5 text-black text-sm  shadow-sm hover:shadow-md"
+                            aria-label="Create new template"
                             style={{
                                 borderRadius: "48px",
                                 background: "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",

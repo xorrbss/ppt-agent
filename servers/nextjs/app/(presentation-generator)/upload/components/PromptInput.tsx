@@ -7,15 +7,15 @@ interface PromptInputProps {
 }
 
 export function PromptInput({ value, onChange }: PromptInputProps) {
-  const [showHint, setShowHint] = useState(false);
+
 
   const handleChange = (val: string) => {
-    setShowHint(val.length > 0);
+
     onChange(val);
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 font-syne">
       <div className="relative">
         <Textarea
           value={value}

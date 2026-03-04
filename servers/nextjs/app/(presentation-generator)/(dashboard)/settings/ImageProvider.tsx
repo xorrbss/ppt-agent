@@ -48,11 +48,6 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
         return "";
     };
 
-    const shouldHideImageApiKeyInput = (providerValue: string, providerApiKeyField?: string) => {
-        if (!providerApiKeyField) return true;
-        if (providerValue === "comfyui") return false;
-        return providerApiKeyField === getTextProviderApiField();
-    };
 
 
 
@@ -122,9 +117,9 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                 <ToolTip content="Enable/Disable Image Generation" className='flex justify-end items-center'>
                     <div className='flex justify-end items-center'>
                         <Switch
-                            checked={isImageGenerationDisabled}
-                            className=''
-                            onCheckedChange={(checked) => handleChangeImageGenerationDisabled(checked)}
+                            checked={!isImageGenerationDisabled}
+                            className='data-[state=checked]:bg-[#4791FF] data-[state=unchecked]:bg-gray-400'
+                            onCheckedChange={(checked) => handleChangeImageGenerationDisabled(!checked)}
                         />
                     </div>
 
@@ -236,10 +231,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                         (() => {
                                             const provider = IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER];
 
-                                            // Show info message when using same API key as main provider
-                                            if (shouldHideImageApiKeyInput(provider.value, provider.apiKeyField)) {
-                                                return <></>;
-                                            }
+
 
                                             // Show ComfyUI configuration
                                             if (provider.value === "comfyui") {
@@ -305,7 +297,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                 </>
                             )}
                         </div>
-                        <div className='flex justify-end items-center mt-[18px]'>
+                        {!isImageGenerationDisabled && <div className='flex justify-end items-center mt-[18px]'>
 
                             {renderQualitySelector(llmConfig, input_field_changed)}
                             {llmConfig.IMAGE_PROVIDER === "comfyui" && <div className='w-full'>
@@ -328,7 +320,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                 </div>
 
                             </div>}
-                        </div>
+                        </div>}
                     </div>
                 </div>
             </div>

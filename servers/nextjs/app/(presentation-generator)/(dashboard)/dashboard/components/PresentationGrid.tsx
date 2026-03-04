@@ -42,7 +42,7 @@ export const PresentationGrid = ({
   const CreateNewCard = () => (
     <div
       onClick={handleCreateNewPresentation}
-      className="flex flex-col cursor-pointer group ring-1 ring-inset ring-slate-200 hover:ring-[#8A7DFF]/40 bg-white/80 rounded-xl overflow-hidden transition-all duration-300"
+      className="flex flex-col cursor-pointer group ring-1 ring-inset ring-slate-200 hover:ring-[#8A7DFF]/40 bg-white/80 rounded-xl overflow-hidden transition-all duration-300 font-syne"
     >
       <img src="/create_presentation.png" alt="New Presentation" className="w-full aspect-[16/11] object-cover" />
       <div className="flex items-center gap-3 p-3 mt-auto  border border-[#EDEEEF]">

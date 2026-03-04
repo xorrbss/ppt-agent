@@ -48,7 +48,7 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
     const pathname = usePathname();
 
     return (
-        <div className="space-y-6 font-instrument_sans">
+        <div className="space-y-6 font-syne ">
             {isLoading && (!outlines || outlines.length === 0) && (
                 <div className="flex items-center justify-center">
                     <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 text-blue-600 px-2 py-0.5 text-xs">
@@ -93,7 +93,7 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
             {/* Outlines content */}
 
             {outlines && outlines.length > 0 && (
-                <div className="bg-[#F9F8F8] p-7 rounded-[20px] overflow-y-auto custom_scrollbar">
+                <div className="bg-[#F9F8F8] p-7  rounded-[20px] overflow-y-auto custom_scrollbar">
                     <DndContext
                         sensors={sensors}
                         collisionDetection={closestCenter}

@@ -41,6 +41,9 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
       if (!llmConfig.LLM) {
         llmConfig.LLM = 'openai';
       }
+      if (!llmConfig.IMAGE_PROVIDER) {
+        llmConfig.IMAGE_PROVIDER = 'gpt-image-1.5';
+      }
       dispatch(setLLMConfig(llmConfig));
       const isValid = hasValidLLMConfig(llmConfig);
       if (isValid) {

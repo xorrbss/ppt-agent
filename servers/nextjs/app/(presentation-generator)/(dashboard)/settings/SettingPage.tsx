@@ -183,7 +183,7 @@ const SettingsPage = () => {
       : "No image provider";
 
   return (
-    <div className="h-screen font-instrument_sans flex flex-col overflow-hidden relative">
+    <div className="h-screen font-syne flex flex-col overflow-hidden relative">
       <div
         className='fixed z-0 bottom-[-14.5rem] left-0 w-full h-full'
         style={{
@@ -236,7 +236,7 @@ const SettingsPage = () => {
             background: "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
             color: "#101323",
           }}
-          className={`w-full flex items-center justify-center gap-2 font-semibold py-3 px-5 rounded-[58px] transition-all duration-500 ${buttonState.isDisabled
+          className={`w-full font-syne font-semibold flex items-center justify-center gap-2 py-3 px-5 rounded-[58px] transition-all duration-500 ${buttonState.isDisabled
             ? "bg-gray-400 cursor-not-allowed"
             : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:ring-4 focus:ring-blue-200"
             } text-white`}

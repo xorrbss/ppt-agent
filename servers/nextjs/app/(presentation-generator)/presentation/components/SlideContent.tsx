@@ -143,7 +143,7 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
         <div
           data-layout={slide.layout}
           data-group={slide.layout_group}
-          className={` w-full  group `}
+          className={` w-full  group font-syne `}
         >
           <V1ContentRender slide={slide} isEditMode={true} theme={null} />
           {!showNewSlideSelection && (
@@ -186,7 +186,7 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
                 <PopoverTrigger asChild>
                   <button
                     type="button"
-                    className="flex px-3.5 py-2.5 items-center justify-center rounded-full bg-[#F7F6F9]"
+                    className="flex px-3.5 py-2.5 items-center justify-center rounded-full bg-[#F7F6F9] font-syne"
                   >
                     <ToolTip content="Update slide using prompt">
                       <Pencil className="h-4 w-4" />
@@ -197,7 +197,7 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
                   side="bottom"
                   align="center"
                   sideOffset={12}
-                  className="z-30 w-[340px] rounded-2xl border border-gray-200 bg-white p-0 shadow-2xl"
+                  className="z-30 w-[340px] rounded-2xl border border-gray-200 bg-white p-0 shadow-2xl font-syne"
                 >
                   <div className="border-b border-gray-100 px-4 py-3">
                     <p className="text-sm font-semibold text-gray-900">Update slide</p>
@@ -242,7 +242,7 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
                       background: "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
 
                     }}
-                    className={`flex px-4 py-2.5 items-center justify-center rounded-full border ${slide?.speaker_note
+                    className={`flex px-4 py-2.5 items-center justify-center rounded-full border font-syne ${slide?.speaker_note
                       ? "border-violet-200 bg-violet-50 text-violet-700"
                       : "border-gray-200 bg-white text-gray-600"
                       }`}
@@ -260,7 +260,7 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
                   side="bottom"
                   align="center"
                   sideOffset={12}
-                  className="z-30 w-[340px] rounded-2xl border border-gray-200 bg-white p-0 shadow-2xl"
+                  className="z-30 w-[340px] rounded-2xl border border-gray-200 bg-white p-0 shadow-2xl font-syne"
                 >
                   <div className="border-b border-gray-100 px-4 py-3">
                     <p className="text-sm font-semibold text-gray-900">Speaker notes</p>
@@ -277,7 +277,7 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
               <button
                 type="button"
                 onClick={onDeleteSlide}
-                className="flex px-4 py-2.5 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600"
+                className="flex px-4 py-2.5 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 font-syne"
               >
                 <ToolTip content="Delete slide">
                   <Trash className="h-4 w-4" />
