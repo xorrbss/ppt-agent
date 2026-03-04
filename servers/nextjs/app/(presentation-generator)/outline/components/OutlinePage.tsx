@@ -40,7 +40,7 @@ const OutlinePage: React.FC = () => {
 
 
   return (
-    <div className="">
+    <div className=" font-syne">
       <div
         className='fixed z-0 bottom-[-16.5rem] left-0 w-full h-full'
         style={{
@@ -103,7 +103,7 @@ const OutlinePage: React.FC = () => {
           </Tabs>
           {/* Fixed Button */}
 
-          <div className="absolute bottom-0 -right-10 z-50">
+          <div className="absolute bottom-0 -right-5 z-50">
             <GenerateButton
               outlineCount={outlines.length}
               loadingState={loadingState}

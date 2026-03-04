@@ -205,8 +205,8 @@ const UploadPage = () => {
       <div className="rounded-2xl border border-slate-200/70 bg-white/80 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60" >
         <div className="flex flex-col gap-4 md:items-center md:flex-row justify-between p-4">
           <div >
-            <h2 className="text-lg font-unbounded tracking-tight text-slate-900">Configuration</h2>
-            <p className="text-sm text-slate-500">Choose slides, tone, and language preferences.</p>
+            <h2 className="text-lg font-unbounded tracking-tight text-slate-900 ">Configuration</h2>
+            <p className="text-sm text-slate-500 font-syne">Choose slides, tone, and language preferences.</p>
           </div>
           <ConfigurationSelects
             config={config}
@@ -216,7 +216,7 @@ const UploadPage = () => {
         <div className="border-t border-slate-200/70" />
 
         <div className="p-4 md:p-6">
-          <h3 className="text-base font-normal font-unbounded text-slate-900 mb-2">Content</h3>
+          <h3 className="text-base font-normal font-unbounded  text-slate-900 mb-2">Content</h3>
           <div className="relative">
             <PromptInput
               value={config.prompt}
@@ -241,7 +241,7 @@ const UploadPage = () => {
         <div className="p-4 md:p-6">
           <Button
             onClick={handleGeneratePresentation}
-            className="w-full rounded-[28px] flex items-center justify-center py-5 bg-[#5141e5] text-white font-instrument_sans font-semibold text-lg hover:bg-[#5141e5]/85 focus-visible:ring-2 focus-visible:ring-[#5141e5]/40"
+            className="w-full rounded-[28px] flex items-center justify-center py-5 bg-[#5141e5] text-white font-syne font-semibold text-lg hover:bg-[#5141e5]/85 focus-visible:ring-2 focus-visible:ring-[#5141e5]/40"
             data-testid="next-button"
           >
             <span>Generate Presentation</span>

@@ -12,7 +12,6 @@ const ThemeSelector = ({ presentation_id, current_theme, themes: allThemes }: { 
     const [currentTheme, setCurrentTheme] = useState<any>(current_theme)
     const dispatch = useDispatch()
     const router = useRouter()
-    const { presentationData } = useSelector((state: RootState) => state.presentationGeneration)
     const applyTheme = async (theme: any) => {
         const element = document.getElementById('presentation-slides-wrapper')
         if (!element) return;
@@ -80,7 +79,7 @@ const ThemeSelector = ({ presentation_id, current_theme, themes: allThemes }: { 
     return (
         <Popover>
             <PopoverTrigger>
-                <button className="text-sm px-[18px] py-2.5 gap-1.5 flex items-center font-inter border border-[#EDEEEF] bg-[#F6F6F9] text-black hover:text-blue-500 duration-300 rounded-[88px] font-medium">
+                <button className="text-sm px-[18px] py-2.5 gap-1.5 flex items-center  border border-[#EDEEEF] bg-[#F6F6F9] text-black hover:text-blue-500 duration-300 rounded-[88px] font-medium font-syne">
                     <Palette className="h-4 w-4" /> Theme
                 </button>
             </PopoverTrigger>

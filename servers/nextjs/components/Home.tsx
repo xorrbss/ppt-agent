@@ -19,6 +19,7 @@ import OnBoardingHeader from "./OnBoarding/OnBoardingHeader";
 import ModeSelectStep from "./OnBoarding/ModeSelectStep";
 import PresentonMode from "./OnBoarding/PresentonMode";
 import GenerationWithImage from "./OnBoarding/GenerationWithImage";
+import FinalStep from "./OnBoarding/FinalStep";
 
 // Button state interface
 interface ButtonState {
@@ -30,6 +31,54 @@ interface ButtonState {
   status?: string;
 }
 
+const FINAL_STEP_CONFETTI_PIECES = [
+  // left: denser at top
+  { side: "left", offset: 1, top: 3, width: 28, height: 10, color: "#F59E0B", rotate: 12 },
+  { side: "left", offset: 7, top: 5, width: 18, height: 7, color: "#7C3AED", rotate: -10 },
+  { side: "left", offset: 12, top: 7, width: 20, height: 7, color: "#14B8A6", rotate: 22 },
+  { side: "left", offset: 3, top: 10, width: 22, height: 8, color: "#22C55E", rotate: -18 },
+  { side: "left", offset: 9, top: 12, width: 24, height: 8, color: "#E11D48", rotate: 18 },
+  { side: "left", offset: 14, top: 15, width: 18, height: 7, color: "#F43F5E", rotate: 23 },
+  { side: "left", offset: 5, top: 18, width: 20, height: 7, color: "#0EA5E9", rotate: -12 },
+  { side: "left", offset: 11, top: 21, width: 26, height: 9, color: "#2563EB", rotate: 20 },
+  { side: "left", offset: 2, top: 24, width: 19, height: 7, color: "#14B8A6", rotate: -16 },
+  { side: "left", offset: 8, top: 28, width: 21, height: 8, color: "#FB7185", rotate: 27 },
+  { side: "left", offset: 13, top: 32, width: 20, height: 7, color: "#06B6D4", rotate: 16 },
+  { side: "left", offset: 3, top: 36, width: 24, height: 9, color: "#EAB308", rotate: -22 },
+  { side: "left", offset: 10, top: 41, width: 18, height: 7, color: "#A855F7", rotate: -14 },
+  { side: "left", offset: 2, top: 50, width: 30, height: 10, color: "#EC4899", rotate: -28 },
+  { side: "left", offset: 13, top: 58, width: 19, height: 7, color: "#22C55E", rotate: 17 },
+  { side: "left", offset: 5, top: 66, width: 24, height: 8, color: "#8B5CF6", rotate: 14 },
+  { side: "left", offset: 11, top: 74, width: 18, height: 7, color: "#3B82F6", rotate: 12 },
+  { side: "left", offset: 4, top: 82, width: 20, height: 7, color: "#14B8A6", rotate: 21 },
+  { side: "left", offset: 7, top: 90, width: 24, height: 8, color: "#D946EF", rotate: -26 },
+
+  // right: denser at top
+  { side: "right", offset: 1, top: 4, width: 30, height: 10, color: "#F97316", rotate: -14 },
+  { side: "right", offset: 8, top: 6, width: 19, height: 7, color: "#0EA5E9", rotate: 12 },
+  { side: "right", offset: 13, top: 9, width: 20, height: 7, color: "#22C55E", rotate: -20 },
+  { side: "right", offset: 4, top: 12, width: 24, height: 8, color: "#EC4899", rotate: 20 },
+  { side: "right", offset: 10, top: 15, width: 22, height: 8, color: "#06B6D4", rotate: -18 },
+  { side: "right", offset: 15, top: 18, width: 20, height: 7, color: "#22C55E", rotate: -25 },
+  { side: "right", offset: 5, top: 21, width: 18, height: 7, color: "#8B5CF6", rotate: 19 },
+  { side: "right", offset: 12, top: 24, width: 21, height: 8, color: "#F43F5E", rotate: 14 },
+  { side: "right", offset: 2, top: 28, width: 26, height: 9, color: "#84CC16", rotate: 15 },
+  { side: "right", offset: 9, top: 33, width: 21, height: 8, color: "#F97316", rotate: -11 },
+  { side: "right", offset: 14, top: 38, width: 20, height: 7, color: "#A855F7", rotate: -19 },
+  { side: "right", offset: 4, top: 44, width: 19, height: 7, color: "#F43F5E", rotate: 20 },
+  { side: "right", offset: 2, top: 52, width: 28, height: 10, color: "#FACC15", rotate: 25 },
+  { side: "right", offset: 12, top: 60, width: 18, height: 7, color: "#14B8A6", rotate: -15 },
+  { side: "right", offset: 6, top: 68, width: 24, height: 8, color: "#22C55E", rotate: -17 },
+  { side: "right", offset: 1, top: 76, width: 20, height: 7, color: "#A855F7", rotate: 14 },
+  { side: "right", offset: 13, top: 84, width: 20, height: 7, color: "#3B82F6", rotate: -24 },
+  { side: "right", offset: 5, top: 92, width: 26, height: 9, color: "#EAB308", rotate: 18 },
+] as const;
+
+const getTaperedSideOffset = (offset: number, top: number) => {
+  const taperMultiplier = Math.max(0.72, 1.85 - top * 0.012);
+  return Math.min(29, Number((offset * taperMultiplier).toFixed(2)));
+};
+
 export default function Home() {
   const router = useRouter();
   const pathname = usePathname();
@@ -37,7 +86,7 @@ export default function Home() {
   const [selectedMode, setSelectedMode] = useState<string>("presenton")
   const config = useSelector((state: RootState) => state.userConfig);
   const [llmConfig, setLlmConfig] = useState<LLMConfig>(config.llm_config);
-  console.log('config', config);
+
   const [downloadingModel, setDownloadingModel] = useState<{
     name: string;
     size: number | null;
@@ -270,13 +319,34 @@ export default function Home() {
     //     </div>
     //   </div>
     // </div>
-    <div className="flex h-screen ">
+    <div className="flex h-screen">
       <OnBoardingSlidebar />
-      <main className="w-full pl-20 pr-8 max-w-[1440px] mx-auto relative">
+      <main className="w-full pl-20 pr-8 max-w-[1440px] mx-auto relative z-10">
+        {step === 3 && (
+          <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden>
+            {FINAL_STEP_CONFETTI_PIECES.map((piece, index) => (
+              <span
+                key={`${piece.side}-${index}`}
+                className="absolute rounded-[3px]"
+                style={{
+                  top: `${piece.top}%`,
+                  ...(piece.side === "left"
+                    ? { left: `${getTaperedSideOffset(piece.offset, piece.top)}%` }
+                    : { right: `${getTaperedSideOffset(piece.offset, piece.top)}%` }),
+                  width: `${piece.width}px`,
+                  height: `${piece.height}px`,
+                  backgroundColor: piece.color,
+                  transform: `rotate(${piece.rotate}deg)`,
+                }}
+              />
+            ))}
+          </div>
+        )}
         <OnBoardingHeader currentStep={step} />
         {step === 1 && <ModeSelectStep setStep={setStep} setSelectedMode={setSelectedMode} />}
         {step === 2 && selectedMode === "presenton" && <PresentonMode currentStep={step} setStep={setStep} />}
         {step === 2 && selectedMode === "image" && <GenerationWithImage />}
+        {step === 3 && <FinalStep />}
       </main>
     </div>
   );

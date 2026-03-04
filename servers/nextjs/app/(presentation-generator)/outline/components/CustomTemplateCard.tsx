@@ -34,7 +34,7 @@ export const CustomTemplateCard = memo(({ template, onSelectTemplate, selectedTe
     return (
 
         <Card
-            className={`${isSelected ? 'border-2 border-blue-500' : ''} cursor-pointer flex flex-col justify-between relative hover:shadow-lg transition-all duration-200 group overflow-hidden`}
+            className={`${isSelected ? 'border-2 border-blue-500' : ''} font-syne cursor-pointer flex flex-col justify-between relative hover:shadow-lg transition-all duration-200 group overflow-hidden`}
             onClick={() => onSelectTemplate(template.id)}
         >
 

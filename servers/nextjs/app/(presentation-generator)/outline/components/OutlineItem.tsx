@@ -119,7 +119,7 @@ export function OutlineItem({
     }, [isStreaming, isActiveStreaming, isStableStreaming, slideOutline.content])
 
     return (
-        <div className="mb-4 bg-white rounded-[12px] group shadow-sm p-10 relative">
+        <div className="mb-4 bg-white rounded-[12px] group shadow-sm p-10 relative font-syne">
 
             <div
                 ref={setNodeRef}

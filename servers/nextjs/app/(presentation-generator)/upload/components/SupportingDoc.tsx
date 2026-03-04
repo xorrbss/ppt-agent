@@ -139,14 +139,14 @@ const SupportingDoc = ({
     return (
         <div className="space-y-2" data-testid="attachments-uploader">
             <div className="flex items-center justify-between">
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-gray-600 font-syne">
                     {hasFiles ? `${filteredFiles.length} attachment${filteredFiles.length > 1 ? 's' : ''}` : 'No attachments yet'}
                 </p>
                 <button
                     type="button"
                     onClick={handleClearFiles}
                     disabled={!hasFiles}
-                    className={`text-sm font-medium ${!hasFiles ? 'cursor-not-allowed text-gray-400' : 'text-red-600 hover:text-red-700'}`}
+                    className={`text-sm font-medium font-syne ${!hasFiles ? 'cursor-not-allowed text-gray-400' : 'text-red-600 hover:text-red-700'}`}
                     data-testid="attachments-clear-button"
                     aria-disabled={!hasFiles}
                 >
@@ -170,7 +170,7 @@ const SupportingDoc = ({
                 />
                 <div className="flex flex-col items-center gap-2">
                     <Paperclip className="h-6 w-6 text-[#5146E5]" />
-                    <p className="text-sm font-medium text-gray-800">
+                    <p className="text-sm font-medium text-gray-800 font-syne">
                         Drag and drop PDF, TXT, PPTX, DOCX, or <span className="text-[#5146E5]">click to browse</span>
                     </p>
                 </div>
@@ -194,10 +194,10 @@ const SupportingDoc = ({
                                 )}
 
                                 <div className="min-w-0 flex-1">
-                                    <p className="truncate text-sm font-medium text-gray-900" title={file.name}>
+                                    <p className="truncate text-sm font-medium text-gray-900 font-syne" title={file.name}>
                                         {file.name}
                                     </p>
-                                    <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
+                                    <p className="text-xs text-gray-500 font-syne">{formatFileSize(file.size)}</p>
                                 </div>
 
                                 <button
@@ -213,7 +213,7 @@ const SupportingDoc = ({
                         ))}
                     </ul>
                     {filteredFiles.length !== files.length && (
-                        <p className="mt-2 text-xs text-amber-600">
+                        <p className="mt-2 text-xs text-amber-600 font-syne">
                             Some files were skipped. Only PDF, TXT, PPTX, and DOCX files are supported.
                         </p>
                     )}

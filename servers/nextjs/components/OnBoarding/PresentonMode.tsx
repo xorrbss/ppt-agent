@@ -289,13 +289,16 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 }
             }
             toast.info("Configuration saved successfully");
-            setSavingConfig(false);
             // Track navigation from -> to
-            trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/upload" });
-            router.push("/upload");
+            trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/final onboarding step" });
+            setStep(3)
+            // router.push("/upload");
         } catch (error) {
             toast.info(error instanceof Error ? error.message : "Failed to save configuration");
 
+        }
+        finally {
+            setSavingConfig(false);
         }
     };
 
@@ -308,12 +311,12 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
 
 
     return (
-        <div className='w-full max-w-[640px]'>
-            <p className='px-2.5 py-0.5 w-fit text-[#7A5AF8] rounded-[50px]  border border-[#EDEEEF] text-[10px] font-medium mb-5'>PRESENTON</p>
+        <div className='w-full max-w-[640px] font-syne'>
+            <p className='px-2.5 py-0.5 w-fit text-[#7A5AF8] rounded-[50px]  border border-[#EDEEEF] text-[10px] font-medium mb-5 font-syne'>PRESENTON</p>
             <div className='mb-[54px]'>
 
-                <h2 className='mb-4 text-black text-[26px] font-normal '>Choose your content providers</h2>
-                <p className='text-[##000000CC] text-xl font-normal'>Select the AI engines that will generate your slide text and visuals.</p>
+                <h2 className='mb-4 text-black text-[26px] font-normal font-unbounded '>Choose your content providers</h2>
+                <p className='text-[#000000CC] text-xl font-normal font-syne'>Select the AI engines that will generate your slide text and visuals.</p>
             </div>
             {/* Text Provider */}
             <div className='p-3 border border-[#EDEEEF] rounded-[11px] '>
@@ -798,7 +801,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 </button>
                 <button
 
-                    disabled={savingConfig || downloadProgress > 0}
+                    disabled={savingConfig}
                     onClick={handleSaveConfig}
                     className='border border-[#EDEEEF] bg-[#7C51F8]  rounded-[58px] px-5 py-2.5 text-white text-xs  font-semibold'>
                     Continue to Finish

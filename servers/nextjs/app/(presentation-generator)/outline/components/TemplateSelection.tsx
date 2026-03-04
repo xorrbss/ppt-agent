@@ -19,7 +19,7 @@ const BuiltInLayoutPreview = memo(({ layout, templateId, index }: {
   const LayoutComponent = layout.component;
   return (
     <div
-      className="relative bg-gray-100 border border-gray-200 overflow-hidden aspect-video rounded"
+      className="relative bg-gray-100 font-syne border border-gray-200 overflow-hidden aspect-video rounded"
       style={{ contain: 'layout style paint' }}
     >
       <div className="absolute inset-0 bg-transparent z-10" />
@@ -66,10 +66,10 @@ const BuiltInTemplateCard = memo(({ template, isSelected, onSelect }: {
       </div>
       <div className="flex items-center justify-between p-5 bg-white border-t border-[#EDEEEF] relative z-40">
         <div>
-          <h3 className="text-sm font-bold text-gray-900 capitalize">
+          <h3 className="text-sm font-bold text-gray-900 capitalize font-syne">
             {template.name}
           </h3>
-          <p className="text-xs text-gray-600 mb-4 line-clamp-2">
+          <p className="text-xs text-gray-600 mb-4 line-clamp-2 font-syne">
             {template.description}
           </p>
         </div>
@@ -130,8 +130,8 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = memo(({
   const customTemplateCards = useMemo(() => {
     if (customLoading) {
       return (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <div className="flex items-center justify-center py-12 font-syne">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600 font-syne" />
           <span className="ml-3 text-gray-600">Loading custom templates...</span>
         </div>
       );
@@ -177,13 +177,13 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = memo(({
       {/* Custom AI Templates */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-semibold text-gray-900">Custom</h3>
+          <h3 className="text-lg font-semibold text-gray-900 font-syne">Custom</h3>
         </div>
         {customTemplateCards}
       </div>
       {/* In Built Templates */}
       <div>
-        <h3 className="text-lg font-semibold text-gray-900 mb-3">In Built</h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-3 font-syne">In Built</h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {builtInTemplateCards}
         </div>

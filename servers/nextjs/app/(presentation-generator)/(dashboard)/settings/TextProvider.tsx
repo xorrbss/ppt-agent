@@ -81,7 +81,9 @@ const TextProvider = ({
         if (currentModelField) {
             onInputChange('', currentModelField);
         }
-    }, [selectedProvider, currentApiKey, currentCustomUrl, currentOllamaUrl]);
+    }, [selectedProvider, currentApiKey, currentCustomUrl, currentModelField]);
+
+
 
     const onApiKeyChange = (llm: keyof typeof LLM_PROVIDERS, value: string) => {
         if (llm === 'ollama') {

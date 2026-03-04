@@ -3,10 +3,10 @@ import React from 'react'
 
 const OnBoardingHeader = ({ currentStep }: { currentStep: number }) => {
     return (
-        <div className='flex items-center justify-end gap-1 mt-7 mb-[52px]'>
+        <div className='relative z-20 flex items-center font-syne justify-end gap-1 mt-7 mb-[52px]'>
 
             <div className='flex items-center gap-1'>
-                <div className={`${currentStep >= 1 ? 'bg-[#010100] text-white' : 'border border-[#ECECEF] text-[#494A4D]'} px-2.5 h-7 w-7  text-xs font-medium rounded-full flex items-center justify-center`}>
+                <div className={`${currentStep === 1 ? 'bg-[#010100] text-white' : 'border border-[#ECECEF] text-[#494A4D]'} px-2.5 h-7 w-7  text-xs font-medium rounded-full flex items-center justify-center`}>
                     1
                 </div>
                 <p className='text-[#010000] text-xs '>Select Mode</p>
@@ -15,7 +15,7 @@ const OnBoardingHeader = ({ currentStep }: { currentStep: number }) => {
                 <path d="M0 0.5H21.5" stroke="#ECECEF" />
             </svg>
             <div className='flex items-center gap-1'>
-                <div className={`${currentStep >= 2 ? 'bg-[#010100] text-white' : 'border border-[#ECECEF] text-[#494A4D]'} px-2.5 h-7 w-7  text-xs font-medium rounded-full flex items-center justify-center`}>
+                <div className={`${currentStep === 2 ? 'bg-[#010100] text-white' : 'border border-[#ECECEF] text-[#494A4D]'} px-2.5 h-7 w-7  text-xs font-medium rounded-full flex items-center justify-center`}>
                     2
                 </div>
                 <p className='text-[#010000] text-xs '>Choose Providers</p>
@@ -24,7 +24,7 @@ const OnBoardingHeader = ({ currentStep }: { currentStep: number }) => {
                 <path d="M0 0.5H21.5" stroke="#ECECEF" />
             </svg>
             <div className='flex items-center gap-1'>
-                <div className={`${currentStep >= 3 ? 'bg-[#010100] text-white' : 'border border-[#ECECEF] text-[#494A4D]'} px-2.5 h-7 w-7  text-xs font-medium rounded-full flex items-center justify-center`}>
+                <div className={`${currentStep === 3 ? 'bg-[#010100] text-white' : 'border border-[#ECECEF] text-[#494A4D]'} px-2.5 h-7 w-7  text-xs font-medium rounded-full flex items-center justify-center`}>
                     3
                 </div>
                 <p className='text-[#010000] text-xs '>Finish Setup</p>

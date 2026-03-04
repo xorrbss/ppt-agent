@@ -31,6 +31,7 @@ import { useSearchParams } from 'next/navigation'
 import CustomTabEmpty from './CustomTabEmpty'
 import ThemeApi from '@/app/(presentation-generator)/services/api/theme'
 import { useFontLoader } from '@/app/(presentation-generator)/hooks/useFontLoad'
+import Link from 'next/link'
 
 // Fallback theme used before defaults are loaded from API (unified Theme type)
 const FALLBACK_THEME: Theme = {
@@ -844,11 +845,27 @@ const ThemePanel: React.FC = () => {
 
 
   return (
-    <div className="space-y-6 px-6">
+    <div className="space-y-6 px-6 font-syne">
+      <div className='py-[28px] flex justify-between'>
 
-      <h3 className=" text-[28px] py-[28px] tracking-[-0.84px] font-unbounded font-normal text-[#101828] flex items-center gap-2">
-        Themes
-      </h3>
+        <h3 className=" text-[28px]  tracking-[-0.84px] font-unbounded font-normal text-[#101828] flex items-center gap-2">
+          Themes
+        </h3>
+        <Link
+          href="/theme?tab=new-theme"
+          className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-black text-sm font-semibold font-syne shadow-sm hover:shadow-md"
+          aria-label="Create new theme"
+          style={{
+            borderRadius: "48px",
+            background: "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
+          }}
+        >
+
+          <span className="hidden md:inline">New Theme</span>
+          <span className="md:hidden">New</span>
+          <ChevronRight className="w-4 h-4" />
+        </Link>
+      </div>
       {/* Tabs */}
       <div className='p-1 rounded-[40px] bg-[#F7F6F9] w-fit border border-[#F4F4F4] flex items-center justify-center '>
         <button className='px-5  py-2 text-xs font-medium text-[#3A3A3A] rounded-[70px]'
@@ -908,7 +925,7 @@ const ThemePanel: React.FC = () => {
       <Sheet open={isSheetOpen} onOpenChange={handleCloseSheet} >
 
 
-        <SheetContent side="bottom" className="h-[90vh] w-full p-0 [&>button]:hidden focus:outline-none" >
+        <SheetContent side="bottom" className="h-[90vh] font-syne w-full p-0 [&>button]:hidden focus:outline-none" >
           <div className="flex h-full">
             {/* Left side - Editor */}
             <div
