@@ -2,14 +2,19 @@
  * libreoffice-check.ts
  *
  * Checks whether LibreOffice is available on the host machine before the
- * main BrowserWindow is created.  If it is not found, an Electron dialog is
- * shown that lets the user download LibreOffice, skip the check, or quit.
+ * main BrowserWindow is created. LibreOffice is required for creating custom
+ * templates from uploaded PPTX files.
+ *
+ * If not found, shows a branded installer window that lets the user download
+ * and install LibreOffice with a real-time progress UI.
  */
 
-import { app, dialog, shell } from "electron";
+import { BrowserWindow, ipcMain, app } from "electron";
 import { exec } from "child_process";
 import * as util from "util";
 import * as fs from "fs";
+import * as path from "path";
+import { baseDir } from "./constants";
 
 const execAsync = util.promisify(exec);
 
@@ -186,33 +191,45 @@ function getCandidatePaths(): string[] {
 }
 
 /**
- * Returns a human-readable, OS-specific install instruction string.
+ * Detects the Linux distro from /etc/os-release and returns the install
+ * command for LibreOffice, or null if the distro is not supported.
+ *
+ * Exported so that libreoffice_install_handlers.ts can reuse it.
  */
-function getInstallInstructions(): string {
-  const platform = process.platform;
+export function getLinuxInstallCommand(): { cmd: string; args: string[] } | null {
+  const osReleasePaths = ["/etc/os-release", "/usr/lib/os-release"];
+  let id = "";
+  let idLike = "";
 
-  if (platform === "win32") {
-    return (
-      "Download the Windows installer from https://www.libreoffice.org/download/ " +
-      "and run it.  Both the 64-bit and 32-bit editions are supported."
-    );
+  for (const p of osReleasePaths) {
+    try {
+      const content = fs.readFileSync(p, "utf-8");
+      for (const line of content.split("\n")) {
+        const m = line.match(/^ID=(.+)$/);
+        if (m) id = m[1].replace(/^["']|["']$/g, "").trim().toLowerCase();
+        const m2 = line.match(/^ID_LIKE=(.+)$/);
+        if (m2) idLike = m2[1].replace(/^["']|["']$/g, "").trim().toLowerCase();
+      }
+      if (id) break;
+    } catch {
+      continue;
+    }
   }
 
-  if (platform === "darwin") {
-    return (
-      "Download the macOS disk image from https://www.libreoffice.org/download/ " +
-      "and drag LibreOffice into your Applications folder."
-    );
+  const ids = `${id} ${idLike}`;
+  if (ids.includes("ubuntu") || ids.includes("debian") || ids.includes("pop") || ids.includes("linuxmint")) {
+    return { cmd: "apt", args: ["install", "-y", "libreoffice"] };
   }
-
-  // Linux
-  return (
-    "Install LibreOffice with your package manager, for example:\n\n" +
-    "  Ubuntu / Debian:  sudo apt install libreoffice\n" +
-    "  Fedora:           sudo dnf install libreoffice\n" +
-    "  Arch:             sudo pacman -S libreoffice-still\n\n" +
-    "Or download it from https://www.libreoffice.org/download/"
-  );
+  if (ids.includes("fedora") || ids.includes("rhel") || ids.includes("centos") || ids.includes("rocky")) {
+    return { cmd: "dnf", args: ["install", "-y", "libreoffice"] };
+  }
+  if (ids.includes("arch")) {
+    return { cmd: "pacman", args: ["-S", "--noconfirm", "libreoffice-still"] };
+  }
+  if (ids.includes("opensuse") || ids.includes("suse")) {
+    return { cmd: "zypper", args: ["install", "-y", "libreoffice"] };
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -281,68 +298,52 @@ async function isLibreOfficeInstalled(): Promise<LibreOfficeCheckResult> {
 }
 
 // ---------------------------------------------------------------------------
-// Dialog
+// Installer window
 // ---------------------------------------------------------------------------
 
 /**
- * Shows a modal dialog informing the user that LibreOffice is required.
+ * Opens a branded 520×400 installer window that lets the user download and
+ * install LibreOffice with a live progress UI.
  *
- * Button indices:
- *  0 – "Download LibreOffice" → opens download page, shows a re-launch notice,
- *                               then quits the application
- *  1 – "Install Later"        → continues launching without LibreOffice
- *  2 – "Exit"                 → quits the application immediately
- *
- * @returns `true` if the application should proceed to create its window,
- *          `false` if `app.quit()` has been called.
+ * Returns a Promise that resolves once the window is closed (either by the
+ * user skipping or after a successful install).
  */
-async function showLibreOfficeMissingDialog(): Promise<boolean> {
-  const instructions = getInstallInstructions();
-
-  const { response } = await dialog.showMessageBox({
-    type: "warning",
-    title: "LibreOffice Required",
-    message: "LibreOffice is not installed",
-    detail:
-      "Presenton uses LibreOffice to export presentations to PPTX and PDF " +
-      "formats.  Without it, export functionality will not work.\n\n" +
-      `How to install LibreOffice on your system:\n\n${instructions}`,
-    buttons: ["Download LibreOffice", "Install Later", "Exit"],
-    defaultId: 0,
-    cancelId: 1,
-    noLink: true,
-  });
-
-  if (response === 0) {
-    // Open the LibreOffice download page in the default browser.
-    await shell.openExternal("https://www.libreoffice.org/download/");
-
-    // Let the user know they need to restart Presenton after installation,
-    // then close the app so they start fresh with LibreOffice on the PATH.
-    await dialog.showMessageBox({
-      type: "info",
-      title: "Restart Required",
-      message: "Please re-launch Presenton after installation",
-      detail:
-        "The LibreOffice download page has been opened in your browser.\n\n" +
-        "Once LibreOffice is installed, re-run Presenton and it will be " +
-        "detected automatically.",
-      buttons: ["OK"],
-      defaultId: 0,
+async function showLibreOfficeInstallerWindow(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const win = new BrowserWindow({
+      width: 520,
+      height: 560,
+      resizable: false,
+      center: true,
+      title: "Presenton – Install LibreOffice",
+      icon: path.join(baseDir, "resources/ui/assets/images/presenton_short_filled.png"),
+      webPreferences: {
+        webSecurity: false,
+        preload: path.join(__dirname, "../preloads/libreoffice-installer.js"),
+      },
     });
 
-    app.quit();
-    return false;
-  }
+    win.setMenuBarVisibility(false);
 
-  if (response === 2) {
-    // User chose to exit immediately.
-    app.quit();
-    return false;
-  }
+    const htmlPath = path.join(
+      baseDir,
+      "resources/ui/libreoffice-installer/index.html"
+    );
+    win.loadFile(htmlPath);
 
-  // response === 1 → "Install Later" – continue launching without LibreOffice.
-  return true;
+    // lo:skip is sent by the renderer when the user clicks "Skip" or after
+    // a successful install (the success state auto-sends skip after 2 s).
+    const onSkip = () => {
+      if (!win.isDestroyed()) win.close();
+    };
+    ipcMain.once("lo:skip", onSkip);
+
+    win.on("closed", () => {
+      // Remove the listener in case the window was closed by the OS (title-bar X)
+      ipcMain.removeListener("lo:skip", onSkip);
+      resolve();
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -350,20 +351,17 @@ async function showLibreOfficeMissingDialog(): Promise<boolean> {
 // ---------------------------------------------------------------------------
 
 /**
- * Checks for LibreOffice and, when it is absent, presents the user with the
- * "LibreOffice Required" dialog.
+ * Checks for LibreOffice. When absent, shows a branded installer window that
+ * lets the user install it. Never blocks app startup — always returns `true`.
  *
  * Call this function **before** creating the main `BrowserWindow`.
  *
- * @returns `true` if the application should proceed to create its window,
- *          `false` if the user chose to exit and `app.quit()` has been called.
+ * @returns Always `true` – the application should always proceed.
  */
 export async function checkLibreOfficeBeforeWindow(): Promise<boolean> {
-  const result = await isLibreOfficeInstalled();
+  let result = await isLibreOfficeInstalled();
 
   if (result.installed) {
-    // Persist the resolved path so getSofficePath() returns it for the
-    // lifetime of this Electron process.
     if (result.path) {
       resolvedSofficePath = result.path;
     }
@@ -373,8 +371,16 @@ export async function checkLibreOfficeBeforeWindow(): Promise<boolean> {
     return true;
   }
 
-  console.warn(
-    "[LibreOffice] Not found on this system – showing installation dialog."
-  );
-  return showLibreOfficeMissingDialog();
+  console.warn("[LibreOffice] Not found – showing installer window.");
+  await showLibreOfficeInstallerWindow();
+
+  // Re-detect after the window closes (install may have succeeded)
+  result = await isLibreOfficeInstalled();
+  if (result.installed && result.path) {
+    resolvedSofficePath = result.path;
+    console.log(`[LibreOffice] Detected after install: ${resolvedSofficePath}`);
+  }
+
+  // Always proceed – never block the app
+  return true;
 }

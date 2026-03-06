@@ -6,6 +6,7 @@ import { startFastApiServer, startNextJsServer } from "./utils/servers";
 import { ChildProcessByStdio } from "child_process";
 import { appDataDir, baseDir, ensureDirectoriesExist, fastapiDir, isDev, localhost, nextjsDir, tempDir, userConfigPath, userDataDir } from "./utils/constants";
 import { setupIpcHandlers } from "./ipc";
+import { setupLibreOfficeInstallHandlers } from "./ipc/libreoffice_install_handlers";
 import { checkLibreOfficeBeforeWindow, getSofficePath } from "./utils/libreoffice-check";
 
 
@@ -105,10 +106,12 @@ app.whenReady().then(async () => {
   // Ensure all required directories exist before starting
   ensureDirectoriesExist();
 
-  // Guard: verify LibreOffice is available before showing the main window.
-  // If it is missing, the user is prompted to download it or exit.
-  const shouldContinue = await checkLibreOfficeBeforeWindow();
-  if (!shouldContinue) return;
+  // Register LibreOffice install handlers early so the installer window can use them
+  setupLibreOfficeInstallHandlers();
+
+  // Check for LibreOffice (required for custom template from PPTX). Shows installer
+  // window if missing. Never blocks; always proceeds.
+  await checkLibreOfficeBeforeWindow();
 
   createWindow();
   win?.loadFile(path.join(baseDir, "resources/ui/homepage/index.html"));

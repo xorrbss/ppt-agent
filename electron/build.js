@@ -48,8 +48,12 @@ const config = {
   },
   linux: {
     artifactName: "Presenton-${version}.${ext}",
-    target: ["AppImage"],
-    icon: "resources/ui/assets/images/presenton_short_filled.png",
+    target: ["AppImage", "deb"],
+    icon: "build/icons",
+  },
+  deb: {
+    afterInstall: "build/after-install.tpl",
+    recommends: ["libreoffice"],
   },
   win: {
     target: ["nsis", "appx"],
