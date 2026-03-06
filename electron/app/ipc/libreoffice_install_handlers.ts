@@ -42,11 +42,15 @@ function sendLog(
 // Download with progress
 // ---------------------------------------------------------------------------
 
+/** Minimum expected size (bytes). LibreOffice installers are ~280–350 MB; HTML/redirect pages are ~30 KB. */
+const MIN_INSTALLER_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
+
 function downloadWithProgress(
   url: string,
   dest: string,
   filename: string,
-  wc: WebContents
+  wc: WebContents,
+  minSizeBytes: number = MIN_INSTALLER_SIZE_BYTES
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const fmtBytes = (bytes: number) => {
@@ -141,6 +145,15 @@ function downloadWithProgress(
             const elapsedSec = (Date.now() - startTime) / 1000;
             const avgSpeed = downloaded / elapsedSec;
             sendLog(wc, "ok", `Download complete — ${fmtBytes(downloaded)} in ${elapsedSec.toFixed(1)}s (avg ${fmtSpeed(avgSpeed)})`);
+            if (downloaded < minSizeBytes) {
+              fs.unlink(dest, () => {});
+              reject(
+                new Error(
+                  `Download failed: received ${fmtBytes(downloaded)} (expected > 50 MB). The server may have returned an HTML page instead of the installer.`
+                )
+              );
+              return;
+            }
             resolve();
           })
         );
