@@ -1,6 +1,7 @@
 require("dotenv").config();
 import { app, BrowserWindow } from "electron";
 import path from "path";
+import fs from "fs";
 import { findUnusedPorts, killProcess, setupEnv, setUserConfig } from "./utils";
 import { startFastApiServer, startNextJsServer } from "./utils/servers";
 import { ChildProcessByStdio } from "child_process";
@@ -15,6 +16,30 @@ var fastApiProcess: ChildProcessByStdio<any, any, any> | undefined;
 var nextjsProcess: any;
 
 app.commandLine.appendSwitch('gtk-version', '3');
+
+// Mitigate "Unable to move the cache: Access is denied" on Windows (Chromium disk cache).
+// Use explicit cache paths and remove stale old_* dirs that cause move failures.
+if (process.platform === "win32") {
+  const ud = app.getPath("userData");
+  const cacheBase = path.join(ud, "Cache");
+  const gpuCacheBase = path.join(ud, "GPUCache");
+  app.setPath("cache", cacheBase);
+  app.commandLine.appendSwitch("disk-cache-dir", cacheBase);
+  try {
+    [cacheBase, gpuCacheBase].forEach((dir) => {
+      if (fs.existsSync(dir)) {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const e of entries) {
+          if (e.isDirectory() && e.name.startsWith("old_")) {
+            fs.rmSync(path.join(dir, e.name), { recursive: true, force: true });
+          }
+        }
+      }
+    });
+  } catch {
+    /* ignore cleanup errors */
+  }
+}
 
 const createWindow = () => {
   win = new BrowserWindow({
