@@ -184,10 +184,14 @@ async function installWindows(wc: WebContents): Promise<void> {
   await downloadWithProgress(url, dest, filename, wc);
 
   sendProgress(wc, "installing");
+  sendLog(wc, "info", "Requesting administrator rights (UAC prompt may appear)…");
   sendLog(wc, "cmd", `Running: msiexec /i "${filename}" /qn /norestart`);
 
   await new Promise<void>((resolve, reject) => {
-    const child = spawn("msiexec", ["/i", dest, "/qn", "/norestart"], {
+    // Run msiexec elevated via PowerShell; error 1603 often means installer needs admin rights
+    const destEscaped = dest.replace(/'/g, "''");
+    const ps = `$p = Start-Process -FilePath "msiexec" -ArgumentList "/i", '${destEscaped}', "/qn", "/norestart" -Verb RunAs -Wait -PassThru; if ($p) { exit $p.ExitCode } else { exit 1 }`;
+    const child = spawn("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps], {
       stdio: ["ignore", "pipe", "pipe"],
     });
     child.stdout?.on("data", (d: Buffer) => sendLog(wc, "info", d.toString()));
@@ -198,7 +202,13 @@ async function installWindows(wc: WebContents): Promise<void> {
         sendLog(wc, "ok", `msiexec exited with code ${code} (success)`);
         resolve();
       } else {
-        reject(new Error(`msiexec exited with code ${code}`));
+        const hint =
+          code === 1603
+            ? " — Try closing other apps, freeing disk space, or install LibreOffice manually from libreoffice.org"
+            : code === 1
+              ? " — Did you cancel the administrator prompt?"
+              : "";
+        reject(new Error(`msiexec exited with code ${code}${hint}`));
       }
     });
     child.on("error", (err) => {
