@@ -18,6 +18,17 @@ import uuid
 from constants.documents import POWERPOINT_TYPES
 
 
+def _get_soffice_binary() -> str:
+    """Return the soffice binary to use for LibreOffice subprocess calls.
+
+    When running inside the Electron desktop app, the main process resolves the
+    exact soffice binary path at startup and forwards it via the ``SOFFICE_PATH``
+    environment variable.  Falling back to the bare ``"soffice"`` command keeps
+    Docker / server deployments working unchanged.
+    """
+    return os.environ.get("SOFFICE_PATH") or "soffice"
+
+
 PPTX_SLIDES_ROUTER = APIRouter(prefix="/pptx-slides", tags=["PPTX Slides"])
 
 
@@ -572,7 +583,7 @@ async def _convert_pptx_to_pdf(pptx_path: str, temp_dir: str) -> str:
         try:
             result = subprocess.run(
                 [
-                    "libreoffice",
+                    _get_soffice_binary(),
                     "--headless",
                     "--convert-to",
                     "pdf",
