@@ -45,12 +45,25 @@ function sendLog(
 /** Minimum expected size (bytes). LibreOffice installers are ~280–350 MB; HTML/redirect pages are ~30 KB. */
 const MIN_INSTALLER_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
 
+/**
+ * Known approximate installer sizes used as fallback when the download server
+ * does not send a Content-Length header (e.g. some CDN mirrors strip it).
+ * These are intentionally conservative estimates so the progress bar never
+ * jumps backward if the actual file is slightly smaller.
+ */
+const KNOWN_INSTALLER_SIZES = {
+  win64:    370 * 1024 * 1024, // ~350–360 MB MSI
+  macX64:   400 * 1024 * 1024, // ~370–390 MB DMG
+  macArm64: 400 * 1024 * 1024, // ~370–390 MB DMG
+};
+
 function downloadWithProgress(
   url: string,
   dest: string,
   filename: string,
   wc: WebContents,
-  minSizeBytes: number = MIN_INSTALLER_SIZE_BYTES
+  minSizeBytes: number = MIN_INSTALLER_SIZE_BYTES,
+  knownTotalBytes?: number
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const fmtBytes = (bytes: number) => {
@@ -92,7 +105,11 @@ function downloadWithProgress(
           return;
         }
 
-        const totalBytes = parseInt(res.headers["content-length"] ?? "0", 10);
+        const contentLength = parseInt(res.headers["content-length"] ?? "0", 10);
+        // Use Content-Length when available; fall back to the caller-supplied
+        // known size so the progress bar shows something meaningful even when
+        // the CDN mirror omits the header.
+        const totalBytes = contentLength > 0 ? contentLength : (knownTotalBytes ?? 0);
         sendLog(wc, "ok", `HTTP 200 OK — ${totalBytes > 0 ? fmtBytes(totalBytes) : "size unknown"}`);
         sendLog(wc, "info", `Saving to: ${dest}`);
         sendLog(wc, "info", `Starting download of ${filename}…`);
@@ -110,7 +127,8 @@ function downloadWithProgress(
           downloaded += chunk.length;
           const now = Date.now();
           const elapsedMs = now - startTime;
-          const percent = totalBytes > 0 ? Math.floor((downloaded / totalBytes) * 100) : 0;
+          // Cap at 99 while still downloading so 100% only fires on completion
+          const percent = totalBytes > 0 ? Math.min(Math.floor((downloaded / totalBytes) * 100), 99) : 0;
           const sizeLabel = totalBytes > 0
             ? `${fmtBytes(downloaded)} / ${fmtBytes(totalBytes)}`
             : fmtBytes(downloaded);
@@ -181,7 +199,7 @@ async function installWindows(wc: WebContents): Promise<void> {
   const dest = path.join(app.getPath("temp"), filename);
 
   sendProgress(wc, "downloading", 0, `${filename}|`);
-  await downloadWithProgress(url, dest, filename, wc);
+  await downloadWithProgress(url, dest, filename, wc, MIN_INSTALLER_SIZE_BYTES, KNOWN_INSTALLER_SIZES.win64);
 
   sendProgress(wc, "installing");
   sendLog(wc, "info", "Requesting administrator rights (UAC prompt may appear)…");
@@ -259,7 +277,11 @@ async function installMac(wc: WebContents): Promise<void> {
   const mountPoint = path.join(app.getPath("temp"), "LibreOfficeMount");
 
   sendProgress(wc, "downloading", 0, `${filename}|`);
-  await downloadWithProgress(url, dmgPath, filename, wc);
+  await downloadWithProgress(
+    url, dmgPath, filename, wc,
+    MIN_INSTALLER_SIZE_BYTES,
+    isArm64 ? KNOWN_INSTALLER_SIZES.macArm64 : KNOWN_INSTALLER_SIZES.macX64
+  );
 
   sendProgress(wc, "installing");
   fs.mkdirSync(mountPoint, { recursive: true });
@@ -307,20 +329,109 @@ async function installLinux(wc: WebContents): Promise<void> {
     );
   }
 
+  const isApt = installCmd.cmd === "apt" || installCmd.cmd === "apt-get";
+
+  if (isApt) {
+    // apt-get supports APT::Status-Fd which writes machine-readable progress
+    // lines to the specified file descriptor.  We route them to stdout (fd=1)
+    // so the piped child.stdout stream delivers them without mixing with the
+    // regular log output that apt sends to stderr.
+    //
+    // Status line formats:
+    //   dlstatus:<id>:<percent>:<message>   — download progress
+    //   pmstatus:<pkg>:<percent>:<message>  — dpkg install progress
+    sendProgress(wc, "downloading", 0, "libreoffice|Resolving packages…");
+    sendLog(wc, "cmd", "Running: pkexec apt-get install -y libreoffice");
+    sendLog(wc, "info", "A system dialog will prompt for your password…");
+
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(
+        "pkexec",
+        ["apt-get", "install", "-y", "-o", "APT::Status-Fd=1", "libreoffice"],
+        { stdio: ["ignore", "pipe", "pipe"] }
+      );
+
+      let stdoutBuf = "";
+
+      child.stdout?.on("data", (d: Buffer) => {
+        stdoutBuf += d.toString();
+        const lines = stdoutBuf.split("\n");
+        stdoutBuf = lines.pop() ?? ""; // keep any incomplete trailing line
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+
+          if (trimmed.startsWith("dlstatus:")) {
+            // dlstatus:<numeric-id>:<percent>:<human-readable-msg>
+            const parts = trimmed.split(":");
+            const pct = parseFloat(parts[2] ?? "0");
+            if (!isNaN(pct)) {
+              const msg = parts.slice(3).join(":").trim() || "Downloading packages…";
+              sendProgress(wc, "downloading", Math.min(Math.floor(pct), 99), `libreoffice|${msg}`);
+            }
+          } else if (trimmed.startsWith("pmstatus:")) {
+            // pmstatus:<pkg-name>:<percent>:<human-readable-msg>
+            const parts = trimmed.split(":");
+            const pct = parseFloat(parts[2] ?? "0");
+            if (!isNaN(pct)) {
+              sendProgress(wc, "installing", Math.min(Math.floor(pct), 99));
+            }
+          } else {
+            sendLog(wc, "info", trimmed);
+          }
+        }
+      });
+
+      child.stderr?.on("data", (d: Buffer) => {
+        const text = d.toString();
+        sendLog(wc, text.toLowerCase().includes("error") ? "error" : "info", text);
+      });
+
+      child.on("close", (code) => {
+        if (code === 0) {
+          sendLog(wc, "ok", "apt-get exited successfully");
+          resolve();
+        } else {
+          reject(new Error(`apt-get exited with code ${code}`));
+        }
+      });
+      child.on("error", reject);
+    });
+    return;
+  }
+
+  // For dnf, pacman, zypper — use a simple regex to extract any percentage
+  // printed to stdout so we can at least animate the progress bar forward.
   sendProgress(wc, "installing");
   const fullCmd = `pkexec ${installCmd.cmd} ${installCmd.args.join(" ")}`;
   sendLog(wc, "cmd", `Running: ${fullCmd}`);
   sendLog(wc, "info", "A system dialog will prompt for your password…");
 
+  const pctRegex = /(\d+)\s*%/;
+
   await new Promise<void>((resolve, reject) => {
     const child = spawn("pkexec", [installCmd.cmd, ...installCmd.args], {
       stdio: ["ignore", "pipe", "pipe"],
     });
-    child.stdout?.on("data", (d: Buffer) => sendLog(wc, "info", d.toString()));
+
+    child.stdout?.on("data", (d: Buffer) => {
+      const text = d.toString();
+      const match = pctRegex.exec(text);
+      if (match) {
+        const pct = parseInt(match[1], 10);
+        if (pct >= 0 && pct <= 100) {
+          sendProgress(wc, "installing", pct);
+        }
+      }
+      sendLog(wc, "info", text);
+    });
+
     child.stderr?.on("data", (d: Buffer) => {
       const text = d.toString();
       sendLog(wc, text.toLowerCase().includes("error") ? "error" : "info", text);
     });
+
     child.on("close", (code) => {
       if (code === 0) {
         sendLog(wc, "ok", `${installCmd.cmd} exited successfully`);

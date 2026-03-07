@@ -423,6 +423,9 @@
         <p class="heading">Installing LibreOffice</p>
         <p class="sub">Running the installer — this won't take long…</p>
         <div class="progress-wrap">
+          <div class="progress-meta" id="install-meta" style="display:none;">
+            <span id="install-label">0%</span>
+          </div>
           <div class="progress-track">
             <div class="progress-fill indeterminate" id="install-bar"></div>
           </div>
@@ -492,6 +495,19 @@
       if (logSection) {
         logSection.style.display =
           (name === 'downloading' || name === 'installing' || name === 'error') ? 'flex' : 'none';
+      }
+      // When entering installing state fresh, reset to indeterminate until a
+      // real percent arrives (e.g. Windows msiexec never sends one).
+      if (name === 'installing') {
+        const bar   = document.getElementById('install-bar');
+        const meta  = document.getElementById('install-meta');
+        const label = document.getElementById('install-label');
+        if (bar && !bar.classList.contains('indeterminate')) {
+          bar.classList.add('indeterminate');
+          bar.style.width = '';
+        }
+        if (meta)  meta.style.display = 'none';
+        if (label) label.textContent   = '0%';
       }
     }
 
@@ -596,6 +612,20 @@
 
       if (phase === 'installing') {
         showState('installing');
+        const bar   = document.getElementById('install-bar');
+        const meta  = document.getElementById('install-meta');
+        const label = document.getElementById('install-label');
+        if (bar) {
+          if (typeof percent === 'number') {
+            bar.classList.remove('indeterminate');
+            bar.style.width = Math.min(percent, 100) + '%';
+            if (meta)  meta.style.display  = 'flex';
+            if (label) label.textContent    = percent + '%';
+          } else if (!bar.classList.contains('indeterminate')) {
+            bar.classList.add('indeterminate');
+            bar.style.width = '';
+          }
+        }
         return;
       }
 

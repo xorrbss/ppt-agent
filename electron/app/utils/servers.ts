@@ -24,11 +24,6 @@ export async function startFastApiServer(
     const binary = process.platform === "win32" ? "fastapi.exe" : "fastapi";
     command = path.join(directory, binary);
     args = ["--port", port.toString()];
-    if (!fs.existsSync(command)) {
-      throw new Error(
-        `FastAPI binary not found at ${command}. Rebuild the app for ${process.platform} or run in dev mode.`
-      );
-    }
   }
 
   const safeLog = (data: Buffer | string, logPath: string) => {
