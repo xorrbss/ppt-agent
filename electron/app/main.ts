@@ -1,11 +1,14 @@
 require("dotenv").config();
 import { app, BrowserWindow } from "electron";
 import path from "path";
+import fs from "fs";
 import { findUnusedPorts, killProcess, setupEnv, setUserConfig } from "./utils";
 import { startFastApiServer, startNextJsServer } from "./utils/servers";
 import { ChildProcessByStdio } from "child_process";
 import { appDataDir, baseDir, ensureDirectoriesExist, fastapiDir, isDev, localhost, nextjsDir, tempDir, userConfigPath, userDataDir } from "./utils/constants";
 import { setupIpcHandlers } from "./ipc";
+import { setupLibreOfficeInstallHandlers } from "./ipc/libreoffice_install_handlers";
+import { checkLibreOfficeBeforeWindow, getSofficePath } from "./utils/libreoffice-check";
 
 
 var win: BrowserWindow | undefined;
@@ -13,6 +16,30 @@ var fastApiProcess: ChildProcessByStdio<any, any, any> | undefined;
 var nextjsProcess: any;
 
 app.commandLine.appendSwitch('gtk-version', '3');
+
+// Mitigate "Unable to move the cache: Access is denied" on Windows (Chromium disk cache).
+// Use explicit cache paths and remove stale old_* dirs that cause move failures.
+if (process.platform === "win32") {
+  const ud = app.getPath("userData");
+  const cacheBase = path.join(ud, "Cache");
+  const gpuCacheBase = path.join(ud, "GPUCache");
+  app.setPath("cache", cacheBase);
+  app.commandLine.appendSwitch("disk-cache-dir", cacheBase);
+  try {
+    [cacheBase, gpuCacheBase].forEach((dir) => {
+      if (fs.existsSync(dir)) {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const e of entries) {
+          if (e.isDirectory() && e.name.startsWith("old_")) {
+            fs.rmSync(path.join(dir, e.name), { recursive: true, force: true });
+          }
+        }
+      }
+    });
+  } catch {
+    /* ignore cleanup errors */
+  }
+}
 
 const createWindow = () => {
   win = new BrowserWindow({
@@ -63,6 +90,9 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         APP_DATA_DIRECTORY: appDataDir,
         TEMP_DIRECTORY: tempDir,
         USER_CONFIG_PATH: userConfigPath,
+        // Resolved by libreoffice-check.ts at startup; lets Python invoke the
+        // exact binary path instead of relying on the system PATH.
+        SOFFICE_PATH: getSofficePath(),
       },
       isDev,
     );
@@ -100,7 +130,14 @@ async function stopServers() {
 app.whenReady().then(async () => {
   // Ensure all required directories exist before starting
   ensureDirectoriesExist();
-  
+
+  // Register LibreOffice install handlers early so the installer window can use them
+  setupLibreOfficeInstallHandlers();
+
+  // Check for LibreOffice (required for custom template from PPTX). Shows installer
+  // window if missing. Never blocks; always proceeds.
+  await checkLibreOfficeBeforeWindow();
+
   createWindow();
   win?.loadFile(path.join(baseDir, "resources/ui/homepage/index.html"));
 

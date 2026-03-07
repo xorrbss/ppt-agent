@@ -26,6 +26,15 @@ export async function startFastApiServer(
     args = ["--port", port.toString()];
   }
 
+  const safeLog = (data: Buffer | string, logPath: string) => {
+    try {
+      fs.appendFileSync(logPath, data);
+    } catch {
+      /* ignore if logs dir not writable */
+    }
+  };
+  const fastapiLogPath = path.join(logsDir, "fastapi-server.log");
+
   const fastApiProcess = spawn(
     command,
     args,
@@ -36,12 +45,15 @@ export async function startFastApiServer(
     }
   );
   fastApiProcess.stdout.on("data", (data: any) => {
-    fs.appendFileSync(path.join(logsDir, "fastapi-server.log"), data);
+    safeLog(data, fastapiLogPath);
     console.log(`FastAPI: ${data}`);
   });
   fastApiProcess.stderr.on("data", (data: any) => {
-    fs.appendFileSync(path.join(logsDir, "fastapi-server.log"), data);
+    safeLog(data, fastapiLogPath);
     console.error(`FastAPI: ${data}`);
+  });
+  fastApiProcess.on("error", (err) => {
+    safeLog(`Spawn error: ${err.message}\n`, fastapiLogPath);
   });
   // Wait for FastAPI server to start
   await waitForServer(`${localhost}:${port}/docs`);
@@ -67,17 +79,25 @@ export async function startNextJsServer(
         env: { ...process.env, ...env },
       }
     );
+    const nextjsLogPath = path.join(logsDir, "nextjs-server.log");
+    const safeNextLog = (d: Buffer | string) => {
+      try {
+        fs.appendFileSync(nextjsLogPath, d);
+      } catch {
+        /* ignore */
+      }
+    };
     nextjsProcess.stdout.on("data", (data: any) => {
-      fs.appendFileSync(path.join(logsDir, "nextjs-server.log"), data);
+      safeNextLog(data);
       console.log(`NextJS: ${data}`);
     });
     nextjsProcess.stderr.on("data", (data: any) => {
-      fs.appendFileSync(path.join(logsDir, "nextjs-server.log"), data);
+      safeNextLog(data);
       console.error(`NextJS: ${data}`);
     });
   } else {
     // Start NextJS build server
-    nextjsProcess = startNextjsBuildServer(directory, port);
+    nextjsProcess = await startNextjsBuildServer(directory, port);
   }
 
   // Wait for NextJS server to start
@@ -85,16 +105,20 @@ export async function startNextJsServer(
   return nextjsProcess;
 }
 
-async function startNextjsBuildServer(directory: string, port: number) {
-  const server = http.createServer((req, res) => {
-    return handler(req, res, {
-      public: directory,
-      cleanUrls: true,
+function startNextjsBuildServer(directory: string, port: number): Promise<http.Server> {
+  return new Promise((resolve, reject) => {
+    const server = http.createServer((req, res) => {
+      return handler(req, res, {
+        public: directory,
+        cleanUrls: true,
+      });
+    });
+    server.on("error", reject);
+    server.listen(port, () => {
+      server.off("error", reject);
+      resolve(server);
     });
   });
-
-  server.listen(port);
-  return server;
 }
 
 
