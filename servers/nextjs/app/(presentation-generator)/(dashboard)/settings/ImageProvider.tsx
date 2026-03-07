@@ -111,9 +111,9 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
 
 
     return (
-        <div className="space-y-6 bg-[#F9F8F8] p-7 rounded-[20px] ">
+        <div className="space-y-6 bg-[#F9F8F8] p-7 rounded-[12px] ">
             {/* API Key Input */}
-            <div className="mb-4  bg-white p-10 pt-5">
+            <div className="mb-4  bg-white p-10 pt-5 rounded-[12px]">
                 <ToolTip content="Enable/Disable Image Generation" className='flex justify-end items-center'>
                     <div className='flex justify-end items-center'>
                         <Switch
@@ -127,7 +127,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                 <div className='flex items-center justify-between'>
 
 
-                    <div className=" max-w-[290px]">
+                    <div className=" max-w-[290px] pb-[50px]">
                         <div className='w-[60px] h-[60px] px-[13.5px] py-[14.2px] rounded-[4px] flex items-center justify-center'
                             style={{ backgroundColor: '#F4F3FF' }}
                         >

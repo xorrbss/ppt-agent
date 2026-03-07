@@ -204,10 +204,10 @@ const TextProvider = ({
         }
     }, [selectedProvider, modelsChecked, modelsLoading]);
     return (
-        <div className="space-y-6 bg-[#F9F8F8] p-7 rounded-[20px] ">
+        <div className="space-y-6 bg-[#F9F8F8] p-7 rounded-[12px] ">
             {/* API Key Input */}
-            <div className="mb-4 flex items-center justify-between bg-white p-10">
-                <div className=" max-w-[290px]">
+            <div className="mb-4 flex items-center justify-between rounded-[12px] bg-white pt-5 pb-10 px-10">
+                <div className=" max-w-[290px] pb-[50px]">
                     <div className='w-[60px] h-[60px] rounded-[4px] flex items-center justify-center'
                         style={{ backgroundColor: '#4C55541A' }}
                     >

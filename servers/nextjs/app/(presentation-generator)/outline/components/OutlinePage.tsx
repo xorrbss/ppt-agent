@@ -40,15 +40,8 @@ const OutlinePage: React.FC = () => {
 
 
   return (
-    <div className=" font-syne">
-      <div
-        className='fixed z-0 bottom-[-16.5rem] left-0 w-full h-full'
-        style={{
-          height: "341px",
-          borderRadius: '1440px',
-          background: 'radial-gradient(5.92% 104.69% at 50% 100%, rgba(122, 90, 248, 0.00) 0%, rgba(255, 255, 255, 0.00) 100%), radial-gradient(50% 50% at 50% 50%, rgba(122, 90, 248, 0.80) 0%, rgba(122, 90, 248, 0.00) 100%)',
-        }}
-      />
+    <div className=" font-syne  pb-9">
+
       <OverlayLoader
         show={loadingState.isLoading}
         text={loadingState.message}
@@ -56,27 +49,27 @@ const OutlinePage: React.FC = () => {
         duration={loadingState.duration}
       />
 
-      <Wrapper className="h-full  flex flex-col w-full relative">
+      <Wrapper className="h-full  flex flex-col w-full relative px-5 sm:px-10 lg:px-20 ">
         <div className="flex-grow w-full hidden-scrollbar   mx-auto ">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-            <TabsList className="my-4 h-auto w-fit  rounded-full border border-[#DFDFE1] bg-[#F8F8F9] p-1.5">
+            <TabsList className="my-4 h-auto w-fit  rounded-full border border-[#EDEEEF] bg-white p-1.5">
               <TabsTrigger
                 value={TABS.OUTLINE}
-                className="rounded-full px-5 py-2 text-xs font-medium text-[#2D2D2D] shadow-none data-[state=active]:bg-[#E9E2F8] data-[state=active]:text-[#7E3AF2] data-[state=active]:shadow-none"
+                className="rounded-full px-5 py-2  text-xs font-medium text-[#2D2D2D] shadow-none data-[state=active]:bg-[#F4F3FF] data-[state=active]:text-[#7E3AF2] data-[state=active]:shadow-none"
               >
                 Outline & Content
               </TabsTrigger>
               <Separator orientation="vertical" className="h-6 mx-1" />
               <TabsTrigger
                 value={TABS.LAYOUTS}
-                className="relative rounded-full px-5 py-2 text-xs font-medium text-[#2D2D2D] shadow-none  data-[state=active]:bg-[#E9E2F8] data-[state=active]:text-[#7E3AF2] data-[state=active]:shadow-none"
+                className="relative rounded-full px-5  py-2 text-xs font-medium text-[#2D2D2D] shadow-none  data-[state=active]:bg-[#F4F3FF] data-[state=active]:text-[#7E3AF2] data-[state=active]:shadow-none"
               >
                 Select Template
               </TabsTrigger>
             </TabsList>
 
             <div className="flex-grow w-full mx-auto">
-              <TabsContent value={TABS.OUTLINE} className="h-[calc(100vh-16rem)] overflow-y-auto hide-scrollbar"
+              <TabsContent value={TABS.OUTLINE} className="h-[calc(100vh-15rem)]   overflow-y-auto hide-scrollbar"
               >
                 <div>
                   <OutlineContent
@@ -91,7 +84,7 @@ const OutlinePage: React.FC = () => {
                 </div>
               </TabsContent>
 
-              <TabsContent value={TABS.LAYOUTS} className="h-[calc(100vh-16rem)] overflow-y-auto hide-scrollbar">
+              <TabsContent value={TABS.LAYOUTS} className="h-[calc(100vh-16rem)] bg-white  overflow-y-auto hide-scrollbar">
                 <div>
                   <TemplateSelection
                     selectedTemplate={selectedTemplate}
@@ -103,7 +96,7 @@ const OutlinePage: React.FC = () => {
           </Tabs>
           {/* Fixed Button */}
 
-          <div className="absolute bottom-0 -right-5 z-50">
+          <div className="absolute bottom-[26px] right-[26px] z-50">
             <GenerateButton
               outlineCount={outlines.length}
               loadingState={loadingState}

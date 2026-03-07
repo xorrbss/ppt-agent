@@ -132,7 +132,7 @@ const SidePanel = ({
       <Separator orientation="horizontal" className="my-6 " />
       <div
         className={`
-          fixed xl:relative h-full z-50 xl:z-auto
+          fixed xl:relative h-full z-50 xl:z-auto 
           transition-all duration-300 ease-in-out
         `}
       >
@@ -189,6 +189,7 @@ const SidePanel = ({
             </div>
 
           </DndContext>
+          <Separator orientation="horizontal" className=" " />
 
           <button
             type="button"

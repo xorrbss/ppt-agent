@@ -20,7 +20,7 @@ export const ThemeCard: React.FC<ThemeCardProps> = ({ theme, onSelect, onDelete,
 
 
   return (<div
-    className={` group rounded-xl border w-[305px] cursor-pointer transition-all relative bg-white border-[#EDEEEF]   hover:shadow-sm`}
+    className={` group rounded-xl border w-[305px] cursor-pointer transition-all relative bg-white border-[#EDEEEF]   hover:shadow-md`}
     onClick={() => onSelect(theme)}
 
   >
@@ -46,7 +46,7 @@ export const ThemeCard: React.FC<ThemeCardProps> = ({ theme, onSelect, onDelete,
       >
         <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
         <div
-          className="relative bg-white rounded-2xl w-[340px] shadow-2xl animate-[scaleIn_200ms_ease-out] overflow-hidden"
+          className="relative bg-white rounded-2xl w-[340px] shadow-2xl animate-[scaleIn_200ms_ease-out] "
           onClick={(e) => e.stopPropagation()}
         >
           <div className="p-6 pb-4 flex flex-col items-center text-center">
@@ -79,25 +79,10 @@ export const ThemeCard: React.FC<ThemeCardProps> = ({ theme, onSelect, onDelete,
       </div>
     )}
 
-    <style jsx>{`
-      @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
-      }
-      @keyframes scaleIn {
-        from { 
-          opacity: 0;
-          transform: scale(0.95);
-        }
-        to { 
-          opacity: 1;
-          transform: scale(1);
-        }
-      }
-    `}</style>
+
     <div className='relative h-[250px] flex justify-center items-center '>
 
-      <img src="/card_bg.svg" alt="" className="absolute top-0 z-[1] left-0 w-full h-full object-cover" />
+      <img src="/card_bg.svg" alt="" className="absolute top-0 z-[1] left-0 w-[99%] h-full object-cover" />
       <div className=" absolute top-0 left-0 flex items-center justify-between gap-2  z-[2] p-2">
         <ToolTip content='Font' >
 
@@ -128,11 +113,11 @@ export const ThemeCard: React.FC<ThemeCardProps> = ({ theme, onSelect, onDelete,
 
         <div className="w-full h-[135px]">
           <div
-            className=" w-full h-full rounded-xl p-3 border border-black/10 overflow-hidden"
+            className=" w-full h-full rounded-xl p-3 border border-black/10 "
             style={{ backgroundColor: theme.data.colors['background'] }}
           >
             <div
-              className="h-full w-full  rounded-xl p-4 border border-black/10 shadow-[0_2px_6px_rgba(0,0,0,0.10)]"
+              className="h-[calc(100%-2px)] w-[calc(100%-2px)] mx-auto my-auto rounded-xl p-4 border border-black/10 shadow-[0_2px_6px_rgba(0,0,0,0.10)]"
               style={{ backgroundColor: theme.data.colors['card'] }}
             >
               <div className="h-full w-full flex flex-col justify-center">
@@ -161,7 +146,7 @@ export const ThemeCard: React.FC<ThemeCardProps> = ({ theme, onSelect, onDelete,
     </div>
 
 
-    <div className='px-5 border-t border-[#EDEEEF] w-full py-2.5 h-[80px] bg-white flex items-center justify-between'>
+    <div className='px-5 border-t rounded-b-xl border-[#EDEEEF] w-full py-2.5 h-[80px] bg-white flex items-center justify-between'>
       <div>
 
         <h4 className='text-sm font-semibold text-[#191919] pb-1'>{theme.name}</h4>

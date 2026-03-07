@@ -55,7 +55,7 @@ export function SortableSlide({ slide, index, selectedSlide, onSlideClick }: Sor
             {...attributes}
             {...listeners}
             onClick={handleClick}
-            className={` cursor-pointer border relative  p-1    rounded-[12px] transition-all duration-200 ${selectedSlide === index ? ' border-[#5141e5]' : 'border-[#EDEEEF]'
+            className={` cursor-pointer border relative  p-1    rounded-[12px] transition-all duration-200 ${selectedSlide === index ? ' border-[#BDB4FE]' : 'border-[#EDEEEF]'
                 }`}
         >
 

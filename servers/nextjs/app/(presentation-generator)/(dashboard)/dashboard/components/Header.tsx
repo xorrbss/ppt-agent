@@ -3,16 +3,13 @@
 import Wrapper from "@/components/Wrapper";
 import React from "react";
 import Link from "next/link";
-import BackBtn from "@/components/BackBtn";
 import { usePathname } from "next/navigation";
-import HeaderNav from "@/app/(presentation-generator)/components/HeaderNab";
-import { Layout, FilePlus2 } from "lucide-react";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 const Header = () => {
   const pathname = usePathname();
   return (
-    <div className="w-full  sticky top-0 z-50 py-7">
-      <Wrapper>
+    <div className="w-full  sticky top-0 z-50 py-7 ">
+      <Wrapper className="px-5 sm:px-10 lg:px-20">
         <div className="flex items-center justify-between py-1">
           <div className="flex items-center gap-3">
             {/* {(pathname !== "/upload" && pathname !== "/dashboard") && <BackBtn />} */}
@@ -20,7 +17,7 @@ const Header = () => {
               <img
                 src="/logo-with-bg.png"
                 alt="Presentation logo"
-                className="h-[33px]"
+                className="h-[40px] w-[40px]"
               />
             </Link>
           </div>

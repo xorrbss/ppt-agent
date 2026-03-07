@@ -135,7 +135,7 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
     <>
       <div
         id={`slide-${slide.index}`}
-        className=" w-full  main-slide flex items-center max-md:mb-4 justify-center relative"
+        className=" w-full  main-slide flex items-center max-md:mb-4  justify-center relative"
       >
         {isStreaming && (
           <Loader2 className="w-8 h-8 absolute right-2 top-2 z-30 text-blue-800 animate-spin" />
@@ -143,7 +143,7 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
         <div
           data-layout={slide.layout}
           data-group={slide.layout_group}
-          className={` w-full  group font-syne `}
+          className={` w-full  group font-syne  `}
         >
           <V1ContentRender slide={slide} isEditMode={true} theme={null} />
           {!showNewSlideSelection && (

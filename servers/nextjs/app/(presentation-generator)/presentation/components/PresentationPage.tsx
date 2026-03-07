@@ -136,7 +136,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
 
           />
         </div>
-        <div className=" w-full h-[calc(100vh-20px)] overflow-y-auto">
+        <div className=" w-full h-[calc(100vh-20px)] hide-scrollbar pr-[25px] overflow-y-auto">
           <PresentationHeader presentation_id={presentation_id} isPresentationSaving={isSaving} currentSlide={selectedSlide} />
           <div
             id="presentation-slides-wrapper"
@@ -152,7 +152,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                 loading ||
                 !presentationData?.slides ||
                 presentationData?.slides.length === 0 ? (
-                <div className="relative w-full h-[calc(100vh-120px)] mx-auto">
+                <div className="relative w-full h-[calc(100vh-120px)]   mx-auto">
                   <div className="">
                     {Array.from({ length: 2 }).map((_, index) => (
                       <Skeleton

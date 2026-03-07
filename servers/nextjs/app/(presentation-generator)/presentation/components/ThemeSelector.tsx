@@ -11,6 +11,7 @@ import { RootState } from '@/store/store';
 const ThemeSelector = ({ presentation_id, current_theme, themes: allThemes }: { presentation_id: string, current_theme: any, themes: any[] }) => {
     const [currentTheme, setCurrentTheme] = useState<any>(current_theme)
     const dispatch = useDispatch()
+    const [isOpen, setIsOpen] = useState(false)
     const router = useRouter()
     const applyTheme = async (theme: any) => {
         const element = document.getElementById('presentation-slides-wrapper')
@@ -77,13 +78,13 @@ const ThemeSelector = ({ presentation_id, current_theme, themes: allThemes }: { 
 
 
     return (
-        <Popover>
+        <Popover open={isOpen} onOpenChange={setIsOpen}>
             <PopoverTrigger>
-                <button className="text-sm px-[18px] py-2.5 gap-1.5 flex items-center  border border-[#EDEEEF] bg-[#F6F6F9] text-black hover:text-blue-500 duration-300 rounded-[88px] font-medium font-syne">
-                    <Palette className="h-4 w-4" /> Theme
+                <button className={`text-sm px-[18px] py-2.5 gap-1.5 flex items-center  border border-[#EDEEEF] bg-[#F6F6F9]   duration-300 rounded-[88px] font-medium font-syne ${isOpen ? 'text-[#007AFF]' : 'text-black'}`}>
+                    <Palette className={`h-4 w-4 ${isOpen ? 'text-[#007AFF]' : 'text-black'}`} /> Theme
                 </button>
             </PopoverTrigger>
-            <PopoverContent className="w-fit max-h-80 overflow-y-auto custom_scrollbar">
+            <PopoverContent className="w-fit rounded-[18px] max-h-80 overflow-y-auto hide-scrollbar">
                 <div className='pb-2 flex  gap-2 justify-end'>
                     <button className='text-xs text-gray-500 pb-2 text-right underline' onClick={() => router.push(`/theme?tab=new-theme`)}>+Customize Theme</button>
                     <button className='text-xs text-gray-500 pb-2 text-right underline' onClick={resetTheme}>Reset Theme</button>

@@ -70,7 +70,7 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
             </div> */}
             {/* Skeleton loading state */}
             {isLoading && (
-                <div className="space-y-4">
+                <div className="space-y-4 bg-white">
                     {[...Array(6)].map((_, index) => (
                         <div key={index} className="animate-pulse">
                             <div className="flex items-start space-x-3 p-4 border rounded-lg bg-white">
@@ -93,7 +93,7 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
             {/* Outlines content */}
 
             {outlines && outlines.length > 0 && (
-                <div className="bg-[#F9F8F8] p-7  rounded-[20px] overflow-y-auto custom_scrollbar">
+                <div className="bg-[#F9F8F8] min-h-[calc(100vh-16rem)] p-7 relative z-20  rounded-[20px] overflow-y-auto custom_scrollbar">
                     <DndContext
                         sensors={sensors}
                         collisionDetection={closestCenter}

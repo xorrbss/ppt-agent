@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
-import { ChevronRight, ExternalLink, Loader2, Plus } from "lucide-react";
+import { ArrowUpRight, ChevronRight, ExternalLink, Loader2, Plus } from "lucide-react";
 import { templates } from "@/app/presentation-templates";
 import { TemplateWithData, TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
 import {
@@ -29,7 +29,7 @@ export const CustomTemplateCard = React.memo(function CustomTemplateCard({ templ
 
     return (
         <Card
-            className="cursor-pointer flex flex-col justify-between relative hover:shadow-lg transition-all duration-200 group overflow-hidden"
+            className="cursor-pointer flex flex-col justify-between shadow-none sm:shadow-none relative hover:shadow-lg transition-all duration-200 group overflow-hidden"
             onClick={handleOpen}
         >
 
@@ -76,13 +76,13 @@ export const CustomTemplateCard = React.memo(function CustomTemplateCard({ templ
 
             </div>
             <div className="flex items-center justify-between p-5 bg-white border-t border-[#EDEEEF] relative z-40  ">
-                <h3 className="text-sm font-bold text-gray-900">
+                <h3 className="text-sm font-bold w-[191px] text-gray-900">
                     {template.name}
                 </h3>
 
                 <div className="flex items-center gap-2">
 
-                    <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-purple-600 transition-colors" />
+                    <ArrowUpRight className="w-4 h-4 text-gray-400 group-hover:text-purple-600 transition-colors" />
                 </div>
             </div>
         </Card>
@@ -110,7 +110,7 @@ const InbuiltTemplateCard = React.memo(function InbuiltTemplateCard({
     return (
         <Card
             key={template.id}
-            className="cursor-pointer relative hover:shadow-lg transition-all duration-200 group overflow-hidden"
+            className="cursor-pointer relative sm:shadow-none shadow-none  hover:shadow-lg transition-all duration-200 group overflow-hidden"
             onClick={handleOpen}
         >
             <span className="text-xs font-syne absolute top-2 flex gap-1 capitalize  items-center left-2 rounded-[100px]  px-2.5 py-1 bg-[#3A3A3AF5] text-white font-semibold  z-40">
@@ -139,7 +139,7 @@ const InbuiltTemplateCard = React.memo(function InbuiltTemplateCard({
                 </div>
             </div>
             <div className="flex items-center justify-between  p-5 bg-white border-t border-[#EDEEEF] relative z-40 ">
-                <div>
+                <div className="w-[191px]">
 
                     <h3 className="text-sm font-bold text-gray-900 capitalize">
                         {template.name}
@@ -150,7 +150,7 @@ const InbuiltTemplateCard = React.memo(function InbuiltTemplateCard({
                 </div>
                 <div className="flex items-center gap-2">
 
-                    <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
+                    <ArrowUpRight className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
                 </div>
             </div>
         </Card>
