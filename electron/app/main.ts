@@ -46,6 +46,7 @@ const createWindow = () => {
   win = new BrowserWindow({
     width: 1280,
     height: 720,
+    show: false, // Shown after LibreOffice check so "Skip" doesn't quit the app
     icon: path.join(baseDir, "resources/ui/assets/images/presenton_short_filled.png"),
     webPreferences: {
       webSecurity: false,
@@ -146,12 +147,18 @@ app.whenReady().then(async () => {
   // Register LibreOffice install handlers early so the installer window can use them
   setupLibreOfficeInstallHandlers();
 
+  // Create main window BEFORE LibreOffice check so that when user clicks "Skip for now",
+  // the installer closes but the main window stays open (avoids app quit on window-all-closed).
+  createWindow();
+  win?.loadFile(path.join(baseDir, "resources/ui/homepage/index.html"));
+
   // Check for LibreOffice (required for custom template from PPTX). Shows installer
   // window if missing. Never blocks; always proceeds.
   await checkLibreOfficeBeforeWindow();
 
-  createWindow();
-  win?.loadFile(path.join(baseDir, "resources/ui/homepage/index.html"));
+  // Show and focus main window (was hidden to avoid app quit when user clicks "Skip for now")
+  win?.show();
+  win?.focus();
 
   setUserConfig({
     CAN_CHANGE_KEYS: process.env.CAN_CHANGE_KEYS,
