@@ -36,7 +36,9 @@ from models.pptx_models import (
     PptxTextBoxModel,
     PptxTextRunModel,
 )
+from utils.asset_directory_utils import get_images_directory, resolve_image_path_to_filesystem
 from utils.download_helpers import download_files
+from utils.get_env import get_app_data_directory_env
 from utils.image_utils import (
     clip_image,
     create_circle_image,
@@ -206,35 +208,36 @@ class PptxPresentationCreator:
         image_urls = []
         models_with_network_asset: List[PptxPictureBoxModel] = []
 
+        def _process_image_path(each_shape, image_path):
+            if not image_path.startswith("http"):
+                return
+            if "app_data/" in image_path:
+                relative_path = image_path.split("app_data/")[1]
+                app_data_dir = get_app_data_directory_env()
+                if app_data_dir:
+                    each_shape.picture.path = os.path.join(app_data_dir, relative_path)
+                else:
+                    each_shape.picture.path = os.path.join("/app_data", relative_path)
+                each_shape.picture.is_network = False
+                return
+            # Resolve HTTP URLs that contain absolute filesystem paths (Mac/Electron)
+            local_path = resolve_image_path_to_filesystem(image_path)
+            if local_path:
+                each_shape.picture.path = local_path
+                each_shape.picture.is_network = False
+                return
+            image_urls.append(image_path)
+            models_with_network_asset.append(each_shape)
+
         if self._ppt_model.shapes:
             for each_shape in self._ppt_model.shapes:
                 if isinstance(each_shape, PptxPictureBoxModel):
-                    image_path = each_shape.picture.path
-                    if image_path.startswith("http"):
-                        if "app_data/" in image_path:
-                            relative_path = image_path.split("app_data/")[1]
-                            each_shape.picture.path = os.path.join(
-                                "/app_data", relative_path
-                            )
-                            each_shape.picture.is_network = False
-                            continue
-                        image_urls.append(image_path)
-                        models_with_network_asset.append(each_shape)
+                    _process_image_path(each_shape, each_shape.picture.path)
 
         for each_slide in self._slide_models:
             for each_shape in each_slide.shapes:
                 if isinstance(each_shape, PptxPictureBoxModel):
-                    image_path = each_shape.picture.path
-                    if image_path.startswith("http"):
-                        if "app_data" in image_path:
-                            relative_path = image_path.split("app_data/")[1]
-                            each_shape.picture.path = os.path.join(
-                                "/app_data", relative_path
-                            )
-                            each_shape.picture.is_network = False
-                            continue
-                        image_urls.append(image_path)
-                        models_with_network_asset.append(each_shape)
+                    _process_image_path(each_shape, each_shape.picture.path)
 
         if image_urls:
             image_paths = await download_files(image_urls, self._temp_dir)
@@ -312,6 +315,12 @@ class PptxPresentationCreator:
 
     def add_picture(self, slide: Slide, picture_model: PptxPictureBoxModel):
         image_path = picture_model.picture.path
+        # Resolve /app_data/... to actual filesystem path (Electron)
+        if image_path.startswith("/app_data/"):
+            app_data_dir = get_app_data_directory_env()
+            if app_data_dir:
+                relative = image_path[len("/app_data/"):]
+                image_path = os.path.join(app_data_dir, relative)
         if (
             picture_model.clip
             or picture_model.border_radius
