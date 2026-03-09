@@ -29,4 +29,7 @@ contextBridge.exposeInMainWorld('electron', {
   telemetryStatus: () => ipcRenderer.invoke("api:telemetry-status"),
   getTemplates: () => ipcRenderer.invoke("api:templates"),
   getPresentationPptxModel: (presentationId: string) => ipcRenderer.invoke("presentation-to-pptx-model", presentationId),
+  onStartupStatus: (callback: (payload: { name: string; status: string }) => void) =>
+    ipcRenderer.on("startup:status", (_event, payload) => callback(payload)),
+  getStartupStatus: () => ipcRenderer.invoke("startup:get-status"),
 });

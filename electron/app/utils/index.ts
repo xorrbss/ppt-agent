@@ -70,14 +70,14 @@ export function setupEnv(fastApiPort: number, nextjsPort: number) {
 }
 
 
-export function killProcess(pid: number) {
+export function killProcess(pid: number, signal: NodeJS.Signals = "SIGTERM") {
   return new Promise((resolve, reject) => {
-    treeKill(pid, "SIGTERM", (err: any) => {
+    treeKill(pid, signal, (err: any) => {
       if (err) {
         console.error(`Error killing process ${pid}:`, err)
         reject(err)
       } else {
-        console.log(`Process ${pid} killed`)
+        console.log(`Process ${pid} killed (${signal})`)
         resolve(true)
       }
     })
