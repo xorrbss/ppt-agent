@@ -271,7 +271,7 @@ export function getSofficePath(): string {
  * Returns an object indicating whether LibreOffice was found and, when it
  * was, the version string reported by the binary.
  */
-async function isLibreOfficeInstalled(): Promise<LibreOfficeCheckResult> {
+export async function isLibreOfficeInstalled(): Promise<LibreOfficeCheckResult> {
   // --- Step 1: check well-known paths synchronously (no exec overhead) ---
   for (const candidate of getCandidatePaths()) {
     if (fs.existsSync(candidate)) {

@@ -6,6 +6,7 @@ import path from "path";
 import { showFileDownloadedDialog } from "../utils/dialog";
 import { v4 as uuidv4 } from 'uuid';
 import { spawn } from "child_process";
+import { getPuppeteerExecutablePath } from "../utils/puppeteer-check";
 
 export function setupExportHandlers() {
   ipcMain.handle("file-downloaded", async (_, filePath: string): Promise<IPCStatus> => {
@@ -37,6 +38,19 @@ export function setupExportHandlers() {
 
       const exportScriptPath = path.join(baseDir, "resources", "export", "index.js");
       const pythonModulePath = path.join(baseDir, "resources", "export", "py", "convert");
+      const puppeteerExecutablePath = await getPuppeteerExecutablePath();
+      console.log("[Export] Spawning export task with config:", {
+        exportAs,
+        id,
+        title,
+        pptUrl,
+        exportTaskPath,
+        exportScriptPath,
+        pythonModulePath,
+        puppeteerExecutablePath,
+        NEXT_PUBLIC_URL: process.env.NEXT_PUBLIC_URL,
+        NEXT_PUBLIC_FAST_API: process.env.NEXT_PUBLIC_FAST_API,
+      });
       const exportTaskProcess = spawn("node", [exportScriptPath, exportTaskPath], {
         stdio: ["ignore", "pipe", "pipe"],
         env: {
@@ -44,6 +58,9 @@ export function setupExportHandlers() {
           TEMP_DIRECTORY: tempDir,
           APP_DATA_DIRECTORY: appDataDir,
           BUILT_PYTHON_MODULE_PATH: pythonModulePath,
+          ...(puppeteerExecutablePath && {
+            PUPPETEER_EXECUTABLE_PATH: puppeteerExecutablePath,
+          }),
         },
       });
 

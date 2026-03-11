@@ -1,12 +1,14 @@
 from datetime import datetime
 from typing import Optional
+import os
 import uuid
 
 from sqlalchemy import JSON, Column, DateTime
 from sqlmodel import Field, SQLModel
-from pydantic import computed_field
 
 from utils.datetime_utils import get_current_utc_datetime
+from utils.get_env import get_app_data_directory_env
+from utils.path_helpers import get_resource_path
 
 
 class ImageAsset(SQLModel, table=True):
@@ -20,11 +22,40 @@ class ImageAsset(SQLModel, table=True):
     path: str
     extras: Optional[dict] = Field(sa_column=Column(JSON), default=None)
     
-    @computed_field
     @property
     def file_url(self) -> str:
-        """Returns the path with file:// prefix for Electron compatibility"""
-        if self.path.startswith("http://") or self.path.startswith("https://") or self.path.startswith("file://"):
-            return self.path
-        # Add file:// prefix for local paths
-        return f"file://{self.path}"
+        """
+        Returns a web path suitable for FastAPI static serving.
+        - HTTP(S) URLs are returned as-is.
+        - Files under APP_DATA are exposed under /app_data.
+        - Files under the packaged static directory are exposed under /static.
+        """
+        path = self.path
+
+        # Already an absolute web URL
+        if path.startswith("http://") or path.startswith("https://"):
+            return path
+
+        # Normalize filesystem path
+        real_path = os.path.realpath(path)
+
+        # Map APP_DATA files to /app_data/...
+        app_data_dir = get_app_data_directory_env()
+        if app_data_dir:
+            app_data_dir_real = os.path.realpath(app_data_dir)
+            if real_path.startswith(app_data_dir_real):
+                rel = os.path.relpath(real_path, app_data_dir_real)
+                rel_web = rel.replace(os.sep, "/")
+                return f"/app_data/{rel_web}"
+
+        # Map packaged static assets to /static/...
+        static_root = get_resource_path("static")
+        static_root_real = os.path.realpath(static_root)
+        if real_path.startswith(static_root_real):
+            rel = os.path.relpath(real_path, static_root_real)
+            rel_web = rel.replace(os.sep, "/")
+            return f"/static/{rel_web}"
+
+        # Fallback: return the original path (may be absolute or relative);
+        # frontend can decide how to handle unusual cases.
+        return path

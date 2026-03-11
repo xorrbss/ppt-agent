@@ -34,8 +34,11 @@ class IconFinderService:
         try:
             # Try bundled vectorstore first (read-only location)
             bundled_vectorstore_path = get_resource_path("assets/icons-vectorstore.json")
-            # Writable location for user-created vectorstore
-            writable_vectorstore_path = get_writable_path("assets/icons-vectorstore.json")
+            # Writable location for user-created vectorstore (directory + filename)
+            writable_assets_dir = get_writable_path("assets")
+            writable_vectorstore_path = os.path.join(
+                writable_assets_dir, "icons-vectorstore.json"
+            )
             # Icons JSON should be in bundled assets
             icons_path = get_resource_path("assets/icons.json")
             

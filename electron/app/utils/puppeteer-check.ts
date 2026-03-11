@@ -1,14 +1,14 @@
 /**
  * puppeteer-check.ts
  *
- * Ensures Puppeteer's Chromium/Chrome-for-Testing binary is downloaded
- * before the main BrowserWindow is created.
+ * Detects Chromium (or Chrome) for Puppeteer. We support Chromium from
+ * browser-snapshots; the setup installer installs Chromium into the cache.
  */
 import fs from "fs";
 import os from "os";
 import path from "path";
 import puppeteer from "puppeteer";
-import { Browser, detectBrowserPlatform, install } from "@puppeteer/browsers";
+import { Browser, getInstalledBrowsers } from "@puppeteer/browsers";
 
 function getPuppeteerCacheDir(): string {
   const configCache =
@@ -25,9 +25,41 @@ function shouldSkipDownload(): boolean {
   return Boolean((puppeteer as any).configuration?.skipDownload);
 }
 
+/** Status for the unified setup installer (what’s missing). */
+export interface SetupStatus {
+  needsLibreOffice: boolean;
+  needsChrome: boolean;
+}
+
 /**
- * Ensures Puppeteer has its browser binary available.
- * Never blocks app startup — always returns `true`.
+ * Returns the path to the browser executable to use for Puppeteer: either
+ * Chrome (Puppeteer default) if present, or Chromium from the cache.
+ */
+export async function getPuppeteerExecutablePath(): Promise<string | undefined> {
+  if (shouldSkipDownload()) return undefined;
+  const chromePath = puppeteer.executablePath();
+  if (chromePath && fs.existsSync(chromePath)) return chromePath;
+  const cacheDir = getPuppeteerCacheDir();
+  const browsers = await getInstalledBrowsers({ cacheDir });
+  const chromium = browsers.find((b) => b.browser === Browser.CHROMIUM);
+  if (chromium?.executablePath && fs.existsSync(chromium.executablePath)) {
+    return chromium.executablePath;
+  }
+  return undefined;
+}
+
+/**
+ * Returns true if a supported browser (Chrome or Chromium) is already installed.
+ */
+export async function isChromeInstalled(): Promise<boolean> {
+  if (shouldSkipDownload()) return false;
+  const execPath = await getPuppeteerExecutablePath();
+  return Boolean(execPath);
+}
+
+/**
+ * Status for Puppeteer/Chromium (used by UI). Installation is done via the
+ * unified setup window, not here.
  */
 export type PuppeteerStatus =
   | "checking"
@@ -38,6 +70,10 @@ export type PuppeteerStatus =
   | "skipped"
   | "failed";
 
+/**
+ * Checks whether Chromium (or Chrome) is available. Does not install;
+ * use the unified setup window to install.
+ */
 export async function checkPuppeteerChromiumBeforeWindow(
   onStatus?: (status: PuppeteerStatus) => void
 ): Promise<boolean> {
@@ -47,54 +83,12 @@ export async function checkPuppeteerChromiumBeforeWindow(
     onStatus?.("skipped");
     return true;
   }
-
-  const executablePath = puppeteer.executablePath();
-  if (executablePath && fs.existsSync(executablePath)) {
-    console.log(`[Puppeteer] Chromium found at ${executablePath}`);
+  const executablePath = await getPuppeteerExecutablePath();
+  if (executablePath) {
+    console.log(`[Puppeteer] Browser found at ${executablePath}`);
     onStatus?.("installed");
     return true;
   }
-
   onStatus?.("missing");
-  const cacheDir = getPuppeteerCacheDir();
-  const platform = detectBrowserPlatform();
-  if (!platform) {
-    console.warn("[Puppeteer] Unable to detect platform; skipping download.");
-    onStatus?.("failed");
-    return true;
-  }
-
-  const buildId =
-    (puppeteer as any).browserVersion ??
-    (puppeteer as any).defaultBrowserRevision;
-
-  if (!buildId) {
-    console.warn("[Puppeteer] Unable to resolve browser build; skipping download.");
-    onStatus?.("failed");
-    return true;
-  }
-
-  console.warn("[Puppeteer] Chromium missing – downloading now...");
-  onStatus?.("downloading");
-  try {
-    await install({
-      cacheDir,
-      platform,
-      browser: Browser.CHROME,
-      buildId,
-    });
-    const downloadedPath = puppeteer.executablePath();
-    if (downloadedPath && fs.existsSync(downloadedPath)) {
-      console.log(`[Puppeteer] Chromium downloaded to ${downloadedPath}`);
-      onStatus?.("downloaded");
-    } else {
-      console.log("[Puppeteer] Chromium download finished.");
-      onStatus?.("downloaded");
-    }
-  } catch (error) {
-    console.warn("[Puppeteer] Chromium download failed:", error);
-    onStatus?.("failed");
-  }
-
   return true;
 }
