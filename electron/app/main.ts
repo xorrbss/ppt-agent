@@ -1,5 +1,5 @@
 require("dotenv").config();
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, shell } from "electron";
 import path from "path";
 import fs from "fs";
 import { findUnusedPorts, killProcess, setupEnv, setUserConfig } from "./utils";
@@ -11,6 +11,7 @@ import { ipcMain } from "electron";
 import { setupLibreOfficeInstallHandlers } from "./ipc/libreoffice_install_handlers";
 import { checkLibreOfficeBeforeWindow, getSofficePath } from "./utils/libreoffice-check";
 import { checkPuppeteerChromiumBeforeWindow } from "./utils/puppeteer-check";
+import { startUpdateChecker, stopUpdateChecker } from "./utils/update-checker";
 
 
 var win: BrowserWindow | undefined;
@@ -52,11 +53,22 @@ const createWindow = () => {
   win = new BrowserWindow({
     width: 1280,
     height: 720,
+    show: false, // Shown after LibreOffice check so "Skip" doesn't quit the app
     icon: path.join(baseDir, "resources/ui/assets/images/presenton_short_filled.png"),
     webPreferences: {
       webSecurity: false,
       preload: path.join(__dirname, 'preloads/index.js'),
     },
+  });
+
+  // Open external links (e.g. "Download update") in the system browser so the user
+  // sees download progress and can manage downloads normally.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      shell.openExternal(url);
+      return { action: "deny" };
+    }
+    return { action: "allow" };
   });
 };
 
@@ -97,6 +109,7 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         APP_DATA_DIRECTORY: appDataDir,
         TEMP_DIRECTORY: tempDir,
         USER_CONFIG_PATH: userConfigPath,
+        MIGRATE_DATABASE_ON_STARTUP: "True",
         // Resolved by libreoffice-check.ts at startup; lets Python invoke the
         // exact binary path instead of relying on the system PATH.
         SOFFICE_PATH: getSofficePath(),
@@ -157,8 +170,18 @@ app.whenReady().then(async () => {
   // Register LibreOffice install handlers early so the installer window can use them
   setupLibreOfficeInstallHandlers();
 
+  // Create main window BEFORE LibreOffice check so that when user clicks "Skip for now",
+  // the installer closes but the main window stays open (avoids app quit on window-all-closed).
   createWindow();
   win?.loadFile(path.join(baseDir, "resources/ui/homepage/index.html"));
+
+  // Check for LibreOffice (required for custom template from PPTX). Shows installer
+  // window if missing. Never blocks; always proceeds.
+  await checkLibreOfficeBeforeWindow();
+
+  // Show and focus main window (was hidden to avoid app quit when user clicks "Skip for now")
+  win?.show();
+  win?.focus();
 
   const sendStartupStatus = (name: string, status: string) => {
     startupStatus[name] = status;
@@ -221,9 +244,17 @@ app.whenReady().then(async () => {
 
   await startServers(fastApiPort, nextjsPort);
   win?.loadURL(`${localhost}:${nextjsPort}`);
+
+  // Begin polling the version server for available updates
+  if (win) {
+    process.stderr.write("[Presenton] Starting update checker...\n");
+    startUpdateChecker(win);
+  }
 });
 
 app.on("window-all-closed", async () => {
+  stopUpdateChecker();
+  await stopServers();
   app.quit();
 });
 
