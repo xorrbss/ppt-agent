@@ -30,6 +30,7 @@ interface FastApiEnv {
   APP_DATA_DIRECTORY?: string,
   TEMP_DIRECTORY?: string,
   USER_CONFIG_PATH?: string,
+  MIGRATE_DATABASE_ON_STARTUP?: string,
   /** Absolute path to the soffice binary resolved at startup by libreoffice-check.ts. */
   SOFFICE_PATH?: string,
 }

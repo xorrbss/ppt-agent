@@ -9,7 +9,7 @@ from openai import OpenAI
 from openai import APIError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func
-from utils.asset_directory_utils import get_images_directory
+from utils.asset_directory_utils import get_images_directory, resolve_image_path_to_filesystem
 from services.database import get_async_session
 from models.sql.presentation_layout_code import PresentationLayoutCodeModel
 from .prompts import (
@@ -454,28 +454,10 @@ async def convert_slide_to_html(request: SlideToHtmlRequest):
             )
 
         # Resolve image path to actual file system path
-        image_path = request.image
-
-        # Handle different path formats
-        if image_path.startswith("/app_data/images/"):
-            # Remove the /app_data/images/ prefix and join with actual images directory
-            relative_path = image_path[len("/app_data/images/") :]
-            actual_image_path = os.path.join(get_images_directory(), relative_path)
-        elif image_path.startswith("/static/"):
-            # Handle static files
-            relative_path = image_path[len("/static/") :]
-            actual_image_path = os.path.join("static", relative_path)
-        else:
-            # Assume it's already a full path or relative to images directory
-            if os.path.isabs(image_path):
-                actual_image_path = image_path
-            else:
-                actual_image_path = os.path.join(get_images_directory(), image_path)
-
-        # Check if image file exists
-        if not os.path.exists(actual_image_path):
+        actual_image_path = resolve_image_path_to_filesystem(request.image)
+        if not actual_image_path:
             raise HTTPException(
-                status_code=404, detail=f"Image file not found: {image_path}"
+                status_code=404, detail=f"Image file not found: {request.image}"
             )
 
         # Read and encode image to base64
@@ -546,20 +528,8 @@ async def convert_html_to_react(request: HtmlToReactRequest):
         image_b64 = None
         media_type = None
         if request.image:
-            image_path = request.image
-            if image_path.startswith("/app_data/images/"):
-                relative_path = image_path[len("/app_data/images/") :]
-                actual_image_path = os.path.join(get_images_directory(), relative_path)
-            elif image_path.startswith("/static/"):
-                relative_path = image_path[len("/static/") :]
-                actual_image_path = os.path.join("static", relative_path)
-            else:
-                actual_image_path = (
-                    image_path
-                    if os.path.isabs(image_path)
-                    else os.path.join(get_images_directory(), image_path)
-                )
-            if os.path.exists(actual_image_path):
+            actual_image_path = resolve_image_path_to_filesystem(request.image)
+            if actual_image_path:
                 with open(actual_image_path, "rb") as f:
                     image_b64 = base64.b64encode(f.read()).decode("utf-8")
                 ext = os.path.splitext(actual_image_path)[1].lower()
