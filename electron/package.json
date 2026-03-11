@@ -17,6 +17,7 @@
     "typescript",
     "fastapi",
     "nextjs",
+    "puppeteer",
     "sharp",
     "template management",
     "slide generation",
