@@ -31,6 +31,12 @@ interface LibreOfficeCheckResult {
   path?: string;
 }
 
+export type LibreOfficeStatus =
+  | "checking"
+  | "installed"
+  | "missing"
+  | "installing";
+
 // ---------------------------------------------------------------------------
 // Platform helpers
 // ---------------------------------------------------------------------------
@@ -358,7 +364,10 @@ async function showLibreOfficeInstallerWindow(): Promise<void> {
  *
  * @returns Always `true` – the application should always proceed.
  */
-export async function checkLibreOfficeBeforeWindow(): Promise<boolean> {
+export async function checkLibreOfficeBeforeWindow(
+  onStatus?: (status: LibreOfficeStatus) => void
+): Promise<boolean> {
+  onStatus?.("checking");
   let result = await isLibreOfficeInstalled();
 
   if (result.installed) {
@@ -368,10 +377,13 @@ export async function checkLibreOfficeBeforeWindow(): Promise<boolean> {
     console.log(
       `[LibreOffice] Detected: ${result.version ?? "(version unknown)"} at ${resolvedSofficePath}`
     );
+    onStatus?.("installed");
     return true;
   }
 
   console.warn("[LibreOffice] Not found – showing installer window.");
+  onStatus?.("missing");
+  onStatus?.("installing");
   await showLibreOfficeInstallerWindow();
 
   // Re-detect after the window closes (install may have succeeded)
@@ -379,6 +391,9 @@ export async function checkLibreOfficeBeforeWindow(): Promise<boolean> {
   if (result.installed && result.path) {
     resolvedSofficePath = result.path;
     console.log(`[LibreOffice] Detected after install: ${resolvedSofficePath}`);
+    onStatus?.("installed");
+  } else {
+    onStatus?.("missing");
   }
 
   // Always proceed – never block the app

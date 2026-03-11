@@ -55,9 +55,10 @@ export async function startFastApiServer(
   fastApiProcess.on("error", (err) => {
     safeLog(`Spawn error: ${err.message}\n`, fastapiLogPath);
   });
-  // Wait for FastAPI server to start
-  await waitForServer(`${localhost}:${port}/docs`);
-  return fastApiProcess;
+  return {
+    process: fastApiProcess,
+    ready: waitForServer(`${localhost}:${port}/docs`),
+  };
 }
 
 export async function startNextJsServer(
@@ -100,9 +101,10 @@ export async function startNextJsServer(
     nextjsProcess = await startNextjsBuildServer(directory, port);
   }
 
-  // Wait for NextJS server to start
-  await waitForServer(`${localhost}:${port}`);
-  return nextjsProcess;
+  return {
+    process: nextjsProcess,
+    ready: waitForServer(`${localhost}:${port}`),
+  };
 }
 
 function startNextjsBuildServer(directory: string, port: number): Promise<http.Server> {

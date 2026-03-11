@@ -7,14 +7,21 @@ import { startFastApiServer, startNextJsServer } from "./utils/servers";
 import { ChildProcessByStdio } from "child_process";
 import { appDataDir, baseDir, ensureDirectoriesExist, fastapiDir, isDev, localhost, nextjsDir, tempDir, userConfigPath, userDataDir } from "./utils/constants";
 import { setupIpcHandlers } from "./ipc";
+import { ipcMain } from "electron";
 import { setupLibreOfficeInstallHandlers } from "./ipc/libreoffice_install_handlers";
 import { checkLibreOfficeBeforeWindow, getSofficePath } from "./utils/libreoffice-check";
+import { checkPuppeteerChromiumBeforeWindow } from "./utils/puppeteer-check";
 import { startUpdateChecker, stopUpdateChecker } from "./utils/update-checker";
 
 
 var win: BrowserWindow | undefined;
 var fastApiProcess: ChildProcessByStdio<any, any, any> | undefined;
 var nextjsProcess: any;
+let isStopping = false;
+const startupStatus: Record<string, string> = {
+  libreoffice: "checking",
+  puppeteer: "checking",
+};
 
 app.commandLine.appendSwitch('gtk-version', '3');
 
@@ -67,7 +74,7 @@ const createWindow = () => {
 
 async function startServers(fastApiPort: number, nextjsPort: number) {
   try {
-    fastApiProcess = await startFastApiServer(
+    const fastApi = await startFastApiServer(
       fastapiDir,
       fastApiPort,
       {
@@ -109,7 +116,10 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
       },
       isDev,
     );
-    nextjsProcess = await startNextJsServer(
+    fastApiProcess = fastApi.process;
+    await fastApi.ready;
+
+    const nextjs = await startNextJsServer(
       nextjsDir,
       nextjsPort,
       {
@@ -122,6 +132,8 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
       },
       isDev,
     )
+    nextjsProcess = nextjs.process;
+    await nextjs.ready;
   } catch (error) {
     console.error("Server startup error:", error);
   }
@@ -129,12 +141,23 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
 
 async function stopServers() {
   if (fastApiProcess?.pid) {
-    await killProcess(fastApiProcess.pid);
+    console.log("Closing FastAPI...");
+    try {
+      await killProcess(fastApiProcess.pid);
+    } catch {
+      await killProcess(fastApiProcess.pid, "SIGKILL");
+    }
   }
   if (nextjsProcess) {
     if (isDev) {
-      await killProcess(nextjsProcess.pid);
+      console.log("Closing NextJS...");
+      try {
+        await killProcess(nextjsProcess.pid);
+      } catch {
+        await killProcess(nextjsProcess.pid, "SIGKILL");
+      }
     } else {
+      console.log("Closing NextJS...");
       nextjsProcess.close();
     }
   }
@@ -159,6 +182,27 @@ app.whenReady().then(async () => {
   // Show and focus main window (was hidden to avoid app quit when user clicks "Skip for now")
   win?.show();
   win?.focus();
+
+  const sendStartupStatus = (name: string, status: string) => {
+    startupStatus[name] = status;
+    win?.webContents.send("startup:status", { name, status });
+  };
+
+  win?.webContents.once("did-finish-load", async () => {
+    // Emit initial status so the UI doesn't remain in "Checking..." if it
+    // registers late.
+    sendStartupStatus("libreoffice", startupStatus.libreoffice);
+    sendStartupStatus("puppeteer", startupStatus.puppeteer);
+    // Check for LibreOffice (required for custom template from PPTX). Shows installer
+    // window if missing. Never blocks; always proceeds.
+    await checkLibreOfficeBeforeWindow((status) =>
+      sendStartupStatus("libreoffice", status)
+    );
+    // Check Puppeteer Chromium (used for export & template rendering).
+    await checkPuppeteerChromiumBeforeWindow((status) =>
+      sendStartupStatus("puppeteer", status)
+    );
+  });
 
   setUserConfig({
     CAN_CHANGE_KEYS: process.env.CAN_CHANGE_KEYS,
@@ -196,6 +240,7 @@ app.whenReady().then(async () => {
   //? Setup environment variables to be used in the preloads
   setupEnv(fastApiPort, nextjsPort);
   setupIpcHandlers();
+  ipcMain.handle("startup:get-status", () => startupStatus);
 
   await startServers(fastApiPort, nextjsPort);
   win?.loadURL(`${localhost}:${nextjsPort}`);
@@ -211,4 +256,26 @@ app.on("window-all-closed", async () => {
   stopUpdateChecker();
   await stopServers();
   app.quit();
+});
+
+app.on("before-quit", async (event) => {
+  if (isStopping) return;
+  isStopping = true;
+  event.preventDefault();
+  try {
+    await stopServers();
+  } finally {
+    app.quit();
+  }
+});
+
+app.on("will-quit", async (event) => {
+  if (isStopping) return;
+  isStopping = true;
+  event.preventDefault();
+  try {
+    await stopServers();
+  } finally {
+    app.quit();
+  }
 });
