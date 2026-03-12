@@ -27,6 +27,7 @@ export function setupExportHandlers() {
         url: pptUrl,
         format: exportAs,
         title: title,
+        fastapiUrl: process.env.NEXT_PUBLIC_FAST_API,
       }
 
       const randomUuid = uuidv4();
