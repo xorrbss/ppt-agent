@@ -58,6 +58,7 @@ export function setupExportHandlers() {
           ...process.env,
           TEMP_DIRECTORY: tempDir,
           APP_DATA_DIRECTORY: appDataDir,
+          NODE_ENV: "development",
           BUILT_PYTHON_MODULE_PATH: pythonModulePath,
           ...(puppeteerExecutablePath && {
             PUPPETEER_EXECUTABLE_PATH: puppeteerExecutablePath,
