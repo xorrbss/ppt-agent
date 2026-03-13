@@ -19,12 +19,12 @@ export interface IconSearch {
 }
 
 export interface PreviousGeneratedImagesResponse {
-
-    extras: {
-      prompt: string;
-      theme_prompt: string | null;
-    },
-    created_at: string;
-    id: string;
-    path: string;
+  extras: {
+    prompt: string;
+    theme_prompt: string | null;
+  };
+  created_at: string;
+  id: string;
+  path: string;
+  file_url?: string;
 }
