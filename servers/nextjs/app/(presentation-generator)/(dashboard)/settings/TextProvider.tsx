@@ -1,3 +1,4 @@
+import ToolTip from '@/components/ToolTip';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -5,7 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { LLMConfig } from '@/types/llm_config';
 import { LLM_PROVIDERS } from '@/utils/providerConstants';
-import { Check, Loader2, Eye, EyeOff, ChevronUp } from 'lucide-react';
+import { Check, Loader2, Eye, EyeOff, ChevronUp, User, RefreshCw, LogOut } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner';
 
@@ -222,251 +223,87 @@ const TextProvider = ({
                         Choosing where text contets come from
                     </p>
                 </div>
-                <div className="flex items-start gap-4 justify-end">
-                    <div className="relative  w-[205px] ">
-                        <div className="flex flex-col justify-start ">
-
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Select Text Provider
-                            </label>
-                            <Popover
-                                open={openProviderSelect}
-                                onOpenChange={setOpenProviderSelect}
-                            >
-                                <PopoverTrigger asChild>
-                                    <Button
-                                        variant="outline"
-                                        role="combobox"
-                                        aria-expanded={openProviderSelect}
-                                        className="w-[205px] h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
-                                    >
-                                        <div className="flex gap-3 items-center">
-                                            <span className="text-sm font-medium text-gray-900">
-                                                {llmConfig.LLM
-                                                    ? LLM_PROVIDERS[llmConfig.LLM]
-                                                        ?.label || llmConfig.LLM
-                                                    : "Select text provider"}
-                                            </span>
-                                        </div>
-                                        <ChevronUp className="w-4 h-4 text-gray-500" />
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent
-                                    className="p-0"
-                                    align="start"
-                                    style={{ width: "var(--radix-popover-trigger-width)" }}
-                                >
-                                    <Command>
-                                        <CommandInput placeholder="Search provider..." />
-                                        <CommandList>
-                                            <CommandEmpty>No provider found.</CommandEmpty>
-                                            <CommandGroup>
-                                                {Object.values(LLM_PROVIDERS).map(
-                                                    (provider, index) => (
-                                                        <CommandItem
-                                                            key={index}
-                                                            value={provider.value}
-                                                            onSelect={(value) => {
-                                                                onInputChange(value, "LLM");
-                                                                setOpenProviderSelect(false);
-                                                            }}
-                                                        >
-                                                            <Check
-                                                                className={cn(
-                                                                    "mr-2 h-4 w-4",
-                                                                    llmConfig.LLM === provider.value
-                                                                        ? "opacity-100"
-                                                                        : "opacity-0"
-                                                                )}
-                                                            />
-                                                            <div className="flex gap-3 items-center">
-                                                                <div className="flex flex-col space-y-1 flex-1">
-                                                                    <div className="flex items-center justify-between gap-2">
-                                                                        <span className="text-sm font-medium text-gray-900 capitalize">
-                                                                            {provider.label}
-                                                                        </span>
-                                                                    </div>
-                                                                    <span className="text-xs text-gray-600 leading-relaxed">
-                                                                        {provider.description}
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                        </CommandItem>
-                                                    )
-                                                )}
-                                            </CommandGroup>
-                                        </CommandList>
-                                    </Command>
-                                </PopoverContent>
-                            </Popover>
-                        </div>
-
-
-                    </div>
-                    <div className="relative flex flex-col justify-end  items-end w-[205px] ">
-                        <div className="flex flex-col justify-start ">
-                            {selectedProvider === 'ollama' ? (
-                                <>
-                                    {!useCustomOllamaUrl ? (
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                onInputChange(true, 'USE_CUSTOM_URL');
-                                                if (!currentOllamaUrl) {
-                                                    onInputChange('http://localhost:11434', 'OLLAMA_URL');
-                                                }
-                                            }}
-                                            className="mt-8 py-2.5 bg-[#EDEEEF] px-3.5 w-fit rounded-[48px] text-xs font-semibold text-[#101323] transition-all duration-200 border border-[#EDEEEF] hover:bg-[#E8F0FF]/90 focus:ring-2 focus:ring-blue-500/20"
-                                        >
-                                            Use Ollama URL
-                                        </button>
-                                    ) : (
-                                        <>
-                                            <label className="block text-sm font-medium capitalize text-gray-700 mb-2">
-                                                Ollama URL
-                                            </label>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    value={currentOllamaUrl}
-                                                    onChange={(e) => onApiKeyChange(selectedProvider, e.target.value)}
-                                                    className="w-full px-2 py-3 outline-none border  border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                                                    placeholder="http://localhost:11434"
-                                                />
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    onInputChange(false, 'USE_CUSTOM_URL');
-                                                    onInputChange('http://localhost:11434', 'OLLAMA_URL');
-                                                }}
-                                                className="mt-2 text-xs font-medium text-[#4B5563] underline underline-offset-2"
-                                            >
-                                                Use default Ollama URL
-                                            </button>
-                                        </>
-                                    )}
-                                </>
-                            ) : (
-                                <>
-                                    <label className="block text-sm font-medium capitalize text-gray-700 mb-2">
-                                        {selectedProvider === 'custom' ? 'Custom LLM API Key' : `${llmConfig.LLM} API Key`}
-                                    </label>
-                                    <div className="relative">
-                                        <input
-                                            type={showApiKey ? 'text' : 'password'}
-                                            value={currentApiKey}
-                                            onChange={(e) => onApiKeyChange(selectedProvider, e.target.value)}
-                                            className="w-full px-2 py-3 outline-none border  border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                                            placeholder={`Enter your ${llmConfig.LLM} API key`}
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowApiKey((prev) => !prev)}
-                                            className='absolute right-2 top-1/2 -translate-y-1/2 bg-white px-2 py-1 cursor-pointer'
-                                        >
-                                            {showApiKey ? <Eye className='w-4 h-4 text-gray-500' /> : <EyeOff className='w-4 h-4 text-gray-500' />}
-                                        </button>
-                                    </div>
-                                </>
-                            )}
-                            {selectedProvider === 'custom' && (
-                                <input
-                                    type="text"
-                                    value={currentCustomUrl}
-                                    onChange={(e) => onInputChange(e.target.value, 'CUSTOM_LLM_URL')}
-                                    className="w-full mt-2 px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                                    placeholder="OpenAI-compatible URL"
-                                />
-                            )}
-
-
-                        </div>
-
-
-                        {selectedProvider !== 'ollama' && (!modelsChecked || (modelsChecked && availableModels.length === 0)) && (
-
-                            <button
-                                onClick={fetchAvailableModels}
-                                disabled={
-                                    modelsLoading ||
-                                    (selectedProvider === 'openai' && !currentApiKey) ||
-                                    (selectedProvider === 'google' && !currentApiKey) ||
-                                    (selectedProvider === 'anthropic' && !currentApiKey) ||
-                                    (selectedProvider === 'custom' && !currentCustomUrl)
-                                }
-                                className={`mt-4 py-2.5 bg-[#EDEEEF] px-3.5 w-fit  rounded-[48px] text-xs font-semibold text-[#101323] transition-all duration-200 border ${modelsLoading
-                                    ? " border-gray-300 cursor-not-allowed text-gray-500"
-                                    : " border-[#EDEEEF] text-[#101323] hover:bg-[#E8F0FF]/90 focus:ring-2 focus:ring-blue-500/20"
-                                    }`}
-                            >
-                                {modelsLoading ? (
-                                    <span className="flex items-center justify-center gap-2">
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                        Checking for models...
-                                    </span>
-                                ) : (
-                                    "Check models"
-                                )}
-                            </button>
-
-                        )}
-                    </div>
-
-
-                    {/* Model Selection - only show if models are available */}
-                    {modelsChecked && availableModels.length > 0 ? (
-                        <div className="w-[205px]">
+                <div>
+                    {selectedProvider === 'codex' && false && <div className='border border-[#EDEEEF] mb-4 rounded-[8px] p-5 flex justify-between items-center'>
+                        <div className='flex items-center gap-2.5'>
+                            <User className='w-4 h-4 text-gray-500' />
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-3">
-                                    {selectedProvider === 'ollama' ? 'Choose a supported model' : `Select ${modelLabel} Model`}
-                                </label>
-                                <div className="w-full">
-                                    <Popover
-                                        open={openModelSelect}
-                                        onOpenChange={setOpenModelSelect}
-                                    >
-                                        <PopoverTrigger asChild>
-                                            <Button
-                                                variant="outline"
-                                                role="combobox"
-                                                aria-expanded={openModelSelect}
-                                                className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
-                                            >
-                                                <span className="text-sm truncate font-medium text-gray-900">
-                                                    {currentModel
-                                                        ? availableModels.find(model => model === currentModel) || currentModel
-                                                        : "Select a model"}
-                                                </span>
+                                <h4 className='text-[#19001F] text-sm font-medium'>Acc: 123-455-acghk</h4>
+                                <p className='text-xs text-[#B3B3B3]'>Signed in to ChatGPT</p>
+                            </div>
 
-                                                <ChevronUp className="w-4 h-4 text-gray-500" />
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent
-                                            className="p-0"
-                                            align="start"
-                                            style={{ width: "var(--radix-popover-trigger-width)" }}
+                        </div>
+                        <div className='flex items-center gap-2.5'>
+                            <ToolTip content='Refresh ChatGPT account'>
+
+
+                                <button className='px-3.5 py-2.5 rounded-full bg-[#EDEEEF]'>
+
+                                    <RefreshCw className='w-4 h-4 text-black' />
+                                </button>
+                            </ToolTip>
+                            <ToolTip content='Logout from ChatGPT'>
+                                <button className='px-3.5 py-2.5 rounded-full bg-[#EDEEEF]'>
+
+                                    <LogOut className='w-4 h-4 text-black' />
+                                </button>
+                            </ToolTip>
+                        </div>
+                    </div>}
+
+                    <div className={`flex  gap-4 justify-end ${selectedProvider === 'codex' ? 'items-end' : 'items-start'}`}>
+                        <div className="relative  w-[205px] ">
+                            <div className="flex flex-col justify-start ">
+
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Select Text Provider
+                                </label>
+                                <Popover
+                                    open={openProviderSelect}
+                                    onOpenChange={setOpenProviderSelect}
+                                >
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={openProviderSelect}
+                                            className="w-[205px] h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
                                         >
-                                            <Command>
-                                                <CommandInput placeholder="Search models..." />
-                                                <CommandList>
-                                                    <CommandEmpty>No model found.</CommandEmpty>
-                                                    <CommandGroup>
-                                                        {availableModels.map((model, index) => (
+                                            <div className="flex gap-3 items-center">
+                                                <span className="text-sm font-medium text-gray-900">
+                                                    {llmConfig.LLM
+                                                        ? LLM_PROVIDERS[llmConfig.LLM]
+                                                            ?.label || llmConfig.LLM
+                                                        : "Select text provider"}
+                                                </span>
+                                            </div>
+                                            <ChevronUp className="w-4 h-4 text-gray-500" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent
+                                        className="p-0"
+                                        align="start"
+                                        style={{ width: "var(--radix-popover-trigger-width)" }}
+                                    >
+                                        <Command>
+                                            <CommandInput placeholder="Search provider..." />
+                                            <CommandList>
+                                                <CommandEmpty>No provider found.</CommandEmpty>
+                                                <CommandGroup>
+                                                    {Object.values(LLM_PROVIDERS).map(
+                                                        (provider, index) => (
                                                             <CommandItem
                                                                 key={index}
-                                                                value={model}
+                                                                value={provider.value}
                                                                 onSelect={(value) => {
-                                                                    if (currentModelField) {
-                                                                        onInputChange(value, currentModelField);
-                                                                    }
-                                                                    setOpenModelSelect(false);
+                                                                    onInputChange(value, "LLM");
+                                                                    setOpenProviderSelect(false);
                                                                 }}
                                                             >
                                                                 <Check
                                                                     className={cn(
                                                                         "mr-2 h-4 w-4",
-                                                                        currentModel === model
+                                                                        llmConfig.LLM === provider.value
                                                                             ? "opacity-100"
                                                                             : "opacity-0"
                                                                     )}
@@ -474,23 +311,220 @@ const TextProvider = ({
                                                                 <div className="flex gap-3 items-center">
                                                                     <div className="flex flex-col space-y-1 flex-1">
                                                                         <div className="flex items-center justify-between gap-2">
-                                                                            <span className="text-sm font-medium text-gray-900">
-                                                                                {model}
+                                                                            <span className="text-sm font-medium text-gray-900 capitalize">
+                                                                                {provider.label}
                                                                             </span>
                                                                         </div>
+                                                                        <span className="text-xs text-gray-600 leading-relaxed">
+                                                                            {provider.description}
+                                                                        </span>
                                                                     </div>
                                                                 </div>
                                                             </CommandItem>
-                                                        ))}
-                                                    </CommandGroup>
-                                                </CommandList>
-                                            </Command>
-                                        </PopoverContent>
-                                    </Popover>
+                                                        )
+                                                    )}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+
+
+                        </div>
+                        <div className="relative flex flex-col justify-end  items-end w-[205px] ">
+                            <div className="flex flex-col justify-start w-full ">
+                                {selectedProvider === 'ollama' ? (
+                                    <>
+                                        {!useCustomOllamaUrl ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    onInputChange(true, 'USE_CUSTOM_URL');
+                                                    if (!currentOllamaUrl) {
+                                                        onInputChange('http://localhost:11434', 'OLLAMA_URL');
+                                                    }
+                                                }}
+                                                className="mt-8 py-2.5 bg-[#EDEEEF] px-3.5 w-fit rounded-[48px] text-xs font-semibold text-[#101323] transition-all duration-200 border border-[#EDEEEF] hover:bg-[#E8F0FF]/90 focus:ring-2 focus:ring-blue-500/20"
+                                            >
+                                                Use Ollama URL
+                                            </button>
+                                        ) : (
+                                            <>
+                                                <label className="block text-sm font-medium capitalize text-gray-700 mb-2">
+                                                    Ollama URL
+                                                </label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={currentOllamaUrl}
+                                                        onChange={(e) => onApiKeyChange(selectedProvider, e.target.value)}
+                                                        className="w-full px-2 py-3 outline-none border  border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                                        placeholder="http://localhost:11434"
+                                                    />
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        onInputChange(false, 'USE_CUSTOM_URL');
+                                                        onInputChange('http://localhost:11434', 'OLLAMA_URL');
+                                                    }}
+                                                    className="mt-2 text-xs font-medium text-[#4B5563] underline underline-offset-2"
+                                                >
+                                                    Use default Ollama URL
+                                                </button>
+                                            </>
+                                        )}
+                                    </>
+                                ) : selectedProvider === 'codex' ?
+                                    <>
+                                        <button className='px-3.5 py-2.5 bg-[#EDEEEF]  mt-auto rounded-[58px] w-full  text-xs font-medium text-[#101323]'>Sign in with ChatGPT</button>
+                                    </>
+                                    : (
+                                        <>
+                                            <label className="block text-sm font-medium capitalize text-gray-700 mb-2">
+                                                {selectedProvider === 'custom' ? 'Custom LLM API Key' : `${llmConfig.LLM} API Key`}
+                                            </label>
+                                            <div className="relative">
+                                                <input
+                                                    type={showApiKey ? 'text' : 'password'}
+                                                    value={currentApiKey}
+                                                    onChange={(e) => onApiKeyChange(selectedProvider, e.target.value)}
+                                                    className="w-full px-2 py-3 outline-none border  border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                                    placeholder={`Enter your ${llmConfig.LLM} API key`}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowApiKey((prev) => !prev)}
+                                                    className='absolute right-2 top-1/2 -translate-y-1/2 bg-white px-2 py-1 cursor-pointer'
+                                                >
+                                                    {showApiKey ? <Eye className='w-4 h-4 text-gray-500' /> : <EyeOff className='w-4 h-4 text-gray-500' />}
+                                                </button>
+                                            </div>
+                                        </>
+                                    )}
+                                {selectedProvider === 'custom' && (
+                                    <input
+                                        type="text"
+                                        value={currentCustomUrl}
+                                        onChange={(e) => onInputChange(e.target.value, 'CUSTOM_LLM_URL')}
+                                        className="w-full mt-2 px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                        placeholder="OpenAI-compatible URL"
+                                    />
+                                )}
+
+
+                            </div>
+
+
+                            {selectedProvider !== 'ollama' && selectedProvider !== 'codex' && (!modelsChecked || (modelsChecked && availableModels.length === 0)) && (
+
+                                <button
+                                    onClick={fetchAvailableModels}
+                                    disabled={
+                                        modelsLoading ||
+                                        (selectedProvider === 'openai' && !currentApiKey) ||
+                                        (selectedProvider === 'google' && !currentApiKey) ||
+                                        (selectedProvider === 'anthropic' && !currentApiKey) ||
+                                        (selectedProvider === 'custom' && !currentCustomUrl)
+                                    }
+                                    className={`mt-4 py-2.5 bg-[#EDEEEF] px-3.5 w-fit  rounded-[48px] text-xs font-semibold text-[#101323] transition-all duration-200 border ${modelsLoading
+                                        ? " border-gray-300 cursor-not-allowed text-gray-500"
+                                        : " border-[#EDEEEF] text-[#101323] hover:bg-[#E8F0FF]/90 focus:ring-2 focus:ring-blue-500/20"
+                                        }`}
+                                >
+                                    {modelsLoading ? (
+                                        <span className="flex items-center justify-center gap-2">
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            Checking for models...
+                                        </span>
+                                    ) : (
+                                        "Check models"
+                                    )}
+                                </button>
+
+                            )}
+                        </div>
+
+
+                        {/* Model Selection - only show if models are available */}
+                        {modelsChecked && availableModels.length > 0 ? (
+                            <div className="w-[205px]">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                                        {selectedProvider === 'ollama' ? 'Choose a supported model' : `Select ${modelLabel} Model`}
+                                    </label>
+                                    <div className="w-full">
+                                        <Popover
+                                            open={openModelSelect}
+                                            onOpenChange={setOpenModelSelect}
+                                        >
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    role="combobox"
+                                                    aria-expanded={openModelSelect}
+                                                    className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
+                                                >
+                                                    <span className="text-sm truncate font-medium text-gray-900">
+                                                        {currentModel
+                                                            ? availableModels.find(model => model === currentModel) || currentModel
+                                                            : "Select a model"}
+                                                    </span>
+
+                                                    <ChevronUp className="w-4 h-4 text-gray-500" />
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent
+                                                className="p-0"
+                                                align="start"
+                                                style={{ width: "var(--radix-popover-trigger-width)" }}
+                                            >
+                                                <Command>
+                                                    <CommandInput placeholder="Search models..." />
+                                                    <CommandList>
+                                                        <CommandEmpty>No model found.</CommandEmpty>
+                                                        <CommandGroup>
+                                                            {availableModels.map((model, index) => (
+                                                                <CommandItem
+                                                                    key={index}
+                                                                    value={model}
+                                                                    onSelect={(value) => {
+                                                                        if (currentModelField) {
+                                                                            onInputChange(value, currentModelField);
+                                                                        }
+                                                                        setOpenModelSelect(false);
+                                                                    }}
+                                                                >
+                                                                    <Check
+                                                                        className={cn(
+                                                                            "mr-2 h-4 w-4",
+                                                                            currentModel === model
+                                                                                ? "opacity-100"
+                                                                                : "opacity-0"
+                                                                        )}
+                                                                    />
+                                                                    <div className="flex gap-3 items-center">
+                                                                        <div className="flex flex-col space-y-1 flex-1">
+                                                                            <div className="flex items-center justify-between gap-2">
+                                                                                <span className="text-sm font-medium text-gray-900">
+                                                                                    {model}
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </CommandItem>
+                                                            ))}
+                                                        </CommandGroup>
+                                                    </CommandList>
+                                                </Command>
+                                            </PopoverContent>
+                                        </Popover>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ) : null}
+                        ) : null}
+                    </div>
                 </div>
             </div>
             {/* Show message if no models found */}
