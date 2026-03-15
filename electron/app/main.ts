@@ -186,7 +186,13 @@ app.whenReady().then(async () => {
 
   // Single installer: checks LibreOffice and Chrome; if either is missing, shows one
   // window that installs them one after another. Resolves when the window closes.
-  await checkDependenciesBeforeWindow();
+  const setupCompleted = await checkDependenciesBeforeWindow();
+  if (!setupCompleted) {
+    // Block app usage when required setup is not completed.
+    win?.destroy();
+    app.quit();
+    return;
+  }
 
   // Update startup status after setup (user may have installed one or both)
   const [loResult, chromeOk] = await Promise.all([

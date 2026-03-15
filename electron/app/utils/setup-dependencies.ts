@@ -28,9 +28,10 @@ export function getSetupStatus(): SetupStatus | null {
 /**
  * Checks LibreOffice and Chrome. If both are present, returns immediately.
  * If either is missing, opens one installer window that runs LibreOffice
- * then Chrome in sequence. Resolves when the window closes (all done or skipped).
+ * then Chrome in sequence. Returns true only when all required dependencies
+ * are installed; false when the installer is closed/skipped before completion.
  */
-export async function checkDependenciesBeforeWindow(): Promise<void> {
+export async function checkDependenciesBeforeWindow(): Promise<boolean> {
   const [loResult, chromeInstalled] = await Promise.all([
     isLibreOfficeInstalled(),
     isChromeInstalled(),
@@ -40,7 +41,7 @@ export async function checkDependenciesBeforeWindow(): Promise<void> {
   const needsChrome = !chromeInstalled;
 
   if (!needsLibreOffice && !needsChrome) {
-    return;
+    return true;
   }
 
   currentSetupStatus = {
@@ -50,7 +51,15 @@ export async function checkDependenciesBeforeWindow(): Promise<void> {
 
   await showSetupInstallerWindow();
 
+  // Re-check after installer closes; setup can only proceed when all
+  // required dependencies are actually installed.
+  const [postLoResult, postChromeInstalled] = await Promise.all([
+    isLibreOfficeInstalled(),
+    isChromeInstalled(),
+  ]);
+
   currentSetupStatus = null;
+  return postLoResult.installed && postChromeInstalled;
 }
 
 /**
