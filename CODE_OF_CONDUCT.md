@@ -1,32 +1,153 @@
 # Presenton Code of Conduct
 
-Like the technical community as a whole, the Presenton team and community is made up of a mixture of professionals and volunteers from all over the world, working on every aspect of the mission - including mentorship, teaching, and connecting people.
+## Our Community
 
-Diversity is one of our huge strengths, but it can also lead to communication issues and unhappiness. To that end, we have a few ground rules that we ask people to adhere to. This code applies equally to founders, mentors and those seeking help and guidance.
+The **Presenton** community is made up of contributors, developers, designers, researchers, and users from all around the world. Together we are building an open-source platform for **AI-powered presentation generation**.
 
-This isn’t an exhaustive list of things that you can’t do. Rather, take it in the spirit in which it’s intended - a guide to make it easier to enrich all of us and the technical communities in which we participate.
+We welcome contributions and participation from people of all backgrounds and experience levels. Whether you're fixing a typo, contributing code, reporting a bug, or proposing a new feature — you are a valued part of the community.
 
-This code of conduct applies to all spaces managed by the Presenton project or presenton. This includes IRC, the mailing lists, the issue tracker, DSF events, and any other forums created by the project team which the community uses for communication. In addition, violations of this code outside these spaces may affect a person's ability to participate within them.
+To ensure a positive and inclusive environment for everyone, we ask all community members to follow this Code of Conduct.
 
-If you believe someone is violating the code of conduct, we ask that you report it by emailing [suraj@presenton.ai](mailto:suraj@presenton.ai). For more details please see our 
+---
 
-- **Be friendly and patient.**
-- **Be welcoming.** We strive to be a community that welcomes and supports people of all backgrounds and identities. This includes, but is not limited to members of any race, ethnicity, culture, national origin, colour, immigration status, social and economic class, educational level, sex, sexual orientation, gender identity and expression, age, size, family status, political belief, religion, and mental and physical ability.
-- **Be considerate.** Your work will be used by other people, and you in turn will depend on the work of others. Any decision you take will affect users and colleagues, and you should take those consequences into account when making decisions. Remember that we're a world-wide community, so you might not be communicating in someone else's primary language.
-- **Be respectful.** Not all of us will agree all the time, but disagreement is no excuse for poor behavior and poor manners. We might all experience some frustration now and then, but we cannot allow that frustration to turn into a personal attack. It’s important to remember that a community where people feel uncomfortable or threatened is not a productive one. Members of the Presenton community should be respectful when dealing with other members as well as with people outside the Presenton community.
-- **Be careful in the words that you choose.** We are a community of professionals, and we conduct ourselves professionally. Be kind to others. Do not insult or put down other participants. Harassment and other exclusionary behavior aren't acceptable. This includes, but is not limited to: 
- - Violent threats or language directed against another person.
- - Discriminatory jokes and language.
- - Posting sexually explicit or violent material.
- - Posting (or threatening to post) other people's personally identifying information ("doxing").
- - Personal insults, especially those using racist or sexist terms.
- - Unwelcome sexual attention.
- - Advocating for, or encouraging, any of the above behavior.
- - Repeated harassment of others. In general, if someone asks you to stop, then stop.
-- **When we disagree, try to understand why.** Disagreements, both social and technical, happen all the time and Presenton is no exception. It is important that we resolve disagreements and differing views constructively. Remember that we’re different. The strength of Presenton comes from its varied community, people from a wide range of backgrounds. Different people have different perspectives on issues. Being unable to understand why someone holds a viewpoint doesn’t mean that they’re wrong. Don’t forget that it is human to err and blaming each other doesn’t get us anywhere. Instead, focus on helping to resolve issues and learning from mistakes.
+## Where This Applies
 
-Original text courtesy of the [Speak Up! project](http://web.archive.org/web/20141109123859/http://speakup.io/coc.html).
+This Code of Conduct applies to all spaces managed by the **Presenton project**, including but not limited to:
+
+- GitHub repositories (issues, pull requests, discussions)
+- Official documentation
+- Discord community
+- Social media interactions
+- Events, meetups, or presentations related to Presenton
+
+Violations of this code outside these spaces may also affect a person’s ability to participate in the Presenton community.
+
+---
+
+## Our Values
+
+### 🤝 Be Friendly and Patient
+
+Remember that many people contribute their time voluntarily. Be patient with newcomers and respectful of different experience levels.
+
+---
+
+### 🌍 Be Welcoming and Inclusive
+
+We are committed to creating a community that welcomes people of all backgrounds and identities.
+
+This includes, but is not limited to:
+
+- Race
+- Ethnicity
+- Culture
+- National origin
+- Gender identity and expression
+- Sexual orientation
+- Age
+- Disability
+- Religion
+- Education level
+- Socioeconomic background
+
+Everyone should feel safe and respected when participating in the Presenton community.
+
+---
+
+### 🧠 Be Considerate
+
+Your work and decisions may impact others who rely on Presenton. Think about how your contributions affect:
+
+- users
+- contributors
+- maintainers
+- the broader open-source ecosystem
+
+Remember that we are a global community, and English may not be everyone's first language.
+
+---
+
+### Respect Others
+
+Disagreements are natural in any collaborative project, especially when discussing technical decisions.
+
+However:
+
+- Do not engage in personal attacks
+- Avoid aggressive or dismissive language
+- Focus on ideas, not individuals
+
+A respectful environment allows everyone to contribute effectively.
+
+---
+
+### 💬 Choose Words Carefully
+
+We strive to maintain a professional and supportive community.
+
+The following behaviors are **not acceptable**:
+
+- Violent threats or abusive language
+- Discriminatory jokes or remarks
+- Harassment or intimidation
+- Posting sexually explicit or violent material
+- Sharing or threatening to share personal information ("doxing")
+- Personal insults or derogatory language
+- Unwanted sexual attention
+- Encouraging or advocating harmful behavior
+- Repeated harassment after being asked to stop
+
+If someone asks you to stop a behavior, please respect their request.
+
+---
+
+### 🤔 When We Disagree
+
+Disagreements are part of building great software.
+
+When they occur:
+
+- Try to understand the other perspective
+- Assume good intentions
+- Focus on solving problems constructively
+
+Remember: **diverse perspectives make open-source projects stronger**.
+
+---
+
+## Reporting Violations
+
+If you believe someone is violating this Code of Conduct, please report it privately.
+
+📧 **Email:** [suraj@presenton.ai](mailto:suraj@presenton.ai)
+
+All reports will be handled confidentially and respectfully by the maintainers.
+
+---
+
+## Enforcement
+
+Project maintainers are responsible for clarifying and enforcing this Code of Conduct. They may take appropriate action in response to unacceptable behavior, including:
+
+- Warning the offender
+- Removing content
+- Temporarily restricting participation
+- Banning users from community spaces
+
+Our goal is to maintain a safe and productive environment for everyone.
+
+---
+
+## Acknowledgements
+
+This Code of Conduct is inspired by guidelines from open-source communities and the **Speak Up! project**, adapted for the Presenton community.
+
+---
 
 ## Questions?
 
-If you have questions, please see . If that doesn't answer your questions, feel free to [contact us](mailto:suraj@presenton.ai).
+If you have questions about this Code of Conduct, feel free to contact us:
+
+📧 **suraj@presenton.ai**
+
+Thank you for helping make **Presenton a welcoming and collaborative open-source project.**
