@@ -1,11 +1,11 @@
-// Check if building for Electron or in development mode
-const isElectronBuild = process.env.BUILD_TARGET === 'electron' || process.argv.includes('--electron');
 const isDevelopment = process.env.NODE_ENV !== 'production';
 
 const nextConfig = {
   reactStrictMode: false,
   distDir: ".next-build",
-  ...(isElectronBuild ? { output: "export" } : isDevelopment ? {} : { output: "export" }),
+  // This Next.js app is always bundled for Electron, so we can
+  // unconditionally use static export.
+  output: "export",
   ...(isDevelopment ? { allowedDevOrigins: ['127.0.0.1:*', 'localhost:*'] } : {}),
   
   // Disable font optimization to avoid Google Fonts download warnings during build

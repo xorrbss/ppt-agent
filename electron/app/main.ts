@@ -9,8 +9,10 @@ import { appDataDir, baseDir, ensureDirectoriesExist, fastapiDir, isDev, localho
 import { setupIpcHandlers } from "./ipc";
 import { ipcMain } from "electron";
 import { setupLibreOfficeInstallHandlers } from "./ipc/libreoffice_install_handlers";
-import { checkLibreOfficeBeforeWindow, getSofficePath } from "./utils/libreoffice-check";
-import { checkPuppeteerChromiumBeforeWindow } from "./utils/puppeteer-check";
+import { setupSetupInstallHandlers } from "./ipc/setup_install_handlers";
+import { checkDependenciesBeforeWindow } from "./utils/setup-dependencies";
+import { getSofficePath, isLibreOfficeInstalled } from "./utils/libreoffice-check";
+import { getPuppeteerExecutablePath, isChromeInstalled } from "./utils/puppeteer-check";
 import { startUpdateChecker, stopUpdateChecker } from "./utils/update-checker";
 
 
@@ -22,6 +24,9 @@ const startupStatus: Record<string, string> = {
   libreoffice: "checking",
   puppeteer: "checking",
 };
+
+// Allow renderer to query initial startup status as soon as it loads.
+ipcMain.handle("startup:get-status", () => startupStatus);
 
 app.commandLine.appendSwitch('gtk-version', '3');
 
@@ -119,6 +124,7 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
     fastApiProcess = fastApi.process;
     await fastApi.ready;
 
+    const puppeteerExecutablePath = await getPuppeteerExecutablePath();
     const nextjs = await startNextJsServer(
       nextjsDir,
       nextjsPort,
@@ -129,6 +135,9 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         NEXT_PUBLIC_USER_CONFIG_PATH: process.env.NEXT_PUBLIC_USER_CONFIG_PATH,
         USER_CONFIG_PATH: process.env.NEXT_PUBLIC_USER_CONFIG_PATH,
         APP_DATA_DIRECTORY: appDataDir,
+        ...(puppeteerExecutablePath && {
+          PUPPETEER_EXECUTABLE_PATH: puppeteerExecutablePath,
+        }),
       },
       isDev,
     )
@@ -167,19 +176,27 @@ app.whenReady().then(async () => {
   // Ensure all required directories exist before starting
   ensureDirectoriesExist();
 
-  // Register LibreOffice install handlers early so the installer window can use them
+  // Register install handlers early so the unified setup window can use them
   setupLibreOfficeInstallHandlers();
+  setupSetupInstallHandlers();
 
-  // Create main window BEFORE LibreOffice check so that when user clicks "Skip for now",
-  // the installer closes but the main window stays open (avoids app quit on window-all-closed).
+  // Create main window before setup so that when user skips, the main window stays open
   createWindow();
   win?.loadFile(path.join(baseDir, "resources/ui/homepage/index.html"));
 
-  // Check for LibreOffice (required for custom template from PPTX). Shows installer
-  // window if missing. Never blocks; always proceeds.
-  await checkLibreOfficeBeforeWindow();
+  // Single installer: checks LibreOffice and Chrome; if either is missing, shows one
+  // window that installs them one after another. Resolves when the window closes.
+  await checkDependenciesBeforeWindow();
 
-  // Show and focus main window (was hidden to avoid app quit when user clicks "Skip for now")
+  // Update startup status after setup (user may have installed one or both)
+  const [loResult, chromeOk] = await Promise.all([
+    isLibreOfficeInstalled(),
+    isChromeInstalled(),
+  ]);
+  startupStatus.libreoffice = loResult.installed ? "installed" : "missing";
+  startupStatus.puppeteer = chromeOk ? "installed" : "missing";
+
+  // Show and focus main window
   win?.show();
   win?.focus();
 
@@ -188,20 +205,9 @@ app.whenReady().then(async () => {
     win?.webContents.send("startup:status", { name, status });
   };
 
-  win?.webContents.once("did-finish-load", async () => {
-    // Emit initial status so the UI doesn't remain in "Checking..." if it
-    // registers late.
+  win?.webContents.once("did-finish-load", () => {
     sendStartupStatus("libreoffice", startupStatus.libreoffice);
     sendStartupStatus("puppeteer", startupStatus.puppeteer);
-    // Check for LibreOffice (required for custom template from PPTX). Shows installer
-    // window if missing. Never blocks; always proceeds.
-    await checkLibreOfficeBeforeWindow((status) =>
-      sendStartupStatus("libreoffice", status)
-    );
-    // Check Puppeteer Chromium (used for export & template rendering).
-    await checkPuppeteerChromiumBeforeWindow((status) =>
-      sendStartupStatus("puppeteer", status)
-    );
   });
 
   setUserConfig({
@@ -240,7 +246,6 @@ app.whenReady().then(async () => {
   //? Setup environment variables to be used in the preloads
   setupEnv(fastApiPort, nextjsPort);
   setupIpcHandlers();
-  ipcMain.handle("startup:get-status", () => startupStatus);
 
   await startServers(fastApiPort, nextjsPort);
   win?.loadURL(`${localhost}:${nextjsPort}`);

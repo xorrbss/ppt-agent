@@ -6,7 +6,7 @@
   "description": "Open-Source AI Presentation Generator",
   "homepage": "https://presenton.ai",
   "repository": "https://github.com/presenton/presenton",
-   "keywords": [
+  "keywords": [
     "electron",
     "electron-builder",
     "Microsoft Store",
@@ -46,10 +46,12 @@
     "email": "suraj@presenton.ai"
   },
   "dependencies": {
+    "@puppeteer/browsers": "^1.9.1",
     "@tailwindcss/cli": "^4.1.5",
     "@types/uuid": "^10.0.0",
     "dotenv": "^16.5.0",
     "electron-squirrel-startup": "^1.0.1",
+    "puppeteer": "^24.38.0",
     "serve-handler": "^6.1.6",
     "sharp": "^0.34.5",
     "tailwindcss": "^4.1.5",

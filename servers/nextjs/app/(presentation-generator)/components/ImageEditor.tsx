@@ -232,7 +232,7 @@ const ImageEditor = ({
       setUploadError(null);
       trackEvent(MixpanelEvent.ImageEditor_UploadImage_API_Call);
       const result = await ImagesApi.uploadImage(file);
-      setUploadedImageUrl(result.path);
+      setUploadedImageUrl(result.file_url || result.path);
     } catch (err:any) {
       setUploadError("Failed to upload image. Please try again.");
       toast.error(err.message || "Failed to upload image. Please try again.");
@@ -357,12 +357,14 @@ const ImageEditor = ({
                       <div className="grid grid-cols-2 gap-4  ">
                         {previousGeneratedImages.map((image) => (
                           <div
-                            onClick={() => handleImageChange(image.path)}
+                            onClick={() =>
+                              handleImageChange(image.file_url || image.path)
+                            }
                             key={image.id}
                             className="aspect-[4/3] w-full overflow-hidden rounded-lg border cursor-pointer hover:border-blue-500 transition-colors"
                           >
                             <img
-                              src={image.path}
+                              src={image.file_url || image.path}
                               alt={image.extras.prompt}
                               className="w-full h-full object-cover"
                             />
@@ -474,7 +476,7 @@ const ImageEditor = ({
                           <div key={image.id}>
                             <div
                               onClick={() =>
-                                handleImageChange(image.path)
+                                handleImageChange(image.file_url || image.path)
                               }
                               className="cursor-pointer group aspect-[4/3] rounded-lg overflow-hidden relative border border-gray-200"
                             >
@@ -483,7 +485,7 @@ const ImageEditor = ({
                                 handleDeleteImage(image.id)
                               }}/>
                               <img
-                                src={image.path}
+                              src={image.file_url || image.path}
                                 alt="Uploaded preview"
                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                               />

@@ -1,26 +1,17 @@
 // Utility to get the FastAPI base URL
 export function getFastAPIUrl(): string {
-  // In Electron environment, use the exposed env variable
-  if (typeof window !== 'undefined' && (window as any).env) {
-    return (window as any).env.NEXT_PUBLIC_FAST_API || '';
+  // Prefer Electron-preload env when available
+  if (typeof window !== "undefined" && (window as any).env?.NEXT_PUBLIC_FAST_API) {
+    return (window as any).env.NEXT_PUBLIC_FAST_API;
   }
-  
-  // Prefer explicit env var when available in any mode
+
+  // In Electron, NEXT_PUBLIC_FAST_API is set by setupEnv in main.ts
   if (process.env.NEXT_PUBLIC_FAST_API) {
     return process.env.NEXT_PUBLIC_FAST_API;
   }
 
-  // Electron mode: direct access to FastAPI
-  if (typeof window !== 'undefined' && (window as any).electron) {
-    return 'http://127.0.0.1:8000';
-  }
-
-  // Docker/web mode: use current origin (goes through nginx)
-  if (typeof window !== 'undefined') {
-    return window.location.origin;
-  }
-  // Server-side fallback
-  return 'http://127.0.0.1:8000';
+  // Safe Electron fallback to local FastAPI
+  return "http://127.0.0.1:8000";
 }
 
 // Utility to construct full API URL

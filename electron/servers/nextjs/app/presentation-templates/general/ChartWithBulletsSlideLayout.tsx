@@ -162,7 +162,7 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
                         <YAxis {...axisProps} />
                         {showTooltip && <Tooltip content={<CustomTooltip />} />}
                         {showLegend && <Legend wrapperStyle={{ fontSize: '10px' }} />}
-                        <Bar dataKey={yAxis} barSize={70} radius={[8, 8, 0, 0]} >
+                        <Bar dataKey={yAxis} barSize={70} radius={[8, 8, 0, 0]} isAnimationActive={false} >
                             {chartData.map((_, index) => (
                                 <Cell key={`cell-${index}`} fill={`var(--graph-${index}, ${CHART_COLORS[index % CHART_COLORS.length]})`} />
                             ))}
@@ -182,6 +182,7 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
                             type="monotone"
                             dataKey={yAxis}
                             strokeWidth={3}
+                            isAnimationActive={false}
                             dot={{ fill: `var(--graph-0, ${CHART_COLORS[0]})`, strokeWidth: 2, r: 4 }}
                         >
                             {chartData.map((_, index) => (
@@ -203,6 +204,7 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
                             type="monotone"
                             dataKey={yAxis}
                             fillOpacity={0.6}
+                            isAnimationActive={false}
                         >
                             {chartData.map((_, index) => (
                                 <Cell key={`cell-${index}`} fill={`var(--graph-${index}, ${CHART_COLORS[index % CHART_COLORS.length]})`} />
@@ -222,6 +224,7 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
                             fill={`var(--background-text, ${color})`}
                             dataKey={yAxis}
                             label={renderPieLabel}
+                            isAnimationActive={false}
                         >
                             {chartData.map((_, index) => (
                                 <Cell key={`cell-${index}`} fill={`var(--graph-${index}, ${CHART_COLORS[index % CHART_COLORS.length]})`} />
@@ -238,7 +241,7 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
                         <YAxis dataKey={yAxis} type="number" {...axisProps} />
                         {showTooltip && <Tooltip content={<CustomTooltip />} />}
                         {showLegend && <Legend wrapperStyle={{ fontSize: '10px' }} />}
-                        <Scatter dataKey="value" >
+                        <Scatter dataKey="value" isAnimationActive={false} >
                             {chartData.map((_, index) => (
                                 <Cell key={`cell-${index}`} fill={`var(--graph-${index}, ${CHART_COLORS[index % CHART_COLORS.length]})`} />
                             ))}
@@ -294,13 +297,13 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
                         </p>
 
                         {/* Chart Container */}
-                        <div className="flex-1 rounded-lg shadow-sm border border-gray-100 p-4"
+                        <div className="flex-1 min-h-[280px] rounded-lg shadow-sm border border-gray-100 p-4"
                             style={{
                                 borderColor: 'var(--stroke, #F8F9FA)',
                             }}
                         >
                             {/* <ChartContainer config={chartConfig} className="h-full w-full"> */}
-                            <ResponsiveContainer maxHeight={460} height='100%' className="">
+                            <ResponsiveContainer width="100%" height="100%" className="">
 
                                 {renderChart()}
                             </ResponsiveContainer>

@@ -1,33 +1,67 @@
+import { getFastAPIUrl } from "./api";
+
+function toFastApiStaticUrl(fileSrc: string): string {
+  try {
+    const baseUrl = getFastAPIUrl();
+    const url = new URL(fileSrc);
+    const path = url.pathname;
+
+    // Prefer subpath starting at /app_data or /static if present
+    const appDataIdx = path.indexOf("/app_data/");
+    const staticIdx = path.indexOf("/static/");
+
+    let relPath = path;
+    if (appDataIdx !== -1) {
+      relPath = path.slice(appDataIdx);
+    } else if (staticIdx !== -1) {
+      relPath = path.slice(staticIdx);
+    }
+
+    return `${baseUrl}${relPath}`;
+  } catch {
+    // If URL parsing fails, leave as-is
+    return fileSrc;
+  }
+}
+
+function normalizeImageSrc(src: string): string {
+  // If already an absolute HTTP(S) URL, prefer FastAPI origin for /app_data and /static
+  if (/^https?:\/\//.test(src)) {
+    try {
+      const url = new URL(src);
+      if (url.pathname.startsWith("/app_data/") || url.pathname.startsWith("/static/")) {
+        return `${getFastAPIUrl()}${url.pathname}`;
+      }
+      return src;
+    } catch {
+      return src;
+    }
+  }
+
+  // If we have a file:// URL, map it to FastAPI static HTTP URL
+  if (src.startsWith("file://")) {
+    return toFastApiStaticUrl(src);
+  }
+
+  // Safe fallback for bare paths: treat as file URL, then map to FastAPI
+  const trimmed = src.trim();
+  const fileLike = trimmed.startsWith("/") ? `file://${trimmed}` : `file:///${trimmed}`;
+  return toFastApiStaticUrl(fileLike);
+}
+
 /**
- * Converts file:// protocol image URLs to HTTP URLs for Docker/browser compatibility
- * In Electron: file:///app_data/images/... works
- * In Docker/Browser: needs http://localhost/app_data/images/...
+ * Normalizes image URLs so that non-protocol paths are treated as file URLs.
+ * If the src is already http/https/file, it is left unchanged.
  */
 export function convertImageUrlsForEnvironment() {
-  // Check if we're in Electron environment
-  const isElectron = typeof window !== 'undefined' && (window as any).electron;
-  
-  // If in Electron, file:// URLs work fine, no conversion needed
-  if (isElectron) {
-    return;
-  }
-  
-  // In Docker/browser, convert all file:// URLs to HTTP URLs
-  const images = document.querySelectorAll('img[src^="file://"]');
-  
+  if (typeof document === "undefined") return;
+
+  const images = document.querySelectorAll("img[src]");
+
   images.forEach((img) => {
     const htmlImg = img as HTMLImageElement;
-    const fileSrc = htmlImg.src;
-    
-    // Extract the path after file://
-    // file:///app_data/images/xxx.png -> /app_data/images/xxx.png
-    const match = fileSrc.match(/^file:\/\/(.*)$/);
-    if (match) {
-      const filePath = match[1];
-      // Convert to HTTP URL that goes through nginx
-      // In Docker, nginx serves /app_data/images/ from the mounted volume
-      htmlImg.src = filePath;
-    }
+    if (!htmlImg.src) return;
+    htmlImg.src = normalizeImageSrc(htmlImg.src);
   });
 }
 
@@ -44,13 +78,12 @@ export function setupImageUrlConverter() {
         if (node.nodeType === Node.ELEMENT_NODE) {
           const element = node as Element;
           
-          // Check if the added node is an img with file:// src
-          if (element.tagName === 'IMG' && element.getAttribute('src')?.startsWith('file://')) {
+          // Any new <img> or descendants with src should be normalized
+          if (element.tagName === "IMG") {
             convertImageUrlsForEnvironment();
           }
           
-          // Check for img descendants
-          const imgs = element.querySelectorAll?.('img[src^="file://"]');
+          const imgs = element.querySelectorAll?.("img[src]");
           if (imgs && imgs.length > 0) {
             convertImageUrlsForEnvironment();
           }

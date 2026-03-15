@@ -6,6 +6,7 @@ import path from "path";
 import { showFileDownloadedDialog } from "../utils/dialog";
 import { v4 as uuidv4 } from 'uuid';
 import { spawn } from "child_process";
+import { getPuppeteerExecutablePath } from "../utils/puppeteer-check";
 
 export function setupExportHandlers() {
   ipcMain.handle("file-downloaded", async (_, filePath: string): Promise<IPCStatus> => {
@@ -26,6 +27,7 @@ export function setupExportHandlers() {
         url: pptUrl,
         format: exportAs,
         title: title,
+        fastapiUrl: process.env.NEXT_PUBLIC_FAST_API,
       }
 
       const randomUuid = uuidv4();
@@ -37,21 +39,46 @@ export function setupExportHandlers() {
 
       const exportScriptPath = path.join(baseDir, "resources", "export", "index.js");
       const pythonModulePath = path.join(baseDir, "resources", "export", "py", "convert");
+      const puppeteerExecutablePath = await getPuppeteerExecutablePath();
+      console.log("[Export] Spawning export task with config:", {
+        exportAs,
+        id,
+        title,
+        pptUrl,
+        exportTaskPath,
+        exportScriptPath,
+        pythonModulePath,
+        puppeteerExecutablePath,
+        NEXT_PUBLIC_URL: process.env.NEXT_PUBLIC_URL,
+        NEXT_PUBLIC_FAST_API: process.env.NEXT_PUBLIC_FAST_API,
+      });
       const exportTaskProcess = spawn("node", [exportScriptPath, exportTaskPath], {
         stdio: ["ignore", "pipe", "pipe"],
+        cwd: baseDir,
         env: {
           ...process.env,
           TEMP_DIRECTORY: tempDir,
           APP_DATA_DIRECTORY: appDataDir,
+          NODE_ENV: "development",
           BUILT_PYTHON_MODULE_PATH: pythonModulePath,
+          ...(puppeteerExecutablePath && {
+            PUPPETEER_EXECUTABLE_PATH: puppeteerExecutablePath,
+          }),
         },
       });
 
+      const stdoutChunks: string[] = [];
+      const stderrChunks: string[] = [];
+
       exportTaskProcess.stdout.on("data", (data: Buffer) => {
-        console.log(`[Export] ${data.toString()}`);
+        const text = data.toString();
+        stdoutChunks.push(text);
+        console.log(`[Export] ${text}`);
       });
       exportTaskProcess.stderr.on("data", (data: Buffer) => {
-        console.error(`[Export] ${data.toString()}`);
+        const text = data.toString();
+        stderrChunks.push(text);
+        console.error(`[Export] ${text}`);
       });
 
       await new Promise<void>((resolve, reject) => {
@@ -60,7 +87,19 @@ export function setupExportHandlers() {
           if (code === 0) {
             resolve();
           } else {
-            reject(new Error(`Export process exited with code ${code}`));
+            const stderrText = stderrChunks.join("").trim() || "(no stderr)";
+            const stdoutText = stdoutChunks.join("").trim();
+            const detail =
+              stderrText !== "(no stderr)"
+                ? stderrText
+                : stdoutText
+                  ? `stdout: ${stdoutText}`
+                  : "";
+            reject(
+              new Error(
+                `Export process exited with code ${code}${detail ? `. ${detail}` : ""}`
+              )
+            );
           }
         });
       });

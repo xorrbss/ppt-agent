@@ -54,12 +54,12 @@ async def process_slide_and_fetch_assets(
     for icon_path in icon_paths:
         icon_dict = get_dict_at_path(slide.content, icon_path)
         icon_result = results.pop()
-        if icon_result and len(icon_result) > 0:
+        # ICON_FINDER_SERVICE.search_icons returns a list of URLs
+        if isinstance(icon_result, list) and icon_result:
             icon_dict["__icon_url__"] = icon_result[0]
         else:
-            # Fallback to placeholder if no icon found
-            placeholder_path = get_resource_path(os.path.join("static", "icons", "placeholder.svg"))
-            icon_dict["__icon_url__"] = f"file://{placeholder_path}"
+            # Fallback to FastAPI static placeholder if no icon found
+            icon_dict["__icon_url__"] = "/static/icons/placeholder.svg"
         set_dict_at_path(slide.content, icon_path, icon_dict)
 
     return return_assets
@@ -155,7 +155,7 @@ async def process_old_and_new_slides_and_fetch_assets(
     new_assets = []
 
     # Sets new image and icon urls for assets that were fetched
-    for i, new_image in enumerate(new_images):
+    for i, _ in enumerate(new_images):
         if new_images_fetch_status[i]:
             fetched_image = new_images[i]
             if isinstance(fetched_image, ImageAsset):
@@ -165,7 +165,7 @@ async def process_old_and_new_slides_and_fetch_assets(
                 image_url = fetched_image
             new_image_dicts[i]["__image_url__"] = image_url
 
-    for i, new_icon in enumerate(new_icons):
+    for i, _ in enumerate(new_icons):
         if new_icons_fetch_status[i]:
             icon_result = new_icons[i]
             if icon_result and len(icon_result) > 0:
@@ -190,14 +190,12 @@ def process_slide_add_placeholder_assets(slide: SlideModel):
 
     for image_path in image_paths:
         image_dict = get_dict_at_path(slide.content, image_path)
-        # Use proper path resolution for packaged environments
-        placeholder_img_path = get_resource_path(os.path.join("static", "images", "placeholder.jpg"))
-        image_dict["__image_url__"] = f"file://{placeholder_img_path}"
+        # Use FastAPI static path for placeholder image
+        image_dict["__image_url__"] = "/static/images/placeholder.jpg"
         set_dict_at_path(slide.content, image_path, image_dict)
 
     for icon_path in icon_paths:
         icon_dict = get_dict_at_path(slide.content, icon_path)
-        # Use proper path resolution for packaged environments
-        placeholder_icon_path = get_resource_path(os.path.join("static", "icons", "placeholder.svg"))
-        icon_dict["__icon_url__"] = f"file://{placeholder_icon_path}"
+        # Use FastAPI static path for placeholder icon
+        icon_dict["__icon_url__"] = "/static/icons/placeholder.svg"
         set_dict_at_path(slide.content, icon_path, icon_dict)
