@@ -54,6 +54,7 @@ export function setupExportHandlers() {
       });
       const exportTaskProcess = spawn("node", [exportScriptPath, exportTaskPath], {
         stdio: ["ignore", "pipe", "pipe"],
+        cwd: baseDir,
         env: {
           ...process.env,
           TEMP_DIRECTORY: tempDir,
@@ -66,11 +67,18 @@ export function setupExportHandlers() {
         },
       });
 
+      const stdoutChunks: string[] = [];
+      const stderrChunks: string[] = [];
+
       exportTaskProcess.stdout.on("data", (data: Buffer) => {
-        console.log(`[Export] ${data.toString()}`);
+        const text = data.toString();
+        stdoutChunks.push(text);
+        console.log(`[Export] ${text}`);
       });
       exportTaskProcess.stderr.on("data", (data: Buffer) => {
-        console.error(`[Export] ${data.toString()}`);
+        const text = data.toString();
+        stderrChunks.push(text);
+        console.error(`[Export] ${text}`);
       });
 
       await new Promise<void>((resolve, reject) => {
@@ -79,7 +87,19 @@ export function setupExportHandlers() {
           if (code === 0) {
             resolve();
           } else {
-            reject(new Error(`Export process exited with code ${code}`));
+            const stderrText = stderrChunks.join("").trim() || "(no stderr)";
+            const stdoutText = stdoutChunks.join("").trim();
+            const detail =
+              stderrText !== "(no stderr)"
+                ? stderrText
+                : stdoutText
+                  ? `stdout: ${stdoutText}`
+                  : "";
+            reject(
+              new Error(
+                `Export process exited with code ${code}${detail ? `. ${detail}` : ""}`
+              )
+            );
           }
         });
       });
