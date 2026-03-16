@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useMemo } from "react";
-import { Loader2, PlusIcon, Trash2, WandSparkles, StickyNote } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Loader2, PlusIcon, Trash2, Pencil, Trash } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -16,11 +16,11 @@ import {
   deletePresentationSlide,
   updateSlide,
 } from "@/store/slices/presentationGeneration";
-import { useTemplateLayouts } from "../../hooks/useTemplateLayouts";
 import { usePathname } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
-import NewSlide from "../../components/NewSlide";
 import { addToHistory } from "@/store/slices/undoRedoSlice";
+import { V1ContentRender } from "../../components/V1ContentRender";
+import NewSlide from "./NewSlide";
 
 interface SlideContentProps {
   slide: any;
@@ -32,35 +32,36 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
   const dispatch = useDispatch();
   const [isUpdating, setIsUpdating] = useState(false);
   const [showNewSlideSelection, setShowNewSlideSelection] = useState(false);
+  const [isEditPopoverOpen, setIsEditPopoverOpen] = useState(false);
+  const [isSpeakerPopoverOpen, setIsSpeakerPopoverOpen] = useState(false);
+  const [editPrompt, setEditPrompt] = useState("");
   const { presentationData, isStreaming } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
 
   // Use the centralized group layouts hook
-  const { renderSlideContent, loading } = useTemplateLayouts();
+
   const pathname = usePathname();
 
   const handleSubmit = async () => {
-    const element = document.getElementById(
-      `slide-${slide.index}-prompt`
-    ) as HTMLInputElement;
-    const value = element?.value;
-    if (!value?.trim()) {
+    if (!editPrompt.trim()) {
       toast.error("Please enter a prompt before submitting");
       return;
     }
     setIsUpdating(true);
 
     try {
+      trackEvent(MixpanelEvent.Slide_Update_From_Prompt_Button_Clicked, { pathname });
       trackEvent(MixpanelEvent.Slide_Edit_API_Call);
       const response = await PresentationGenerationApi.editSlide(
         slide.id,
-        value
+        editPrompt
       );
 
       if (response) {
         dispatch(updateSlide({ index: slide.index, slide: response }));
         toast.success("Slide updated successfully");
+        setEditPrompt("");
       }
     } catch (error: any) {
       console.error("Error in slide editing:", error);
@@ -71,8 +72,10 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
       setIsUpdating(false);
     }
   };
+
   const onDeleteSlide = async () => {
     try {
+      trackEvent(MixpanelEvent.Slide_Delete_Slide_Button_Clicked, { pathname });
       trackEvent(MixpanelEvent.Slide_Delete_API_Call);
       // Add current state to past
       dispatch(addToHistory({
@@ -110,15 +113,10 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
     }
   }, [presentationData?.slides?.length, isStreaming]);
 
-  // Memoized slide content rendering to prevent unnecessary re-renders
-  const slideContent = useMemo(() => {
-    return renderSlideContent(slide, isStreaming ? false : true); // Enable edit mode for main content
-  }, [renderSlideContent, slide, isStreaming]);
+
 
   useEffect(() => {
-    if (loading) {
-      return;
-    }
+
     if (slide.layout.includes("custom")) {
 
       const existingScript = document.querySelector(
@@ -131,13 +129,13 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
         document.head.appendChild(script);
       }
     }
-  }, [slide, isStreaming, loading]);
+  }, [slide, isStreaming]);
 
   return (
     <>
       <div
         id={`slide-${slide.index}`}
-        className=" w-full max-w-[1280px] main-slide flex items-center max-md:mb-4 justify-center relative"
+        className=" w-full  main-slide flex items-center max-md:mb-4  justify-center relative"
       >
         {isStreaming && (
           <Loader2 className="w-8 h-8 absolute right-2 top-2 z-30 text-blue-800 animate-spin" />
@@ -145,21 +143,13 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
         <div
           data-layout={slide.layout}
           data-group={slide.layout_group}
-          className={` w-full  group `}
+          className={` w-full  group font-syne  `}
         >
-          {/* render slides */}
-          {loading ? (
-            <div className="flex flex-col bg-white aspect-video items-center justify-center h-full">
-              <Loader2 className="w-8 h-8 animate-spin" />
-            </div>
-          ) : (
-            slideContent
-          )}
-
+          <V1ContentRender slide={slide} isEditMode={true} theme={null} />
           {!showNewSlideSelection && (
             <div className="group-hover:opacity-100 hidden md:block opacity-0 transition-opacity my-4 duration-300">
               <ToolTip content="Add new slide below">
-                {!isStreaming && !loading && (
+                {!isStreaming && (
                   <div
                     onClick={() => {
                       trackEvent(MixpanelEvent.Slide_Add_New_Slide_Button_Clicked, { pathname });
@@ -173,7 +163,7 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
               </ToolTip>
             </div>
           )}
-          {showNewSlideSelection && !loading && (
+          {showNewSlideSelection && (
             <NewSlide
               index={index}
               templateID={`${slide.layout.split(":")[0]}`}
@@ -182,97 +172,117 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
             />
           )}
 
-          {!isStreaming && !loading && (
-            <ToolTip content="Delete slide">
-              <div
-                onClick={() => {
-                  trackEvent(MixpanelEvent.Slide_Delete_Slide_Button_Clicked, { pathname });
-                  onDeleteSlide();
-                }}
-                className="absolute top-2 z-20 sm:top-4 right-2 sm:right-4 hidden md:block  transition-transform"
-              >
-                <Trash2 className="text-gray-500 text-xl cursor-pointer" />
-              </div>
-            </ToolTip>
-          )}
           {!isStreaming && (
-            <div className="absolute top-2 z-20 sm:top-4 hidden md:block left-2 sm:left-4 transition-transform">
-              <Popover>
-                <PopoverTrigger>
-                  <ToolTip content="Update slide using prompt">
-                    <div
-                      className={`p-2 group-hover:scale-105 rounded-lg bg-[#5141e5] hover:shadow-md transition-all duration-300 cursor-pointer shadow-md `}
-                    >
-                      <WandSparkles className="w-4 sm:w-5 h-4 sm:h-5 text-white" />
-                    </div>
-                  </ToolTip>
+            <div
+              className={`absolute right-3 top-3 z-30 hidden md:flex flex-row items-center gap-2 rounded-[28px] border border-gray-200/80 bg-white/95 px-2.5 py-2 ${isEditPopoverOpen || isSpeakerPopoverOpen
+                ? "opacity-100 pointer-events-auto"
+                : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto"
+                }`}
+              style={{
+                boxShadow: "0 2px 13.2px 0 rgba(0, 0, 0, 0.10)"
+              }}
+            >
+              <Popover open={isEditPopoverOpen} onOpenChange={setIsEditPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex px-3.5 py-2.5 items-center justify-center rounded-full bg-[#F7F6F9] font-syne"
+                  >
+                    <ToolTip content="Update slide using prompt">
+                      <Pencil className="h-4 w-4" />
+                    </ToolTip>
+                  </button>
                 </PopoverTrigger>
                 <PopoverContent
-                  side="right"
-                  align="start"
-                  sideOffset={10}
-                  className="w-[280px] sm:w-[400px] z-20"
+                  side="bottom"
+                  align="center"
+                  sideOffset={12}
+                  className="z-30 w-[340px] rounded-2xl border border-gray-200 bg-white p-0 shadow-2xl font-syne"
                 >
-                  <div className="space-y-4">
-                    <form
-                      className="flex flex-col gap-3"
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        handleSubmit();
-                      }}
-                    >
-                      <Textarea
-                        id={`slide-${slide.index}-prompt`}
-                        placeholder="Enter your prompt here..."
-                        className="w-full min-h-[100px] max-h-[100px] p-2 text-sm border rounded-lg focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                        disabled={isUpdating}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault();
-                            handleSubmit();
-                          }
-                        }}
-                        rows={4}
-                        wrap="soft"
-                      />
-                      <button
-                        disabled={isUpdating}
-                        type="submit"
-                        className={`bg-gradient-to-r from-[#9034EA] to-[#5146E5] rounded-[32px] px-4 py-2 text-white flex items-center justify-end gap-2 ml-auto ${isUpdating ? "opacity-70 cursor-not-allowed" : ""
-                          }`}
-                        onClick={() => {
-                          trackEvent(MixpanelEvent.Slide_Update_From_Prompt_Button_Clicked, { pathname });
-                        }}
-                      >
-                        {isUpdating ? "Updating..." : "Update"}
-                        <SendHorizontal className="w-4 sm:w-5 h-4 sm:h-5" />
-                      </button>
-                    </form>
+                  <div className="border-b border-gray-100 px-4 py-3">
+                    <p className="text-sm font-semibold text-gray-900">Update slide</p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Describe how this slide should be improved.
+                    </p>
                   </div>
+                  <form
+                    className="flex flex-col gap-3 p-4"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleSubmit();
+                    }}
+                  >
+                    <Textarea
+                      id={`slide-${slide.index}-prompt`}
+                      value={editPrompt}
+                      placeholder="Enter your prompt here..."
+                      className="min-h-[110px] max-h-[180px] w-full resize-none rounded-xl border border-gray-200 p-3 text-sm focus-visible:ring-1 focus-visible:ring-[#5141e5]"
+                      disabled={isUpdating}
+                      onChange={(e) => setEditPrompt(e.target.value)}
+                      rows={5}
+                      wrap="soft"
+                    />
+                    <button
+                      disabled={isUpdating}
+                      type="submit"
+                      className={`ml-auto flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#9034EA] to-[#5146E5] px-4 py-2 text-sm font-medium text-white transition-opacity ${isUpdating ? "cursor-not-allowed opacity-70" : "hover:opacity-90"}`}
+                    >
+                      {isUpdating ? "Updating..." : "Update"}
+                      <SendHorizontal className="h-4 w-4" />
+                    </button>
+                  </form>
                 </PopoverContent>
               </Popover>
-            </div>
-          )}
-          {/* Speaker Notes */}
-          {!isStreaming && slide?.speaker_note && (
-            <div className="absolute top-2 z-20 sm:top-4 right-8 sm:right-12 hidden md:block transition-transform">
-              <Popover>
+
+              <Popover open={isSpeakerPopoverOpen} onOpenChange={setIsSpeakerPopoverOpen}>
                 <PopoverTrigger asChild>
-                  <div className=" cursor-pointer ">
-                    <ToolTip content="Show speaker notes">
-                      <StickyNote className="text-xl text-gray-500" />
+                  <button
+                    type="button"
+                    style={{
+                      background: "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
+
+                    }}
+                    className={`flex px-4 py-2.5 items-center justify-center rounded-full border font-syne ${slide?.speaker_note
+                      ? "border-violet-200 bg-violet-50 text-violet-700"
+                      : "border-gray-200 bg-white text-gray-600"
+                      }`}
+                  >
+                    <ToolTip content="Edit speaker notes">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path d="M5.13334 11.6665V9.27482L6.24167 9.39149C6.56434 9.37356 6.86969 9.23977 7.1016 9.01472C7.33351 8.78966 7.4764 8.48847 7.50401 8.16649V4.84149C7.50787 4.0011 7.17774 3.1936 6.58624 2.59663C5.99473 1.99965 5.1903 1.6621 4.34992 1.65824C3.50954 1.65437 2.70204 1.9845 2.10506 2.57601C1.50809 3.16751 1.17054 3.97194 1.16667 4.81232C1.16667 6.44565 1.54934 6.59382 1.75001 7.46649C1.88562 7.99351 1.89143 8.54556 1.76692 9.07532L1.16667 11.6665" stroke="black" strokeWidth="1.16667" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M11.55 10.3833C12.3701 9.56317 12.8309 8.45095 12.8312 7.29115C12.8316 6.13134 12.3714 5.01886 11.5518 4.19824" stroke="black" strokeWidth="1.16667" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M9.91667 8.74974C10.1075 8.55893 10.2586 8.33217 10.3613 8.08258C10.464 7.83299 10.5161 7.56553 10.5148 7.29566C10.5134 7.02578 10.4586 6.75885 10.3534 6.51031C10.2482 6.26177 10.0948 6.03654 9.90208 5.84766" stroke="black" strokeWidth="1.16667" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
                     </ToolTip>
-                  </div>
+                  </button>
                 </PopoverTrigger>
-                <PopoverContent side="left" align="start" sideOffset={10} className="w-[320px] z-30">
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold text-gray-600">Speaker notes</p>
-                    <div className="text-sm text-gray-800 whitespace-pre-wrap max-h-64 overflow-auto">
-                      {slide.speaker_note}
+                <PopoverContent
+                  side="bottom"
+                  align="center"
+                  sideOffset={12}
+                  className="z-30 w-[340px] rounded-2xl border border-gray-200 bg-white p-0 shadow-2xl font-syne"
+                >
+                  <div className="border-b border-gray-100 px-4 py-3">
+                    <p className="text-sm font-semibold text-gray-900">Speaker notes</p>
+
+                  </div>
+                  <div className="space-y-3 p-4">
+                    <div className="max-h-[220px] min-h-[100px] overflow-auto whitespace-pre-wrap rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-800">
+                      {slide?.speaker_note?.trim() || "No speaker notes for this slide."}
                     </div>
                   </div>
                 </PopoverContent>
               </Popover>
+
+              <button
+                type="button"
+                onClick={onDeleteSlide}
+                className="flex px-4 py-2.5 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 font-syne"
+              >
+                <ToolTip content="Delete slide">
+                  <Trash className="h-4 w-4" />
+                </ToolTip>
+              </button>
             </div>
           )}
         </div>

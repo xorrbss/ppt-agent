@@ -6,7 +6,8 @@ RUN apt-get update && apt-get install -y \
     curl \
     libreoffice \
     fontconfig \
-    chromium
+    chromium \
+    zstd
 
 
 # Install Node.js 20 using NodeSource repository
@@ -27,7 +28,7 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 RUN curl -fsSL https://ollama.com/install.sh | sh
 
 # Install dependencies for FastAPI
-RUN pip install aiohttp aiomysql aiosqlite asyncpg fastapi[standard] \
+RUN pip install alembic aiohttp aiomysql aiosqlite asyncpg fastapi[standard] \
     pathvalidate pdfplumber chromadb sqlmodel \
     anthropic google-genai openai fastmcp dirtyjson
 RUN pip install docling --extra-index-url https://download.pytorch.org/whl/cpu

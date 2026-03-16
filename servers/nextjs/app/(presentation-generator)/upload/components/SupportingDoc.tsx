@@ -1,230 +1,240 @@
 'use client'
 
-import React, { useRef, useState } from 'react'
-import { File, X, Upload } from 'lucide-react'
+import React, { ChangeEvent, useEffect, useMemo, useState } from 'react'
+import { File, Paperclip, X } from 'lucide-react'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
-
-interface FileWithId extends File {
-    id: string;
-}
 
 interface SupportingDocProps {
-    files: File[];
-    onFilesChange: (files: File[]) => void;
+    files: File[]
+    onFilesChange: (files: File[]) => void
+    accept?: string
+    multiple?: boolean
 }
 
-const SupportingDoc = ({ files, onFilesChange }: SupportingDocProps) => {
+const PDF_TYPES = ['.pdf']
+const TEXT_TYPES = ['.txt']
+const POWERPOINT_TYPES = ['.pptx']
+const WORD_TYPES = ['.docx']
+
+const ACCEPT_DEFAULT = [
+    'application/pdf',
+    'text/plain',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    ...PDF_TYPES,
+    ...TEXT_TYPES,
+    ...POWERPOINT_TYPES,
+    ...WORD_TYPES,
+].join(',')
+const ALLOWED_MIME_PREFIXES: string[] = []
+const ALLOWED_MIME_TYPES = [
+    'application/pdf',
+    'application/x-pdf',
+    'application/acrobat',
+    'applications/pdf',
+    'text/pdf',
+    'application/vnd.pdf',
+    'text/plain',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+]
+const ALLOWED_EXTENSIONS = [
+    ...PDF_TYPES,
+    ...TEXT_TYPES,
+    ...POWERPOINT_TYPES,
+    ...WORD_TYPES,
+]
+
+const SupportingDoc = ({
+    files,
+    onFilesChange,
+    accept = ACCEPT_DEFAULT,
+    multiple = true,
+}: SupportingDocProps) => {
     const [isDragging, setIsDragging] = useState(false)
-    const fileInputRef = useRef<HTMLInputElement>(null)
+    const [previewUrls, setPreviewUrls] = useState<(string | null)[]>([])
 
-    // Convert Files to FileWithId with proper type checking
-    const filesWithIds: FileWithId[] = files.map(file => {
-        const fileWithId = file as FileWithId
-        fileWithId.id = `${file.name || 'unnamed'}-${file.lastModified || Date.now()}-${file.size || 0}`
-        return fileWithId
-    })
+    const hasFiles = files.length > 0
 
-    const formatFileSize = (bytes: number): string => {
-        if (!bytes || bytes === 0) return '0 Bytes'
-        const k = 1024
-        const sizes = ['Bytes', 'KB', 'MB', 'GB']
-        const i = Math.floor(Math.log(bytes) / Math.log(k))
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+    const filteredFiles = useMemo(() => {
+        return files.filter(isAllowedFile)
+    }, [files])
+
+    useEffect(() => {
+        const urls = filteredFiles.map((file) => (file.type.startsWith('image/') ? URL.createObjectURL(file) : null))
+        setPreviewUrls(urls)
+
+        return () => {
+            urls.forEach((url) => {
+                if (url) URL.revokeObjectURL(url)
+            })
+        }
+    }, [filteredFiles])
+
+    const handleValidate = (filesToReview: File[]) => {
+        const disallowed = filesToReview.filter((file) => !isAllowedFile(file))
+        if (disallowed.length > 0) {
+            toast.error('Some files are not supported', {
+                description: 'Only PDF, TXT, PPTX, and DOCX files are allowed.',
+            })
+        }
     }
 
-    const handleDragEvents = (e: React.DragEvent<HTMLDivElement>, isDragging: boolean) => {
-        e.preventDefault()
-        e.stopPropagation()
-        setIsDragging(isDragging)
+    const handleFilesSelected = (e: ChangeEvent<HTMLInputElement>) => {
+        const selectedFiles = Array.from(e.target.files ?? [])
+        if (selectedFiles.length === 0) return
+
+        const nextFiles = multiple ? [...files, ...selectedFiles] : [selectedFiles[0]]
+        const allowedFiles = nextFiles.filter(isAllowedFile)
+
+        onFilesChange(allowedFiles)
+        handleValidate(nextFiles)
+        if (allowedFiles.length > files.length) {
+            toast.success('Files selected', {
+                description: `${allowedFiles.length - files.length} file(s) have been added`,
+            })
+        }
+        e.currentTarget.value = ''
     }
 
-    const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    const handleDrop = (e: React.DragEvent<HTMLLabelElement>) => {
         e.preventDefault()
-        e.stopPropagation()
         setIsDragging(false)
 
-        const droppedFiles = Array.from(e.dataTransfer.files);
-        const hasPdf = files.some(file => file.type === 'application/pdf');
+        const droppedFiles = Array.from(e.dataTransfer.files ?? [])
+        if (droppedFiles.length === 0) return
 
-        const validTypes = [
-            'application/pdf',
-            'text/plain',
-            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        ];
+        const nextFiles = multiple ? [...files, ...droppedFiles] : [droppedFiles[0]]
+        const allowedFiles = nextFiles.filter(isAllowedFile)
 
-        const invalidFiles = droppedFiles.filter(file => !validTypes.includes(file.type));
-        if (invalidFiles.length > 0) {
-            toast.error('Invalid file type', {
-                description: 'Please upload only PDF, TXT, PPTX, or DOCX files',
-            });
-            return;
-        }
-
-        if (hasPdf && droppedFiles.some(file => file.type === 'application/pdf')) {
-            toast.error('Multiple PDF files are not allowed', {
-                description: 'Please select only one PDF file',
-            });
-            return;
-        }
-
-        const validFiles = droppedFiles.filter(file => {
-            return !(hasPdf && file.type === 'application/pdf');
-        });
-
-        if (validFiles.length > 0) {
-            const updatedFiles = [...files, ...validFiles]
-            onFilesChange(updatedFiles)
-
+        onFilesChange(allowedFiles)
+        handleValidate(nextFiles)
+        if (allowedFiles.length > files.length) {
             toast.success('Files selected', {
-                description: `${validFiles.length} file(s) have been added`,
+                description: `${allowedFiles.length - files.length} file(s) have been added`,
             })
         }
     }
 
-    const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const selectedFiles = Array.from(e.target.files || []);
-
-        const hasPdf = files.some(file => file.type === 'application/pdf');
-
-        const validFiles = selectedFiles.filter(file => {
-            return !(hasPdf && file.type === 'application/pdf');
-        });
-
-        if (validFiles.length > 0) {
-            const updatedFiles = [...files, ...validFiles]
-            onFilesChange(updatedFiles)
-
-            toast.success('Files selected', {
-                description: `${validFiles.length} file(s) have been added`,
-            })
-        }
+    const handleDragOver = (e: React.DragEvent<HTMLLabelElement>) => {
+        e.preventDefault()
+        setIsDragging(true)
     }
 
-    const removeFile = (fileId: string) => {
-        const updatedFiles = files.filter(file => {
-            const currentFileId = `${file.name || 'unnamed'}-${file.lastModified || Date.now()}-${file.size || 0}`
-            return currentFileId !== fileId
-        })
-        onFilesChange(updatedFiles)
+    const handleDragLeave = (e: React.DragEvent<HTMLLabelElement>) => {
+        e.preventDefault()
+        setIsDragging(false)
     }
 
+    const handleRemoveFileAt = (index: number) => {
+        const nextFiles = filteredFiles.filter((_, i) => i !== index)
+        onFilesChange(nextFiles)
+    }
+
+    const handleClearFiles = () => {
+        if (!hasFiles) return
+        onFilesChange([])
+    }
 
     return (
-        <div className="w-full">
-            <h2 className="text-[#444] font-instrument_sans pt-4 text-lg mb-4">Supporting Documents</h2>
-            <div
-                onClick={() => fileInputRef.current?.click()}
-                className={cn(
-                    "w-full border-2 border-dashed border-gray-400 rounded-lg",
-                    "transition-all duration-300 ease-in-out bg-white",
-                    "min-h-[300px] flex flex-col mb-8",
-                    isDragging && "border-purple-400 bg-purple-50"
-                )}
-                onDragOver={(e) => handleDragEvents(e, true)}
-                onDragLeave={(e) => handleDragEvents(e, false)}
+        <div className="space-y-2" data-testid="attachments-uploader">
+            <div className="flex items-center justify-between">
+                <p className="text-sm text-gray-600 font-syne">
+                    {hasFiles ? `${filteredFiles.length} attachment${filteredFiles.length > 1 ? 's' : ''}` : 'No attachments yet'}
+                </p>
+                <button
+                    type="button"
+                    onClick={handleClearFiles}
+                    disabled={!hasFiles}
+                    className={`text-sm font-medium font-syne ${!hasFiles ? 'cursor-not-allowed text-gray-400' : 'text-red-600 hover:text-red-700'}`}
+                    data-testid="attachments-clear-button"
+                    aria-disabled={!hasFiles}
+                >
+                    Clear all
+                </button>
+            </div>
+
+            <label
+                className={`mt-1 block cursor-pointer rounded-lg border-2 border-dashed px-4 py-6 text-center transition-colors ${isDragging ? 'border-[#5146E5] bg-[#5146E5]/5' : 'border-gray-200 hover:border-[#5146E5]'}`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
             >
-                <div className="flex-1 flex flex-col items-center justify-center p-6">
-                    <Upload className={cn(
-                        "w-12 h-12 text-gray-400 mb-4",
-                        isDragging && "text-purple-400"
-                    )} />
-
-                    <p className="text-gray-600 text-center mb-2">
-                        {isDragging
-                            ? 'Drop your file here'
-                            : 'Drag and drop your file here or click below button'
-                        }
+                <input
+                    type="file"
+                    className="hidden"
+                    onChange={handleFilesSelected}
+                    accept={accept}
+                    multiple={multiple}
+                    data-testid="file-upload-input"
+                />
+                <div className="flex flex-col items-center gap-2">
+                    <Paperclip className="h-6 w-6 text-[#5146E5]" />
+                    <p className="text-sm font-medium text-gray-800 font-syne">
+                        Drag and drop PDF, TXT, PPTX, DOCX, or <span className="text-[#5146E5]">click to browse</span>
                     </p>
-                    <p className="text-gray-400 text-sm text-center mb-4">
-                        Supports PDFs, Text files, PPTX, DOCX
-                    </p>
-
-                    <input
-                        type="file"
-                        accept=".pdf,.txt,.pptx,.docx"
-                        onChange={handleFileInput}
-                        className="hidden"
-                        id="file-upload"
-                        ref={fileInputRef}
-                        multiple
-                        data-testid="file-upload-input"
-                    />
-
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation()
-                            fileInputRef.current?.click()
-                        }}
-                        className="px-6 py-2 bg-purple-600 text-white rounded-full
-                            hover:bg-purple-700 transition-colors duration-200
-                            font-medium text-sm"
-                    >
-                        Choose Files
-                    </button>
                 </div>
+            </label>
 
-                {files.length > 0 && (
-                    <div className="border-t border-gray-200 bg-gray-50 rounded-b-lg">
-                        <div className="p-4">
-                            <div className="flex items-center justify-between mb-3">
-                                <h3 className="text-sm font-medium text-gray-700">
-                                    Selected Files ({files.length})
-                                </h3>
-                            </div>
-                            <div data-testid="file-list" className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                                {filesWithIds.map((file) => {
+            {hasFiles && (
+                <div className="mt-2">
+                    <ul data-testid="file-list" className="grid grid-cols-1 gap-2 sm:grid-cols-2" aria-label="Attached files">
+                        {filteredFiles.map((file, idx) => (
+                            <li
+                                key={`${file.name}-${idx}`}
+                                className="flex items-center gap-3 rounded-md border border-gray-200 px-3 py-2"
+                                data-testid="attached-file-item"
+                            >
+                                {previewUrls[idx] ? (
+                                    <img src={previewUrls[idx] as string} alt="Preview" className="h-10 w-10 flex-none rounded object-cover" />
+                                ) : (
+                                    <div className="flex h-10 w-10 flex-none items-center justify-center rounded bg-gray-100 text-gray-600">
+                                        <File className="h-5 w-5" />
+                                    </div>
+                                )}
 
-                                    return (
-                                        (
-                                            <div key={file.id}
-                                                className="bg-white rounded-lg border border-gray-200 overflow-hidden
-                                            hover:border-purple-200 group relative"
-                                            >
-                                                <div className="p-4 bg-purple-50 group-hover:bg-purple-100 
-                                            transition-colors flex items-center justify-center relative"
-                                                >
+                                <div className="min-w-0 flex-1">
+                                    <p className="truncate text-sm font-medium text-gray-900 font-syne" title={file.name}>
+                                        {file.name}
+                                    </p>
+                                    <p className="text-xs text-gray-500 font-syne">{formatFileSize(file.size)}</p>
+                                </div>
 
-                                                    <File className="w-8 h-8 text-purple-600" />
-
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation()
-                                                            removeFile(file.id)
-                                                        }}
-                                                        className="absolute top-1 right-2 p-1.5
-                                                    bg-white/80 backdrop-blur-sm rounded-full
-                                                    text-gray-500 hover:text-red-500 
-                                                    shadow-sm hover:shadow-md
-                                                    transition-all duration-200"
-                                                        aria-label="Remove file"
-                                                    >
-                                                        <X className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-
-                                                <div className="p-3 relative">
-                                                    <p className="text-sm font-medium text-gray-700 truncate mb-1 pr-2">
-                                                        {file.name || 'Unnamed File'}
-                                                    </p>
-                                                    <p className="text-xs text-gray-500">
-                                                        {formatFileSize(file.size)}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        )
-                                    )
-                                })}
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-            </div>
+                                <button
+                                    type="button"
+                                    onClick={() => handleRemoveFileAt(idx)}
+                                    className="ml-2 inline-flex h-8 w-8 items-center justify-center rounded text-red-600 hover:bg-red-50 hover:text-red-700"
+                                    aria-label={`Remove ${file.name}`}
+                                    data-testid="remove-file-button"
+                                >
+                                    <X className="h-5 w-5" />
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                    {filteredFiles.length !== files.length && (
+                        <p className="mt-2 text-xs text-amber-600 font-syne">
+                            Some files were skipped. Only PDF, TXT, PPTX, and DOCX files are supported.
+                        </p>
+                    )}
+                </div>
+            )}
         </div>
     )
+}
+
+const formatFileSize = (bytes: number): string => {
+    if (!bytes || bytes <= 0) return '0 KB'
+    return `${(bytes / 1024).toFixed(1)} KB`
+}
+
+function isAllowedFile(file: File): boolean {
+    const type = (file.type || '').toLowerCase()
+    const name = (file.name || '').toLowerCase()
+    const typeAllowed = ALLOWED_MIME_TYPES.includes(type) || ALLOWED_MIME_PREFIXES.some((prefix) => type.startsWith(prefix))
+
+    if (typeAllowed) return true
+    return ALLOWED_EXTENSIONS.some((ext) => name.endsWith(ext))
 }
 
 export default SupportingDoc

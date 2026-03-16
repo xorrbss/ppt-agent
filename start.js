@@ -65,7 +65,7 @@ const setupUserConfigFromEnv = () => {
     existingConfig = JSON.parse(readFileSync(userConfigPath, "utf8"));
   }
 
-  if (!["ollama", "openai", "google"].includes(existingConfig.LLM)) {
+  if (!["ollama", "openai", "google", "anthropic", "custom", "codex"].includes(existingConfig.LLM)) {
     existingConfig.LLM = undefined;
   }
 
@@ -103,6 +103,11 @@ const setupUserConfigFromEnv = () => {
       process.env.DALL_E_3_QUALITY || existingConfig.DALL_E_3_QUALITY,
     GPT_IMAGE_1_5_QUALITY:
       process.env.GPT_IMAGE_1_5_QUALITY || existingConfig.GPT_IMAGE_1_5_QUALITY,
+    CODEX_MODEL: process.env.CODEX_MODEL || existingConfig.CODEX_MODEL,
+    CODEX_ACCESS_TOKEN: existingConfig.CODEX_ACCESS_TOKEN,
+    CODEX_REFRESH_TOKEN: existingConfig.CODEX_REFRESH_TOKEN,
+    CODEX_TOKEN_EXPIRES: existingConfig.CODEX_TOKEN_EXPIRES,
+    CODEX_ACCOUNT_ID: existingConfig.CODEX_ACCOUNT_ID,
   };
 
   writeFileSync(userConfigPath, JSON.stringify(userConfig));

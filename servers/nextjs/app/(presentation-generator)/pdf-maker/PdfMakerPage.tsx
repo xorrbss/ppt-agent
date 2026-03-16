@@ -10,32 +10,26 @@ import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { AlertCircle } from "lucide-react";
 import { setPresentationData } from "@/store/slices/presentationGeneration";
 import { DashboardApi } from "../services/api/dashboard";
-import { useLayout } from "../context/LayoutContext";
-import { useFontLoader } from "../hooks/useFontLoader";
-import { useTemplateLayouts } from "../hooks/useTemplateLayouts";
+
+
+import { V1ContentRender } from "../components/V1ContentRender";
+import { useFontLoader } from "../hooks/useFontLoad";
+import { Theme } from "../services/api/types";
 
 
 
 
 
 const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
-  const { renderSlideContent, loading } = useTemplateLayouts();
   const pathname = usePathname();
   const [contentLoading, setContentLoading] = useState(true);
-  const { getCustomTemplateFonts } = useLayout()
+
   const dispatch = useDispatch();
   const { presentationData } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
   const [error, setError] = useState(false);
-  useEffect(() => {
-    if (!loading && presentationData?.slides && presentationData?.slides.length > 0) {
-      const presentation_id = presentationData?.slides[0].layout.split(":")[0].split("custom-")[1];
-      const fonts = getCustomTemplateFonts(presentation_id);
 
-      useFontLoader(fonts || []);
-    }
-  }, [presentationData, loading]);
   useEffect(() => {
     if (presentationData?.slides[0].layout.includes("custom")) {
       const existingScript = document.querySelector(
@@ -60,6 +54,9 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
       const data = await DashboardApi.getPresentation(presentation_id);
       dispatch(setPresentationData(data));
       setContentLoading(false);
+      if (data?.theme) {
+        applyTheme(data.theme);
+      }
     } catch (error) {
       setError(true);
       toast.error("Failed to load presentation");
@@ -67,6 +64,43 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
       setContentLoading(false);
     }
   };
+
+  const applyTheme = async (theme: Theme) => {
+    const element = document.getElementById('presentation-slides-wrapper')
+    if (!element) return;
+    if (!theme || !theme.data) { return; }
+    if (!theme.data.colors['graph_0']) { return; }
+    const cssVariables = {
+      '--primary-color': theme.data.colors['primary'],
+      '--background-color': theme.data.colors['background'],
+      '--card-color': theme.data.colors['card'],
+      '--stroke': theme.data.colors['stroke'],
+      '--primary-text': theme.data.colors['primary_text'],
+      '--background-text': theme.data.colors['background_text'],
+      '--graph-0': theme.data.colors['graph_0'],
+      '--graph-1': theme.data.colors['graph_1'],
+      '--graph-2': theme.data.colors['graph_2'],
+      '--graph-3': theme.data.colors['graph_3'],
+      '--graph-4': theme.data.colors['graph_4'],
+      '--graph-5': theme.data.colors['graph_5'],
+      '--graph-6': theme.data.colors['graph_6'],
+      '--graph-7': theme.data.colors['graph_7'],
+      '--graph-8': theme.data.colors['graph_8'],
+      '--graph-9': theme.data.colors['graph_9'],
+    }
+
+    Object.entries(cssVariables).forEach(([key, value]) => {
+      element.style.setProperty(key, value)
+    })
+    useFontLoader({ [theme.data.fonts.textFont.name]: theme.data.fonts.textFont.url })
+
+    // Apply fonts to preview container
+    element.style.setProperty('font-family', `"${theme.data.fonts.textFont.name}"`)
+    element.style.setProperty('--heading-font-family', `"${theme.data.fonts.textFont.name}"`)
+    element.style.setProperty('--body-font-family', `"${theme.data.fonts.textFont.name}"`)
+    // Update the Presentation content with theme
+  }
+
 
   // Regular view
   return (
@@ -103,7 +137,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
             className="mx-auto flex flex-col items-center  overflow-hidden  justify-center   "
           >
             {!presentationData ||
-              loading ||
+
               contentLoading ||
               !presentationData?.slides ||
               presentationData?.slides.length === 0 ? (
@@ -125,7 +159,8 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
                   presentationData.slides.map((slide: any, index: number) => (
                     // [data-speaker-note] is used to extract the speaker note from the slide for export to pptx
                     <div key={index} className="w-full" data-speaker-note={slide.speaker_note}>
-                      {renderSlideContent(slide, true)}
+                      <V1ContentRender slide={slide} isEditMode={true} theme={null}
+                      />
                     </div>
                   ))}
               </>

@@ -17,4 +17,5 @@ class PresentationWithSlides(BaseModel):
     updated_at: datetime
     tone: Optional[str] = None
     verbosity: Optional[str] = None
+    theme: Optional[dict] = None
     slides: List[SlideModel]
