@@ -16,7 +16,12 @@ const afterPack = async (context) => {
       "resources"
     )
     const fastapiPath = path.join(resourcesRoot, "fastapi", "fastapi")
-    const convertPath = path.join(resourcesRoot, "export", "py", "convert")
+    const exportPyDir = path.join(resourcesRoot, "export", "py")
+    const converterCandidates = [
+      `convert-${process.platform}-${process.arch}`,
+      `convert-${process.platform}`,
+      "convert",
+    ]
 
     console.log("Setting executable permissions for FastAPI binary...")
     console.log("FastAPI path:", fastapiPath)
@@ -29,13 +34,17 @@ const afterPack = async (context) => {
     }
 
     console.log("Setting executable permissions for export converter binary...")
-    console.log("Converter path:", convertPath)
-
-    if (fs.existsSync(convertPath)) {
-      fs.chmodSync(convertPath, 0o755)
-      console.log("✓ Execute permissions set for converter")
-    } else {
-      console.warn("⚠ Converter binary not found at:", convertPath)
+    let converterFound = false
+    for (const candidate of converterCandidates) {
+      const candidatePath = path.join(exportPyDir, candidate)
+      if (fs.existsSync(candidatePath)) {
+        fs.chmodSync(candidatePath, 0o755)
+        console.log("✓ Execute permissions set for converter:", candidatePath)
+        converterFound = true
+      }
+    }
+    if (!converterFound) {
+      console.warn("⚠ No converter binary found in:", exportPyDir)
     }
 
     const fastapiDir = path.join(resourcesRoot, "fastapi")
@@ -43,7 +52,6 @@ const afterPack = async (context) => {
       console.log("FastAPI directory contents:", fs.readdirSync(fastapiDir))
     }
 
-    const exportPyDir = path.join(resourcesRoot, "export", "py")
     if (fs.existsSync(exportPyDir)) {
       console.log("Export py directory contents:", fs.readdirSync(exportPyDir))
     }
