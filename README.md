@@ -461,28 +461,6 @@ Track the public roadmap on GitHub Projects: [https://github.com/orgs/presenton/
 
 #
 
-### 📺 Latest YouTube Videos
-
-
-<p align="left">
-<a href="https://youtu.be/vvCj23ySjLg">
-  <img src="https://ytcards.demolab.com/?id=vvCj23ySjLg&title=Tired+of+Generic+AI+Slides%3F+Use+Your+Existing+Presentations+as+Templates+with+Presenton%21&lang=en&background_color=%230d1117&title_color=%23ffffff&stats_color=%23dedede&max_title_lines=2&width=250&border_radius=5" />
-</a>
-
-<a href="https://youtu.be/rqr2J2ci0DI">
-  <img src="https://ytcards.demolab.com/?id=rqr2J2ci0DI&title=How+to+Build+an+AI+Agent+That+Creates+Company+Pitch+Decks+(Python,+OpenAI,+Presenton)&lang=en&background_color=%230d1117&title_color=%23ffffff&stats_color=%23dedede&max_title_lines=2&width=250&border_radius=5" />
-</a>
-
-<a href="https://youtu.be/grKoA3u1CMk">
-  <img src="https://ytcards.demolab.com/?id=grKoA3u1CMk&title=Generate+AI+Presentations+via+API+in+5+Minutes+%7C+Open-Source+Tutorial&lang=en&background_color=%230d1117&title_color=%23ffffff&stats_color=%23dedede&max_title_lines=2&width=250&border_radius=5" />
-</a>
-
-<a href="https://youtu.be/L25NSkZj7nk">
-  <img src="https://ytcards.demolab.com/?id=L25NSkZj7nk&title=Full+Setup+Guide%3A+Presenton+-+Your+Self-Hosted,+Open-Source+AI+Presentation+Generator&lang=en&background_color=%230d1117&title_color=%23ffffff&stats_color=%23dedede&max_title_lines=2&width=250&border_radius=5" />
-</a>
-</p>
-
-
 <p align="left">
   <a href="https://www.youtube.com/@presentonai?sub_confirmation=1">
     <img src="https://img.shields.io/badge/Subscribe-6C47FF?style=for-the-badge&logo=cloud&logoColor=white" />
