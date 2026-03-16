@@ -6,7 +6,17 @@ const path = require("path")
 const afterPack = async (context) => {
   if (context.electronPlatformName === "darwin") {
     const appPath = context.appOutDir
-    const fastapiPath = path.join(appPath, "Presenton.app/Contents/Resources/app/resources/fastapi/fastapi")
+    const appBundleName = `${context.packager.appInfo.productFilename}.app`
+    const resourcesRoot = path.join(
+      appPath,
+      appBundleName,
+      "Contents",
+      "Resources",
+      "app",
+      "resources"
+    )
+    const fastapiPath = path.join(resourcesRoot, "fastapi", "fastapi")
+    const convertPath = path.join(resourcesRoot, "export", "py", "convert")
 
     console.log("Setting executable permissions for FastAPI binary...")
     console.log("FastAPI path:", fastapiPath)
@@ -18,9 +28,24 @@ const afterPack = async (context) => {
       console.warn("⚠ FastAPI binary not found at:", fastapiPath)
     }
 
-    const fastapiDir = path.join(appPath, "Presenton.app/Contents/Resources/app/resources/fastapi")
+    console.log("Setting executable permissions for export converter binary...")
+    console.log("Converter path:", convertPath)
+
+    if (fs.existsSync(convertPath)) {
+      fs.chmodSync(convertPath, 0o755)
+      console.log("✓ Execute permissions set for converter")
+    } else {
+      console.warn("⚠ Converter binary not found at:", convertPath)
+    }
+
+    const fastapiDir = path.join(resourcesRoot, "fastapi")
     if (fs.existsSync(fastapiDir)) {
       console.log("FastAPI directory contents:", fs.readdirSync(fastapiDir))
+    }
+
+    const exportPyDir = path.join(resourcesRoot, "export", "py")
+    if (fs.existsSync(exportPyDir)) {
+      console.log("Export py directory contents:", fs.readdirSync(exportPyDir))
     }
   }
 }
