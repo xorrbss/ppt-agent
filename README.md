@@ -15,7 +15,7 @@
   <a href="https://presenton.ai/"><img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=flat" alt="Platform" /></a>
 </p>
 
-<!-- 
+<!--
 [![website-shield]][website-url]
 [![download-shield]][download-url]
 [![docs-shield]][docs-url]
@@ -57,12 +57,12 @@
 
 # Open-Source AI Presentation Generator and API (Gamma, Beautiful AI, Decktopus Alternative)
 
-
 ### ✨ Why Presenton
 
 No SaaS lock-in · No forced subscriptions · Full control over models and data
 
 What makes Presenton different?
+
 - Use your **existing PPTX files as templates**
 - Fully **self-hosted**
 - Works with OpenAI, Gemini, Anthropic, Ollama, or custom models
@@ -76,6 +76,7 @@ What makes Presenton different?
 #
 
 ### 🎛 UI Features
+
 <p align="center">
   <img src="./readme_assets/images/UI-elements/features.png" alt="Presenton" />
 </p>
@@ -85,6 +86,7 @@ What makes Presenton different?
 ### 📌 Download Presenton
 
 Create AI-powered presentations using your own model provider (BYOK) or run everything locally on your own machine for full control and data privacy.
+
 <p align="center">
   <a href="https://presenton.ai/download">
     <img src="./readme_assets/images/banner-4.jpg" alt="Cloud deployment" />
@@ -124,7 +126,7 @@ Presenton gives you complete control over your AI presentation workflow. Choose 
     experience (ideal for development or offline use).
   </p>
 
-  **Option 1: Electron (Desktop App)**
+**Option 1: Electron (Desktop App)**
 
    <p>
     Run Presenton as a native desktop application. LLM and image provider
@@ -139,52 +141,52 @@ Presenton gives you complete control over your AI presentation workflow. Choose 
     <code>electron/servers/fastapi</code>).
   </p>
 
-  - Setup (First Time)
-    <pre><code class="language-bash">cd electron
-    npm run setup:env</code></pre>
-    This installs Node dependencies, runs <code>uv sync</code> in the FastAPI
-    server, and installs Next.js dependencies.
+- Setup (First Time)
+  <pre><code class="language-bash">cd electron
+  npm run setup:env</code></pre>
 
-  - Run in Development
-    <pre><code class="language-bash">npm run dev</code></pre>
-    <p>
-    This compiles TypeScript and starts Electron. The backend and UI run locally
-    inside the desktop window.
-    </p>
+  This installs Node dependencies, runs <code>uv sync</code> in the FastAPI
+  server, and installs Next.js dependencies.
 
-  - Build Distributable (Optional)
-    To create installers for Windows, macOS, or Linux:
-    <pre><code class="language-bash">npm run build:all
-    npm run dist</code></pre>
-    <p>
-    Output files are written to <code>electron/dist</code>
-    (or as configured in your <code>electron-builder</code> settings).
-    </p>
+- Run in Development
+  <pre><code class="language-bash">npm run dev</code></pre>
+  <p>
+  This compiles TypeScript and starts Electron. The backend and UI run locally
+  inside the desktop window.
+  </p>
 
-  **Option 2: Docker**
+- Build Distributable (Optional)
+  To create installers for Windows, macOS, or Linux:
+  <pre><code class="language-bash">npm run build:all
+  npm run dist</code></pre>
+  <p>
+  Output files are written to <code>electron/dist</code>
+  (or as configured in your <code>electron-builder</code> settings).
+  </p>
 
-  - Start Presenton
-    Linux/MacOS (Bash/Zsh Shell):
-    <pre><code class="language-bash">docker run -it --name presenton -p 5000:80 -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
-    
-    Windows (PowerShell):
-    <pre><code class="language-bash">docker run -it --name presenton -p 5000:80 -v "${PWD}\app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
+**Option 2: Docker**
 
-  - Open Presenton
-    <p>
-    Open <a href="http://localhost:5000">http://localhost:5000</a> in the browser
-    of your choice to use Presenton.
-    </p>
-    
-    <blockquote>
-    <p>
-      <strong>Note:</strong> You can replace <code>5000</code> with any other port
-      number of your choice to run Presenton on a different port number.
-    </p>
-    </blockquote>
+- Start Presenton
+  Linux/MacOS (Bash/Zsh Shell):
+  <pre><code class="language-bash">docker run -it --name presenton -p 5000:80 -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
+
+  Windows (PowerShell):
+  <pre><code class="language-bash">docker run -it --name presenton -p 5000:80 -v "${PWD}\app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
+
+- Open Presenton
+  <p>
+  Open <a href="http://localhost:5000">http://localhost:5000</a> in the browser
+  of your choice to use Presenton.
+  </p>
+
+  <blockquote>
+  <p>
+    <strong>Note:</strong> You can replace <code>5000</code> with any other port
+    number of your choice to run Presenton on a different port number.
+  </p>
+  </blockquote>
 
 #
-
 
 ### ⚙️ Deployment Configurations
 
@@ -209,35 +211,6 @@ These settings apply to both Docker and the Electron app's backend. You may want
 
 You can also set the following environment variables to customize the image generation provider and API keys:
 
-- **DISABLE_IMAGE_GENERATION**: If **true**, Image Generation will be disabled for slides.
-- **IMAGE_PROVIDER=[dall-e-3/gpt-image-1.5/gemini_flash/nanobanana_pro/pexels/pixabay/comfyui/openai_compatible]**: Select the image provider of your choice.
-  - Required if **DISABLE_IMAGE_GENERATION** is not set to **true**.
-- **OPENAI_API_KEY=[Your OpenAI API Key]**: Required if using **dall-e-3** or **gpt-image-1.5** as the image provider.
-- **DALL_E_3_QUALITY=[standard/hd]**: Optional quality setting for **dall-e-3** (default: `standard`).
-- **GPT_IMAGE_1_5_QUALITY=[low/medium/high]**: Optional quality setting for **gpt-image-1.5** (default: `medium`).
-- **GOOGLE_API_KEY=[Your Google API Key]**: Required if using **gemini_flash** or **nanobanana_pro** as the image provider.
-- **PEXELS_API_KEY=[Your Pexels API Key]**: Required if using **pexels** as the image provider.
-- **PIXABAY_API_KEY=[Your Pixabay API Key]**: Required if using **pixabay** as the image provider.
-- **COMFYUI_URL=[Your ComfyUI server URL]** and **COMFYUI_WORKFLOW=[Workflow JSON]**: Required if using **comfyui** to route prompts to a self-hosted ComfyUI workflow.
-- **OPENAI_COMPAT_IMAGE_BASE_URL=[Custom Images API URL]**, **OPENAI_COMPAT_IMAGE_API_KEY=[API Key]**, **OPENAI_COMPAT_IMAGE_MODEL=[Model ID]**: Required if using **openai_compatible** to send image requests to any OpenAI-compatible `/v1/images/*` endpoint (LiteLLM, Azure, vLLM gateways, etc.).
-
-You can disable anonymous telemetry using the following environment variable:
-
-- **DISABLE_ANONYMOUS_TELEMETRY=[true/false]**: Set this to **true** to disable anonymous telemetry.
-
-> **Note:** You can freely choose both the LLM (text generation) and the image provider. Supported image providers: **dall-e-3**, **gpt-image-1.5** (OpenAI), **gemini_flash**, **nanobanana_pro** (Google), **pexels**, **pixabay**, **comfyui** (self-hosted), and **openai_compatible** (any OpenAI-compatible Images API).
-
-### Using OpenAI
-
-```bash
-docker run -it --name presenton -p 5000:80 -e LLM="openai" -e OPENAI_API_KEY="******" -e IMAGE_PROVIDER="dall-e-3" -e CAN_CHANGE_KEYS="false" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest
-```
-
-### Using Google
-
-```bash
-docker run -it --name presenton -p 5000:80 -e LLM="google" -e GOOGLE_API_KEY="******" -e IMAGE_PROVIDER="gemini_flash" -e CAN_CHANGE_KEYS="false" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest
-```
 - DISABLE_IMAGE_GENERATION: If **true**, Image Generation will be disabled for slides.
 - IMAGE_PROVIDER=[dall-e-3/gpt-image-1.5/gemini_flash/nanobanana_pro/pexels/pixabay/comfyui]: Select the image provider of your choice.
   - Required if **DISABLE_IMAGE_GENERATION** is not set to **true**.
@@ -248,6 +221,7 @@ docker run -it --name presenton -p 5000:80 -e LLM="google" -e GOOGLE_API_KEY="**
 - PEXELS_API_KEY=[Your Pexels API Key]: Required if using **pexels** as the image provider.
 - PIXABAY_API_KEY=[Your Pixabay API Key]: Required if using **pixabay** as the image provider.
 - COMFYUI_URL=[Your ComfyUI server URL] and COMFYUI_WORKFLOW=[Workflow JSON]: Required if using **comfyui** to route prompts to a self-hosted ComfyUI workflow.
+- OPENAI_COMPAT_IMAGE_BASE_URL=[Custom Images API URL], OPENAI_COMPAT_IMAGE_API_KEY=[API Key], OPENAI_COMPAT_IMAGE_MODEL=[Model ID]: Required if using **openai_compatible** to send image requests to any OpenAI-compatible `/v1/images/*` endpoint (LiteLLM, Azure, vLLM Gateways, etc.).
 
 You can disable anonymous telemetry using the following environment variable:
 
@@ -259,6 +233,7 @@ You can disable anonymous telemetry using the following environment variable:
 <br>
 
 **Docker Run Examples by Provider**
+
 - Using OpenAI
     <pre><code class="language-bash">docker run -it --name presenton -p 5000:80 -e LLM="openai" -e OPENAI_API_KEY="******" -e IMAGE_PROVIDER="dall-e-3" -e CAN_CHANGE_KEYS="false" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
 
@@ -271,35 +246,24 @@ You can disable anonymous telemetry using the following environment variable:
 - Using Anthropic
     <pre><code class="language-bash">docker run -it --name presenton -p 5000:80 -e LLM="anthropic" -e ANTHROPIC_API_KEY="******" -e IMAGE_PROVIDER="pexels" -e PEXELS_API_KEY="******" -e CAN_CHANGE_KEYS="false" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
 
-### Using an OpenAI-Compatible Image Provider
-
-<pre><code class="language-bash">
-docker run -it --name presenton -p 5000:80 \
-  -e IMAGE_PROVIDER="openai_compatible" \
-  -e OPENAI_COMPAT_IMAGE_BASE_URL="https://proxy.example.com/v1" \
-  -e OPENAI_COMPAT_IMAGE_API_KEY="******" \
-  -e OPENAI_COMPAT_IMAGE_MODEL="gpt-image-1" \
-  -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest
-</code></pre>
-
-> This routes all slide image requests through your OpenAI-compatible gateway (LiteLLM, Azure, vLLM, etc.) while keeping the text LLM configuration independent.
-
-#### Running Presenton with GPU Support
-- Using OpenAI Compatible API
+- Using OpenAI Compatible LLM API
     <pre><code class="language-bash">docker run -it -p 5000:80 -e CAN_CHANGE_KEYS="false"  -e LLM="custom" -e CUSTOM_LLM_URL="http://*****" -e CUSTOM_LLM_API_KEY="*****" -e CUSTOM_MODEL="llama3.2:3b" -e IMAGE_PROVIDER="pexels" -e  PEXELS_API_KEY="********" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
 
 - Running Presenton with GPU Support
-    
-    To use GPU acceleration with Ollama models, you need to install and configure the NVIDIA Container Toolkit. This allows Docker containers to access your NVIDIA GPU.
-    
-    Once the NVIDIA Container Toolkit is installed and configured, you can run Presenton with GPU support by adding the `--gpus=all` flag:
+
+  To use GPU acceleration with Ollama models, you need to install and configure the NVIDIA Container Toolkit. This allows Docker containers to access your NVIDIA GPU.
+
+  Once the NVIDIA Container Toolkit is installed and configured, you can run Presenton with GPU support by adding the `--gpus=all` flag:
     <pre><code class="language-bash">docker run -it --name presenton --gpus=all -p 5000:80 -e LLM="ollama" -e OLLAMA_MODEL="llama3.2:3b" -e IMAGE_PROVIDER="pexels" -e PEXELS_API_KEY="*******" -e CAN_CHANGE_KEYS="false" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
+
+- Using an OpenAI-Compatible Image Provider
+
+  This routes all slide image requests through your OpenAI-compatible gateway (LiteLLM, Azure, vLLM, etc.) while keeping the text LLM configuration independent:
+    <pre><code class="language-bash">docker run -it --name presenton -p 5000:80 -e IMAGE_PROVIDER="openai_compatible" -e OPENAI_COMPAT_IMAGE_BASE_URL="https://proxy.example.com/v1" -e OPENAI_COMPAT_IMAGE_API_KEY="******" -e OPENAI_COMPAT_IMAGE_MODEL="gpt-image-1" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
 
 #
 
 ### ✨ Generate Presentation via API
-
-
 
 **Generate Presentation**
 
@@ -308,8 +272,6 @@ docker run -it --name presenton -p 5000:80 \
 <strong>Method:</strong> <code>POST</code><br>
 <strong>Content-Type:</strong> <code>application/json</code>
 </p>
-
-
 
 **Request Body**
 
@@ -431,8 +393,6 @@ Options: <code>pptx</code>, <code>pdf</code>
 </tbody>
 </table>
 
-
-
 **Response**
 
 <pre><code class="language-json">{
@@ -440,8 +400,6 @@ Options: <code>pptx</code>, <code>pdf</code>
   "path": "string",
   "edit_path": "string"
 }</code></pre>
-
-
 
 **Example Request**
 
@@ -454,8 +412,6 @@ Options: <code>pptx</code>, <code>pdf</code>
     "template": "general",
     "export_as": "pptx"
   }'</code></pre>
-
-
 
 **Example Response**
 
