@@ -34,6 +34,17 @@ if alembic_config.config_file_name is not None:
 target_metadata = SQLModel.metadata
 
 
+def _to_sync_database_url(database_url: str) -> str:
+    # Preserve slash counts for sqlite URLs so Windows paths stay valid.
+    if database_url.startswith("sqlite+aiosqlite:///"):
+        return "sqlite:///" + database_url[len("sqlite+aiosqlite:///") :]
+    if database_url.startswith("postgresql+asyncpg://"):
+        return "postgresql://" + database_url[len("postgresql+asyncpg://") :]
+    if database_url.startswith("mysql+aiomysql://"):
+        return "mysql://" + database_url[len("mysql+aiomysql://") :]
+    return database_url
+
+
 def _get_url() -> str:
     """
     Prefer the URL injected by migrations.py via config.set_main_option,
@@ -46,12 +57,7 @@ def _get_url() -> str:
     from utils.db_utils import get_database_url_and_connect_args
 
     url, _ = get_database_url_and_connect_args()
-    return (
-        url
-        .replace("sqlite+aiosqlite://", "sqlite:///")
-        .replace("postgresql+asyncpg://", "postgresql://")
-        .replace("mysql+aiomysql://", "mysql://")
-    )
+    return _to_sync_database_url(url)
 
 
 def run_migrations_offline() -> None:
