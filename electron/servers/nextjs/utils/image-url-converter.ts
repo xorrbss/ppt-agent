@@ -1,23 +1,45 @@
 import { getFastAPIUrl } from "./api";
 
+function normalizePathSeparators(value: string): string {
+  return value.replace(/\\/g, "/");
+}
+
+function toServedPath(rawPath: string): string {
+  const normalized = normalizePathSeparators(decodeURIComponent(rawPath));
+
+  // Never rewrite Next.js bundled/static assets.
+  // Example: /_next/static/media/*.svg should stay unchanged.
+  if (normalized.startsWith("/_next/static/")) {
+    return normalized;
+  }
+
+  // Prefer canonical FastAPI-mounted roots when present.
+  const appDataIdx = normalized.indexOf("/app_data/");
+  if (appDataIdx !== -1) {
+    return normalized.slice(appDataIdx);
+  }
+
+  const staticIdx = normalized.indexOf("/static/");
+  if (staticIdx !== -1) {
+    return normalized.slice(staticIdx);
+  }
+
+  // Windows absolute path in URL form: /C:/Users/.../images/foo.png
+  // Map anything under an images folder to FastAPI app_data mount.
+  const imagesIdx = normalized.lastIndexOf("/images/");
+  if (imagesIdx !== -1) {
+    return `/app_data${normalized.slice(imagesIdx)}`;
+  }
+
+  return normalized;
+}
+
 function toFastApiStaticUrl(fileSrc: string): string {
   try {
     const baseUrl = getFastAPIUrl();
     const url = new URL(fileSrc);
-    const path = url.pathname;
-
-    // Prefer subpath starting at /app_data or /static if present
-    const appDataIdx = path.indexOf("/app_data/");
-    const staticIdx = path.indexOf("/static/");
-
-    let relPath = path;
-    if (appDataIdx !== -1) {
-      relPath = path.slice(appDataIdx);
-    } else if (staticIdx !== -1) {
-      relPath = path.slice(staticIdx);
-    }
-
-    return `${baseUrl}${relPath}`;
+    const servedPath = toServedPath(url.pathname);
+    return `${baseUrl}${servedPath}`;
   } catch {
     // If URL parsing fails, leave as-is
     return fileSrc;
@@ -29,8 +51,9 @@ function normalizeImageSrc(src: string): string {
   if (/^https?:\/\//.test(src)) {
     try {
       const url = new URL(src);
-      if (url.pathname.startsWith("/app_data/") || url.pathname.startsWith("/static/")) {
-        return `${getFastAPIUrl()}${url.pathname}`;
+      const servedPath = toServedPath(url.pathname);
+      if (servedPath.startsWith("/app_data/") || servedPath.startsWith("/static/")) {
+        return `${getFastAPIUrl()}${servedPath}`;
       }
       return src;
     } catch {

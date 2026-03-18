@@ -8,6 +8,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { spawn } from "child_process";
 import { getPuppeteerExecutablePath } from "../utils/puppeteer-check";
 
+type BinaryFormat = "elf" | "mach-o" | "pe" | "unknown";
+
 export function setupExportHandlers() {
   ipcMain.handle("file-downloaded", async (_, filePath: string): Promise<IPCStatus> => {
     const fileName = path.basename(filePath);
@@ -38,7 +40,7 @@ export function setupExportHandlers() {
       await fs.promises.writeFile(exportTaskPath, JSON.stringify(exportTask));
 
       const exportScriptPath = path.join(baseDir, "resources", "export", "index.js");
-      const pythonModulePath = path.join(baseDir, "resources", "export", "py", "convert");
+      const pythonModulePath = await resolveConverterPath(baseDir);
       const puppeteerExecutablePath = await getPuppeteerExecutablePath();
       console.log("[Export] Spawning export task with config:", {
         exportAs,
@@ -123,6 +125,94 @@ export function setupExportHandlers() {
     }
   })
 
+}
+
+async function resolveConverterPath(currentBaseDir: string): Promise<string> {
+  const pyDir = path.join(currentBaseDir, "resources", "export", "py");
+  const extension = process.platform === "win32" ? ".exe" : "";
+  const converterCandidates = [
+    path.join(pyDir, `convert-${process.platform}-${process.arch}${extension}`),
+    path.join(pyDir, `convert-${process.platform}${extension}`),
+    ...(process.platform === "win32"
+      ? [path.join(pyDir, "convert.exe"), path.join(pyDir, "convert")]
+      : [path.join(pyDir, "convert")]),
+  ];
+
+  const converterPath = await findFirstExistingPath(converterCandidates);
+  if (!converterPath) {
+    throw new Error(
+      [
+        "No converter binary found for export.",
+        "Expected one of:",
+        ...converterCandidates.map((candidate) => `  - ${candidate}`),
+      ].join("\n")
+    );
+  }
+
+  const format = await detectBinaryFormat(converterPath);
+  if (!isBinaryFormatCompatible(format)) {
+    throw new Error(
+      [
+        `Converter binary is not valid for ${process.platform}/${process.arch}.`,
+        `Selected converter: ${converterPath}`,
+        `Detected format: ${format}`,
+        "Please bundle a platform-correct converter binary (for example convert-darwin-arm64 or convert-darwin-x64).",
+      ].join("\n")
+    );
+  }
+
+  return converterPath;
+}
+
+async function findFirstExistingPath(paths: string[]): Promise<string | null> {
+  for (const candidate of paths) {
+    try {
+      await fs.promises.access(candidate, fs.constants.F_OK);
+      return candidate;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+async function detectBinaryFormat(binaryPath: string): Promise<BinaryFormat> {
+  const fd = await fs.promises.open(binaryPath, "r");
+  try {
+    const header = Buffer.alloc(4);
+    await fd.read(header, 0, 4, 0);
+
+    if (header[0] === 0x7f && header[1] === 0x45 && header[2] === 0x4c && header[3] === 0x46) {
+      return "elf";
+    }
+
+    if (header[0] === 0x4d && header[1] === 0x5a) {
+      return "pe";
+    }
+
+    const magic = header.readUInt32BE(0);
+    if (
+      magic === 0xfeedface ||
+      magic === 0xcefaedfe ||
+      magic === 0xfeedfacf ||
+      magic === 0xcffaedfe ||
+      magic === 0xcafebabe ||
+      magic === 0xbebafeca
+    ) {
+      return "mach-o";
+    }
+
+    return "unknown";
+  } finally {
+    await fd.close();
+  }
+}
+
+function isBinaryFormatCompatible(format: BinaryFormat): boolean {
+  if (process.platform === "darwin") return format === "mach-o";
+  if (process.platform === "linux") return format === "elf";
+  if (process.platform === "win32") return format === "pe";
+  return true;
 }
 
 function resolveExportedFilePath(responseData: any): string | null {
