@@ -1,9 +1,9 @@
 {
-  "version": "0.6.0-beta",
-  "message": "• Bug fixes and performance improvements\n• New template designs\n• Improved export quality",
+  "version": "0.6.2-beta",
+  "message": "This Release Has new Export Package, Better Exports, and a lot of bug fixes. Please check the changelog for more details.",
   "downloads": {
-    "linux": "https://github.com/presenton/presenton/releases/download/electron-v0.6.0-beta/Presenton-0.6.0-beta.deb",
-    "mac": "https://github.com/presenton/presenton/releases/download/electron-v0.6.0-beta/Presenton-0.6.0-beta.dmg",
-    "windows": "https://github.com/presenton/presenton/releases/download/electron-v0.6.0-beta/Presenton-0.6.0-beta.exe"
+    "linux": "https://github.com/presenton/presenton/releases/download/electron-v0.6.2-beta/Presenton-0.6.2-beta.deb",
+    "mac": "https://github.com/presenton/presenton/releases/download/electron-v0.6.2-beta/Presenton-0.6.2-beta.dmg",
+    "windows": "https://github.com/presenton/presenton/releases/download/electron-v0.6.2-beta/Presenton-0.6.2-beta.exe"
   }
 }
