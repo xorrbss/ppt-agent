@@ -7,6 +7,12 @@ function normalizePathSeparators(value: string): string {
 function toServedPath(rawPath: string): string {
   const normalized = normalizePathSeparators(decodeURIComponent(rawPath));
 
+  // Never rewrite Next.js bundled/static assets.
+  // Example: /_next/static/media/*.svg should stay unchanged.
+  if (normalized.startsWith("/_next/static/")) {
+    return normalized;
+  }
+
   // Prefer canonical FastAPI-mounted roots when present.
   const appDataIdx = normalized.indexOf("/app_data/");
   if (appDataIdx !== -1) {
