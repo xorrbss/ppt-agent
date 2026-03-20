@@ -54,11 +54,14 @@ export function setupExportHandlers() {
         NEXT_PUBLIC_URL: process.env.NEXT_PUBLIC_URL,
         NEXT_PUBLIC_FAST_API: process.env.NEXT_PUBLIC_FAST_API,
       });
-      const exportTaskProcess = spawn("node", [exportScriptPath, exportTaskPath], {
+      // Use the current Electron binary in Node-compatible mode so export does
+      // not depend on a system-wide `node` being available in PATH.
+      const exportTaskProcess = spawn(process.execPath, [exportScriptPath, exportTaskPath], {
         stdio: ["ignore", "pipe", "pipe"],
         cwd: baseDir,
         env: {
           ...process.env,
+          ELECTRON_RUN_AS_NODE: "1",
           TEMP_DIRECTORY: tempDir,
           APP_DATA_DIRECTORY: appDataDir,
           NODE_ENV: "development",
