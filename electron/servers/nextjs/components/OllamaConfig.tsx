@@ -42,7 +42,7 @@ export default function OllamaConfig({
   const fetchOllamaModels = async () => {
     try {
       setOllamaModelsLoading(true);
-      const response = await fetch(getApiUrl('api/v1/ppt/ollama/models/supported'));
+      const response = await fetch(getApiUrl('/api/v1/ppt/ollama/models/supported'));
 
       if (response.ok) {
         const data = await response.json();

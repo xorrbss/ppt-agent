@@ -14,9 +14,8 @@ import React, { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useDispatch } from "react-redux";
 import { clearOutlines, setPresentationId } from "@/store/slices/presentationGeneration";
-import { ConfigurationSelects } from "./ConfigurationSelects";
 import { PromptInput } from "./PromptInput";
-import {  LanguageType, PresentationConfig, ToneType, VerbosityType } from "../type";
+import { LanguageType, PresentationConfig, ToneType, VerbosityType } from "../type";
 import SupportingDoc from "./SupportingDoc";
 import { Button } from "@/components/ui/button";
 import { ChevronRight } from "lucide-react";
@@ -26,6 +25,7 @@ import { OverlayLoader } from "@/components/ui/overlay-loader";
 import Wrapper from "@/components/Wrapper";
 import { setPptGenUploadState } from "@/store/slices/presentationGenUpload";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
+import { ConfigurationSelects } from "./ConfigurationSelects";
 
 // Types for loading state
 interface LoadingState {
@@ -44,7 +44,7 @@ const UploadPage = () => {
   // State management
   const [files, setFiles] = useState<File[]>([]);
   const [config, setConfig] = useState<PresentationConfig>({
-    slides: "8",
+    slides: "5",
     language: LanguageType.English,
     prompt: "",
     tone: ToneType.Default,
@@ -202,34 +202,56 @@ const UploadPage = () => {
         duration={loadingState.duration}
         extra_info={loadingState.extra_info}
       />
-      <div className="flex flex-col gap-4 md:items-center md:flex-row justify-between py-4">
-        <p></p>
-        <ConfigurationSelects
-          config={config}
-          onConfigChange={handleConfigChange}
-        />
-      </div>
+      <div className="rounded-2xl border border-slate-200/70 bg-white/80 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60" >
+        <div className="flex flex-col gap-4 md:items-center md:flex-row justify-between p-4">
+          <div >
+            <h2 className="text-lg font-unbounded tracking-tight text-slate-900 ">Configuration</h2>
+            <p className="text-sm text-slate-500 font-syne">Choose slides, tone, and language preferences.</p>
+          </div>
+          <ConfigurationSelects
+            config={config}
+            onConfigChange={handleConfigChange}
+          />
+        </div>
+        <div className="border-t border-slate-200/70" />
 
-      <div className="relative">
-        <PromptInput
-          value={config.prompt}
-          onChange={(value) => handleConfigChange("prompt", value)}
-          data-testid="prompt-input"
-        />
+        <div className="p-4 md:p-6">
+          <h3 className="text-base font-normal font-unbounded  text-slate-900 mb-2">Content</h3>
+          <div className="relative">
+            <PromptInput
+              value={config.prompt}
+              onChange={(value) => handleConfigChange("prompt", value)}
+              data-testid="prompt-input"
+            />
+          </div>
+        </div>
+        <div className="border-t border-slate-200/70" />
+        <div className="p-4 md:p-6">
+          <h3 className="text-base font-normal font-unbounded text-slate-900 mb-2">Attachments (optional)</h3>
+
+
+          <SupportingDoc
+            files={[...files]}
+            onFilesChange={setFiles}
+            data-testid="file-upload-input"
+          />
+        </div>
+        <div className="border-t border-slate-200/70" />
+
+        <div className="p-4 md:p-6">
+          <Button
+            onClick={handleGeneratePresentation}
+            className="w-full rounded-[28px] flex items-center justify-center py-5 bg-[#5141e5] text-white font-syne font-semibold text-lg hover:bg-[#5141e5]/85 focus-visible:ring-2 focus-visible:ring-[#5141e5]/40"
+            data-testid="next-button"
+          >
+            <span>Generate Presentation</span>
+            <ChevronRight className="!w-5 !h-5 ml-1.5" />
+          </Button>
+        </div>
+
+
+
       </div>
-      <SupportingDoc
-        files={[...files]}
-        onFilesChange={setFiles}
-        data-testid="file-upload-input"
-      />
-      <Button
-        onClick={handleGeneratePresentation}
-        className="w-full rounded-[32px] flex items-center justify-center py-6 bg-[#5141e5] text-white font-instrument_sans font-semibold text-xl hover:bg-[#5141e5]/80 transition-colors duration-300"
-        data-testid="next-button"
-      >
-        <span>Next</span>
-        <ChevronRight className="!w-6 !h-6" />
-      </Button>
     </Wrapper>
   );
 };

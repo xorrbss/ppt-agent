@@ -2,7 +2,7 @@
 
 import React, { useEffect } from "react";
 import FontManager from "./components/FontManager";
-import Header from "../dashboard/components/Header";
+import Header from "../(dashboard)/dashboard/components/Header";
 
 import { useCustomLayout } from "./hooks/useCustomLayout";
 import { useFontManagement } from "./hooks/useFontManagement";

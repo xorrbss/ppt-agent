@@ -176,6 +176,7 @@ import neoStandardSettings from "./neo-standard/settings.json";
 import neoModernSettings from "./neo-modern/settings.json";
 import neoSwiftSettings from "./neo-swift/settings.json";
 
+
 // Helper to create template entry
 
 
@@ -223,6 +224,7 @@ export const neoGeneralTemplates: TemplateWithData[] = [
     createTemplateEntry(TitleDescriptionMultiChartGridWithMetricsLayout, TitleDescriptionMultiChartGridWithMetricsSchema, TitleDescriptionMultiChartGridWithMetricsId, TitleDescriptionMultiChartGridWithMetricsName, TitleDescriptionMultiChartGridWithMetricsDesc, "neo-general", "TitleDescriptionMultiChartGridWithMetrics"),
     createTemplateEntry(TitleDescriptionMultiChartGridWithBulletsLayout, TitleDescriptionMultiChartGridWithBulletsSchema, TitleDescriptionMultiChartGridWithBulletsId, TitleDescriptionMultiChartGridWithBulletsName, TitleDescriptionMultiChartGridWithBulletsDesc, "neo-general", "TitleDescriptionMultiChartGridWithBullets"),
 ]
+
 export const neoStandardTemplates: TemplateWithData[] = [
     createTemplateEntry(TitleBadgeChartLayout, TitleBadgeChartSchema, TitleBadgeChartId, TitleBadgeChartName, TitleBadgeChartDesc, "neo-standard", "TitleBadgeChartLayout"),
     createTemplateEntry(TitleDescriptionBulletListStandardLayout, TitleDescriptionBulletListStandardSchema, TitleDescriptionBulletListStandardId, TitleDescriptionBulletListStandardName, TitleDescriptionBulletListStandardDesc, "neo-standard", "TitleDescriptionBulletList"),
@@ -350,6 +352,7 @@ export const allLayouts: TemplateWithData[] = [
     ...modernTemplates,
     ...standardTemplates,
     ...swiftTemplates,
+
 
 ];
 

@@ -83,7 +83,7 @@ export default function CodexConfig({
 
   const checkCurrentAuthStatus = async () => {
     try {
-      const res = await fetch(getApiUrl("api/v1/ppt/codex/auth/status"));
+      const res = await fetch(getApiUrl("/api/v1/ppt/codex/auth/status"));
       if (!res.ok) {
         setAuthStatus("unauthenticated");
         return;
@@ -102,7 +102,7 @@ export default function CodexConfig({
 
   const handleSignIn = async () => {
     try {
-      const res = await fetch(getApiUrl("api/v1/ppt/codex/auth/initiate"), {
+      const res = await fetch(getApiUrl("/api/v1/ppt/codex/auth/initiate"), {
         method: "POST",
       });
       if (!res.ok) throw new Error("Failed to initiate auth");
@@ -117,7 +117,7 @@ export default function CodexConfig({
       pollIntervalRef.current = setInterval(async () => {
         try {
           const pollRes = await fetch(
-            getApiUrl(`api/v1/ppt/codex/auth/status/${session_id}`)
+            getApiUrl(`/api/v1/ppt/codex/auth/status/${session_id}`)
           );
           if (!pollRes.ok) return;
           const pollData: StatusResponse = await pollRes.json();
@@ -151,7 +151,7 @@ export default function CodexConfig({
     if (!sessionId || !manualCode.trim()) return;
     setIsExchanging(true);
     try {
-      const res = await fetch(getApiUrl("api/v1/ppt/codex/auth/exchange"), {
+      const res = await fetch(getApiUrl("/api/v1/ppt/codex/auth/exchange"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ session_id: sessionId, code: manualCode.trim() }),
@@ -187,7 +187,7 @@ export default function CodexConfig({
   const handleSignOut = async () => {
     setIsLoggingOut(true);
     try {
-      await fetch(getApiUrl("api/v1/ppt/codex/auth/logout"), { method: "POST" });
+      await fetch(getApiUrl("/api/v1/ppt/codex/auth/logout"), { method: "POST" });
       setAuthStatus("unauthenticated");
       setAccountId(null);
       onInputChange("", "codex_model");
@@ -202,7 +202,7 @@ export default function CodexConfig({
   const handleRefreshToken = async () => {
     setIsRefreshing(true);
     try {
-      const res = await fetch(getApiUrl("api/v1/ppt/codex/auth/refresh"), {
+      const res = await fetch(getApiUrl("/api/v1/ppt/codex/auth/refresh"), {
         method: "POST",
       });
       if (!res.ok) throw new Error("Refresh failed");

@@ -6,7 +6,16 @@ const nextConfig = {
   // This Next.js app is always bundled for Electron, so we can
   // unconditionally use static export.
   output: "export",
-  ...(isDevelopment ? { allowedDevOrigins: ['127.0.0.1:*', 'localhost:*'] } : {}),
+  ...(isDevelopment
+    ? {
+        allowedDevOrigins: [
+          "http://127.0.0.1:40001",
+          "http://localhost:40001",
+          "127.0.0.1",
+          "localhost",
+        ],
+      }
+    : {}),
   
   // Disable font optimization to avoid Google Fonts download warnings during build
   optimizeFonts: false,

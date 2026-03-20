@@ -8,7 +8,6 @@ import {
 import { jsonrepair } from "jsonrepair";
 import { toast } from "sonner";
 import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
-import { getApiUrl } from "@/utils/api";
 
 export const usePresentationStreaming = (
   presentationId: string,
@@ -31,7 +30,7 @@ export const usePresentationStreaming = (
       trackEvent(MixpanelEvent.Presentation_Stream_API_Call);
 
       eventSource = new EventSource(
-        getApiUrl(`api/v1/ppt/presentation/stream/${presentationId}`)
+        `/api/v1/ppt/presentation/stream/${presentationId}`
       );
 
       eventSource.addEventListener("response", (event) => {

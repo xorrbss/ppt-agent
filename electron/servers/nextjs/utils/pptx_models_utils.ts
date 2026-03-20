@@ -200,7 +200,7 @@ function convertToAutoShapeBox(element: ElementAttributes): PptxAutoShapeBoxMode
     shadow,
     position,
     text_wrap: element.textWrap ?? true,
-    border_radius: borderRadius ? Math.round(borderRadius) : undefined,
+    border_radius: borderRadius || undefined,
     paragraphs
   };
 }

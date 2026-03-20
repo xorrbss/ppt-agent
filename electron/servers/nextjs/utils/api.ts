@@ -14,10 +14,32 @@ export function getFastAPIUrl(): string {
   return "http://127.0.0.1:8000";
 }
 
-// Utility to construct full API URL
+function isAbsoluteHttpUrl(path: string): boolean {
+  return /^https?:\/\//i.test(path);
+}
+
+function withLeadingSlash(path: string): string {
+  return path.startsWith("/") ? path : `/${path}`;
+}
+
+function isElectronRuntime(): boolean {
+  return typeof window !== "undefined" && !!(window as any).electron;
+}
+
+// Utility to construct API URL that works in both web and Electron.
 export function getApiUrl(path: string): string {
-  const baseUrl = getFastAPIUrl();
-  // Remove leading slash if present to avoid double slashes
-  const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-  return `${baseUrl}/${cleanPath}`;
+  if (isAbsoluteHttpUrl(path)) {
+    return path;
+  }
+
+  const normalizedPath = withLeadingSlash(path);
+  const isFastApiEndpoint = normalizedPath.startsWith("/api/v1/");
+
+  // In web/docker, /api/v1 is typically reverse-proxied by the web server.
+  // In Electron, Next and FastAPI run on different ports, so use FastAPI base URL.
+  if (isFastApiEndpoint && (isElectronRuntime() || !!process.env.NEXT_PUBLIC_FAST_API)) {
+    return `${getFastAPIUrl()}${normalizedPath}`;
+  }
+
+  return normalizedPath;
 }

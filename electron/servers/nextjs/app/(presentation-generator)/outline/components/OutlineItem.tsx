@@ -1,6 +1,6 @@
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { Trash2 } from "lucide-react"
+import { GripHorizontal, Trash, Trash2 } from "lucide-react"
 import { RootState } from "@/store/store"
 import { useDispatch, useSelector } from "react-redux"
 import { deleteSlideOutline, setOutlines } from "@/store/slices/presentationGeneration"
@@ -11,6 +11,7 @@ import { marked } from "marked"
 
 
 interface OutlineItemProps {
+    sortableId: string
     slideOutline: {
         content: string,
     },
@@ -21,6 +22,7 @@ interface OutlineItemProps {
 }
 
 export function OutlineItem({
+    sortableId,
     index,
     slideOutline,
     isStreaming,
@@ -45,7 +47,7 @@ export function OutlineItem({
         }
     }, [outlines.length]);
 
-    const handleSlideChange = (newOutline:any) => {
+    const handleSlideChange = (newOutline: any) => {
         if (isStreaming) return;
         const newData = outlines?.map((each, idx) => {
             if (idx === index - 1) {
@@ -69,7 +71,7 @@ export function OutlineItem({
         transform,
         transition,
         isDragging,
-    } = useSortable({ id: index })
+    } = useSortable({ id: sortableId, disabled: isStreaming })
 
     const style = {
         transform: CSS.Transform.toString(transform),
@@ -117,30 +119,34 @@ export function OutlineItem({
     }, [isStreaming, isActiveStreaming, isStableStreaming, slideOutline.content])
 
     return (
-        <div className="mb-2">
-            {/* Main Title Row */}
+        <div
+            ref={setNodeRef}
+            style={style}
+            className={`mb-4 bg-white rounded-[12px] group shadow-sm p-10 relative font-syne transition-all duration-500 hover:shadow-[0_6.6px_13.2px_0_rgba(0,0,0,0.10)] ${isDragging ? "opacity-50" : ""}`}
+        >
+
             <div
-                ref={setNodeRef}
-                style={style}
-                className={`flex items-start gap-2 md:gap-4 p-2 sm:pr-4 border border-black/10 bg-purple-100/10 rounded-[8px] ${isDragging ? "opacity-50" : ""}`}
+                className="flex items-start gap-3 md:gap-4 rounded-[8px]"
             >
-                {/* Drag Handle with Number - Make it smaller on mobile */}
+
                 <div
                     {...attributes}
                     {...listeners}
-                    className="min-w-8 sm:min-w-10 w-10 sm:w-14 h-10 sm:h-14 bg-blue-400/10 rounded-[8px] flex items-center justify-center relative cursor-grab"
+                    className=" flex items-center justify-center relative cursor-grab"
                 >
-                    <div className="grid grid-cols-2 gap-[2px]">
-                        <div className="w-[3px] h-[3px] bg-black/80 rounded-full" />
-                        <div className="w-[3px] h-[3px] bg-black/80 rounded-full" />
-                        <div className="w-[3px] h-[3px] bg-black/80 rounded-full" />
-                        <div className="w-[3px] h-[3px] bg-black/80 rounded-full" />
-                    </div>
-                    <span className="text-black/80 text-md sm:text-lg font-medium ml-1">{index}</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M12 10C12.5523 10 13 9.55228 13 9C13 8.44772 12.5523 8 12 8C11.4477 8 11 8.44772 11 9C11 9.55228 11.4477 10 12 10Z" fill="#191919" stroke="#191919" strokeWidth="0.5" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M19 10C19.5523 10 20 9.55228 20 9C20 8.44772 19.5523 8 19 8C18.4477 8 18 8.44772 18 9C18 9.55228 18.4477 10 19 10Z" fill="#191919" stroke="#191919" strokeWidth="0.5" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M5 10C5.55228 10 6 9.55228 6 9C6 8.44772 5.55228 8 5 8C4.44772 8 4 8.44772 4 9C4 9.55228 4.44772 10 5 10Z" fill="#191919" stroke="#191919" strokeWidth="0.5" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M12 16C12.5523 16 13 15.5523 13 15C13 14.4477 12.5523 14 12 14C11.4477 14 11 14.4477 11 15C11 15.5523 11.4477 16 12 16Z" fill="#191919" stroke="#191919" strokeWidth="0.5" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M19 16C19.5523 16 20 15.5523 20 15C20 14.4477 19.5523 14 19 14C18.4477 14 18 14.4477 18 15C18 15.5523 18.4477 16 19 16Z" fill="#191919" stroke="#191919" strokeWidth="0.5" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M5 16C5.55228 16 6 15.5523 6 15C6 14.4477 5.55228 14 5 14C4.44772 14 4 14.4477 4 15C4 15.5523 4.44772 16 5 16Z" fill="#191919" stroke="#191919" strokeWidth="0.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
                 </div>
 
-                {/* Main Title Input - Add onFocus handler */}
+
                 <div id={`outline-item-${index}`} className="flex flex-col basis-full gap-2">
+                    <p className="text-black w-fit text-[10px] font-medium  bg-white border border-[#EDEEEF] rounded-[80px] px-2.5">slide {index}</p>
                     {/* Editable Markdown Content */}
                     {isStreaming ? (
                         isActiveStreaming ? (
@@ -166,15 +172,15 @@ export function OutlineItem({
 
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex gap-1 sm:gap-2 items-center">
+
+                <div className="hidden group-hover:flex absolute -top-3 -right-3 gap-1 sm:gap-2 items-center">
 
                     <ToolTip content="Delete Slide">
                         <button
                             onClick={handleSlideDelete}
-                            className="p-1.5 sm:p-2 bg-gray-200/50 hover:bg-gray-200 rounded-lg transition-colors"
+                            className="p-1.5 sm:p-2 bg-white shadow-md  rounded-full transition-colors"
                         >
-                            <Trash2 className="w-4 h-4 sm:w-5 sm:h-5 text-black/70" />
+                            <Trash className="w-4 h-4  text-black/70" />
                         </button>
                     </ToolTip>
                 </div>

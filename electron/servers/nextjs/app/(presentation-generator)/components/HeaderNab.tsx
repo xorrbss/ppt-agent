@@ -18,7 +18,7 @@ const HeaderNav = () => {
       <Link
         href="/dashboard"
         prefetch={false}
-        className="flex items-center gap-2 px-3 py-2 text-white hover:bg-primary/80 rounded-md transition-colors outline-none"
+        className="flex items-center gap-2 px-3 py-2 text-[#101323]  rounded-md transition-colors outline-none"
         role="menuitem"
         onClick={() => trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/dashboard" })}
       >
@@ -31,7 +31,7 @@ const HeaderNav = () => {
         <Link
           href="/settings"
           prefetch={false}
-          className="flex items-center gap-2 px-3 py-2 text-white hover:bg-primary/80 rounded-md transition-colors outline-none"
+          className="flex items-center gap-2 px-3 py-2 text-[#101323]  rounded-md transition-colors outline-none"
           role="menuitem"
           onClick={() => trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/settings" })}
         >
