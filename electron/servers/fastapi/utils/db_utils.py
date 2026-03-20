@@ -4,6 +4,40 @@ from urllib.parse import urlsplit, urlunsplit, parse_qsl
 import ssl
 
 
+def _int_env(name: str, default: int) -> int:
+    """Read an integer from an environment variable, falling back to *default*."""
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def get_pool_kwargs() -> dict:
+    """Build SQLAlchemy engine pool keyword arguments from environment variables.
+
+    Supported variables (all optional):
+        DB_POOL_SIZE          – max persistent connections (default 5)
+        DB_MAX_OVERFLOW       – extra connections above pool_size (default 10)
+        DB_POOL_TIMEOUT       – seconds to wait for a connection (default 30)
+        DB_POOL_RECYCLE       – seconds before a connection is recycled (default 1800)
+        DB_POOL_PRE_PING      – enable connection liveness check (default true)
+
+    For SQLite the pool settings are not applicable and an empty dict is
+    returned, since SQLite uses ``StaticPool`` / ``NullPool`` by default.
+    """
+    return {
+        "pool_size": _int_env("DB_POOL_SIZE", 5),
+        "max_overflow": _int_env("DB_MAX_OVERFLOW", 10),
+        "pool_timeout": _int_env("DB_POOL_TIMEOUT", 30),
+        "pool_recycle": _int_env("DB_POOL_RECYCLE", 1800),
+        "pool_pre_ping": os.getenv("DB_POOL_PRE_PING", "true").lower()
+        not in ("false", "0", "no"),
+    }
+
+
 def _ensure_sqlite_parent_dir(database_url: str) -> None:
     if not database_url.startswith("sqlite://"):
         return

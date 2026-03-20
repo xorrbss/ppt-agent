@@ -19,13 +19,19 @@ from models.sql.slide import SlideModel
 from models.sql.presentation_layout_code import PresentationLayoutCodeModel
 from models.sql.template import TemplateModel
 from models.sql.webhook_subscription import WebhookSubscription
-from utils.db_utils import get_database_url_and_connect_args
+from utils.db_utils import get_database_url_and_connect_args, get_pool_kwargs
 from utils.get_env import get_app_data_directory_env
 
 
 database_url, connect_args = get_database_url_and_connect_args()
 
-sql_engine: AsyncEngine = create_async_engine(database_url, connect_args=connect_args)
+# Apply connection-pool settings for server-class databases (PostgreSQL, MySQL).
+# SQLite uses a file-lock model and ignores pool configuration, so we skip it.
+_pool_kwargs = get_pool_kwargs() if "sqlite" not in database_url else {}
+
+sql_engine: AsyncEngine = create_async_engine(
+    database_url, connect_args=connect_args, **_pool_kwargs
+)
 async_session_maker = async_sessionmaker(sql_engine, expire_on_commit=False)
 
 
@@ -76,3 +82,14 @@ async def create_db_and_tables():
                 tables=[OllamaPullStatus.__table__],
             )
         )
+
+
+async def dispose_engines():
+    """Dispose all engine connection pools.
+
+    Call this during application shutdown (e.g. in a FastAPI ``shutdown``
+    event or lifespan context) to release every connection back to the
+    database and prevent stale / leaked connections.
+    """
+    await sql_engine.dispose()
+    await container_db_engine.dispose()
