@@ -15,59 +15,19 @@
   <a href="https://presenton.ai/"><img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=flat" alt="Platform" /></a>
 </p>
 
-<!-- 
-[![website-shield]][website-url]
-[![download-shield]][download-url]
-[![docs-shield]][docs-url]
-[![youtube-shield]][youtube-url]
-[![discord-shield]][discord-url]
-<br>
-[![docker-shield]][docker-url]
-[![stars-shield]][stars-url]
-[![license-shield]][license-url]
-[![platform-shield]][platform-url]
-
-
-[website-shield]: https://img.shields.io/badge/Website-presenton.ai-111827?style=flat&logo=google-chrome&logoColor=white
-[website-url]: https://presenton.ai/
-
-[download-shield]: https://img.shields.io/badge/Download-Latest%20Release-6C47FF?style=flat&logo=download&logoColor=white
-[download-url]: https://presenton.ai/download
-
-[docs-shield]: https://img.shields.io/badge/Docs-docs.presenton.ai-0ea5e9?style=flat&logo=readthedocs&logoColor=white
-[docs-url]: https://docs.presenton.ai/
-
-[youtube-shield]: https://img.shields.io/badge/YouTube-PresentonAI-FF0000?style=flat&logo=youtube&logoColor=white
-[youtube-url]: https://www.youtube.com/@presentonai
-
-[discord-shield]: https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=flat&logo=discord&logoColor=white
-[discord-url]: https://discord.gg/9ZsKKxudNE
-
-[docker-shield]: https://img.shields.io/badge/Docker-ghcr.io/presenton/presenton-2496ED?style=flat&logo=docker&logoColor=white
-[docker-url]: https://ghcr.io/presenton/presenton
-
-[stars-shield]: https://img.shields.io/github/stars/presenton/presenton?style=flat
-[stars-url]: https://github.com/presenton/presenton
-
-[license-shield]: https://img.shields.io/badge/License-Apache%202.0-blue?style=flat
-[license-url]: https://github.com/presenton/presenton/blob/main/LICENSE
-
-[platform-shield]: https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=flat
-[platform-url]: https://presenton.ai/ -->
-
 # Open-Source AI Presentation Generator and API (Gamma, Beautiful AI, Decktopus Alternative)
-
 
 ### ✨ Why Presenton
 
 No SaaS lock-in · No forced subscriptions · Full control over models and data
 
 What makes Presenton different?
-- Use your **existing PPTX files as templates**
+
 - Fully **self-hosted**
 - Works with OpenAI, Gemini, Anthropic, Ollama, or custom models
 - API deployable
 - Fully open-source (Apache 2.0)
+- Use your **existing PPTX files as templates** _(coming soon)_
 
 <p align="center">
   <img src="./readme_assets/images/banner_bg.gif" alt="Presenton" />
@@ -75,23 +35,56 @@ What makes Presenton different?
 
 #
 
-### 🎛 UI Features
+### 🎛 Features
+
 <p align="center">
-  <img src="./readme_assets/images/UI-elements/features.png" alt="Presenton" />
+  <img src="./readme_assets/images/features-1.png" alt="Presenton Features" />
 </p>
 
 #
 
-### 📌 Download Presenton
+### 💻 Presenton Desktop
 
 Create AI-powered presentations using your own model provider (BYOK) or run everything locally on your own machine for full control and data privacy.
+
 <p align="center">
   <a href="https://presenton.ai/download">
-    <img src="./readme_assets/images/banner-4.jpg" alt="Cloud deployment" />
+    <img src="./readme_assets/images/banner.png" alt="Cloud deployment" />
   </a>
 </p>
 
-**Available Platforms:** [macOS](https://presenton.ai/download), [Linux](https://presenton.ai/download), [Windows](https://presenton.ai/download)
+**Available Platforms**
+
+<table>
+<tr>
+<th align="left">Platform</th>
+<th align="left">Architecture</th>
+<th align="left">Package</th>
+<th align="left">Download</th>
+</tr>
+
+<tr>
+<td><b>macOS</b></td>
+<td>Apple Silicon / Intel</td>
+<td><code>.dmg</code></td>
+<td><a href="https://presenton.ai/download">Download ↗</a></td>
+</tr>
+
+<tr>
+<td><b>Windows</b></td>
+<td>x64</td>
+<td><code>.exe</code></td>
+<td><a href="https://presenton.ai/download">Download ↗</a></td>
+</tr>
+
+<tr>
+<td><b>Linux</b></td>
+<td>x64</td>
+<td> <code>.deb</code></td>
+<td><a href="https://presenton.ai/download">Download ↗</a></td>
+</tr>
+
+</table>
 
 Presenton gives you complete control over your AI presentation workflow. Choose your models, customize your experience, and keep your data private.
 
@@ -115,6 +108,18 @@ Presenton gives you complete control over your AI presentation workflow. Choose 
 
 #
 
+### ☁️ Presenton Cloud
+
+Run Presenton directly in your browser — no installation, no setup required. Start creating presentations instantly from anywhere.
+
+<p align="center">
+  <a href="https://presenton.ai">
+    <img src="./readme_assets/images/cloud-banner.png" alt="Presenton Cloud" />
+  </a>
+</p>
+
+#
+
 ### ⚡ Running Presenton
 
   <p>
@@ -124,7 +129,7 @@ Presenton gives you complete control over your AI presentation workflow. Choose 
     experience (ideal for development or offline use).
   </p>
 
-  **Option 1: Electron (Desktop App)**
+**Option 1: Electron (Desktop App)**
 
    <p>
     Run Presenton as a native desktop application. LLM and image provider
@@ -139,52 +144,52 @@ Presenton gives you complete control over your AI presentation workflow. Choose 
     <code>electron/servers/fastapi</code>).
   </p>
 
-  - Setup (First Time)
-    <pre><code class="language-bash">cd electron
-    npm run setup:env</code></pre>
-    This installs Node dependencies, runs <code>uv sync</code> in the FastAPI
-    server, and installs Next.js dependencies.
+- Setup (First Time)
+  <pre><code class="language-bash">cd electron
+  npm run setup:env</code></pre>
 
-  - Run in Development
-    <pre><code class="language-bash">npm run dev</code></pre>
-    <p>
-    This compiles TypeScript and starts Electron. The backend and UI run locally
-    inside the desktop window.
-    </p>
+  This installs Node dependencies, runs <code>uv sync</code> in the FastAPI
+  server, and installs Next.js dependencies.
 
-  - Build Distributable (Optional)
-    To create installers for Windows, macOS, or Linux:
-    <pre><code class="language-bash">npm run build:all
-    npm run dist</code></pre>
-    <p>
-    Output files are written to <code>electron/dist</code>
-    (or as configured in your <code>electron-builder</code> settings).
-    </p>
+- Run in Development
+  <pre><code class="language-bash">npm run dev</code></pre>
+  <p>
+  This compiles TypeScript and starts Electron. The backend and UI run locally
+  inside the desktop window.
+  </p>
 
-  **Option 2: Docker**
+- Build Distributable (Optional)
+  To create installers for Windows, macOS, or Linux:
+  <pre><code class="language-bash">npm run build:all
+  npm run dist</code></pre>
+  <p>
+  Output files are written to <code>electron/dist</code>
+  (or as configured in your <code>electron-builder</code> settings).
+  </p>
 
-  - Start Presenton
-    Linux/MacOS (Bash/Zsh Shell):
-    <pre><code class="language-bash">docker run -it --name presenton -p 5000:80 -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
-    
-    Windows (PowerShell):
-    <pre><code class="language-bash">docker run -it --name presenton -p 5000:80 -v "${PWD}\app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
+**Option 2: Docker**
 
-  - Open Presenton
-    <p>
-    Open <a href="http://localhost:5000">http://localhost:5000</a> in the browser
-    of your choice to use Presenton.
-    </p>
-    
-    <blockquote>
-    <p>
-      <strong>Note:</strong> You can replace <code>5000</code> with any other port
-      number of your choice to run Presenton on a different port number.
-    </p>
-    </blockquote>
+- Start Presenton
+  Linux/MacOS (Bash/Zsh Shell):
+  <pre><code class="language-bash">docker run -it --name presenton -p 5000:80 -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
+
+  Windows (PowerShell):
+  <pre><code class="language-bash">docker run -it --name presenton -p 5000:80 -v "${PWD}\app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
+
+- Open Presenton
+  <p>
+  Open <a href="http://localhost:5000">http://localhost:5000</a> in the browser
+  of your choice to use Presenton.
+  </p>
+
+  <blockquote>
+  <p>
+    <strong>Note:</strong> You can replace <code>5000</code> with any other port
+    number of your choice to run Presenton on a different port number.
+  </p>
+  </blockquote>
 
 #
-
 
 ### ⚙️ Deployment Configurations
 
@@ -230,6 +235,7 @@ You can disable anonymous telemetry using the following environment variable:
 <br>
 
 **Docker Run Examples by Provider**
+
 - Using OpenAI
     <pre><code class="language-bash">docker run -it --name presenton -p 5000:80 -e LLM="openai" -e OPENAI_API_KEY="******" -e IMAGE_PROVIDER="dall-e-3" -e CAN_CHANGE_KEYS="false" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
 
@@ -246,17 +252,13 @@ You can disable anonymous telemetry using the following environment variable:
     <pre><code class="language-bash">docker run -it -p 5000:80 -e CAN_CHANGE_KEYS="false"  -e LLM="custom" -e CUSTOM_LLM_URL="http://*****" -e CUSTOM_LLM_API_KEY="*****" -e CUSTOM_MODEL="llama3.2:3b" -e IMAGE_PROVIDER="pexels" -e  PEXELS_API_KEY="********" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
 
 - Running Presenton with GPU Support
-    
-    To use GPU acceleration with Ollama models, you need to install and configure the NVIDIA Container Toolkit. This allows Docker containers to access your NVIDIA GPU.
-    
-    Once the NVIDIA Container Toolkit is installed and configured, you can run Presenton with GPU support by adding the `--gpus=all` flag:
+  To use GPU acceleration with Ollama models, you need to install and configure the NVIDIA Container Toolkit. This allows Docker containers to access your NVIDIA GPU.
+  Once the NVIDIA Container Toolkit is installed and configured, you can run Presenton with GPU support by adding the `--gpus=all` flag:
     <pre><code class="language-bash">docker run -it --name presenton --gpus=all -p 5000:80 -e LLM="ollama" -e OLLAMA_MODEL="llama3.2:3b" -e IMAGE_PROVIDER="pexels" -e PEXELS_API_KEY="*******" -e CAN_CHANGE_KEYS="false" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
 
 #
 
 ### ✨ Generate Presentation via API
-
-
 
 **Generate Presentation**
 
@@ -265,8 +267,6 @@ You can disable anonymous telemetry using the following environment variable:
 <strong>Method:</strong> <code>POST</code><br>
 <strong>Content-Type:</strong> <code>application/json</code>
 </p>
-
-
 
 **Request Body**
 
@@ -388,8 +388,6 @@ Options: <code>pptx</code>, <code>pdf</code>
 </tbody>
 </table>
 
-
-
 **Response**
 
 <pre><code class="language-json">{
@@ -397,8 +395,6 @@ Options: <code>pptx</code>, <code>pdf</code>
   "path": "string",
   "edit_path": "string"
 }</code></pre>
-
-
 
 **Example Request**
 
@@ -411,8 +407,6 @@ Options: <code>pptx</code>, <code>pdf</code>
     "template": "general",
     "export_as": "pptx"
   }'</code></pre>
-
-
 
 **Example Response**
 
@@ -452,6 +446,16 @@ Prepend your server’s root URL to <code>path</code> and
     </a>
   </li>
 </ul>
+
+#
+
+### 🚀 Roadmap
+
+- [x] Support for custom HTML templates by developers
+- [x] Support for accessing custom templates over API
+- [x] Implement MCP server
+- [ ] Ability for users to change system prompt
+- [x] Support external SQL database
 
 #
 
