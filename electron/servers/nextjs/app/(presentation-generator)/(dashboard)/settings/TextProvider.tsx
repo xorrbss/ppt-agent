@@ -1,4 +1,4 @@
-import ToolTip from '@/components/ToolTip';
+import CodexConfig from '@/components/CodexConfig';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { LLMConfig } from '@/types/llm_config';
 import { getApiUrl } from '@/utils/api';
 import { LLM_PROVIDERS } from '@/utils/providerConstants';
-import { Check, Loader2, Eye, EyeOff, ChevronUp, User, RefreshCw, LogOut } from 'lucide-react';
+import { Check, Loader2, Eye, EyeOff, ChevronUp } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner';
 
@@ -46,6 +46,8 @@ const TextProvider = ({
                 return 'OLLAMA_MODEL';
             case 'custom':
                 return 'CUSTOM_MODEL';
+            case 'codex':
+                return 'CODEX_MODEL';
             default:
                 return '';
         }
@@ -225,35 +227,8 @@ const TextProvider = ({
                     </p>
                 </div>
                 <div>
-                    {selectedProvider === 'codex' && false && <div className='border border-[#EDEEEF] mb-4 rounded-[8px] p-5 flex justify-between items-center'>
-                        <div className='flex items-center gap-2.5'>
-                            <User className='w-4 h-4 text-gray-500' />
-                            <div>
-                                <h4 className='text-[#19001F] text-sm font-medium'>Acc: 123-455-acghk</h4>
-                                <p className='text-xs text-[#B3B3B3]'>Signed in to ChatGPT</p>
-                            </div>
-
-                        </div>
-                        <div className='flex items-center gap-2.5'>
-                            <ToolTip content='Refresh ChatGPT account'>
-
-
-                                <button className='px-3.5 py-2.5 rounded-full bg-[#EDEEEF]'>
-
-                                    <RefreshCw className='w-4 h-4 text-black' />
-                                </button>
-                            </ToolTip>
-                            <ToolTip content='Logout from ChatGPT'>
-                                <button className='px-3.5 py-2.5 rounded-full bg-[#EDEEEF]'>
-
-                                    <LogOut className='w-4 h-4 text-black' />
-                                </button>
-                            </ToolTip>
-                        </div>
-                    </div>}
-
-                    <div className={`flex  gap-4 justify-end ${selectedProvider === 'codex' ? 'items-end' : 'items-start'}`}>
-                        <div className="relative  w-[205px] ">
+                    <div className={`flex gap-4 justify-end ${selectedProvider === 'codex' ? 'items-start' : 'items-start'}`}>
+                        <div className={`relative ${selectedProvider === 'codex' ? 'w-[240px]' : 'w-[205px]'}`}>
                             <div className="flex flex-col justify-start ">
 
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -333,7 +308,7 @@ const TextProvider = ({
 
 
                         </div>
-                        <div className="relative flex flex-col justify-end  items-end w-[205px] ">
+                        <div className={`relative flex flex-col justify-end ${selectedProvider === 'codex' ? 'items-start w-[560px] max-w-full' : 'items-end w-[205px]'}`}>
                             <div className="flex flex-col justify-start w-full ">
                                 {selectedProvider === 'ollama' ? (
                                     <>
@@ -378,9 +353,18 @@ const TextProvider = ({
                                         )}
                                     </>
                                 ) : selectedProvider === 'codex' ?
-                                    <>
-                                        <button className='px-3.5 py-2.5 bg-[#EDEEEF]  mt-auto rounded-[58px] w-full  text-xs font-medium text-[#101323]'>Sign in with ChatGPT</button>
-                                    </>
+                                    <div className='w-full mt-0 rounded-[12px] border border-[#EDEEEF] bg-[#FCFCFD] p-4'>
+                                        <p className='text-xs font-medium text-[#6B7280] mb-3'>
+                                            ChatGPT Account
+                                        </p>
+                                        <CodexConfig
+                                            codexModel={llmConfig.CODEX_MODEL || ''}
+                                            onInputChange={(value, field) => {
+                                                const normalizedField = field === 'codex_model' ? 'CODEX_MODEL' : field;
+                                                onInputChange(value, normalizedField);
+                                            }}
+                                        />
+                                    </div>
                                     : (
                                         <>
                                             <label className="block text-sm font-medium capitalize text-gray-700 mb-2">
@@ -449,7 +433,7 @@ const TextProvider = ({
 
 
                         {/* Model Selection - only show if models are available */}
-                        {modelsChecked && availableModels.length > 0 ? (
+                        {selectedProvider !== 'codex' && modelsChecked && availableModels.length > 0 ? (
                             <div className="w-[205px]">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-3">
