@@ -16,8 +16,10 @@ import {
   usePresentationNavigation,
   useAutoSave,
 } from "../hooks";
+import { useEffect } from "react";
 import { PresentationPageProps } from "../types";
 import LoadingState from "./LoadingState";
+import { setupImageUrlConverter } from "@/utils/image-url-converter";
 
 import { usePresentationUndoRedo } from "../hooks/PresentationUndoRedo";
 import PresentationHeader from "./PresentationHeader";
@@ -31,6 +33,12 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   const [selectedSlide, setSelectedSlide] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [error, setError] = useState(false);
+
+  // Ensure /app_data and /static image paths resolve through FastAPI in Electron.
+  useEffect(() => {
+    const observer = setupImageUrlConverter();
+    return () => observer?.disconnect();
+  }, []);
 
 
   const { presentationData, isStreaming } = useSelector(

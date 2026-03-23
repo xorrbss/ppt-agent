@@ -10,6 +10,7 @@ import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { AlertCircle } from "lucide-react";
 import { setPresentationData } from "@/store/slices/presentationGeneration";
 import { DashboardApi } from "../services/api/dashboard";
+import { setupImageUrlConverter } from "@/utils/image-url-converter";
 
 
 import { V1ContentRender } from "../components/V1ContentRender";
@@ -43,6 +44,13 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
       }
     }
   }, [presentationData]);
+
+  // Ensure /app_data and /static image paths resolve through FastAPI in Electron.
+  useEffect(() => {
+    const observer = setupImageUrlConverter();
+    return () => observer?.disconnect();
+  }, []);
+
   // Function to fetch the slides
   useEffect(() => {
     fetchUserSlides();
