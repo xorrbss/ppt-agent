@@ -40,8 +40,9 @@ export async function startFastApiServer(
     args,
     {
       cwd: directory,
-      stdio: ["inherit", "pipe", "pipe"],
+      stdio: ["ignore", "pipe", "pipe"],
       env: { ...process.env, ...env },
+      windowsHide: process.platform === "win32" && !isDev,
     }
   );
   fastApiProcess.stdout.on("data", (data: any) => {
