@@ -3,12 +3,11 @@ import React, { useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Palette } from 'lucide-react';
 
-import { useDispatch, useSelector } from 'react-redux';
+import { useDispatch } from 'react-redux';
 import { updateTheme } from '@/store/slices/presentationGeneration';
 import { useRouter } from 'next/navigation';
 import { useFontLoader } from '../../hooks/useFontLoad';
-import { RootState } from '@/store/store';
-const ThemeSelector = ({ presentation_id, current_theme, themes: allThemes }: { presentation_id: string, current_theme: any, themes: any[] }) => {
+const ThemeSelector = ({ current_theme, themes: allThemes }: { current_theme: any, themes: any[] }) => {
     const [currentTheme, setCurrentTheme] = useState<any>(current_theme)
     const dispatch = useDispatch()
     const [isOpen, setIsOpen] = useState(false)

@@ -18,3 +18,4 @@ class PresentationWithSlides(BaseModel):
     tone: Optional[str] = None
     verbosity: Optional[str] = None
     slides: List[SlideModel]
+    theme: Optional[dict] = None
