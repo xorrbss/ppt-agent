@@ -17,6 +17,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { handleSaveLLMConfig } from '@/utils/storeHelpers';
 import { checkIfSelectedOllamaModelIsPulled, pullOllamaModel } from '@/utils/providerUtils';
 import { getApiUrl } from '@/utils/api';
+import CodexConfig from '../CodexConfig';
 
 const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep: (step: number) => void }) => {
     const pathname = usePathname();
@@ -467,6 +468,20 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                         </>
                                     )}
                                 </>
+                            ) : llmConfig.LLM === 'codex' ? (
+                                <div className='w-[299px]'>
+
+                                    <CodexConfig
+                                        codexModel={llmConfig.CODEX_MODEL || ''}
+                                        onInputChange={(value, field) => {
+                                            const normalizedField = field === 'codex_model' ? 'CODEX_MODEL' : field;
+                                            setLlmConfig(prev => ({
+                                                ...prev,
+                                                [normalizedField]: value
+                                            }));
+                                        }}
+                                    />
+                                </div>
                             ) : (
                                 <>
                                     <label className="block text-sm font-medium capitalize text-gray-700 mb-2">
@@ -510,7 +525,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                         </div>
 
 
-                        {llmConfig.LLM !== 'ollama' && (!modelsChecked || (modelsChecked && availableModels.length === 0)) && (
+                        {llmConfig.LLM !== 'ollama' && llmConfig.LLM !== 'codex' && (!modelsChecked || (modelsChecked && availableModels.length === 0)) && (
 
                             <button
                                 onClick={fetchAvailableModels}
@@ -543,7 +558,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                     <p className='text-sm font-medium text-gray-700 mb-2 w-full'></p>
 
                     {/* Model Selection - only show if models are available */}
-                    {modelsChecked && availableModels.length > 0 && (
+                    {llmConfig.LLM !== 'codex' && modelsChecked && availableModels.length > 0 && (
                         <div className="w-full">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">

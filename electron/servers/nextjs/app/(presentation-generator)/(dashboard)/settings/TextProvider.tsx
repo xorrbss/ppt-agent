@@ -227,8 +227,8 @@ const TextProvider = ({
                     </p>
                 </div>
                 <div>
-                    <div className={`flex gap-4 justify-end ${selectedProvider === 'codex' ? 'items-start' : 'items-start'}`}>
-                        <div className={`relative ${selectedProvider === 'codex' ? 'w-[240px]' : 'w-[205px]'}`}>
+                    <div className={`flex gap-4 justify-end ${selectedProvider === 'codex' ? 'items-end' : 'items-start'}`}>
+                        <div className={`relative ${selectedProvider === 'codex' ? 'w-[240px]' : 'w-[222px]'}`}>
                             <div className="flex flex-col justify-start ">
 
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -243,7 +243,7 @@ const TextProvider = ({
                                             variant="outline"
                                             role="combobox"
                                             aria-expanded={openProviderSelect}
-                                            className="w-[205px] h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
+                                            className="w-[222px] h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
                                         >
                                             <div className="flex gap-3 items-center">
                                                 <span className="text-sm font-medium text-gray-900">
@@ -308,7 +308,7 @@ const TextProvider = ({
 
 
                         </div>
-                        <div className={`relative flex flex-col justify-end ${selectedProvider === 'codex' ? 'items-start w-[560px] max-w-full' : 'items-end w-[205px]'}`}>
+                        <div className={`relative flex flex-col justify-end ${selectedProvider === 'codex' ? 'items-end w-[262px] max-w-full' : 'items-end w-[222px]'}`}>
                             <div className="flex flex-col justify-start w-full ">
                                 {selectedProvider === 'ollama' ? (
                                     <>
@@ -353,10 +353,8 @@ const TextProvider = ({
                                         )}
                                     </>
                                 ) : selectedProvider === 'codex' ?
-                                    <div className='w-full mt-0 rounded-[12px] border border-[#EDEEEF] bg-[#FCFCFD] p-4'>
-                                        <p className='text-xs font-medium text-[#6B7280] mb-3'>
-                                            ChatGPT Account
-                                        </p>
+                                    <div className='w-full mt-0 rounded-[12px]  '>
+
                                         <CodexConfig
                                             codexModel={llmConfig.CODEX_MODEL || ''}
                                             onInputChange={(value, field) => {
@@ -434,7 +432,7 @@ const TextProvider = ({
 
                         {/* Model Selection - only show if models are available */}
                         {selectedProvider !== 'codex' && modelsChecked && availableModels.length > 0 ? (
-                            <div className="w-[205px]">
+                            <div className="w-[222px]">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-3">
                                         {selectedProvider === 'ollama' ? 'Choose a supported model' : `Select ${modelLabel} Model`}
@@ -533,7 +531,7 @@ const TextProvider = ({
                 </div>
                 <div className="flex items-center gap-4">
 
-                    <div className="w-[205px]">
+                    <div className="w-[222px]">
                         <div className="flex items-center  mb-4 gap-2.5 ">
                             <Switch
                                 checked={!!llmConfig.WEB_GROUNDING}
