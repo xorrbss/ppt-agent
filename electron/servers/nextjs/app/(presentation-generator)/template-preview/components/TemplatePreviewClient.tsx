@@ -1,43 +1,36 @@
 "use client";
 import React, { useEffect } from "react";
-import { useParams, usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Home, Loader2, Trash2 } from "lucide-react";
 
 import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
-import TemplateService from "../../../services/api/template";
-import Header from "../../../dashboard/components/Header";
+import TemplateService from "../../services/api/template";
+import Header from "../../(dashboard)/dashboard/components/Header";
 import { toast } from "sonner";
 import { CustomTemplateLayout, useCustomTemplateDetails } from "@/app/hooks/useCustomTemplates";
 import { templates as templateGroups, getTemplatesByTemplateName } from "@/app/presentation-templates";
 
 const GroupLayoutPreview = () => {
-  const params = useParams();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
 
-  const templateParams = params.slug as string;
+  const templateParams = searchParams.get("slug") || "";
 
-  // Check if this is a custom template
   const isCustom = templateParams.startsWith("custom-");
   const customTemplateId = isCustom ? templateParams.split("custom-")[1] : null;
 
-
-  // Fetch static templates if not custom
   const staticTemplates = !isCustom ? getTemplatesByTemplateName(templateParams) : [];
-
   const staticGroup = !isCustom ? templateGroups.find((g: { id: string }) => g.id === templateParams) : null;
 
-  // Fetch custom template details if custom
   const {
     template: customTemplate,
     loading: customLoading,
     error: customError,
     fonts: customFonts,
   } = useCustomTemplateDetails({ id: templateParams?.split("custom-")[1] || "", name: "", description: "" });
-
-
 
   useEffect(() => {
     const existingScript = document.querySelector('script[src*="tailwindcss.com"]');
@@ -60,15 +53,13 @@ const GroupLayoutPreview = () => {
     const success = await TemplateService.deleteCustomTemplate(customTemplateId);
     if (success.success) {
       toast.success("Template deleted successfully");
-      router.push("/template-preview");
+      router.push("/templates");
     } else {
       toast.error("Failed to delete template");
     }
   };
 
-
-  // Loading state for custom templates
-  if (isCustom && (customLoading)) {
+  if (isCustom && customLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />
@@ -80,7 +71,6 @@ const GroupLayoutPreview = () => {
     );
   }
 
-  // Error state
   if (isCustom && customError) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -88,7 +78,7 @@ const GroupLayoutPreview = () => {
         <div className="flex flex-col items-center justify-center py-24">
           <h2 className="text-2xl font-bold text-red-600 mb-4">Error loading template</h2>
           <p className="text-gray-600 mb-4">{customError}</p>
-          <Button onClick={() => router.push("/template-preview")}>
+          <Button onClick={() => router.push("/templates")}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Templates
           </Button>
@@ -97,10 +87,9 @@ const GroupLayoutPreview = () => {
     );
   }
 
-  // Empty state
   if (
     (!isCustom && (!staticGroup || staticTemplates.length === 0)) ||
-    (isCustom && (!customTemplate))
+    (isCustom && !customTemplate)
   ) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -109,7 +98,7 @@ const GroupLayoutPreview = () => {
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
             Template not found
           </h2>
-          <Button onClick={() => router.push("/template-preview")}>
+          <Button onClick={() => router.push("/templates")}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Templates
           </Button>
@@ -118,7 +107,6 @@ const GroupLayoutPreview = () => {
     );
   }
 
-  // Determine what to render
   const templateName = isCustom ? customTemplate?.template.name || "Custom Template" : staticGroup?.name || "";
   const templateDescription = isCustom
     ? customTemplate?.template.description || ""
@@ -127,13 +115,10 @@ const GroupLayoutPreview = () => {
     ? customTemplate?.layouts.length || 0
     : staticTemplates.length;
 
-  console.log('compileLayout', customTemplate)
-
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
 
-      {/* Header */}
       <header className="bg-white shadow-sm border-b sticky top-0 z-30">
         <div className=" mx-auto px-6 py-6">
           <div className="flex items-center justify-between mb-4 max-w-[1440px] mx-auto">
@@ -155,7 +140,7 @@ const GroupLayoutPreview = () => {
                 size="sm"
                 onClick={() => {
                   trackEvent(MixpanelEvent.TemplatePreview_All_Groups_Button_Clicked, { pathname });
-                  router.push("/template-preview");
+                  router.push("/templates");
                 }}
                 className="flex items-center gap-2"
               >
@@ -166,7 +151,6 @@ const GroupLayoutPreview = () => {
 
             {isCustom && (
               <div className="flex items-center gap-4">
-
                 <Button
                   variant="outline"
                   size="sm"
@@ -199,12 +183,9 @@ const GroupLayoutPreview = () => {
             </p>
           </div>
         </div>
-
       </header>
 
-      {/* Layout Grid - Wrapped in SchemaHighlightProvider for custom templates */}
       <main className="mx-auto px-2 py-8" id="presentation-page">
-        {/* Static Templates */}
         {!isCustom && (
           <div className="space-y-12 w-[1440px] h-[720px] aspect-video mx-auto">
             {staticTemplates.map((template: any, index: number) => {
@@ -251,12 +232,8 @@ const GroupLayoutPreview = () => {
           </div>
         )}
 
-        {/* Custom Templates - with page-level schema editor */}
         {isCustom && (
-
-          <div className="flex flex-col items-center justify-center w-full gap-10  aspect-video mx-auto">
-            {/* Slides List */}
-
+          <div className="flex flex-col items-center justify-center w-full gap-10 aspect-video mx-auto">
             {customTemplate && customTemplate.layouts.map((layout: CustomTemplateLayout, index: number) => {
               const LayoutComponent = layout.component;
               return (
@@ -280,7 +257,6 @@ const GroupLayoutPreview = () => {
                       <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded text-sm font-mono">
                         {templateParams}:{layout.layoutId}
                       </span>
-
                     </div>
                   </div>
 
@@ -295,8 +271,6 @@ const GroupLayoutPreview = () => {
                 </Card>
               );
             })}
-
-
           </div>
         )}
       </main>

@@ -20,9 +20,9 @@ export const CustomTemplateCard = React.memo(function CustomTemplateCard({ templ
     const { previewLayouts, loading, totalLayouts } = useCustomTemplatePreview(`${template.id}`);
     const handleOpen = useCallback(() => {
         if (template.id.startsWith('custom-')) {
-            router.push(`/template-preview/${template.id}`)
+            router.push(`/template-preview?slug=${template.id}`)
         } else {
-            router.push(`/template-preview/custom-${template.id}`)
+            router.push(`/template-preview?slug=custom-${template.id}`)
         }
     }
         , [router, template.id]);
@@ -46,7 +46,7 @@ export const CustomTemplateCard = React.memo(function CustomTemplateCard({ templ
                         [...Array(Math.min(4, template.layoutCount))].map((_, index) => (
                             <div
                                 key={`${template.id}-loading-${index}`}
-                                className="relative bg-gradient-to-br from-purple-50 to-blue-50 border border-gray-200 overflow-hidden aspect-video rounded flex items-center justify-center"
+                                className="relative bg-linear-to-br from-purple-50 to-blue-50 border border-gray-200 overflow-hidden aspect-video rounded flex items-center justify-center"
                             >
                                 <Loader2 className="w-4 h-4 text-purple-300 animate-spin" />
                             </div>
@@ -172,7 +172,7 @@ const LayoutPreview = () => {
         }
     }, []);
 
-    const handleOpenPreview = useCallback((id: string) => router.push(`/template-preview/${id}`), [router]);
+    const handleOpenPreview = useCallback((id: string) => router.push(`/template-preview?slug=${id}`), [router]);
 
 
 
@@ -193,7 +193,7 @@ const LayoutPreview = () => {
     return (
         <div className="min-h-screen  relative font-syne">
             <div
-                className='fixed z-0 bottom-[-16.5rem] left-0 w-full h-full'
+                className='fixed z-0 -bottom-[16.5rem] left-0 w-full h-full'
                 style={{
                     height: "341px",
                     borderRadius: '1440px',
