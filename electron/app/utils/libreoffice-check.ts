@@ -286,7 +286,7 @@ export async function isLibreOfficeInstalled(): Promise<LibreOfficeCheckResult> 
         const quoted = `"${candidate}"`;
         const { stdout } = await execAsync(`${quoted} --version`, {
           timeout: 8_000,
-          windowsHide: process.platform === "win32",
+          windowsHide: (process.platform as string) === "win32",
         });
         return { installed: true, version: stdout.trim(), path: candidate };
       } catch {
@@ -320,7 +320,7 @@ export async function isLibreOfficeInstalled(): Promise<LibreOfficeCheckResult> 
   try {
     const { stdout } = await execAsync("soffice --version", {
       timeout: 8_000,
-      windowsHide: process.platform === "win32",
+      windowsHide: (process.platform as string) === "win32",
     });
     // Found via PATH – record the bare command name as the path so callers
     // can pass it directly to subprocess invocations.
