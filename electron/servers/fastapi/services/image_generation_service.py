@@ -5,6 +5,7 @@ import os
 import aiohttp
 from fastapi import HTTPException
 from google import genai
+from google.genai import types
 from openai import NOT_GIVEN, AsyncOpenAI
 from models.image_prompt import ImagePrompt
 from models.sql.image_asset import ImageAsset
@@ -149,15 +150,39 @@ class ImageGenerationService:
         response = await asyncio.to_thread(
             client.models.generate_content,
             model=model,
-            contents=[prompt],
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_modalities=["IMAGE"],
+            ),
         )
 
+        # Latest SDK docs expose images in response.parts.
+        response_parts = getattr(response, "parts", None)
+        if not response_parts and getattr(response, "candidates", None):
+            first_candidate = response.candidates[0] if response.candidates else None
+            content = getattr(first_candidate, "content", None) if first_candidate else None
+            response_parts = getattr(content, "parts", None) if content else None
+
         image_path = None
-        for part in response.candidates[0].content.parts:
+        for part in response_parts or []:
             if part.inline_data is not None:
-                image = part.as_image()
-                image_path = os.path.join(output_directory, f"{uuid.uuid4()}.jpg")
-                image.save(image_path)
+                mime_type = getattr(part.inline_data, "mime_type", "") or ""
+                ext = mime_type.split("/")[-1] if mime_type.startswith("image/") else "png"
+                image_path = os.path.join(output_directory, f"{uuid.uuid4()}.{ext}")
+                if hasattr(part, "as_image"):
+                    part.as_image().save(image_path)
+                else:
+                    # Backward-compatible fallback if helper method is unavailable.
+                    image_data = getattr(part.inline_data, "data", None)
+                    if image_data is None:
+                        continue
+                    image_bytes = (
+                        base64.b64decode(image_data)
+                        if isinstance(image_data, str)
+                        else image_data
+                    )
+                    with open(image_path, "wb") as image_file:
+                        image_file.write(image_bytes)
 
         if not image_path:
             raise HTTPException(
@@ -169,9 +194,9 @@ class ImageGenerationService:
     async def generate_image_gemini_flash(
         self, prompt: str, output_directory: str
     ) -> str:
-        """Generate image using Gemini Flash (gemini-2.5-flash-image-preview)."""
+        """Generate image using Gemini Flash (gemini-2.5-flash-image)."""
         return await self._generate_image_google(
-            prompt, output_directory, "gemini-2.5-flash-image-preview"
+            prompt, output_directory, "gemini-2.5-flash-image"
         )
 
     async def generate_image_nanobanana_pro(
