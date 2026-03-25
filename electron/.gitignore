@@ -22,3 +22,5 @@ resources/fastapi
 resources/nextjs
 dist
 servers/fastapi/fastembed_cache/
+electron/.cache/
+electron/.cache/export-runtime/

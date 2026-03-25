@@ -11,12 +11,16 @@ export const useOutlineManagement = (outlines: { content: string }[] | null) => 
 
     if (!active || !over || !outlines) return;
 
-    if (active.id !== over.id) {
-      const oldIndex = outlines.findIndex((item) => item.content === active.id);
-      const newIndex = outlines.findIndex((item) => item.content === over.id);
-      const reorderedArray = arrayMove(outlines, oldIndex, newIndex);
-      dispatch(setOutlines(reorderedArray));
-    }
+    if (active.id === over.id) return;
+
+    const oldIndex = Number(String(active.id).replace("slide-", ""));
+    const newIndex = Number(String(over.id).replace("slide-", ""));
+
+    if (Number.isNaN(oldIndex) || Number.isNaN(newIndex)) return;
+    if (oldIndex < 0 || newIndex < 0 || oldIndex >= outlines.length || newIndex >= outlines.length) return;
+
+    const reorderedArray = arrayMove(outlines, oldIndex, newIndex);
+    dispatch(setOutlines(reorderedArray));
   }, [outlines, dispatch]);
 
   const handleAddSlide = useCallback(() => {

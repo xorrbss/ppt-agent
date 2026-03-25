@@ -39,6 +39,10 @@ class FontListResponse(BaseModel):
     message: Optional[str] = None
 
 
+class UploadedFontsResponse(BaseModel):
+    fonts: List[dict]
+
+
 def get_fonts_directory() -> str:
     """Get the fonts directory path, create if it doesn't exist"""
     app_data_dir = get_app_data_directory_env() or "/tmp/presenton"
@@ -241,6 +245,45 @@ async def list_fonts():
         raise HTTPException(
             status_code=500,
             detail=f"Error listing fonts: {str(e)}"
+        )
+
+
+@FONTS_ROUTER.get("/uploaded", response_model=UploadedFontsResponse)
+async def get_uploaded_fonts():
+    """
+    Compatibility endpoint used by frontend theme flow.
+    Returns uploaded fonts as a compact list with id/name/url fields.
+    """
+    try:
+        fonts_dir = get_fonts_directory()
+        fonts = []
+
+        if os.path.exists(fonts_dir):
+            for filename in os.listdir(fonts_dir):
+                file_path = os.path.join(fonts_dir, filename)
+                if not os.path.isfile(file_path):
+                    continue
+
+                file_ext = os.path.splitext(filename)[1].lower()
+                if file_ext not in SUPPORTED_FONT_EXTENSIONS:
+                    continue
+
+                font_name = extract_font_name_from_file(file_path)
+                fonts.append(
+                    {
+                        "id": filename,
+                        "name": font_name,
+                        "url": f"/app_data/fonts/{filename}",
+                    }
+                )
+
+        return UploadedFontsResponse(fonts=fonts)
+
+    except Exception as e:
+        print(f"Error getting uploaded fonts: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error getting uploaded fonts: {str(e)}"
         )
 
 

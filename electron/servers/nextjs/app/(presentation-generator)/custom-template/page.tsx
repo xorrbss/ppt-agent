@@ -2,7 +2,7 @@
 
 import React, { useEffect } from "react";
 import FontManager from "./components/FontManager";
-import Header from "../dashboard/components/Header";
+import Header from "../(dashboard)/dashboard/components/Header";
 
 import { useCustomLayout } from "./hooks/useCustomLayout";
 import { useFontManagement } from "./hooks/useFontManagement";
@@ -47,7 +47,7 @@ const CustomTemplatePage = () => {
     trackEvent(MixpanelEvent.CustomTemplate_Save_Templates_API_Call);
     const id = await saveLayout(layoutName, description);
     if (id) {
-      router.push(`/template-preview/custom-${id}`);
+      router.push(`/template-preview?slug=custom-${id}`);
     }
     return id;
   };
@@ -94,7 +94,7 @@ const CustomTemplatePage = () => {
 
   }
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="min-h-screen bg-linear-to-br from-slate-50 to-slate-100">
       <Header />
       <div className="max-w-[1440px] aspect-video mx-auto px-6">
         {/* Header */}

@@ -28,7 +28,7 @@ export const useSlideProcessing = (
       );
 
       try {
-        const htmlResponse = await fetch(getApiUrl("api/v1/ppt/slide-to-html/"), {
+        const htmlResponse = await fetch(getApiUrl("/api/v1/ppt/slide-to-html/"), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -134,7 +134,7 @@ export const useSlideProcessing = (
       let slidesResponseData: any = null;
       if (isPdf) {
         formData.append("pdf_file", selectedFile);
-        const pdfResponse = await fetch(getApiUrl("api/v1/ppt/pdf-slides/process"), {
+        const pdfResponse = await fetch(getApiUrl("/api/v1/ppt/pdf-slides/process"), {
           method: "POST",
           body: formData,
         });
@@ -144,7 +144,7 @@ export const useSlideProcessing = (
         );
       } else if (isPptx) {
         formData.append("pptx_file", selectedFile);
-        const pptxResponse = await fetch(getApiUrl("api/v1/ppt/pptx-slides/process"), {
+        const pptxResponse = await fetch(getApiUrl("/api/v1/ppt/pptx-slides/process"), {
           method: "POST",
           body: formData,
         });

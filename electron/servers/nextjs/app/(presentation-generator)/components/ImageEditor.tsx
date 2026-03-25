@@ -357,7 +357,9 @@ const ImageEditor = ({
                       <div className="grid grid-cols-2 gap-4  ">
                         {previousGeneratedImages.map((image) => (
                           <div
-                            onClick={() => handleImageChange(image.file_url || image.path)}
+                            onClick={() =>
+                              handleImageChange(image.file_url || image.path)
+                            }
                             key={image.id}
                             className="aspect-[4/3] w-full overflow-hidden rounded-lg border cursor-pointer hover:border-blue-500 transition-colors"
                           >
@@ -483,7 +485,7 @@ const ImageEditor = ({
                                 handleDeleteImage(image.id)
                               }}/>
                               <img
-                                src={image.file_url || image.path}
+                              src={image.file_url || image.path}
                                 alt="Uploaded preview"
                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                               />

@@ -36,9 +36,9 @@ const Header = () => {
               <span className="text-sm font-medium font-inter">Create Template</span>
             </Link>
             <Link
-              href="/template-preview"
+              href="/templates"
               prefetch={false}
-              onClick={() => trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/template-preview" })}
+              onClick={() => trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/templates" })}
               className="flex items-center gap-2 px-3 py-2 text-white hover:bg-primary/80 rounded-md transition-colors outline-none"
               role="menuitem"
             >

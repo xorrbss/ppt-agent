@@ -40,8 +40,9 @@ export async function startFastApiServer(
     args,
     {
       cwd: directory,
-      stdio: ["inherit", "pipe", "pipe"],
+      stdio: ["ignore", "pipe", "pipe"],
       env: { ...process.env, ...env },
+      windowsHide: process.platform === "win32" && !isDev,
     }
   );
   fastApiProcess.stdout.on("data", (data: any) => {
@@ -70,13 +71,12 @@ export async function startNextJsServer(
   let nextjsProcess;
 
   if (isDev) {
-    // Start NextJS development server
     nextjsProcess = spawn(
       "npm",
       ["run", "dev", "--", "-p", port.toString()],
       {
         cwd: directory,
-        stdio: ["inherit", "pipe", "pipe"],
+        stdio: ["ignore", "pipe", "pipe"],
         env: { ...process.env, ...env },
       }
     );
@@ -95,6 +95,13 @@ export async function startNextJsServer(
     nextjsProcess.stderr.on("data", (data: any) => {
       safeNextLog(data);
       console.error(`NextJS: ${data}`);
+    });
+    nextjsProcess.on("error", (err: Error) => {
+      safeNextLog(`Spawn error: ${err.message}\n`);
+      console.error(`NextJS spawn error: ${err.message}`);
+    });
+    nextjsProcess.on("exit", (code: number | null, signal: string | null) => {
+      console.error(`NextJS process exited unexpectedly: code=${code}, signal=${signal}`);
     });
   } else {
     // Start NextJS build server
@@ -124,19 +131,25 @@ function startNextjsBuildServer(directory: string, port: number): Promise<http.S
 }
 
 
-async function waitForServer(url: string, timeout = 30000): Promise<void> {
+async function waitForServer(url: string, timeout = 120000): Promise<void> {
   const startTime = Date.now();
 
   while (Date.now() - startTime < timeout) {
     try {
       await new Promise<void>((resolve, reject) => {
-        http.get(url, (res) => {
-          if (res.statusCode === 200 || res.statusCode === 304) {
+        const req = http.get(url, (res) => {
+          res.resume();
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 500) {
             resolve();
           } else {
             reject(new Error(`Unexpected status code: ${res.statusCode}`));
           }
-        }).on('error', reject);
+        });
+        req.on('error', reject);
+        req.setTimeout(5000, () => {
+          req.destroy();
+          reject(new Error('Request timed out'));
+        });
       });
       return;
     } catch (error) {

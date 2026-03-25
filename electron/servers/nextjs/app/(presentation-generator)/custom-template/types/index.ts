@@ -21,8 +21,6 @@ export interface ProcessedSlide extends SlideData {
   error?: string;
   modified?: boolean; 
   convertingToReact?: boolean; // indicates HTML-to-React conversion in progress
-  react?: string; // React component code
-  layout_name?: string; // Layout name
 }
 
 export interface FontData {

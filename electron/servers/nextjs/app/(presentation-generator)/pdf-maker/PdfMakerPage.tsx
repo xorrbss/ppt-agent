@@ -14,6 +14,8 @@ import { setupImageUrlConverter } from "@/utils/image-url-converter";
 
 
 import { V1ContentRender } from "../components/V1ContentRender";
+import { useFontLoader } from "../hooks/useFontLoad";
+import { Theme } from "../services/api/types";
 
 
 
@@ -42,13 +44,13 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
       }
     }
   }, [presentationData]);
-  
-  // Setup image URL converter for Docker/browser compatibility
+
+  // Ensure /app_data and /static image paths resolve through FastAPI in Electron.
   useEffect(() => {
     const observer = setupImageUrlConverter();
     return () => observer?.disconnect();
   }, []);
-  
+
   // Function to fetch the slides
   useEffect(() => {
     fetchUserSlides();
@@ -60,6 +62,9 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
       const data = await DashboardApi.getPresentation(presentation_id);
       dispatch(setPresentationData(data));
       setContentLoading(false);
+      if (data?.theme) {
+        applyTheme(data.theme);
+      }
     } catch (error) {
       setError(true);
       toast.error("Failed to load presentation");
@@ -67,6 +72,43 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
       setContentLoading(false);
     }
   };
+
+  const applyTheme = async (theme: Theme) => {
+    const element = document.getElementById('presentation-slides-wrapper')
+    if (!element) return;
+    if (!theme || !theme.data) { return; }
+    if (!theme.data.colors['graph_0']) { return; }
+    const cssVariables = {
+      '--primary-color': theme.data.colors['primary'],
+      '--background-color': theme.data.colors['background'],
+      '--card-color': theme.data.colors['card'],
+      '--stroke': theme.data.colors['stroke'],
+      '--primary-text': theme.data.colors['primary_text'],
+      '--background-text': theme.data.colors['background_text'],
+      '--graph-0': theme.data.colors['graph_0'],
+      '--graph-1': theme.data.colors['graph_1'],
+      '--graph-2': theme.data.colors['graph_2'],
+      '--graph-3': theme.data.colors['graph_3'],
+      '--graph-4': theme.data.colors['graph_4'],
+      '--graph-5': theme.data.colors['graph_5'],
+      '--graph-6': theme.data.colors['graph_6'],
+      '--graph-7': theme.data.colors['graph_7'],
+      '--graph-8': theme.data.colors['graph_8'],
+      '--graph-9': theme.data.colors['graph_9'],
+    }
+
+    Object.entries(cssVariables).forEach(([key, value]) => {
+      element.style.setProperty(key, value)
+    })
+    useFontLoader({ [theme.data.fonts.textFont.name]: theme.data.fonts.textFont.url })
+
+    // Apply fonts to preview container
+    element.style.setProperty('font-family', `"${theme.data.fonts.textFont.name}"`)
+    element.style.setProperty('--heading-font-family', `"${theme.data.fonts.textFont.name}"`)
+    element.style.setProperty('--body-font-family', `"${theme.data.fonts.textFont.name}"`)
+    // Update the Presentation content with theme
+  }
+
 
   // Regular view
   return (

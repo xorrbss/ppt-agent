@@ -30,6 +30,10 @@ ipcMain.handle("startup:get-status", () => startupStatus);
 
 app.commandLine.appendSwitch('gtk-version', '3');
 
+// Work around Chromium/Electron GPU compositor issues that can cause
+// startup white screens on some Linux/driver combinations.
+app.disableHardwareAcceleration();
+
 // Mitigate "Unable to move the cache: Access is denied" on Windows (Chromium disk cache).
 // Use explicit cache paths and remove stale old_* dirs that cause move failures.
 if (process.platform === "win32") {

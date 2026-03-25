@@ -16,6 +16,8 @@ from api.v1.ppt.endpoints.outlines import OUTLINES_ROUTER
 from api.v1.ppt.endpoints.slide import SLIDE_ROUTER
 from api.v1.ppt.endpoints.codex_auth import CODEX_AUTH_ROUTER
 from api.v1.ppt.endpoints.pptx_slides import PPTX_FONTS_ROUTER
+from api.v1.ppt.endpoints.theme import THEMES_ROUTER
+from api.v1.ppt.endpoints.theme_generate import THEME_ROUTER
 
 
 API_V1_PPT_ROUTER = APIRouter(prefix="/api/v1/ppt")
@@ -32,6 +34,8 @@ API_V1_PPT_ROUTER.include_router(HTML_EDIT_ROUTER)
 API_V1_PPT_ROUTER.include_router(LAYOUT_MANAGEMENT_ROUTER)
 API_V1_PPT_ROUTER.include_router(IMAGES_ROUTER)
 API_V1_PPT_ROUTER.include_router(ICONS_ROUTER)
+API_V1_PPT_ROUTER.include_router(THEMES_ROUTER)
+API_V1_PPT_ROUTER.include_router(THEME_ROUTER)
 API_V1_PPT_ROUTER.include_router(OLLAMA_ROUTER)
 API_V1_PPT_ROUTER.include_router(PDF_SLIDES_ROUTER)
 API_V1_PPT_ROUTER.include_router(OPENAI_ROUTER)

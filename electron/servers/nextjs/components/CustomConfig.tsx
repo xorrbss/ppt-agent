@@ -61,7 +61,7 @@ export default function CustomConfig({
 
     try {
       setCustomModelsLoading(true);
-      const response = await fetch(getApiUrl("api/v1/ppt/openai/models/available"), {
+      const response = await fetch(getApiUrl("/api/v1/ppt/openai/models/available"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -8,8 +8,8 @@ const EmptyStateView: React.FC = () => {
     const router = useRouter();
 
     return (
-        <Wrapper>
-            <div className="max-w-[800px] h-[calc(100vh-72px)] flex justify-center items-center mx-auto px-4 sm:px-6 pb-6">
+        <Wrapper className="bg-white">
+            <div className="max-w-[800px] h-[calc(100vh-72px)] font-syne flex justify-center items-center mx-auto px-4 sm:px-6 pb-6">
                 <div className="text-center space-y-8">
                     {/* Icon */}
                     <div className="flex justify-center">

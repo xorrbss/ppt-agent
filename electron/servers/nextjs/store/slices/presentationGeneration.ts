@@ -1,3 +1,4 @@
+import { Theme } from "@/app/(presentation-generator)/services/api/types";
 import { Slide } from "@/app/(presentation-generator)/types/slide";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
@@ -12,6 +13,7 @@ export interface PresentationData {
   n_slides: number;
   title: string;
   slides: any;
+  theme: Theme | null;
 }
 
 interface PresentationGenerationState {
@@ -377,7 +379,13 @@ const presentationGenerationSlice = createSlice({
         }
       }
     },
+    updateTheme: (state, action: PayloadAction<Theme | null>) => {
+      if (state.presentationData) {
+        state.presentationData['theme'] = action.payload;
+      }
+    },
   },
+
 });
 
 export const {
@@ -401,6 +409,7 @@ export const {
   updateImageProperties,
   updateSlideIcon,
   addNewSlide,
+  updateTheme,
 } = presentationGenerationSlice.actions;
 
 export default presentationGenerationSlice.reducer;

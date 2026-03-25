@@ -143,7 +143,7 @@ export const useSlideEdit = (
       formData.append("html", currentHtml);
       formData.append("prompt", prompt);
 
-      const response = await fetch(getApiUrl("api/v1/ppt/html-edit/"), {
+      const response = await fetch(getApiUrl("/api/v1/ppt/html-edit/"), {
         method: "POST",
         body: formData,
       });

@@ -48,7 +48,7 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
     const pathname = usePathname();
 
     return (
-        <div className="space-y-6 font-instrument_sans">
+        <div className="space-y-6 font-syne ">
             {isLoading && (!outlines || outlines.length === 0) && (
                 <div className="flex items-center justify-center">
                     <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 text-blue-600 px-2 py-0.5 text-xs">
@@ -70,7 +70,7 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
             </div> */}
             {/* Skeleton loading state */}
             {isLoading && (
-                <div className="space-y-4">
+                <div className="space-y-4 bg-white">
                     {[...Array(6)].map((_, index) => (
                         <div key={index} className="animate-pulse">
                             <div className="flex items-start space-x-3 p-4 border rounded-lg bg-white">
@@ -91,41 +91,30 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
             )}
 
             {/* Outlines content */}
+
             {outlines && outlines.length > 0 && (
-                <div>
+                <div className="bg-[#F9F8F8] min-h-[calc(100vh-16rem)] p-7 relative z-20  rounded-[20px] overflow-y-auto custom_scrollbar">
                     <DndContext
                         sensors={sensors}
                         collisionDetection={closestCenter}
                         onDragEnd={onDragEnd}
                     >
-                        {isStreaming ? (
-
-                           outlines.map((item, index) => (
-                            <OutlineItem
-                                key={`slide-${index}`}
-                                index={index + 1}
-                                slideOutline={item}
-                                isStreaming={isStreaming}
-                                isActiveStreaming={activeSlideIndex === index}
-                                isStableStreaming={highestActiveIndex >= 0 && index < highestActiveIndex}
-                            />
-                        ))
-                        ) :
-                            <SortableContext
-                            items={outlines?.map((item, index) => ({ id: `slide-${index}` })) || []}
+                        <SortableContext
+                            items={outlines.map((_, index) => `slide-${index}`)}
                             strategy={verticalListSortingStrategy}
                         >
-                            {outlines?.map((item, index) => (
+                            {outlines.map((item, index) => (
                                 <OutlineItem
                                     key={`slide-${index}`}
+                                    sortableId={`slide-${index}`}
                                     index={index + 1}
                                     slideOutline={item}
                                     isStreaming={isStreaming}
-                                    isActiveStreaming={false}
-                                    isStableStreaming={false}
+                                    isActiveStreaming={activeSlideIndex === index}
+                                    isStableStreaming={highestActiveIndex >= 0 && index < highestActiveIndex}
                                 />
                             ))}
-                        </SortableContext>}
+                        </SortableContext>
                     </DndContext>
 
                     <Button
