@@ -275,6 +275,12 @@ export async function isLibreOfficeInstalled(): Promise<LibreOfficeCheckResult> 
   // --- Step 1: check well-known paths synchronously (no exec overhead) ---
   for (const candidate of getCandidatePaths()) {
     if (fs.existsSync(candidate)) {
+      // On Windows, avoid probing with "--version" because some LibreOffice
+      // builds open a transient console window for this command.
+      if (process.platform === "win32") {
+        return { installed: true, path: candidate };
+      }
+
       // Binary found at a known location – try to get the version string.
       try {
         const quoted = `"${candidate}"`;
@@ -291,6 +297,26 @@ export async function isLibreOfficeInstalled(): Promise<LibreOfficeCheckResult> 
   }
 
   // --- Step 2: try the PATH-based command ---
+  if (process.platform === "win32") {
+    try {
+      // Use "where" for PATH detection without launching LibreOffice itself.
+      const { stdout } = await execAsync("where soffice.exe", {
+        timeout: 8_000,
+        windowsHide: true,
+      });
+      const firstPath = stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find((line) => line.length > 0);
+      if (firstPath) {
+        return { installed: true, path: firstPath };
+      }
+    } catch {
+      // Keep behavior: if PATH lookup fails, report not installed.
+    }
+    return { installed: false };
+  }
+
   try {
     const { stdout } = await execAsync("soffice --version", {
       timeout: 8_000,

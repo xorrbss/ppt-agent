@@ -26,7 +26,23 @@ def _get_soffice_binary() -> str:
     environment variable.  Falling back to the bare ``"soffice"`` command keeps
     Docker / server deployments working unchanged.
     """
-    return os.environ.get("SOFFICE_PATH") or "soffice"
+    configured = os.environ.get("SOFFICE_PATH")
+    if configured:
+        return configured
+    return "soffice.exe" if os.name == "nt" else "soffice"
+
+
+def _windows_hidden_subprocess_kwargs() -> Dict[str, object]:
+    """Return subprocess kwargs that suppress Windows console windows."""
+    if os.name != "nt":
+        return {}
+
+    startupinfo = subprocess.STARTUPINFO()
+    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    return {
+        "creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        "startupinfo": startupinfo,
+    }
 
 
 PPTX_SLIDES_ROUTER = APIRouter(prefix="/pptx-slides", tags=["PPTX Slides"])
@@ -596,6 +612,7 @@ async def _convert_pptx_to_pdf(pptx_path: str, temp_dir: str) -> str:
                 text=True,
                 timeout=500,
                 env=env,
+                **_windows_hidden_subprocess_kwargs(),
             )
 
             print(f"LibreOffice PDF conversion output: {result.stdout}")
