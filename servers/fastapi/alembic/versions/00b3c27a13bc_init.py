@@ -1,8 +1,8 @@
 """init
 
-Revision ID: fd2ab04834cc
+Revision ID: 00b3c27a13bc
 Revises: 
-Create Date: 2026-03-08 19:10:59.637680
+Create Date: 2026-03-08 19:12:45.478149
 
 """
 from typing import Sequence, Union
@@ -13,7 +13,7 @@ import sqlmodel
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'fd2ab04834cc'
+revision: str = '00b3c27a13bc'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -76,7 +76,6 @@ def upgrade() -> None:
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('layout', sa.JSON(), nullable=True),
     sa.Column('structure', sa.JSON(), nullable=True),
-    sa.Column('theme', sa.JSON(), nullable=True),
     sa.Column('instructions', sa.String(), nullable=True),
     sa.Column('tone', sa.String(), nullable=True),
     sa.Column('verbosity', sa.String(), nullable=True),

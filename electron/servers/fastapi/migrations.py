@@ -5,6 +5,8 @@ from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, inspect, text
+from alembic.script import ScriptDirectory
+from sqlalchemy import create_engine, inspect, text
 
 from utils.db_utils import get_database_url_and_connect_args
 from utils.get_env import get_migrate_database_on_startup_env
@@ -32,6 +34,12 @@ async def migrate_database_on_startup() -> None:
         print("Migrations run successfully", flush=True)
     except Exception as exc:
         print(f"Error running migrations: {exc}", flush=True)
+        raise
+
+
+def run_migrations_sync() -> None:
+    """Apply Alembic migrations to head (for CLI/scripts; no env gate)."""
+    _run_migrations()
         raise
 
 
