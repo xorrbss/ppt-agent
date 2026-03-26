@@ -63,7 +63,12 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
       dispatch(setPresentationData(data));
       setContentLoading(false);
       if (data?.theme) {
-        applyTheme(data.theme);
+        try {
+          applyTheme(data.theme);
+        } catch (themeError) {
+          // Theme issues should not block export rendering.
+          console.warn("Theme application skipped for pdf-maker:", themeError);
+        }
       }
     } catch (error) {
       setError(true);
@@ -78,6 +83,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
     if (!element) return;
     if (!theme || !theme.data) { return; }
     if (!theme.data.colors['graph_0']) { return; }
+    if (!theme.data.fonts?.textFont?.name || !theme.data.fonts?.textFont?.url) { return; }
     const cssVariables = {
       '--primary-color': theme.data.colors['primary'],
       '--background-color': theme.data.colors['background'],
