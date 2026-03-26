@@ -86,7 +86,7 @@ export const V1ContentRender = ({ slide, isEditMode, theme }: { slide: any, isEd
     if (isEditMode) {
         return (
             <SlideErrorBoundary label={`Slide ${slide.index + 1}`}>
-                <div ref={containerRef} className={`w-full h-full border border-[#EDEEEF] `}>
+                <div ref={containerRef} className={` `}>
 
                     <EditableLayoutWrapper
                         slideIndex={slide.index}
