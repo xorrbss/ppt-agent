@@ -252,7 +252,7 @@ const PresentationHeader = ({
           {isPresentationSaving && <div className="flex items-center gap-2">
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
           </div>}
-          <ThemeSelector current_theme={presentationData?.theme || {}} themes={themes} />
+          {presentationData && presentationData.slides && !presentationData.slides[0].layout.includes("custom") && <ThemeSelector current_theme={presentationData?.theme || {}} themes={themes} />}
 
           <div className="flex items-center gap-2 bg-[#F6F6F9] px-3.5 h-[38px] border border-[#EDECEC] rounded-[80px]">
 
