@@ -33,6 +33,9 @@ if alembic_config.config_file_name is not None:
 
 target_metadata = SQLModel.metadata
 
+# alembic.ini sets this so Config validates; treat it as "unset" for URL resolution.
+_CLI_PLACEHOLDER_DB_URL = "sqlite:///placeholder"
+
 
 def _to_sync_database_url(database_url: str) -> str:
     # Preserve slash counts for sqlite URLs so Windows paths stay valid.
@@ -51,7 +54,7 @@ def _get_url() -> str:
     falling back to the DATABASE_URL environment variable or a local SQLite DB.
     """
     configured = alembic_config.get_main_option("sqlalchemy.url")
-    if configured:
+    if configured and configured != _CLI_PLACEHOLDER_DB_URL:
         return configured
 
     from utils.db_utils import get_database_url_and_connect_args

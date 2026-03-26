@@ -21,6 +21,7 @@ from models.sql.template import TemplateModel
 from models.sql.webhook_subscription import WebhookSubscription
 from utils.db_utils import get_database_url_and_connect_args
 from utils.get_env import get_app_data_directory_env
+from utils.get_env import get_migrate_database_on_startup_env
 
 
 database_url, connect_args = get_database_url_and_connect_args()
@@ -52,22 +53,24 @@ async def get_container_db_async_session() -> AsyncGenerator[AsyncSession, None]
 
 # Create Database and Tables
 async def create_db_and_tables():
-    async with sql_engine.begin() as conn:
-        await conn.run_sync(
-            lambda sync_conn: SQLModel.metadata.create_all(
-                sync_conn,
-                tables=[
-                    PresentationModel.__table__,
-                    SlideModel.__table__,
-                    KeyValueSqlModel.__table__,
-                    ImageAsset.__table__,
-                    PresentationLayoutCodeModel.__table__,
-                    TemplateModel.__table__,
-                    WebhookSubscription.__table__,
-                    AsyncPresentationGenerationTaskModel.__table__,
-                ],
+    should_run_alembic = get_migrate_database_on_startup_env() in ["true", "True"]
+    if not should_run_alembic:
+        async with sql_engine.begin() as conn:
+            await conn.run_sync(
+                lambda sync_conn: SQLModel.metadata.create_all(
+                    sync_conn,
+                    tables=[
+                        PresentationModel.__table__,
+                        SlideModel.__table__,
+                        KeyValueSqlModel.__table__,
+                        ImageAsset.__table__,
+                        PresentationLayoutCodeModel.__table__,
+                        TemplateModel.__table__,
+                        WebhookSubscription.__table__,
+                        AsyncPresentationGenerationTaskModel.__table__,
+                    ],
+                )
             )
-        )
 
     async with container_db_engine.begin() as conn:
         await conn.run_sync(
