@@ -329,8 +329,8 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
             </div>
             {/* Text Provider */}
             <div className='p-3 border border-[#EDEEEF] rounded-[11px] '>
-                <div className="flex items-center gap-6  mb-7">
-                    <div className='w-[60px] h-[60px] rounded-[4px] flex items-center justify-center'
+                <div className="flex items-center gap-[24.3px]  mb-[42px]">
+                    <div className='w-[74px] h-[74px] rounded-[4px] pt-[16.8px] pr-[17.15px] pb-[17.2px] pl-[16.85px] flex items-center justify-center'
                         style={{ backgroundColor: '#4C55541A' }}
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40" fill="none">
@@ -362,7 +362,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                     variant="outline"
                                     role="combobox"
                                     aria-expanded={openProviderSelect}
-                                    className=" h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
+                                    className=" h-12 px-4 py-4 outline-none border border-[#E8E8E9] rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
                                 >
                                     <div className="flex gap-3 items-center">
                                         <span className="text-sm font-medium text-gray-900">
@@ -536,7 +536,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                     (llmConfig.LLM === 'anthropic' && !currentApiKey) ||
                                     (llmConfig.LLM === 'custom' && !llmConfig.CUSTOM_LLM_URL)
                                 }
-                                className={`mt-4 py-2.5 bg-[#EDEEEF] px-3.5 w-fit  rounded-[48px] text-xs font-semibold text-[#101323] transition-all duration-200 border ${modelsLoading
+                                className={`mt-4 py-2.5 bg-[#EDEEEF] disabled:opacity-50 disabled:cursor-not-allowed px-3.5 w-fit  rounded-[48px] text-xs font-semibold text-[#101323] transition-all duration-200 border ${modelsLoading
                                     ? " border-gray-300 cursor-not-allowed text-gray-500"
                                     : " border-[#EDEEEF] text-[#101323] hover:bg-[#E8F0FF]/90 focus:ring-2 focus:ring-blue-500/20"
                                     }`}
@@ -643,12 +643,12 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 </div>
             </div>
             {/* Image Provider */}
-            <div className='p-3 border border-[#EDEEEF] rounded-[11px] mt-5'>
-                <ToolTip content="Enable/Disable Image Generation" className='flex justify-end items-center'>
+            <div className={`p-3 border border-[#EDEEEF] rounded-[11px] relative mt-5 ${llmConfig.DISABLE_IMAGE_GENERATION ? "bg-[#F9FAFB]" : ""}`}>
+                <ToolTip content="Enable/Disable Image Generation" className='flex justify-end items-center absolute top-3 right-3'>
                     <div className='flex justify-end items-center'>
                         <Switch
                             checked={!llmConfig.DISABLE_IMAGE_GENERATION}
-                            className='data-[state=checked]:bg-[#4791FF] data-[state=unchecked]:bg-gray-400'
+                            className='data-[state=checked]:bg-[#4791FF] h-[22px] w-[36px] data-[state=unchecked]:bg-[#E2E0E1]'
                             onCheckedChange={(checked) => setLlmConfig(prev => ({
                                 ...prev,
                                 DISABLE_IMAGE_GENERATION: !checked
@@ -657,8 +657,8 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                     </div>
 
                 </ToolTip>
-                <div className=" mb-7 flex items-center gap-6">
-                    <div className='w-[60px] h-[60px] px-[13.5px] py-[14.2px] rounded-[4px] flex items-center justify-center'
+                <div className={` flex items-center gap-6 ${llmConfig.DISABLE_IMAGE_GENERATION ? "" : "mb-[42px]"}`}>
+                    <div className='w-[74px] h-[74px] px-[13.5px] py-[14.2px] rounded-[4px] flex items-center justify-center'
                         style={{ backgroundColor: '#F4F3FF' }}
                     >
                         <img src="/image-markup.svg" className='w-full h-full object-cover' alt='image-markup' />

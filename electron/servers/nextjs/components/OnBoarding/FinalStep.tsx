@@ -23,7 +23,7 @@ const FinalStep = () => {
                 <p className='text-[#000000CC] text-xl font-normal font-syne'>Your AI workspace is ready. Let’s create your first presentation.</p>
                 <button onClick={handleGoToUpload} className='bg-[#7C51F8] px-[23px] mt-14 py-[15px]  rounded-[70px] text-white text-lg font-syne font-semibold'>My First Presentation</button>
             </div>
-            <button onClick={handleGoToDashboard} className='absolute bottom-20 text-[#7A5AF8] flex items-center gap-2 right-10  text-xs font-normal font-syne'>Go to your dashboard <ArrowRight className='w-4 h-4 text-[#7A5AF8]' /></button>
+            <button onClick={handleGoToDashboard} className='absolute uppercase bottom-20 text-[#7A5AF8] flex items-center gap-2 right-10  text-xs font-normal font-syne'>Go to your dashboard <ArrowRight className='w-4 h-4 text-[#7A5AF8]' /></button>
         </div>
     )
 }

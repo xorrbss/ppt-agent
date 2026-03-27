@@ -845,7 +845,7 @@ const ThemePanel: React.FC = () => {
 
 
   return (
-    <div className="space-y-6 px-6 font-syne">
+    <div className="space-y-6 pl-6 font-syne mb-10">
       <div className='py-[28px] flex justify-between'>
 
         <h3 className=" text-[28px]  tracking-[-0.84px] font-unbounded font-normal text-[#101828] flex items-center gap-2">
@@ -867,11 +867,11 @@ const ThemePanel: React.FC = () => {
         </Link>
       </div>
       {/* Tabs */}
-      <div className='p-1 rounded-[40px] bg-[#F7F6F9] w-fit border border-[#F4F4F4] flex items-center justify-center '>
+      <div className='p-1 rounded-[40px] bg-[#ffffff] w-fit border border-[#EDEEEF] flex items-center justify-center '>
         <button className='px-5  py-2 text-xs font-medium text-[#3A3A3A] rounded-[70px]'
           onClick={() => setTab('custom')}
           style={{
-            background: tab === 'custom' ? 'linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)' : 'transparent'
+            background: tab === 'custom' ? '#F4F3FF' : 'transparent'
           }}
         >Custom</button>
         <svg xmlns="http://www.w3.org/2000/svg" className='mx-1' width="2" height="17" viewBox="0 0 2 17" fill="none">
@@ -880,13 +880,13 @@ const ThemePanel: React.FC = () => {
         <button className='px-5  py-2 text-xs font-medium text-[#3A3A3A] rounded-[70px]'
           onClick={() => setTab('default')}
           style={{
-            background: tab === 'default' ? 'linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)' : 'transparent'
+            background: tab === 'default' ? '#F4F3FF' : 'transparent'
           }}
         >Built-in</button>
       </div>
       {/* Built-in Themes */}
 
-      {tab === 'default' && <div className="flex flex-wrap gap-6">
+      {tab === 'default' && <div className="flex flex-wrap gap-x-5 gap-y-3.5">
         {
           defaultThemes.map((theme) => (
             <ThemeCard
@@ -904,7 +904,7 @@ const ThemePanel: React.FC = () => {
       {/* Custom Themes Section */}
       {tab === 'custom' && customThemes.length > 0 && (
 
-        <div className="flex flex-wrap gap-6">
+        <div className="flex flex-wrap gap-x-5 gap-y-3.5">
           {customThemes.map((theme) => (
             <ThemeCard
               key={theme.id}
