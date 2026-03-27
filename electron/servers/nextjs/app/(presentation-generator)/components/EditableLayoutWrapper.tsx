@@ -12,7 +12,7 @@ interface EditableLayoutWrapperProps {
     slideData: any;
     isEditMode?: boolean;
     properties?: any;
-    
+
 }
 
 interface EditableElement {
@@ -29,7 +29,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
     slideIndex,
     slideData,
     properties,
-    
+
 }) => {
     const dispatch = useDispatch();
     const containerRef = useRef<HTMLDivElement>(null);
@@ -245,7 +245,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                 }
             }
         });
-        
+
         // Process SVG icons
         svgElements.forEach((svg, index) => {
             const svgEl = svg as SVGElement;

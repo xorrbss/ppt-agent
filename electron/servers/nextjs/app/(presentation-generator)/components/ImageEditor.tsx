@@ -67,7 +67,7 @@ const ImageEditor = ({
     (properties &&
       properties[imageIdx] &&
       properties[imageIdx].initialObjectFit) ||
-      "cover"
+    "cover"
   );
 
   // Refs
@@ -104,7 +104,7 @@ const ImageEditor = ({
       console.error("error in getting previous generated images", error);
       setError(
         error.message ||
-          "Failed to get previous generated images. Please try again."
+        "Failed to get previous generated images. Please try again."
       );
     }
   };
@@ -233,7 +233,7 @@ const ImageEditor = ({
       trackEvent(MixpanelEvent.ImageEditor_UploadImage_API_Call);
       const result = await ImagesApi.uploadImage(file);
       setUploadedImageUrl(result.file_url || result.path);
-    } catch (err:any) {
+    } catch (err: any) {
       setUploadError("Failed to upload image. Please try again.");
       toast.error(err.message || "Failed to upload image. Please try again.");
       console.log("Upload error:", err.message);
@@ -247,7 +247,7 @@ const ImageEditor = ({
       setUploadedImagesLoading(true);
       const result = await ImagesApi.getUploadedImages();
       setUploadedImages(result);
-    } catch (err:any) {
+    } catch (err: any) {
       toast.error(err.message || "Failed to get uploaded images. Please try again.");
       console.log("Get uploaded images error:", err.message);
     } finally {
@@ -265,7 +265,7 @@ const ImageEditor = ({
       const result = await ImagesApi.deleteImage(image_id);
       setUploadedImages(uploadedImages.filter((image) => image.id !== image_id));
       toast.success(result.message || "Image deleted successfully");
-    } catch (err:any) {
+    } catch (err: any) {
       toast.error(err.message || "Failed to delete image. Please try again.");
     }
   };
@@ -480,12 +480,12 @@ const ImageEditor = ({
                               }
                               className="cursor-pointer group aspect-[4/3] rounded-lg overflow-hidden relative border border-gray-200"
                             >
-                              <Trash className="absolute group-hover:opacity-100 opacity-0 transition-opacity z-10 w-4 h-4 top-2 right-2 text-red-500" onClick={(e) =>{
+                              <Trash className="absolute group-hover:opacity-100 opacity-0 transition-opacity z-10 w-4 h-4 top-2 right-2 text-red-500" onClick={(e) => {
                                 e.stopPropagation();
                                 handleDeleteImage(image.id)
-                              }}/>
+                              }} />
                               <img
-                              src={image.file_url || image.path}
+                                src={image.file_url || image.path}
                                 alt="Uploaded preview"
                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                               />
@@ -496,7 +496,7 @@ const ImageEditor = ({
                                 </span>
                               </div>
                             </div>
-                          
+
                           </div>
                         ))
                       )}
@@ -578,7 +578,7 @@ const ImageEditor = ({
                           variant="outline"
                           className={cn(
                             objectFit === "cover" &&
-                              "bg-blue-50 border-blue-500"
+                            "bg-blue-50 border-blue-500"
                           )}
                           onClick={() => handleFitChange("cover")}
                         >
@@ -588,7 +588,7 @@ const ImageEditor = ({
                           variant="outline"
                           className={cn(
                             objectFit === "contain" &&
-                              "bg-blue-50 border-blue-500"
+                            "bg-blue-50 border-blue-500"
                           )}
                           onClick={() => handleFitChange("contain")}
                         >
@@ -607,7 +607,7 @@ const ImageEditor = ({
                     </div>
                   }
                   {/* Focus Point */}
-                  {}
+                  { }
                 </div>
               </TabsContent>
             </Tabs>
