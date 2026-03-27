@@ -1,5 +1,10 @@
 // Utility to get the FastAPI base URL
 export function getFastAPIUrl(): string {
+  const queryFastApiUrl = getFastApiUrlFromQuery();
+  if (queryFastApiUrl) {
+    return queryFastApiUrl;
+  }
+
   // Prefer Electron-preload env when available
   if (typeof window !== "undefined" && (window as any).env?.NEXT_PUBLIC_FAST_API) {
     return (window as any).env.NEXT_PUBLIC_FAST_API;
@@ -12,6 +17,23 @@ export function getFastAPIUrl(): string {
 
   // Safe Electron fallback to local FastAPI
   return "http://127.0.0.1:8000";
+}
+
+function getFastApiUrlFromQuery(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const value = params.get("fastapiUrl");
+    if (!value) return null;
+
+    const parsed = new URL(value);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return null;
+    }
+    return parsed.origin;
+  } catch {
+    return null;
+  }
 }
 
 function isAbsoluteHttpUrl(path: string): boolean {
@@ -34,10 +56,15 @@ export function getApiUrl(path: string): string {
 
   const normalizedPath = withLeadingSlash(path);
   const isFastApiEndpoint = normalizedPath.startsWith("/api/v1/");
+  const hasWindowFastApi = typeof window !== "undefined" && !!(window as any).env?.NEXT_PUBLIC_FAST_API;
+  const hasQueryFastApi = !!getFastApiUrlFromQuery();
 
   // In web/docker, /api/v1 is typically reverse-proxied by the web server.
   // In Electron, Next and FastAPI run on different ports, so use FastAPI base URL.
-  if (isFastApiEndpoint && (isElectronRuntime() || !!process.env.NEXT_PUBLIC_FAST_API)) {
+  if (
+    isFastApiEndpoint &&
+    (isElectronRuntime() || !!process.env.NEXT_PUBLIC_FAST_API || hasWindowFastApi || hasQueryFastApi)
+  ) {
     return `${getFastAPIUrl()}${normalizedPath}`;
   }
 

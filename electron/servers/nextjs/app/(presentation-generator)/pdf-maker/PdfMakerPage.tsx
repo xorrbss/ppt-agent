@@ -63,7 +63,12 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
       dispatch(setPresentationData(data));
       setContentLoading(false);
       if (data?.theme) {
-        applyTheme(data.theme);
+        try {
+          applyTheme(data.theme);
+        } catch (themeError) {
+          // Theme issues should not block export rendering.
+          console.warn("Theme application skipped for pdf-maker:", themeError);
+        }
       }
     } catch (error) {
       setError(true);
@@ -78,6 +83,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
     if (!element) return;
     if (!theme || !theme.data) { return; }
     if (!theme.data.colors['graph_0']) { return; }
+    if (!theme.data.fonts?.textFont?.name || !theme.data.fonts?.textFont?.url) { return; }
     const cssVariables = {
       '--primary-color': theme.data.colors['primary'],
       '--background-color': theme.data.colors['background'],
@@ -142,7 +148,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
         <div className="">
           <div
             id="presentation-slides-wrapper"
-            className="mx-auto flex flex-col items-center  overflow-hidden  justify-center   "
+            className=" mx-auto flex flex-col items-center overflow-hidden justify-center  "
           >
             {!presentationData ||
 
@@ -166,8 +172,12 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
                   presentationData.slides.length > 0 &&
                   presentationData.slides.map((slide: any, index: number) => (
                     // [data-speaker-note] is used to extract the speaker note from the slide for export to pptx
-                    <div key={index} className="w-full" data-speaker-note={slide.speaker_note}>
-                      <V1ContentRender slide={slide} isEditMode={true} theme={null}
+                    <div key={index} className="w-full " data-speaker-note={slide.speaker_note}>
+                      <V1ContentRender
+                        slide={slide}
+                        isEditMode={true}
+                        theme={null}
+
                       />
                     </div>
                   ))}

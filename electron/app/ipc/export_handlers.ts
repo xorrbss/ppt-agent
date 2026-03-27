@@ -22,7 +22,11 @@ export function setupExportHandlers() {
 
   ipcMain.handle("export-presentation", async (_, id: string, title: string, exportAs: "pptx" | "pdf" | "png") => {
     try {
-      const pptUrl = `${process.env.NEXT_PUBLIC_URL}/pdf-maker?id=${id}`;
+      const params = new URLSearchParams({ id });
+      if (process.env.NEXT_PUBLIC_FAST_API) {
+        params.set("fastapiUrl", process.env.NEXT_PUBLIC_FAST_API);
+      }
+      const pptUrl = `${process.env.NEXT_PUBLIC_URL}/pdf-maker?${params.toString()}`;
 
       let exportTask = {
         type: "export",
