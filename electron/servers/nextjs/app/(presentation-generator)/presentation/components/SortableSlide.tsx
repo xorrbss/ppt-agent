@@ -13,8 +13,6 @@ interface SortableSlideProps {
 const SCALE = 0.125;
 
 export function SortableSlide({ slide, index, selectedSlide, onSlideClick }: SortableSlideProps) {
-    const searchParams = useSearchParams();
-    const type = searchParams.get("type") as 'standard' | 'smart';
     const lastClickTime = useRef(0);
     const {
         attributes,

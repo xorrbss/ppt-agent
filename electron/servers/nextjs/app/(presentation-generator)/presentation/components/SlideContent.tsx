@@ -21,6 +21,7 @@ import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { addToHistory } from "@/store/slices/undoRedoSlice";
 import { V1ContentRender } from "../../components/V1ContentRender";
 import NewSlide from "./NewSlide";
+import SlideScale from "../../components/PresentationRender";
 
 interface SlideContentProps {
   slide: any;
@@ -145,7 +146,8 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
           data-group={slide.layout_group}
           className={` w-full  group font-syne  `}
         >
-          <V1ContentRender slide={slide} isEditMode={true} theme={null} />
+          {/* <V1ContentRender slide={slide} isEditMode={true} theme={null} /> */}
+          <SlideScale slide={slide} theme={presentationData?.theme || null} />
           {!showNewSlideSelection && (
             <div className="group-hover:opacity-100 hidden md:block opacity-0 transition-opacity my-4 duration-300">
               <ToolTip content="Add new slide below">
