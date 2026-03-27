@@ -35,7 +35,7 @@ export const CustomTemplateCard = React.memo(function CustomTemplateCard({ templ
 
             <img src="/card_bg.svg" alt="" className="absolute top-0 left-0 w-full h-full object-cover" />
             <span className="text-xs font-syne absolute top-2 flex gap-1 capitalize  items-center left-2 rounded-[100px]  px-2.5 py-1 bg-[#3A3A3AF5] text-white font-semibold  z-40">
-                Layouts- {totalLayouts}
+                {totalLayouts} {totalLayouts === 1 ? 'Layout' : 'Layouts'}
             </span>
             <div className="p-5">
 
@@ -206,10 +206,6 @@ const LayoutPreview = () => {
                         Templates
                     </h3>
                     <div className="flex  gap-2.5 max-sm:w-full max-md:justify-center max-sm:flex-wrap">
-
-
-
-
                         <Link
                             href="/custom-template"
                             className="inline-flex items-center font-syne font-semibold gap-2 rounded-xl px-4 py-2.5 text-black text-sm  shadow-sm hover:shadow-md"
