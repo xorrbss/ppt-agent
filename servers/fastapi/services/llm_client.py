@@ -967,7 +967,10 @@ class LLMClient:
             ],
         )
         tool_calls: List[AnthropicToolCall] = []
+        text_parts: List[str] = []
         for content in response.content:
+            if content.type == "text" and isinstance(content.text, str):
+                text_parts.append(content.text)
             if content.type == "tool_use":
                 tool_calls.append(
                     AnthropicToolCall(
@@ -1000,6 +1003,24 @@ class LLMClient:
             return await self._generate_anthropic_structured(
                 model=model,
                 messages=new_messages,
+                max_tokens=max_tokens,
+                response_format=response_format,
+                tools=tools,
+                depth=depth + 1,
+            )
+
+        text_content = "".join(text_parts).strip()
+        if text_content:
+            try:
+                return dict(dirtyjson.loads(text_content))
+            except Exception:
+                pass
+
+        if depth < 2:
+            await asyncio.sleep(0.4 * (depth + 1))
+            return await self._generate_anthropic_structured(
+                model=model,
+                messages=messages,
                 max_tokens=max_tokens,
                 response_format=response_format,
                 tools=tools,
@@ -1057,64 +1078,70 @@ class LLMClient:
     ) -> dict:
         parsed_tools = self.tool_calls_handler.parse_tools(tools)
 
-        content = None
-        match self.llm_provider:
-            case LLMProvider.OPENAI:
-                content = await self._generate_openai_structured(
-                    model=model,
-                    messages=messages,
-                    response_format=response_format,
-                    strict=strict,
-                    tools=parsed_tools,
-                    max_tokens=max_tokens,
-                )
-            case LLMProvider.CODEX:
-                content = await self._generate_codex_structured(
-                    model=model,
-                    messages=messages,
-                    response_format=response_format,
-                    strict=strict,
-                    tools=parsed_tools,
-                    max_tokens=max_tokens,
-                )
-            case LLMProvider.GOOGLE:
-                content = await self._generate_google_structured(
-                    model=model,
-                    messages=messages,
-                    response_format=response_format,
-                    tools=parsed_tools,
-                    max_tokens=max_tokens,
-                )
-            case LLMProvider.ANTHROPIC:
-                content = await self._generate_anthropic_structured(
-                    model=model,
-                    messages=messages,
-                    response_format=response_format,
-                    tools=parsed_tools,
-                    max_tokens=max_tokens,
-                )
-            case LLMProvider.OLLAMA:
-                content = await self._generate_ollama_structured(
-                    model=model,
-                    messages=messages,
-                    response_format=response_format,
-                    strict=strict,
-                    max_tokens=max_tokens,
-                )
-            case LLMProvider.CUSTOM:
-                content = await self._generate_custom_structured(
-                    model=model,
-                    messages=messages,
-                    response_format=response_format,
-                    strict=strict,
-                    max_tokens=max_tokens,
-                )
-        if content is None:
-            raise HTTPException(
-                status_code=400,
-                detail="LLM did not return any content",
-            )
-        return content
+        for attempt in range(3):
+            content = None
+            match self.llm_provider:
+                case LLMProvider.OPENAI:
+                    content = await self._generate_openai_structured(
+                        model=model,
+                        messages=messages,
+                        response_format=response_format,
+                        strict=strict,
+                        tools=parsed_tools,
+                        max_tokens=max_tokens,
+                    )
+                case LLMProvider.CODEX:
+                    content = await self._generate_codex_structured(
+                        model=model,
+                        messages=messages,
+                        response_format=response_format,
+                        strict=strict,
+                        tools=parsed_tools,
+                        max_tokens=max_tokens,
+                    )
+                case LLMProvider.GOOGLE:
+                    content = await self._generate_google_structured(
+                        model=model,
+                        messages=messages,
+                        response_format=response_format,
+                        tools=parsed_tools,
+                        max_tokens=max_tokens,
+                    )
+                case LLMProvider.ANTHROPIC:
+                    content = await self._generate_anthropic_structured(
+                        model=model,
+                        messages=messages,
+                        response_format=response_format,
+                        tools=parsed_tools,
+                        max_tokens=max_tokens,
+                    )
+                case LLMProvider.OLLAMA:
+                    content = await self._generate_ollama_structured(
+                        model=model,
+                        messages=messages,
+                        response_format=response_format,
+                        strict=strict,
+                        max_tokens=max_tokens,
+                    )
+                case LLMProvider.CUSTOM:
+                    content = await self._generate_custom_structured(
+                        model=model,
+                        messages=messages,
+                        response_format=response_format,
+                        strict=strict,
+                        max_tokens=max_tokens,
+                    )
+
+            if content is not None:
+                return content
+
+            if attempt < 2:
+                await asyncio.sleep(0.5 * (attempt + 1))
+
+        raise HTTPException(
+            status_code=400,
+            detail="LLM did not return any content",
+        )
 
     # ? Stream Unstructured Content
     async def _stream_openai(
