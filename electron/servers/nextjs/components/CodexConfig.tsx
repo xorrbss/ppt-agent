@@ -44,15 +44,14 @@ interface CodexModel {
 const CHATGPT_MODELS: CodexModel[] = [
   { id: "gpt-5.1", name: "GPT-5.1" },
   { id: "gpt-5.1-codex-max", name: "GPT-5.1 Codex Max" },
-  { id: "gpt-5.1-codex-mini", name: "GPT-5.1 Codex Mini" },
   { id: "gpt-5.2", name: "GPT-5.2" },
   { id: "gpt-5.2-codex", name: "GPT-5.2 Codex" },
   { id: "gpt-5.3-codex", name: "GPT-5.3 Codex" },
+  { id: "gpt-5.4-mini", name: "GPT-5.4 Mini" },
   { id: "gpt-5.4", name: "GPT-5.4" },
-  { id: "gpt-5.3-codex-spark", name: "GPT-5.3 Codex Spark" },
 ];
 
-const DEFAULT_CODEX_MODEL = "gpt-5.1";
+const DEFAULT_CODEX_MODEL = "gpt-5.5-mini";
 
 export default function CodexConfig({
   codexModel,
