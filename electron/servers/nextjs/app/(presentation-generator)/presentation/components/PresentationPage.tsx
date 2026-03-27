@@ -87,14 +87,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     handleSlideChange(newSlide, presentationData);
   };
 
-  // useEffect(() => {
-  //   if(!loading && !isStreaming && presentationData?.slides && presentationData?.slides.length > 0){  
-  //     const presentation_id = presentationData?.slides[0].layout.split(":")[0].split("custom-")[1];
-  //   const fonts = getCustomTemplateFonts(presentation_id);
 
-  //   useFontLoader(fonts || []);
-  // }
-  // }, [presentationData,loading,isStreaming]);
   // Presentation Mode View
   if (isPresentMode) {
     return (
@@ -133,6 +126,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
         style={{
           background: "#ffffff",
         }}
+        id="presentation-slides-wrapper"
         className="flex  gap-6 relative "
       >
         <div className="w-[200px]">
@@ -144,10 +138,10 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
 
           />
         </div>
-        <div className=" w-full h-[calc(100vh-20px)] hide-scrollbar pr-[25px] overflow-y-auto">
+        <div className=" w-full h-[calc(100vh-20px)]  pr-[25px] overflow-y-auto">
           <PresentationHeader presentation_id={presentation_id} isPresentationSaving={isSaving} currentSlide={selectedSlide} />
           <div
-            id="presentation-slides-wrapper"
+
             style={{
               background: "rgba(255, 255, 255, 0.10)",
               boxShadow: "0 0 20.01px 0 rgba(122, 90, 248, 0.16) inset",

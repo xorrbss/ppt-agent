@@ -246,7 +246,7 @@ const PresentationHeader = ({
   return (
     <>
       <div className="py-7 sticky top-0 bg-white z-50 mb-[17px]  font-syne flex justify-between items-center">
-        <h2 className="text-lg text-[#101323] font-unbounded "><MarkdownRenderer content={presentationData?.title || "Presentation"} className="mb-0  w-[600px] truncate text-sm text-[#101323] " /></h2>
+        <h2 className="text-lg text-[#101323] font-unbounded "><MarkdownRenderer content={presentationData?.title || "Presentation"} className="mb-0  max-w-[600px] overflow-ellipsis line-clamp-1 text-sm text-[#101323] " /></h2>
         <div className="flex items-center gap-2.5">
 
           {isPresentationSaving && <div className="flex items-center gap-2">

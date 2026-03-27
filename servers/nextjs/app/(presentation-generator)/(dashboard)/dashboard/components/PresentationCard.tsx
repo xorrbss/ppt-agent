@@ -12,7 +12,7 @@ import {
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-import { useFontLoader } from "@/app/(presentation-generator)/hooks/useFontLoader";
+import { useFontLoader } from "@/app/(presentation-generator)/hooks/useFontLoad";
 import SlideScale from "@/app/(presentation-generator)/components/PresentationRender";
 import MarkdownRenderer from "@/components/MarkDownRender";
 
@@ -28,7 +28,7 @@ export const PresentationCard = ({
   onDeleted?: (presentationId: string) => void;
 }) => {
   const router = useRouter();
-  useFontLoader(presentation.fonts || []);
+
   const handlePreview = (e: React.MouseEvent) => {
     e.preventDefault();
     router.push(`/presentation?id=${id}&type=standard`);

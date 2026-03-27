@@ -49,54 +49,54 @@ const OutlinePage: React.FC = () => {
         duration={loadingState.duration}
       />
 
-      <Wrapper className="h-full  flex flex-col w-full relative px-5 sm:px-10 lg:px-20 ">
-        <div className="flex-grow w-full hidden-scrollbar   mx-auto ">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-            <TabsList className="my-4 h-auto w-fit  rounded-full border border-[#EDEEEF] bg-white p-1.5">
-              <TabsTrigger
-                value={TABS.OUTLINE}
-                className="rounded-full px-5 py-2  text-xs font-medium text-[#2D2D2D] shadow-none data-[state=active]:bg-[#F4F3FF] data-[state=active]:text-[#7E3AF2] data-[state=active]:shadow-none"
-              >
-                Outline & Content
-              </TabsTrigger>
-              <Separator orientation="vertical" className="h-6 mx-1" />
-              <TabsTrigger
-                value={TABS.LAYOUTS}
-                className="relative rounded-full px-5  py-2 text-xs font-medium text-[#2D2D2D] shadow-none  data-[state=active]:bg-[#F4F3FF] data-[state=active]:text-[#7E3AF2] data-[state=active]:shadow-none"
-              >
-                Select Template
-              </TabsTrigger>
-            </TabsList>
+      <Wrapper className="flex flex-col w-full relative px-5 sm:px-10 lg:px-20 ">
+        <div className="w-full mx-auto">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex w-full flex-col">
+            {/* Reserves vertical space so content does not sit under the fixed tab bar */}
+            <div className="h-[4.75rem] shrink-0 sm:h-[5rem]" aria-hidden />
+            <div className="fixed top-26 left-0 right-0 z-40  pb-2">
+              <div className="mx-auto w-full max-w-[1440px] px-5 sm:px-10 lg:px-20">
+                <TabsList className="my-4 h-auto w-fit rounded-full border border-[#EDEEEF] bg-white p-1.5">
+                  <TabsTrigger
+                    value={TABS.OUTLINE}
+                    className="rounded-full px-5 py-2  text-xs font-medium text-[#2D2D2D] shadow-none data-[state=active]:bg-[#F4F3FF] data-[state=active]:text-[#7E3AF2] data-[state=active]:shadow-none"
+                  >
+                    Outline & Content
+                  </TabsTrigger>
+                  <Separator orientation="vertical" className="h-6 mx-1" />
+                  <TabsTrigger
+                    value={TABS.LAYOUTS}
+                    className="relative rounded-full px-5  py-2 text-xs font-medium text-[#2D2D2D] shadow-none  data-[state=active]:bg-[#F4F3FF] data-[state=active]:text-[#7E3AF2] data-[state=active]:shadow-none"
+                  >
+                    Select Template
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+            </div>
 
-            <div className="flex-grow w-full mx-auto">
-              <TabsContent value={TABS.OUTLINE} className="h-[calc(100vh-15rem)]   overflow-y-auto hide-scrollbar"
-              >
-                <div>
-                  <OutlineContent
-                    outlines={outlines}
-                    isLoading={streamState.isLoading}
-                    isStreaming={streamState.isStreaming}
-                    activeSlideIndex={streamState.activeSlideIndex}
-                    highestActiveIndex={streamState.highestActiveIndex}
-                    onDragEnd={handleDragEnd}
-                    onAddSlide={handleAddSlide}
-                  />
-                </div>
+            <div className="w-full mx-auto">
+              <TabsContent value={TABS.OUTLINE} className="mt-0">
+                <OutlineContent
+                  outlines={outlines}
+                  isLoading={streamState.isLoading}
+                  isStreaming={streamState.isStreaming}
+                  activeSlideIndex={streamState.activeSlideIndex}
+                  highestActiveIndex={streamState.highestActiveIndex}
+                  onDragEnd={handleDragEnd}
+                  onAddSlide={handleAddSlide}
+                />
               </TabsContent>
 
-              <TabsContent value={TABS.LAYOUTS} className="h-[calc(100vh-16rem)] bg-white  overflow-y-auto hide-scrollbar">
-                <div>
-                  <TemplateSelection
-                    selectedTemplate={selectedTemplate}
-                    onSelectTemplate={setSelectedTemplate}
-                  />
-                </div>
+              <TabsContent value={TABS.LAYOUTS} className="mt-0 bg-white">
+                <TemplateSelection
+                  selectedTemplate={selectedTemplate}
+                  onSelectTemplate={setSelectedTemplate}
+                />
               </TabsContent>
             </div>
           </Tabs>
-          {/* Fixed Button */}
 
-          <div className="absolute bottom-[26px] right-[26px] z-50">
+          <div className="fixed bottom-[26px] right-[26px] z-50">
             <GenerateButton
               outlineCount={outlines.length}
               loadingState={loadingState}

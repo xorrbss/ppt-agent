@@ -132,7 +132,7 @@ const SidePanel = ({
       <Separator orientation="horizontal" className="my-6 " />
       <div
         className={`
-          fixed xl:relative h-full z-50 xl:z-auto 
+          relative bg-[#F6F6F9] h-full z-50 xl:z-auto 
           transition-all duration-300 ease-in-out
         `}
       >
@@ -141,14 +141,14 @@ const SidePanel = ({
           className="w-full h-[calc(100vh-120px)]   hide-scrollbar overflow-hidden slide-theme "
         >
 
-          <p className="text-xl font-normal pb-3.5 text-[#000000]">Slides</p>
+          <p className="text-xl font-normal pb-3.5 text-[#000000]">Slides ({presentationData?.slides?.length})</p>
 
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
           >
-            <div className=" overflow-y-auto hide-scrollbar h-[calc(100%-140px)] space-y-3.5">
+            <div className=" overflow-y-auto w-full hide-scrollbar h-[calc(100%-140px)] space-y-3.5">
               {isStreaming ? (
                 presentationData &&
                 presentationData?.slides.map((slide: any, index: number) => (

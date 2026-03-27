@@ -93,6 +93,12 @@ export const IMAGE_PROVIDERS: Record<string, ImageProviderOption> = {
 };
 
 export const LLM_PROVIDERS: Record<string, LLMProviderOption> = {
+  codex: {
+    value: "codex",
+    label: "ChatGPT",
+    description: "ChatGPT Plus/Pro via OAuth",
+    icon: "/icons/chatgpt.png",
+  },
   openai: {
     value: "openai",
     label: "OpenAI",
@@ -126,12 +132,7 @@ export const LLM_PROVIDERS: Record<string, LLMProviderOption> = {
     description: "Custom LLM",
     icon: "/icons/custom.png",
   },
-  codex: {
-    value: "codex",
-    label: "ChatGPT",
-    description: "ChatGPT Plus/Pro via OAuth",
-    icon: "/icons/chatgpt.png",
-  },
+
 };
 
 export const DALLE_3_QUALITY_OPTIONS = [
