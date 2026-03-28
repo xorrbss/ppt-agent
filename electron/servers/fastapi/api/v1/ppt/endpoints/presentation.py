@@ -518,7 +518,10 @@ async def generate_presentation_handler(
                 await sql_session.commit()
 
             if request.files:
-                documents_loader = DocumentsLoader(file_paths=request.files)
+                documents_loader = DocumentsLoader(
+                    file_paths=request.files,
+                    presentation_language=request.language,
+                )
                 await documents_loader.load_documents()
                 documents = documents_loader.documents
                 if documents:

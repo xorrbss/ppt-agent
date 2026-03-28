@@ -1,0 +1,8 @@
+{
+  "name": "presenton-document-extraction",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@llamaindex/liteparse": "^1.4.0"
+  }
+}

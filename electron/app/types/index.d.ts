@@ -33,6 +33,8 @@ interface FastApiEnv {
   MIGRATE_DATABASE_ON_STARTUP?: string,
   /** Absolute path to the soffice binary resolved at startup by libreoffice-check.ts. */
   SOFFICE_PATH?: string,
+  /** Absolute path to the bundled LiteParse runner script. */
+  LITEPARSE_RUNNER_PATH?: string,
 }
 
 interface NextJsEnv {

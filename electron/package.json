@@ -26,10 +26,10 @@
     "automation"
   ],
   "scripts": {
-    "start": "electron .",
+    "start": "electron . --no-sandbox",
     "dist": "electron-builder",
     "postinstall": "electron-builder install-app-deps",
-    "dev": "rm -rf app_dist && tsc && electron .",
+    "dev": "rm -rf app_dist && tsc && electron . --no-sandbox",
     "setup:env": "npm install && cd servers/fastapi && uv sync && cd ../../servers/nextjs && npm install && cd ../.. && npm run setup:export-runtime",
     "install:pyinstaller": "cd servers/fastapi && echo 'pyinstaller already in dependencies'",
     "build:ts": "rm -rf app_dist && tsc",
@@ -51,6 +51,7 @@
     "email": "suraj@presenton.ai"
   },
   "dependencies": {
+    "@llamaindex/liteparse": "^1.4.0",
     "@puppeteer/browsers": "^1.9.1",
     "@tailwindcss/cli": "^4.1.5",
     "@types/uuid": "^10.0.0",

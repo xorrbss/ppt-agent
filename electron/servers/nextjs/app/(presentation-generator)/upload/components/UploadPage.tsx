@@ -132,7 +132,12 @@ const UploadPage = () => {
 
     if (documents.length > 0) {
       trackEvent(MixpanelEvent.Upload_Decompose_Documents_API_Call);
-      promises.push(PresentationGenerationApi.decomposeDocuments(documents));
+      promises.push(
+        PresentationGenerationApi.decomposeDocuments(
+          documents,
+          config?.language ?? null
+        )
+      );
     }
     const responses = await Promise.all(promises);
     dispatch(setPptGenUploadState({

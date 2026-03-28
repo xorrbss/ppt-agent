@@ -43,7 +43,10 @@ async def stream_outlines(
 
         additional_context = ""
         if presentation.file_paths:
-            documents_loader = DocumentsLoader(file_paths=presentation.file_paths)
+            documents_loader = DocumentsLoader(
+                file_paths=presentation.file_paths,
+                presentation_language=presentation.language,
+            )
             await documents_loader.load_documents(temp_dir)
             documents = documents_loader.documents
             if documents:

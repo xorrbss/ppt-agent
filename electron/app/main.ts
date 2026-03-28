@@ -13,6 +13,8 @@ import { setupSetupInstallHandlers } from "./ipc/setup_install_handlers";
 import { checkDependenciesBeforeWindow } from "./utils/setup-dependencies";
 import { getSofficePath, isLibreOfficeInstalled } from "./utils/libreoffice-check";
 import { getPuppeteerExecutablePath, isChromeInstalled } from "./utils/puppeteer-check";
+import { getLiteParseRunnerPath } from "./utils/liteparse-check";
+import { isImageMagickInstalled } from "./utils/imagemagick-check";
 import { startUpdateChecker, stopUpdateChecker } from "./utils/update-checker";
 
 
@@ -23,6 +25,7 @@ let isStopping = false;
 const startupStatus: Record<string, string> = {
   libreoffice: "checking",
   puppeteer: "checking",
+  imagemagick: "checking",
 };
 
 // Allow renderer to query initial startup status as soon as it loads.
@@ -122,6 +125,7 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         // Resolved by libreoffice-check.ts at startup; lets Python invoke the
         // exact binary path instead of relying on the system PATH.
         SOFFICE_PATH: getSofficePath(),
+        LITEPARSE_RUNNER_PATH: getLiteParseRunnerPath(),
       },
       isDev,
     );
@@ -188,7 +192,7 @@ app.whenReady().then(async () => {
   createWindow();
   win?.loadFile(path.join(baseDir, "resources/ui/homepage/index.html"));
 
-  // Single installer: checks LibreOffice and Chrome; if either is missing, shows one
+  // Single installer: checks LibreOffice, Chrome, and ImageMagick; if any are missing, shows one
   // window that installs them one after another. Resolves when the window closes.
   const setupCompleted = await checkDependenciesBeforeWindow();
   if (!setupCompleted) {
@@ -199,12 +203,14 @@ app.whenReady().then(async () => {
   }
 
   // Update startup status after setup (user may have installed one or both)
-  const [loResult, chromeOk] = await Promise.all([
+  const [loResult, chromeOk, imageMagickOk] = await Promise.all([
     isLibreOfficeInstalled(),
     isChromeInstalled(),
+    Promise.resolve(isImageMagickInstalled()),
   ]);
   startupStatus.libreoffice = loResult.installed ? "installed" : "missing";
   startupStatus.puppeteer = chromeOk ? "installed" : "missing";
+  startupStatus.imagemagick = imageMagickOk ? "installed" : "missing";
 
   // Show and focus main window
   win?.show();
@@ -218,6 +224,7 @@ app.whenReady().then(async () => {
   win?.webContents.once("did-finish-load", () => {
     sendStartupStatus("libreoffice", startupStatus.libreoffice);
     sendStartupStatus("puppeteer", startupStatus.puppeteer);
+    sendStartupStatus("imagemagick", startupStatus.imagemagick);
   });
 
   setUserConfig({

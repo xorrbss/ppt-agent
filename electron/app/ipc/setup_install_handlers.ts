@@ -1,13 +1,14 @@
 /**
- * IPC handlers for the unified setup installer (LibreOffice + Chromium).
+ * IPC handlers for the unified setup installer (LibreOffice + Chromium + ImageMagick).
  * - setup:get-status — which dependencies are missing
  * - setup:install-chrome — download Chromium (browser-snapshots) with progress
  */
 
-import { ipcMain, WebContents } from "electron";
+import { ipcMain, WebContents, shell } from "electron";
 import fs from "fs";
 import path from "path";
 import os from "os";
+import { spawn, spawnSync } from "child_process";
 import puppeteer from "puppeteer";
 import {
   Browser,
@@ -17,6 +18,10 @@ import {
   resolveBuildId,
 } from "@puppeteer/browsers";
 import { getSetupStatus } from "../utils/setup-dependencies";
+import {
+  getImageMagickDownloadUrl,
+  isImageMagickInstalled,
+} from "../utils/imagemagick-check";
 
 function getPuppeteerCacheDir(): string {
   const configCache =
@@ -42,9 +47,78 @@ function sendChromeLog(wc: WebContents, level: string, text: string) {
   }
 }
 
+function sendImageMagickProgress(
+  wc: WebContents,
+  phase: "installing" | "done" | "error",
+  percent?: number,
+  message?: string
+) {
+  if (!wc.isDestroyed()) {
+    wc.send("setup:imagemagick-progress", { phase, percent, message });
+  }
+}
+
+function sendImageMagickLog(wc: WebContents, level: string, text: string) {
+  if (!wc.isDestroyed()) {
+    wc.send("setup:imagemagick-log", { level, text });
+  }
+}
+
+function commandExists(command: string, versionArgs: string[] = ["--version"]): boolean {
+  const result = spawnSync(command, versionArgs, {
+    stdio: "pipe",
+    windowsHide: true,
+  });
+  return result.status === 0;
+}
+
+function runInstallCommand(
+  wc: WebContents,
+  command: string,
+  args: string[]
+): Promise<void> {
+  sendImageMagickLog(wc, "info", `Running: ${command} ${args.join(" ")}`);
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: process.platform === "win32",
+    });
+
+    child.stdout.on("data", (data) => {
+      const text = String(data).trim();
+      if (text) sendImageMagickLog(wc, "info", text);
+    });
+    child.stderr.on("data", (data) => {
+      const text = String(data).trim();
+      if (text) {
+        sendImageMagickLog(
+          wc,
+          text.toLowerCase().includes("error") ? "error" : "info",
+          text
+        );
+      }
+    });
+
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(`${command} exited with code ${code}`));
+    });
+  });
+}
+
 export function setupSetupInstallHandlers() {
   ipcMain.handle("setup:get-status", () => {
-    return getSetupStatus() ?? { needsLibreOffice: false, needsChrome: false };
+    return (
+      getSetupStatus() ?? {
+        needsLibreOffice: false,
+        needsChrome: false,
+        needsImageMagick: false,
+      }
+    );
   });
 
   ipcMain.handle(
@@ -119,6 +193,93 @@ export function setupSetupInstallHandlers() {
       }
       sendChromeProgress(wc, "done", 100);
       return { ok: true };
+    }
+  );
+
+  ipcMain.handle(
+    "setup:install-imagemagick",
+    async (event): Promise<{ ok: boolean; error?: string }> => {
+      const wc = event.sender;
+      try {
+        sendImageMagickProgress(
+          wc,
+          "installing",
+          undefined,
+          "Installing ImageMagick..."
+        );
+
+        if (process.platform === "linux") {
+          if (commandExists("apt-get")) {
+            await runInstallCommand(wc, "pkexec", [
+              "apt-get",
+              "install",
+              "-y",
+              "imagemagick",
+            ]);
+          } else {
+            throw new Error(
+              "apt-get is unavailable. Install ImageMagick manually from the official download page."
+            );
+          }
+        } else if (process.platform === "darwin") {
+          if (commandExists("brew")) {
+            await runInstallCommand(wc, "brew", ["install", "imagemagick"]);
+          } else {
+            throw new Error(
+              "Homebrew is not installed. Install ImageMagick manually from the official download page."
+            );
+          }
+        } else if (process.platform === "win32") {
+          if (commandExists("choco", ["-v"])) {
+            await runInstallCommand(wc, "choco", [
+              "install",
+              "imagemagick.app",
+              "-y",
+            ]);
+          } else {
+            throw new Error(
+              "Chocolatey is not installed. Install ImageMagick manually from the official download page."
+            );
+          }
+        } else {
+          throw new Error(
+            "Unsupported platform for automatic install. Use manual install from the official download page."
+          );
+        }
+
+        sendImageMagickProgress(wc, "done", 100, "ImageMagick install finished");
+        return { ok: true };
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "ImageMagick install failed";
+        sendImageMagickLog(wc, "error", message);
+        const downloadUrl = getImageMagickDownloadUrl();
+        sendImageMagickLog(
+          wc,
+          "info",
+          `Falling back to manual install page: ${downloadUrl}`
+        );
+        await shell.openExternal(downloadUrl);
+        return { ok: true };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    "setup:check-imagemagick",
+    async (event): Promise<{ ok: boolean; error?: string }> => {
+      const wc = event.sender;
+      const installed = isImageMagickInstalled();
+      if (installed) {
+        sendImageMagickProgress(wc, "done", 100, "ImageMagick detected");
+        sendImageMagickLog(wc, "ok", "ImageMagick is installed and ready.");
+        return { ok: true };
+      }
+      const message =
+        "ImageMagick is not detected yet. Install it, then click Retry.";
+      sendImageMagickProgress(wc, "error", undefined, message);
+      sendImageMagickLog(wc, "error", message);
+      return { ok: false, error: message };
     }
   );
 }

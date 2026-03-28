@@ -4,6 +4,7 @@ from typing import Annotated, List, Optional
 from fastapi import APIRouter, Body, File, UploadFile
 
 from constants.documents import UPLOAD_ACCEPTED_FILE_TYPES
+from models.decompose_files_body import DecomposeFilesBody
 from models.decomposed_file_info import DecomposedFileInfo
 from services.temp_file_service import TEMP_FILE_SERVICE
 from services.documents_loader import DocumentsLoader
@@ -38,18 +39,21 @@ async def upload_files(files: Optional[List[UploadFile]]):
 
 
 @FILES_ROUTER.post("/decompose", response_model=List[DecomposedFileInfo])
-async def decompose_files(file_paths: Annotated[List[str], Body(embed=True)]):
+async def decompose_files(body: DecomposeFilesBody):
     temp_dir = TEMP_FILE_SERVICE.create_temp_dir(str(uuid.uuid4()))
 
     txt_files = []
     other_files = []
-    for file_path in file_paths:
+    for file_path in body.file_paths:
         if file_path.endswith(".txt"):
             txt_files.append(file_path)
         else:
             other_files.append(file_path)
 
-    documents_loader = DocumentsLoader(file_paths=other_files)
+    documents_loader = DocumentsLoader(
+        file_paths=other_files,
+        presentation_language=body.language,
+    )
     await documents_loader.load_documents(temp_dir)
     parsed_documents = documents_loader.documents
 

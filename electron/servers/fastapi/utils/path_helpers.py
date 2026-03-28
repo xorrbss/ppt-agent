@@ -156,7 +156,7 @@ def patch_python_docx_templates():
     - Docker/Development: Returns immediately without patching (no-op)
     - PyInstaller: Patches the template loading functions
     
-    Note: This should be called before using docling service in PyInstaller bundles.
+    Note: Call before any code path that uses python-docx inside a PyInstaller bundle.
     """
     # Only patch if running in PyInstaller bundle
     # This check ensures Docker and development environments are unaffected
