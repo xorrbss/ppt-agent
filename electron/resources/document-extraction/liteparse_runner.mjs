@@ -70,7 +70,7 @@ const ocrEnabled = parseBool(readArg("--ocr-enabled"), true);
 const dpi = toNumber(readArg("--dpi"), 150, 72, 600);
 const numWorkers = toNumber(
   readArg("--num-workers"),
-  Math.max(os.cpus().length - 1, 1),
+  Math.max(os.cpus().length - 4, 1),
   1,
   64
 );

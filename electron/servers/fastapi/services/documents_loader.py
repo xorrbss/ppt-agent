@@ -1,15 +1,21 @@
-import mimetypes
-from fastapi import HTTPException
-import os, asyncio
+import asyncio
+import os
+import tempfile
+from pathlib import Path
 from typing import List, Optional, Tuple
 
 import pdfplumber
+from fastapi import HTTPException
+
 from constants.documents import (
-    IMAGE_MIME_TYPES,
-    PDF_MIME_TYPES,
-    POWERPOINT_TYPES,
-    TEXT_MIME_TYPES,
-    WORD_TYPES,
+    IMAGE_EXTENSIONS,
+    OFFICE_EXTENSIONS,
+    PDF_EXTENSIONS,
+    TEXT_EXTENSIONS,
+)
+from services.document_conversion_service import (
+    DocumentConversionError,
+    DocumentConversionService,
 )
 from services.liteparse_service import LiteParseError, LiteParseService
 from utils.ocr_language import presentation_language_to_ocr_code
@@ -31,6 +37,7 @@ class DocumentsLoader:
         self._file_paths = file_paths
         self._ocr_language = presentation_language_to_ocr_code(presentation_language)
         self.liteparse_service = LiteParseService()
+        self.document_conversion_service = DocumentConversionService()
         self.document_service = DocumentService() if DocumentService is not None else None
 
         self._documents: List[str] = []
@@ -53,7 +60,7 @@ class DocumentsLoader:
         """If load_images is True, temp_dir must be provided"""
 
         documents: List[str] = []
-        images: List[str] = []
+        images: List[List[str]] = []
 
         for file_path in self._file_paths:
             if not os.path.exists(file_path):
@@ -64,19 +71,28 @@ class DocumentsLoader:
             document = ""
             imgs = []
 
-            mime_type = mimetypes.guess_type(file_path)[0]
-            if mime_type in PDF_MIME_TYPES:
+            extension = Path(file_path).suffix.lower()
+
+            if extension in PDF_EXTENSIONS:
                 document, imgs = await self.load_pdf(
                     file_path, load_text, load_images, temp_dir
                 )
-            elif mime_type in TEXT_MIME_TYPES:
+            elif extension in TEXT_EXTENSIONS:
                 document = await self.load_text(file_path)
-            elif mime_type in POWERPOINT_TYPES:
-                document = self.load_powerpoint(file_path)
-            elif mime_type in WORD_TYPES:
-                document = self.load_msword(file_path)
-            elif mime_type in IMAGE_MIME_TYPES:
-                document = self.load_image(file_path)
+            elif extension in OFFICE_EXTENSIONS:
+                document = await asyncio.to_thread(
+                    self.load_office_document,
+                    file_path,
+                    temp_dir,
+                )
+            elif extension in IMAGE_EXTENSIONS:
+                document = await asyncio.to_thread(
+                    self.load_image,
+                    file_path,
+                    temp_dir,
+                )
+            else:
+                document = await asyncio.to_thread(self._parse_with_liteparse, file_path)
 
             documents.append(document)
             images.append(imgs)
@@ -106,14 +122,35 @@ class DocumentsLoader:
         with open(file_path, "r", encoding="utf-8") as file:
             return await asyncio.to_thread(file.read)
 
-    def load_msword(self, file_path: str) -> str:
-        return self._parse_with_liteparse(file_path)
+    def load_office_document(self, file_path: str, temp_dir: Optional[str] = None) -> str:
+        if temp_dir:
+            converted_path = self.document_conversion_service.convert_office_to_pdf(
+                file_path,
+                temp_dir,
+            )
+            return self._parse_with_liteparse(converted_path)
 
-    def load_powerpoint(self, file_path: str) -> str:
-        return self._parse_with_liteparse(file_path)
+        with tempfile.TemporaryDirectory(prefix="office-convert-") as conversion_dir:
+            converted_path = self.document_conversion_service.convert_office_to_pdf(
+                file_path,
+                conversion_dir,
+            )
+            return self._parse_with_liteparse(converted_path)
 
-    def load_image(self, file_path: str) -> str:
-        return self._parse_with_liteparse(file_path)
+    def load_image(self, file_path: str, temp_dir: Optional[str] = None) -> str:
+        if temp_dir:
+            converted_path = self.document_conversion_service.convert_image_to_png(
+                file_path,
+                temp_dir,
+            )
+            return self._parse_with_liteparse(converted_path)
+
+        with tempfile.TemporaryDirectory(prefix="image-convert-") as conversion_dir:
+            converted_path = self.document_conversion_service.convert_image_to_png(
+                file_path,
+                conversion_dir,
+            )
+            return self._parse_with_liteparse(converted_path)
 
     def _parse_with_liteparse(self, file_path: str) -> str:
         try:
@@ -122,7 +159,7 @@ class DocumentsLoader:
                 ocr_enabled=True,
                 ocr_language=self._ocr_language,
             )
-        except LiteParseError as exc:
+        except (LiteParseError, DocumentConversionError) as exc:
             if self.document_service is not None:
                 try:
                     return self.document_service.parse_to_markdown(file_path)
