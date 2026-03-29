@@ -9,6 +9,7 @@ import { LLM_PROVIDERS } from '@/utils/providerConstants';
 import { Check, Loader2, Eye, EyeOff, ChevronUp, User, RefreshCw, LogOut } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { notify } from '@/components/ui/sonner';
+import { toast } from 'sonner';
 
 
 interface OpenAIConfigProps {
