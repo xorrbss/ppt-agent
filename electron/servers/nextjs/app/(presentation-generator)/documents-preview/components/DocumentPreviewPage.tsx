@@ -27,7 +27,7 @@ import MarkdownRenderer from "./MarkdownRenderer";
 import { getIconFromFile } from "../../utils/others";
 import { ChevronRight, PanelRightOpen, X } from "lucide-react";
 import ToolTip from "@/components/ToolTip";
-import Header from "@/app/(presentation-generator)/dashboard/components/Header";
+import Wrapper from "@/components/Wrapper";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 
 // Types
@@ -167,7 +167,7 @@ const DocumentsPreviewPage: React.FC = () => {
         (fileItem: FileItem) => fileItem.file_path
       );
       trackEvent(MixpanelEvent.DocumentsPreview_Create_Presentation_API_Call);
-       const createResponse = await PresentationGenerationApi.createPresentation(
+      const createResponse = await PresentationGenerationApi.createPresentation(
         {
           content: config?.prompt ?? "",
           n_slides: config?.slides ? parseInt(config.slides) : null,
@@ -223,12 +223,11 @@ const DocumentsPreviewPage: React.FC = () => {
     if (!isDocument) return null;
 
     return (
-      <div className="h-full mr-4">
-        <div className="overflow-y-auto custom_scrollbar h-full">
-          <div className="h-full w-full max-w-full flex flex-col mb-5">
-            <h1 className="text-2xl font-medium mb-5">Content:</h1>
+      <div className="flex h-full min-h-0 flex-1 flex-col pr-2 sm:pr-4">
+        <div className="custom_scrollbar min-h-0 flex-1 overflow-y-auto">
+          <div className="flex min-h-0 w-full max-w-full flex-col pb-6">
             {downloadingDocuments.includes(selectedDocument) ? (
-              <Skeleton className="w-full h-full" />
+              <Skeleton className="min-h-[240px] w-full rounded-xl" />
             ) : (
               <MarkdownRenderer
                 content={textContents[selectedDocument] || ""}
@@ -244,82 +243,102 @@ const DocumentsPreviewPage: React.FC = () => {
     if (!isOpen) return null;
 
     return (
-      <div className={`border-r border-gray-200 fixed xl:relative w-full z-50 xl:z-auto
-        transition-all duration-300 bg-white ease-in-out max-w-[200px] md:max-w-[300px] h-[85vh] rounded-md p-5`}>
-        <X
+      <aside
+        className={[
+          "z-30 flex w-full min-h-0 flex-col border-b border-slate-200/70 bg-white/95 p-4 pt-2 mt-2 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/80",
+          "max-h-[min(42vh,360px)] shrink-0",
+          "lg:fixed lg:top-28 lg:bottom-40 lg:z-30 lg:max-h-none lg:w-[300px] lg:shrink-0 lg:rounded-2xl lg:border lg:border-slate-200/70 lg:shadow-sm lg:left-[calc((100vw-min(100vw,1440px))/2+5rem)]",
+        ].join(" ")}
+      >
+        <button
+          type="button"
           onClick={() => setIsOpen(false)}
-          className="text-black mb-4 ml-auto mr-0 cursor-pointer hover:text-gray-600"
-          size={20}
-        />
+          className="mb-2 ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
+          aria-label="Close document list"
+        >
+          <X size={18} strokeWidth={2} />
+        </button>
 
         {documentKeys.length > 0 && (
-          <div className="mt-8">
-            <p className="text-xs mt-2 text-[#2E2E2E] opacity-70">DOCUMENTS</p>
-            <div className="flex flex-col gap-2 mt-6">
-              {documentKeys.map((key: string) => (
-                <div
-                  key={key}
-                  onClick={() => updateSelectedDocument(key)}
-                  className={`${
-                    selectedDocument === key ? "border border-blue-500" : ""
-                  } flex p-2 rounded-sm gap-2 items-center cursor-pointer`}
-                >
-                  <img
-                    className="h-6 w-6 border border-gray-200"
-                    src={getIconFromFile(key)}
-                    alt="Document icon"
-                  />
-                  <span className="text-sm h-6 text-[#2E2E2E] overflow-hidden">
-                    {key.split("/").pop() ?? "file.txt"}
-                  </span>
-                </div>
-              ))}
+          <>
+            <p className="shrink-0 text-xs font-syne font-medium uppercase tracking-wider text-slate-500">
+              Documents
+            </p>
+            <div className="custom_scrollbar mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain lg:min-h-0 lg:flex-1">
+              <div className="flex flex-col gap-1.5 pb-1">
+                {documentKeys.map((key: string) => (
+                  <button
+                    type="button"
+                    key={key}
+                    onClick={() => updateSelectedDocument(key)}
+                    className={`flex cursor-pointer items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition-colors ${selectedDocument === key
+                      ? "border-[#5141e5]/35 bg-[#F4F3FF] text-[#7E3AF2]"
+                      : "border-transparent bg-slate-50/80 text-slate-800 hover:border-slate-200/80 hover:bg-white"
+                      }`}
+                  >
+                    <img
+                      className="h-6 w-6 shrink-0 rounded border border-slate-200/80"
+                      src={getIconFromFile(key)}
+                      alt=""
+                    />
+                    <span className="line-clamp-2 text-sm font-syne leading-snug">
+                      {key.split("/").pop() ?? "file.txt"}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          </>
         )}
-      </div>
+      </aside>
     );
   };
 
   return (
-    <div className={`bg-white/90 min-h-screen flex flex-col w-full`}>
+    <div className="flex w-full flex-col font-syne">
       <OverlayLoader
         show={showLoading.show}
         text={showLoading.message}
         showProgress={showLoading.progress}
         duration={showLoading.duration}
       />
-      <Header />
-      <div className="flex mt-6 gap-4 font-instrument_sans">
+      <Wrapper className="relative px-5 pb-28 pt-4 sm:px-10 lg:px-20">
         {!isOpen && (
-          <div className="fixed left-4 top-1/2 -translate-y-1/2 z-50">
-            <ToolTip content="Open Panel">
+          <div className="fixed left-4 top-1/2 z-50 -translate-y-1/2 sm:left-6">
+            <ToolTip content="Open document list">
               <Button
+                type="button"
                 onClick={() => setIsOpen(true)}
-                className="bg-[#5146E5] text-white p-3 shadow-lg"
+                className="h-12 w-12 rounded-full bg-[#5141e5] p-0 text-white shadow-lg hover:bg-[#5141e5]/90 focus-visible:ring-2 focus-visible:ring-[#5141e5]/40"
               >
-                <PanelRightOpen className="text-white" size={20} />
+                <PanelRightOpen className="h-5 w-5" strokeWidth={2} />
               </Button>
             </ToolTip>
           </div>
         )}
 
-        {renderSidebar()}
+        {isOpen && renderSidebar()}
 
-        <div className="bg-white w-full mx-2 sm:mx-4 h-[calc(100vh-100px)] custom_scrollbar rounded-md overflow-y-auto py-6 pl-6">
-          {renderDocumentContent()}
+        <div
+          className={`rounded-2xl border border-slate-200/70 bg-white/80 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60 ${isOpen ? "lg:ml-[316px]" : ""
+            }`}
+        >
+          <div className="custom_scrollbar flex min-h-[min(70vh,560px)] flex-col overflow-y-auto p-4 md:p-6">
+            {renderDocumentContent()}
+          </div>
         </div>
 
-        <div className="fixed bottom-5 right-5">
+        <div className="fixed bottom-5 right-5 z-50 sm:bottom-[26px] sm:right-[26px]">
           <Button
+            type="button"
             onClick={handleCreatePresentation}
-            className="flex items-center gap-2 px-8 py-6 rounded-sm text-md bg-[#5146E5] hover:bg-[#5146E5]/90"
+            className="flex items-center gap-2 rounded-[28px] bg-[#5141e5] px-8 py-5 text-lg font-semibold text-white shadow-sm hover:bg-[#5141e5]/85 focus-visible:ring-2 focus-visible:ring-[#5141e5]/40"
           >
-            <span className="text-white font-semibold">Next</span>
-            <ChevronRight />
+            <span>Next</span>
+            <ChevronRight className="!h-5 !w-5" strokeWidth={2} />
           </Button>
         </div>
-      </div>
+      </Wrapper>
     </div>
   );
 };
