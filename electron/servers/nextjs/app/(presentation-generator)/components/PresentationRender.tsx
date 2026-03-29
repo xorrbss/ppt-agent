@@ -76,7 +76,7 @@ const SlideScale = ({
                     } as React.CSSProperties}
                 >
 
-                    {/* <div
+                    {isClickable && <div
                         className="absolute inset-0 bg-transparent z-30 w-full h-full  select-none"
                         aria-hidden="true"
 
