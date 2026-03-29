@@ -83,7 +83,7 @@ export const useFontManagement = () => {
         const formData = new FormData();
         formData.append("font_file", file);
 
-        const response = await fetch(getApiUrl("/api/v1/ppt/fonts/upload"), {
+        const response = await fetch(getApiUrl(`${process.env.NEXT_PUBLIC_FAST_API}/api/v1/ppt/fonts/upload`), {
           method: "POST",
           body: formData,
         });
