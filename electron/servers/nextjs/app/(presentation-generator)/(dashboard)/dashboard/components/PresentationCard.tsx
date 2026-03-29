@@ -111,7 +111,7 @@ export const PresentationCard = ({
         <img src="/card_bg.svg" alt="" className="absolute top-0 left-0 w-full h-full object-cover" />
         <div className="scale-[0.75] mt-4  border border-gray-300 rounded-lg overflow-hidden">
 
-          <SlideScale slide={firstSlide} isClickable={true} />
+          <SlideScale slide={firstSlide} isClickable={false} />
         </div>
 
         <div className="w-full py-3 px-5 mt-auto z-40 relative bg-white  border-t border-[#EDEEEF]">

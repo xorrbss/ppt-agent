@@ -12,7 +12,8 @@ const SlideScale = ({
     isEditMode = true,
     /** Fill viewport; scale may exceed 1 so slides appear larger in present mode */
     presentMode = false,
-}: { slide: any; theme?: any; isEditMode?: boolean; presentMode?: boolean }) => {
+    isClickable = true,
+}: { slide: any; theme?: any; isEditMode?: boolean; presentMode?: boolean; isClickable?: boolean }) => {
 
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [box, setBox] = useState({ w: 0, h: 0 });
@@ -76,11 +77,11 @@ const SlideScale = ({
                     } as React.CSSProperties}
                 >
 
-                    {isClickable && <div
+                    {!isClickable && <div
                         className="absolute inset-0 bg-transparent z-30 w-full h-full  select-none"
                         aria-hidden="true"
 
-                    /> */}
+                    />}
                     <V1ContentRender slide={slide} isEditMode={isEditMode} theme={theme} />
                 </div>
 
