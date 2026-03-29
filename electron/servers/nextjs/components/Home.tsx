@@ -289,7 +289,7 @@ export default function Home() {
             <img src="/right-confetti.png" alt="presenton" className='w-full h-full object-contain' />
           </div>
         )}
-        <OnBoardingHeader currentStep={step} />
+        <OnBoardingHeader currentStep={step} setStep={setStep} />
         {step === 1 && <ModeSelectStep selectedMode={selectedMode} setStep={setStep} setSelectedMode={setSelectedMode} />}
         {step === 2 && selectedMode === "presenton" && <PresentonMode currentStep={step} setStep={setStep} />}
         {step === 2 && selectedMode === "image" && <GenerationWithImage />}

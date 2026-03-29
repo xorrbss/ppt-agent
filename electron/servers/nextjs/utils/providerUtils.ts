@@ -110,47 +110,97 @@ export const resetDownloadingModel = (): DownloadingModel => ({
   done: false,
 });
 
+function abortPullError(): Error {
+  const err = new Error("Download cancelled");
+  err.name = "AbortError";
+  return err;
+}
+
+function isAbortError(e: unknown): boolean {
+  return e instanceof Error && e.name === "AbortError";
+}
+
 /**
- * Pulls Ollama model with progress tracking
- * Returns a promise that resolves with the final downloading model state
+ * Pulls Ollama model with progress tracking.
+ * Pass an AbortSignal to stop polling (e.g. user cancels download).
  */
 export const pullOllamaModel = async (
   model: string,
-  onProgress?: (model: DownloadingModel) => void
+  onProgress?: (model: DownloadingModel) => void,
+  signal?: AbortSignal
 ): Promise<DownloadingModel> => {
   return new Promise((resolve, reject) => {
-    const interval = setInterval(async () => {
+    let interval: ReturnType<typeof setInterval> | null = null;
+    let settled = false;
+
+    const cleanup = () => {
+      if (interval !== null) {
+        clearInterval(interval);
+        interval = null;
+      }
+      signal?.removeEventListener("abort", onAbort);
+    };
+
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      onProgress?.(resetDownloadingModel());
+      reject(abortPullError());
+    };
+
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+    signal?.addEventListener("abort", onAbort);
+
+    interval = setInterval(async () => {
+      if (signal?.aborted) {
+        onAbort();
+        return;
+      }
       try {
         const response = await fetch(
           getApiUrl(`/api/v1/ppt/ollama/model/pull?model=${model}`)
         );
+        if (settled) return;
         if (response.status === 200) {
           const data = await response.json();
           if (data.done && data.status !== "error") {
-            clearInterval(interval);
+            if (settled) return;
+            settled = true;
+            cleanup();
             onProgress?.(data);
             resolve(data);
           } else if (data.status === "error") {
-            clearInterval(interval);
-            const resetData = resetDownloadingModel();
-            onProgress?.(resetData);
+            if (settled) return;
+            settled = true;
+            cleanup();
+            onProgress?.(resetDownloadingModel());
             reject(new Error("Error occurred while pulling model"));
           } else {
             onProgress?.(data);
           }
         } else {
-          clearInterval(interval);
-          const resetData = resetDownloadingModel();
-          onProgress?.(resetData);
+          if (settled) return;
+          settled = true;
+          cleanup();
+          onProgress?.(resetDownloadingModel());
           if (response.status === 403) {
             reject(new Error("Request to Ollama Not Authorized"));
+          } else {
+            reject(new Error("Error occurred while pulling model"));
           }
-          reject(new Error("Error occurred while pulling model"));
         }
       } catch (error) {
-        clearInterval(interval);
-        const resetData = resetDownloadingModel();
-        onProgress?.(resetData);
+        if (settled) return;
+        if (isAbortError(error)) {
+          return;
+        }
+        settled = true;
+        cleanup();
+        onProgress?.(resetDownloadingModel());
         reject(error);
       }
     }, 1000);
