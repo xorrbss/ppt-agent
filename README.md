@@ -23,7 +23,7 @@ No SaaS lock-in · No forced subscriptions · Full control over models and data
 
 What makes Presenton different?
 
-- Fully **self-hosted**
+- Fully **self-hosted**; Web (Docker) & Desktop (Mac, Windows & Linux)
 - Works with OpenAI, Gemini, Anthropic, Ollama, or custom models
 - API deployable
 - Fully open-source (Apache 2.0)
