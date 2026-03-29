@@ -71,13 +71,15 @@ export async function startNextJsServer(
   let nextjsProcess;
 
   if (isDev) {
+    // Windows: npm is npm.cmd; spawn() needs a shell or ENOENT.
     nextjsProcess = spawn(
-      "npm",
+      process.platform === "win32" ? "npm.cmd" : "npm",
       ["run", "dev", "--", "-p", port.toString()],
       {
         cwd: directory,
         stdio: ["ignore", "pipe", "pipe"],
         env: { ...process.env, ...env },
+        shell: process.platform === "win32",
       }
     );
     const nextjsLogPath = path.join(logsDir, "nextjs-server.log");
