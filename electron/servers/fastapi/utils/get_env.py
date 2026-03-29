@@ -142,3 +142,7 @@ def get_codex_model_env():
 
 def get_migrate_database_on_startup_env():
     return os.getenv("MIGRATE_DATABASE_ON_STARTUP")
+
+
+def get_next_public_fast_api_env():
+    return os.getenv("NEXT_PUBLIC_FAST_API")

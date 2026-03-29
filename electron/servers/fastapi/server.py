@@ -1,5 +1,6 @@
 import uvicorn
 import argparse
+import os
 from api.main import app
 
 if __name__ == "__main__":
@@ -12,10 +13,14 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     reload = args.reload == "true"
+    host = "127.0.0.1"
+
+    # Provide a predictable public URL for services that need absolute asset links.
+    os.environ.setdefault("FASTAPI_PUBLIC_URL", f"http://{host}:{args.port}")
     
     uvicorn.run(
         "api.main:app",
-        host="127.0.0.1",
+        host=host,
         port=args.port,
         log_level="info",
         reload=reload,
