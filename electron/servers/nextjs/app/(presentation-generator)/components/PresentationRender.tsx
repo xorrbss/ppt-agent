@@ -6,7 +6,7 @@ import { V1ContentRender } from '../../(presentation-generator)/components/V1Con
 const BASE_WIDTH = 1280;
 const BASE_HEIGHT = 720;
 
-const SlideScale = ({ slide, theme }: { slide: any, theme?: any }) => {
+const SlideScale = ({ slide, theme, isClickable = false }: { slide: any, theme?: any, isClickable?: boolean }) => {
 
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [containerWidth, setContainerWidth] = useState<number>(0);
@@ -62,11 +62,11 @@ const SlideScale = ({ slide, theme }: { slide: any, theme?: any }) => {
                     } as React.CSSProperties}
                 >
 
-                    {/* <div
+                    {isClickable && <div
                         className="absolute inset-0 bg-transparent z-30 w-full h-full  select-none"
                         aria-hidden="true"
 
-                    /> */}
+                    />}
                     <V1ContentRender slide={slide} isEditMode={true} theme={theme} />
                 </div>
 

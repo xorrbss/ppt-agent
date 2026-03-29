@@ -34,11 +34,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [error, setError] = useState(false);
 
-  // Ensure /app_data and /static image paths resolve through FastAPI in Electron.
-  useEffect(() => {
-    const observer = setupImageUrlConverter();
-    return () => observer?.disconnect();
-  }, []);
 
 
   const { presentationData, isStreaming } = useSelector(
