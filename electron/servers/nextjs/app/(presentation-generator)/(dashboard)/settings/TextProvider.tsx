@@ -9,7 +9,7 @@ import { getApiUrl } from '@/utils/api';
 import { LLM_PROVIDERS } from '@/utils/providerConstants';
 import { Check, Loader2, Eye, EyeOff, ChevronUp } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { toast } from 'sonner';
+import { notify } from '@/components/ui/sonner';
 
 
 interface OpenAIConfigProps {
@@ -190,11 +190,17 @@ const TextProvider = ({
                 console.error('Failed to fetch models');
                 setAvailableModels([]);
                 setModelsChecked(true);
-                toast.error(`Failed to fetch ${modelLabel} models`);
+                notify.error(
+                    'Could not load models',
+                    `The server could not list ${modelLabel} models. Check your API key or endpoint and try again.`
+                );
             }
         } catch (error) {
             console.error('Error fetching models:', error);
-            toast.error('Error fetching models');
+            notify.error(
+                'Could not load models',
+                'Something went wrong while contacting the provider. Check your network and try again.'
+            );
             setAvailableModels([]);
             setModelsChecked(true);
         } finally {

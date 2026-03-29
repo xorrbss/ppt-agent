@@ -1,7 +1,18 @@
 "use client"
 
+import type React from "react"
 import { useTheme } from "next-themes"
-import { Toaster as Sonner } from "sonner"
+import { Toaster as Sonner, toast as sonnerToast } from "sonner"
+
+/** Toasts with both title and description. */
+export const notify = {
+  error: (title: string, description: string) =>
+    sonnerToast.error(title, { description }),
+  success: (title: string, description: string) =>
+    sonnerToast.success(title, { description }),
+  info: (title: string, description: string) =>
+    sonnerToast.info(title, { description }),
+} as const
 
 type ToasterProps = React.ComponentProps<typeof Sonner>
 

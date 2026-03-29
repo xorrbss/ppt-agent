@@ -1,10 +1,14 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { Loader2, Download, CheckCircle, ChevronRight } from "lucide-react";
-import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { notify } from "@/components/ui/sonner";
 import { RootState } from "@/store/store";
 import { useSelector } from "react-redux";
-import { handleSaveLLMConfig } from "@/utils/storeHelpers";
+import {
+  getLLMConfigValidationError,
+  handleSaveLLMConfig,
+} from "@/utils/storeHelpers";
 import {
   checkIfSelectedOllamaModelIsPulled,
   pullOllamaModel,
@@ -52,6 +56,7 @@ const SettingsPage = () => {
     done: boolean;
   } | null>(null);
   const [showDownloadModal, setShowDownloadModal] = useState<boolean>(false);
+  const downloadAbortRef = React.useRef<AbortController | null>(null);
 
   const downloadProgress = React.useMemo(() => {
     if (
@@ -68,6 +73,11 @@ const SettingsPage = () => {
 
   const handleSaveConfig = async () => {
     trackEvent(MixpanelEvent.Settings_SaveConfiguration_Button_Clicked, { pathname });
+    const validationError = getLLMConfigValidationError(llmConfig);
+    if (validationError) {
+      notify.error("Cannot save settings", validationError);
+      return;
+    }
     try {
       setButtonState(prev => ({
         ...prev,
@@ -84,11 +94,24 @@ const SettingsPage = () => {
         );
         if (!isPulled) {
           setShowDownloadModal(true);
+          setDownloadingModel({
+            name: llmConfig.OLLAMA_MODEL || "",
+            size: null,
+            downloaded: null,
+            status: "pulling",
+            done: false,
+          });
           trackEvent(MixpanelEvent.Settings_DownloadOllamaModel_API_Call);
-          await handleModelDownload();
+          const downloadOutcome = await handleModelDownload();
+          if (downloadOutcome === "cancelled") {
+            return;
+          }
         }
       }
-      toast.info("Configuration saved successfully");
+      notify.info(
+        "Settings saved",
+        "Your configuration was saved successfully."
+      );
       setButtonState(prev => ({
         ...prev,
         isLoading: false,
@@ -98,7 +121,11 @@ const SettingsPage = () => {
       trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/upload" });
       router.push("/upload");
     } catch (error) {
-      toast.info(error instanceof Error ? error.message : "Failed to save configuration");
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Something went wrong while saving.";
+      notify.error("Could not save settings", message);
       setButtonState(prev => ({
         ...prev,
         isLoading: false,
@@ -108,13 +135,38 @@ const SettingsPage = () => {
     }
   };
 
-  const handleModelDownload = async () => {
+  const handleModelDownload = async (): Promise<"completed" | "cancelled"> => {
+    const ac = new AbortController();
+    downloadAbortRef.current = ac;
     try {
-      await pullOllamaModel(llmConfig.OLLAMA_MODEL!, setDownloadingModel);
-    }
-    finally {
+      await pullOllamaModel(
+        llmConfig.OLLAMA_MODEL!,
+        setDownloadingModel,
+        ac.signal
+      );
+      return "completed";
+    } catch (e) {
+      const aborted = e instanceof Error && e.name === "AbortError";
+      if (aborted) {
+        setDownloadingModel(null);
+        setShowDownloadModal(false);
+        setButtonState({
+          isLoading: false,
+          isDisabled: false,
+          text: "Save Configuration",
+          showProgress: false,
+        });
+        notify.info(
+          "Download cancelled",
+          "The Ollama model download was stopped. Your settings are already saved—you can save again to retry the download."
+        );
+        return "cancelled";
+      }
       setDownloadingModel(null);
       setShowDownloadModal(false);
+      throw e;
+    } finally {
+      downloadAbortRef.current = null;
     }
   };
 
@@ -141,7 +193,10 @@ const SettingsPage = () => {
       setTimeout(() => {
         setShowDownloadModal(false);
         setDownloadingModel(null);
-        toast.info("Model downloaded successfully!");
+        notify.success(
+          "Model ready",
+          "The Ollama model finished downloading successfully."
+        );
       }, 2000);
     }
   }, [downloadingModel]);
@@ -334,6 +389,19 @@ const SettingsPage = () => {
                       MB
                     </span>
                   </div>
+                </div>
+              )}
+
+              {!downloadingModel.done && (
+                <div className="mt-6 flex justify-center">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-lg border-gray-300 text-gray-800 hover:bg-gray-50"
+                    onClick={() => downloadAbortRef.current?.abort()}
+                  >
+                    Cancel download
+                  </Button>
                 </div>
               )}
             </div>

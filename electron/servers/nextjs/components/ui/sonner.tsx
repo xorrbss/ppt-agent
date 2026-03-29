@@ -2,7 +2,17 @@
 
 import type React from "react"
 import { BadgeCheck, Loader2, ShieldAlert } from "lucide-react"
-import { Toaster as Sonner } from "sonner"
+import { Toaster as Sonner, toast as sonnerToast } from "sonner"
+
+/** Toasts with both title and description (matches styled [data-title] / [data-description]). */
+export const notify = {
+  error: (title: string, description: string) =>
+    sonnerToast.error(title, { description }),
+  success: (title: string, description: string) =>
+    sonnerToast.success(title, { description }),
+  info: (title: string, description: string) =>
+    sonnerToast.info(title, { description }),
+} as const
 
 type ToasterProps = React.ComponentProps<typeof Sonner>
 
@@ -19,29 +29,42 @@ const Toaster = ({ icons, ...props }: ToasterProps) => {
   return (
     <>
       <style jsx global>{`
-        /* Constrain toast width similar to the design mock */
-       
-        /* Neutral "card" toast container */
-        [data-sonner-toast][data-styled="true"] {
-          border-radius: 10px !important;
-         
-          border: 1px solid #E1E1E5 !important;
-          box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.06) !important;
-          padding: 8px !important;
-          gap: 10px !important;
-          backdrop-filter: blur(6px) !important;
-          background: white !important;
+        /* Near Sonner default width on desktop; nearly full width on narrow screens */
+        [data-sonner-toaster] {
+          --width: min(100dvw - 1.5rem, 22.5rem) !important;
+          box-sizing: border-box !important;
         }
 
-        /* Typography */
+        @media (min-width: 640px) {
+          [data-sonner-toaster] {
+            --width: min(100dvw - 2rem, 24rem) !important;
+          }
+        }
+
+        /* Neutral "card" toast container — design tokens */
+        [data-sonner-toast][data-styled="true"] {
+          border-radius: 10px !important;
+
+          border: 1px solid var(--Base-Gray-700, #e1e1e5) !important;
+          background: rgba(255, 255, 255, 0.6) !important;
+          box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.06) !important;
+          padding: clamp(9px, 0.5rem + 0.35vw, 12px) clamp(11px, 0.65rem + 0.5vw, 14px) !important;
+          gap: clamp(8px, 0.5rem + 0.35vw, 11px) !important;
+          backdrop-filter: blur(6px) !important;
+          -webkit-backdrop-filter: blur(6px) !important;
+          width: 100% !important;
+          max-width: 100% !important;
+        }
+
+        /* Typography — slight scale-up from original 12px, capped modestly */
         [data-sonner-toast][data-styled="true"] [data-title] {
           font-family: var(--font-syne), ui-sans-serif, system-ui, -apple-system,
             BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
             "Noto Sans", sans-serif !important;
-          font-size: 12px !important;
+          font-size: clamp(0.8125rem, 0.8rem + 0.12vw, 0.9375rem) !important;
           font-weight: 500 !important;
-          line-height: 14px !important;
-          letter-spacing: 0.04em !important;
+          line-height: 1.35 !important;
+          letter-spacing: 0.03em !important;
           color: rgb(15 23 42) !important; /* slate-900 */
           text-transform: none !important;
         }
@@ -50,23 +73,24 @@ const Toaster = ({ icons, ...props }: ToasterProps) => {
           font-family: var(--font-syne), ui-sans-serif, system-ui, -apple-system,
             BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
             "Noto Sans", sans-serif !important;
-          font-size: 10px !important;
+          font-size: clamp(0.6875rem, 0.67rem + 0.1vw, 0.8125rem) !important;
           font-weight: 400 !important;
-          line-height: 10px !important; /* 100% */
+          line-height: 1.4 !important;
           letter-spacing: 0.03em !important;
           color: rgb(100 116 139) !important; /* slate-500 */
         }
 
         [data-sonner-toast][data-styled="true"] [data-content] {
-          gap: 2px !important;
+          gap: clamp(2px, 0.15vw, 5px) !important;
           flex: 1 1 auto !important;
           min-width: 0 !important;
         }
 
         /* Left icon badge */
         [data-sonner-toast][data-styled="true"] [data-icon] {
-          width: 20px !important;
-          height: 20px !important;
+          width: clamp(20px, 1.15rem + 0.35vw, 22px) !important;
+          height: clamp(20px, 1.15rem + 0.35vw, 22px) !important;
+          flex-shrink: 0 !important;
           display: flex !important;
           align-items: center !important;
           justify-content: center !important;
@@ -75,8 +99,8 @@ const Toaster = ({ icons, ...props }: ToasterProps) => {
         }
 
         [data-sonner-toast][data-styled="true"] [data-icon] svg {
-          width: 20px !important;
-          height: 20px !important;
+          width: clamp(20px, 1.15rem + 0.35vw, 22px) !important;
+          height: clamp(20px, 1.15rem + 0.35vw, 22px) !important;
         }
 
         /* Per-type icon colors */
@@ -103,12 +127,13 @@ const Toaster = ({ icons, ...props }: ToasterProps) => {
         /* Outline buttons like the mock ("Got it!") */
         [data-sonner-toast][data-styled="true"] [data-button] {
           height: auto !important;
-          padding: 4px 8px !important;
+          padding: clamp(4px, 0.3rem + 0.2vw, 7px)
+            clamp(7px, 0.5rem + 0.25vw, 10px) !important;
           border-radius: 6px !important;
           font-family: var(--font-syne), ui-sans-serif, system-ui, -apple-system,
             BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
             "Noto Sans", sans-serif !important;
-          font-size: 10px !important;
+          font-size: clamp(0.625rem, 0.62rem + 0.08vw, 0.75rem) !important;
           font-weight: 400 !important;
           background: rgb(255 255 255) !important;
           color: #3F3F3F !important;
@@ -127,21 +152,22 @@ const Toaster = ({ icons, ...props }: ToasterProps) => {
           white-space: nowrap !important;
           width: auto !important;
           height: auto !important;
-          padding: 4px 8px !important;
+          padding: clamp(4px, 0.3rem + 0.2vw, 7px)
+            clamp(7px, 0.5rem + 0.25vw, 10px) !important;
           border-radius: 6px !important;
           margin-left: auto !important;
           margin-right: 0 !important;
           align-self: center !important;
           background: rgb(255 255 255) !important;
-          color: #3F3F3F !important;
-          border: 1px solid #EDEEEF !important;
+          color: #3f3f3f !important;
+          border: 1px solid #edeeef !important;
           box-shadow: none !important;
           font-family: var(--font-syne), ui-sans-serif, system-ui, -apple-system,
             BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
             "Noto Sans", sans-serif !important;
-          font-size: 10px !important;
+          font-size: clamp(0.625rem, 0.62rem + 0.08vw, 0.75rem) !important;
           font-weight: 400 !important;
-          line-height: 14px !important;
+          line-height: 1.3 !important;
           letter-spacing: 0.02em !important;
         }
 
@@ -153,11 +179,14 @@ const Toaster = ({ icons, ...props }: ToasterProps) => {
           background: rgb(248 250 252) !important; /* slate-50 */
         }
 
-        /* Dark mode */
+        /* Dark mode — same radius, border weight, shadow; frosted dark surface */
         .dark [data-sonner-toast][data-styled="true"] {
-          background: rgb(2 6 23) !important; /* slate-950 */
-          border: 1px solid rgba(148, 163, 184, 0.22) !important; /* slate-400 @ 22% */
-          box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45) !important;
+          border-radius: 10px !important;
+          border: 1px solid rgba(148, 163, 184, 0.22) !important;
+          background: rgba(2, 6, 23, 0.6) !important;
+          box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.06) !important;
+          backdrop-filter: blur(6px) !important;
+          -webkit-backdrop-filter: blur(6px) !important;
         }
 
         .dark [data-sonner-toast][data-styled="true"] [data-title] {
@@ -189,11 +218,8 @@ const Toaster = ({ icons, ...props }: ToasterProps) => {
         }
       `}</style>
       <Sonner
-        style={{
-          zIndex: 999999999,
-          background: 'red',
-        }}
-        className="toaster group z-50 bg-white"
+        style={{ zIndex: 999999999 }}
+        className="toaster group z-50 bg-transparent"
         icons={{ ...defaultIcons, ...(icons ?? {}) }}
         toastOptions={{
           closeButtonAriaLabel: "Dismiss notification",

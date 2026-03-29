@@ -2,9 +2,118 @@ import { setLLMConfig } from "@/store/slices/userConfig";
 import { store } from "@/store/store";
 import { LLMConfig } from "@/types/llm_config";
 
+function isProvided(value: unknown): boolean {
+  return value !== "" && value !== null && value !== undefined;
+}
+
+/**
+ * Returns a user-facing validation message, or null when the config is valid.
+ */
+export const getLLMConfigValidationError = (
+  llmConfig: LLMConfig
+): string | null => {
+  if (!llmConfig.LLM) {
+    return "Select a text provider.";
+  }
+
+  if (!llmConfig.DISABLE_IMAGE_GENERATION && !llmConfig.IMAGE_PROVIDER) {
+    return "Select an image provider, or turn off image generation.";
+  }
+
+  const llm = llmConfig.LLM;
+
+  if (llm === "openai") {
+    if (!isProvided(llmConfig.OPENAI_API_KEY)) {
+      return "OpenAI API key is required.";
+    }
+    if (!isProvided(llmConfig.OPENAI_MODEL)) {
+      return 'No OpenAI model selected. Use "Check models" after entering your API key, then choose a model.';
+    }
+  } else if (llm === "google") {
+    if (!isProvided(llmConfig.GOOGLE_API_KEY)) {
+      return "Google API key is required.";
+    }
+    if (!isProvided(llmConfig.GOOGLE_MODEL)) {
+      return 'No Google model selected. Use "Check models" after entering your API key, then choose a model.';
+    }
+  } else if (llm === "anthropic") {
+    if (!isProvided(llmConfig.ANTHROPIC_API_KEY)) {
+      return "Anthropic API key is required.";
+    }
+    if (!isProvided(llmConfig.ANTHROPIC_MODEL)) {
+      return 'No Anthropic model selected. Use "Check models" after entering your API key, then choose a model.';
+    }
+  } else if (llm === "ollama") {
+    if (!isProvided(llmConfig.OLLAMA_URL)) {
+      return "Ollama server URL is required.";
+    }
+    if (!isProvided(llmConfig.OLLAMA_MODEL)) {
+      return "Select an Ollama model. If none appear, confirm Ollama is running and reachable.";
+    }
+  } else if (llm === "custom") {
+    if (!isProvided(llmConfig.CUSTOM_LLM_URL)) {
+      return "Enter your custom LLM endpoint URL (OpenAI-compatible).";
+    }
+    if (!isProvided(llmConfig.CUSTOM_MODEL)) {
+      return 'No model selected for your custom endpoint. Use "Check models" after entering the URL, then choose a model.';
+    }
+  } else if (llm === "codex") {
+    if (!isProvided(llmConfig.CODEX_MODEL)) {
+      return "Select a Codex model.";
+    }
+  } else {
+    return "Unsupported or unknown text provider.";
+  }
+
+  if (!llmConfig.DISABLE_IMAGE_GENERATION) {
+    switch (llmConfig.IMAGE_PROVIDER) {
+      case "pexels":
+        if (!isProvided(llmConfig.PEXELS_API_KEY)) {
+          return "Pexels API key is required.";
+        }
+        break;
+      case "pixabay":
+        if (!isProvided(llmConfig.PIXABAY_API_KEY)) {
+          return "Pixabay API key is required.";
+        }
+        break;
+      case "dall-e-3":
+        if (!isProvided(llmConfig.OPENAI_API_KEY)) {
+          return "OpenAI API key is required for DALL·E 3.";
+        }
+        break;
+      case "gpt-image-1.5":
+        if (!isProvided(llmConfig.OPENAI_API_KEY)) {
+          return "OpenAI API key is required for GPT Image 1.5.";
+        }
+        break;
+      case "gemini_flash":
+        if (!isProvided(llmConfig.GOOGLE_API_KEY)) {
+          return "Google API key is required for Gemini Flash image generation.";
+        }
+        break;
+      case "nanobanana_pro":
+        if (!isProvided(llmConfig.GOOGLE_API_KEY)) {
+          return "Google API key is required for NanoBanana Pro.";
+        }
+        break;
+      case "comfyui":
+        if (!isProvided(llmConfig.COMFYUI_URL)) {
+          return "ComfyUI server URL is required.";
+        }
+        break;
+      default:
+        return "Select a valid image provider.";
+    }
+  }
+
+  return null;
+};
+
 export const handleSaveLLMConfig = async (llmConfig: LLMConfig) => {
-  if (!hasValidLLMConfig(llmConfig)) {
-    throw new Error("Provided configuration is not valid");
+  const validationError = getLLMConfigValidationError(llmConfig);
+  if (validationError) {
+    throw new Error(validationError);
   }
   
   // Check if running in Electron environment
@@ -22,96 +131,5 @@ export const handleSaveLLMConfig = async (llmConfig: LLMConfig) => {
   store.dispatch(setLLMConfig(llmConfig));
 };
 
-export const hasValidLLMConfig = (llmConfig: LLMConfig) => {
-  if (!llmConfig.LLM) return false;
-  if (!llmConfig.DISABLE_IMAGE_GENERATION && !llmConfig.IMAGE_PROVIDER)
-    return false;
-
-  const isOpenAIConfigValid =
-    llmConfig.OPENAI_MODEL !== "" &&
-    llmConfig.OPENAI_MODEL !== null &&
-    llmConfig.OPENAI_MODEL !== undefined &&
-    llmConfig.OPENAI_API_KEY !== "" &&
-    llmConfig.OPENAI_API_KEY !== null &&
-    llmConfig.OPENAI_API_KEY !== undefined;
-
-  const isGoogleConfigValid =
-    llmConfig.GOOGLE_MODEL !== "" &&
-    llmConfig.GOOGLE_MODEL !== null &&
-    llmConfig.GOOGLE_MODEL !== undefined &&
-    llmConfig.GOOGLE_API_KEY !== "" &&
-    llmConfig.GOOGLE_API_KEY !== null &&
-    llmConfig.GOOGLE_API_KEY !== undefined;
-
-  const isAnthropicConfigValid =
-    llmConfig.ANTHROPIC_MODEL !== "" &&
-    llmConfig.ANTHROPIC_MODEL !== null &&
-    llmConfig.ANTHROPIC_MODEL !== undefined &&
-    llmConfig.ANTHROPIC_API_KEY !== "" &&
-    llmConfig.ANTHROPIC_API_KEY !== null &&
-    llmConfig.ANTHROPIC_API_KEY !== undefined;
-
-  const isOllamaConfigValid =
-    llmConfig.OLLAMA_MODEL !== "" &&
-    llmConfig.OLLAMA_MODEL !== null &&
-    llmConfig.OLLAMA_MODEL !== undefined &&
-    llmConfig.OLLAMA_URL !== "" &&
-    llmConfig.OLLAMA_URL !== null &&
-    llmConfig.OLLAMA_URL !== undefined;
-
-  const isCustomConfigValid =
-    llmConfig.CUSTOM_LLM_URL !== "" &&
-    llmConfig.CUSTOM_LLM_URL !== null &&
-    llmConfig.CUSTOM_LLM_URL !== undefined &&
-    llmConfig.CUSTOM_MODEL !== "" &&
-    llmConfig.CUSTOM_MODEL !== null &&
-    llmConfig.CUSTOM_MODEL !== undefined;
-
-  const isCodexConfigValid =
-    llmConfig.CODEX_MODEL !== "" &&
-    llmConfig.CODEX_MODEL !== null &&
-    llmConfig.CODEX_MODEL !== undefined;
-
-  const shouldValidateImages = !llmConfig.DISABLE_IMAGE_GENERATION;
-
-  const isImageConfigValid = () => {
-    if (!shouldValidateImages) {
-      return true;
-    }
-    switch (llmConfig.IMAGE_PROVIDER) {
-      case "pexels":
-        return llmConfig.PEXELS_API_KEY && llmConfig.PEXELS_API_KEY !== "";
-      case "pixabay":
-        return llmConfig.PIXABAY_API_KEY && llmConfig.PIXABAY_API_KEY !== "";
-      case "dall-e-3":
-        return llmConfig.OPENAI_API_KEY && llmConfig.OPENAI_API_KEY !== "";
-      case "gpt-image-1.5":
-        return llmConfig.OPENAI_API_KEY && llmConfig.OPENAI_API_KEY !== "";
-      case "gemini_flash":
-        return llmConfig.GOOGLE_API_KEY && llmConfig.GOOGLE_API_KEY !== "";
-      case "nanobanana_pro":
-        return llmConfig.GOOGLE_API_KEY && llmConfig.GOOGLE_API_KEY !== "";
-      case "comfyui":
-        return llmConfig.COMFYUI_URL && llmConfig.COMFYUI_URL !== "";
-      default:
-        return false;
-    }
-  };
-
-  const isLLMConfigValid =
-    llmConfig.LLM === "openai"
-      ? isOpenAIConfigValid
-      : llmConfig.LLM === "google"
-      ? isGoogleConfigValid
-      : llmConfig.LLM === "anthropic"
-      ? isAnthropicConfigValid
-      : llmConfig.LLM === "ollama"
-      ? isOllamaConfigValid
-      : llmConfig.LLM === "custom"
-      ? isCustomConfigValid
-      : llmConfig.LLM === "codex"
-      ? isCodexConfigValid
-      : false;
-
-  return isLLMConfigValid && isImageConfigValid();
-};
+export const hasValidLLMConfig = (llmConfig: LLMConfig) =>
+  getLLMConfigValidationError(llmConfig) === null;
