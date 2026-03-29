@@ -61,6 +61,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   const {
     isPresentMode,
     stream,
+    currentSlide: presentSlideFromUrl,
     handleSlideClick,
     toggleFullscreen,
     handlePresentExit,
@@ -93,7 +94,8 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     return (
       <PresentationMode
         slides={presentationData?.slides!}
-        currentSlide={selectedSlide}
+        currentSlide={presentSlideFromUrl}
+        theme={presentationData?.theme ?? undefined}
         isFullscreen={isFullscreen}
         onFullscreenToggle={toggleFullscreen}
         onExit={handlePresentExit}
