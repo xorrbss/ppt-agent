@@ -148,7 +148,13 @@ const ThemePanel: React.FC = () => {
     const loadUserFonts = async () => {
       try {
         const userFonts = await ThemeApi.getUserFonts()
-        setUserFonts(userFonts)
+        setUserFonts({
+          fonts: userFonts.fonts.map((font: any) => ({
+            name: font.name,
+            url: `${process.env.NEXT_PUBLIC_FAST_API}${font.url}`,
+          })),
+        })
+
       } catch (error: any) {
         console.error('Failed to load user fonts', error)
         toast.error(error?.message || 'Failed to load user fonts')
@@ -243,6 +249,8 @@ const ThemePanel: React.FC = () => {
       slideContainerRef.current!.style.setProperty('font-family', `"${theme.data.fonts.textFont.name}"`)
       slideContainerRef.current!.style.setProperty('--heading-font-family', `"${theme.data.fonts.textFont.name}"`)
       // Load font
+      console.log(theme.data.fonts)
+      console.log('userfonts', userFonts)
       useFontLoader({ [theme.data.fonts.textFont.name]: theme.data.fonts.textFont.url })
     }
   }
@@ -437,20 +445,21 @@ const ThemePanel: React.FC = () => {
   const handleCustomFontChange = async (fontFile: File) => {
     try {
       setIsFontUploading(true)
-      const { name, url } = await ThemeApi.uploadFont(fontFile)
+      const { font_name, font_url } = await ThemeApi.uploadFont(fontFile)
       setCustomFonts({
         textFont: {
-          name: name,
-          url: url,
+          name: font_name,
+          url: `${process.env.NEXT_PUBLIC_FAST_API}${font_url}`,
         }
       })
+
       // Add the newly uploaded font to userFonts if not already present
-      if (!userFonts.fonts.find(f => f.name === name)) {
+      if (!userFonts.fonts.find(f => f.name === font_name)) {
         setUserFonts(prev => ({
-          fonts: [...prev.fonts, { name, url }]
+          fonts: [...prev.fonts, { name: font_name, url: `${process.env.NEXT_PUBLIC_FAST_API}${font_url}` }]
         }))
       }
-      toast.success(`Font "${name}" uploaded successfully`)
+      toast.success(`Font "${font_name}" uploaded successfully`)
     } catch (error: any) {
       console.error('Failed to upload font', error)
       toast.error(error?.message || 'Failed to upload font')

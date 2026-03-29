@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/select";
 import { LanguageType, PresentationConfig, ToneType, VerbosityType } from "../type";
 import { useState } from "react";
-import { Check, ChevronsUpDown, GalleryVertical, Languages, SlidersHorizontal } from "lucide-react";
+import { Check, ChevronsUp, ChevronsUpDown, ChevronUp, GalleryVertical, Languages, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
     Command,
@@ -157,7 +157,7 @@ const LanguageSelect: React.FC<{
                         {value || "Select language"}
                     </span>
                 </span>
-                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                <ChevronUp className="ml-2 h-4 w-4 shrink-0 opacity-50" />
             </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[300px] p-0" align="end">
