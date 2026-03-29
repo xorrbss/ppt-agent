@@ -8,7 +8,7 @@ import { LLMConfig } from '@/types/llm_config';
 import { LLM_PROVIDERS } from '@/utils/providerConstants';
 import { Check, Loader2, Eye, EyeOff, ChevronUp, User, RefreshCw, LogOut } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { toast } from 'sonner';
+import { notify } from '@/components/ui/sonner';
 
 
 interface OpenAIConfigProps {
@@ -191,7 +191,10 @@ const TextProvider = ({
             }
         } catch (error) {
             console.error('Error fetching models:', error);
-            toast.error('Error fetching models');
+            notify.error(
+                'Could not load models',
+                'Something went wrong while contacting the provider. Check your network and try again.'
+            );
             setAvailableModels([]);
             setModelsChecked(true);
         } finally {

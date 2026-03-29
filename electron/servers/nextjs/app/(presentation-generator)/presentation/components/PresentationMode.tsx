@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Slide } from "../../types/slide";
 import SlideScale from "../../components/PresentationRender";
 import type { Theme } from "../../services/api/types";
+import { applyPresentationThemeToElement } from "../utils/applyPresentationThemeDom";
 
 interface PresentationModeProps {
   slides: Slide[];
@@ -75,6 +76,11 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
       if (hideChromeTimerRef.current) clearTimeout(hideChromeTimerRef.current);
     };
   }, [isFullscreen, bumpChromeVisibility]);
+
+  useLayoutEffect(() => {
+    if (!theme || !rootRef.current) return;
+    applyPresentationThemeToElement(rootRef.current, theme);
+  }, [theme]);
 
   const handlePointerActivity = useCallback(() => {
     bumpChromeVisibility();
@@ -182,6 +188,7 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
 
   return (
     <div
+      id="presentation-mode-wrapper"
       ref={rootRef}
       role="application"
       aria-label="Presentation"

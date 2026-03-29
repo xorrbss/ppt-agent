@@ -49,6 +49,12 @@ const presentationGenerationSlice = createSlice({
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.isLoading = action.payload;
     },
+    // update title
+    updateTitle: (state, action: PayloadAction<string>) => {
+      if (state.presentationData) {
+        state.presentationData.title = action.payload;
+      }
+    },
     setLayoutLoading: (state, action: PayloadAction<boolean>) => {
       state.isLayoutLoading = action.payload;
     },
@@ -57,7 +63,7 @@ const presentationGenerationSlice = createSlice({
       state.presentation_id = action.payload;
       state.error = null;
     },
-    // Slides rendereimport { useEffect } from "react"d
+    // Slides rendered
     setSlidesRendered: (state, action: PayloadAction<boolean>) => {
       state.isSlidesRendered = action.payload;
     },
@@ -391,6 +397,7 @@ const presentationGenerationSlice = createSlice({
 export const {
   setStreaming,
   setLoading,
+  updateTitle,
   setLayoutLoading,
   setPresentationId,
   setSlidesRendered,

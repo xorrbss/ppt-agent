@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useLayoutEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,10 +16,9 @@ import {
   usePresentationNavigation,
   useAutoSave,
 } from "../hooks";
-import { useEffect } from "react";
 import { PresentationPageProps } from "../types";
 import LoadingState from "./LoadingState";
-import { setupImageUrlConverter } from "@/utils/image-url-converter";
+import { applyPresentationThemeToElement } from "../utils/applyPresentationThemeDom";
 
 import { usePresentationUndoRedo } from "../hooks/PresentationUndoRedo";
 import PresentationHeader from "./PresentationHeader";
@@ -35,10 +34,10 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   const [error, setError] = useState(false);
 
   // Ensure /app_data and /static image paths resolve through FastAPI in Electron.
-  useEffect(() => {
-    const observer = setupImageUrlConverter();
-    return () => observer?.disconnect();
-  }, []);
+  // useEffect(() => {
+  //   const observer = setupImageUrlConverter();
+  //   return () => observer?.disconnect();
+  // }, []);
 
 
   const { presentationData, isStreaming } = useSelector(
@@ -83,6 +82,15 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   );
 
   usePresentationUndoRedo();
+
+  /** Editor tree unmounts in present mode; remount loses inline theme CSS — re-apply from Redux. */
+  useLayoutEffect(() => {
+    if (isPresentMode) return;
+    const theme = presentationData?.theme;
+    if (!theme) return;
+    const el = document.getElementById("presentation-slides-wrapper");
+    applyPresentationThemeToElement(el, theme);
+  }, [isPresentMode, presentationData?.theme]);
 
   const onSlideChange = (newSlide: number) => {
     handleSlideChange(newSlide, presentationData);
