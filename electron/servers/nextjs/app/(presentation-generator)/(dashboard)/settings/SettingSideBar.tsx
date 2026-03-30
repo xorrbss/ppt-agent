@@ -35,14 +35,14 @@ const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }
                 </div>
                 <p className='text-[#3A3A3A] text-xs font-medium pb-2.5'>Select Provider</p>
                 {mode === 'presenton' && <div className='space-y-2.5'>
-                    <button className={` w-full rounded-[6px] p-3 py-4 flex items-center gap-1.5 border  ${selectedProvider === 'text-provider' ? 'bg-[#F4F3FF] border-[#D9D6FE]' : 'bg-white border-[#E1E1E5]'}`} onClick={() => setSelectedProvider('text-provider')}>
+                    <button className={` w-full rounded-[6px] p-3 py-4 flex items-center gap-1.5 border  ${selectedProvider === 'text-provider' ? 'bg-[#F4F3FF] border-[#D9D6FE]' : 'bg-white border-[#EDEEEF]'}`} onClick={() => setSelectedProvider('text-provider')}>
                         <div className='relative w-6 h-6 rounded-full overflow-hidden border border-[#EDEEEF]'>
 
                             <img src='/providers/openai.png' className=' object-cover w-full h-full overflow-hidden' alt='google' />
                         </div>
                         <p className='text-[#191919] text-xs  font-medium' >Text Provider</p>
                     </button>
-                    <button className={` w-full rounded-[6px] p-3 py-4 flex items-center gap-1.5 border  ${selectedProvider === 'image-provider' ? 'bg-[#F4F3FF] border-[#D9D6FE]' : 'bg-white border-[#E1E1E5]'}`} onClick={() => setSelectedProvider('image-provider')}>
+                    <button className={` w-full rounded-[6px] p-3 py-4 flex items-center gap-1.5 border  ${selectedProvider === 'image-provider' ? 'bg-[#F4F3FF] border-[#D9D6FE]' : 'bg-white border-[#EDEEEF]'}`} onClick={() => setSelectedProvider('image-provider')}>
                         <div className='relative w-6 h-6 rounded-full overflow-hidden border border-[#EDEEEF]'>
                             <img src='/providers/image-provider.png' className=' object-cover w-full h-full overflow-hidden' alt='google' />
                         </div>

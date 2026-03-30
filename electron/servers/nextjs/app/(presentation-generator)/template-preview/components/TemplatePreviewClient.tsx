@@ -119,38 +119,13 @@ const GroupLayoutPreview = () => {
     <div className="min-h-screen bg-gray-50">
       <Header />
 
-      <header className="bg-white shadow-sm border-b sticky top-0 z-30">
-        <div className=" mx-auto px-6 py-6">
+      <header className=" z-30">
+        <div className=" mx-auto px-6 pb-[30px]">
           <div className="flex items-center justify-between mb-4 max-w-[1440px] mx-auto">
-            <div className="flex items-center gap-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  trackEvent(MixpanelEvent.TemplatePreview_Back_Button_Clicked, { pathname });
-                  router.back();
-                }}
-                className="flex items-center gap-2"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Back
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  trackEvent(MixpanelEvent.TemplatePreview_All_Groups_Button_Clicked, { pathname });
-                  router.push("/templates");
-                }}
-                className="flex items-center gap-2"
-              >
-                <Home className="w-4 h-4" />
-                All Templates
-              </Button>
-            </div>
+
 
             {isCustom && (
-              <div className="flex items-center gap-4">
+              <div className="flex items-center justify-end ml-auto mr-0 gap-4">
                 <Button
                   variant="outline"
                   size="sm"
@@ -170,55 +145,63 @@ const GroupLayoutPreview = () => {
 
           <div className="text-center">
             <div className="flex items-center justify-center gap-2 mb-2">
-              <h1 className="text-3xl font-bold text-gray-900">{templateName}</h1>
+              <h1 className="text-[64px] font-bold text-gray-900">{templateName}</h1>
               {isCustom && (
                 <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-sm">
                   Custom
                 </span>
               )}
             </div>
-            <p className="text-gray-600">
-              {layoutCount} layout{layoutCount !== 1 ? "s" : ""} •{" "}
+            <p className="text-gray-600 text-xl">
+              {/* {layoutCount} layout{layoutCount !== 1 ? "s" : ""} •{" "} */}
               {templateDescription}
             </p>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto px-2 py-8" id="presentation-page">
+      <div className="mx-auto h-full mb-4" >
         {!isCustom && (
-          <div className="space-y-12 w-[1440px] h-[720px] aspect-video mx-auto">
+          <div className="space-y-3   w-[1305px] p-2.5 bg-[#FFFFFF1A] rounded-[20px]  border border-[#EDECEC]  mx-auto"
+            style={{
+              boxShadow: "0 0 20px 0 rgba(122, 90, 248, 0.16) inset",
+
+            }}
+          >
             {staticTemplates.map((template: any, index: number) => {
               const LayoutComponent = template.component;
 
               return (
-                <Card
+                <div
                   key={`${templateParams}-${template.layoutId}-${index}`}
                   id={template.layoutId}
-                  className="overflow-hidden shadow-md"
+                  className="overflow-hidden  bg-white rounded-tl-[10px] rounded-tr-[10px]"
                 >
-                  <div className="bg-white px-6 py-4 border-b">
+                  <div className=" px-4 py-6 ">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="text-xl font-semibold text-gray-900">
+                        <span className="px-3 py-1 bg-[#7A5AF8] text-white  font-syne  rounded-full text-sm font-medium">
+                          {index + 1 < 10 ? `0${index + 1}` : index + 1}
+                        </span>
+                        <h3 className="text-xl font-semibold text-gray-900 mt-3">
                           {template.layoutName}
                         </h3>
-                        <p className="text-sm text-gray-500 mt-1 max-w-2xl">
+                        <p className="text-sm text-gray-500 mt-1 ">
                           {template.layoutDescription}
                         </p>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded text-sm font-mono">
+                      {/* <div className="flex items-center gap-3">
+                        <span className="px-3 py-1  text-gray-600 rounded text-sm font-mono">
                           {template.layoutId}
                         </span>
                         <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
                           #{index + 1}
                         </span>
-                      </div>
+                      </div> */}
                     </div>
                   </div>
 
-                  <div className="bg-gray-100 p-6 flex justify-center overflow-x-auto">
+                  <div className="  flex justify-center overflow-x-auto">
                     <div
                       className="flex-shrink-0"
                       style={{ width: "1280px", height: "720px" }}
@@ -226,7 +209,7 @@ const GroupLayoutPreview = () => {
                       <LayoutComponent data={template.sampleData} />
                     </div>
                   </div>
-                </Card>
+                </div>
               );
             })}
           </div>
@@ -254,13 +237,13 @@ const GroupLayoutPreview = () => {
                       </div>
                     </div>
                     <div className="flex items-end justify-end ">
-                      <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded text-sm font-mono">
+                      <span className="px-3 py-1  text-gray-600 rounded text-sm font-mono">
                         {templateParams}:{layout.layoutId}
                       </span>
                     </div>
                   </div>
 
-                  <div className="bg-gray-100 p-6 flex justify-center overflow-x-auto">
+                  <div className=" p-6 flex justify-center overflow-x-auto">
                     <div
                       className="flex-shrink-0"
                       style={{ width: "1280px", height: "720px" }}
@@ -273,7 +256,7 @@ const GroupLayoutPreview = () => {
             })}
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 };

@@ -221,6 +221,11 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
                       className="min-h-[110px] max-h-[180px] w-full resize-none rounded-xl border border-gray-200 p-3 text-sm focus-visible:ring-1 focus-visible:ring-[#5141e5]"
                       disabled={isUpdating}
                       onChange={(e) => setEditPrompt(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key !== "Enter" || e.shiftKey || isUpdating) return;
+                        e.preventDefault();
+                        handleSubmit();
+                      }}
                       rows={5}
                       wrap="soft"
                     />
@@ -236,7 +241,7 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
                 </PopoverContent>
               </Popover>
 
-              <Popover open={isSpeakerPopoverOpen} onOpenChange={setIsSpeakerPopoverOpen}>
+              {slide?.speaker_note && <Popover open={isSpeakerPopoverOpen} onOpenChange={setIsSpeakerPopoverOpen}>
                 <PopoverTrigger asChild>
                   <button
                     type="button"
@@ -270,11 +275,11 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
                   </div>
                   <div className="space-y-3 p-4">
                     <div className="max-h-[220px] min-h-[100px] overflow-auto whitespace-pre-wrap rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-800">
-                      {slide?.speaker_note?.trim() || "No speaker notes for this slide."}
+                      {slide?.speaker_note?.trim()}
                     </div>
                   </div>
                 </PopoverContent>
-              </Popover>
+              </Popover>}
 
               <button
                 type="button"

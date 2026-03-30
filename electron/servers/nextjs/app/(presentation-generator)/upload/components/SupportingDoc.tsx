@@ -153,9 +153,9 @@ const SupportingDoc = ({
         <div className="space-y-2" data-testid="attachments-uploader">
             <div className="flex items-center justify-between">
                 <p className="text-sm text-gray-600 font-syne">
-                    {hasFiles ? `${filteredFiles.length} attachment${filteredFiles.length > 1 ? 's' : ''}` : 'No attachments yet'}
+                    {hasFiles ? `${filteredFiles.length} attachment${filteredFiles.length > 1 ? 's' : ''}` : ''}
                 </p>
-                <button
+                {hasFiles && <button
                     type="button"
                     onClick={handleClearFiles}
                     disabled={!hasFiles}
@@ -164,7 +164,7 @@ const SupportingDoc = ({
                     aria-disabled={!hasFiles}
                 >
                     Clear all
-                </button>
+                </button>}
             </div>
 
             <label

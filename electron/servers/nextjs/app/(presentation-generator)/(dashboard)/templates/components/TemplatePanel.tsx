@@ -174,13 +174,15 @@ const LayoutPreview = () => {
 
     const handleOpenPreview = useCallback((id: string) => router.push(`/template-preview?slug=${id}`), [router]);
 
-    const inbuiltTemplateCards = useMemo(
-        () =>
-            templates.map((template: TemplateLayoutsWithSettings) => (
-                <InbuiltTemplateCard key={template.id} template={template} onOpen={handleOpenPreview} />
-            )),
-        [handleOpenPreview],
-    );
+    const { nonNeoInbuilt, neoInbuilt } = useMemo(() => {
+        const nonNeo: TemplateLayoutsWithSettings[] = [];
+        const neo: TemplateLayoutsWithSettings[] = [];
+        for (const t of templates) {
+            if (t.id.startsWith("neo")) neo.push(t);
+            else nonNeo.push(t);
+        }
+        return { nonNeoInbuilt: nonNeo, neoInbuilt: neo };
+    }, []);
 
     const customTemplateCards = useMemo(
         () => customTemplates.map((template: CustomTemplates) => <CustomTemplateCard key={template.id} template={template} />),
@@ -242,12 +244,36 @@ const LayoutPreview = () => {
                     >Built-in</button>
                 </div>
 
-                {/* Inbuilt Templates Section */}
-                {tab === 'default' && <section className="my-12">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                        {inbuiltTemplateCards}
-                    </div>
-                </section>}
+                {/* Inbuilt Templates Section: non-neo first, then Report (neo) */}
+                {tab === 'default' && (
+                    <section className="my-12 space-y-12">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            {nonNeoInbuilt.map((template) => (
+                                <InbuiltTemplateCard
+                                    key={template.id}
+                                    template={template}
+                                    onOpen={handleOpenPreview}
+                                />
+                            ))}
+                        </div>
+                        {neoInbuilt.length > 0 && (
+                            <div>
+                                <h4 className="text-base font-semibold text-[#101828] mb-6 font-syne tracking-tight">
+                                    Report
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                    {neoInbuilt.map((template) => (
+                                        <InbuiltTemplateCard
+                                            key={template.id}
+                                            template={template}
+                                            onOpen={handleOpenPreview}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </section>
+                )}
 
 
                 {tab === 'custom' && <section className="my-12">
