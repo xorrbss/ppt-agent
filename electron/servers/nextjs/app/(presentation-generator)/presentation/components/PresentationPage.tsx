@@ -7,7 +7,7 @@ import PresentationMode from "./PresentationMode";
 import SidePanel from "./SidePanel";
 import SlideContent from "./SlideContent";
 import { Button } from "@/components/ui/button";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { AlertCircle } from "lucide-react";
 import {
@@ -32,12 +32,8 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   const [selectedSlide, setSelectedSlide] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [error, setError] = useState(false);
+  const router = useRouter();
 
-  // Ensure /app_data and /static image paths resolve through FastAPI in Electron.
-  // useEffect(() => {
-  //   const observer = setupImageUrlConverter();
-  //   return () => observer?.disconnect();
-  // }, []);
 
 
   const { presentationData, isStreaming } = useSelector(
@@ -124,7 +120,11 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
           <p className="text-center mb-4">
             We couldn't load your presentation. Please try again.
           </p>
-          <Button onClick={() => { trackEvent(MixpanelEvent.PresentationPage_Refresh_Page_Button_Clicked, { pathname }); window.location.reload(); }}>Refresh Page</Button>
+          <div className="flex gap-2 justify-center items-center">
+
+            <Button onClick={() => { trackEvent(MixpanelEvent.PresentationPage_Refresh_Page_Button_Clicked, { pathname }); window.location.reload(); }}>Refresh Page</Button>
+            <Button onClick={() => { trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/upload" }); router.push("/upload"); }}>Go to Upload</Button>
+          </div>
         </div>
       </div>
     );

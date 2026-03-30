@@ -41,7 +41,6 @@ const UploadPage = () => {
   const pathname = usePathname();
   const dispatch = useDispatch();
 
-  // State management
   const [files, setFiles] = useState<File[]>([]);
   const [config, setConfig] = useState<PresentationConfig>({
     slides: "5",
@@ -63,13 +62,8 @@ const UploadPage = () => {
     extra_info: "",
   });
 
-  /**
-   * Updates the presentation configuration
-   * @param key - Configuration key to update
-   * @param value - New value for the configuration
-   */
-  const handleConfigChange = (key: keyof PresentationConfig, value: string) => {
-    setConfig((prev) => ({ ...prev, [key]: value }));
+  const handleConfigChange = (key: keyof PresentationConfig, value: unknown) => {
+    setConfig((prev) => ({ ...prev, [key]: value } as PresentationConfig));
   };
 
   /**
@@ -203,10 +197,9 @@ const UploadPage = () => {
         extra_info={loadingState.extra_info}
       />
       <div className="rounded-2xl border border-slate-200/70 bg-white/80 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60" >
-        <div className="flex flex-col gap-4 md:items-center md:flex-row justify-between p-4">
+        <div className="flex flex-col gap-4 md:items-center md:flex-row justify-between px-4 py-5">
           <div >
-            <h2 className="text-lg font-unbounded tracking-tight text-slate-900 ">Configuration</h2>
-            <p className="text-sm text-slate-500 font-syne">Choose slides, tone, and language preferences.</p>
+            <h2 className="text-lg font-unbounded tracking-tight text-[#191919] ">Configuration</h2>
           </div>
           <ConfigurationSelects
             config={config}
@@ -215,42 +208,36 @@ const UploadPage = () => {
         </div>
         <div className="border-t border-slate-200/70" />
 
-        <div className="p-4 md:p-6">
-          <h3 className="text-base font-normal font-unbounded  text-slate-900 mb-2">Content</h3>
+        <div className="p-4 mt-2 ">
+          <h3 className="text-sm font-normal font-unbounded  text-[#333333] mb-2">Content</h3>
           <div className="relative">
             <PromptInput
               value={config.prompt}
               onChange={(value) => handleConfigChange("prompt", value)}
-              data-testid="prompt-input"
+
             />
           </div>
         </div>
-        <div className="border-t border-slate-200/70" />
-        <div className="p-4 md:p-6">
-          <h3 className="text-base font-normal font-unbounded text-slate-900 mb-2">Attachments (optional)</h3>
-
-
+        <div className="p-4 ">
+          <h3 className="text-sm font-normal font-unbounded text-[#333333] mb-2">Attachments (optional)</h3>
           <SupportingDoc
             files={[...files]}
             onFilesChange={setFiles}
-            data-testid="file-upload-input"
           />
         </div>
-        <div className="border-t border-slate-200/70" />
 
-        <div className="p-4 md:p-6">
+        <div className="p-4">
           <Button
             onClick={handleGeneratePresentation}
-            className="w-full rounded-[28px] flex items-center justify-center py-5 bg-[#5141e5] text-white font-syne font-semibold text-lg hover:bg-[#5141e5]/85 focus-visible:ring-2 focus-visible:ring-[#5141e5]/40"
-            data-testid="next-button"
+            style={{
+              background: "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)"
+            }}
+            className="w-fit mr-0 ml-auto rounded-[28px] flex items-center justify-center py-5 px-4  text-[#101323] font-syne font-semibold text-xs  "
           >
-            <span>Generate Presentation</span>
-            <ChevronRight className="!w-5 !h-5 ml-1.5" />
+            <span>Get Started</span>
+            <ChevronRight className="!w-5 !h-5 " />
           </Button>
         </div>
-
-
-
       </div>
     </Wrapper>
   );
