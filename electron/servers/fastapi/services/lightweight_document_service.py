@@ -158,7 +158,7 @@ class LightweightDocumentConverter:
 class DocumentService:
     """
     Document service wrapper providing parse_to_markdown interface.
-    Compatible with DoclingService interface for easy swapping.
+    Same parse_to_markdown entry point as LiteParseService for optional Windows fallback.
     """
     
     def __init__(self):

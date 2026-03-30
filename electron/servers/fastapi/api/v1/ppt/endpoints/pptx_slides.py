@@ -15,7 +15,7 @@ import re
 from services.documents_loader import DocumentsLoader
 from utils.asset_directory_utils import get_images_directory
 import uuid
-from constants.documents import POWERPOINT_TYPES
+from constants.documents import PPTX_MIME_TYPES
 
 
 def _get_soffice_binary() -> str:
@@ -330,7 +330,7 @@ async def process_pptx_slides(
     """
 
     # Validate PPTX file
-    if pptx_file.content_type not in POWERPOINT_TYPES:
+    if pptx_file.content_type not in PPTX_MIME_TYPES:
         raise HTTPException(
             status_code=400,
             detail=f"Invalid file type. Expected PPTX file, got {pptx_file.content_type}",
@@ -441,7 +441,7 @@ async def process_pptx_fonts(
     Uses the exact same font extraction and analysis utilities as the /pptx-slides endpoint.
     """
     # Validate PPTX file
-    if pptx_file.content_type not in POWERPOINT_TYPES:
+    if pptx_file.content_type not in PPTX_MIME_TYPES:
         raise HTTPException(
             status_code=400,
             detail=f"Invalid file type. Expected PPTX file, got {pptx_file.content_type}",

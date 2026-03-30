@@ -11,8 +11,6 @@ dependencies = [
     "anthropic>=0.60.0",
     "asyncpg>=0.30.0",
     "dirtyjson>=1.0.8",
-    # Platform-specific: docling for Linux/macOS only
-    "docling>=2.43.0; sys_platform != 'win32'",
     "fastapi[standard]>=0.116.1",
     "fastembed-vectorstore>=0.5.2",
     "fastmcp>=2.11.0",
@@ -27,7 +25,7 @@ dependencies = [
     "docx2everything>=1.0.0; sys_platform == 'win32'",
     "pyinstaller>=6.18.0",
     "pytest>=8.4.1",
-    "python-pptx>=1.0.2; sys_platform == 'win32'",
+    "python-pptx>=1.0.2",
     "redis>=6.2.0",
     "sqlmodel>=0.0.24",
 ]

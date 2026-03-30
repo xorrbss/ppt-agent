@@ -12,6 +12,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const labelMap = {
     libreoffice: "LibreOffice",
     puppeteer: "Chromium",
+    imagemagick: "ImageMagick",
   };
 
   const dependenciesEl = document.getElementById("status-dependencies");
@@ -24,6 +25,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const currentStatus = {
     libreoffice: "checking",
     puppeteer: "checking",
+    imagemagick: "checking",
   };
 
   function setStatus(name, status) {
@@ -83,6 +85,7 @@ window.addEventListener("DOMContentLoaded", () => {
       if (!statusMap) return;
       if (statusMap.libreoffice) setStatus("libreoffice", statusMap.libreoffice);
       if (statusMap.puppeteer) setStatus("puppeteer", statusMap.puppeteer);
+      if (statusMap.imagemagick) setStatus("imagemagick", statusMap.imagemagick);
     });
   }
 });

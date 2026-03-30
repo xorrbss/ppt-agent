@@ -29,6 +29,7 @@ function shouldSkipDownload(): boolean {
 export interface SetupStatus {
   needsLibreOffice: boolean;
   needsChrome: boolean;
+  needsImageMagick: boolean;
 }
 
 /**

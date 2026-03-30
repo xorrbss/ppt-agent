@@ -141,7 +141,7 @@
       <div id="state-prompt" class="state active">
         <div class="icon-wrap purple">📦</div>
         <p class="heading" id="prompt-heading">Dependencies required</p>
-        <p class="sub" id="prompt-sub">Presenton needs LibreOffice and Chrome to create and export presentations. Install them now so everything works.</p>
+        <p class="sub" id="prompt-sub">Presenton needs LibreOffice, Chrome, and ImageMagick to create and export presentations reliably. Install them now so everything works.</p>
         <div class="btn-row">
           <button class="btn-primary" id="btn-install">Install</button>
           <button class="btn-ghost" id="btn-skip">Skip for now</button>
@@ -212,8 +212,9 @@
   <script>
     const STATES = ['prompt','downloading','installing','success','error'];
     let logLines = 0;
-    let currentStep = null; // 'libreoffice' | 'chrome'
-    let status = { needsLibreOffice: false, needsChrome: false };
+    let currentStep = null; // 'libreoffice' | 'chrome' | 'imagemagick'
+    let status = { needsLibreOffice: false, needsChrome: false, needsImageMagick: false };
+    let steps = [];
     let logOpen = false;
 
     function showState(name) {
@@ -264,15 +265,30 @@
       document.getElementById('log-toggle-label').textContent = logOpen ? 'Hide details' : 'Show details';
     }
 
+    function getStepsFromStatus() {
+      const queue = [];
+      if (status.needsLibreOffice) queue.push('libreoffice');
+      if (status.needsChrome) queue.push('chrome');
+      if (status.needsImageMagick) queue.push('imagemagick');
+      return queue;
+    }
+
     function showPromptForStep(step) {
       currentStep = step;
-      const total = (status.needsLibreOffice ? 1 : 0) + (status.needsChrome ? 1 : 0);
-      const stepNum = step === 'libreoffice' ? 1 : 2;
-      setStepBadge(stepNum, total, step === 'libreoffice' ? 'LibreOffice' : 'Chromium');
-      document.getElementById('prompt-heading').textContent = step === 'libreoffice' ? 'LibreOffice required' : 'Chromium required';
-      document.getElementById('prompt-sub').innerHTML = step === 'libreoffice'
-        ? '<strong>Presenton</strong> uses LibreOffice to generate custom templates from PPTX files.'
-        : '<strong>Presenton</strong> uses Chromium for export and slide rendering. Download it now (~150 MB).';
+      const total = steps.length || 1;
+      const stepNum = Math.max(1, steps.indexOf(step) + 1);
+      const stepLabel = step === 'libreoffice' ? 'LibreOffice' : step === 'chrome' ? 'Chromium' : 'ImageMagick';
+      setStepBadge(stepNum, total, stepLabel);
+      document.getElementById('prompt-heading').textContent =
+        step === 'libreoffice' ? 'LibreOffice required' :
+        step === 'chrome' ? 'Chromium required' :
+        'ImageMagick required';
+      document.getElementById('prompt-sub').innerHTML =
+        step === 'libreoffice'
+          ? '<strong>Presenton</strong> uses LibreOffice to generate custom templates from PPTX files.'
+          : step === 'chrome'
+          ? '<strong>Presenton</strong> uses Chromium for export and slide rendering. Download it now (~150 MB).'
+          : '<strong>Presenton</strong> uses ImageMagick for OCR/document conversion support. Linux uses apt, macOS installs Homebrew first (if needed) and then runs brew install imagemagick, and Windows uses Chocolatey with a direct installer fallback.';
       document.getElementById('btn-install').onclick = () => startInstall(step);
       document.getElementById('btn-skip').onclick = () => handleSkip();
       showState('prompt');
@@ -286,7 +302,7 @@
         document.getElementById('dl-heading').textContent = 'Downloading LibreOffice';
         document.getElementById('dl-phase').textContent = 'This may take a few minutes (~300 MB)';
         window.setupInstaller.installLibreOffice();
-      } else {
+      } else if (step === 'chrome') {
         document.getElementById('dl-heading').textContent = 'Downloading Chromium';
         document.getElementById('dl-phase').textContent = 'This may take a few minutes (~150 MB)';
         window.setupInstaller.installChrome().then(res => {
@@ -297,12 +313,36 @@
             document.getElementById('btn-skip-error').onclick = () => nextOrDone();
           }
         });
+      } else {
+        document.getElementById('dl-heading').textContent = 'Installing ImageMagick';
+        document.getElementById('dl-phase').textContent = 'Linux: apt-get | macOS: Homebrew + brew install | Windows: choco or direct installer';
+        window.setupInstaller.installImageMagick().then((installResult) => {
+          if (!installResult || !installResult.ok) {
+            if (currentStep !== 'imagemagick') return;
+            document.getElementById('err-msg').textContent = installResult?.error || 'ImageMagick installation needs manual completion. Follow the shown commands and then click Retry.';
+            showState('error');
+            document.getElementById('btn-retry').onclick = () => startInstall('imagemagick');
+            document.getElementById('btn-skip-error').onclick = () => nextOrDone();
+            return;
+          }
+
+          window.setupInstaller.checkImageMagick().then(res => {
+            if (!res.ok && currentStep === 'imagemagick') {
+              document.getElementById('err-msg').textContent = res.error || 'ImageMagick is not installed yet.';
+              showState('error');
+              document.getElementById('btn-retry').onclick = () => startInstall('imagemagick');
+              document.getElementById('btn-skip-error').onclick = () => nextOrDone();
+            }
+          });
+        });
       }
     }
 
     function nextOrDone() {
-      if (currentStep === 'libreoffice' && status.needsChrome) {
-        showPromptForStep('chrome');
+      const idx = steps.indexOf(currentStep);
+      const nextStep = idx >= 0 ? steps[idx + 1] : null;
+      if (nextStep) {
+        showPromptForStep(nextStep);
       } else {
         window.setupInstaller.done();
       }
@@ -338,13 +378,17 @@
       }
       if (phase === 'done') {
         showState('success');
-        document.getElementById('success-heading').textContent = currentStep === 'libreoffice' ? 'LibreOffice installed' : 'Chromium installed';
-        document.getElementById('success-sub').textContent = status.needsChrome && currentStep === 'libreoffice' ? 'Next: Chrome.' : 'Continuing in a moment…';
+        document.getElementById('success-heading').textContent =
+          currentStep === 'libreoffice' ? 'LibreOffice installed' :
+          currentStep === 'chrome' ? 'Chromium installed' :
+          'ImageMagick ready';
+        const idx = steps.indexOf(currentStep);
+        const nextStep = idx >= 0 ? steps[idx + 1] : null;
+        document.getElementById('success-sub').textContent = nextStep ? 'Continuing with next step…' : 'Continuing in a moment…';
         const bar = document.getElementById('success-bar');
         if (bar) bar.style.width = '100%';
         setTimeout(() => {
-          if (currentStep === 'libreoffice' && status.needsChrome) showPromptForStep('chrome');
-          else window.setupInstaller.done();
+          nextOrDone();
         }, 2200);
         return;
       }
@@ -366,18 +410,20 @@
     window.setupInstaller.onLibreOfficeLog((data) => onLog('libreoffice', data));
     window.setupInstaller.onChromeProgress((data) => onProgress('chrome', data));
     window.setupInstaller.onChromeLog((data) => onLog('chrome', data));
+    window.setupInstaller.onImageMagickProgress((data) => onProgress('imagemagick', data));
+    window.setupInstaller.onImageMagickLog((data) => onLog('imagemagick', data));
 
     document.getElementById('btn-retry').onclick = () => startInstall(currentStep);
     document.getElementById('btn-skip-error').onclick = () => nextOrDone();
 
     window.setupInstaller.getStatus().then(s => {
       status = s;
-      if (!status.needsLibreOffice && !status.needsChrome) {
+      steps = getStepsFromStatus();
+      if (steps.length === 0) {
         window.setupInstaller.done();
         return;
       }
-      if (status.needsLibreOffice) showPromptForStep('libreoffice');
-      else showPromptForStep('chrome');
+      showPromptForStep(steps[0]);
     });
   </script>
 </body>

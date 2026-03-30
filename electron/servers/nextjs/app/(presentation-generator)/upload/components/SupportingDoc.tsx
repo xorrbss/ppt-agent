@@ -13,37 +13,50 @@ interface SupportingDocProps {
 
 const PDF_TYPES = ['.pdf']
 const TEXT_TYPES = ['.txt']
-const POWERPOINT_TYPES = ['.pptx']
-const WORD_TYPES = ['.docx']
+const WORD_TYPES = ['.doc', '.docx', '.docm', '.odt', '.rtf']
+const POWERPOINT_TYPES = ['.ppt', '.pptx', '.pptm', '.odp']
+const SPREADSHEET_TYPES = ['.xls', '.xlsx', '.xlsm', '.ods', '.csv', '.tsv']
+const IMAGE_TYPES = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', '.svg']
 
-const ACCEPT_DEFAULT = [
-    'application/pdf',
-    'text/plain',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    ...PDF_TYPES,
-    ...TEXT_TYPES,
-    ...POWERPOINT_TYPES,
-    ...WORD_TYPES,
-].join(',')
-const ALLOWED_MIME_PREFIXES: string[] = []
+const ALLOWED_MIME_PREFIXES: string[] = ['image/']
 const ALLOWED_MIME_TYPES = [
     'application/pdf',
-    'application/x-pdf',
-    'application/acrobat',
-    'applications/pdf',
-    'text/pdf',
-    'application/vnd.pdf',
     'text/plain',
+    'text/csv',
+    'application/csv',
+    'text/tab-separated-values',
+    'text/tsv',
+    'application/msword',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-word.document.macroenabled.12',
+    'application/vnd.oasis.opendocument.text',
+    'application/rtf',
+    'text/rtf',
+    'application/vnd.ms-powerpoint',
     'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.ms-powerpoint.presentation.macroenabled.12',
+    'application/vnd.oasis.opendocument.presentation',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-excel.sheet.macroenabled.12',
+    'application/vnd.oasis.opendocument.spreadsheet',
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    'image/bmp',
+    'image/tiff',
+    'image/webp',
+    'image/svg+xml',
 ]
 const ALLOWED_EXTENSIONS = [
     ...PDF_TYPES,
     ...TEXT_TYPES,
-    ...POWERPOINT_TYPES,
     ...WORD_TYPES,
+    ...POWERPOINT_TYPES,
+    ...SPREADSHEET_TYPES,
+    ...IMAGE_TYPES,
 ]
+const ACCEPT_DEFAULT = [...ALLOWED_MIME_TYPES, ...ALLOWED_EXTENSIONS].join(',')
 
 const SupportingDoc = ({
     files,
@@ -75,7 +88,7 @@ const SupportingDoc = ({
         const disallowed = filesToReview.filter((file) => !isAllowedFile(file))
         if (disallowed.length > 0) {
             toast.error('Some files are not supported', {
-                description: 'Only PDF, TXT, PPTX, and DOCX files are allowed.',
+                description: 'Supported: Word, PowerPoint, spreadsheets, PDF/TXT, and image files.',
             })
         }
     }
@@ -171,7 +184,7 @@ const SupportingDoc = ({
                 <div className="flex flex-col items-center gap-2">
                     <Paperclip className="h-6 w-6 text-[#5146E5]" />
                     <p className="text-sm font-medium text-gray-800 font-syne">
-                        Drag and drop PDF, TXT, PPTX, DOCX, or <span className="text-[#5146E5]">click to browse</span>
+                        Drag and drop Office docs, spreadsheets, images, PDF/TXT, or <span className="text-[#5146E5]">click to browse</span>
                     </p>
                 </div>
             </label>
@@ -214,7 +227,7 @@ const SupportingDoc = ({
                     </ul>
                     {filteredFiles.length !== files.length && (
                         <p className="mt-2 text-xs text-amber-600 font-syne">
-                            Some files were skipped. Only PDF, TXT, PPTX, and DOCX files are supported.
+                            Some files were skipped. Supported: Word, PowerPoint, spreadsheets, PDF/TXT, and image files.
                         </p>
                     )}
                 </div>

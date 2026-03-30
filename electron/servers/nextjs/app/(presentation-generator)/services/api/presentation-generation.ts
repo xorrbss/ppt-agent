@@ -29,7 +29,10 @@ export class PresentationGenerationApi {
     }
   }
 
-  static async decomposeDocuments(documentKeys: string[]) {
+  static async decomposeDocuments(
+    documentKeys: string[],
+    language?: string | null
+  ) {
     try {
       const response = await fetch(
         getApiUrl(`/api/v1/ppt/files/decompose`),
@@ -38,6 +41,7 @@ export class PresentationGenerationApi {
           headers: getHeader(),
           body: JSON.stringify({
             file_paths: documentKeys,
+            language: language ?? null,
           }),
           cache: "no-cache",
         }

@@ -17,18 +17,6 @@ datas_docx2everything, binaries_docx2everything, hiddenimports_docx2everything =
 # collect_all returns empty lists if package not installed, so safe to call always
 datas_greenlet, binaries_greenlet, hiddenimports_greenlet = collect_all('greenlet')
 
-# Collect docling - only installed on Linux/macOS (via pyproject.toml)
-# collect_all returns empty lists if package not installed, so safe to call always
-datas_docling, binaries_docling, hiddenimports_docling = collect_all('docling')
-# Also collect docling dependencies which are needed for metadata lookup
-datas_docling_core, binaries_docling_core, hiddenimports_docling_core = collect_all('docling-core')
-datas_docling_parse, binaries_docling_parse, hiddenimports_docling_parse = collect_all('docling-parse')
-datas_docling_ibm, binaries_docling_ibm, hiddenimports_docling_ibm = collect_all('docling-ibm-models')
-
-# Collect python-docx (dependency of docling) - needed for Word document processing on Linux/macOS
-# collect_all returns empty lists if package not installed, so safe to call conditionally
-datas_docx, binaries_docx, hiddenimports_docx = collect_all('docx')
-
 # fastembed_cache is created at runtime when models are first used; include only if present (e.g. local dev)
 datas_fastembed_cache = [('fastembed_cache', 'fastembed_cache')] if os.path.isdir('fastembed_cache') else []
 
@@ -37,12 +25,12 @@ excludes = []
 a = Analysis(
     ['server.py'],
     pathex=[],
-    binaries=binaries_fastembed + binaries_fastembed_vs + binaries_onnx + binaries_pptx + binaries_docx2everything + binaries_greenlet + binaries_docling + binaries_docling_core + binaries_docling_parse + binaries_docling_ibm + binaries_docx,
+    binaries=binaries_fastembed + binaries_fastembed_vs + binaries_onnx + binaries_pptx + binaries_docx2everything + binaries_greenlet,
     datas=[
         ('assets', 'assets'),
         ('static', 'static'),
         ('alembic', 'alembic'),
-    ] + datas_fastembed_cache + datas_fastembed + datas_fastembed_vs + datas_onnx + datas_pptx + datas_docx2everything + datas_greenlet + datas_docling + datas_docling_core + datas_docling_parse + datas_docling_ibm + datas_docx,
+    ] + datas_fastembed_cache + datas_fastembed + datas_fastembed_vs + datas_onnx + datas_pptx + datas_docx2everything + datas_greenlet,
     hiddenimports=[
         'aiosqlite',
         'alembic',
@@ -52,10 +40,10 @@ a = Analysis(
         'greenlet',
         'greenlet._greenlet',
         'importlib.metadata',
-    ] + hiddenimports_fastembed + hiddenimports_fastembed_vs + hiddenimports_onnx + hiddenimports_pptx + hiddenimports_docx2everything + hiddenimports_greenlet + hiddenimports_docling + hiddenimports_docling_core + hiddenimports_docling_parse + hiddenimports_docling_ibm + hiddenimports_docx,
+    ] + hiddenimports_fastembed + hiddenimports_fastembed_vs + hiddenimports_onnx + hiddenimports_pptx + hiddenimports_docx2everything + hiddenimports_greenlet,
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=['runtime_hook_docling.py'],
+    runtime_hooks=[],
     excludes=excludes,
     noarchive=False,
     optimize=0,
