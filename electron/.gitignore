@@ -21,6 +21,13 @@ app_dist
 resources/fastapi
 resources/nextjs
 dist
+eng.traineddata
+servers/fastapi/build/
+servers/fastapi/dist/
 servers/fastapi/fastembed_cache/
 electron/.cache/
 electron/.cache/export-runtime/
+*.pkg
+*.toc
+*.zip
+*.pyc

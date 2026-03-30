@@ -20,6 +20,7 @@ import {
 import { getSetupStatus } from "../utils/setup-dependencies";
 import {
   getImageMagickDownloadUrl,
+  getImageMagickManualInstallCommands,
   isImageMagickInstalled,
 } from "../utils/imagemagick-check";
 
@@ -70,6 +71,33 @@ function commandExists(command: string, versionArgs: string[] = ["--version"]): 
     windowsHide: true,
   });
   return result.status === 0;
+}
+
+function resolveBrewCommand(): string | null {
+  if (commandExists("brew")) {
+    return "brew";
+  }
+
+  const candidates = ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function resolveLinuxEscalationCommand(): string | null {
+  if (commandExists("pkexec", ["--version"])) return "pkexec";
+  if (commandExists("sudo", ["-V"])) return "sudo";
+  return null;
+}
+
+function logManualImageMagickCommands(wc: WebContents) {
+  for (const line of getImageMagickManualInstallCommands()) {
+    const level = line.endsWith(":") ? "info" : "cmd";
+    sendImageMagickLog(wc, level, line);
+  }
 }
 
 function runInstallCommand(
@@ -210,7 +238,18 @@ export function setupSetupInstallHandlers() {
 
         if (process.platform === "linux") {
           if (commandExists("apt-get")) {
-            await runInstallCommand(wc, "pkexec", [
+            const escalator = resolveLinuxEscalationCommand();
+            if (!escalator) {
+              throw new Error(
+                "Neither pkexec nor sudo is available to run apt-get install."
+              );
+            }
+
+            await runInstallCommand(wc, escalator, [
+              "apt-get",
+              "update",
+            ]);
+            await runInstallCommand(wc, escalator, [
               "apt-get",
               "install",
               "-y",
@@ -218,17 +257,30 @@ export function setupSetupInstallHandlers() {
             ]);
           } else {
             throw new Error(
-              "apt-get is unavailable. Install ImageMagick manually from the official download page."
+              "apt-get is unavailable. Install ImageMagick manually using your package manager."
             );
           }
         } else if (process.platform === "darwin") {
-          if (commandExists("brew")) {
-            await runInstallCommand(wc, "brew", ["install", "imagemagick"]);
-          } else {
+          let brewCommand = resolveBrewCommand();
+          if (!brewCommand) {
+            sendImageMagickLog(
+              wc,
+              "info",
+              "Homebrew not found. Installing Homebrew first..."
+            );
+            const installHomebrewCommand =
+              'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"';
+            await runInstallCommand(wc, "/bin/bash", ["-c", installHomebrewCommand]);
+            brewCommand = resolveBrewCommand();
+          }
+
+          if (!brewCommand) {
             throw new Error(
-              "Homebrew is not installed. Install ImageMagick manually from the official download page."
+              "Homebrew installation completed, but brew was not found on PATH."
             );
           }
+
+          await runInstallCommand(wc, brewCommand, ["install", "imagemagick"]);
         } else if (process.platform === "win32") {
           if (commandExists("choco", ["-v"])) {
             await runInstallCommand(wc, "choco", [
@@ -238,7 +290,7 @@ export function setupSetupInstallHandlers() {
             ]);
           } else {
             throw new Error(
-              "Chocolatey is not installed. Install ImageMagick manually from the official download page."
+              "Chocolatey is not installed. Falling back to direct installer download."
             );
           }
         } else {
@@ -253,14 +305,21 @@ export function setupSetupInstallHandlers() {
         const message =
           error instanceof Error ? error.message : "ImageMagick install failed";
         sendImageMagickLog(wc, "error", message);
+        logManualImageMagickCommands(wc);
         const downloadUrl = getImageMagickDownloadUrl();
         sendImageMagickLog(
           wc,
           "info",
-          `Falling back to manual install page: ${downloadUrl}`
+          `Opening manual install link: ${downloadUrl}`
         );
         await shell.openExternal(downloadUrl);
-        return { ok: true };
+        sendImageMagickProgress(
+          wc,
+          "error",
+          undefined,
+          "Finish manual installation, then click Retry."
+        );
+        return { ok: false, error: message };
       }
     }
   );
