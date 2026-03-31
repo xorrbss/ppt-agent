@@ -26,6 +26,46 @@ class LiteParseService:
         binary_name = os.path.basename(self.node_binary).lower()
         if binary_name not in {"node", "node.exe"}:
             env.setdefault("ELECTRON_RUN_AS_NODE", "1")
+
+        # LiteParse checks ImageMagick availability with `which magick`.
+        # On macOS app launches, PATH often excludes Homebrew bins, even when
+        # IMAGEMAGICK_BINARY is configured to an absolute executable path.
+        path_entries = [p for p in (env.get("PATH") or "").split(os.pathsep) if p]
+        additional_entries = []
+
+        imagemagick_binary = (env.get("IMAGEMAGICK_BINARY") or "").strip()
+        if imagemagick_binary:
+            magick_dir = os.path.dirname(imagemagick_binary)
+            if magick_dir:
+                additional_entries.append(magick_dir)
+
+        soffice_binary = (env.get("SOFFICE_PATH") or "").strip()
+        if soffice_binary:
+            soffice_dir = os.path.dirname(soffice_binary)
+            if soffice_dir:
+                additional_entries.append(soffice_dir)
+
+        if os.name != "nt":
+            additional_entries.extend([
+                "/opt/homebrew/bin",
+                "/usr/local/bin",
+                "/opt/local/bin",
+                "/usr/bin",
+                "/bin",
+            ])
+
+        deduped_additional_entries = []
+        for entry in additional_entries:
+            normalized = entry.strip()
+            if not normalized or not os.path.isdir(normalized):
+                continue
+            if normalized in path_entries or normalized in deduped_additional_entries:
+                continue
+            deduped_additional_entries.append(normalized)
+
+        if deduped_additional_entries:
+            env["PATH"] = os.pathsep.join(deduped_additional_entries + path_entries)
+
         return env
 
     def _resolve_npm_project_root(self) -> str:
