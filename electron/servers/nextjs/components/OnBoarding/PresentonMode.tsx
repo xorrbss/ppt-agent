@@ -17,7 +17,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { handleSaveLLMConfig } from '@/utils/storeHelpers';
 import { checkIfSelectedOllamaModelIsPulled, pullOllamaModel } from '@/utils/providerUtils';
 import { getApiUrl } from '@/utils/api';
-import CodexConfig from '../CodexConfig';
+import CodexConfig, { CHATGPT_MODELS } from '../CodexConfig';
 
 const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep: (step: number) => void }) => {
     const pathname = usePathname();
@@ -327,6 +327,16 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 <h2 className='mb-4 text-black text-[26px] font-normal font-unbounded '>Choose your content providers</h2>
                 <p className='text-[#000000CC] text-xl font-normal font-syne'>Select the AI engines that will generate your slide text and visuals.</p>
             </div>
+            <CodexConfig
+                codexModel={llmConfig.CODEX_MODEL || ''}
+                onInputChange={(value, field) => {
+                    const normalizedField = field === 'codex_model' ? 'CODEX_MODEL' : field;
+                    setLlmConfig(prev => ({
+                        ...prev,
+                        [normalizedField]: value
+                    }));
+                }}
+            />
             {/* Text Provider */}
             <div className='p-3 border border-[#EDEEEF] rounded-[11px] '>
                 <div className="flex items-center gap-[24.3px]  mb-[42px]">
@@ -469,18 +479,64 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                     )}
                                 </>
                             ) : llmConfig.LLM === 'codex' ? (
-                                <div className='w-[299px]'>
-
-                                    <CodexConfig
-                                        codexModel={llmConfig.CODEX_MODEL || ''}
-                                        onInputChange={(value, field) => {
-                                            const normalizedField = field === 'codex_model' ? 'CODEX_MODEL' : field;
-                                            setLlmConfig(prev => ({
-                                                ...prev,
-                                                [normalizedField]: value
-                                            }));
-                                        }}
-                                    />
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Select GPT Model
+                                    </label>
+                                    <Popover open={openModelSelect} onOpenChange={setOpenModelSelect}>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                aria-expanded={openModelSelect}
+                                                className="w-full h-12 px-3 outline-none border border-gray-300 rounded-lg hover:border-gray-400 justify-between"
+                                            >
+                                                <span className="text-sm text-gray-900">
+                                                    {llmConfig.CODEX_MODEL
+                                                        ? (CHATGPT_MODELS.find((m) => m.id === llmConfig.CODEX_MODEL)?.name ?? llmConfig.CODEX_MODEL)
+                                                        : "Select a model"}
+                                                </span>
+                                                <ChevronUp className="w-4 h-4 text-gray-400" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent
+                                            className="p-0"
+                                            align="start"
+                                            style={{ width: "var(--radix-popover-trigger-width)" }}
+                                        >
+                                            <Command>
+                                                <CommandInput placeholder="Search models…" />
+                                                <CommandList>
+                                                    <CommandEmpty>No model found.</CommandEmpty>
+                                                    <CommandGroup>
+                                                        {CHATGPT_MODELS.map((model) => (
+                                                            <CommandItem
+                                                                key={model.id}
+                                                                value={model.id}
+                                                                onSelect={(value) => {
+                                                                    setLlmConfig(prev => ({
+                                                                        ...prev,
+                                                                        CODEX_MODEL: value
+                                                                    }));
+                                                                    setOpenModelSelect(false);
+                                                                }}
+                                                            >
+                                                                <Check
+                                                                    className={cn(
+                                                                        "mr-2 h-4 w-4",
+                                                                        llmConfig.CODEX_MODEL === model.id ? "opacity-100" : "opacity-0"
+                                                                    )}
+                                                                />
+                                                                <span className="text-sm text-gray-900">
+                                                                    {model.name}
+                                                                </span>
+                                                            </CommandItem>
+                                                        ))}
+                                                    </CommandGroup>
+                                                </CommandList>
+                                            </Command>
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
                             ) : (
                                 <>

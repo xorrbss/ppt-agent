@@ -8,6 +8,7 @@ import {
   Trash2,
   User,
   UserCheck,
+  ArrowRight,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import {
@@ -41,17 +42,17 @@ interface CodexModel {
   name: string;
 }
 
-const CHATGPT_MODELS: CodexModel[] = [
+export const CHATGPT_MODELS: CodexModel[] = [
   { id: "gpt-5.1", name: "GPT-5.1" },
   { id: "gpt-5.1-codex-max", name: "GPT-5.1 Codex Max" },
   { id: "gpt-5.2", name: "GPT-5.2" },
   { id: "gpt-5.2-codex", name: "GPT-5.2 Codex" },
   { id: "gpt-5.3-codex", name: "GPT-5.3 Codex" },
-  { id: "gpt-5.4-mini", name: "GPT-5.4 Mini" },
+  { id: "gpt-5.4 mini", name: "GPT-5.4 Mini" },
   { id: "gpt-5.4", name: "GPT-5.4" },
 ];
 
-const DEFAULT_CODEX_MODEL = "gpt-5.5-mini";
+export const DEFAULT_CODEX_MODEL = "gpt-5.4-mini";
 
 export default function CodexConfig({
   codexModel,
@@ -100,6 +101,8 @@ export default function CodexConfig({
 
   const handleSignIn = async () => {
     try {
+      onInputChange('codex', 'LLM');
+
       const res = await fetch(getApiUrl("/api/v1/ppt/codex/auth/initiate"), {
         method: "POST",
       });
@@ -215,46 +218,64 @@ export default function CodexConfig({
 
   if (authStatus === "checking") {
     return (
-      <div className="flex items-center gap-2 py-3 text-gray-400">
-        <Loader2 className="w-4 h-4 animate-spin" />
-        <span className="text-xs">Checking status…</span>
+      <div className="mb-5 w-full p-3 bg-[#010100] font-syne rounded-[8px] flex items-center gap-6">
+        <div className="w-[74px] h-[74px] bg-[#333333] rounded-full flex items-center justify-center shrink-0">
+          <Loader2 className="w-10 h-10 text-white animate-spin" />
+        </div>
+        <div className="text-start flex-1 min-w-0">
+          <h4 className="text-white text-lg font-medium">Checking status</h4>
+          <p className="text-[#808080] text-sm font-normal">
+            Verifying your ChatGPT connection…
+          </p>
+        </div>
       </div>
     );
   }
 
   if (authStatus === "polling") {
     return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-3 py-2">
-          <Loader2 className="w-4 h-4 text-gray-500 animate-spin" />
-          <span className="text-sm text-gray-600">Waiting for sign-in…</span>
+      <div className="mb-5 space-y-4 font-syne">
+        <div className="w-full p-3 bg-[#010100] rounded-[8px] flex items-center justify-between gap-4">
+          <div className="flex items-center gap-6 min-w-0 flex-1">
+            <div className="w-[74px] h-[74px] bg-[#333333] rounded-full flex items-center justify-center shrink-0">
+              <Loader2 className="w-10 h-10 text-white animate-spin" />
+            </div>
+            <div className="text-start min-w-0">
+              <h4 className="text-white text-lg font-medium">Waiting for sign-in</h4>
+              <p className="text-[#808080] text-sm font-normal">
+                Complete sign-in in the browser tab we opened.
+              </p>
+            </div>
+          </div>
           <button
+            type="button"
             onClick={handleCancelPolling}
-            className="text-xs text-gray-400 hover:text-gray-600 underline underline-offset-2 ml-auto"
+            className="shrink-0 text-sm text-[#808080] hover:text-white underline underline-offset-2 transition-colors"
           >
             Cancel
           </button>
         </div>
 
-        <div className="space-y-2">
-          <p className="text-xs text-gray-400">
-            Paste redirect URL or code if not redirected automatically
+        <div className="space-y-2 rounded-[8px] border border-[#333333] bg-[#010100] p-3">
+          <p className="text-white text-xs font-normal">
+            Paste redirect URL or code if you were not redirected automatically
           </p>
           <div className="flex gap-2">
             <input
               type="text"
               placeholder="Paste URL or code…"
-              className="flex-1 px-2 py-2 outline-none border border-gray-300 rounded-lg text-xs focus:border-gray-400 transition-colors"
+              className="flex-1 min-w-0 px-3 py-2.5 outline-none border border-[#333333] rounded-[8px] bg-[#1a1a1a] text-sm text-white placeholder:text-[#666666] focus:border-[#555555] transition-colors"
               value={manualCode}
               onChange={(e) => setManualCode(e.target.value)}
             />
             <button
+              type="button"
               onClick={handleManualExchange}
               disabled={isExchanging || !manualCode.trim()}
-              className="px-3 py-2 bg-[#EDEEEF] hover:bg-[#E4E5E6] disabled:opacity-40 rounded-lg text-xs font-medium text-[#101323] transition-colors"
+              className="shrink-0 px-4 py-2.5 bg-[#333333] hover:bg-[#444444] disabled:opacity-40 disabled:hover:bg-[#333333] rounded-[8px] text-sm font-medium text-white transition-colors flex items-center justify-center min-w-[88px]"
             >
               {isExchanging ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
                 "Submit"
               )}
@@ -267,10 +288,10 @@ export default function CodexConfig({
 
   if (authStatus === "authenticated") {
     return (
-      <div className="space-y-4">
+      <div className="space-y-4 mb-5">
         <div className="flex items-center gap-3 p-3  border border-[#EDEEEF] rounded-[8px]">
           <UserCheck className="w-5 h-5 text-black shrink-0" />
-          <div className="flex-1 min-w-0">
+          <div className="flex-gpt 5.4 mini1 min-w-0">
             {accountId && (
               <p className="text-sm font-medium text-gray-800 truncate">
                 Acc: {accountId}
@@ -283,7 +304,7 @@ export default function CodexConfig({
               onClick={handleRefreshToken}
               disabled={isRefreshing}
               title="Refresh token"
-              className="w-8 h-8 flex items-center justify-center rounded-full bg-[#EDEEEF] hover:bg-[#E4E5E6] disabled:opacity-40 transition-colors"
+              className="w-8 h-gpt 5.4 minid:opacity-40 transition-colors"
             >
               {isRefreshing ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-500" />
@@ -306,62 +327,7 @@ export default function CodexConfig({
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Select GPT Model
-          </label>
-          <Popover open={openModelSelect} onOpenChange={setOpenModelSelect}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                role="combobox"
-                aria-expanded={openModelSelect}
-                className="w-full h-10 px-3 outline-none border border-gray-300 rounded-lg hover:border-gray-400 justify-between"
-              >
-                <span className="text-sm text-gray-900">
-                  {codexModel
-                    ? (CHATGPT_MODELS.find((m) => m.id === codexModel)?.name ?? codexModel)
-                    : "Select a model"}
-                </span>
-                <ChevronUp className="w-4 h-4 text-gray-400" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              className="p-0"
-              align="start"
-              style={{ width: "var(--radix-popover-trigger-width)" }}
-            >
-              <Command>
-                <CommandInput placeholder="Search models…" />
-                <CommandList>
-                  <CommandEmpty>No model found.</CommandEmpty>
-                  <CommandGroup>
-                    {CHATGPT_MODELS.map((model) => (
-                      <CommandItem
-                        key={model.id}
-                        value={model.id}
-                        onSelect={(value) => {
-                          onInputChange(value, "codex_model");
-                          setOpenModelSelect(false);
-                        }}
-                      >
-                        <Check
-                          className={cn(
-                            "mr-2 h-4 w-4",
-                            codexModel === model.id ? "opacity-100" : "opacity-0"
-                          )}
-                        />
-                        <span className="text-sm text-gray-900">
-                          {model.name}
-                        </span>
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
-        </div>
+
       </div>
     );
   }
@@ -369,9 +335,19 @@ export default function CodexConfig({
   return (
     <button
       onClick={handleSignIn}
-      className="mt-8 py-2.5 px-3.5 bg-[#EDEEEF] hover:bg-[#E4E5E6] rounded-[48px] text-xs font-semibold text-[#101323] transition-colors"
+      className="mb-5 w-full  p-3 bg-[#010100] font-syne   rounded-[8px] flex items-center   justify-between  "
     >
-      Sign in with ChatGPT
+      <div className="flex items-center gap-6">
+        <div className="w-[74px] h-[74px] bg-[#333333] rounded-full flex items-center justify-center" >
+
+          <img src="/providers/OpenAI-white.png" alt="openai Logo" className="w-[52px] h-[52px]" />
+        </div>
+        <div className="text-start">
+          <h4 className="text-white text-lg font-medium">Sign in with ChatGPT</h4>
+          <p className="text-[#808080]   text-sm font-normal">Use your ChatGPT account — no API <br /> key required</p>
+        </div>
+      </div>
+      <ArrowRight className="w-[22px] h-[22px] text-white" />
     </button>
   );
 }
