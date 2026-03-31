@@ -1,8 +1,9 @@
 import asyncio
+import logging
 import os
 import tempfile
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import pdfplumber
 from fastapi import HTTPException
@@ -22,9 +23,11 @@ from utils.ocr_language import presentation_language_to_ocr_code
 
 # Optional fallback converter (primarily useful on Windows)
 try:
-    from services.lightweight_document_service import DocumentService
+    from services.lightweight_document_service import DocumentService as DocumentServiceCls
 except Exception:
-    DocumentService = None
+    DocumentServiceCls = None
+
+LOGGER = logging.getLogger(__name__)
 
 
 class DocumentsLoader:
@@ -38,7 +41,9 @@ class DocumentsLoader:
         self._ocr_language = presentation_language_to_ocr_code(presentation_language)
         self.liteparse_service = LiteParseService()
         self.document_conversion_service = DocumentConversionService()
-        self.document_service = DocumentService() if DocumentService is not None else None
+        self.document_service: Any = (
+            DocumentServiceCls() if DocumentServiceCls is not None else None
+        )
 
         self._documents: List[str] = []
         self._images: List[List[str]] = []
@@ -69,9 +74,14 @@ class DocumentsLoader:
                 )
 
             document = ""
-            imgs = []
+            imgs: List[str] = []
 
             extension = Path(file_path).suffix.lower()
+            LOGGER.info(
+                "[DocumentsLoader] Processing file=%s extension=%s",
+                file_path,
+                extension,
+            )
 
             if extension in PDF_EXTENSIONS:
                 document, imgs = await self.load_pdf(
@@ -107,13 +117,18 @@ class DocumentsLoader:
         load_images: bool,
         temp_dir: Optional[str] = None,
     ) -> Tuple[str, List[str]]:
-        image_paths = []
+        image_paths: List[str] = []
         document: str = ""
 
         if load_text:
             document = await asyncio.to_thread(self._parse_with_liteparse, file_path)
 
         if load_images:
+            if temp_dir is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="temp_dir is required when load_images is true",
+                )
             image_paths = await self.get_page_images_from_pdf_async(file_path, temp_dir)
 
         return document, image_paths
@@ -154,16 +169,27 @@ class DocumentsLoader:
 
     def _parse_with_liteparse(self, file_path: str) -> str:
         try:
+            LOGGER.info("[DocumentsLoader] LiteParse start file=%s", file_path)
             return self.liteparse_service.parse_to_markdown(
                 file_path,
                 ocr_enabled=True,
                 ocr_language=self._ocr_language,
             )
         except (LiteParseError, DocumentConversionError) as exc:
+            LOGGER.warning(
+                "[DocumentsLoader] Primary parse failed file=%s error=%s",
+                file_path,
+                exc,
+            )
             if self.document_service is not None:
                 try:
+                    LOGGER.info("[DocumentsLoader] Trying fallback parser file=%s", file_path)
                     return self.document_service.parse_to_markdown(file_path)
                 except Exception:
+                    LOGGER.exception(
+                        "[DocumentsLoader] Fallback parser failed file=%s",
+                        file_path,
+                    )
                     pass
             raise HTTPException(
                 status_code=500,

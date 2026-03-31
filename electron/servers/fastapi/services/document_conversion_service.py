@@ -1,11 +1,29 @@
 import os
 import subprocess
+import logging
 from pathlib import Path
 from typing import Dict, List
 
 
 class DocumentConversionError(Exception):
     pass
+
+
+LOGGER = logging.getLogger(__name__)
+_LOG_SNIPPET_LIMIT = 600
+
+
+def _snippet(value: str, limit: int = _LOG_SNIPPET_LIMIT) -> str:
+    text = (value or "").strip()
+    if not text:
+        return "<empty>"
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit]}... [truncated {len(text) - limit} chars]"
+
+
+def _command_str(parts: list[str]) -> str:
+    return " ".join(repr(part) for part in parts)
 
 
 def _windows_hidden_subprocess_kwargs() -> Dict[str, object]:
@@ -39,6 +57,8 @@ class DocumentConversionService:
                 [command, *args],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=10,
                 check=False,
                 **_windows_hidden_subprocess_kwargs(),
@@ -71,23 +91,39 @@ class DocumentConversionService:
         }
 
         try:
+            command = [
+                self.soffice_binary,
+                "--headless",
+                "--convert-to",
+                "pdf",
+                "--outdir",
+                output_dir,
+                file_path,
+            ]
+            LOGGER.info(
+                "[DocumentConversion] LibreOffice conversion start input=%s output_dir=%s",
+                file_path,
+                output_dir,
+            )
             subprocess.run(
-                [
-                    self.soffice_binary,
-                    "--headless",
-                    "--convert-to",
-                    "pdf",
-                    "--outdir",
-                    output_dir,
-                    file_path,
-                ],
+                command,
                 check=True,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=timeout_seconds,
                 **_windows_hidden_subprocess_kwargs(),
             )
+            LOGGER.info(
+                "[DocumentConversion] LibreOffice conversion complete input=%s",
+                file_path,
+            )
         except subprocess.TimeoutExpired as exc:
+            LOGGER.error(
+                "[DocumentConversion] LibreOffice timed out command=%s",
+                _command_str(exc.cmd if isinstance(exc.cmd, list) else [str(exc.cmd)]),
+            )
             raise DocumentConversionError(
                 f"LibreOffice conversion timed out for {os.path.basename(file_path)}"
             ) from exc
@@ -95,10 +131,19 @@ class DocumentConversionService:
             stderr = (exc.stderr or "").strip()
             stdout = (exc.stdout or "").strip()
             details = stderr or stdout or str(exc)
+            LOGGER.error(
+                "[DocumentConversion] LibreOffice failed code=%s command=%s stderr=%s stdout=%s",
+                exc.returncode,
+                _command_str(exc.cmd if isinstance(exc.cmd, list) else [str(exc.cmd)]),
+                _snippet(stderr),
+                _snippet(stdout),
+            )
             raise DocumentConversionError(
-                f"LibreOffice conversion failed for {os.path.basename(file_path)}: {details}"
+                f"LibreOffice conversion failed for {os.path.basename(file_path)}: {details} "
+                f"(stderr={_snippet(stderr)}; stdout={_snippet(stdout)})"
             ) from exc
         except Exception as exc:
+            LOGGER.exception("[DocumentConversion] LibreOffice conversion unexpected error")
             raise DocumentConversionError(
                 f"LibreOffice conversion failed for {os.path.basename(file_path)}: {exc}"
             ) from exc
@@ -133,15 +178,31 @@ class DocumentConversionService:
         command = [self.imagemagick_binary, file_path, str(output_path)]
 
         try:
+            LOGGER.info(
+                "[DocumentConversion] ImageMagick conversion start input=%s output=%s command=%s",
+                file_path,
+                output_path,
+                _command_str(command),
+            )
             subprocess.run(
                 command,
                 check=True,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=timeout_seconds,
                 **_windows_hidden_subprocess_kwargs(),
             )
+            LOGGER.info(
+                "[DocumentConversion] ImageMagick conversion complete output=%s",
+                output_path,
+            )
         except subprocess.TimeoutExpired as exc:
+            LOGGER.error(
+                "[DocumentConversion] ImageMagick timed out command=%s",
+                _command_str(exc.cmd if isinstance(exc.cmd, list) else [str(exc.cmd)]),
+            )
             raise DocumentConversionError(
                 f"ImageMagick conversion timed out for {os.path.basename(file_path)}"
             ) from exc
@@ -149,10 +210,19 @@ class DocumentConversionService:
             stderr = (exc.stderr or "").strip()
             stdout = (exc.stdout or "").strip()
             details = stderr or stdout or str(exc)
+            LOGGER.error(
+                "[DocumentConversion] ImageMagick failed code=%s command=%s stderr=%s stdout=%s",
+                exc.returncode,
+                _command_str(exc.cmd if isinstance(exc.cmd, list) else [str(exc.cmd)]),
+                _snippet(stderr),
+                _snippet(stdout),
+            )
             raise DocumentConversionError(
-                f"ImageMagick conversion failed for {os.path.basename(file_path)}: {details}"
+                f"ImageMagick conversion failed for {os.path.basename(file_path)}: {details} "
+                f"(stderr={_snippet(stderr)}; stdout={_snippet(stdout)})"
             ) from exc
         except Exception as exc:
+            LOGGER.exception("[DocumentConversion] ImageMagick conversion unexpected error")
             raise DocumentConversionError(
                 f"ImageMagick conversion failed for {os.path.basename(file_path)}: {exc}"
             ) from exc

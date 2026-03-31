@@ -4,11 +4,14 @@
  * - setup:install-chrome — download Chromium (browser-snapshots) with progress
  */
 
-import { ipcMain, WebContents, shell } from "electron";
+import { ipcMain, WebContents } from "electron";
 import fs from "fs";
 import path from "path";
 import os from "os";
 import { spawn, spawnSync } from "child_process";
+import * as https from "https";
+import * as http from "http";
+import { IncomingMessage } from "http";
 import puppeteer from "puppeteer";
 import {
   Browser,
@@ -19,8 +22,10 @@ import {
 } from "@puppeteer/browsers";
 import { getSetupStatus } from "../utils/setup-dependencies";
 import {
+  getImageMagickBinaryPath,
   getImageMagickDownloadUrl,
   getImageMagickManualInstallCommands,
+  getWindowsImageMagickInstallDir,
   isImageMagickInstalled,
 } from "../utils/imagemagick-check";
 
@@ -50,7 +55,7 @@ function sendChromeLog(wc: WebContents, level: string, text: string) {
 
 function sendImageMagickProgress(
   wc: WebContents,
-  phase: "installing" | "done" | "error",
+  phase: "downloading" | "installing" | "done" | "error",
   percent?: number,
   message?: string
 ) {
@@ -97,6 +102,156 @@ function logManualImageMagickCommands(wc: WebContents) {
   for (const line of getImageMagickManualInstallCommands()) {
     const level = line.endsWith(":") ? "info" : "cmd";
     sendImageMagickLog(wc, level, line);
+  }
+}
+
+const MAX_DOWNLOAD_REDIRECTS = 5;
+const MIN_IMAGEMAGICK_INSTALLER_SIZE_BYTES = 5 * 1024 * 1024;
+
+function formatBytes(bytes: number): string {
+  if (bytes <= 0) return "0 B";
+  const mb = bytes / 1024 / 1024;
+  if (mb >= 1) return `${mb.toFixed(1)} MB`;
+  const kb = bytes / 1024;
+  if (kb >= 1) return `${kb.toFixed(0)} KB`;
+  return `${bytes} B`;
+}
+
+function escapePowerShellSingleQuoted(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
+function getFilenameFromUrl(url: string, fallback: string): string {
+  try {
+    const parsed = new URL(url);
+    const name = path.basename(parsed.pathname);
+    return name || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function downloadFileWithProgress(
+  wc: WebContents,
+  url: string,
+  destinationPath: string
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const requestDownload = (requestUrl: string, redirects: number) => {
+      const requester = requestUrl.startsWith("https") ? https.get : http.get;
+      sendImageMagickLog(wc, "cmd", `GET ${requestUrl}`);
+
+      requester(requestUrl, (res: IncomingMessage) => {
+        const statusCode = res.statusCode ?? 0;
+        if (
+          [301, 302, 303, 307, 308].includes(statusCode) &&
+          res.headers.location
+        ) {
+          if (redirects >= MAX_DOWNLOAD_REDIRECTS) {
+            reject(new Error("Too many redirects while downloading installer."));
+            return;
+          }
+          const redirectUrl = new URL(res.headers.location, requestUrl).toString();
+          sendImageMagickLog(wc, "info", `Redirecting to ${redirectUrl}`);
+          requestDownload(redirectUrl, redirects + 1);
+          return;
+        }
+
+        if (statusCode !== 200) {
+          reject(new Error(`Download failed with HTTP ${statusCode}.`));
+          return;
+        }
+
+        const totalBytes = Number.parseInt(
+          String(res.headers["content-length"] ?? "0"),
+          10
+        );
+        let downloadedBytes = 0;
+
+        const file = fs.createWriteStream(destinationPath);
+
+        res.on("data", (chunk: Buffer) => {
+          downloadedBytes += chunk.length;
+          const percent =
+            totalBytes > 0
+              ? Math.min(99, Math.floor((downloadedBytes / totalBytes) * 100))
+              : undefined;
+          const sizeLabel =
+            totalBytes > 0
+              ? `${formatBytes(downloadedBytes)} / ${formatBytes(totalBytes)}`
+              : `${formatBytes(downloadedBytes)} downloaded`;
+          sendImageMagickProgress(wc, "downloading", percent, sizeLabel);
+        });
+
+        res.pipe(file);
+
+        file.on("finish", () => {
+          file.close(() => {
+            if (downloadedBytes < MIN_IMAGEMAGICK_INSTALLER_SIZE_BYTES) {
+              fs.unlink(destinationPath, () => {});
+              reject(
+                new Error(
+                  `Downloaded file is too small (${formatBytes(downloadedBytes)}).`
+                )
+              );
+              return;
+            }
+
+            sendImageMagickLog(
+              wc,
+              "ok",
+              `Download complete (${formatBytes(downloadedBytes)}).`
+            );
+            resolve();
+          });
+        });
+
+        file.on("error", (err) => {
+          fs.unlink(destinationPath, () => {});
+          reject(err);
+        });
+      }).on("error", (err) => {
+        fs.unlink(destinationPath, () => {});
+        reject(err);
+      });
+    };
+
+    requestDownload(url, 0);
+  });
+}
+
+async function runWindowsExecutableInstaller(
+  wc: WebContents,
+  installerPath: string,
+  installerArgs: string[]
+): Promise<void> {
+  const escapedInstallerPath = escapePowerShellSingleQuoted(installerPath);
+  const argList = installerArgs
+    .map((arg) => `'${escapePowerShellSingleQuoted(arg)}'`)
+    .join(", ");
+
+  const runViaPowerShell = async (runAsAdmin: boolean) => {
+    const verb = runAsAdmin ? " -Verb RunAs" : "";
+    const script = `$p = Start-Process -FilePath '${escapedInstallerPath}' -ArgumentList ${argList}${verb} -Wait -PassThru; if ($p) { exit $p.ExitCode } else { exit 1 }`;
+    await runInstallCommand(wc, "powershell", [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-Command",
+      script,
+    ]);
+  };
+
+  try {
+    sendImageMagickLog(wc, "info", "Running installer in user mode...");
+    await runViaPowerShell(false);
+  } catch {
+    sendImageMagickLog(
+      wc,
+      "warn",
+      "User-mode install failed. Retrying with administrator rights..."
+    );
+    await runViaPowerShell(true);
   }
 }
 
@@ -282,22 +437,60 @@ export function setupSetupInstallHandlers() {
 
           await runInstallCommand(wc, brewCommand, ["install", "imagemagick"]);
         } else if (process.platform === "win32") {
-          if (commandExists("choco", ["-v"])) {
-            await runInstallCommand(wc, "choco", [
-              "install",
-              "imagemagick.app",
-              "-y",
-            ]);
-          } else {
-            throw new Error(
-              "Chocolatey is not installed. Falling back to direct installer download."
-            );
-          }
+          const installerUrl = getImageMagickDownloadUrl();
+          const installerFilename = getFilenameFromUrl(
+            installerUrl,
+            "ImageMagick-installer.exe"
+          );
+          const installerPath = path.join(os.tmpdir(), installerFilename);
+          const installDir = getWindowsImageMagickInstallDir();
+
+          fs.mkdirSync(installDir, { recursive: true });
+
+          sendImageMagickLog(
+            wc,
+            "info",
+            `Downloading ImageMagick installer (${installerFilename})...`
+          );
+          sendImageMagickLog(wc, "cmd", `Install directory: ${installDir}`);
+          sendImageMagickProgress(wc, "downloading", 0, "Connecting...");
+
+          await downloadFileWithProgress(wc, installerUrl, installerPath);
+
+          sendImageMagickProgress(
+            wc,
+            "installing",
+            undefined,
+            "Running installer..."
+          );
+
+          await runWindowsExecutableInstaller(wc, installerPath, [
+            "/SP-",
+            "/VERYSILENT",
+            "/SUPPRESSMSGBOXES",
+            "/NORESTART",
+            `/DIR=${installDir}`,
+          ]);
+
+          fs.unlink(installerPath, () => {});
+          sendImageMagickLog(wc, "ok", "ImageMagick installer completed.");
         } else {
           throw new Error(
             "Unsupported platform for automatic install. Use manual install from the official download page."
           );
         }
+
+        if (!isImageMagickInstalled()) {
+          throw new Error(
+            "ImageMagick installation command finished, but the binary was not detected."
+          );
+        }
+
+        sendImageMagickLog(
+          wc,
+          "ok",
+          `ImageMagick detected at ${getImageMagickBinaryPath()}`
+        );
 
         sendImageMagickProgress(wc, "done", 100, "ImageMagick install finished");
         return { ok: true };
@@ -310,9 +503,8 @@ export function setupSetupInstallHandlers() {
         sendImageMagickLog(
           wc,
           "info",
-          `Opening manual install link: ${downloadUrl}`
+          `Manual install URL: ${downloadUrl}`
         );
-        await shell.openExternal(downloadUrl);
         sendImageMagickProgress(
           wc,
           "error",
@@ -331,7 +523,11 @@ export function setupSetupInstallHandlers() {
       const installed = isImageMagickInstalled();
       if (installed) {
         sendImageMagickProgress(wc, "done", 100, "ImageMagick detected");
-        sendImageMagickLog(wc, "ok", "ImageMagick is installed and ready.");
+        sendImageMagickLog(
+          wc,
+          "ok",
+          `ImageMagick is installed and ready (${getImageMagickBinaryPath()}).`
+        );
         return { ok: true };
       }
       const message =

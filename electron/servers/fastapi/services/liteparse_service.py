@@ -1,11 +1,39 @@
 import json
+import logging
 import os
 import subprocess
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Mapping, Tuple
 
 
 class LiteParseError(Exception):
     pass
+
+
+LOGGER = logging.getLogger(__name__)
+_LOG_SNIPPET_LIMIT = 600
+
+
+def _snippet(value: str, limit: int = _LOG_SNIPPET_LIMIT) -> str:
+    text = (value or "").strip()
+    if not text:
+        return "<empty>"
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit]}... [truncated {len(text) - limit} chars]"
+
+
+def _command_str(parts: list[str]) -> str:
+    return " ".join(json.dumps(part) for part in parts)
+
+
+def _subprocess_text_kwargs() -> Mapping[str, object]:
+    """Decode subprocess output consistently across platforms.
+
+    Windows defaults to a locale-dependent code page (often cp1252), which can
+    crash while decoding UTF-8 output from Node tools. Use UTF-8 and replace
+    undecodable bytes to keep parsing resilient.
+    """
+    return {"text": True, "encoding": "utf-8", "errors": "replace"}
 
 
 class LiteParseService:
@@ -15,6 +43,58 @@ class LiteParseService:
         self.runner_path = os.getenv("LITEPARSE_RUNNER_PATH", self._resolve_runner_path())
         self.runner_dir = os.path.dirname(self.runner_path)
         self._npm_project_root = self._resolve_npm_project_root()
+
+    def _build_node_env(self) -> Dict[str, str]:
+        """Build environment for Node subprocesses.
+
+        When the configured runtime binary is not the canonical `node` executable
+        (for example Electron's app binary), force Node-compatible mode.
+        """
+        env = os.environ.copy()
+        binary_name = os.path.basename(self.node_binary).lower()
+        if binary_name not in {"node", "node.exe"}:
+            env.setdefault("ELECTRON_RUN_AS_NODE", "1")
+
+        # LiteParse checks ImageMagick availability with `which magick`.
+        # On macOS app launches, PATH often excludes Homebrew bins, even when
+        # IMAGEMAGICK_BINARY is configured to an absolute executable path.
+        path_entries = [p for p in (env.get("PATH") or "").split(os.pathsep) if p]
+        additional_entries = []
+
+        imagemagick_binary = (env.get("IMAGEMAGICK_BINARY") or "").strip()
+        if imagemagick_binary:
+            magick_dir = os.path.dirname(imagemagick_binary)
+            if magick_dir:
+                additional_entries.append(magick_dir)
+
+        soffice_binary = (env.get("SOFFICE_PATH") or "").strip()
+        if soffice_binary:
+            soffice_dir = os.path.dirname(soffice_binary)
+            if soffice_dir:
+                additional_entries.append(soffice_dir)
+
+        if os.name != "nt":
+            additional_entries.extend([
+                "/opt/homebrew/bin",
+                "/usr/local/bin",
+                "/opt/local/bin",
+                "/usr/bin",
+                "/bin",
+            ])
+
+        deduped_additional_entries = []
+        for entry in additional_entries:
+            normalized = entry.strip()
+            if not normalized or not os.path.isdir(normalized):
+                continue
+            if normalized in path_entries or normalized in deduped_additional_entries:
+                continue
+            deduped_additional_entries.append(normalized)
+
+        if deduped_additional_entries:
+            env["PATH"] = os.pathsep.join(deduped_additional_entries + path_entries)
+
+        return env
 
     def _resolve_npm_project_root(self) -> str:
         """Directory whose node_modules contains @llamaindex/liteparse (runner dir or Electron app root)."""
@@ -76,8 +156,9 @@ class LiteParseService:
                 cwd=self.runner_dir,
                 check=True,
                 capture_output=True,
-                text=True,
                 timeout=10,
+                env=self._build_node_env(),
+                **_subprocess_text_kwargs(),
             )
         except Exception as exc:
             return False, f"Node.js runtime is unavailable: {exc}"
@@ -103,8 +184,9 @@ class LiteParseService:
                 cwd=self._npm_project_root,
                 check=True,
                 capture_output=True,
-                text=True,
                 timeout=20,
+                env=self._build_node_env(),
+                **_subprocess_text_kwargs(),
             )
         except Exception as exc:
             return False, f"LiteParse dependency is unavailable: {exc}"
@@ -151,21 +233,51 @@ class LiteParseService:
         if tessdata:
             command.extend(["--tessdata-path", tessdata])
 
+        LOGGER.info(
+            "[LiteParse] Parsing file=%s ocr_enabled=%s ocr_language=%s",
+            file_path,
+            ocr_enabled,
+            ocr_language,
+        )
+
         process = subprocess.run(
             command,
             cwd=self._npm_project_root,
             capture_output=True,
-            text=True,
             timeout=self.timeout_seconds,
-            env=os.environ.copy(),
+            env=self._build_node_env(),
+            **_subprocess_text_kwargs(),
         )
-        payload = self._decode_runner_output(process.stdout)
+        LOGGER.info(
+            "[LiteParse] Command finished returncode=%s command=%s",
+            process.returncode,
+            _command_str(command),
+        )
+
+        payload: Dict[str, Any]
+        try:
+            payload = self._decode_runner_output(process.stdout)
+        except LiteParseError as exc:
+            raise LiteParseError(
+                f"{exc}; returncode={process.returncode}; "
+                f"stderr={_snippet(process.stderr)}; stdout={_snippet(process.stdout)}"
+            ) from exc
 
         if process.returncode != 0:
             message = payload.get("error") or process.stderr.strip() or "Unknown error"
+            LOGGER.error(
+                "[LiteParse] Parse failed returncode=%s stderr=%s stdout=%s",
+                process.returncode,
+                _snippet(process.stderr),
+                _snippet(process.stdout),
+            )
             raise LiteParseError(message)
 
         if not payload.get("ok"):
+            LOGGER.error(
+                "[LiteParse] Runner returned not-ok payload=%s",
+                _snippet(json.dumps(payload)),
+            )
             raise LiteParseError(payload.get("error") or "LiteParse parse failed")
 
         return payload

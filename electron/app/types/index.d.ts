@@ -33,8 +33,14 @@ interface FastApiEnv {
   MIGRATE_DATABASE_ON_STARTUP?: string,
   /** Absolute path to the soffice binary resolved at startup by libreoffice-check.ts. */
   SOFFICE_PATH?: string,
+  /** Absolute path to the ImageMagick binary resolved at startup by imagemagick-check.ts. */
+  IMAGEMAGICK_BINARY?: string,
   /** Absolute path to the bundled LiteParse runner script. */
   LITEPARSE_RUNNER_PATH?: string,
+  /** Binary path used by LiteParseService to execute liteparse_runner.mjs. */
+  LITEPARSE_NODE_BINARY?: string,
+  /** Set to "1" when using the Electron binary as a Node runtime. */
+  ELECTRON_RUN_AS_NODE?: string,
 }
 
 interface NextJsEnv {
