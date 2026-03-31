@@ -288,40 +288,43 @@ export default function CodexConfig({
 
   if (authStatus === "authenticated") {
     return (
-      <div className="space-y-4 mb-5">
-        <div className="flex items-center gap-3 p-3  border border-[#EDEEEF] rounded-[8px]">
-          <UserCheck className="w-5 h-5 text-black shrink-0" />
-          <div className="flex-gpt 5.4 mini1 min-w-0">
-            {accountId && (
-              <p className="text-sm font-medium text-gray-800 truncate">
-                Acc: {accountId}
-              </p>
-            )}
-            <p className="text-xs text-gray-400">Signed in to ChatGPT</p>
+      <div className=" mb-5">
+        <div className="flex items-center justify-between gap-3 p-5  border border-[#EDEEEF] rounded-[8px]">
+          <div className="flex items-center gap-3">
+
+            <UserCheck className="w-6 h-6 text-black shrink-0" />
+            <div className="flex-gpt 5.4 mini1 min-w-0">
+              {accountId && (
+                <p className="text-sm font-medium text-gray-800 truncate">
+                  Acc: {accountId}
+                </p>
+              )}
+              <p className="text-xs text-gray-400">Signed in to ChatGPT</p>
+            </div>
           </div>
           <div className="flex gap-1.5 shrink-0">
             <button
               onClick={handleRefreshToken}
               disabled={isRefreshing}
               title="Refresh token"
-              className="w-8 h-gpt 5.4 minid:opacity-40 transition-colors"
+              className="flex items-center justify-center px-3.5 py-2.5  bg-[#EDEEEF] rounded-[58px] minid:opacity-40 transition-colors"
             >
               {isRefreshing ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-500" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-black" />
               ) : (
-                <RefreshCw className="w-3.5 h-3.5 text-gray-500" />
+                <RefreshCw className="w-3.5 h-3.5 text-black" />
               )}
             </button>
             <button
               onClick={handleSignOut}
               disabled={isLoggingOut}
               title="Sign out"
-              className="w-8 h-8 flex items-center justify-center rounded-full bg-[#EDEEEF] hover:bg-[#E4E5E6] disabled:opacity-40 transition-colors"
+              className="flex items-center justify-center px-3.5 py-2.5  bg-[#EDEEEF] rounded-[58px] hover:bg-[#E4E5E6] disabled:opacity-40 transition-colors"
             >
               {isLoggingOut ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-500" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-black" />
               ) : (
-                <Trash2 className="w-3.5 h-3.5 text-gray-500" />
+                <Trash2 className="w-3.5 h-3.5 text-black" />
               )}
             </button>
           </div>

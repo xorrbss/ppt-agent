@@ -175,9 +175,9 @@ const GroupLayoutPreview = () => {
                 <div
                   key={`${templateParams}-${template.layoutId}-${index}`}
                   id={template.layoutId}
-                  className="overflow-hidden  bg-white rounded-tl-[10px] rounded-tr-[10px]"
+                  className="overflow-hidden   rounded-tl-[10px] border border-[#EDEEEF] rounded-tr-[10px]"
                 >
-                  <div className=" px-4 py-6 ">
+                  <div className=" px-4 py-6 bg-white border-b border-[#EDEEEF] ">
                     <div className="flex items-center justify-between">
                       <div>
                         <span className="px-3 py-1 bg-[#7A5AF8] text-white  font-syne  rounded-full text-sm font-medium">
