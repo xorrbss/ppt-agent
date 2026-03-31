@@ -14,7 +14,7 @@ import { checkDependenciesBeforeWindow } from "./utils/setup-dependencies";
 import { getSofficePath, isLibreOfficeInstalled } from "./utils/libreoffice-check";
 import { getPuppeteerExecutablePath, isChromeInstalled } from "./utils/puppeteer-check";
 import { getLiteParseRunnerPath } from "./utils/liteparse-check";
-import { isImageMagickInstalled } from "./utils/imagemagick-check";
+import { getImageMagickBinaryPath, isImageMagickInstalled } from "./utils/imagemagick-check";
 import { startUpdateChecker, stopUpdateChecker } from "./utils/update-checker";
 
 
@@ -125,6 +125,7 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         // Resolved by libreoffice-check.ts at startup; lets Python invoke the
         // exact binary path instead of relying on the system PATH.
         SOFFICE_PATH: getSofficePath(),
+        IMAGEMAGICK_BINARY: getImageMagickBinaryPath(),
         LITEPARSE_RUNNER_PATH: getLiteParseRunnerPath(),
       },
       isDev,

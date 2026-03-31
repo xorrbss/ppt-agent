@@ -288,7 +288,7 @@
           ? '<strong>Presenton</strong> uses LibreOffice to generate custom templates from PPTX files.'
           : step === 'chrome'
           ? '<strong>Presenton</strong> uses Chromium for export and slide rendering. Download it now (~150 MB).'
-          : '<strong>Presenton</strong> uses ImageMagick for OCR/document conversion support. Linux uses apt, macOS installs Homebrew first (if needed) and then runs brew install imagemagick, and Windows uses Chocolatey with a direct installer fallback.';
+            : '<strong>Presenton</strong> uses ImageMagick for OCR/document conversion support. Linux uses apt, macOS installs Homebrew first (if needed) and then runs brew install imagemagick, and Windows downloads and installs it directly into the Presenton runtime.';
       document.getElementById('btn-install').onclick = () => startInstall(step);
       document.getElementById('btn-skip').onclick = () => handleSkip();
       showState('prompt');
@@ -315,7 +315,7 @@
         });
       } else {
         document.getElementById('dl-heading').textContent = 'Installing ImageMagick';
-        document.getElementById('dl-phase').textContent = 'Linux: apt-get | macOS: Homebrew + brew install | Windows: choco or direct installer';
+        document.getElementById('dl-phase').textContent = 'Linux: apt-get | macOS: Homebrew + brew install | Windows: direct installer (Presenton runtime)';
         window.setupInstaller.installImageMagick().then((installResult) => {
           if (!installResult || !installResult.ok) {
             if (currentStep !== 'imagemagick') return;
