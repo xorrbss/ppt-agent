@@ -16,6 +16,18 @@ class LiteParseService:
         self.runner_dir = os.path.dirname(self.runner_path)
         self._npm_project_root = self._resolve_npm_project_root()
 
+    def _build_node_env(self) -> Dict[str, str]:
+        """Build environment for Node subprocesses.
+
+        When the configured runtime binary is not the canonical `node` executable
+        (for example Electron's app binary), force Node-compatible mode.
+        """
+        env = os.environ.copy()
+        binary_name = os.path.basename(self.node_binary).lower()
+        if binary_name not in {"node", "node.exe"}:
+            env.setdefault("ELECTRON_RUN_AS_NODE", "1")
+        return env
+
     def _resolve_npm_project_root(self) -> str:
         """Directory whose node_modules contains @llamaindex/liteparse (runner dir or Electron app root)."""
         local_nm = os.path.join(
@@ -78,6 +90,7 @@ class LiteParseService:
                 capture_output=True,
                 text=True,
                 timeout=10,
+                env=self._build_node_env(),
             )
         except Exception as exc:
             return False, f"Node.js runtime is unavailable: {exc}"
@@ -105,6 +118,7 @@ class LiteParseService:
                 capture_output=True,
                 text=True,
                 timeout=20,
+                env=self._build_node_env(),
             )
         except Exception as exc:
             return False, f"LiteParse dependency is unavailable: {exc}"
@@ -157,7 +171,7 @@ class LiteParseService:
             capture_output=True,
             text=True,
             timeout=self.timeout_seconds,
-            env=os.environ.copy(),
+            env=self._build_node_env(),
         )
         payload = self._decode_runner_output(process.stdout)
 

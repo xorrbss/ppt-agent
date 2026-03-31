@@ -37,6 +37,10 @@ interface FastApiEnv {
   IMAGEMAGICK_BINARY?: string,
   /** Absolute path to the bundled LiteParse runner script. */
   LITEPARSE_RUNNER_PATH?: string,
+  /** Binary path used by LiteParseService to execute liteparse_runner.mjs. */
+  LITEPARSE_NODE_BINARY?: string,
+  /** Set to "1" when using the Electron binary as a Node runtime. */
+  ELECTRON_RUN_AS_NODE?: string,
 }
 
 interface NextJsEnv {

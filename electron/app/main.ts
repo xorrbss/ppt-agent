@@ -127,6 +127,10 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         SOFFICE_PATH: getSofficePath(),
         IMAGEMAGICK_BINARY: getImageMagickBinaryPath(),
         LITEPARSE_RUNNER_PATH: getLiteParseRunnerPath(),
+        // Use Electron's embedded runtime for LiteParse so parsing does not
+        // depend on a system-wide Node installation.
+        LITEPARSE_NODE_BINARY: process.execPath,
+        ELECTRON_RUN_AS_NODE: "1",
       },
       isDev,
     );
