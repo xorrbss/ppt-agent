@@ -1,11 +1,39 @@
 import json
+import logging
 import os
 import subprocess
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Mapping, Tuple
 
 
 class LiteParseError(Exception):
     pass
+
+
+LOGGER = logging.getLogger(__name__)
+_LOG_SNIPPET_LIMIT = 600
+
+
+def _snippet(value: str, limit: int = _LOG_SNIPPET_LIMIT) -> str:
+    text = (value or "").strip()
+    if not text:
+        return "<empty>"
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit]}... [truncated {len(text) - limit} chars]"
+
+
+def _command_str(parts: list[str]) -> str:
+    return " ".join(json.dumps(part) for part in parts)
+
+
+def _subprocess_text_kwargs() -> Mapping[str, object]:
+    """Decode subprocess output consistently across platforms.
+
+    Windows defaults to a locale-dependent code page (often cp1252), which can
+    crash while decoding UTF-8 output from Node tools. Use UTF-8 and replace
+    undecodable bytes to keep parsing resilient.
+    """
+    return {"text": True, "encoding": "utf-8", "errors": "replace"}
 
 
 class LiteParseService:
@@ -128,9 +156,9 @@ class LiteParseService:
                 cwd=self.runner_dir,
                 check=True,
                 capture_output=True,
-                text=True,
                 timeout=10,
                 env=self._build_node_env(),
+                **_subprocess_text_kwargs(),
             )
         except Exception as exc:
             return False, f"Node.js runtime is unavailable: {exc}"
@@ -156,9 +184,9 @@ class LiteParseService:
                 cwd=self._npm_project_root,
                 check=True,
                 capture_output=True,
-                text=True,
                 timeout=20,
                 env=self._build_node_env(),
+                **_subprocess_text_kwargs(),
             )
         except Exception as exc:
             return False, f"LiteParse dependency is unavailable: {exc}"
@@ -205,21 +233,51 @@ class LiteParseService:
         if tessdata:
             command.extend(["--tessdata-path", tessdata])
 
+        LOGGER.info(
+            "[LiteParse] Parsing file=%s ocr_enabled=%s ocr_language=%s",
+            file_path,
+            ocr_enabled,
+            ocr_language,
+        )
+
         process = subprocess.run(
             command,
             cwd=self._npm_project_root,
             capture_output=True,
-            text=True,
             timeout=self.timeout_seconds,
             env=self._build_node_env(),
+            **_subprocess_text_kwargs(),
         )
-        payload = self._decode_runner_output(process.stdout)
+        LOGGER.info(
+            "[LiteParse] Command finished returncode=%s command=%s",
+            process.returncode,
+            _command_str(command),
+        )
+
+        payload: Dict[str, Any]
+        try:
+            payload = self._decode_runner_output(process.stdout)
+        except LiteParseError as exc:
+            raise LiteParseError(
+                f"{exc}; returncode={process.returncode}; "
+                f"stderr={_snippet(process.stderr)}; stdout={_snippet(process.stdout)}"
+            ) from exc
 
         if process.returncode != 0:
             message = payload.get("error") or process.stderr.strip() or "Unknown error"
+            LOGGER.error(
+                "[LiteParse] Parse failed returncode=%s stderr=%s stdout=%s",
+                process.returncode,
+                _snippet(process.stderr),
+                _snippet(process.stdout),
+            )
             raise LiteParseError(message)
 
         if not payload.get("ok"):
+            LOGGER.error(
+                "[LiteParse] Runner returned not-ok payload=%s",
+                _snippet(json.dumps(payload)),
+            )
             raise LiteParseError(payload.get("error") or "LiteParse parse failed")
 
         return payload
