@@ -49,13 +49,13 @@ const ModeSelectStep = ({ selectedMode, setStep, setSelectedMode }: { selectedMo
                     <ChevronRight className='w-6 h-6 text-[#B3B3B3]' />
                 </div>
             </div>
-            <div className='absolute bottom-16 mr-8  max-w-[1440px]  right-0 flex justify-end items-center gap-2.5 '>
+            <div className='fixed bottom-16 mr-8  max-w-[1440px]  right-16 flex justify-end items-center gap-2.5 '>
 
                 <button
                     onClick={() => {
                         setStep(2);
                     }}
-                    className='border border-[#EDEEEF] bg-[#7C51F8]  rounded-[58px] px-5 py-2.5 text-white text-xs  font-semibold'>
+                    className='border font-syne border-[#EDEEEF] bg-[#7C51F8]  rounded-[58px] px-5 py-2.5 text-white text-xs  font-semibold'>
                     Start With {selectedMode === "presenton" ? "Presenton" : "Image Model"}
                 </button>
             </div>

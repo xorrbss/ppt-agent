@@ -19,6 +19,7 @@ import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import SettingSideBar from "./SettingSideBar";
 import TextProvider from "./TextProvider";
 import ImageProvider from "./ImageProvider";
+import PrivacySettings from "./PrivacySettings";
 import { IMAGE_PROVIDERS, LLM_PROVIDERS } from "@/utils/providerConstants";
 
 // Button state interface
@@ -35,7 +36,7 @@ const SettingsPage = () => {
   const router = useRouter();
   const pathname = usePathname();
   const [mode, setMode] = useState<'nanobanana' | 'presenton'>('presenton')
-  const [selectedProvider, setSelectedProvider] = useState<'text-provider' | 'image-provider'>('text-provider')
+  const [selectedProvider, setSelectedProvider] = useState<'text-provider' | 'image-provider' | 'privacy'>('text-provider')
   const userConfigState = useSelector((state: RootState) => state.userConfig);
   const [llmConfig, setLlmConfig] = useState<LLMConfig>(
     userConfigState.llm_config
@@ -228,7 +229,7 @@ const SettingsPage = () => {
               ? llmConfig.CUSTOM_MODEL
               : textProviderKey === "codex"
                 ? llmConfig.CODEX_MODEL
-              : "";
+                : "";
   const textSummary = selectedTextModel
     ? `${textProviderLabel} (${selectedTextModel})`
     : textProviderLabel;
@@ -280,6 +281,7 @@ const SettingsPage = () => {
             llmConfig={llmConfig}
           />}
           {mode === 'presenton' && selectedProvider === 'image-provider' && <ImageProvider llmConfig={llmConfig} setLlmConfig={setLlmConfig} />}
+          {selectedProvider === 'privacy' && <PrivacySettings />}
 
         </div>
       </main>

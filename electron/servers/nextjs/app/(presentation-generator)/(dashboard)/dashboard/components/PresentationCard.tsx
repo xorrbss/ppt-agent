@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { useFontLoader } from "@/app/(presentation-generator)/hooks/useFontLoad";
 import SlideScale from "@/app/(presentation-generator)/components/PresentationRender";
 import MarkdownRenderer from "@/components/MarkDownRender";
+import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 
 export const PresentationCard = ({
   id,
@@ -31,6 +32,7 @@ export const PresentationCard = ({
 
   const handlePreview = (e: React.MouseEvent) => {
     e.preventDefault();
+    trackEvent(MixpanelEvent.Dashboard_Presentation_Opened, { presentation_id: id });
     router.push(`/presentation?id=${id}&type=standard`);
   };
   useEffect(() => {
@@ -80,6 +82,7 @@ export const PresentationCard = ({
     e.stopPropagation();
 
 
+    trackEvent(MixpanelEvent.Dashboard_Presentation_Deleted, { presentation_id: id });
     const response = await DashboardApi.deletePresentation(id);
 
     if (response) {

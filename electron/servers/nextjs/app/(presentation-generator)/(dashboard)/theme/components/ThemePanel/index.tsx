@@ -32,6 +32,7 @@ import CustomTabEmpty from './CustomTabEmpty'
 import ThemeApi from '@/app/(presentation-generator)/services/api/theme'
 import { useFontLoader } from '@/app/(presentation-generator)/hooks/useFontLoad'
 import Link from 'next/link'
+import { trackEvent, MixpanelEvent } from '@/utils/mixpanel'
 
 // Fallback theme used before defaults are loaded from API (unified Theme type)
 const FALLBACK_THEME: Theme = {
@@ -124,6 +125,7 @@ const ThemePanel: React.FC = () => {
 
   // Initialize theme on component mount
   useEffect(() => {
+    trackEvent(MixpanelEvent.Theme_Page_Viewed)
     applyTheme(selectedTheme)
   }, [])
 
@@ -256,6 +258,7 @@ const ThemePanel: React.FC = () => {
   }
 
   const handleThemeSelect = (theme: Theme) => {
+    trackEvent(MixpanelEvent.Theme_Selected, { theme_id: theme.id, theme_name: theme.name })
     setIsNewTheme(false)
     setSelectedTheme(theme)
     setCustomColors(theme.data.colors)
@@ -279,6 +282,7 @@ const ThemePanel: React.FC = () => {
   }
 
   const handleFontSelect = (fontName: string, url: string) => {
+    trackEvent(MixpanelEvent.Theme_Font_Changed, { font_name: fontName })
     setCustomFonts({ textFont: { name: fontName, url: url } })
   }
 
@@ -286,6 +290,7 @@ const ThemePanel: React.FC = () => {
     try {
       setIsLogoUploading(true)
       const uploaded = await ImagesApi.uploadImage(file)
+      trackEvent(MixpanelEvent.Theme_Logo_Uploaded)
       setCustomBrandLogo(uploaded.path)
       setCustomBrandLogoId(uploaded.id)
     } catch (error: any) {
@@ -397,6 +402,7 @@ const ThemePanel: React.FC = () => {
             }
           }
           const updated = await ThemeApi.updateTheme(params)
+          trackEvent(MixpanelEvent.Theme_Saved, { theme_id: updated.id, is_update: true })
           setCustomThemes(customThemes.map(t => t.id === updated.id ? updated : t))
           setSelectedTheme(updated)
           setIsSheetOpen(false)
@@ -421,6 +427,7 @@ const ThemePanel: React.FC = () => {
         }
       }
       const created = await ThemeApi.createTheme(params)
+      trackEvent(MixpanelEvent.Theme_Saved, { theme_id: created.id, is_update: false })
       setCustomThemes([...customThemes, created])
       setSelectedTheme(created)
       setIsSheetOpen(false)
@@ -438,6 +445,7 @@ const ThemePanel: React.FC = () => {
     setShowColorPicker(null)
   }
   const handleDelete = async (themeId: string) => {
+    trackEvent(MixpanelEvent.Theme_Deleted, { theme_id: themeId })
     await ThemeApi.deleteTheme(themeId)
     setCustomThemes(customThemes.filter(theme => theme.id !== themeId))
     toast.success("Theme deleted successfully")
@@ -446,6 +454,7 @@ const ThemePanel: React.FC = () => {
     try {
       setIsFontUploading(true)
       const { font_name, font_url } = await ThemeApi.uploadFont(fontFile)
+      trackEvent(MixpanelEvent.Theme_Custom_Font_Uploaded, { font_name })
       setCustomFonts({
         textFont: {
           name: font_name,
@@ -862,6 +871,7 @@ const ThemePanel: React.FC = () => {
         </h3>
         <Link
           href="/theme?tab=new-theme"
+          onClick={() => trackEvent(MixpanelEvent.Theme_New_Theme_Clicked)}
           className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-black text-sm font-semibold font-syne shadow-sm hover:shadow-md"
           aria-label="Create new theme"
           style={{
@@ -878,7 +888,7 @@ const ThemePanel: React.FC = () => {
       {/* Tabs */}
       <div className='p-1 rounded-[40px] bg-[#ffffff] w-fit border border-[#EDEEEF] flex items-center justify-center '>
         <button className='px-5  py-2 text-xs font-medium text-[#3A3A3A] rounded-[70px]'
-          onClick={() => setTab('custom')}
+          onClick={() => { trackEvent(MixpanelEvent.Theme_Tab_Switched, { tab: 'custom' }); setTab('custom'); }}
           style={{
             background: tab === 'custom' ? '#F4F3FF' : 'transparent'
           }}
@@ -887,7 +897,7 @@ const ThemePanel: React.FC = () => {
           <path d="M1 0V16.5" stroke="#EDECEC" strokeWidth="2" />
         </svg>
         <button className='px-5  py-2 text-xs font-medium text-[#3A3A3A] rounded-[70px]'
-          onClick={() => setTab('default')}
+          onClick={() => { trackEvent(MixpanelEvent.Theme_Tab_Switched, { tab: 'default' }); setTab('default'); }}
           style={{
             background: tab === 'default' ? '#F4F3FF' : 'transparent'
           }}

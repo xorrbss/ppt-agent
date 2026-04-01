@@ -32,7 +32,7 @@ interface ElectronAPI {
   // API handlers
   hasRequiredKey: () => Promise<{ hasKey: boolean }>;
   telemetryStatus: () => Promise<{ telemetryEnabled: boolean }>;
-  getTemplates: () => Promise<Array<{templateName: string; templateID: string; files: string[]; settings: any }>>;
+  getTemplates: () => Promise<Array<{ templateName: string; templateID: string; files: string[]; settings: any }>>;
 }
 
 interface Window {
@@ -42,5 +42,6 @@ interface Window {
     NEXT_PUBLIC_URL: string;
     TEMP_DIRECTORY: string;
     NEXT_PUBLIC_USER_CONFIG_PATH: string;
+    APP_VERSION: string;
   };
 }

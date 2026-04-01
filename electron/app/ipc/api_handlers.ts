@@ -1,6 +1,7 @@
 import { app, ipcMain } from "electron";
 import fs from "fs";
 import path from "path";
+import { getUserConfig } from "../utils";
 
 export function setupApiHandlers() {
   // Handler for can-change-keys API
@@ -26,15 +27,19 @@ export function setupApiHandlers() {
 
     const keyFromEnv = process.env.OPENAI_API_KEY || "";
     const hasKey = Boolean((keyFromFile || keyFromEnv).trim());
-    
+
     return { hasKey };
   });
 
-  // Handler for telemetry-status API
+  // Reads persisted user config so runtime toggles from the settings page
+  // are picked up immediately without requiring an app restart.
   ipcMain.handle("api:telemetry-status", async () => {
-    const isDisabled = process.env.DISABLE_ANONYMOUS_TELEMETRY === 'true' || process.env.DISABLE_ANONYMOUS_TELEMETRY === 'True';
-    const telemetryEnabled = !isDisabled;
-    return { telemetryEnabled };
+    const cfg = getUserConfig();
+    const fromConfig = cfg.DISABLE_ANONYMOUS_TRACKING;
+    const fromEnv = process.env.DISABLE_ANONYMOUS_TRACKING;
+    const raw = fromConfig ?? fromEnv ?? "";
+    const isDisabled = raw === "true" || raw === "True";
+    return { telemetryEnabled: !isDisabled };
   });
 
   // Handler for save-layout API
@@ -100,36 +105,36 @@ export function setupApiHandlers() {
       // In production, use resources/nextjs/presentation-templates
       const baseDir = app.getAppPath();
       const isDev = !app.isPackaged;
-      const templatesPath = isDev 
+      const templatesPath = isDev
         ? path.join(baseDir, "servers", "nextjs", "presentation-templates")
         : path.join(baseDir, "resources", "nextjs", "presentation-templates");
-      
+
       if (!fs.existsSync(templatesPath)) {
         return [];
       }
-      
+
       const items = fs.readdirSync(templatesPath, { withFileTypes: true });
       const templateDirectories = items
         .filter(item => item.isDirectory())
         .map(dir => dir.name);
-      
-      const allLayouts: Array<{templateName: string; templateID: string; files: string[]; settings: any }> = [];
-      
+
+      const allLayouts: Array<{ templateName: string; templateID: string; files: string[]; settings: any }> = [];
+
       // Scan each template directory for layout files and settings
       for (const templateName of templateDirectories) {
         try {
           const templatePath = path.join(templatesPath, templateName);
           const templateFiles = fs.readdirSync(templatePath);
-          
+
           // Filter for .tsx files and exclude any non-layout files
-          const layoutFiles = templateFiles.filter(file => 
-            file.endsWith('.tsx') && 
-            !file.startsWith('.') && 
+          const layoutFiles = templateFiles.filter(file =>
+            file.endsWith('.tsx') &&
+            !file.startsWith('.') &&
             !file.includes('.test.') &&
             !file.includes('.spec.') &&
             file !== 'settings.json'
           );
-          
+
           // Read settings.json if it exists
           let settings: any = null;
           const settingsPath = path.join(templatePath, 'settings.json');
@@ -145,7 +150,7 @@ export function setupApiHandlers() {
               default: false
             };
           }
-          
+
           if (layoutFiles.length > 0) {
             allLayouts.push({
               templateName: templateName,
@@ -159,7 +164,7 @@ export function setupApiHandlers() {
           // Continue with other templates even if one fails
         }
       }
-      
+
       return allLayouts;
     } catch (error) {
       console.error("Error reading templates:", error);

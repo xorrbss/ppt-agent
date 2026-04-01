@@ -6,6 +6,7 @@ import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashbo
 import { PresentationGrid } from "@/app/(presentation-generator)/(dashboard)/dashboard/components/PresentationGrid";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
+import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 
 
 
@@ -15,6 +16,7 @@ const DashboardPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    trackEvent(MixpanelEvent.Dashboard_Page_Viewed);
     const loadData = async () => {
       await fetchPresentations();
     };
@@ -59,6 +61,7 @@ const DashboardPage: React.FC = () => {
 
             <Link
               href="/upload"
+              onClick={() => trackEvent(MixpanelEvent.Dashboard_New_Presentation_Clicked)}
               className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-black text-sm font-semibold font-syne shadow-sm hover:shadow-md"
               aria-label="Create new presentation"
               style={{

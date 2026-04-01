@@ -4,6 +4,7 @@ import { PlusIcon } from "@radix-ui/react-icons";
 import { useRouter } from "next/navigation";
 import { PresentationResponse } from "@/app/(presentation-generator)/services/api/dashboard";
 import { ArrowRight } from "lucide-react";
+import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 
 interface PresentationGridProps {
   presentations: PresentationResponse[];
@@ -22,6 +23,7 @@ export const PresentationGrid = ({
 }: PresentationGridProps) => {
   const router = useRouter();
   const handleCreateNewPresentation = () => {
+    trackEvent(MixpanelEvent.Dashboard_Create_New_Card_Clicked, { type });
     if (type === "slide") {
       router.push("/upload");
     } else {

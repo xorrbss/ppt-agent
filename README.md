@@ -227,7 +227,7 @@ You can also set the following environment variables to customize the image gene
 
 You can disable anonymous telemetry using the following environment variable:
 
-- DISABLE_ANONYMOUS_TELEMETRY=[true/false]: Set this to **true** to disable anonymous telemetry.
+- DISABLE_ANONYMOUS_TRACKING=[true/false]: Set this to **true** to disable anonymous telemetry.
 
 > Note: You can freely choose both the LLM (text generation) and the image provider. Supported image providers: **dall-e-3**, **gpt-image-1.5** (OpenAI), **gemini_flash**, **nanobanana_pro** (Google), **pexels**, **pixabay**, and **comfyui** (self-hosted).
 

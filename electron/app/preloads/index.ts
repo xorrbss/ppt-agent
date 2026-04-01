@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('env', {
   NEXT_PUBLIC_URL: process.env.NEXT_PUBLIC_URL || '',
   TEMP_DIRECTORY: process.env.TEMP_DIRECTORY || '',
   NEXT_PUBLIC_USER_CONFIG_PATH: process.env.NEXT_PUBLIC_USER_CONFIG_PATH || '',
+  APP_VERSION: process.env.APP_VERSION || '',
 });
 
 
