@@ -91,7 +91,7 @@ class ThemeApi {
     try {
       const formData = new FormData();
       formData.append("font_file", font);
-      const response = await fetch(getApiUrl(`${process.env.NEXT_PUBLIC_FAST_API}/api/v1/ppt/fonts/upload`), {
+      const response: any = await fetch(getApiUrl(`/api/v1/ppt/fonts/upload`), {
         method: "POST",
         headers: getHeaderForFormData(),
         body: formData,
@@ -105,7 +105,7 @@ class ThemeApi {
   }
   static async getUserFonts() {
     try {
-      const response = await fetch(getApiUrl(`${process.env.NEXT_PUBLIC_FAST_API}/api/v1/ppt/fonts/uploaded`), {
+      const response = await fetch(getApiUrl(`/api/v1/ppt/fonts/uploaded`), {
         method: "GET",
         headers: getHeader(),
       })

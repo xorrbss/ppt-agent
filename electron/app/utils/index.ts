@@ -31,6 +31,8 @@ export function getUserConfig(): UserConfig {
 }
 
 export function setupEnv(fastApiPort: number, nextjsPort: number) {
+  const { app } = require('electron');
+  process.env.APP_VERSION = app.getVersion();
   process.env.NEXT_PUBLIC_FAST_API = `${localhost}:${fastApiPort}`;
   process.env.TEMP_DIRECTORY = tempDir;
   process.env.NEXT_PUBLIC_USER_CONFIG_PATH = userConfigPath;

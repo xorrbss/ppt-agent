@@ -5,6 +5,7 @@ import { LayoutDashboard, Star, Brain, Settings, Palette } from "lucide-react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 
 
 
@@ -37,7 +38,7 @@ const DashboardSidebar = () => {
         >
             <div>
 
-                <div onClick={() => router.push("/dashboard")} className="flex items-center  pb-6 border-b border-[#E1E1E5]   gap-2    ">
+                <div onClick={() => { trackEvent(MixpanelEvent.Sidebar_Navigation_Clicked, { target: '/dashboard' }); router.push("/dashboard"); }} className="flex items-center  pb-6 border-b border-[#E1E1E5]   gap-2    ">
                     <div className="bg-[#7C51F8] rounded-full cursor-pointer p-1 flex justify-center items-center mx-auto">
                         <img src="/logo-with-bg.png" alt="Presenton logo" className="h-[40px] object-contain w-full" />
                     </div>
@@ -49,6 +50,7 @@ const DashboardSidebar = () => {
                         <Link
                             prefetch={false}
                             href={`/dashboard`}
+                            onClick={() => trackEvent(MixpanelEvent.Sidebar_Navigation_Clicked, { target: '/dashboard' })}
                             className={[
                                 "flex flex-col tex-center items-center gap-2  transition-colors",
                                 pathname === "/dashboard" ? "" : "ring-transparent",
@@ -62,6 +64,7 @@ const DashboardSidebar = () => {
                         <Link
                             prefetch={false}
                             href={`/templates`}
+                            onClick={() => trackEvent(MixpanelEvent.Sidebar_Navigation_Clicked, { target: '/templates' })}
                             className={[
                                 "flex flex-col tex-center items-center gap-2  transition-colors",
                                 pathname === "/templates" ? "" : "ring-transparent",
@@ -77,6 +80,7 @@ const DashboardSidebar = () => {
                         <Link
                             prefetch={false}
                             href={`/theme`}
+                            onClick={() => trackEvent(MixpanelEvent.Sidebar_Navigation_Clicked, { target: '/theme' })}
                             className={[
                                 "flex flex-col tex-center items-center gap-2  transition-colors",
                                 pathname === "/theme" ? "" : "ring-transparent",
@@ -102,6 +106,7 @@ const DashboardSidebar = () => {
                             prefetch={false}
                             key={key}
                             href={`/${key}`}
+                            onClick={() => trackEvent(MixpanelEvent.Sidebar_Navigation_Clicked, { target: `/${key}` })}
                             className={[
                                 "flex flex-col tex-center items-center gap-2  transition-colors ",
                                 isActive ? "" : "ring-transparent",
