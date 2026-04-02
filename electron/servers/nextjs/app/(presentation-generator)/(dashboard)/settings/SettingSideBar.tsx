@@ -1,7 +1,13 @@
 import React from 'react'
 import { Shield } from 'lucide-react'
+import { IMAGE_PROVIDERS, LLM_PROVIDERS } from '@/utils/providerConstants'
+import { useSelector } from 'react-redux'
+import { RootState } from '@/store/store'
 
 const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }: { mode: 'nanobanana' | 'presenton', setMode: (mode: 'nanobanana' | 'presenton') => void, selectedProvider: 'text-provider' | 'image-provider' | 'privacy', setSelectedProvider: (provider: 'text-provider' | 'image-provider' | 'privacy') => void }) => {
+    const { llm_config } = useSelector((state: RootState) => state.userConfig)
+    const textProviderIcon = LLM_PROVIDERS[llm_config.LLM as keyof typeof LLM_PROVIDERS]?.icon
+    const imageProviderIcon = IMAGE_PROVIDERS[llm_config.IMAGE_PROVIDER as keyof typeof IMAGE_PROVIDERS]?.icon || '/providers/pexel.png'
     return (
         <div className='w-full max-w-[230px] h-screen px-4 pt-[22px] bg-[#F9FAFB] flex flex-col'>
             <p className='text-xs text-black  font-medium border-b mt-[3.15rem]  border-[#E1E1E5] pb-3.5'>FILTER BY:</p>
@@ -40,13 +46,13 @@ const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }
                     <button className={` w-full rounded-[6px] p-3 py-4 flex items-center gap-1.5 border  ${selectedProvider === 'text-provider' ? 'bg-[#F4F3FF] border-[#D9D6FE]' : 'bg-white border-[#EDEEEF]'}`} onClick={() => setSelectedProvider('text-provider')}>
                         <div className='relative w-6 h-6 rounded-full overflow-hidden border border-[#EDEEEF]'>
 
-                            <img src='/providers/openai.png' className=' object-cover w-full h-full overflow-hidden' alt='google' />
+                            <img src={textProviderIcon} className=' object-cover w-full h-full overflow-hidden' alt='google' />
                         </div>
                         <p className='text-[#191919] text-xs  font-medium' >Text Provider</p>
                     </button>
                     <button className={` w-full rounded-[6px] p-3 py-4 flex items-center gap-1.5 border  ${selectedProvider === 'image-provider' ? 'bg-[#F4F3FF] border-[#D9D6FE]' : 'bg-white border-[#EDEEEF]'}`} onClick={() => setSelectedProvider('image-provider')}>
                         <div className='relative w-6 h-6 rounded-full overflow-hidden border border-[#EDEEEF]'>
-                            <img src='/providers/image-provider.png' className=' object-cover w-full h-full overflow-hidden' alt='google' />
+                            <img src={imageProviderIcon} className=' object-cover w-full h-full overflow-hidden' alt='google' />
                         </div>
                         <p className='text-[#191919] text-xs  font-medium' >Image Provider</p>
                     </button>
