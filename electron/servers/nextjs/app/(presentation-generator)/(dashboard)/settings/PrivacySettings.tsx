@@ -68,8 +68,8 @@ const PrivacySettings = () => {
         </h4>
         <p className="text-xs text-[#6B7280] mb-6 leading-relaxed max-w-lg">
           When enabled, Presenton collects anonymous usage data to help us
-          understand how the app is used and improve your experience. No
-          personal information or presentation content is ever collected.
+          understand how the app is used and improve your experience.<span className="font-bold"> No
+            personal information or presentation content is ever collected.</span>
         </p>
 
         <div className="flex items-center justify-between gap-4 rounded-[10px] bg-white border border-[#EDEEEF] p-4">

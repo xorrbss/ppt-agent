@@ -6,6 +6,9 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store/store";
+import { IMAGE_PROVIDERS, LLM_PROVIDERS } from "@/utils/providerConstants";
 
 
 
@@ -27,6 +30,10 @@ const DashboardSidebar = () => {
     const pathname = usePathname();
     const activeTab = pathname.split("?")[0].split("/").pop();
     const router = useRouter();
+
+    const { llm_config } = useSelector((state: RootState) => state.userConfig)
+    const textProviderIcon = LLM_PROVIDERS[llm_config.LLM as keyof typeof LLM_PROVIDERS]?.icon
+    const imageProviderIcon = IMAGE_PROVIDERS[llm_config.IMAGE_PROVIDER as keyof typeof IMAGE_PROVIDERS]?.icon || '/providers/pexel.png'
 
 
 
@@ -114,7 +121,10 @@ const DashboardSidebar = () => {
                             aria-label={itemLabel}
                             title={itemLabel}
                         >
-                            <Icon className={["h-4 w-4", isActive ? "text-[#5146E5]" : "text-slate-600"].join(" ")} />
+                            <div className="flex items-center  ">
+                                <img src={imageProviderIcon} alt="image provider" className="w-5 h-5 rounded-full object-cover border border-[#EDEEEF]" />
+                                <img src={textProviderIcon} alt="text provider" className="w-5 h-5 rounded-full object-cover border border-[#EDEEEF]" />
+                            </div>
                             <span className="text-[11px] text-slate-800">{itemLabel}</span>
                         </Link>
                     );
