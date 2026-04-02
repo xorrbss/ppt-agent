@@ -131,7 +131,7 @@ export function initMixpanel(): void {
   void ensureTelemetryStatus().then((enabled) => {
     if (!enabled) return;
     if (window.__mixpanel_initialized) return;
-    mixpanel.init(MIXPANEL_TOKEN as string, { track_pageview: false });
+    mixpanel.init(MIXPANEL_TOKEN as string, { track_pageview: false, api_host: 'https://api-eu.mixpanel.com', });
     const appVersion = window.env?.APP_VERSION;
     if (appVersion) {
       mixpanel.register({ app_version: appVersion });
