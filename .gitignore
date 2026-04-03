@@ -1,4 +1,6 @@
 .env
+.env.*
+*.env
 .venv
 __pycache__
 .pytest_cache
@@ -17,3 +19,7 @@ chroma
 container.db
 .next-build
 .cursor
+
+# Agent skill artifacts
+.agents/
+skills-lock.json
