@@ -13,19 +13,20 @@ const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }
             <p className='text-xs text-black  font-medium border-b mt-[3.15rem]  border-[#E1E1E5] pb-3.5'>FILTER BY:</p>
             <div className='mt-6 flex-1'>
                 <p className='text-[#3A3A3A] text-xs font-medium pb-2.5'>Select Mode</p>
-                <div className='p-1 rounded-[40px] bg-[#ffffff] w-fit border border-[#EDEEEF] flex items-center justify-center mb-[34px] '>
-                    <button className='px-3  py-2 text-xs font-medium text-[#3A3A3A] rounded-[70px]'
+                <div className='p-0.5 rounded-[40px] bg-[#ffffff] w-fit border border-[#EDEEEF] flex items-center justify-center mb-[34px] '>
+                    <button className='px-3 font-syne h-[26px] text-xs font-medium text-[#3A3A3A] rounded-[70px]'
                         onClick={() => setMode('presenton')}
                         style={{
                             background: mode === 'presenton' ? '#F4F3FF' : 'transparent',
                             color: mode === 'presenton' ? '#5146E5' : '#3A3A3A'
                         }}
-                    >Presenton</button>
+                    >Presenton
+                    </button>
                     <svg xmlns="http://www.w3.org/2000/svg" className='mx-1' width="2" height="17" viewBox="0 0 2 17" fill="none">
                         <path d="M1 0V16.5" stroke="#EDECEC" strokeWidth="2" />
                     </svg>
                     <div className='relative'>
-                        <button className='px-3  py-2 text-xs font-medium rounded-[70px] cursor-not-allowed opacity-60'
+                        <button className='px-3 font-syne  h-[26px] text-xs font-medium rounded-[70px] cursor-not-allowed opacity-60'
                             disabled
                             style={{
                                 background: 'transparent',
@@ -43,15 +44,15 @@ const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }
                 </div>
                 <p className='text-[#3A3A3A] text-xs font-medium pb-2.5'>Select Provider</p>
                 {mode === 'presenton' && <div className='space-y-2.5'>
-                    <button className={` w-full rounded-[6px] p-3 py-4 flex items-center gap-1.5 border  ${selectedProvider === 'text-provider' ? 'bg-[#F4F3FF] border-[#D9D6FE]' : 'bg-white border-[#EDEEEF]'}`} onClick={() => setSelectedProvider('text-provider')}>
-                        <div className='relative w-6 h-6 rounded-full overflow-hidden border border-[#EDEEEF]'>
+                    <button className={` w-full rounded-[6px] px-3 py-4 flex items-center gap-1.5 border  ${selectedProvider === 'text-provider' ? 'bg-[#F4F3FF] border-[#D9D6FE]' : 'bg-white border-[#EDEEEF]'}`} onClick={() => setSelectedProvider('text-provider')}>
+                        <div className='relative w-[18px] h-[18px] rounded-full overflow-hidden border border-[#EDEEEF]'>
 
                             <img src={textProviderIcon} className=' object-cover w-full h-full overflow-hidden' alt='google' />
                         </div>
                         <p className='text-[#191919] text-xs  font-medium' >Text Provider</p>
                     </button>
-                    <button className={` w-full rounded-[6px] p-3 py-4 flex items-center gap-1.5 border  ${selectedProvider === 'image-provider' ? 'bg-[#F4F3FF] border-[#D9D6FE]' : 'bg-white border-[#EDEEEF]'}`} onClick={() => setSelectedProvider('image-provider')}>
-                        <div className='relative w-6 h-6 rounded-full overflow-hidden border border-[#EDEEEF]'>
+                    <button className={` w-full rounded-[6px] px-3 py-4 flex items-center gap-1.5 border  ${selectedProvider === 'image-provider' ? 'bg-[#F4F3FF] border-[#D9D6FE]' : 'bg-white border-[#EDEEEF]'}`} onClick={() => setSelectedProvider('image-provider')}>
+                        <div className='relative w-[18px] h-[18px] rounded-full overflow-hidden border border-[#EDEEEF]'>
                             <img src={imageProviderIcon} className=' object-cover w-full h-full overflow-hidden' alt='google' />
                         </div>
                         <p className='text-[#191919] text-xs  font-medium' >Image Provider</p>
@@ -59,8 +60,8 @@ const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }
                 </div>}
                 {
                     mode === 'nanobanana' && <div>
-                        <button className={` w-full rounded-[6px] p-3 py-4 flex items-center gap-1.5 border  bg-[#F4F3FF] border-[#D9D6FE]`}>
-                            <div className='relative w-6 h-6 rounded-full overflow-hidden border border-[#EDEEEF]'>
+                        <button className={` w-full rounded-[6px] px-3 py-4 flex items-center gap-1.5 border  bg-[#F4F3FF] border-[#D9D6FE]`}>
+                            <div className='relative w-[18px] h-[18px] rounded-full overflow-hidden border border-[#EDEEEF]'>
 
                                 <img src='/providers/openai.png' className=' object-cover w-full h-full overflow-hidden' alt='google' />
                             </div>

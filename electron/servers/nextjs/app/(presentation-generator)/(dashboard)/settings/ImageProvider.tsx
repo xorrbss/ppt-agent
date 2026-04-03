@@ -175,7 +175,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                                 <PopoverContent
                                                     className="p-0"
                                                     align="start"
-                                                    style={{ width: "var(--radix-popover-trigger-width)" }}
+                                                    style={{ width: "300px" }}
                                                 >
                                                     <Command>
                                                         <CommandInput placeholder="Search provider..." />

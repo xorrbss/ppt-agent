@@ -216,8 +216,8 @@ const TextProvider = ({
     return (
         <div className="space-y-6 bg-[#F9F8F8] p-7 rounded-[12px] ">
             {/* API Key Input */}
-            <div className="mb-4 flex items-center justify-between rounded-[12px] bg-white pt-5 pb-10 px-10">
-                <div className=" max-w-[290px] pb-[50px]">
+            <div className="mb-4 flex items-end justify-between rounded-[12px] bg-white pt-5 pb-10 px-10">
+                <div className=" max-w-[290px] ">
                     <div className='w-[60px] h-[60px] rounded-[4px] flex items-center justify-center'
                         style={{ backgroundColor: '#4C55541A' }}
                     >
@@ -232,11 +232,10 @@ const TextProvider = ({
                         Choosing where text contets come from
                     </p>
                 </div>
-                <div>
+                <div className='flex flex-col justify-end items-end gap-4'>
                     <div className={`flex gap-4 justify-end ${selectedProvider === 'codex' ? 'items-end' : 'items-start'}`}>
                         <div className={`relative ${selectedProvider === 'codex' ? 'w-[240px]' : 'w-[222px]'}`}>
                             <div className="flex flex-col justify-start ">
-
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Select Text Provider
                                 </label>
@@ -265,7 +264,7 @@ const TextProvider = ({
                                     <PopoverContent
                                         className="p-0"
                                         align="start"
-                                        style={{ width: "var(--radix-popover-trigger-width)" }}
+                                        style={{ width: "300px" }}
                                     >
                                         <Command>
                                             <CommandInput placeholder="Search provider..." />
@@ -311,8 +310,6 @@ const TextProvider = ({
                                     </PopoverContent>
                                 </Popover>
                             </div>
-
-
                         </div>
                         <div className={`relative flex flex-col justify-end ${selectedProvider === 'codex' ? 'items-end w-[262px] max-w-full' : 'items-end w-[222px]'}`}>
                             <div className="flex flex-col justify-start w-full ">
@@ -431,89 +428,86 @@ const TextProvider = ({
                                         "Check models"
                                     )}
                                 </button>
-
                             )}
                         </div>
-
-
-                        {/* Model Selection - only show if models are available */}
-                        {selectedProvider !== 'codex' && modelsChecked && availableModels.length > 0 ? (
-                            <div className="w-[222px]">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-3">
-                                        {selectedProvider === 'ollama' ? 'Choose a supported model' : `Select ${modelLabel} Model`}
-                                    </label>
-                                    <div className="w-full">
-                                        <Popover
-                                            open={openModelSelect}
-                                            onOpenChange={setOpenModelSelect}
-                                        >
-                                            <PopoverTrigger asChild>
-                                                <Button
-                                                    variant="outline"
-                                                    role="combobox"
-                                                    aria-expanded={openModelSelect}
-                                                    className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
-                                                >
-                                                    <span className="text-sm truncate font-medium text-gray-900">
-                                                        {currentModel
-                                                            ? availableModels.find(model => model === currentModel) || currentModel
-                                                            : "Select a model"}
-                                                    </span>
-
-                                                    <ChevronUp className="w-4 h-4 text-gray-500" />
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent
-                                                className="p-0"
-                                                align="start"
-                                                style={{ width: "var(--radix-popover-trigger-width)" }}
+                    </div>
+                    {/* Model Selection - only show if models are available */}
+                    {selectedProvider !== 'codex' && modelsChecked && availableModels.length > 0 ? (
+                        <div className="w-[222px]">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-3">
+                                    {selectedProvider === 'ollama' ? 'Choose a supported model' : `Select ${modelLabel} Model`}
+                                </label>
+                                <div className="w-full">
+                                    <Popover
+                                        open={openModelSelect}
+                                        onOpenChange={setOpenModelSelect}
+                                    >
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                aria-expanded={openModelSelect}
+                                                className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
                                             >
-                                                <Command>
-                                                    <CommandInput placeholder="Search models..." />
-                                                    <CommandList>
-                                                        <CommandEmpty>No model found.</CommandEmpty>
-                                                        <CommandGroup>
-                                                            {availableModels.map((model, index) => (
-                                                                <CommandItem
-                                                                    key={index}
-                                                                    value={model}
-                                                                    onSelect={(value) => {
-                                                                        if (currentModelField) {
-                                                                            onInputChange(value, currentModelField);
-                                                                        }
-                                                                        setOpenModelSelect(false);
-                                                                    }}
-                                                                >
-                                                                    <Check
-                                                                        className={cn(
-                                                                            "mr-2 h-4 w-4",
-                                                                            currentModel === model
-                                                                                ? "opacity-100"
-                                                                                : "opacity-0"
-                                                                        )}
-                                                                    />
-                                                                    <div className="flex gap-3 items-center">
-                                                                        <div className="flex flex-col space-y-1 flex-1">
-                                                                            <div className="flex items-center justify-between gap-2">
-                                                                                <span className="text-sm font-medium text-gray-900">
-                                                                                    {model}
-                                                                                </span>
-                                                                            </div>
+                                                <span className="text-sm truncate font-medium text-gray-900">
+                                                    {currentModel
+                                                        ? availableModels.find(model => model === currentModel) || currentModel
+                                                        : "Select a model"}
+                                                </span>
+
+                                                <ChevronUp className="w-4 h-4 text-gray-500" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent
+                                            className="p-0"
+                                            align="start"
+                                            style={{ width: "var(--radix-popover-trigger-width)" }}
+                                        >
+                                            <Command>
+                                                <CommandInput placeholder="Search models..." />
+                                                <CommandList>
+                                                    <CommandEmpty>No model found.</CommandEmpty>
+                                                    <CommandGroup>
+                                                        {availableModels.map((model, index) => (
+                                                            <CommandItem
+                                                                key={index}
+                                                                value={model}
+                                                                onSelect={(value) => {
+                                                                    if (currentModelField) {
+                                                                        onInputChange(value, currentModelField);
+                                                                    }
+                                                                    setOpenModelSelect(false);
+                                                                }}
+                                                            >
+                                                                <Check
+                                                                    className={cn(
+                                                                        "mr-2 h-4 w-4",
+                                                                        currentModel === model
+                                                                            ? "opacity-100"
+                                                                            : "opacity-0"
+                                                                    )}
+                                                                />
+                                                                <div className="flex gap-3 items-center">
+                                                                    <div className="flex flex-col space-y-1 flex-1">
+                                                                        <div className="flex items-center justify-between gap-2">
+                                                                            <span className="text-sm font-medium text-gray-900">
+                                                                                {model}
+                                                                            </span>
                                                                         </div>
                                                                     </div>
-                                                                </CommandItem>
-                                                            ))}
-                                                        </CommandGroup>
-                                                    </CommandList>
-                                                </Command>
-                                            </PopoverContent>
-                                        </Popover>
-                                    </div>
+                                                                </div>
+                                                            </CommandItem>
+                                                        ))}
+                                                    </CommandGroup>
+                                                </CommandList>
+                                            </Command>
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
                             </div>
-                        ) : null}
-                    </div>
+                        </div>
+                    ) : null}
                 </div>
             </div>
             {/* Show message if no models found */}
@@ -526,7 +520,7 @@ const TextProvider = ({
             )}
 
 
-            {/* Web Grounding Toggle - show at the end, below models dropdown */}
+
             <div className="bg-white flex justify-between items-center p-10 rounded-[12px]">
                 <div className=' max-w-[290px]'>
 
@@ -536,7 +530,6 @@ const TextProvider = ({
                     </p>
                 </div>
                 <div className="flex items-center gap-4">
-
                     <div className="w-[222px]">
                         <div className="flex items-center  mb-4 gap-2.5 ">
                             <Switch
@@ -547,16 +540,9 @@ const TextProvider = ({
                                 Enable Web Grounding
                             </label>
                         </div>
-
-
                     </div>
-                    {/* <div className="w-[295px]"></div> */}
                 </div>
-
-
             </div>
-
-
         </div>
     )
 }
