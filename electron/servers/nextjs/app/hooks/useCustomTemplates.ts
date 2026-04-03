@@ -403,7 +403,7 @@ export function useCustomTemplatePreview(presentationId: string) {
                 setTotalLayouts(data.layouts.length);
                 // Compile first 4 layouts for preview
                 const compiled: CompiledLayout[] = [];
-                const layoutsToPreview = data.layouts.slice(0, 4);
+                const layoutsToPreview = data.layouts.slice(0, 2);
 
                 for (const layout of layoutsToPreview) {
                     try {
