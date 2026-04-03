@@ -6,6 +6,7 @@ import {
     Loader2,
     RefreshCw,
     Trash2,
+    Crown,
     User,
     UserCheck,
 } from "lucide-react";
@@ -33,6 +34,9 @@ type AuthStatus = "checking" | "unauthenticated" | "polling" | "authenticated";
 interface StatusResponse {
     status: string;
     account_id?: string;
+    username?: string;
+    email?: string;
+    is_pro?: boolean;
     detail?: string;
 }
 
@@ -59,6 +63,9 @@ export default function CodexConfig({
 }: CodexConfigProps) {
     const [authStatus, setAuthStatus] = useState<AuthStatus>("checking");
     const [accountId, setAccountId] = useState<string | null>(null);
+    const [username, setUsername] = useState<string | null>(null);
+    const [email, setEmail] = useState<string | null>(null);
+    const [isPro, setIsPro] = useState<boolean | null>(null);
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [manualCode, setManualCode] = useState("");
     const [isExchanging, setIsExchanging] = useState(false);
@@ -79,22 +86,32 @@ export default function CodexConfig({
         return () => stopPolling();
     }, []);
 
+    const applyProfile = (data: Partial<StatusResponse>) => {
+        setAccountId(data.account_id ?? null);
+        setUsername(data.username ?? null);
+        setEmail(data.email ?? null);
+        setIsPro(typeof data.is_pro === "boolean" ? data.is_pro : null);
+    };
+
     const checkCurrentAuthStatus = async () => {
         try {
             const res = await fetch(getApiUrl("/api/v1/ppt/codex/auth/status"));
             if (!res.ok) {
                 setAuthStatus("unauthenticated");
+                applyProfile({});
                 return;
             }
             const data: StatusResponse = await res.json();
             if (data.status === "authenticated") {
                 setAuthStatus("authenticated");
-                setAccountId(data.account_id ?? null);
+                applyProfile(data);
             } else {
                 setAuthStatus("unauthenticated");
+                applyProfile({});
             }
         } catch {
             setAuthStatus("unauthenticated");
+            applyProfile({});
         }
     };
 
@@ -122,7 +139,7 @@ export default function CodexConfig({
                     if (pollData.status === "success") {
                         stopPolling();
                         setAuthStatus("authenticated");
-                        setAccountId(pollData.account_id ?? null);
+                        applyProfile(pollData);
                         setSessionId(null);
                         if (!codexModel) {
                             onInputChange(DEFAULT_CODEX_MODEL, "codex_model");
@@ -131,6 +148,7 @@ export default function CodexConfig({
                     } else if (pollData.status === "failed") {
                         stopPolling();
                         setAuthStatus("unauthenticated");
+                        applyProfile({});
                         toast.error("Authentication failed. Please try again.");
                     }
                 } catch {
@@ -140,6 +158,7 @@ export default function CodexConfig({
         } catch (err) {
             toast.error("Failed to start sign-in flow");
             setAuthStatus("unauthenticated");
+            applyProfile({});
         }
     };
 
@@ -159,7 +178,7 @@ export default function CodexConfig({
             const data = await res.json();
             stopPolling();
             setAuthStatus("authenticated");
-            setAccountId(data.account_id);
+            applyProfile(data);
             setSessionId(null);
             setManualCode("");
             if (!codexModel) {
@@ -185,7 +204,7 @@ export default function CodexConfig({
         try {
             await fetch(getApiUrl("/api/v1/ppt/codex/auth/logout"), { method: "POST" });
             setAuthStatus("unauthenticated");
-            setAccountId(null);
+            applyProfile({});
             onInputChange("", "codex_model");
             toast.success("Signed out from ChatGPT");
         } catch {
@@ -203,11 +222,12 @@ export default function CodexConfig({
             });
             if (!res.ok) throw new Error("Refresh failed");
             const data = await res.json();
-            if (data.account_id) setAccountId(data.account_id);
+            applyProfile(data);
             toast.success("Token refreshed successfully");
         } catch {
             toast.error("Token refresh failed. Please sign in again.");
             setAuthStatus("unauthenticated");
+            applyProfile({});
         } finally {
             setIsRefreshing(false);
         }
@@ -266,15 +286,37 @@ export default function CodexConfig({
     }
 
     if (authStatus === "authenticated") {
+        const planLabel = isPro === true ? "Pro" : isPro === false ? "Free" : "Unknown";
+
         return (
             <div className="space-y-4">
-                <div className="flex items-center gap-3 p-3  border border-[#EDEEEF] rounded-[8px]">
+                <div className="flex items-center gap-3 p-3  border border-[#EDEEEF] rounded-lg">
                     <UserCheck className="w-5 h-5 text-black shrink-0" />
                     <div className="flex-1 min-w-0">
-                        {accountId && (
+                        <div className="flex items-center gap-2 min-w-0">
                             <p className="text-sm font-medium text-gray-800 truncate">
-                                Acc: {accountId}
+                                {username || email || (accountId ? `Account ${accountId}` : "ChatGPT Account")}
                             </p>
+                            <span
+                                className={cn(
+                                    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium shrink-0",
+                                    isPro === true ? "bg-amber-100 text-amber-800" : "bg-gray-100 text-gray-700"
+                                )}
+                                title={`Subscription: ${planLabel}`}
+                            >
+                                {isPro === true ? (
+                                    <Crown className="w-3 h-3" />
+                                ) : (
+                                    <User className="w-3 h-3" />
+                                )}
+                                {planLabel}
+                            </span>
+                        </div>
+                        {email && username && (
+                            <p className="text-xs text-gray-500 truncate">{email}</p>
+                        )}
+                        {!email && accountId && (
+                            <p className="text-xs text-gray-500 truncate">ID: {accountId}</p>
                         )}
                         <p className="text-xs text-gray-400">Signed in to ChatGPT</p>
                     </div>
