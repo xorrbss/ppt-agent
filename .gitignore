@@ -17,3 +17,5 @@ chroma
 container.db
 .next-build
 .cursor
+.agents
+skills-lock.json
