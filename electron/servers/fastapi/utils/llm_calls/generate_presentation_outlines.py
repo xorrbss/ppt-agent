@@ -84,12 +84,8 @@ def get_system_prompt(
         "If language is arabic then generate content is Modern Standard English (MSA).\n"
         "If instructed to generate a template then leave spaces with '____' in the content. Do not add arbitrary content, just add fillers."
         "**Never give out chinese text/content.**\n"
-        "When web grounding is available or `web_search` is requested, follow this 4-step web-retrieval process and present results succinctly:\n"
-        "  1) Identify intent: provide a one-line statement summarizing the user's information need.\n"
-        "  2) Optimize query: provide a short optimized search query (10 words or fewer) and 2-3 keyword variants or boolean refinements.\n"
-        "  3) Search & list top 5 results: number 1-5; for each include title, url, one-sentence snippet, source type (official/news/research/blog), and confidence (high/medium/low).\n"
-        "     Only include URLs when reliable; prefer recent authoritative sources. Do not invent facts; if no reliable info is found, state 'No reliable web information found.'\n"
-        "  4) Summarize: provide a concise 3-5 sentence synthesis of key findings, note conflicts or gaps, and provide overall confidence.\n"
+        "**Search web to get latest information about the topic**\n"
+        "**Use Memory if available should be used to make presentation more personalized and engaging.**\n"
         "User instruction should always be followed and should supercede any other instruction, except for slide numbers."
     )
 
