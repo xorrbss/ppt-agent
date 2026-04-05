@@ -124,3 +124,12 @@ def set_codex_account_id_env(value: str):
 
 def set_codex_model_env(value: str):
     os.environ["CODEX_MODEL"] = value
+
+
+# Open WebUI Image Provider
+def set_open_webui_image_url_env(value: str):
+    os.environ["OPEN_WEBUI_IMAGE_URL"] = value
+
+
+def set_open_webui_image_api_key_env(value: str):
+    os.environ["OPEN_WEBUI_IMAGE_API_KEY"] = value

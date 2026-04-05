@@ -142,3 +142,12 @@ def get_codex_model_env():
 
 def get_migrate_database_on_startup_env():
     return os.getenv("MIGRATE_DATABASE_ON_STARTUP")
+
+
+# Open WebUI Image Provider
+def get_open_webui_image_url_env():
+    return os.getenv("OPEN_WEBUI_IMAGE_URL")
+
+
+def get_open_webui_image_api_key_env():
+    return os.getenv("OPEN_WEBUI_IMAGE_API_KEY")

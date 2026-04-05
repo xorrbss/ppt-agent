@@ -266,6 +266,56 @@ const ImageSelectionConfig = ({ isImageGenerationDisabled, openImageProviderSele
                                         return <></>;
                                     }
 
+                                    // Show Open WebUI configuration
+                                    if (provider.value === "open_webui") {
+                                        return (
+                                            <div className="space-y-4 w-[295px]">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        Open WebUI URL
+                                                    </label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            placeholder="http://localhost:3000/api/v1"
+                                                            className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                                            value={llmConfig.OPEN_WEBUI_IMAGE_URL || ""}
+                                                            onChange={(e) => {
+                                                                input_field_changed(
+                                                                    e.target.value,
+                                                                    "open_webui_image_url"
+                                                                );
+                                                            }}
+                                                        />
+                                                    </div>
+                                                    <p className="mt-2 text-sm text-gray-500 flex items-center gap-2">
+                                                        <span className="block w-1 h-1 rounded-full bg-gray-400"></span>
+                                                        Image model is configured in Open WebUI admin settings
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        API Key (optional)
+                                                    </label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Open WebUI API key"
+                                                            className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                                            value={llmConfig.OPEN_WEBUI_IMAGE_API_KEY || ""}
+                                                            onChange={(e) => {
+                                                                input_field_changed(
+                                                                    e.target.value,
+                                                                    "open_webui_image_api_key"
+                                                                );
+                                                            }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+
                                     // Show ComfyUI configuration
                                     if (provider.value === "comfyui") {
                                         return (
