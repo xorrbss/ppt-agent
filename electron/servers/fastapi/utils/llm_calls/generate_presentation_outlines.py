@@ -85,7 +85,6 @@ def get_system_prompt(
         "If instructed to generate a template then leave spaces with '____' in the content. Do not add arbitrary content, just add fillers."
         "**Never give out chinese text/content.**\n"
         "**Search web to get latest information about the topic**\n"
-        "**Use Memory if available should be used to make presentation more personalized and engaging.**\n"
         "User instruction should always be followed and should supercede any other instruction, except for slide numbers."
     )
 

@@ -12,7 +12,6 @@ from models.presentation_structure_model import PresentationStructureModel
 
 STRUCTURE_FROM_SLIDES_MARKDOWN_SYSTEM_PROMPT = """
 You will be given available slide layouts and content for each slide.
-If any user or workspace memory (previous conversation context) is available, incorporate it when making layout selections.
 You need to select a layout for each slide based on the mentioned guidelines.
 
 # Steps
@@ -57,7 +56,6 @@ You need to select a layout for each slide based on the mentioned guidelines.
 
 GET_MESSAGES_SYSTEM_PROMPT = """
 You're a professional presentation designer with creative freedom to design engaging presentations.
-If any user or workspace memory (previous conversation context) is available, incorporate it when making layout and design decisions.
 
 # DESIGN PHILOSOPHY
 - Create visually compelling and varied presentations
