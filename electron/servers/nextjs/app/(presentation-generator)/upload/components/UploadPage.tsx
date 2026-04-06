@@ -43,7 +43,7 @@ const UploadPage = () => {
 
   const [files, setFiles] = useState<File[]>([]);
   const [config, setConfig] = useState<PresentationConfig>({
-    slides: "5",
+    slides: null,
     language: LanguageType.English,
     prompt: "",
     tone: ToneType.Default,
@@ -71,8 +71,8 @@ const UploadPage = () => {
    * @returns boolean indicating if the configuration is valid
    */
   const validateConfiguration = (): boolean => {
-    if (!config.language || !config.slides) {
-      toast.error("Please select number of Slides & Language");
+    if (!config.language) {
+      toast.error("Please select language");
       return false;
     }
 
@@ -122,6 +122,8 @@ const UploadPage = () => {
       documents = uploadResponse;
     }
 
+    const selectedLanguage = config?.language ?? "";
+
     const promises: Promise<any>[] = [];
 
     if (documents.length > 0) {
@@ -129,7 +131,7 @@ const UploadPage = () => {
       promises.push(
         PresentationGenerationApi.decomposeDocuments(
           documents,
-          config?.language ?? null
+          selectedLanguage
         )
       );
     }
@@ -154,13 +156,15 @@ const UploadPage = () => {
       duration: 30,
     });
 
+    const selectedLanguage = config?.language ?? "";
+
     // Use the first available layout group for direct generation
     trackEvent(MixpanelEvent.Upload_Create_Presentation_API_Call);
     const createResponse = await PresentationGenerationApi.createPresentation({
       content: config?.prompt ?? "",
-      n_slides: config?.slides ? parseInt(config.slides) : null,
+      n_slides: config?.slides ? parseInt(config.slides, 10) : null,
       file_paths: [],
-      language: config?.language ?? "",
+      language: selectedLanguage,
       tone: config?.tone,
       verbosity: config?.verbosity,
       instructions: config?.instructions || null,

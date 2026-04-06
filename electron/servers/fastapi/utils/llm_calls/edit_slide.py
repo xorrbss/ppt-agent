@@ -9,6 +9,17 @@ from utils.llm_provider import get_model
 from utils.schema_utils import add_field_in_schema, remove_fields_from_schema
 
 
+def _resolve_prompt_language(language: Optional[str]) -> str:
+    if language is None:
+        return "auto-detect"
+    s = str(language).strip()
+    if not s:
+        return "auto-detect"
+    if s.lower() in {"auto", "auto-detect"}:
+        return "auto-detect"
+    return s
+
+
 def get_system_prompt(
     tone: Optional[str] = None,
     verbosity: Optional[str] = None,
@@ -40,6 +51,7 @@ def get_system_prompt(
 
 
 def get_user_prompt(prompt: str, slide_data: dict, language: str):
+    display_language = _resolve_prompt_language(language)
     return f"""
         ## Icon Query And Image Prompt Language
         English
@@ -48,7 +60,7 @@ def get_user_prompt(prompt: str, slide_data: dict, language: str):
         {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
         ## Slide Content Language
-        {language}
+        {display_language}
 
         ## Prompt
         {prompt}
@@ -61,7 +73,7 @@ def get_user_prompt(prompt: str, slide_data: dict, language: str):
 def get_messages(
     prompt: str,
     slide_data: dict,
-    language: str,
+    language: Optional[str],
     tone: Optional[str] = None,
     verbosity: Optional[str] = None,
     instructions: Optional[str] = None,
@@ -79,7 +91,7 @@ def get_messages(
 async def get_edited_slide_content(
     prompt: str,
     slide: SlideModel,
-    language: str,
+    language: Optional[str],
     slide_layout: SlideLayoutModel,
     tone: Optional[str] = None,
     verbosity: Optional[str] = None,

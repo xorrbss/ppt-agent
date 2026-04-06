@@ -70,3 +70,42 @@ export function getApiUrl(path: string): string {
 
   return normalizedPath;
 }
+
+function hasBackendAssetPrefix(path: string): boolean {
+  return path.startsWith("/static/") || path.startsWith("/app_data/");
+}
+
+// Resolve backend-served asset paths to the FastAPI origin in Electron/runtime split-port setups.
+export function resolveBackendAssetUrl(path?: string): string {
+  if (!path) return "";
+
+  const trimmedPath = path.trim();
+  if (!trimmedPath) return "";
+
+  if (
+    trimmedPath.startsWith("data:") ||
+    trimmedPath.startsWith("blob:") ||
+    trimmedPath.startsWith("file:")
+  ) {
+    return trimmedPath;
+  }
+
+  if (isAbsoluteHttpUrl(trimmedPath)) {
+    try {
+      const parsed = new URL(trimmedPath);
+      if (hasBackendAssetPrefix(parsed.pathname)) {
+        return `${getFastAPIUrl()}${parsed.pathname}${parsed.search}${parsed.hash}`;
+      }
+      return trimmedPath;
+    } catch {
+      return trimmedPath;
+    }
+  }
+
+  const normalizedPath = withLeadingSlash(trimmedPath);
+  if (hasBackendAssetPrefix(normalizedPath)) {
+    return `${getFastAPIUrl()}${normalizedPath}`;
+  }
+
+  return trimmedPath;
+}

@@ -1,5 +1,5 @@
 import React from "react";
-import { getFastAPIUrl } from "@/utils/api";
+import { resolveBackendAssetUrl } from "@/utils/api";
 
 export type RemoteSvgOptions = {
   strokeColor?: string;
@@ -145,12 +145,7 @@ export function useRemoteSvgIcon(url?: string, options: RemoteSvgOptions = {}) {
         return;
       }
       try {
-        // If URL starts with /static or /app_data, proxy it through FastAPI.
-        let fetchUrl = url;
-        if (url.startsWith('/static/') || url.startsWith('/app_data/')) {
-          const fastApiUrl = getFastAPIUrl();
-          fetchUrl = `${fastApiUrl}${url}`;
-        }
+        const fetchUrl = resolveBackendAssetUrl(url);
 
         const res = await fetch(fetchUrl);
         if (!res.ok) {

@@ -1,6 +1,5 @@
 import asyncio
 import json
-import math
 import traceback
 import uuid
 import dirtyjson
@@ -19,8 +18,11 @@ from models.sse_response import (
 from services.temp_file_service import TEMP_FILE_SERVICE
 from services.database import get_async_session
 from services.documents_loader import DocumentsLoader
+from utils.outline_utils import (
+    get_no_of_outlines_to_generate_for_n_slides,
+    get_presentation_title_from_presentation_outline,
+)
 from utils.llm_calls.generate_presentation_outlines import generate_ppt_outline
-from utils.ppt_utils import get_presentation_title_from_outlines
 
 OUTLINES_ROUTER = APIRouter(prefix="/outlines", tags=["Outlines"])
 
@@ -54,12 +56,14 @@ async def stream_outlines(
 
         presentation_outlines_text = ""
 
-        n_slides_to_generate = presentation.n_slides
-        if presentation.include_table_of_contents:
-            needed_toc_count = math.ceil((presentation.n_slides - 1) / 10)
-            n_slides_to_generate -= math.ceil(
-                (presentation.n_slides - needed_toc_count) / 10
+        if presentation.n_slides > 0:
+            n_slides_to_generate = get_no_of_outlines_to_generate_for_n_slides(
+                n_slides=presentation.n_slides,
+                toc=presentation.include_table_of_contents,
+                title_slide=presentation.include_title_slide,
             )
+        else:
+            n_slides_to_generate = None
 
         async for chunk in generate_ppt_outline(
             presentation.content,
@@ -71,6 +75,7 @@ async def stream_outlines(
             presentation.instructions,
             presentation.include_title_slide,
             presentation.web_search,
+            presentation.include_table_of_contents,
         ):
             # Give control to the event loop
             await asyncio.sleep(0)
@@ -99,12 +104,30 @@ async def stream_outlines(
 
         presentation_outlines = PresentationOutlineModel(**presentation_outlines_json)
 
-        presentation_outlines.slides = presentation_outlines.slides[
-            :n_slides_to_generate
-        ]
+        if (
+            n_slides_to_generate is not None
+            and len(presentation_outlines.slides) != n_slides_to_generate
+        ):
+            yield SSEErrorResponse(
+                detail=(
+                    "Failed to generate presentation outlines with requested "
+                    "number of slides. Please try again."
+                )
+            ).to_string()
+            return
+
+        if n_slides_to_generate is not None:
+            presentation_outlines.slides = presentation_outlines.slides[
+                :n_slides_to_generate
+            ]
+
+        if presentation.n_slides <= 0:
+            presentation.n_slides = len(presentation_outlines.slides)
 
         presentation.outlines = presentation_outlines.model_dump()
-        presentation.title = get_presentation_title_from_outlines(presentation_outlines)
+        presentation.title = get_presentation_title_from_presentation_outline(
+            presentation_outlines
+        )
 
         sql_session.add(presentation)
         await sql_session.commit()
