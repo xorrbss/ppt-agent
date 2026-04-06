@@ -11,11 +11,12 @@ from api.v1.webhook.router import API_V1_WEBHOOK_ROUTER
 from api.v1.mock.router import API_V1_MOCK_ROUTER
 from utils.get_env import (
     get_app_data_directory_env,
-    get_sentry_dsn_env,
     get_sentry_send_default_pii_env,
     get_sentry_traces_sample_rate_env,
 )
 from utils.path_helpers import get_resource_path
+
+FASTAPI_SENTRY_DSN = "https://a7831b44cb7096645e4b7569f53d070c@o4509882707410944.ingest.us.sentry.io/4511171447947264"
 
 
 
@@ -41,7 +42,7 @@ def _get_sentry_send_default_pii() -> bool:
 
 
 sentry_sdk.init(
-    dsn=get_sentry_dsn_env(),
+    dsn=FASTAPI_SENTRY_DSN,
     send_default_pii=_get_sentry_send_default_pii(),
     traces_sample_rate=_get_sentry_traces_sample_rate(),
 )

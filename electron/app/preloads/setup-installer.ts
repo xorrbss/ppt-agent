@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import "./sentry";
 
 contextBridge.exposeInMainWorld("setupInstaller", {
   getStatus: () => ipcRenderer.invoke("setup:get-status"),

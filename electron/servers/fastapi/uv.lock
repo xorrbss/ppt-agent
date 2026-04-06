@@ -1310,6 +1310,7 @@ dependencies = [
     { name = "pytest" },
     { name = "python-pptx" },
     { name = "redis" },
+    { name = "sentry-sdk" },
     { name = "sqlmodel" },
 ]
 
@@ -1336,6 +1337,7 @@ requires-dist = [
     { name = "pytest", specifier = ">=8.4.1" },
     { name = "python-pptx", specifier = ">=1.0.2" },
     { name = "redis", specifier = ">=6.2.0" },
+    { name = "sentry-sdk", specifier = ">=2.34.1" },
     { name = "sqlmodel", specifier = ">=0.0.24" },
 ]
 

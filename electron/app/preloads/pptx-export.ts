@@ -1,5 +1,6 @@
 // Preload script for PPTX export browser window
 // This script runs before the page loads and injects environment variables
+import './sentry';
 
 // Expose environment variables to the window
 (window as any).env = {
