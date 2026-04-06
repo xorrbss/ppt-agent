@@ -163,6 +163,8 @@ const DocumentsPreviewPage: React.FC = () => {
         progress: true,
       });
 
+      const selectedLanguage = config?.language ?? "";
+
       const documentPaths = fileItems.map(
         (fileItem: FileItem) => fileItem.file_path
       );
@@ -170,9 +172,9 @@ const DocumentsPreviewPage: React.FC = () => {
       const createResponse = await PresentationGenerationApi.createPresentation(
         {
           content: config?.prompt ?? "",
-          n_slides: config?.slides ? parseInt(config.slides) : null,
+          n_slides: config?.slides ? parseInt(config.slides, 10) : null,
           file_paths: documentPaths,
-          language: config?.language ?? "",
+          language: selectedLanguage,
           tone: config?.tone,
           verbosity: config?.verbosity,
           instructions: config?.instructions || null,

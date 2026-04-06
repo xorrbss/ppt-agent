@@ -53,13 +53,13 @@ const SlideCountSelect: React.FC<{
         value && !SLIDE_OPTIONS.includes(value as SlideOption) ? value : ""
     );
 
-    // useEffect(() => {
-    //     if (value && !SLIDE_OPTIONS.includes(value as SlideOption)) {
-    //         setCustomInput(value);
-    //     } else {
-    //         setCustomInput("");
-    //     }
-    // }, [value]);
+    useEffect(() => {
+        if (value && !SLIDE_OPTIONS.includes(value as SlideOption)) {
+            setCustomInput(value);
+        } else {
+            setCustomInput("");
+        }
+    }, [value]);
 
     const sanitizeToPositiveInteger = (raw: string): string => {
         const digitsOnly = raw.replace(/\D+/g, "");
@@ -76,7 +76,7 @@ const SlideCountSelect: React.FC<{
         }
     };
 
-    const displayLabel = value ? `${value} slides` : "Select Slides";
+    const displayLabel = value ? `${value} slides` : "Auto slides";
 
     return (
         <Popover open={open} onOpenChange={onOpenChange}>
