@@ -3,6 +3,19 @@ import { TemplateWithData, TemplateGroupSettings, createTemplateEntry, TemplateL
 
 // TODO: Step 1: Import All templates Layouts Here (like the ones below)
 
+// Code templates
+import CodeSlide01RoadmapCover, { Schema as CodeRoadmapCoverSchema, slideLayoutId as CodeRoadmapCoverId, slideLayoutName as CodeRoadmapCoverName, slideLayoutDescription as CodeRoadmapCoverDesc } from "./Code/CodeSlide01RoadmapCover";
+import CodeSlide02CodeExplanationSplit, { Schema as CodeExplanationSplitSchema, slideLayoutId as CodeExplanationSplitId, slideLayoutName as CodeExplanationSplitName, slideLayoutDescription as CodeExplanationSplitDesc } from "./Code/CodeSlide02CodeExplanationSplit";
+import CodeSlide03ApiRequestResponse, { Schema as CodeApiRequestResponseSchema, slideLayoutId as CodeApiRequestResponseId, slideLayoutName as CodeApiRequestResponseName, slideLayoutDescription as CodeApiRequestResponseDesc } from "./Code/CodeSlide03ApiRequestResponse";
+import CodeSlide04FeatureGrid, { Schema as CodeFeatureGridSchema, slideLayoutId as CodeFeatureGridId, slideLayoutName as CodeFeatureGridName, slideLayoutDescription as CodeFeatureGridDesc } from "./Code/CodeSlide04FeatureGrid";
+import CodeSlide05ComparisonTable, { Schema as CodeComparisonTableSchema, slideLayoutId as CodeComparisonTableId, slideLayoutName as CodeComparisonTableName, slideLayoutDescription as CodeComparisonTableDesc } from "./Code/CodeSlide05ComparisonTable";
+import CodeSlide06Workflow, { Schema as CodeWorkflowSchema, slideLayoutId as CodeWorkflowId, slideLayoutName as CodeWorkflowName, slideLayoutDescription as CodeWorkflowDesc } from "./Code/CodeSlide06Workflow";
+import CodeSlide07UseCaseList, { Schema as CodeUseCaseListSchema, slideLayoutId as CodeUseCaseListId, slideLayoutName as CodeUseCaseListName, slideLayoutDescription as CodeUseCaseListDesc } from "./Code/CodeSlide07UseCaseList";
+import CodeSlide08CodeExplanationText, { Schema as CodeExplanationTextSchema, slideLayoutId as CodeExplanationTextId, slideLayoutName as CodeExplanationTextName, slideLayoutDescription as CodeExplanationTextDesc } from "./Code/CodeSlide08CodeExplanationText";
+import CodeSlide09TableOfContent, { Schema as CodeTableOfContentSchema, slideLayoutId as CodeTableOfContentId, slideLayoutName as CodeTableOfContentName, slideLayoutDescription as CodeTableOfContentDesc } from "./Code/CodeSlide09TableOfContent";
+import CodeSlide10MetricsSplit, { Schema as CodeMetricsSplitSchema, slideLayoutId as CodeMetricsSplitId, slideLayoutName as CodeMetricsSplitName, slideLayoutDescription as CodeMetricsSplitDesc } from "./Code/CodeSlide10MetricsSplit";
+import CodeSlide11MetricsGrid, { Schema as CodeMetricsGridSchema, slideLayoutId as CodeMetricsGridId, slideLayoutName as CodeMetricsGridName, slideLayoutDescription as CodeMetricsGridDesc } from "./Code/CodeSlide11MetricsGrid";
+
 // General templates
 import GeneralIntroSlideLayout, { Schema as GeneralIntroSchema, layoutId as GeneralIntroId, layoutName as GeneralIntroName, layoutDescription as GeneralIntroDesc } from "./general/IntroSlideLayout";
 import BasicInfoSlideLayout, { Schema as BasicInfoSchema, layoutId as BasicInfoId, layoutName as BasicInfoName, layoutDescription as BasicInfoDesc } from "./general/BasicInfoSlideLayout";
@@ -175,12 +188,27 @@ import neoGeneralSettings from "./neo-general/settings.json";
 import neoStandardSettings from "./neo-standard/settings.json";
 import neoModernSettings from "./neo-modern/settings.json";
 import neoSwiftSettings from "./neo-swift/settings.json";
+import codeSettings from "./Code/settings.json";
 
 
 // Helper to create template entry
 
 
 // TODO: Step 3: Create template entries for each template (like the ones below)
+
+export const codeTemplates: TemplateWithData[] = [
+    createTemplateEntry(CodeSlide01RoadmapCover, CodeRoadmapCoverSchema, CodeRoadmapCoverId, CodeRoadmapCoverName, CodeRoadmapCoverDesc, "code", "CodeSlide01RoadmapCover"),
+    createTemplateEntry(CodeSlide02CodeExplanationSplit, CodeExplanationSplitSchema, CodeExplanationSplitId, CodeExplanationSplitName, CodeExplanationSplitDesc, "code", "CodeSlide02CodeExplanationSplit"),
+    createTemplateEntry(CodeSlide03ApiRequestResponse, CodeApiRequestResponseSchema, CodeApiRequestResponseId, CodeApiRequestResponseName, CodeApiRequestResponseDesc, "code", "CodeSlide03ApiRequestResponse"),
+    createTemplateEntry(CodeSlide04FeatureGrid, CodeFeatureGridSchema, CodeFeatureGridId, CodeFeatureGridName, CodeFeatureGridDesc, "code", "CodeSlide04FeatureGrid"),
+    createTemplateEntry(CodeSlide05ComparisonTable, CodeComparisonTableSchema, CodeComparisonTableId, CodeComparisonTableName, CodeComparisonTableDesc, "code", "CodeSlide05ComparisonTable"),
+    createTemplateEntry(CodeSlide06Workflow, CodeWorkflowSchema, CodeWorkflowId, CodeWorkflowName, CodeWorkflowDesc, "code", "CodeSlide06Workflow"),
+    createTemplateEntry(CodeSlide07UseCaseList, CodeUseCaseListSchema, CodeUseCaseListId, CodeUseCaseListName, CodeUseCaseListDesc, "code", "CodeSlide07UseCaseList"),
+    createTemplateEntry(CodeSlide08CodeExplanationText, CodeExplanationTextSchema, CodeExplanationTextId, CodeExplanationTextName, CodeExplanationTextDesc, "code", "CodeSlide08CodeExplanationText"),
+    createTemplateEntry(CodeSlide09TableOfContent, CodeTableOfContentSchema, CodeTableOfContentId, CodeTableOfContentName, CodeTableOfContentDesc, "code", "CodeSlide09TableOfContent"),
+    createTemplateEntry(CodeSlide10MetricsSplit, CodeMetricsSplitSchema, CodeMetricsSplitId, CodeMetricsSplitName, CodeMetricsSplitDesc, "code", "CodeSlide10MetricsSplit"),
+    createTemplateEntry(CodeSlide11MetricsGrid, CodeMetricsGridSchema, CodeMetricsGridId, CodeMetricsGridName, CodeMetricsGridDesc, "code", "CodeSlide11MetricsGrid"),
+];
 
 export const neoGeneralTemplates: TemplateWithData[] = [
 
@@ -352,8 +380,7 @@ export const allLayouts: TemplateWithData[] = [
     ...modernTemplates,
     ...standardTemplates,
     ...swiftTemplates,
-
-
+    ...codeTemplates,
 ];
 
 
@@ -416,7 +443,13 @@ export const templates: TemplateLayoutsWithSettings[] = [
         settings: swiftSettings as TemplateGroupSettings,
         layouts: swiftTemplates,
     },
-
+    {
+        id: "code",
+        name: "Code",
+        description: codeSettings.description,
+        settings: codeSettings as TemplateGroupSettings,
+        layouts: codeTemplates,
+    },
 ];
 
 // Helper to get templates by group ID
