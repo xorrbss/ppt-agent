@@ -1,0 +1,185 @@
+import * as z from "zod";
+
+import { DualLineChart } from "./chartPrimitives";
+
+const LinePointSchema = z.object({
+  label: z.string().min(1).max(12).meta({
+    description: "Chart axis label.",
+  }),
+  valueA: z.number().min(0).max(1000).meta({
+    description: "First series value.",
+  }),
+  valueB: z.number().min(0).max(1000).meta({
+    description: "Second series value.",
+  }),
+});
+
+const MetricSchema = z.object({
+  value: z.string().min(1).max(12).meta({
+    description: "Primary metric value shown in the stat card.",
+  }),
+  label: z.string().min(3).max(24).meta({
+    description: "Metric label shown below the value.",
+  }),
+  description: z.string().min(6).max(36).meta({
+    description: "Supporting description shown below the label.",
+  }),
+});
+
+const StatColumnSchema = z.object({
+  metrics: z.array(MetricSchema).min(2).max(2).meta({
+    description: "Two stacked metrics shown in one stat card.",
+  }),
+});
+
+export const slideLayoutId = "data-analysis-line-stats-slide";
+export const slideLayoutName = "Data Analysis Line Stats Slide";
+export const slideLayoutDescription =
+  "A slide with a title at the top, a two-series line chart in the left content area, and two tall metric cards arranged side by side on the right. Each metric card contains two stacked metric blocks.";
+
+export const Schema = z.object({
+  title: z.string().min(3).max(28).default("Data Analysis").meta({
+    description: "Slide title shown at the top-left.",
+  }),
+  seriesALabel: z.string().min(3).max(20).default("Category A").meta({
+    description: "Legend label for the first line series.",
+  }),
+  seriesBLabel: z.string().min(3).max(20).default("Category B").meta({
+    description: "Legend label for the second line series.",
+  }),
+  lineData: z
+    .array(LinePointSchema)
+    .min(7)
+    .max(7)
+    .default([
+      { label: "label", valueA: 24, valueB: 40 },
+      { label: "label", valueA: 55, valueB: 72 },
+      { label: "label", valueA: 50, valueB: 98 },
+      { label: "label", valueA: 97, valueB: 86 },
+      { label: "label", valueA: 70, valueB: 52 },
+      { label: "label", valueA: 42, valueB: 78 },
+      { label: "label", valueA: 63, valueB: 51 },
+    ])
+    .meta({
+      description: "Line chart data displayed on the left side of the slide.",
+    }),
+  statColumns: z
+    .array(StatColumnSchema)
+    .min(2)
+    .max(2)
+    .default([
+      {
+        metrics: [
+          { value: "25K", label: "Students", description: "Ut enim ad minima" },
+          { value: "25K", label: "Students", description: "Ut enim ad minima" },
+        ],
+      },
+      {
+        metrics: [
+          { value: "25K", label: "Students", description: "Ut enim ad minima" },
+          { value: "25K", label: "Students", description: "Ut enim ad minima" },
+        ],
+      },
+    ])
+    .meta({
+      description: "Two stat cards shown on the right side of the slide.",
+    }),
+});
+
+export type SchemaType = z.infer<typeof Schema>;
+
+type StatMetric = {
+  value: string;
+  label: string;
+  description: string;
+};
+
+function StatPill({
+  metrics,
+
+}: {
+  metrics: StatMetric[];
+
+}) {
+
+
+  return (
+    <div className=" h-[438px] w-[248px] overflow-hidden rounded-[127px] bg-[#157CFF] px-[28px] py-[74px] text-center text-white">
+
+      {metrics.map((metric, index) => (
+        <>
+          <div
+            key={`${metric.value}-${metric.label}-${index}`}
+            className={``}
+          >
+            <p className="text-[55px] font-medium leading-[ 44.353px] tracking-[-1.09px]">
+              {metric.value}
+            </p>
+            <p className="mt-[6px] text-[20px] font-medium leading-none">{metric.label}</p>
+            <p className=" text-[20px] leading-[1.15] text-white/90">
+              {metric.description}
+            </p>
+          </div>
+          {index === 0 && <div className="py-[22px]">
+
+            <svg xmlns="http://www.w3.org/2000/svg" width="181" height="1" viewBox="0 0 181 1" fill="none">
+              <path opacity="0.2" d="M0 0.487305H180.122" stroke="white" strokeWidth="0.974913" strokeDasharray="3.9 1.95" />
+            </svg>
+          </div>
+          }
+        </>
+      ))}
+
+
+    </div>
+  );
+}
+const DataAnalysisLineStatsSlide = ({ data }: { data: Partial<SchemaType> }) => {
+  const { title, seriesALabel, seriesBLabel, lineData, statColumns } = data;
+
+  return (
+    <div className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#f9f8f8]">
+      <div
+        className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#157CFF]"
+        style={{ height: 185 }}
+      />
+
+      <div className="px-[64px] pt-[48px]">
+        <h2 className="text-[80px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]">
+          {title}
+        </h2>
+      </div>
+
+      <div className="flex justify-between px-[74px] pt-[40px]">
+        <div className="w-[474px]">
+          <div className="flex justify-center gap-[26px] text-[14px] text-[#353538]">
+            <span className="flex items-center gap-[8px]">
+              <span className="h-[2px] w-[20px] bg-[#9fb6ff]" />
+              {seriesALabel}
+            </span>
+            <span className="flex items-center gap-[8px]">
+              <span className="h-[2px] w-[20px] bg-[#4d4ef3]" />
+              {seriesBLabel}
+            </span>
+          </div>
+
+          <div className="mt-[12px] h-[356px] w-full">
+            <DualLineChart data={lineData ?? []} />
+          </div>
+
+          <div className="mt-[2px] text-center text-[18px] text-[#4b5563]">
+            X axis name
+          </div>
+        </div>
+
+        <div className="ml-[42px] flex gap-[30px]">
+          {statColumns?.map((column, index) => (
+            <StatPill key={`line-stat-column-${index}`} metrics={column.metrics} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default DataAnalysisLineStatsSlide;
