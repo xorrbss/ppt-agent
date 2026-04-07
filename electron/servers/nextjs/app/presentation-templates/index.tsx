@@ -16,6 +16,17 @@ import CodeSlide09TableOfContent, { Schema as CodeTableOfContentSchema, slideLay
 import CodeSlide10MetricsSplit, { Schema as CodeMetricsSplitSchema, slideLayoutId as CodeMetricsSplitId, slideLayoutName as CodeMetricsSplitName, slideLayoutDescription as CodeMetricsSplitDesc } from "./Code/CodeSlide10MetricsSplit";
 import CodeSlide11MetricsGrid, { Schema as CodeMetricsGridSchema, slideLayoutId as CodeMetricsGridId, slideLayoutName as CodeMetricsGridName, slideLayoutDescription as CodeMetricsGridDesc } from "./Code/CodeSlide11MetricsGrid";
 
+// Education templates
+import EducationCoverSlide, { Schema as EduCoverSchema, slideLayoutId as EduCoverId, slideLayoutName as EduCoverName, slideLayoutDescription as EduCoverDesc } from "./Education/EducationCoverSlide";
+import EducationTableOfContentsSlide, { Schema as EduTocSchema, slideLayoutId as EduTocId, slideLayoutName as EduTocName, slideLayoutDescription as EduTocDesc } from "./Education/EducationTableOfContentsSlide";
+import EducationAboutSlide, { Schema as EduAboutSchema, slideLayoutId as EduAboutId, slideLayoutName as EduAboutName, slideLayoutDescription as EduAboutDesc } from "./Education/EducationAboutSlide";
+import EducationContentSplitSlide, { Schema as EduContentSplitSchema, slideLayoutId as EduContentSplitId, slideLayoutName as EduContentSplitName, slideLayoutDescription as EduContentSplitDesc } from "./Education/EducationContentSplitSlide";
+import EducationImageGallerySlide, { Schema as EduImageGallerySchema, slideLayoutId as EduImageGalleryId, slideLayoutName as EduImageGalleryName, slideLayoutDescription as EduImageGalleryDesc } from "./Education/EducationImageGallerySlide";
+import EducationReportDonutSlide, { Schema as EduReportDonutSchema, slideLayoutId as EduReportDonutId, slideLayoutName as EduReportDonutName, slideLayoutDescription as EduReportDonutDesc } from "./Education/EducationReportDonutSlide";
+import EducationServicesSplitSlide, { Schema as EduServicesSplitSchema, slideLayoutId as EduServicesSplitId, slideLayoutName as EduServicesSplitName, slideLayoutDescription as EduServicesSplitDesc } from "./Education/EducationServicesSplitSlide";
+import EducationStatisticsGridSlide, { Schema as EduStatisticsGridSchema, slideLayoutId as EduStatisticsGridId, slideLayoutName as EduStatisticsGridName, slideLayoutDescription as EduStatisticsGridDesc } from "./Education/EducationStatisticsGridSlide";
+import EducationTimelineSlide, { Schema as EduTimelineSchema, slideLayoutId as EduTimelineId, slideLayoutName as EduTimelineName, slideLayoutDescription as EduTimelineDesc } from "./Education/EducationTimelineSlide";
+
 // General templates
 import GeneralIntroSlideLayout, { Schema as GeneralIntroSchema, layoutId as GeneralIntroId, layoutName as GeneralIntroName, layoutDescription as GeneralIntroDesc } from "./general/IntroSlideLayout";
 import BasicInfoSlideLayout, { Schema as BasicInfoSchema, layoutId as BasicInfoId, layoutName as BasicInfoName, layoutDescription as BasicInfoDesc } from "./general/BasicInfoSlideLayout";
@@ -189,6 +200,7 @@ import neoStandardSettings from "./neo-standard/settings.json";
 import neoModernSettings from "./neo-modern/settings.json";
 import neoSwiftSettings from "./neo-swift/settings.json";
 import codeSettings from "./Code/settings.json";
+import educationSettings from "./Education/settings.json";
 
 
 // Helper to create template entry
@@ -208,6 +220,18 @@ export const codeTemplates: TemplateWithData[] = [
     createTemplateEntry(CodeSlide09TableOfContent, CodeTableOfContentSchema, CodeTableOfContentId, CodeTableOfContentName, CodeTableOfContentDesc, "code", "CodeSlide09TableOfContent"),
     createTemplateEntry(CodeSlide10MetricsSplit, CodeMetricsSplitSchema, CodeMetricsSplitId, CodeMetricsSplitName, CodeMetricsSplitDesc, "code", "CodeSlide10MetricsSplit"),
     createTemplateEntry(CodeSlide11MetricsGrid, CodeMetricsGridSchema, CodeMetricsGridId, CodeMetricsGridName, CodeMetricsGridDesc, "code", "CodeSlide11MetricsGrid"),
+];
+
+export const educationTemplates: TemplateWithData[] = [
+    createTemplateEntry(EducationCoverSlide, EduCoverSchema, EduCoverId, EduCoverName, EduCoverDesc, "education", "EducationCoverSlide"),
+    createTemplateEntry(EducationTableOfContentsSlide, EduTocSchema, EduTocId, EduTocName, EduTocDesc, "education", "EducationTableOfContentsSlide"),
+    createTemplateEntry(EducationAboutSlide, EduAboutSchema, EduAboutId, EduAboutName, EduAboutDesc, "education", "EducationAboutSlide"),
+    createTemplateEntry(EducationContentSplitSlide, EduContentSplitSchema, EduContentSplitId, EduContentSplitName, EduContentSplitDesc, "education", "EducationContentSplitSlide"),
+    createTemplateEntry(EducationImageGallerySlide, EduImageGallerySchema, EduImageGalleryId, EduImageGalleryName, EduImageGalleryDesc, "education", "EducationImageGallerySlide"),
+    createTemplateEntry(EducationReportDonutSlide, EduReportDonutSchema, EduReportDonutId, EduReportDonutName, EduReportDonutDesc, "education", "EducationReportDonutSlide"),
+    createTemplateEntry(EducationServicesSplitSlide, EduServicesSplitSchema, EduServicesSplitId, EduServicesSplitName, EduServicesSplitDesc, "education", "EducationServicesSplitSlide"),
+    createTemplateEntry(EducationStatisticsGridSlide, EduStatisticsGridSchema, EduStatisticsGridId, EduStatisticsGridName, EduStatisticsGridDesc, "education", "EducationStatisticsGridSlide"),
+    createTemplateEntry(EducationTimelineSlide, EduTimelineSchema, EduTimelineId, EduTimelineName, EduTimelineDesc, "education", "EducationTimelineSlide"),
 ];
 
 export const neoGeneralTemplates: TemplateWithData[] = [
@@ -381,6 +405,7 @@ export const allLayouts: TemplateWithData[] = [
     ...standardTemplates,
     ...swiftTemplates,
     ...codeTemplates,
+    ...educationTemplates,
 ];
 
 
@@ -449,6 +474,13 @@ export const templates: TemplateLayoutsWithSettings[] = [
         description: codeSettings.description,
         settings: codeSettings as TemplateGroupSettings,
         layouts: codeTemplates,
+    },
+    {
+        id: "education",
+        name: "Education",
+        description: educationSettings.description,
+        settings: educationSettings as TemplateGroupSettings,
+        layouts: educationTemplates,
     },
 ];
 

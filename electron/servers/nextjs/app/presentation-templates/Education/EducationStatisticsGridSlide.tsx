@@ -1,0 +1,153 @@
+import * as z from "zod";
+
+export const slideLayoutId = "education-statistics-grid-slide";
+export const slideLayoutName = "Education Statistics Grid Slide";
+export const slideLayoutDescription =
+  "A two-column layout with a left title block and a right 2x4 grid of statistics cards, using one subtle background image texture.";
+
+const StatisticSchema = z.object({
+  value: z.string().min(1).max(8).meta({
+    description: "Main metric value shown at the top of one card.",
+  }),
+  label: z.string().min(3).max(22).meta({
+    description: "Label shown under the value.",
+  }),
+});
+
+export const Schema = z.object({
+  title: z.string().min(4).max(14).default("Statistics").meta({
+    description: "Main title shown in the left column.",
+  }),
+  description: z.string().min(40).max(120).default(
+    "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+  ).meta({
+    description: "Supporting line shown under the left title.",
+  }),
+  stats: z
+    .array(StatisticSchema)
+    .min(2)
+    .max(8)
+    .default([
+      { value: "120", label: "Sales Team Strength" },
+      { value: "15", label: "Senior Sales Officer" },
+      { value: "1", label: "National Manager" },
+      { value: "25", label: "Sales Officers" },
+      { value: "2", label: "Regional Manager" },
+      { value: "50", label: "Distributor Reps" },
+      { value: "5", label: "Zonal Manager" },
+      { value: "20", label: "Merchandising Team" },
+    ])
+    .meta({
+      description: "Eight statistic cards shown in a 2-column, 4-row grid.",
+    }),
+
+});
+
+export type SchemaType = z.infer<typeof Schema>;
+
+
+
+const EducationStatisticsGridSlide = ({ data }: { data: Partial<SchemaType> }) => {
+
+
+  return (
+    <div className="relative h-[720px] w-[1280px] overflow-hidden bg-[#efeff1]">
+
+
+      <div className="relative z-10 grid h-full grid-cols-[490px_1fr]">
+        <div className="bg-[#f1efef] px-[44px] pb-[78px] pt-[96px]">
+          <div className="flex h-full flex-col justify-end">
+            <h2 className="font-serif text-[64px] leading-[98%] tracking-[-0.02em] text-[#1a1752]">
+              {data.title}
+            </h2>
+            <p className="mt-[40px] max-w-[330px] text-[22px] leading-[1.24] text-[#34394C]">
+              {data.description}
+            </p>
+          </div>
+        </div>
+
+        {data.stats && data.stats?.length <= 4 && <div className="grid h-full grid-cols-1">
+          {data.stats?.map((stat, index) => (
+            <div
+              key={`${stat.value}-${index}`}
+              className="px-[52px] pt-[22px]"
+              style={{ backgroundColor: index % 2 === 1 ? '#5C0FD908' : 'white' }}
+            >
+              <p className="font-serif text-[58px] leading-[56px] text-[#434A63]">
+                {stat?.value}
+              </p>
+              <p className="mt-[12px] text-[24px]  text-[#434A63]">
+                {stat?.label}
+              </p>
+            </div>
+          ))}
+        </div>}
+
+        {/* {stats && stats?.length > 4 && stats?.length <= 8 && <div className="grid h-full  grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
+          {stats?.map((stat, index) => (
+            <div
+              key={`${stat.value}-${index}`}
+              className="px-[52px] pt-[22px]"
+              style={{ backgroundColor: index % 2 === 1 ? '#5C0FD908' : 'white' }}
+            >
+              <p className="font-serif text-[58px] leading-[56px] text-[#283E51]">
+                {stat.value}
+              </p>
+              <p className="mt-[12px] text-[24px]  text-[#434A63]">
+                {stat.label}
+              </p>
+            </div>
+          ))}
+        </div>} */}
+
+        {data.stats && data.stats?.length > 4 && data.stats?.length <= 8 && (() => {
+          const rightArray = data.stats?.slice(0, Math.floor(data.stats?.length / 2));
+          const leftArray = data.stats?.slice(Math.floor(data.stats?.length / 2));
+
+          return (
+            <div className="h-full flex w-full">
+              <div className="flex flex-col h-full w-full">
+
+                {leftArray?.map((stat: any, index: number) => (
+                  <div
+                    key={`${stat?.value}-${index}`}
+                    className="px-[52px] pt-[22px] h-full"
+                    style={{ backgroundColor: index % 2 === 0 ? '#5C0FD908' : 'white' }}
+                  >
+                    <p className="font-serif text-[58px] leading-[56px] text-[#283E51]">
+                      {stat?.value}
+                    </p>
+                    <p className="mt-[12px] text-[24px] text-[#434A63]">
+                      {stat?.label}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+
+              <div className="flex flex-col w-full">
+
+                {rightArray?.map((stat: any, index: number) => (
+                  <div
+                    key={`${stat.value}-${index}`}
+                    className="px-[52px] pt-[22px] h-full"
+                    style={{ backgroundColor: index % 2 === 1 ? '#5C0FD908' : 'white' }}
+                  >
+                    <p className="font-serif text-[58px] leading-[56px] text-[#283E51]">
+                      {stat.value}
+                    </p>
+                    <p className="mt-[12px] text-[24px] text-[#434A63]">
+                      {stat.label}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+    </div>
+  );
+};
+
+export default EducationStatisticsGridSlide;
