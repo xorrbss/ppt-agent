@@ -21,6 +21,9 @@ import TextProvider from "./TextProvider";
 import ImageProvider from "./ImageProvider";
 import PrivacySettings from "./PrivacySettings";
 import { IMAGE_PROVIDERS, LLM_PROVIDERS } from "@/utils/providerConstants";
+import { ImagesApi } from "@/app/(presentation-generator)/services/api/images";
+
+const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
 
 // Button state interface
 interface ButtonState {
@@ -72,6 +75,36 @@ const SettingsPage = () => {
     return 0;
   }, [downloadingModel?.downloaded, downloadingModel?.size]);
 
+  const ensureSelectedStockProviderReady = async (): Promise<boolean> => {
+    if (llmConfig.DISABLE_IMAGE_GENERATION) {
+      return true;
+    }
+
+    const provider = (llmConfig.IMAGE_PROVIDER || "").toLowerCase();
+    if (!STOCK_IMAGE_PROVIDERS.has(provider)) {
+      return true;
+    }
+
+    const providerApiKey =
+      provider === "pexels" ? llmConfig.PEXELS_API_KEY : llmConfig.PIXABAY_API_KEY;
+
+    try {
+      await ImagesApi.searchStockImages("business", 1, {
+        provider,
+        apiKey: providerApiKey,
+        strictApiKey: true,
+      });
+      return true;
+    } catch (error: any) {
+      notify.error(
+        "Cannot save settings",
+        error?.message ||
+        `Unable to reach ${provider} with the provided API key. Please verify your settings and try again.`
+      );
+      return false;
+    }
+  };
+
   const handleSaveConfig = async () => {
     trackEvent(MixpanelEvent.Settings_SaveConfiguration_Button_Clicked, { pathname });
     const validationError = getLLMConfigValidationError(llmConfig);
@@ -79,6 +112,12 @@ const SettingsPage = () => {
       notify.error("Cannot save settings", validationError);
       return;
     }
+
+    const providerReady = await ensureSelectedStockProviderReady();
+    if (!providerReady) {
+      return;
+    }
+
     try {
       setButtonState(prev => ({
         ...prev,

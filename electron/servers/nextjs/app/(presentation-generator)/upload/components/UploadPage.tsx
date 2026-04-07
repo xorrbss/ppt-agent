@@ -12,7 +12,7 @@
 "use client";
 import React, { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { clearOutlines, setPresentationId } from "@/store/slices/presentationGeneration";
 import { PromptInput } from "./PromptInput";
 import { LanguageType, PresentationConfig, ToneType, VerbosityType } from "../type";
@@ -26,6 +26,10 @@ import Wrapper from "@/components/Wrapper";
 import { setPptGenUploadState } from "@/store/slices/presentationGenUpload";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { ConfigurationSelects } from "./ConfigurationSelects";
+import { RootState } from "@/store/store";
+import { ImagesApi } from "../../services/api/images";
+
+const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
 
 // Types for loading state
 interface LoadingState {
@@ -40,11 +44,12 @@ const UploadPage = () => {
   const router = useRouter();
   const pathname = usePathname();
   const dispatch = useDispatch();
+  const llmConfig = useSelector((state: RootState) => state.userConfig.llm_config);
 
   const [files, setFiles] = useState<File[]>([]);
   const [config, setConfig] = useState<PresentationConfig>({
     slides: null,
-    language: LanguageType.English,
+    language: LanguageType.Auto,
     prompt: "",
     tone: ToneType.Default,
     verbosity: VerbosityType.Standard,
@@ -66,6 +71,36 @@ const UploadPage = () => {
     setConfig((prev) => ({ ...prev, [key]: value } as PresentationConfig));
   };
 
+  const ensureStockImageProviderReady = async (): Promise<boolean> => {
+    if (llmConfig?.DISABLE_IMAGE_GENERATION) {
+      return true;
+    }
+
+    const selectedProvider = (llmConfig?.IMAGE_PROVIDER || "").toLowerCase();
+    if (!STOCK_IMAGE_PROVIDERS.has(selectedProvider)) {
+      return true;
+    }
+
+    try {
+      const providerApiKey =
+        selectedProvider === "pexels"
+          ? llmConfig?.PEXELS_API_KEY
+          : llmConfig?.PIXABAY_API_KEY;
+      await ImagesApi.searchStockImages("business", 1, {
+        provider: selectedProvider,
+        apiKey: providerApiKey,
+        strictApiKey: true,
+      });
+      return true;
+    } catch (error: any) {
+      toast.error(
+        error?.message ||
+        `Unable to reach ${selectedProvider} right now. Please check your API key/settings and try again.`
+      );
+      return false;
+    }
+  };
+
   /**
    * Validates the current configuration and files
    * @returns boolean indicating if the configuration is valid
@@ -73,6 +108,11 @@ const UploadPage = () => {
   const validateConfiguration = (): boolean => {
     if (!config.language) {
       toast.error("Please select language");
+      return false;
+    }
+
+    if (files.length > 0 && config.language === LanguageType.Auto) {
+      toast.error("Please choose a language before processing uploaded documents");
       return false;
     }
 
@@ -88,6 +128,9 @@ const UploadPage = () => {
    */
   const handleGeneratePresentation = async () => {
     if (!validateConfiguration()) return;
+
+    const isStockProviderReady = await ensureStockImageProviderReady();
+    if (!isStockProviderReady) return;
 
     try {
       const hasUploadedAssets = files.length > 0;
