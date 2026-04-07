@@ -9,31 +9,31 @@ const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }
     const textProviderIcon = LLM_PROVIDERS[llm_config.LLM as keyof typeof LLM_PROVIDERS]?.icon
     const imageProviderIcon = IMAGE_PROVIDERS[llm_config.IMAGE_PROVIDER as keyof typeof IMAGE_PROVIDERS]?.icon || '/providers/pexel.png'
     return (
-        <div className='w-full max-w-[230px] h-screen px-4 pt-[22px] bg-[#F9FAFB] flex flex-col'>
+        <div className='w-full max-w-[230px] h-screen px-3 pt-[22px] bg-[#F9FAFB] flex flex-col'>
             <p className='text-xs text-black  font-medium border-b mt-[3.15rem]  border-[#E1E1E5] pb-3.5'>FILTER BY:</p>
             <div className='mt-6 flex-1'>
                 <p className='text-[#3A3A3A] text-xs font-medium pb-2.5'>Select Mode</p>
                 <div className='p-0.5 rounded-[40px] bg-[#ffffff] w-fit border border-[#EDEEEF] flex items-center justify-center mb-[34px] '>
-                    <button className='px-3 font-syne h-[26px] text-xs font-medium text-[#3A3A3A] rounded-[70px]'
+                    <button className='px-3 font-syne h-[26px] text-[10px] font-medium text-[#3A3A3A] rounded-[70px]'
                         onClick={() => setMode('presenton')}
                         style={{
                             background: mode === 'presenton' ? '#F4F3FF' : 'transparent',
                             color: mode === 'presenton' ? '#5146E5' : '#3A3A3A'
                         }}
-                    >Presenton
+                    >Template Based
                     </button>
                     <svg xmlns="http://www.w3.org/2000/svg" className='mx-1' width="2" height="17" viewBox="0 0 2 17" fill="none">
                         <path d="M1 0V16.5" stroke="#EDECEC" strokeWidth="2" />
                     </svg>
                     <div className='relative'>
-                        <button className='px-3 font-syne  h-[26px] text-xs font-medium rounded-[70px] cursor-not-allowed opacity-60'
+                        <button className='px-3 font-syne  h-[26px] text-[10px] font-medium rounded-[70px] cursor-not-allowed opacity-60'
                             disabled
                             style={{
                                 background: 'transparent',
                                 color: '#9CA3AF'
                             }}
                         >
-                            Nanobanana
+                            Image Based
                         </button>
                         <span className='absolute -top-2 -right-5 text-[7px] uppercase tracking-wide bg-[#F4F3FF] text-[#5146E5] border border-[#D9D6FE] rounded-full px-1.5 py-0.5 whitespace-nowrap'>
                             Coming soon

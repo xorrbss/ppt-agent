@@ -229,7 +229,7 @@ const TextProvider = ({
                     </div>
                     <h3 className="text-xl font-normal text-[#191919] py-2.5">Text Generation Settings</h3>
                     <p className=" text-sm  text-gray-500">
-                        Choosing where text contets come from
+                        Choosing where text content comes from
                     </p>
                 </div>
                 <div className='flex flex-col justify-end items-end gap-4'>

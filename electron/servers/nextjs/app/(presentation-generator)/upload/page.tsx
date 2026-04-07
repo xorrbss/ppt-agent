@@ -47,7 +47,7 @@ const page = () => {
       <Header />
       <div className="flex flex-col items-center justify-center  mb-8">
         <h1 className="text-[64px] font-normal font-unbounded text-[#101323] ">
-          AI Presentation
+          Generate Presentation
         </h1>
         <p className="text-xl font-syne text-[#101323CC]">Choose a design, set preferences, and generate polished slides.</p>
       </div>
