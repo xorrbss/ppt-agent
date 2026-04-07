@@ -297,20 +297,7 @@ export default function CodexConfig({
                             <p className="text-sm font-medium text-gray-800 truncate">
                                 {username || email || (accountId ? `Account ${accountId}` : "ChatGPT Account")}
                             </p>
-                            <span
-                                className={cn(
-                                    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium shrink-0",
-                                    isPro === true ? "bg-amber-100 text-amber-800" : "bg-gray-100 text-gray-700"
-                                )}
-                                title={`Subscription: ${planLabel}`}
-                            >
-                                {isPro === true ? (
-                                    <Crown className="w-3 h-3" />
-                                ) : (
-                                    <User className="w-3 h-3" />
-                                )}
-                                {planLabel}
-                            </span>
+
                         </div>
                         {email && username && (
                             <p className="text-xs text-gray-500 truncate">{email}</p>
