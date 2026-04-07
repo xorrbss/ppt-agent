@@ -27,6 +27,24 @@ import EducationServicesSplitSlide, { Schema as EduServicesSplitSchema, slideLay
 import EducationStatisticsGridSlide, { Schema as EduStatisticsGridSchema, slideLayoutId as EduStatisticsGridId, slideLayoutName as EduStatisticsGridName, slideLayoutDescription as EduStatisticsGridDesc } from "./Education/EducationStatisticsGridSlide";
 import EducationTimelineSlide, { Schema as EduTimelineSchema, slideLayoutId as EduTimelineId, slideLayoutName as EduTimelineName, slideLayoutDescription as EduTimelineDesc } from "./Education/EducationTimelineSlide";
 
+// Product Overview templates
+import BusinessChallengesCardsSlide, { Schema as PoBizChallengesCardsSchema, slideLayoutId as PoBizChallengesCardsId, slideLayoutName as PoBizChallengesCardsName, slideLayoutDescription as PoBizChallengesCardsDesc } from "./ProductOverview/BusinessChallengesCardsSlide";
+import BusinessChallengesGridSlide, { Schema as PoBizChallengesGridSchema, slideLayoutId as PoBizChallengesGridId, slideLayoutName as PoBizChallengesGridName, slideLayoutDescription as PoBizChallengesGridDesc } from "./ProductOverview/BusinessChallengesGridSlide";
+import ComparisonChartSlide, { Schema as PoComparisonChartSchema, slideLayoutId as PoComparisonChartId, slideLayoutName as PoComparisonChartName, slideLayoutDescription as PoComparisonChartDesc } from "./ProductOverview/ComparisonChartSlide";
+import ComparisonTableWithTextSlide, { Schema as PoComparisonTableSchema, slideLayoutId as PoComparisonTableId, slideLayoutName as PoComparisonTableName, slideLayoutDescription as PoComparisonTableDesc } from "./ProductOverview/ComparisonTableWithTextSlide";
+import CoverSlide, { Schema as PoCoverSchema, slideLayoutId as PoCoverId, slideLayoutName as PoCoverName, slideLayoutDescription as PoCoverDesc } from "./ProductOverview/CoverSlide";
+import ImageGallerySlide, { Schema as PoImageGallerySchema, slideLayoutId as PoImageGalleryId, slideLayoutName as PoImageGalleryName, slideLayoutDescription as PoImageGalleryDesc } from "./ProductOverview/ImageGallerySlide";
+import IntroductionSlide, { Schema as PoIntroductionSchema, slideLayoutId as PoIntroductionId, slideLayoutName as PoIntroductionName, slideLayoutDescription as PoIntroductionDesc } from "./ProductOverview/IntroductionSlide";
+import KpiCardsSlide, { Schema as PoKpiCardsSchema, slideLayoutId as PoKpiCardsId, slideLayoutName as PoKpiCardsName, slideLayoutDescription as PoKpiCardsDesc } from "./ProductOverview/KpiCardsSlide";
+import MarketOpportunitySlide, { Schema as PoMarketOpportunitySchema, slideLayoutId as PoMarketOpportunityId, slideLayoutName as PoMarketOpportunityName, slideLayoutDescription as PoMarketOpportunityDesc } from "./ProductOverview/MarketOpportunitySlide";
+import MeetTeamSlide, { Schema as PoMeetTeamSchema, slideLayoutId as PoMeetTeamId, slideLayoutName as PoMeetTeamName, slideLayoutDescription as PoMeetTeamDesc } from "./ProductOverview/MeetTeamSlide";
+import MissionVisionSlide, { Schema as PoMissionVisionSchema, slideLayoutId as PoMissionVisionId, slideLayoutName as PoMissionVisionName, slideLayoutDescription as PoMissionVisionDesc } from "./ProductOverview/MissionVisionSlide";
+import OurServicesSlide, { Schema as PoOurServicesSchema, slideLayoutId as PoOurServicesId, slideLayoutName as PoOurServicesName, slideLayoutDescription as PoOurServicesDesc } from "./ProductOverview/OurServicesSlide";
+import PricingPlanSlide, { Schema as PoPricingPlanSchema, slideLayoutId as PoPricingPlanId, slideLayoutName as PoPricingPlanName, slideLayoutDescription as PoPricingPlanDesc } from "./ProductOverview/PricingPlanSlide";
+import ProcessSlide, { Schema as PoProcessSchema, slideLayoutId as PoProcessId, slideLayoutName as PoProcessName, slideLayoutDescription as PoProcessDesc } from "./ProductOverview/ProcessSlide";
+import ReportSnapshotSlide, { Schema as PoReportSnapshotSchema, slideLayoutId as PoReportSnapshotId, slideLayoutName as PoReportSnapshotName, slideLayoutDescription as PoReportSnapshotDesc } from "./ProductOverview/ReportSnapshotSlide";
+import TableOfContentSlide, { Schema as PoTableOfContentSchema, slideLayoutId as PoTableOfContentId, slideLayoutName as PoTableOfContentName, slideLayoutDescription as PoTableOfContentDesc } from "./ProductOverview/TableOfContentSlide";
+
 // General templates
 import GeneralIntroSlideLayout, { Schema as GeneralIntroSchema, layoutId as GeneralIntroId, layoutName as GeneralIntroName, layoutDescription as GeneralIntroDesc } from "./general/IntroSlideLayout";
 import BasicInfoSlideLayout, { Schema as BasicInfoSchema, layoutId as BasicInfoId, layoutName as BasicInfoName, layoutDescription as BasicInfoDesc } from "./general/BasicInfoSlideLayout";
@@ -201,6 +219,7 @@ import neoModernSettings from "./neo-modern/settings.json";
 import neoSwiftSettings from "./neo-swift/settings.json";
 import codeSettings from "./Code/settings.json";
 import educationSettings from "./Education/settings.json";
+import productOverviewSettings from "./ProductOverview/settings.json";
 
 
 // Helper to create template entry
@@ -232,6 +251,25 @@ export const educationTemplates: TemplateWithData[] = [
     createTemplateEntry(EducationServicesSplitSlide, EduServicesSplitSchema, EduServicesSplitId, EduServicesSplitName, EduServicesSplitDesc, "education", "EducationServicesSplitSlide"),
     createTemplateEntry(EducationStatisticsGridSlide, EduStatisticsGridSchema, EduStatisticsGridId, EduStatisticsGridName, EduStatisticsGridDesc, "education", "EducationStatisticsGridSlide"),
     createTemplateEntry(EducationTimelineSlide, EduTimelineSchema, EduTimelineId, EduTimelineName, EduTimelineDesc, "education", "EducationTimelineSlide"),
+];
+
+export const productOverviewTemplates: TemplateWithData[] = [
+    createTemplateEntry(CoverSlide, PoCoverSchema, PoCoverId, PoCoverName, PoCoverDesc, "product-overview", "CoverSlide"),
+    createTemplateEntry(TableOfContentSlide, PoTableOfContentSchema, PoTableOfContentId, PoTableOfContentName, PoTableOfContentDesc, "product-overview", "TableOfContentSlide"),
+    createTemplateEntry(IntroductionSlide, PoIntroductionSchema, PoIntroductionId, PoIntroductionName, PoIntroductionDesc, "product-overview", "IntroductionSlide"),
+    createTemplateEntry(MissionVisionSlide, PoMissionVisionSchema, PoMissionVisionId, PoMissionVisionName, PoMissionVisionDesc, "product-overview", "MissionVisionSlide"),
+    createTemplateEntry(MarketOpportunitySlide, PoMarketOpportunitySchema, PoMarketOpportunityId, PoMarketOpportunityName, PoMarketOpportunityDesc, "product-overview", "MarketOpportunitySlide"),
+    createTemplateEntry(BusinessChallengesGridSlide, PoBizChallengesGridSchema, PoBizChallengesGridId, PoBizChallengesGridName, PoBizChallengesGridDesc, "product-overview", "BusinessChallengesGridSlide"),
+    createTemplateEntry(BusinessChallengesCardsSlide, PoBizChallengesCardsSchema, PoBizChallengesCardsId, PoBizChallengesCardsName, PoBizChallengesCardsDesc, "product-overview", "BusinessChallengesCardsSlide"),
+    createTemplateEntry(OurServicesSlide, PoOurServicesSchema, PoOurServicesId, PoOurServicesName, PoOurServicesDesc, "product-overview", "OurServicesSlide"),
+    createTemplateEntry(ProcessSlide, PoProcessSchema, PoProcessId, PoProcessName, PoProcessDesc, "product-overview", "ProcessSlide"),
+    createTemplateEntry(ComparisonChartSlide, PoComparisonChartSchema, PoComparisonChartId, PoComparisonChartName, PoComparisonChartDesc, "product-overview", "ComparisonChartSlide"),
+    createTemplateEntry(ComparisonTableWithTextSlide, PoComparisonTableSchema, PoComparisonTableId, PoComparisonTableName, PoComparisonTableDesc, "product-overview", "ComparisonTableWithTextSlide"),
+    createTemplateEntry(KpiCardsSlide, PoKpiCardsSchema, PoKpiCardsId, PoKpiCardsName, PoKpiCardsDesc, "product-overview", "KpiCardsSlide"),
+    createTemplateEntry(ReportSnapshotSlide, PoReportSnapshotSchema, PoReportSnapshotId, PoReportSnapshotName, PoReportSnapshotDesc, "product-overview", "ReportSnapshotSlide"),
+    createTemplateEntry(PricingPlanSlide, PoPricingPlanSchema, PoPricingPlanId, PoPricingPlanName, PoPricingPlanDesc, "product-overview", "PricingPlanSlide"),
+    createTemplateEntry(MeetTeamSlide, PoMeetTeamSchema, PoMeetTeamId, PoMeetTeamName, PoMeetTeamDesc, "product-overview", "MeetTeamSlide"),
+    createTemplateEntry(ImageGallerySlide, PoImageGallerySchema, PoImageGalleryId, PoImageGalleryName, PoImageGalleryDesc, "product-overview", "ImageGallerySlide"),
 ];
 
 export const neoGeneralTemplates: TemplateWithData[] = [
@@ -406,6 +444,7 @@ export const allLayouts: TemplateWithData[] = [
     ...swiftTemplates,
     ...codeTemplates,
     ...educationTemplates,
+    ...productOverviewTemplates,
 ];
 
 
@@ -481,6 +520,13 @@ export const templates: TemplateLayoutsWithSettings[] = [
         description: educationSettings.description,
         settings: educationSettings as TemplateGroupSettings,
         layouts: educationTemplates,
+    },
+    {
+        id: "product-overview",
+        name: "Product Overview",
+        description: productOverviewSettings.description,
+        settings: productOverviewSettings as TemplateGroupSettings,
+        layouts: productOverviewTemplates,
     },
 ];
 
