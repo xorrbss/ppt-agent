@@ -229,17 +229,21 @@ export const Schema = z.object({
 
 export type SchemaType = z.infer<typeof Schema>;
 
-const MINI_BAR_DARK = "#0B4B40";
-const MINI_BAR_LIGHT = "#CED3D1";
-const DONUT_COLORS = ["#0B4B40", "#4B6B61", "#7B938C"];
-const KPI_ICON_BG = "#063C73";
+const MINI_BAR_DARK = "var(--graph-0,#0B4B40)";
+const MINI_BAR_LIGHT = "var(--graph-1,#CED3D1)";
+const DONUT_COLORS = [
+  "var(--graph-0,#0B4B40)",
+  "var(--graph-1,#4B6B61)",
+  "var(--graph-2,#7B938C)",
+];
+const KPI_ICON_BG = "var(--graph-3,#063C73)";
 
 const PulseIcon = () => (
   <svg viewBox="0 0 24 24" className="h-[22px] w-[22px]" aria-hidden="true">
     <path
       d="M2.5 12h4.6l1.7-4.4 3.1 9 2.7-6.2h6.9"
       fill="none"
-      stroke="#ffffff"
+      stroke="var(--primary-text,#ffffff)"
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="2"
@@ -254,8 +258,16 @@ const renderDonutPercentLabel = ({ cx, cy, midAngle, outerRadius, percent }: any
 
   return (
     <g>
-      <circle cx={x} cy={y} r={16} fill="#ECEAF8" />
-      <text x={x} y={y} style={{ padding: '4px' }} textAnchor="middle" fill="#2C2B39" fontSize={10} fontWeight={600}>
+      <circle cx={x} cy={y} r={16} fill="var(--card-color,#ECEAF8)" />
+      <text
+        x={x}
+        y={y}
+        style={{ padding: "4px" }}
+        textAnchor="middle"
+        fill="var(--background-text,#2C2B39)"
+        fontSize={10}
+        fontWeight={600}
+      >
         {`${Math.round((percent ?? 0) * 100)}%`}
       </text>
     </g>
@@ -322,7 +334,10 @@ const ReportSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
   return (
     <div
       className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
-      style={{ backgroundColor: "#D7DEDB" }}
+      style={{
+        backgroundColor: "var(--background-color,#D7DEDB)",
+        fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
+      }}
     >
       {sideImage?.__image_url__ && (
         <img
@@ -332,16 +347,25 @@ const ReportSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
         />
       )}
 
-      <div className="absolute left-[268px] top-[74px] text-[#083F37]">
+      <div
+        className="absolute left-[268px] top-[74px] text-[#083F37]"
+        style={{ color: "var(--primary-color,#083F37)" }}
+      >
         <h2 className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px]">
           {title}
         </h2>
 
         <div className="mt-[14px] w-[560px]">
-          <p className="text-[20px] font-semibold tracking-[2.074px] text-[#083F37]">
+          <p
+            className="text-[20px] font-semibold tracking-[2.074px] text-[#083F37]"
+            style={{ color: "var(--primary-color,#083F37)" }}
+          >
             {taglineLabel}
           </p>
-          <p className="mt-[12px] text-[24px] leading-[1.11] text-[#083F37]/75">
+          <p
+            className="mt-[12px] text-[24px] leading-[1.11] text-[#083F37]/75"
+            style={{ color: "var(--background-text,#083F37BF)" }}
+          >
             {taglineBody}
           </p>
         </div>
@@ -350,8 +374,14 @@ const ReportSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
       <div
         className={`absolute bottom-[50px] left-[266px] w-[580px] bg-[#F3F3F3] px-[28px] pb-[18px] pt-[20px] ${activeChartStyle === "mini-bars" ? "h-[308px]" : "h-[350px]"
           }`}
+        style={{ backgroundColor: "var(--card-color,#F3F3F3)" }}
       >
-        <p className="mt-[14px] text-[32px] font-normal leading-[1.1] text-[#15342D]">{chartTitle}</p>
+        <p
+          className="mt-[14px] text-[32px] font-normal leading-[1.1] text-[#15342D]"
+          style={{ color: "var(--primary-color,#15342D)" }}
+        >
+          {chartTitle}
+        </p>
 
         {activeChartStyle === "mini-bars" && (
           <>
@@ -362,7 +392,7 @@ const ReportSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
                   margin={{ top: 0, right: 8, left: -6, bottom: 0 }}
                   barCategoryGap={16}
                 >
-                  <CartesianGrid vertical={false} stroke="#D7DCDA" strokeDasharray="3 3" />
+                  <CartesianGrid vertical={false} stroke="var(--stroke,#D7DCDA)" strokeDasharray="3 3" />
                   <XAxis dataKey="label" tick={false} axisLine={false} tickLine={false} />
                   <YAxis
                     width={42}
@@ -371,7 +401,7 @@ const ReportSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
                     tickFormatter={(value) => `$${value}`}
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: "#6C7271", fontSize: 10 }}
+                    tick={{ fill: "var(--background-text,#6C7271)", fontSize: 10 }}
                   />
                   <Bar
                     dataKey="secondary"
@@ -392,8 +422,18 @@ const ReportSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
             </div>
 
             <div className="mt-[14px] flex items-center justify-between ">
-              <p className="text-[#6D7371] text-[18px]">{footerLabel}</p>
-              <p className="font-medium text-[#15342D] text-[18px]">{footerValue}</p>
+              <p
+                className="text-[#6D7371] text-[18px]"
+                style={{ color: "var(--background-text,#6D7371)" }}
+              >
+                {footerLabel}
+              </p>
+              <p
+                className="font-medium text-[#15342D] text-[18px]"
+                style={{ color: "var(--primary-color,#15342D)" }}
+              >
+                {footerValue}
+              </p>
             </div>
           </>
         )}
@@ -431,11 +471,19 @@ const ReportSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
                         className="h-[14px] w-[14px] rounded-full"
                         style={{ backgroundColor: DONUT_COLORS[index % DONUT_COLORS.length] }}
                       />
-                      <p className="text-[18px] font-bold  text-[#767676]">
+                      <p
+                        className="text-[18px] font-bold  text-[#767676]"
+                        style={{ color: "var(--background-text,#767676)" }}
+                      >
                         {legendLabels?.[index] ?? entry.name}
                       </p>
                     </div>
-                    <p className="text-[18px] font-bold  text-[#404040]">{percent}%</p>
+                    <p
+                      className="text-[18px] font-bold  text-[#404040]"
+                      style={{ color: "var(--background-text,#404040)" }}
+                    >
+                      {percent}%
+                    </p>
                   </div>
                 );
               })}
@@ -452,18 +500,18 @@ const ReportSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
                   margin={{ top: 12, right: 6, left: -12, bottom: 0 }}
                   barCategoryGap={20}
                 >
-                  <CartesianGrid vertical={false} stroke="#D7DCDA" />
+                  <CartesianGrid vertical={false} stroke="var(--stroke,#D7DCDA)" />
                   <XAxis
                     dataKey="label"
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: "#42484A", fontSize: 10 }}
+                    tick={{ fill: "var(--background-text,#42484A)", fontSize: 10 }}
                   />
                   <YAxis
                     axisLine={false}
                     tickLine={false}
 
-                    tick={{ fill: "#566061", fontSize: 10 }}
+                    tick={{ fill: "var(--background-text,#566061)", fontSize: 10 }}
                   />
                   <Bar
                     dataKey="optionA"
@@ -472,16 +520,26 @@ const ReportSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
                     maxBarSize={20}
                     isAnimationActive={false}
                   >
-                    <LabelList dataKey="optionA" position="top" fill="#5B6463" fontSize={9} />
+                    <LabelList
+                      dataKey="optionA"
+                      position="top"
+                      fill="var(--background-text,#5B6463)"
+                      fontSize={9}
+                    />
                   </Bar>
                   <Bar
                     dataKey="optionB"
-                    fill="#8A9A96"
+                    fill="var(--graph-2,#8A9A96)"
                     radius={[4, 4, 0, 0]}
                     maxBarSize={20}
                     isAnimationActive={false}
                   >
-                    <LabelList dataKey="optionB" position="top" fill="#5B6463" fontSize={9} />
+                    <LabelList
+                      dataKey="optionB"
+                      position="top"
+                      fill="var(--background-text,#5B6463)"
+                      fontSize={9}
+                    />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -489,12 +547,28 @@ const ReportSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
 
             <div className="ml-[24px] space-y-[24px]">
               <div className="flex items-center gap-[10px]">
-                <span className="h-[14px] w-[14px] rounded-full bg-[#0B4B40]" />
-                <p className="text-[18px] font-medium leading-[1] text-[#6A6B6E]">{legendLabels?.[0] ?? "Option A"}</p>
+                <span
+                  className="h-[14px] w-[14px] rounded-full bg-[#0B4B40]"
+                  style={{ backgroundColor: "var(--graph-0,#0B4B40)" }}
+                />
+                <p
+                  className="text-[18px] font-medium leading-[1] text-[#6A6B6E]"
+                  style={{ color: "var(--background-text,#6A6B6E)" }}
+                >
+                  {legendLabels?.[0] ?? "Option A"}
+                </p>
               </div>
               <div className="flex items-center gap-[10px]">
-                <span className="h-[14px] w-[14px] rounded-full bg-[#8A9A96]" />
-                <p className="text-[18px] font-medium leading-[1] text-[#6A6B6E]">{legendLabels?.[1] ?? "Option B"}</p>
+                <span
+                  className="h-[14px] w-[14px] rounded-full bg-[#8A9A96]"
+                  style={{ backgroundColor: "var(--graph-2,#8A9A96)" }}
+                />
+                <p
+                  className="text-[18px] font-medium leading-[1] text-[#6A6B6E]"
+                  style={{ color: "var(--background-text,#6A6B6E)" }}
+                >
+                  {legendLabels?.[1] ?? "Option B"}
+                </p>
               </div>
             </div>
           </div>
@@ -505,20 +579,33 @@ const ReportSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
             <div className="h-[210px] w-[362px]">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={trendLines ?? []} margin={{ top: 12, right: 6, left: -6, bottom: 16 }}>
-                  <CartesianGrid vertical={false} stroke="#D7DCDA" />
+                  <CartesianGrid vertical={false} stroke="var(--stroke,#D7DCDA)" />
                   <XAxis
                     dataKey="label"
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: "#42484A", fontSize: 10 }}
-                    label={{ value: xAxisName, position: "insideBottom", offset: -6, fill: "#535B5C", fontSize: 10 }}
+                    tick={{ fill: "var(--background-text,#42484A)", fontSize: 10 }}
+                    label={{
+                      value: xAxisName,
+                      position: "insideBottom",
+                      offset: -6,
+                      fill: "var(--background-text,#535B5C)",
+                      fontSize: 10,
+                    }}
                   />
                   <YAxis
                     axisLine={false}
                     tickLine={false}
 
-                    tick={{ fill: "#566061", fontSize: 10 }}
-                    label={{ value: yAxisName, angle: -90, position: "insideLeft", fill: "#535B5C", fontSize: 10, dx: -8 }}
+                    tick={{ fill: "var(--background-text,#566061)", fontSize: 10 }}
+                    label={{
+                      value: yAxisName,
+                      angle: -90,
+                      position: "insideLeft",
+                      fill: "var(--background-text,#535B5C)",
+                      fontSize: 10,
+                      dx: -8,
+                    }}
                   />
                   <Line
                     type="monotone"
@@ -531,7 +618,7 @@ const ReportSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
                   <Line
                     type="monotone"
                     dataKey="optionB"
-                    stroke="#8A9A96"
+                    stroke="var(--graph-2,#8A9A96)"
                     strokeWidth={2}
                     dot={false}
                     isAnimationActive={false}
@@ -542,12 +629,28 @@ const ReportSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
 
             <div className="ml-[18px] space-y-[24px]">
               <div className="flex items-center gap-[10px]">
-                <span className="h-[14px] w-[14px] rounded-full bg-[#0B4B40]" />
-                <p className="text-[18px] font-medium leading-[1] text-[#6A6B6E]">{legendLabels?.[0] ?? "Option A"}</p>
+                <span
+                  className="h-[14px] w-[14px] rounded-full bg-[#0B4B40]"
+                  style={{ backgroundColor: "var(--graph-0,#0B4B40)" }}
+                />
+                <p
+                  className="text-[18px] font-medium leading-[1] text-[#6A6B6E]"
+                  style={{ color: "var(--background-text,#6A6B6E)" }}
+                >
+                  {legendLabels?.[0] ?? "Option A"}
+                </p>
               </div>
               <div className="flex items-center gap-[10px]">
-                <span className="h-[14px] w-[14px] rounded-full bg-[#8A9A96]" />
-                <p className="text-[18px] font-medium leading-[1] text-[#6A6B6E]">{legendLabels?.[1] ?? "Option B"}</p>
+                <span
+                  className="h-[14px] w-[14px] rounded-full bg-[#8A9A96]"
+                  style={{ backgroundColor: "var(--graph-2,#8A9A96)" }}
+                />
+                <p
+                  className="text-[18px] font-medium leading-[1] text-[#6A6B6E]"
+                  style={{ color: "var(--background-text,#6A6B6E)" }}
+                >
+                  {legendLabels?.[1] ?? "Option B"}
+                </p>
               </div>
             </div>
           </div>
@@ -560,9 +663,16 @@ const ReportSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
       >
         <div className="flex flex-col gap-[24px]">
           {visibleMetricCards.map((metric, index) => (
-            <div key={`${metric.value}-${index}`} className="bg-[#F3F3F3] px-[33px] py-[24px]">
+            <div
+              key={`${metric.value}-${index}`}
+              className="bg-[#F3F3F3] px-[33px] py-[24px]"
+              style={{ backgroundColor: "var(--card-color,#F3F3F3)" }}
+            >
               <div className="flex items-center gap-[14px]">
-                <div className="flex h-[56px] w-[56px] items-center justify-center rounded-full" style={{ backgroundColor: "#15342D" }}>
+                <div
+                  className="flex h-[56px] w-[56px] items-center justify-center rounded-full"
+                  style={{ backgroundColor: KPI_ICON_BG }}
+                >
                   {usePulseFallback ? (
                     <PulseIcon />
                   ) : (
@@ -574,9 +684,19 @@ const ReportSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
                     />
                   )}
                 </div>
-                <p className="text-[48px] font-semibold leading-[1] text-[#113F37]">{metric.value}</p>
+                <p
+                  className="text-[48px] font-semibold leading-[1] text-[#113F37]"
+                  style={{ color: "var(--primary-color,#113F37)" }}
+                >
+                  {metric.value}
+                </p>
               </div>
-              <p className="mt-[18px] text-[28px] leading-[1.08] text-[#113F37]">{metric.body}</p>
+              <p
+                className="mt-[18px] text-[28px] leading-[1.08] text-[#113F37]"
+                style={{ color: "var(--primary-color,#113F37)" }}
+              >
+                {metric.body}
+              </p>
             </div>
           ))}
         </div>

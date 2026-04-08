@@ -80,7 +80,13 @@ function StatPill({
 
 
   return (
-    <div className=" h-[438px] w-[248px] overflow-hidden rounded-[127px] bg-[#157CFF] px-[28px] py-[74px] text-center text-white">
+    <div
+      className=" h-[438px] w-[248px] overflow-hidden rounded-[127px] bg-[#157CFF] px-[28px] py-[74px] text-center text-white"
+      style={{
+        backgroundColor: "var(--primary-color,#157CFF)",
+        color: "var(--primary-text,#ffffff)",
+      }}
+    >
 
       {metrics.map((metric, index) => (
         <Fragment key={`${metric.value}-${metric.label}-${index}`}>
@@ -92,14 +98,20 @@ function StatPill({
               {metric.value}
             </p>
             <p className="mt-[6px] text-[20px] font-medium leading-none">{metric.label}</p>
-            <p className=" text-[20px] leading-[1.15] text-white/90">
+            <p className=" text-[20px] leading-[1.15] text-white/90" style={{ color: "var(--primary-text,#ffffff)", opacity: 0.9 }}>
               {metric.description}
             </p>
           </div>
           {index === 0 && <div className="py-[22px]">
 
             <svg xmlns="http://www.w3.org/2000/svg" width="181" height="1" viewBox="0 0 181 1" fill="none">
-              <path opacity="0.2" d="M0 0.487305H180.122" stroke="white" strokeWidth="0.974913" strokeDasharray="3.9 1.95" />
+              <path
+                opacity="0.2"
+                d="M0 0.487305H180.122"
+                stroke="var(--primary-text,#ffffff)"
+                strokeWidth="0.974913"
+                strokeDasharray="3.9 1.95"
+              />
             </svg>
           </div>
           }
@@ -115,14 +127,23 @@ const PerformanceSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
   const { title, columns } = data;
 
   return (
-    <div className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#f9f8f8]">
+    <div
+      className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#f9f8f8]"
+      style={{
+        backgroundColor: "var(--background-color,#f9f8f8)",
+        fontFamily: "var(--body-font-family,Nunito Sans)",
+      }}
+    >
       <div
         className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#157CFF]"
-        style={{ height: 185 }}
+        style={{ height: 185, backgroundColor: "var(--primary-color,#157CFF)" }}
       />
 
       <div className="px-[64px] pt-[48px]">
-        <h2 className="text-[80px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]">
+        <h2
+          className="text-[80px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]"
+          style={{ color: "var(--background-text,#232223)" }}
+        >
           {title}
         </h2>
       </div>

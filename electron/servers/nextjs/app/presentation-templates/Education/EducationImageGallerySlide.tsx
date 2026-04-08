@@ -33,7 +33,13 @@ const EducationImageGallerySlide = ({ data }: { data: Partial<SchemaType> }) => 
   const { title, body, galleryImages } = data;
 
   return (
-    <div className="relative h-[720px] w-[1280px] overflow-hidden bg-[#E6E7E8]">
+    <div
+      className="relative h-[720px] w-[1280px] overflow-hidden"
+      style={{
+        backgroundColor: "var(--background-color,#E6E7E8)",
+        fontFamily: "var(--body-font-family,'Times New Roman')",
+      }}
+    >
       <div className="grid h-full items-end grid-cols-[590px_1fr]">
         <div className="grid h-full grid-cols-2 grid-rows-[245px_245px_230px] gap-[2px]">
           <img
@@ -64,10 +70,10 @@ const EducationImageGallerySlide = ({ data }: { data: Partial<SchemaType> }) => 
         </div>
 
         <div className="px-[64px] pb-[56px] ">
-          <h2 className="font-serif text-[64px] font-medium leading-[98%]  text-[#101C3D]">
+          <h2 className="font-serif text-[64px] font-medium leading-[98%]" style={{ color: "var(--primary-color,#101C3D)" }}>
             {title}
           </h2>
-          <p className="mt-[37px] text-[22px]  text-[#34394C]">
+          <p className="mt-[37px] text-[22px]" style={{ color: "var(--background-text,#34394C)" }}>
             {body}
           </p>
         </div>

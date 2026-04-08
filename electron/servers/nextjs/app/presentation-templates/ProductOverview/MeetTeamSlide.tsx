@@ -34,14 +34,14 @@ export const Schema = z.object({
   taglineLabel: z.string().min(3).max(10).default("TAGLINE").meta({
     description: "Small heading above team description.",
   }),
-  taglineBody: z.string().min(50).max(100).default(
+  taglineBody: z.string().max(70).default(
     "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea."
   ).meta({
     description: "Short descriptive paragraph at top-right.",
   }),
   members: z
     .array(MemberSchema)
-    .min(4)
+
     .max(4)
     .default([
       {
@@ -94,12 +94,15 @@ const MeetTeamSlide = ({ data }: { data: Partial<SchemaType> }) => {
   return (
     <div
       className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
-      style={{ backgroundColor: "#DAE1DE" }}
+      style={{
+        backgroundColor: "var(--background-color,#DAE1DE)",
+        fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
+      }}
     >
       <div className="flex items-start justify-between px-[64px] pt-[76px]">
         <h2
           className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
-          style={{ color: "#15342D" }}
+          style={{ color: "var(--primary-color,#15342D)" }}
         >
           {title}
         </h2>
@@ -107,11 +110,16 @@ const MeetTeamSlide = ({ data }: { data: Partial<SchemaType> }) => {
         <div className="w-[520px]">
           <p
             className="text-[20px] font-semibold tracking-[2.074px] text-white"
-            style={{ color: "#15342D" }}
+            style={{ color: "var(--primary-color,#15342D)" }}
           >
             {taglineLabel}
           </p>
-          <p className="mt-[14px] text-[24px] font-normal  text-[#15342DCC]">{taglineBody}</p>
+          <p
+            className="mt-[14px] text-[24px] font-normal  text-[#15342DCC]"
+            style={{ color: "var(--background-text,#15342DCC)" }}
+          >
+            {taglineBody}
+          </p>
         </div>
       </div>
 
@@ -125,17 +133,29 @@ const MeetTeamSlide = ({ data }: { data: Partial<SchemaType> }) => {
             />
             <div
               className="h-[154px] p-[33px]"
-              style={{ backgroundColor: member.highlighted ? "#15342D" : "#FEFEFF" }}
+              style={{
+                backgroundColor: member.highlighted
+                  ? "var(--primary-color,#15342D)"
+                  : "var(--card-color,#FEFEFF)",
+              }}
             >
               <p
                 className="text-[20px] font-semibold tracking-[2.074px] text-white"
-                style={{ color: member.highlighted ? "#edf2f1" : "#15342D" }}
+                style={{
+                  color: member.highlighted
+                    ? "var(--primary-text,#edf2f1)"
+                    : "var(--primary-color,#15342D)",
+                }}
               >
                 {member.title}
               </p>
               <p
                 className="mt-[20px] text-[28px] font-normal  text-white"
-                style={{ color: member.highlighted ? "#edf2f1" : "#15342D" }}
+                style={{
+                  color: member.highlighted
+                    ? "var(--primary-text,#edf2f1)"
+                    : "var(--primary-color,#15342D)",
+                }}
               >
                 {member.name}
               </p>

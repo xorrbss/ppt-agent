@@ -77,11 +77,25 @@ const DataAnalysisBarSlide = ({ data }: { data: Partial<SchemaType> }) => {
   const series = chartData?.series ?? [];
 
   return (
-    <div className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#f9f8f8]">
-      <div className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#4d4ef3]" style={{ height: 185 }} />
+    <div
+      className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#f9f8f8]"
+      style={{
+        backgroundColor: "var(--background-color,#f9f8f8)",
+        fontFamily: "var(--body-font-family,Nunito Sans)",
+      }}
+    >
+      <div
+        className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#4d4ef3]"
+        style={{ height: 185, backgroundColor: "var(--graph-0,#4d4ef3)" }}
+      />
 
       <div className="px-[64px] pt-[48px]">
-        <h2 className="text-[80px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]">{title}</h2>
+        <h2
+          className="text-[80px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]"
+          style={{ color: "var(--background-text,#232223)" }}
+        >
+          {title}
+        </h2>
       </div>
 
       <div className="flex justify-between px-[85px] pt-[44px]">
@@ -89,7 +103,13 @@ const DataAnalysisBarSlide = ({ data }: { data: Partial<SchemaType> }) => {
           {items?.map((item, index) => (
             <div key={`${item.title}-${index}`}>
               <div className="flex items-center gap-[14px]">
-                <div className="flex h-[55px] w-[55px] items-center justify-center rounded-full bg-[#4d4ef3] text-white">
+                <div
+                  className="flex h-[55px] w-[55px] items-center justify-center rounded-full bg-[#4d4ef3] text-white"
+                  style={{
+                    backgroundColor: "var(--graph-0,#4d4ef3)",
+                    color: "var(--primary-text,#ffffff)",
+                  }}
+                >
                   <img
                     src={itemIcon?.__icon_url__}
                     alt={itemIcon?.__icon_query__}
@@ -97,9 +117,19 @@ const DataAnalysisBarSlide = ({ data }: { data: Partial<SchemaType> }) => {
                     style={{ filter: "brightness(0) invert(1)" }}
                   />
                 </div>
-                <h3 className="text-[20px] font-medium tracking-[2.074px] text-[#232223]">{item.title}</h3>
+                <h3
+                  className="text-[20px] font-medium tracking-[2.074px] text-[#232223]"
+                  style={{ color: "var(--background-text,#232223)" }}
+                >
+                  {item.title}
+                </h3>
               </div>
-              <p className="mt-[20px] text-[24px] leading-[26.667px] text-[#232223]">{item.description}</p>
+              <p
+                className="mt-[20px] text-[24px] leading-[26.667px] text-[#232223]"
+                style={{ color: "var(--background-text,#232223)" }}
+              >
+                {item.description}
+              </p>
             </div>
           ))}
         </div>
@@ -110,8 +140,14 @@ const DataAnalysisBarSlide = ({ data }: { data: Partial<SchemaType> }) => {
               <FlexibleReportChart chartType={chartType} data={rows} series={series} colorFallback="#4d4ef3" />
             </ResponsiveContainer>
           </div>
-          <div className="mt-[12px] flex items-center gap-[10px] text-[24px] tracking-[-0.03em] text-[#4d4ef3]">
-            <span className="h-[12px] w-[12px] rounded-full bg-[#4d4ef3]" />
+          <div
+            className="mt-[12px] flex items-center gap-[10px] text-[24px] tracking-[-0.03em] text-[#4d4ef3]"
+            style={{ color: "var(--graph-0,#4d4ef3)" }}
+          >
+            <span
+              className="h-[12px] w-[12px] rounded-full bg-[#4d4ef3]"
+              style={{ backgroundColor: "var(--graph-0,#4d4ef3)" }}
+            />
             <p>{legendLabel}</p>
           </div>
         </div>

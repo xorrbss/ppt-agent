@@ -56,16 +56,22 @@ const EducationAboutSlide = ({ data }: { data: Partial<SchemaType> }) => {
   return (<>
     <link href="https://fonts.googleapis.com/css2?family=Corben:wght@400;700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet" />
 
-    <div className="relative h-[720px] w-[1280px] overflow-hidden bg-[#efeff1]">
+    <div
+      className="relative h-[720px] w-[1280px] overflow-hidden"
+      style={{
+        backgroundColor: "var(--background-color,#efeff1)",
+        fontFamily: "var(--body-font-family,'Times New Roman')",
+      }}
+    >
       <div className="grid  items-end grid-cols-[1fr_1fr]">
         <div className="px-[53px] pb-[56px] ">
-          <h2 className="font-serif text-[64px] leading-[98%] tracking-[-0.02em] text-[#101C3D]">
+          <h2 className="font-serif text-[64px] leading-[98%] tracking-[-0.02em]" style={{ color: "var(--primary-color,#101C3D)" }}>
             {data.companyName}
           </h2>
-          <p className="mt-[30px] max-w-[610px] text-[22px] font-semibold leading-[1.24] text-[#34394C]">
+          <p className="mt-[30px] max-w-[610px] text-[22px] font-semibold leading-[1.24]" style={{ color: "var(--background-text,#34394C)" }}>
             {data.intro}
           </p>
-          <p className="mt-[18px] max-w-[620px] text-[22px]  leading-[1.28] text-[#46474C]">
+          <p className="mt-[18px] max-w-[620px] text-[22px] leading-[1.28]" style={{ color: "var(--background-text,#46474C)" }}>
             {data.body}
           </p>
         </div>
@@ -77,8 +83,15 @@ const EducationAboutSlide = ({ data }: { data: Partial<SchemaType> }) => {
               alt={data.topFeatureImage?.__image_prompt__}
               className="absolute inset-0 h-full w-full object-cover z-1 "
             />
-            <div className=" w-1/2 bg-[#28256f]/60 z-10  flex justify-center items-center">
-              <p className=" text-[24px] leading-[1.22] text-[#f5f7ff] px-[42px]">
+            <div className="w-1/2 z-10 flex justify-center items-center relative">
+              <div
+                className="absolute inset-0"
+                style={{
+                  backgroundColor: "var(--primary-color,#28256f)",
+                  opacity: 0.6,
+                }}
+              />
+              <p className="relative z-10 text-[24px] leading-[1.22] px-[42px]" style={{ color: "var(--primary-text,#f5f7ff)" }}>
                 {data.topPanelText}
               </p>
             </div>
@@ -96,8 +109,15 @@ const EducationAboutSlide = ({ data }: { data: Partial<SchemaType> }) => {
             <div className=" w-1/2 ">
 
             </div>
-            <div className=" w-1/2 bg-[#28256f]/60 z-10 flex justify-center items-center">
-              <p className=" text-[24px] leading-[1.22] text-[#f5f7ff] px-[42px]">
+            <div className="w-1/2 z-10 flex justify-center items-center relative">
+              <div
+                className="absolute inset-0"
+                style={{
+                  backgroundColor: "var(--primary-color,#28256f)",
+                  opacity: 0.6,
+                }}
+              />
+              <p className="relative z-10 text-[24px] leading-[1.22] px-[42px]" style={{ color: "var(--primary-text,#f5f7ff)" }}>
                 {data.bottomPanelText}
               </p>
             </div>

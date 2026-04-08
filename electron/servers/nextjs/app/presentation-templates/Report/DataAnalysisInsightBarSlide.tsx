@@ -66,17 +66,37 @@ const DataAnalysisInsightBarSlide = ({
   const series = data?.chartData?.series ?? [];
 
   return (
-    <div className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#f9f8f8]">
-      <div className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#157CFF]" style={{ height: 185 }} />
+    <div
+      className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#f9f8f8]"
+      style={{
+        backgroundColor: "var(--background-color,#f9f8f8)",
+        fontFamily: "var(--body-font-family,Nunito Sans)",
+      }}
+    >
+      <div
+        className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#157CFF]"
+        style={{ height: 185, backgroundColor: "var(--primary-color,#157CFF)" }}
+      />
 
       <div className="px-[64px] pt-[48px]">
-        <h2 className="text-[80px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]">{data.title}</h2>
+        <h2
+          className="text-[80px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]"
+          style={{ color: "var(--background-text,#232223)" }}
+        >
+          {data.title}
+        </h2>
       </div>
 
       <div className="flex justify-between px-[74px] gap-10 pt-[96px]">
         <div className=" pt-[24px] w-1/2">
           <div className="flex items-center gap-[14px]">
-            <div className="flex h-[55px] w-[55px] items-center justify-center rounded-full bg-[#157CFF] text-white">
+            <div
+              className="flex h-[55px] w-[55px] items-center justify-center rounded-full bg-[#157CFF] text-white"
+              style={{
+                backgroundColor: "var(--primary-color,#157CFF)",
+                color: "var(--primary-text,#ffffff)",
+              }}
+            >
               <img
                 src={data.insightIcon?.__icon_url__}
                 alt={data.insightIcon?.__icon_query__}
@@ -85,15 +105,26 @@ const DataAnalysisInsightBarSlide = ({
               />
             </div>
           </div>
-          <p className="mt-[20px] text-[24px] leading-[26.667px] text-[#232223]">{data.insightBody}</p>
+          <p
+            className="mt-[20px] text-[24px] leading-[26.667px] text-[#232223]"
+            style={{ color: "var(--background-text,#232223)" }}
+          >
+            {data.insightBody}
+          </p>
         </div>
 
         <div className="ml-[28px] flex w-1/2 flex-col items-center">
           <ResponsiveContainer height={400} width="100%">
             <FlexibleReportChart chartType={chartType} data={chartData} series={series} colorFallback="#157CFF" />
           </ResponsiveContainer>
-          <div className="mt-[12px] flex items-center gap-[10px] text-[24px] tracking-[-0.03em] text-[#157CFF]">
-            <span className="h-[12px] w-[12px] rounded-full bg-[#157CFF]" />
+          <div
+            className="mt-[12px] flex items-center gap-[10px] text-[24px] tracking-[-0.03em] text-[#157CFF]"
+            style={{ color: "var(--primary-color,#157CFF)" }}
+          >
+            <span
+              className="h-[12px] w-[12px] rounded-full bg-[#157CFF]"
+              style={{ backgroundColor: "var(--primary-color,#157CFF)" }}
+            />
             <p>{data.legendLabel}</p>
           </div>
         </div>

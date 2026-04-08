@@ -10,7 +10,7 @@ const ServiceSchema = z.object({
   heading: z.string().min(4).max(12).meta({
     description: "Service card heading.",
   }),
-  body: z.string().min(20).max(44).meta({
+  body: z.string().max(30).meta({
     description: "Service card short description.",
   }),
   dark: z.boolean().default(false).meta({
@@ -19,13 +19,13 @@ const ServiceSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().min(6).max(18).default("Our Services").meta({
+  title: z.string().min(6).max(12).default("Our Services").meta({
     description: "Main heading shown at the top-left.",
   }),
   taglineLabel: z.string().min(3).max(10).default("TAGLINE").meta({
     description: "Small label above left paragraph.",
   }),
-  taglineBody: z.string().min(40).max(100).default(
+  taglineBody: z.string().max(30).default(
     "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea."
   ).meta({
     description: "Supporting text shown beneath the tagline label.",
@@ -42,7 +42,7 @@ export const Schema = z.object({
   }),
   services: z
     .array(ServiceSchema)
-    .min(4)
+
     .max(4)
     .default([
       { heading: "HEADING 1", body: "Lorem ipsum dolor sit amet, consectetur", dark: false },
@@ -63,14 +63,17 @@ const OurServicesSlide = ({ data }: { data: Partial<SchemaType> }) => {
   return (
     <div
       className="relative h-[720px] w-[1280px] flex items-end pb-[56px]  justify-between overflow-hidden rounded-[24px]"
-      style={{ backgroundColor: "#DAE1DE" }}
+      style={{
+        backgroundColor: "var(--background-color,#DAE1DE)",
+        fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
+      }}
     >
       <div className=" pt-[74px]">
         <div className="px-[68px]">
 
           <h2
             className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
-            style={{ color: "#15342D" }}
+            style={{ color: "var(--primary-color,#15342D)" }}
           >
             {title}
           </h2>
@@ -78,14 +81,22 @@ const OurServicesSlide = ({ data }: { data: Partial<SchemaType> }) => {
           <div className="mt-[26px] w-[560px]">
             <p
               className="text-[20px] font-semibold tracking-[2.074px] text-white"
-              style={{ color: "#15342D" }}
+              style={{ color: "var(--primary-color,#15342D)" }}
             >
               {taglineLabel}
             </p>
-            <p className="mt-[14px] text-[24px] font-normal  text-[#15342DCC]">{taglineBody}</p>
+            <p
+              className="mt-[14px] text-[24px] font-normal  text-[#15342DCC]"
+              style={{ color: "var(--background-text,#15342DCC)" }}
+            >
+              {taglineBody}
+            </p>
           </div>
         </div>
-        <div className="mt-[35px] h-[326px] w-[650px] bg-[#15342D]">
+        <div
+          className="mt-[35px] h-[326px] w-[650px] bg-[#15342D]"
+          style={{ backgroundColor: "var(--primary-color,#15342D)" }}
+        >
 
           {featureImage?.__image_url__ && (
             <img
@@ -104,16 +115,29 @@ const OurServicesSlide = ({ data }: { data: Partial<SchemaType> }) => {
           <div
             key={index}
             className=" p-[33px]"
-            style={{ backgroundColor: service.dark ? "#15342D" : "#ececee" }}
+            style={{
+              backgroundColor: service.dark
+                ? "var(--primary-color,#15342D)"
+                : "var(--card-color,#ececee)",
+            }}
           >
             <p
               className="text-[20px] font-semibold tracking-[2.074px] text-white"
-              style={{ color: service.dark ? "#edf2f1" : "#15342D" }}
+              style={{
+                color: service.dark
+                  ? "var(--primary-text,#edf2f1)"
+                  : "var(--primary-color,#15342D)",
+              }}
             >
               {service.heading}
             </p>
             <p
               className={`${service.dark ? "text-white" : "text-[#15342DCC]"} mt-[20px] text-[28px] font-normal`}
+              style={{
+                color: service.dark
+                  ? "var(--primary-text,#edf2f1)"
+                  : "var(--background-text,#15342DCC)",
+              }}
             >
               {service.body}
             </p>

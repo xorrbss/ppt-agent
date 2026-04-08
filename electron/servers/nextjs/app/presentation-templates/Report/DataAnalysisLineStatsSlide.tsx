@@ -88,18 +88,32 @@ type StatMetric = {
 
 function StatPill({ metrics }: { metrics: StatMetric[] }) {
   return (
-    <div className="h-[438px] w-[248px] overflow-hidden rounded-[127px] bg-[#157CFF] px-[28px] py-[74px] text-center text-white">
+    <div
+      className="h-[438px] w-[248px] overflow-hidden rounded-[127px] bg-[#157CFF] px-[28px] py-[74px] text-center text-white"
+      style={{
+        backgroundColor: "var(--primary-color,#157CFF)",
+        color: "var(--primary-text,#ffffff)",
+      }}
+    >
       {metrics.map((metric, index) => (
         <Fragment key={`${metric.value}-${metric.label}-${index}`}>
           <div key={`${metric.value}-${metric.label}-${index}`} className={``}>
             <p className="text-[55px] font-medium leading-[ 44.353px] tracking-[-1.09px]">{metric.value}</p>
             <p className="mt-[6px] text-[20px] font-medium leading-none">{metric.label}</p>
-            <p className="text-[20px] leading-[1.15] text-white/90">{metric.description}</p>
+            <p className="text-[20px] leading-[1.15] text-white/90" style={{ color: "var(--primary-text,#ffffff)", opacity: 0.9 }}>
+              {metric.description}
+            </p>
           </div>
           {index === 0 && (
             <div className="py-[22px]">
               <svg xmlns="http://www.w3.org/2000/svg" width="181" height="1" viewBox="0 0 181 1" fill="none">
-                <path opacity="0.2" d="M0 0.487305H180.122" stroke="white" strokeWidth="0.974913" strokeDasharray="3.9 1.95" />
+                <path
+                  opacity="0.2"
+                  d="M0 0.487305H180.122"
+                  stroke="var(--primary-text,#ffffff)"
+                  strokeWidth="0.974913"
+                  strokeDasharray="3.9 1.95"
+                />
               </svg>
             </div>
           )}
@@ -116,22 +130,39 @@ const DataAnalysisLineStatsSlide = ({ data }: { data: Partial<SchemaType> }) => 
   const series = chartData?.series ?? [];
 
   return (
-    <div className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#f9f8f8]">
-      <div className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#157CFF]" style={{ height: 185 }} />
+    <div
+      className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#f9f8f8]"
+      style={{
+        backgroundColor: "var(--background-color,#f9f8f8)",
+        fontFamily: "var(--body-font-family,Nunito Sans)",
+      }}
+    >
+      <div
+        className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#157CFF]"
+        style={{ height: 185, backgroundColor: "var(--primary-color,#157CFF)" }}
+      />
 
       <div className="px-[64px] pt-[48px]">
-        <h2 className="text-[80px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]">{title}</h2>
+        <h2
+          className="text-[80px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]"
+          style={{ color: "var(--background-text,#232223)" }}
+        >
+          {title}
+        </h2>
       </div>
 
       <div className="flex justify-between px-[74px] pt-[40px]">
         <div className="w-[474px]">
-          <div className="flex justify-center gap-[26px] text-[14px] text-[#353538]">
+          <div
+            className="flex justify-center gap-[26px] text-[14px] text-[#353538]"
+            style={{ color: "var(--background-text,#353538)" }}
+          >
             <span className="flex items-center gap-[8px]">
-              <span className="h-[2px] w-[20px] bg-[#9fb6ff]" />
+              <span className="h-[2px] w-[20px] bg-[#9fb6ff]" style={{ backgroundColor: "var(--graph-0,#9fb6ff)" }} />
               {seriesALabel}
             </span>
             <span className="flex items-center gap-[8px]">
-              <span className="h-[2px] w-[20px] bg-[#4d4ef3]" />
+              <span className="h-[2px] w-[20px] bg-[#4d4ef3]" style={{ backgroundColor: "var(--graph-1,#4d4ef3)" }} />
               {seriesBLabel}
             </span>
           </div>
@@ -143,13 +174,20 @@ const DataAnalysisLineStatsSlide = ({ data }: { data: Partial<SchemaType> }) => 
                 data={rows}
                 series={series}
                 colorFallback="#157CFF"
-                dualLineColors={["#9fb6ff", "#4d4ef3"]}
+                density="default"
+                dualLineColors={["var(--graph-0,#9fb6ff)", "var(--graph-1,#4d4ef3)"]}
               />
             </ResponsiveContainer>
           </div>
 
-          <div className="mt-[12px] flex items-center gap-[10px] text-center justify-center text-[24px] tracking-[-0.03em] text-[#157CFF]">
-            <span className="h-[12px] w-[12px] rounded-full bg-[#157CFF]" />
+          <div
+            className="mt-[12px] flex items-center gap-[10px] text-center justify-center text-[24px] tracking-[-0.03em] text-[#157CFF]"
+            style={{ color: "var(--primary-color,#157CFF)" }}
+          >
+            <span
+              className="h-[12px] w-[12px] rounded-full bg-[#157CFF]"
+              style={{ backgroundColor: "var(--primary-color,#157CFF)" }}
+            />
             <p>{data.legendLabel}</p>
           </div>
         </div>

@@ -51,16 +51,22 @@ const EducationStatisticsGridSlide = ({ data }: { data: Partial<SchemaType> }) =
 
 
   return (
-    <div className="relative h-[720px] w-[1280px] overflow-hidden bg-[#efeff1]">
+    <div
+      className="relative h-[720px] w-[1280px] overflow-hidden"
+      style={{
+        backgroundColor: "var(--background-color,#efeff1)",
+        fontFamily: "var(--body-font-family,'Times New Roman')",
+      }}
+    >
 
 
       <div className="relative z-10 grid h-full grid-cols-[490px_1fr]">
-        <div className="bg-[#f1efef] px-[44px] pb-[78px] pt-[96px]">
+        <div className="px-[44px] pb-[78px] pt-[96px]" style={{ backgroundColor: "var(--card-color,#f1efef)" }}>
           <div className="flex h-full flex-col justify-end">
-            <h2 className="font-serif text-[64px] leading-[98%] tracking-[-0.02em] text-[#1a1752]">
+            <h2 className="font-serif text-[64px] leading-[98%] tracking-[-0.02em]" style={{ color: "var(--primary-color,#1a1752)" }}>
               {data.title}
             </h2>
-            <p className="mt-[40px] max-w-[330px] text-[22px] leading-[1.24] text-[#34394C]">
+            <p className="mt-[40px] max-w-[330px] text-[22px] leading-[1.24]" style={{ color: "var(--background-text,#34394C)" }}>
               {data.description}
             </p>
           </div>
@@ -71,12 +77,12 @@ const EducationStatisticsGridSlide = ({ data }: { data: Partial<SchemaType> }) =
             <div
               key={`${stat.value}-${index}`}
               className="px-[52px] pt-[22px]"
-              style={{ backgroundColor: index % 2 === 1 ? '#5C0FD908' : 'white' }}
+              style={{ backgroundColor: index % 2 === 1 ? 'var(--card-color,#5C0FD908)' : 'var(--card-color,white)' }}
             >
-              <p className="font-serif text-[58px] leading-[56px] text-[#434A63]">
+              <p className="font-serif text-[58px] leading-[56px]" style={{ color: "var(--background-text,#434A63)" }}>
                 {stat?.value}
               </p>
-              <p className="mt-[12px] text-[24px]  text-[#434A63]">
+              <p className="mt-[12px] text-[24px]" style={{ color: "var(--background-text,#434A63)" }}>
                 {stat?.label}
               </p>
             </div>
@@ -88,12 +94,12 @@ const EducationStatisticsGridSlide = ({ data }: { data: Partial<SchemaType> }) =
             <div
               key={`${stat.value}-${index}`}
               className="px-[52px] pt-[22px]"
-              style={{ backgroundColor: index % 2 === 1 ? '#5C0FD908' : 'white' }}
+              style={{ backgroundColor: index % 2 === 1 ? 'var(--card-color,#5C0FD908)' : 'var(--card-color,white)' }}
             >
-              <p className="font-serif text-[58px] leading-[56px] text-[#283E51]">
+              <p className="font-serif text-[58px] leading-[56px]" style={{ color: "var(--background-text,#283E51)" }}>
                 {stat.value}
               </p>
-              <p className="mt-[12px] text-[24px]  text-[#434A63]">
+              <p className="mt-[12px] text-[24px]" style={{ color: "var(--background-text,#434A63)" }}>
                 {stat.label}
               </p>
             </div>
@@ -112,12 +118,12 @@ const EducationStatisticsGridSlide = ({ data }: { data: Partial<SchemaType> }) =
                   <div
                     key={`${stat?.value}-${index}`}
                     className="px-[52px] pt-[22px] h-full"
-                    style={{ backgroundColor: index % 2 === 0 ? '#5C0FD908' : 'white' }}
+                    style={{ backgroundColor: index % 2 === 0 ? 'var(--card-color,#5C0FD908)' : 'var(--card-color,white)' }}
                   >
-                    <p className="font-serif text-[58px] leading-[56px] text-[#283E51]">
+                    <p className="font-serif text-[58px] leading-[56px]" style={{ color: "var(--background-text,#283E51)" }}>
                       {stat?.value}
                     </p>
-                    <p className="mt-[12px] text-[24px] text-[#434A63]">
+                    <p className="mt-[12px] text-[24px]" style={{ color: "var(--background-text,#434A63)" }}>
                       {stat?.label}
                     </p>
                   </div>
@@ -131,12 +137,12 @@ const EducationStatisticsGridSlide = ({ data }: { data: Partial<SchemaType> }) =
                   <div
                     key={`${stat.value}-${index}`}
                     className="px-[52px] pt-[22px] h-full"
-                    style={{ backgroundColor: index % 2 === 1 ? '#5C0FD908' : 'white' }}
+                    style={{ backgroundColor: index % 2 === 1 ? 'var(--card-color,#5C0FD908)' : 'var(--card-color,white)' }}
                   >
-                    <p className="font-serif text-[58px] leading-[56px] text-[#283E51]">
+                    <p className="font-serif text-[58px] leading-[56px]" style={{ color: "var(--background-text,#283E51)" }}>
                       {stat.value}
                     </p>
-                    <p className="mt-[12px] text-[24px] text-[#434A63]">
+                    <p className="mt-[12px] text-[24px]" style={{ color: "var(--background-text,#434A63)" }}>
                       {stat.label}
                     </p>
                   </div>

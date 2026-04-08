@@ -45,6 +45,7 @@ export const Schema = z.object({
 
 export type SchemaType = z.infer<typeof Schema>;
 
+
 const COLORS = [
   "var(--graph-0,#5f7f79)",
   "var(--graph-1,#1f5a4f)",
@@ -109,8 +110,8 @@ const MarketOpportunitySlide = ({ data }: { data: Partial<SchemaType> }) => {
             key={index}
             className="absolute rounded-full"
             style={{
-              width: 237 + index * 50,
-              height: 237 + index * 50,
+              width: 237 + (index * 50),
+              height: 237 + (index * 50),
               bottom: 0,
               right: 0,
               backgroundColor: COLORS[index],

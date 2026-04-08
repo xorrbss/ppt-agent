@@ -70,7 +70,13 @@ function SolutionCard({
   description: string;
 }) {
   return (
-    <div className="flex py-[60px] px-10 w-[312px] flex-col items-center justify-center rounded-[160px] bg-[#4d4ef3]  text-center text-white">
+    <div
+      className="flex py-[60px] px-10 w-[312px] flex-col items-center justify-center rounded-[160px] bg-[#4d4ef3]  text-center text-white"
+      style={{
+        backgroundColor: "var(--graph-1,#4d4ef3)",
+        color: "var(--primary-text,#ffffff)",
+      }}
+    >
       <p className="text-[42px] font-medium tracking-[8.709px]">{stepNumber}</p>
       <p className="mt-[27px] text-[27px] min-h-[200px] ">
         {description}
@@ -84,14 +90,23 @@ const SolutionSlide = ({ data }: SolutionSlideProps) => {
   const visibleCards = showImage ? cards?.slice(0, 2) : cards;
 
   return (
-    <div className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#F9F8F8]">
+    <div
+      className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#F9F8F8]"
+      style={{
+        backgroundColor: "var(--background-color,#F9F8F8)",
+        fontFamily: "var(--body-font-family,Nunito Sans)",
+      }}
+    >
       <div className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#157CFF]"
-        style={{ height: 185 }}
+        style={{ height: 185, backgroundColor: "var(--primary-color,#157CFF)" }}
       />
 
       <div className="relative z-10 h-full  py-[58px]">
         {title && (
-          <h2 className="text-[80px] px-[64px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]">
+          <h2
+            className="text-[80px] px-[64px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]"
+            style={{ color: "var(--background-text,#232223)" }}
+          >
             {title}
           </h2>
         )}
@@ -100,7 +115,10 @@ const SolutionSlide = ({ data }: SolutionSlideProps) => {
           {showImage ? (
             <div className="flex items-start gap-[40px]">
               {featureImage?.__image_url__ && (
-                <div className="h-[396px] w-[534px] shrink-0 overflow-hidden rounded-r-[90px] bg-[#ece8dd]">
+                <div
+                  className="h-[396px] w-[534px] shrink-0 overflow-hidden rounded-r-[90px] bg-[#ece8dd]"
+                  style={{ backgroundColor: "var(--card-color,#ece8dd)" }}
+                >
                   <img
                     src={featureImage?.__image_url__}
                     alt={featureImage?.__image_prompt__}

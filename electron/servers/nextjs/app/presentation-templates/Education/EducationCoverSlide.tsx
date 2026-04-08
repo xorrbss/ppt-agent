@@ -31,18 +31,33 @@ const EducationCoverSlide = ({ data }: { data: Partial<SchemaType> }) => {
   const { companyName, title, backgroundImage } = data;
 
   return (
-    <div className="relative h-[720px] w-[1280px] overflow-hidden bg-[#2e0a8a]">
+    <div
+      className="relative h-[720px] w-[1280px] overflow-hidden"
+      style={{
+        backgroundColor: "var(--background-color,#2e0a8a)",
+        fontFamily: "var(--body-font-family,'Times New Roman')",
+      }}
+    >
       <img
         src={backgroundImage?.__image_url__}
         alt={backgroundImage?.__image_prompt__}
         className="absolute inset-0 h-full w-full object-cover"
       />
 
-      <div className="absolute inset-0 bg-[#3b0bb6]/85" />
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundColor: "var(--primary-color,#3b0bb6)",
+          opacity: 0.85,
+        }}
+      />
 
 
-      <div className="relative z-10 flex h-full flex-col items-center justify-center text-center text-white">
-        <p className="text-[22px] font-normal uppercase tracking-[0.64px]">{data.companyName}</p>
+      <div
+        className="relative z-10 flex h-full flex-col items-center justify-center text-center"
+        style={{ color: "var(--primary-text,#ffffff)" }}
+      >
+        <p className="text-[22px] font-normal uppercase tracking-[0.64px]">{companyName}</p>
         <h1 className="mt-[12px] px-[53px]  text-[64px] font-medium leading-[98%]">
           {title}
         </h1>

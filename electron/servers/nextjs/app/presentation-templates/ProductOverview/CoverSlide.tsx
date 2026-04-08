@@ -44,9 +44,15 @@ const CoverSlide = ({ data }: { data: Partial<SchemaType> }) => {
   return (
     <div
       className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
-      style={{ backgroundColor: "#DAE1DE" }}
+      style={{
+        backgroundColor: "var(--background-color,#DAE1DE)",
+        fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
+      }}
     >
-      <div className="relative z-20 flex h-full flex-col px-[36px] pt-[62px] text-[#15342D]">
+      <div
+        className="relative z-20 flex h-full flex-col px-[36px] pt-[62px] text-[#15342D]"
+        style={{ color: "var(--primary-color,#15342D)" }}
+      >
         <div className="flex items-center justify-between">
 
           <img
@@ -55,7 +61,10 @@ const CoverSlide = ({ data }: { data: Partial<SchemaType> }) => {
             className="h-[42px] w-[171px] object-cover"
           />
 
-          <p className="text-[18px] font-normal leading-[18.991px] text-[#15342D]">
+          <p
+            className="text-[18px] font-normal leading-[18.991px] text-[#15342D]"
+            style={{ color: "var(--primary-color,#15342D)" }}
+          >
             {label}
           </p>
         </div>
@@ -84,7 +93,7 @@ const CoverSlide = ({ data }: { data: Partial<SchemaType> }) => {
         style={{
           height: "365px",
           background:
-            "linear-gradient(0deg, rgba(218, 225, 222, 0.00) 0%, #DAE1DE 80.33%)",
+            "linear-gradient(0deg, rgba(218, 225, 222, 0.00) 0%, var(--background-color,#DAE1DE) 80.33%)",
         }}
       />
     </div>

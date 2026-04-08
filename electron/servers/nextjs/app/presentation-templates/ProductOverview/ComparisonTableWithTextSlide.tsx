@@ -6,28 +6,27 @@ export const slideLayoutDescription =
   "A comparison table slide with a title, a subtitle, four headers, and three text rows.";
 
 const RowSchema = z.object({
-  cell1: z.string().min(8).max(24).meta({
+  cell1: z.string().max(12).meta({
     description: "First column cell text.",
   }),
-  cell2: z.string().min(8).max(24).meta({
+  cell2: z.string().max(12).meta({
     description: "Second column cell text.",
   }),
-  cell3: z.string().min(8).max(24).meta({
+  cell3: z.string().max(12).meta({
     description: "Third column cell text.",
   }),
-  cell4: z.string().min(8).max(24).meta({
+  cell4: z.string().max(12).meta({
     description: "Fourth column cell text.",
   }),
 });
 
 export const Schema = z.object({
-  title: z.string().min(8).max(32).default("Comparison Chart").meta({
+  title: z.string().min(8).max(20).default("Comparison Chart").meta({
     description: "Main heading shown above the table.",
   }),
   subtitle: z
     .string()
-    .min(30)
-    .max(100)
+    .max(80)
     .default(
       "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt."
     )
@@ -35,8 +34,7 @@ export const Schema = z.object({
       description: "Short subtitle shown under the main heading.",
     }),
   columns: z
-    .array(z.string().min(4).max(18))
-    .min(4)
+    .array(z.string().max(10))
     .max(4)
     .default(["HEADING 1", "HEADING 1", "HEADING 2", "HEADING 3"])
     .meta({
@@ -80,29 +78,52 @@ const ComparisonTableWithTextSlide = ({ data }: { data: Partial<SchemaType> }) =
   const { title, subtitle, columns, highlightedHeaderIndex, rows } = data;
 
   return (
-    <div className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#c3cccc]">
+    <div
+      className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
+      style={{
+        backgroundColor: "var(--background-color,#c3cccc)",
+        fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
+      }}
+    >
       <div className="px-[44px] pt-[46px]">
-        <h2 className="text-[80px] font-semibold leading-[1.02] tracking-[-0.03em] text-[#0a443b]">
+        <h2
+          className="text-[80px] font-semibold leading-[1.02] tracking-[-0.03em] text-[#0a443b]"
+          style={{ color: "var(--primary-color,#0a443b)" }}
+        >
           {title}
         </h2>
-        <p className="mt-[22px] max-w-[700px] text-[24px] leading-[1.22] text-[#2d5d56]">
+        <p
+          className="mt-[22px] max-w-[700px] text-[24px] leading-[1.22] text-[#2d5d56]"
+          style={{ color: "var(--background-text,#2d5d56)" }}
+        >
           {subtitle}
         </p>
       </div>
 
-      <div className="mx-[44px] mt-[30px] overflow-hidden border border-[#bcc3c3]">
-        <table className="w-full table-fixed border-collapse bg-[#ffffff]">
-          <thead>
-            <tr>
+      <div
+        className="mx-[44px] mt-[30px] overflow-hidden border"
+        style={{ borderColor: "var(--stroke,#bcc3c3)" }}
+      >
+        <table
+          className="w-full table-fixed border-collapse"
+          style={{ backgroundColor: "var(--card-color,#ffffff)" }}
+        >
+          <thead className="w-full">
+            <tr className="w-full">
               {columns?.map((column, index) => {
                 const isHighlighted = index + 1 === highlightedHeaderIndex;
                 return (
                   <th
                     key={`${column}-${index}`}
-                    className=" border-r border-[#bcc3c3] p-[33px]  text-left text-[20px] font-semibold uppercase tracking-[0.16em] last:border-r-0"
+                    className=" border-r p-[33px]  text-left text-[20px] font-semibold uppercase tracking-[0.16em] last:border-r-0"
                     style={{
-                      backgroundColor: isHighlighted ? "#05443a" : "#ffffff",
-                      color: isHighlighted ? "#eef2f0" : "#123f38",
+                      borderColor: "var(--stroke,#bcc3c3)",
+                      backgroundColor: isHighlighted
+                        ? "var(--primary-color,#05443a)"
+                        : "var(--card-color,#ffffff)",
+                      color: isHighlighted
+                        ? "var(--primary-text,#eef2f0)"
+                        : "var(--primary-color,#123f38)",
                     }}
                   >
                     {column}
@@ -115,12 +136,23 @@ const ComparisonTableWithTextSlide = ({ data }: { data: Partial<SchemaType> }) =
           <tbody>
             {rows?.map((row, rowIndex) => {
               const cells = [row.cell1, row.cell2, row.cell3, row.cell4];
+              const isHighlighted = rowIndex + 1 === highlightedHeaderIndex;
+
               return (
                 <tr key={`row-${rowIndex}`}>
                   {cells?.map((cell, cellIndex) => (
                     <td
                       key={`cell-${rowIndex}-${cellIndex}`}
-                      className=" border-r border-t  bg-white border-[#bcc3c3] p-[33px] text-left text-[18px] leading-[1.2] text-[#183f38] last:border-r-0"
+                      className=" border-r border-t bg-white p-[33px] text-left text-[18px] leading-[1.2] last:border-r-0"
+                      style={{
+                        borderColor: "var(--stroke,#bcc3c3)",
+                        backgroundColor: isHighlighted
+                          ? "var(--primary-color,#05443a)"
+                          : "var(--card-color,#ffffff)",
+                        color: isHighlighted
+                          ? "var(--primary-text,#eef2f0)"
+                          : "var(--primary-color,#123f38)",
+                      }}
                     >
                       {cell}
                     </td>

@@ -10,12 +10,12 @@ const PlanSchema = z.object({
   price: z.string().min(4).max(12).meta({
     description: "Plan price label shown at the top of each card.",
   }),
-  description: z.string().min(18).max(26).meta({
+  description: z.string().max(20).meta({
     description: "Short statement describing the plan.",
   }),
   features: z
-    .array(z.string().min(10).max(24))
-    .min(4)
+    .array(z.string().max(18))
+
     .max(4)
     .meta({
       description: "Four bullet features shown in the pricing card.",
@@ -41,7 +41,6 @@ export const Schema = z.object({
   }),
   plans: z
     .array(PlanSchema)
-    .min(3)
     .max(3)
     .default([
       {
@@ -91,12 +90,15 @@ const PricingPlanSlide = ({ data }: { data: Partial<SchemaType> }) => {
   return (
     <div
       className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
-      style={{ backgroundColor: "#DAE1DE" }}
+      style={{
+        backgroundColor: "var(--background-color,#DAE1DE)",
+        fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
+      }}
     >
       <div className="px-[68px] pt-[76px]">
         <h2
           className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
-          style={{ color: "#15342D" }}
+          style={{ color: "var(--primary-color,#15342D)" }}
         >
           {title}
         </h2>
@@ -109,17 +111,29 @@ const PricingPlanSlide = ({ data }: { data: Partial<SchemaType> }) => {
             <div
               key={index}
               className={` px-[20px]  ${active ? "-mt-[30px] py-[60px]" : "py-[33px]"}`}
-              style={{ backgroundColor: active ? "#15342D" : "#ececee" }}
+              style={{
+                backgroundColor: active
+                  ? "var(--primary-color,#15342D)"
+                  : "var(--card-color,#ececee)",
+              }}
             >
               <p
                 className="text-[20px] font-semibold tracking-[2.074px] text-white"
-                style={{ color: active ? "#edf2f1" : "#15342D" }}
+                style={{
+                  color: active
+                    ? "var(--primary-text,#edf2f1)"
+                    : "var(--primary-color,#15342D)",
+                }}
               >
                 {plan.price}
               </p>
               <p
                 className="mt-[18px] text-[28px] font-normal  text-[#15342DCC]"
-                style={{ color: active ? "#edf2f1" : "#15342D" }}
+                style={{
+                  color: active
+                    ? "var(--primary-text,#edf2f1)"
+                    : "var(--background-text,#15342DCC)",
+                }}
               >
                 {plan.description}
               </p>
@@ -135,7 +149,11 @@ const PricingPlanSlide = ({ data }: { data: Partial<SchemaType> }) => {
                     />
                     <p
                       className="text-[28px] font-normal  text-[#15342DCC]"
-                      style={{ color: active ? "#edf2f1" : "#15342D" }}
+                      style={{
+                        color: active
+                          ? "var(--primary-text,#edf2f1)"
+                          : "var(--background-text,#15342DCC)",
+                      }}
                     >
                       {feature}
                     </p>

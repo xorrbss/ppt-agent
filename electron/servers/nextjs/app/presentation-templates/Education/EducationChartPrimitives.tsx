@@ -84,17 +84,17 @@ type PieLabelProps = {
 };
 
 const DEFAULT_COLORS = [
-  "#4A15A8",
-  "#5B45AD",
-  "#7E6CC0",
-  "#9F94CD",
-  "#6A31B8",
-  "#4D2A97",
+  "var(--graph-0,#4A15A8)",
+  "var(--graph-1,#5B45AD)",
+  "var(--graph-2,#7E6CC0)",
+  "var(--graph-3,#9F94CD)",
+  "var(--graph-4,#6A31B8)",
+  "var(--graph-5,#4D2A97)",
 ];
 
-const AXIS = "#7C7A83";
-const GRID = "#CFCBD8";
-const PRIMARY_TEXT = "#3E3C45";
+const AXIS = "var(--background-text,#7C7A83)";
+const GRID = "var(--stroke,#CFCBD8)";
+const PRIMARY_TEXT = "var(--background-text,#3E3C45)";
 
 function formatComma(value: number | string) {
   if (typeof value === "number") {
@@ -201,7 +201,7 @@ const renderPieInsideLabel = (props: any) => {
       y={y}
       textAnchor="middle"
       dominantBaseline="central"
-      fill="#ffffff"
+      fill="var(--primary-text,#ffffff)"
       fontSize={fontSize}
       fontWeight={600}
       style={{
@@ -247,10 +247,16 @@ function CustomTooltip({ active, payload, label }: TooltipProps) {
   }
 
   return (
-    <div className="rounded-[8px] border border-[#ddd9e8] bg-[#f7f6fa] px-[10px] py-[8px]">
-      <p className="text-[11px] font-semibold text-[#3f3d47]">{label}</p>
+    <div
+      className="rounded-[8px] border px-[10px] py-[8px]"
+      style={{
+        borderColor: "var(--stroke,#ddd9e8)",
+        backgroundColor: "var(--card-color,#f7f6fa)",
+      }}
+    >
+      <p className="text-[11px] font-semibold" style={{ color: "var(--background-text,#3f3d47)" }}>{label}</p>
       {payload.map((entry, index) => (
-        <p key={`${entry.name ?? "value"}-${index}`} className="text-[10px] text-[#5d5b67]">
+        <p key={`${entry.name ?? "value"}-${index}`} className="text-[10px]" style={{ color: "var(--background-text,#5d5b67)" }}>
           {entry.name ?? entry.dataKey}: {String(entry.value)}
         </p>
       ))}
@@ -268,7 +274,7 @@ function renderPieLabel({ name, percent = 0, x = 0, y = 0, textAnchor = "middle"
   }
 
   return (
-    <text x={x} y={y} textAnchor={textAnchor} fill={AXIS} fontSize={10} fontFamily="serif">
+    <text x={x} y={y} textAnchor={textAnchor} fill={AXIS} fontSize={10} fontFamily="var(--body-font-family,'Times New Roman')">
       {`${name ?? ""} ${(percent * 100).toFixed(0)}%`}
     </text>
   );
@@ -298,7 +304,7 @@ export default function EducationChartPrimitives({
   divergingLabels: [string, string];
 }) {
   const axisProps = {
-    tick: { fill: AXIS, fontSize: 12, fontFamily: "serif" },
+    tick: { fill: AXIS, fontSize: 12, fontFamily: "var(--body-font-family,'Times New Roman')" },
     axisLine: { stroke: GRID },
     tickLine: { stroke: GRID },
   } as const;

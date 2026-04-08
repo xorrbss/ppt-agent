@@ -19,10 +19,10 @@ const RowSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().min(8).max(32).default("Comparison Chart").meta({
+  title: z.string().min(8).max(20).default("Comparison Chart").meta({
     description: "Main heading shown above the table.",
   }),
-  subtitle: z.string().min(30).max(140).default(
+  subtitle: z.string().max(80).default(
     "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt."
   ).meta({
     description: "Short subtitle shown under the main heading.",
@@ -37,7 +37,7 @@ export const Schema = z.object({
     }),
   rows: z
     .array(RowSchema)
-    .min(3)
+
     .max(3)
     .default([
       {
@@ -119,26 +119,47 @@ const ComparisonChartSlide = ({ data }: { data: Partial<SchemaType> }) => {
   return (
     <div
       className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
-      style={{ backgroundColor: "#DAE1DE" }}
+      style={{
+        backgroundColor: "var(--background-color,#DAE1DE)",
+        fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
+      }}
     >
       <div className="px-[56px] pt-[74px]">
         <h2
           className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
-          style={{ color: "#15342D" }}
+          style={{ color: "var(--primary-color,#15342D)" }}
         >
           {title}
         </h2>
-        <p className="mt-[20px] w-[740px] text-[24px] font-normal  text-[#15342DCC]">{subtitle}</p>
+        <p
+          className="mt-[20px] w-[740px] text-[24px] font-normal  text-[#15342DCC]"
+          style={{ color: "var(--background-text,#15342DCC)" }}
+        >
+          {subtitle}
+        </p>
       </div>
 
       <div className="absolute left-[54px] top-[268px] w-[1058px] ">
-        <div className="grid grid-cols-[220px_repeat(4,1fr)] border-b border-[#c5cccb]">
+        <div
+          className="grid grid-cols-[220px_repeat(4,1fr)] border-b"
+          style={{ borderColor: "var(--stroke,#c5cccb)" }}
+        >
           <div className="h-[94px] " />
           {columns?.map((column, index) => (
             <div
               key={index}
-              className="flex h-[94px] items-center justify-center border-r border-[#c5cccb] text-[20px] font-semibold uppercase tracking-[0.2em]"
-              style={{ backgroundColor: index === 3 ? "#15342D" : "#ffffff", color: index === 3 ? "#edf2f1" : "#15342D" }}
+              className="flex h-[94px] items-center justify-center border-r text-[20px] font-semibold uppercase tracking-[0.2em]"
+              style={{
+                backgroundColor:
+                  index === 3
+                    ? "var(--primary-color,#15342D)"
+                    : "var(--card-color,#ffffff)",
+                color:
+                  index === 3
+                    ? "var(--primary-text,#edf2f1)"
+                    : "var(--primary-color,#15342D)",
+                borderColor: "var(--stroke,#c5cccb)",
+              }}
             >
               {column}
             </div>
@@ -156,16 +177,28 @@ const ComparisonChartSlide = ({ data }: { data: Partial<SchemaType> }) => {
           return (
             <div
               key={index}
-              className={`grid grid-cols-[220px_repeat(4,1fr)] ${index < rows.length - 1 ? "border-b border-[#c5cccb]" : ""}`}
+              className={`grid grid-cols-[220px_repeat(4,1fr)] ${index < rows.length - 1 ? "border-b" : ""}`}
+              style={{ borderColor: "var(--stroke,#c5cccb)" }}
             >
-              <div className="flex h-[94px] bg-[#ffffff] items-center border-r border-[#c5cccb] pl-[34px] text-[20px] font-semibold uppercase tracking-[0.2em]" style={{ color: "#15342D" }}>
+              <div
+                className="flex h-[94px] items-center border-r pl-[34px] text-[20px] font-semibold uppercase tracking-[0.2em]"
+                style={{
+                  backgroundColor: "var(--card-color,#ffffff)",
+                  borderColor: "var(--stroke,#c5cccb)",
+                  color: "var(--primary-color,#15342D)",
+                }}
+              >
                 {row.label}
               </div>
 
               {cells?.map((status, cellIndex) => (
                 <div
                   key={cellIndex}
-                  className={`flex h-[94px] items-center justify-center border-r bg-[#ffffff] border-[#c5cccb]`}
+                  className="flex h-[94px] items-center justify-center border-r"
+                  style={{
+                    backgroundColor: "var(--card-color,#ffffff)",
+                    borderColor: "var(--stroke,#c5cccb)",
+                  }}
                 >
                   <StatusIcon
                     status={status}

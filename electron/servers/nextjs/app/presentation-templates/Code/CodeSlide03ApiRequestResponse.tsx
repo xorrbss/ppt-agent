@@ -73,31 +73,64 @@ const CodeSlide03ApiRequestResponse = ({
 }) => {
 
   return (
-    <div className="relative h-[720px] w-[1280px] overflow-hidden  bg-[#101B37] p-[53px] ">
+    <div
+      className="relative h-[720px] w-[1280px] overflow-hidden p-[53px]"
+      style={{
+        backgroundColor: "var(--background-color,#101B37)",
+        fontFamily: "var(--body-font-family,Nunito Sans)",
+      }}
+    >
 
       <div className="relative z-10 flex h-full flex-col">
-        <h2 className="text-[64px] font-medium  text-[#ffffff]">{data.title}</h2>
+        <h2 className="text-[64px] font-medium" style={{ color: "var(--background-text,#ffffff)" }}>{data.title}</h2>
 
         <div className="mt-[22px] grid  flex-1 grid-cols-2 gap-[22px]">
           <div className="flex  flex-col gap-[12px] ">
-            <div className="rounded-[14px] border border-[#1D293D80] bg-[#0F172B80] p-[14px]">
-              <div className="flex items-center gap-5 pb-[14px] border-b border-[#1D293D80]">
-                <p className="rounded-[12px] bg-[#2B7FFF33] px-[23px] py-[10px] text-[14px] uppercase tracking-[0.06em] text-[#51A2FF]">
+            <div
+              className="rounded-[14px] border p-[14px]"
+              style={{
+                borderColor: "var(--stroke,#1D293D80)",
+                backgroundColor: "var(--card-color,#0F172B80)",
+              }}
+            >
+              <div className="flex items-center gap-5 pb-[14px] border-b" style={{ borderColor: "var(--stroke,#1D293D80)" }}>
+                <p
+                  className="rounded-[12px] px-[23px] py-[10px] text-[14px] uppercase tracking-[0.06em]"
+                  style={{
+                    backgroundColor: "var(--primary-color,#2B7FFF33)",
+                    color: "var(--primary-text,#51A2FF)",
+                  }}
+                >
                   {data.method}
                 </p>
-                <p className="text-[23px] text-[#dde5ff]">{data.endpoint}</p>
+                <p className="text-[23px]" style={{ color: "var(--background-text,#dde5ff)" }}>{data.endpoint}</p>
               </div>
-              <p className="mt-[21px] text-[18px] uppercase tracking-[0.08em] text-[#90a1d8]">Headers</p>
-              <div className="mt-[15px] space-y-[4px] text-[24px] text-[#cbd4f8]">
+              <p className="mt-[21px] text-[18px] uppercase tracking-[0.08em]" style={{ color: "var(--background-text,#90a1d8)" }}>Headers</p>
+              <div className="mt-[15px] space-y-[4px] text-[24px]" style={{ color: "var(--background-text,#cbd4f8)" }}>
                 {data.headers?.map((item) => (
-                  <p key={item} className="text-[18px] text-[#CAD5E2]">{item}</p>
+                  <p key={item} className="text-[18px]" style={{ color: "var(--background-text,#CAD5E2)" }}>{item}</p>
                 ))}
               </div>
             </div>
 
-            <div className=" flex-1 bg-[#0F172B80] border border-[#1D293D80]  rounded-[18px] ">
-              <p className="text-[18px] text-[#CAD5E2] capitalize bg-[#1D293D80] rounded-t-[18px]  border border-[#1D293D80] p-[14px]">{data.requestSnippet?.fileName}</p>
-              <pre className=" w-full px-[14px] py-[20px] text-[#ffffff] whitespace-pre-wrap break-words overflow-hidden">
+            <div
+              className=" flex-1 border rounded-[18px]"
+              style={{
+                backgroundColor: "var(--card-color,#0F172B80)",
+                borderColor: "var(--stroke,#1D293D80)",
+              }}
+            >
+              <p
+                className="text-[18px] capitalize rounded-t-[18px] border p-[14px]"
+                style={{
+                  color: "var(--background-text,#CAD5E2)",
+                  backgroundColor: "var(--card-color,#1D293D80)",
+                  borderColor: "var(--stroke,#1D293D80)",
+                }}
+              >
+                {data.requestSnippet?.fileName}
+              </p>
+              <pre className=" w-full px-[14px] py-[20px] whitespace-pre-wrap break-words overflow-hidden" style={{ color: "var(--background-text,#ffffff)" }}>
 
                 <code className="w-full ">
                   {data.requestSnippet?.content}
@@ -106,9 +139,24 @@ const CodeSlide03ApiRequestResponse = ({
             </div>
           </div>
 
-          <div className=" flex-1 bg-[#0F172B80] border border-[#1D293D80]  rounded-[18px] ">
-            <p className="text-[18px] text-[#CAD5E2] capitalize bg-[#1D293D80] rounded-t-[18px]  border border-[#1D293D80] p-[14px]">{data.responseSnippet?.fileName}</p>
-            <pre className=" w-full px-[14px] py-[20px] text-[#ffffff] whitespace-pre-wrap break-words overflow-hidden">
+          <div
+            className=" flex-1 border rounded-[18px]"
+            style={{
+              backgroundColor: "var(--card-color,#0F172B80)",
+              borderColor: "var(--stroke,#1D293D80)",
+            }}
+          >
+            <p
+              className="text-[18px] capitalize rounded-t-[18px] border p-[14px]"
+              style={{
+                color: "var(--background-text,#CAD5E2)",
+                backgroundColor: "var(--card-color,#1D293D80)",
+                borderColor: "var(--stroke,#1D293D80)",
+              }}
+            >
+              {data.responseSnippet?.fileName}
+            </p>
+            <pre className=" w-full px-[14px] py-[20px] whitespace-pre-wrap break-words overflow-hidden" style={{ color: "var(--background-text,#ffffff)" }}>
 
               <code className="w-full ">
                 {data.responseSnippet?.content}
@@ -118,7 +166,14 @@ const CodeSlide03ApiRequestResponse = ({
         </div>
       </div>
 
-      <div className="absolute bottom-[26px] z-50 left-1/2 -translate-x-1/2 rounded-full border border-[#31415880] bg-[#1D293DCC] px-[22px] py-[8px] text-[14px] text-[#CAD5E2]">
+      <div
+        className="absolute bottom-[26px] z-50 left-1/2 -translate-x-1/2 rounded-full border px-[22px] py-[8px] text-[14px]"
+        style={{
+          borderColor: "var(--stroke,#31415880)",
+          backgroundColor: "var(--card-color,#1D293DCC)",
+          color: "var(--background-text,#CAD5E2)",
+        }}
+      >
         {data.pageLabel}
       </div>
     </div>

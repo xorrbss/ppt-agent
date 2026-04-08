@@ -32,16 +32,29 @@ export type SchemaType = z.infer<typeof Schema>;
 const CodeSlide01RoadmapCover = ({ data }: { data: Partial<SchemaType> }) => {
 
   return (
-    <div className="relative h-[720px] w-[1280px] overflow-hidden  bg-[#101B37] p-[53px] ">
+    <div
+      className="relative h-[720px] w-[1280px] overflow-hidden p-[53px]"
+      style={{
+        backgroundColor: "var(--background-color,#101B37)",
+        fontFamily: "var(--body-font-family,Nunito Sans)",
+      }}
+    >
       <div className="relative z-10 flex h-full flex-col items-center justify-center px-[200px] text-center">
-        <p className="text-[22px]  text-[#d7dcff]">{data.companyName}</p>
-        <h2 className="mt-[10px] text-[64px] font-medium  text-white">
+        <p className="text-[22px]" style={{ color: "var(--background-text,#d7dcff)" }}>{data.companyName}</p>
+        <h2 className="mt-[10px] text-[64px] font-medium" style={{ color: "var(--background-text,#ffffff)" }}>
           {data.title}
         </h2>
-        <p className="mt-[35px] text-[26px] leading-[132%] text-[#d8ddff]">{data.subtitle}</p>
+        <p className="mt-[35px] text-[26px] leading-[132%]" style={{ color: "var(--background-text,#d8ddff)" }}>{data.subtitle}</p>
       </div>
 
-      <div className="absolute bottom-[26px] left-1/2 -translate-x-1/2 rounded-full border border-[#31415880] bg-[#1D293DCC] px-[22px] py-[8px] text-[14px] text-[#CAD5E2]">
+      <div
+        className="absolute bottom-[26px] left-1/2 -translate-x-1/2 rounded-full border px-[22px] py-[8px] text-[14px]"
+        style={{
+          borderColor: "var(--stroke,#31415880)",
+          backgroundColor: "var(--card-color,#1D293DCC)",
+          color: "var(--background-text,#CAD5E2)",
+        }}
+      >
         {data.pageLabel}
       </div>
     </div>

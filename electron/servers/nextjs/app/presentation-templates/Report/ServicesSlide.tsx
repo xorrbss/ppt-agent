@@ -108,14 +108,23 @@ const ServicesSlide = ({ data }: { data: Partial<SchemaType> }) => {
   const { title, activeIndex, items } = data;
 
   return (
-    <div className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#f9f8f8]">
+    <div
+      className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#f9f8f8]"
+      style={{
+        backgroundColor: "var(--background-color,#f9f8f8)",
+        fontFamily: "var(--body-font-family,Nunito Sans)",
+      }}
+    >
       <div
         className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#157CFF]"
-        style={{ height: 185 }}
+        style={{ height: 185, backgroundColor: "var(--primary-color,#157CFF)" }}
       />
 
       <div className="px-[70px] pt-[56px]">
-        <h2 className="text-[80px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]">
+        <h2
+          className="text-[80px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]"
+          style={{ color: "var(--background-text,#232223)" }}
+        >
           {title}
         </h2>
       </div>
@@ -135,6 +144,9 @@ const ServicesSlide = ({ data }: { data: Partial<SchemaType> }) => {
                   style={{
                     width: items?.length === 3 ? '266px' : items?.length === 4 ? '192px' : items?.length === 5 ? '157px' : '266px',
                     height: items?.length === 3 ? '266px' : items?.length === 4 ? '192px' : items?.length === 5 ? '157px' : '270px',
+                    backgroundColor: isActive ? "var(--primary-color,#157CFF)" : "transparent",
+                    borderColor: "var(--primary-color,#157CFF)",
+                    color: isActive ? "var(--primary-text,#ffffff)" : "var(--primary-color,#157CFE)",
                   }}
                 >
                   <ServiceGlyph
@@ -148,16 +160,20 @@ const ServicesSlide = ({ data }: { data: Partial<SchemaType> }) => {
                   />
                 </div>
 
-                <h3 className="mt-[18px] text-[26px] font-medium tracking-[0.08em] text-[#232223]"
+                <h3
+                  className="mt-[18px] text-[26px] font-medium tracking-[0.08em] text-[#232223]"
                   style={{
                     fontSize: items?.length === 3 ? '20px' : items?.length === 4 ? '16px' : items?.length === 5 ? '12px' : '20px',
+                    color: "var(--background-text,#232223)",
                   }}
                 >
                   {item.heading}
                 </h3>
-                <p className="mt-[12px] max-w-[290px] text-[18px] leading-[1.08] tracking-[-0.04em] text-[#353538]"
+                <p
+                  className="mt-[12px] max-w-[290px] text-[18px] leading-[1.08] tracking-[-0.04em] text-[#353538]"
                   style={{
                     fontSize: items?.length === 3 ? '24px' : items?.length === 4 ? '17px' : items?.length === 5 ? '14px' : '24px',
+                    color: "var(--background-text,#353538)",
                   }}
                 >
                   {item.description}
@@ -194,7 +210,10 @@ const ServicesSlide = ({ data }: { data: Partial<SchemaType> }) => {
                       width: items?.length === 3 ? '117px' : items?.length === 4 ? '84px' : items?.length === 5 ? '60px' : '112px',
                     }}
                     height="15" viewBox="0 0 119 15" fill="none">
-                    <path d="M1 6.36401H0V8.36401H1V7.36401V6.36401ZM118.707 8.07112C119.098 7.6806 119.098 7.04743 118.707 6.65691L112.343 0.292946C111.953 -0.0975785 111.319 -0.0975785 110.929 0.292946C110.538 0.68347 110.538 1.31664 110.929 1.70716L116.586 7.36401L110.929 13.0209C110.538 13.4114 110.538 14.0446 110.929 14.4351C111.319 14.8256 111.953 14.8256 112.343 14.4351L118.707 8.07112ZM1 7.36401V8.36401H118V7.36401V6.36401H1V7.36401Z" fill="#157CFE" />
+                    <path
+                      d="M1 6.36401H0V8.36401H1V7.36401V6.36401ZM118.707 8.07112C119.098 7.6806 119.098 7.04743 118.707 6.65691L112.343 0.292946C111.953 -0.0975785 111.319 -0.0975785 110.929 0.292946C110.538 0.68347 110.538 1.31664 110.929 1.70716L116.586 7.36401L110.929 13.0209C110.538 13.4114 110.538 14.0446 110.929 14.4351C111.319 14.8256 111.953 14.8256 112.343 14.4351L118.707 8.07112ZM1 7.36401V8.36401H118V7.36401V6.36401H1V7.36401Z"
+                      fill="var(--primary-color,#157CFE)"
+                    />
                   </svg>
                 </div>
               )}

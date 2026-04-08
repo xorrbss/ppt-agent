@@ -36,7 +36,13 @@ const EducationContentSplitSlide = ({ data }: { data: Partial<SchemaType> }) => 
   const { heading, tagline, body, collageImage } = data;
 
   return (
-    <div className="relative h-[720px] w-[1280px] overflow-hidden bg-[#E6E7E8]">
+    <div
+      className="relative h-[720px] w-[1280px] overflow-hidden"
+      style={{
+        backgroundColor: "var(--background-color,#E6E7E8)",
+        fontFamily: "var(--body-font-family,'Times New Roman')",
+      }}
+    >
       <div className="w-full flex items-center h-full">
         <div className="w-[660px] h-full">
           <div className="h-[394px] w-full mb-[6px]">
@@ -61,11 +67,11 @@ const EducationContentSplitSlide = ({ data }: { data: Partial<SchemaType> }) => 
         </div>
 
         <div className="w-1/2 px-[56px]">
-          <h2 className="text-[24px] font-medium leading-none text-[#34394C]">{data.heading}</h2>
-          <p className=" text-[14px] font-medium mt-1 leading-none tracking-[0.04em] text-[#454962]">
-            {data.tagline}
+          <h2 className="text-[24px] font-medium leading-none" style={{ color: "var(--background-text,#34394C)" }}>{heading}</h2>
+          <p className=" text-[14px] font-medium mt-1 leading-none tracking-[0.04em]" style={{ color: "var(--background-text,#454962)" }}>
+            {tagline}
           </p>
-          <p className="mt-[18px] text-[22px] leading-[1.28] text-[#34394C]">{body}</p>
+          <p className="mt-[18px] text-[22px] leading-[1.28]" style={{ color: "var(--background-text,#34394C)" }}>{body}</p>
         </div>
       </div>
     </div>

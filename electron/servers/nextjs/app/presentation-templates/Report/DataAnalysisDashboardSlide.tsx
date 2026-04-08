@@ -141,7 +141,13 @@ function SummaryCard({
 }) {
   return (
     <div className="flex gap-[10px]  items-center rounded-[14px]  py-[9px]">
-      <div className="flex h-[36px] w-[36px] border border-[#ECF5FE] shrink-0 items-center justify-center rounded-full bg-[#ECF5FE] ">
+      <div
+        className="flex h-[36px] w-[36px] border border-[#ECF5FE] shrink-0 items-center justify-center rounded-full bg-[#ECF5FE] "
+        style={{
+          backgroundColor: "var(--card-color,#ECF5FE)",
+          borderColor: "var(--stroke,#ECF5FE)",
+        }}
+      >
         <img
           src={iconUrl ?? ""}
           alt={iconAlt ?? ""}
@@ -150,8 +156,18 @@ function SummaryCard({
         />
       </div>
       <div className="">
-        <p className="text-[18px] leading-none tracking-[-0.04em] text-[#4A4D53]">{value}</p>
-        <p className="mt-[4px] text-[14px] leading-none text-[#6C6C6C]">{label}</p>
+        <p
+          className="text-[18px] leading-none tracking-[-0.04em] text-[#4A4D53]"
+          style={{ color: "var(--background-text,#4A4D53)" }}
+        >
+          {value}
+        </p>
+        <p
+          className="mt-[4px] text-[14px] leading-none text-[#6C6C6C]"
+          style={{ color: "var(--background-text,#6C6C6C)" }}
+        >
+          {label}
+        </p>
       </div>
     </div>
   );
@@ -167,16 +183,32 @@ const DataAnalysisDashboardSlide = ({ data }: { data: Partial<SchemaType> }) => 
   const otherHalfChart = charts?.slice(Math.ceil(charts.length / 2));
 
   return (
-    <div className="relative flex flex-col  h-[720px] w-[1280px] overflow-hidden  bg-[#F9F8F8]">
-      <div className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#157CFF]" style={{ height: 185 }} />
+    <div
+      className="relative flex flex-col  h-[720px] w-[1280px] overflow-hidden  bg-[#F9F8F8]"
+      style={{
+        backgroundColor: "var(--background-color,#F9F8F8)",
+        fontFamily: "var(--body-font-family,Nunito Sans)",
+      }}
+    >
+      <div
+        className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#157CFF]"
+        style={{ height: 185, backgroundColor: "var(--primary-color,#157CFF)" }}
+      />
 
       <div className="px-[64px] pt-[48px]">
-        <h2 className="text-[80px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]">{title}</h2>
+        <h2
+          className="text-[80px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]"
+          style={{ color: "var(--background-text,#232223)" }}
+        >
+          {title}
+        </h2>
       </div>
 
       {summaryCards && summaryCards.length > 0 && <div className=" mx-[64px] grid bg-white gap-[16px] p-[13px] mt-[22px] rounded-[14px]  "
-
-        style={{ gridTemplateColumns: `repeat(${summaryCards.length}, minmax(220px, 1fr))` }}>
+        style={{
+          gridTemplateColumns: `repeat(${summaryCards.length}, minmax(220px, 1fr))`,
+          backgroundColor: "var(--card-color,#ffffff)",
+        }}>
         {summaryCards?.map((card, index) => (
           <SummaryCard
             key={`${card.label}-${index}`}
@@ -192,7 +224,10 @@ const DataAnalysisDashboardSlide = ({ data }: { data: Partial<SchemaType> }) => 
         {halfChart && halfChart.length > 0 && <div className="mt-[14px] px-[64px] flex-1">
           <div
             className={`grid h-full bg-white p-[13px] rounded-[14px] min-h-0 gap-[10px] grid-cols-3`}
-            style={{ gridAutoRows: `minmax(150px, 1fr)` }}
+            style={{
+              gridAutoRows: `minmax(150px, 1fr)`,
+              backgroundColor: "var(--card-color,#ffffff)",
+            }}
           >
             {halfChart?.map((chart, index) => (
               <div
@@ -211,7 +246,10 @@ const DataAnalysisDashboardSlide = ({ data }: { data: Partial<SchemaType> }) => 
         {otherHalfChart && otherHalfChart.length > 0 && <div className="mt-[14px] px-[64px] flex-1">
           <div
             className={`grid h-full bg-white p-[13px] rounded-[14px] min-h-0 gap-[10px] grid-cols-3`}
-            style={{ gridAutoRows: `minmax(150px, 1fr)` }}
+            style={{
+              gridAutoRows: `minmax(150px, 1fr)`,
+              backgroundColor: "var(--card-color,#ffffff)",
+            }}
           >
             {otherHalfChart?.map((chart, index) => (
               <div

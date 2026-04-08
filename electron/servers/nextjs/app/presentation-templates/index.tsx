@@ -36,7 +36,7 @@ import CoverSlide, { Schema as PoCoverSchema, slideLayoutId as PoCoverId, slideL
 import ImageGallerySlide, { Schema as PoImageGallerySchema, slideLayoutId as PoImageGalleryId, slideLayoutName as PoImageGalleryName, slideLayoutDescription as PoImageGalleryDesc } from "./ProductOverview/ImageGallerySlide";
 import IntroductionSlide, { Schema as PoIntroductionSchema, slideLayoutId as PoIntroductionId, slideLayoutName as PoIntroductionName, slideLayoutDescription as PoIntroductionDesc } from "./ProductOverview/IntroductionSlide";
 import KpiCardsSlide, { Schema as PoKpiCardsSchema, slideLayoutId as PoKpiCardsId, slideLayoutName as PoKpiCardsName, slideLayoutDescription as PoKpiCardsDesc } from "./ProductOverview/KpiCardsSlide";
-import MarketOpportunitySlide, { Schema as PoMarketOpportunitySchema, slideLayoutId as PoMarketOpportunityId, slideLayoutName as PoMarketOpportunityName, slideLayoutDescription as PoMarketOpportunityDesc } from "./ProductOverview/MarketOpportunitySlide";
+// import MarketOpportunitySlide, { Schema as PoMarketOpportunitySchema, slideLayoutId as PoMarketOpportunityId, slideLayoutName as PoMarketOpportunityName, slideLayoutDescription as PoMarketOpportunityDesc } from "./ProductOverview/MarketOpportunitySlide";
 import MeetTeamSlide, { Schema as PoMeetTeamSchema, slideLayoutId as PoMeetTeamId, slideLayoutName as PoMeetTeamName, slideLayoutDescription as PoMeetTeamDesc } from "./ProductOverview/MeetTeamSlide";
 import MissionVisionSlide, { Schema as PoMissionVisionSchema, slideLayoutId as PoMissionVisionId, slideLayoutName as PoMissionVisionName, slideLayoutDescription as PoMissionVisionDesc } from "./ProductOverview/MissionVisionSlide";
 import OurServicesSlide, { Schema as PoOurServicesSchema, slideLayoutId as PoOurServicesId, slideLayoutName as PoOurServicesName, slideLayoutDescription as PoOurServicesDesc } from "./ProductOverview/OurServicesSlide";
@@ -274,7 +274,7 @@ export const productOverviewTemplates: TemplateWithData[] = [
     createTemplateEntry(TableOfContentSlide, PoTableOfContentSchema, PoTableOfContentId, PoTableOfContentName, PoTableOfContentDesc, "product-overview", "TableOfContentSlide"),
     createTemplateEntry(IntroductionSlide, PoIntroductionSchema, PoIntroductionId, PoIntroductionName, PoIntroductionDesc, "product-overview", "IntroductionSlide"),
     createTemplateEntry(MissionVisionSlide, PoMissionVisionSchema, PoMissionVisionId, PoMissionVisionName, PoMissionVisionDesc, "product-overview", "MissionVisionSlide"),
-    createTemplateEntry(MarketOpportunitySlide, PoMarketOpportunitySchema, PoMarketOpportunityId, PoMarketOpportunityName, PoMarketOpportunityDesc, "product-overview", "MarketOpportunitySlide"),
+    // createTemplateEntry(MarketOpportunitySlide, PoMarketOpportunitySchema, PoMarketOpportunityId, PoMarketOpportunityName, PoMarketOpportunityDesc, "product-overview", "MarketOpportunitySlide"),
     createTemplateEntry(BusinessChallengesGridSlide, PoBizChallengesGridSchema, PoBizChallengesGridId, PoBizChallengesGridName, PoBizChallengesGridDesc, "product-overview", "BusinessChallengesGridSlide"),
     createTemplateEntry(BusinessChallengesCardsSlide, PoBizChallengesCardsSchema, PoBizChallengesCardsId, PoBizChallengesCardsName, PoBizChallengesCardsDesc, "product-overview", "BusinessChallengesCardsSlide"),
     createTemplateEntry(OurServicesSlide, PoOurServicesSchema, PoOurServicesId, PoOurServicesName, PoOurServicesDesc, "product-overview", "OurServicesSlide"),

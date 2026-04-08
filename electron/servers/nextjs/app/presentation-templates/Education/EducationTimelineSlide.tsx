@@ -49,9 +49,15 @@ const EducationTimelineSlide = ({ data }: { data: Partial<SchemaType> }) => {
   const isSixOrLess = milestones?.length && milestones?.length <= 6;
 
   return (
-    <div className="relative h-[720px] w-[1280px] overflow-hidden bg-[#efeff1]">
+    <div
+      className="relative h-[720px] w-[1280px] overflow-hidden"
+      style={{
+        backgroundColor: "var(--background-color,#efeff1)",
+        fontFamily: "var(--body-font-family,'Times New Roman')",
+      }}
+    >
       <div className="relative z-10 px-[56px] pt-[86px]">
-        <h2 className="font-serif text-[84px] leading-none tracking-[-0.02em] text-[#1a1752]">
+        <h2 className="font-serif text-[84px] leading-none tracking-[-0.02em]" style={{ color: "var(--primary-color,#1a1752)" }}>
           {title}
         </h2>
       </div>
@@ -82,13 +88,13 @@ function TimelineUpToSix({
           <div key={`${milestone.year}-${index}`} className="">
             <div className="flex items-center ">
 
-              <div className="h-[22px] z-10 relative w-[22px] rounded-full bg-[#272272]" />
-              {index !== milestones.length - 1 && <div className="h-[3px] bg-[#d8d8dd] flex-1" />}
+              <div className="h-[22px] z-10 relative w-[22px] rounded-full" style={{ backgroundColor: "var(--primary-color,#272272)" }} />
+              {index !== milestones.length - 1 && <div className="h-[3px] flex-1" style={{ backgroundColor: "var(--stroke,#d8d8dd)" }} />}
             </div>
-            <p className="mt-[18px] text-[20px] font-medium leading-none text-[#3c3f4b]">
+            <p className="mt-[18px] text-[20px] font-medium leading-none" style={{ color: "var(--background-text,#3c3f4b)" }}>
               {milestone.year}
             </p>
-            <p className=" text-[18px] leading-[1.2] text-[#3a3d4c]">
+            <p className=" text-[18px] leading-[1.2]" style={{ color: "var(--background-text,#3a3d4c)" }}>
               {milestone.description}
             </p>
           </div>
@@ -114,10 +120,10 @@ function TimelineMoreThanSix({
         <mask id="path-1-inside-1_220_636" fill="white">
           <path d="M0 0H128C133.891 0 138.667 4.77563 138.667 10.6667V220C138.667 225.891 133.891 230.667 128 230.667H0V0Z" />
         </mask>
-        <path d="M0 -2.66667H128C135.364 -2.66667 141.333 3.30287 141.333 10.6667H136C136 6.24839 132.418 2.66667 128 2.66667H0V-2.66667ZM141.333 220C141.333 227.364 135.364 233.333 128 233.333H0V228H128C132.418 228 136 224.418 136 220H141.333ZM136 220M0 230.667V0V230.667M128 -2.66667C135.364 -2.66667 141.333 3.30287 141.333 10.6667V220C141.333 227.364 135.364 233.333 128 233.333V228C132.418 228 136 224.418 136 220V10.6667C136 6.24839 132.418 2.66667 128 2.66667V-2.66667Z" fill="#101C3D" fillOpacity="0.1" mask="url(#path-1-inside-1_220_636)" />
+        <path d="M0 -2.66667H128C135.364 -2.66667 141.333 3.30287 141.333 10.6667H136C136 6.24839 132.418 2.66667 128 2.66667H0V-2.66667ZM141.333 220C141.333 227.364 135.364 233.333 128 233.333H0V228H128C132.418 228 136 224.418 136 220H141.333ZM136 220M0 230.667V0V230.667M128 -2.66667C135.364 -2.66667 141.333 3.30287 141.333 10.6667V220C141.333 227.364 135.364 233.333 128 233.333V228C132.418 228 136 224.418 136 220V10.6667C136 6.24839 132.418 2.66667 128 2.66667V-2.66667Z" fill="var(--primary-color,#101C3D)" fillOpacity="0.1" mask="url(#path-1-inside-1_220_636)" />
       </svg>
       {/* bottom horizontal line */}
-      {/* <div className="absolute z-[-1]  right-[110px] top-[220px] w-[150px] h-[3px] bg-[#d8d8dd]" /> */}
+      {/* <div className="absolute z-[-1]  right-[110px] top-[220px] w-[150px] h-[3px]" style={{ backgroundColor: "var(--stroke,#d8d8dd)" }} /> */}
       <div className="relative z-10  px-[56px]">
         <div
           className="grid "
@@ -127,15 +133,15 @@ function TimelineMoreThanSix({
             <div key={`${milestone.year}-${index}`} className="">
               <div className="flex items-center ">
 
-                <div className="h-[22px] z-10 relative w-[22px] rounded-full bg-[#272272]" />
-                {index !== milestones.length - 1 && <div className="h-[3px] bg-[#d8d8dd] flex-1" />}
+                <div className="h-[22px] z-10 relative w-[22px] rounded-full" style={{ backgroundColor: "var(--primary-color,#272272)" }} />
+                {index !== milestones.length - 1 && <div className="h-[3px] flex-1" style={{ backgroundColor: "var(--stroke,#d8d8dd)" }} />}
               </div>
               <div className="pr-2 mt-[18px]">
 
-                <p className=" text-[20px] font-medium leading-none text-[#3c3f4b]">
+                <p className=" text-[20px] font-medium leading-none" style={{ color: "var(--background-text,#3c3f4b)" }}>
                   {milestone.year}
                 </p>
-                <p className="mt-2 text-[18px] leading-[1.2] text-[#3a3d4c]">
+                <p className="mt-2 text-[18px] leading-[1.2]" style={{ color: "var(--background-text,#3a3d4c)" }}>
                   {milestone.description}
                 </p>
               </div>
@@ -147,7 +153,7 @@ function TimelineMoreThanSix({
 
       {/* bottom row */}
       <div
-        className="mt-[75px] grid items-end px-[56px] pr-[180px] "
+        className="mt-[95px] grid items-end px-[56px] pr-[180px] "
 
         style={{ gridTemplateColumns: `repeat(${bottomItems.length}, minmax(0, 1fr))` }}
       >
@@ -158,16 +164,16 @@ function TimelineMoreThanSix({
           return (
             <div key={`${item.year}-${colIndex + 8}`} className="flex flex-col items-end">
               <div className="flex w-full items-center ">
-                {/* {colIndex === 0 && <div className="absolute h-[3px] flex-1 bg-[#d8d8dd]" />} */}
-                {true && <div className={` h-[3px] flex-1  ${colIndex === 0 ? '' : 'bg-[#d8d8dd]'}`} />}
-                <div className="h-[22px] z-10 relative w-[22px] rounded-full bg-[#272272]" />
+                {/* {colIndex === 0 && <div className="absolute h-[3px] flex-1" style={{ backgroundColor: "var(--stroke,#d8d8dd)" }} />} */}
+                <div className="h-[3px] flex-1" style={{ backgroundColor: colIndex === 0 ? "transparent" : "var(--stroke,#d8d8dd)" }} />
+                <div className="h-[22px] z-10 relative w-[22px] rounded-full" style={{ backgroundColor: "var(--primary-color,#272272)" }} />
               </div>
               <div className="pl-2 mt-[18px]">
 
-                <p className=" text-right text-[20px] font-medium leading-none text-[#3c3f4b]">
+                <p className=" text-right text-[20px] font-medium leading-none" style={{ color: "var(--background-text,#3c3f4b)" }}>
                   {item.year}
                 </p>
-                <p className="mt-2 text-[18px] text-right leading-[1.2] text-[#3a3d4c]">
+                <p className="mt-2 text-[18px] text-right leading-[1.2]" style={{ color: "var(--background-text,#3a3d4c)" }}>
                   {item.description}
                 </p>
               </div>

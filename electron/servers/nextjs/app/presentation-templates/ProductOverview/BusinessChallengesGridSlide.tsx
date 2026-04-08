@@ -9,7 +9,7 @@ const ChallengeSchema = z.object({
   heading: z.string().min(4).max(12).meta({
     description: "Short heading for a single challenge block.",
   }),
-  body: z.string().min(40).max(96).meta({
+  body: z.string().max(40).meta({
     description: "Description text for a single challenge block.",
   }),
 });
@@ -53,27 +53,38 @@ const BusinessChallengesGridSlide = ({ data }: { data: Partial<SchemaType> }) =>
   return (
     <div
       className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
-      style={{ backgroundColor: "#DAE1DE" }}
+      style={{
+        backgroundColor: "var(--background-color,#DAE1DE)",
+        fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
+      }}
     >
       <div className=" px-[60px] pt-[60px] pb-[28px]">
         <h2
           className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
-          style={{ color: "#15342D" }}
+          style={{ color: "var(--primary-color,#15342D)" }}
         >
           {title}
         </h2>
       </div>
 
       <div
-        className="grid h-[540px] grid-cols-2 justify-between items-center gap-y-[63px] px-[84px] py-[70px] gap-x-[63px]"
-        style={{ backgroundColor: "#15342D" }}
+        className="grid  grid-cols-2 justify-between items-center gap-y-[63px] px-[84px] py-[70px] gap-x-[63px]"
+        style={{ backgroundColor: "var(--primary-color,#15342D)" }}
       >
         {challenges?.map((challenge, index) => (
           <div key={index} className="">
-            <p className="text-[20px] font-semibold tracking-[2.074px] text-white">
+            <p
+              className="text-[20px] font-semibold tracking-[2.074px] text-white"
+              style={{ color: "var(--primary-text,#edf2f1)" }}
+            >
               {challenge.heading}
             </p>
-            <p className="mt-[24px] text-[28px] font-normal  text-white">{challenge.body}</p>
+            <p
+              className="mt-[24px] text-[28px] font-normal  text-white"
+              style={{ color: "var(--primary-text,#edf2f1)" }}
+            >
+              {challenge.body}
+            </p>
           </div>
         ))}
       </div>

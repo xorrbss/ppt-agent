@@ -79,7 +79,13 @@ export type SchemaType = z.infer<typeof Schema>;
 const TeamSlide = ({ data }: { data: Partial<SchemaType> }) => {
 
   return (
-    <div className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-white">
+    <div
+      className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-white"
+      style={{
+        backgroundColor: "var(--background-color,#ffffff)",
+        fontFamily: "var(--body-font-family,Nunito Sans)",
+      }}
+    >
       <div className="grid h-full "
         style={{ gridTemplateColumns: `repeat(${data?.members?.length}, minmax(0, 1fr))` }}
       >
@@ -93,9 +99,19 @@ const TeamSlide = ({ data }: { data: Partial<SchemaType> }) => {
               alt={member.image.__image_prompt__}
               className="h-full w-full object-cover"
             />
-            <div className="absolute inset-x-0 bottom-0 h-[240px] bg-gradient-to-t from-[#4d4ef3] via-[#4d4ef3]/55 to-transparent" />
-            <div className="absolute left-0 bottom-0 p-[33px]  text-white">
-              <p className="text-[21px] tracking-[2.074px] font-medium text-white/90">{member.title}</p>
+            <div
+              className="absolute inset-x-0 bottom-0 h-[240px] bg-gradient-to-t from-[#4d4ef3] via-[#4d4ef3]/55 to-transparent"
+              style={{
+                backgroundImage: "linear-gradient(to top, var(--graph-1,#4d4ef3), rgba(77, 78, 243, 0.55), transparent)",
+              }}
+            />
+            <div className="absolute left-0 bottom-0 p-[33px]  text-white" style={{ color: "var(--primary-text,#ffffff)" }}>
+              <p
+                className="text-[21px] tracking-[2.074px] font-medium text-white/90"
+                style={{ color: "var(--primary-text,#ffffff)", opacity: 0.9 }}
+              >
+                {member.title}
+              </p>
               <p className="mt-[14px] text-[28px] ">
                 {member.name}
               </p>

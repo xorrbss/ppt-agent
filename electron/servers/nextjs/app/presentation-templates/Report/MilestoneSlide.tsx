@@ -66,14 +66,23 @@ const MilestoneSlide = ({ data }: { data: Partial<SchemaType> }) => {
   const { title, activeIndex, items } = data;
 
   return (
-    <div className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#F9F8F8]">
+    <div
+      className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#F9F8F8]"
+      style={{
+        backgroundColor: "var(--background-color,#F9F8F8)",
+        fontFamily: "var(--body-font-family,Nunito Sans)",
+      }}
+    >
       <div
         className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#157CFF]"
-        style={{ height: 185 }}
+        style={{ height: 185, backgroundColor: "var(--primary-color,#157CFF)" }}
       />
 
       <div className="px-[70px] pt-[56px]">
-        <h2 className="text-[80px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]">
+        <h2
+          className="text-[80px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]"
+          style={{ color: "var(--background-text,#232223)" }}
+        >
           {title}
         </h2>
       </div>
@@ -91,17 +100,29 @@ const MilestoneSlide = ({ data }: { data: Partial<SchemaType> }) => {
                     ? "z-10 bg-[#157CFF] text-white"
                     : "border border-[#157CFF] bg-white text-[#157CFE]"
                     } ${index > 0 ? "ml-[-45px]" : ""} `}
+                  style={{
+                    backgroundColor: isActive ? "var(--primary-color,#157CFF)" : "var(--card-color,#ffffff)",
+                    borderColor: "var(--primary-color,#157CFF)",
+                    color: isActive ? "var(--primary-text,#ffffff)" : "var(--primary-color,#157CFE)",
+                  }}
                 >
-                  <span className={`${isActive ? "text-white" : "text-[#157CFF]"} text-[42px] font-medium tracking-[0.18em]`}>
+                  <span
+                    className={`${isActive ? "text-white" : "text-[#157CFF]"} text-[42px] font-medium tracking-[0.18em]`}
+                    style={{ color: isActive ? "var(--primary-text,#ffffff)" : "var(--primary-color,#157CFF)" }}
+                  >
                     {item.stepNumber}
                   </span>
 
                 </div>
-                <div key={`${item.heading}-${index}`} className={`text-center  mt-[20px] text-[#232223] ${index > 0 ? 'pr-[33px]' : ''} ${index === 0 ? 'px-[33px]' : ''}`}>
-                  <h3 className="text-[20px] text-[#232223] font-medium tracking-[2.074px]">
+                <div
+                  key={`${item.heading}-${index}`}
+                  className={`text-center  mt-[20px] text-[#232223] ${index > 0 ? 'pr-[33px]' : ''} ${index === 0 ? 'px-[33px]' : ''}`}
+                  style={{ color: "var(--background-text,#232223)" }}
+                >
+                  <h3 className="text-[20px] text-[#232223] font-medium tracking-[2.074px]" style={{ color: "var(--background-text,#232223)" }}>
                     {item.heading}
                   </h3>
-                  <p className="mt-[6px] text-[24px] leading-[26.667px]  text-[#232223]">
+                  <p className="mt-[6px] text-[24px] leading-[26.667px]  text-[#232223]" style={{ color: "var(--background-text,#232223)" }}>
                     {item.description}
                   </p>
                 </div>

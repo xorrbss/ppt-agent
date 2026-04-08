@@ -11,7 +11,7 @@ const CardSchema = z.object({
   heading: z.string().min(4).max(12).meta({
     description: "Card heading for one challenge column.",
   }),
-  body: z.string().min(30).max(60).meta({
+  body: z.string().max(40).meta({
     description: "Card body copy for one challenge column.",
   }),
   dark: z.boolean().default(false).meta({
@@ -26,7 +26,7 @@ export const Schema = z.object({
   taglineLabel: z.string().min(3).max(10).default("TAGLINE").meta({
     description: "Short label above the left-side paragraph.",
   }),
-  taglineBody: z.string().min(40).max(100).default(
+  taglineBody: z.string().max(80).default(
     "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea."
   ).meta({
     description: "Supporting paragraph on the left side.",
@@ -43,7 +43,7 @@ export const Schema = z.object({
   }),
   cards: z
     .array(CardSchema)
-    .min(3)
+
     .max(3)
     .default([
       {
@@ -75,12 +75,15 @@ const BusinessChallengesCardsSlide = ({ data }: { data: Partial<SchemaType> }) =
   return (
     <div
       className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
-      style={{ backgroundColor: "#DAE1DE" }}
+      style={{
+        backgroundColor: "var(--background-color,#DAE1DE)",
+        fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
+      }}
     >
       <div className=" pl-[66px] pt-[60px] pb-[28px]">
         <h2
           className="text-[80px] max-w-[406px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
-          style={{ color: "#15342D" }}
+          style={{ color: "var(--primary-color,#15342D)" }}
         >
           {title}
         </h2>
@@ -88,11 +91,16 @@ const BusinessChallengesCardsSlide = ({ data }: { data: Partial<SchemaType> }) =
         <div className="mt-[72px] w-[360px]">
           <p
             className="text-[20px] font-semibold tracking-[2.074px] text-white"
-            style={{ color: "#15342D" }}
+            style={{ color: "var(--primary-color,#15342D)" }}
           >
             {taglineLabel}
           </p>
-          <p className="mt-[16px] text-[24px] font-normal  text-[#15342DCC]">{taglineBody}</p>
+          <p
+            className="mt-[16px] text-[24px] font-normal  text-[#15342DCC]"
+            style={{ color: "var(--background-text,#15342DCC)" }}
+          >
+            {taglineBody}
+          </p>
         </div>
       </div>
 
@@ -109,17 +117,29 @@ const BusinessChallengesCardsSlide = ({ data }: { data: Partial<SchemaType> }) =
           <div
             key={index}
             className=" w-[248px] px-[34px] py-[34px]"
-            style={{ backgroundColor: card.dark ? "#15342D" : "#ebebee" }}
+            style={{
+              backgroundColor: card.dark
+                ? "var(--primary-color,#15342D)"
+                : "var(--card-color,#ebebee)",
+            }}
           >
             <p
               className="text-[20px] font-semibold tracking-[2.074px] text-white"
-              style={{ color: card.dark ? "#edf2f1" : "#15342D" }}
+              style={{
+                color: card.dark
+                  ? "var(--primary-text,#edf2f1)"
+                  : "var(--primary-color,#15342D)",
+              }}
             >
               {card.heading}
             </p>
             <p
               className="mt-[18px] text-[28px] font-normal  text-white"
-              style={{ color: card.dark ? "#edf2f1" : "#15342D" }}
+              style={{
+                color: card.dark
+                  ? "var(--primary-text,#edf2f1)"
+                  : "var(--primary-color,#15342D)",
+              }}
             >
               {card.body}
             </p>

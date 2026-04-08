@@ -23,7 +23,7 @@ const ServiceSchema = z.object({
   tagline: z.string().min(3).max(12).meta({
     description: "Short label under each service heading.",
   }),
-  body: z.string().min(40).max(90).meta({
+  body: z.string().max(40).meta({
     description: "Service description paragraph.",
   }),
 });
@@ -91,10 +91,16 @@ const EducationServicesSplitSlide = ({ data }: { data: Partial<SchemaType> }) =>
 
 
   return (
-    <div className="relative h-[720px] w-[1280px] overflow-hidden bg-[#E6E7E8]">
+    <div
+      className="relative h-[720px] w-[1280px] overflow-hidden"
+      style={{
+        backgroundColor: "var(--background-color,#E6E7E8)",
+        fontFamily: "var(--body-font-family,'Times New Roman')",
+      }}
+    >
       <div className="grid h-full grid-cols-[365px_1fr]">
         <div className="px-[53px] pt-[53px]">
-          <h2 className="font-serif text-[64px] leading-[98%] tracking-[-0.02em] text-[#1a1752]">
+          <h2 className="font-serif text-[64px] leading-[98%] tracking-[-0.02em]" style={{ color: "var(--primary-color,#1a1752)" }}>
             {title}
           </h2>
         </div>
@@ -109,7 +115,10 @@ const EducationServicesSplitSlide = ({ data }: { data: Partial<SchemaType> }) =>
           {sections?.map((section, index) => (
             <div key={`${section.heading}-${index}`} className=" flex items-center"
               style={{
-                borderBottom: index !== (sections?.length ?? 1) - 1 ? "5px solid rgba(255, 255, 255, 0.10)" : "none",
+                borderBottom:
+                  index !== (sections?.length ?? 1) - 1
+                    ? "5px solid var(--stroke,rgba(255, 255, 255, 0.10))"
+                    : "none",
               }}
             >
               <div className=" min-w-[316px] max-w-[316px] "
@@ -127,11 +136,11 @@ const EducationServicesSplitSlide = ({ data }: { data: Partial<SchemaType> }) =>
               <div
                 className={`px-[56px] `}
               >
-                <h3 className="text-[24px] font-medium leading-none text-[#34394C]">{section.heading}</h3>
-                <p className="mt-[10px] text-[14px] font-medium uppercase leading-none text-[#454962]">
+                <h3 className="text-[24px] font-medium leading-none" style={{ color: "var(--background-text,#34394C)" }}>{section.heading}</h3>
+                <p className="mt-[10px] text-[14px] font-medium uppercase leading-none" style={{ color: "var(--background-text,#454962)" }}>
                   {section.tagline}
                 </p>
-                <p className="mt-[18px]  text-[22px] leading-[1.26] text-[#34394C] tracking-[0.04em]">
+                <p className="mt-[18px]  text-[22px] leading-[1.26] tracking-[0.04em]" style={{ color: "var(--background-text,#34394C)" }}>
                   {section.body}
                 </p>
               </div>

@@ -249,7 +249,7 @@ export function normalizeFlexibleChartData(
   return { data: mapped, series };
 }
 
-const graphVar = (index: number, fallback: string) => `var(--graph-${index % 8}, ${fallback})`;
+const graphVar = (index: number, fallback: string) => `var(--graph-${index % 10}, ${fallback})`;
 
 export type ChartDensity = "default" | "compact";
 
@@ -269,7 +269,7 @@ export function FlexibleReportChart({
   data: chartData,
   series = [],
   colorFallback = "#157CFF",
-  dualLineColors = ["#9fb6ff", "#4d4ef3"],
+  dualLineColors = ["var(--graph-0,#9fb6ff)", "var(--graph-1,#4d4ef3)"],
   density = "default",
 }: FlexibleReportChartProps) {
   const areaGradientId = `flex-area-${useId().replace(/:/g, "")}`;
@@ -352,25 +352,24 @@ export function FlexibleReportChart({
     const nm = String(name ?? "");
     const short = nm.length <= ui.pieMaxNameLen;
     const pct = `${(percent * 100).toFixed(0)}%`;
-    const fontSize = compact ? (short ? 6 : 5) : short ? 10 : 9;
+    const fontSize = compact ? (short ? 6 : 5) : short ? 12 : 12;
     const labelText = compact ? pct : short ? `${name} ${pct}` : pct;
     return (
-      <text
-        x={x}
-        y={y}
-        textAnchor="middle"
-        dominantBaseline="central"
-        fill="#ffffff"
-        fontSize={fontSize}
-        fontWeight={600}
-        style={{
-          paintOrder: "stroke fill",
-          stroke: "rgba(0,0,0,0.28)",
-          strokeWidth: compact ? 1 : 2,
-        }}
-      >
-        {labelText}
-      </text>
+
+      <g>
+        {/* <circle cx={x} cy={y} fill="var(--card-color,#ECEAF8)" /> */}
+        <text
+          x={x}
+          y={y}
+          style={{ padding: "4px" }}
+          textAnchor="middle"
+          fill="var(--background-text,#2C2B39)"
+          fontSize={fontSize}
+          fontWeight={600}
+        >
+          {labelText}
+        </text>
+      </g>
     );
   };
 
@@ -399,7 +398,7 @@ export function FlexibleReportChart({
               <LabelList
                 dataKey="value"
                 position="top"
-                fill={colorFallback}
+                fill={graphVar(0, colorFallback)}
                 fontSize={ui.labelFs}
                 offset={ui.labelOffTop}
               />
@@ -425,7 +424,13 @@ export function FlexibleReportChart({
               axisLine={false}
             />
             <Bar dataKey="value" barSize={ui.barSize} fill={graphVar(0, colorFallback)} radius={[...ui.barRadiusH]}>
-              <LabelList dataKey="value" position="right" fill={colorFallback} fontSize={ui.labelFs} offset={ui.labelOffSide} />
+              <LabelList
+                dataKey="value"
+                position="right"
+                fill={graphVar(0, colorFallback)}
+                fontSize={ui.labelFs}
+                offset={ui.labelOffSide}
+              />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
@@ -629,7 +634,7 @@ export function FlexibleReportChart({
               tickLine={false}
               axisLine={false}
             />
-            <ReferenceLine x={0} stroke="#9CA3AF" strokeWidth={1} />
+            <ReferenceLine x={0} stroke="var(--stroke,#9CA3AF)" strokeWidth={1} />
             <Bar dataKey="positive" barSize={ui.barSize} fill={graphVar(0, colorFallback)} stackId="stack" radius={[...ui.barRadiusH]}>
               <LabelList dataKey="positive" position="right" fill={graphVar(0, colorFallback)} fontSize={ui.labelFs} offset={ui.labelOffSide} />
             </Bar>
