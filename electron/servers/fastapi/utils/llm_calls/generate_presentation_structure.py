@@ -1,7 +1,7 @@
 from typing import Optional, Dict
 
 from models.llm_message import LLMSystemMessage, LLMUserMessage
-from models.presentation_layout import PresentationLayoutModel
+from templates.presentation_layout import PresentationLayoutModel
 from models.presentation_outline_model import PresentationOutlineModel
 from services.llm_client import LLMClient
 from utils.llm_client_error_handler import handle_llm_client_exceptions

@@ -24,16 +24,13 @@ from models.presentation_outline_model import (
 from enums.tone import Tone
 from enums.verbosity import Verbosity
 from models.pptx_models import PptxPresentationModel
-from models.presentation_layout import PresentationLayoutModel
 from models.presentation_structure_model import PresentationStructureModel
 from models.presentation_with_slides import (
     PresentationWithSlides,
 )
 from models.sql.template import TemplateModel
-
 from services.documents_loader import DocumentsLoader
 from services.webhook_service import WebhookService
-from utils.get_layout_by_name import get_layout_by_name
 from services.image_generation_service import ImageGenerationService
 from utils.dict_utils import deep_update
 from utils.export_utils import export_presentation
@@ -70,6 +67,8 @@ from utils.process_slides import (
     process_slide_add_placeholder_assets,
     process_slide_and_fetch_assets,
 )
+from templates.get_layout_by_name import get_layout_by_name
+from templates.presentation_layout import PresentationLayoutModel
 import uuid
 
 
@@ -881,6 +880,8 @@ async def generate_presentation_sync(
         return await generate_presentation_handler(
             request, presentation_id, None, sql_session
         )
+    except HTTPException:
+        raise
     except Exception:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="Presentation generation failed")

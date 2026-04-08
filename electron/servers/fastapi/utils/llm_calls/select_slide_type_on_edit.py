@@ -1,5 +1,5 @@
 from models.llm_message import LLMSystemMessage, LLMUserMessage
-from models.presentation_layout import PresentationLayoutModel, SlideLayoutModel
+from templates.presentation_layout import PresentationLayoutModel, SlideLayoutModel
 from models.slide_layout_index import SlideLayoutIndex
 from models.sql.slide import SlideModel
 from services.llm_client import LLMClient

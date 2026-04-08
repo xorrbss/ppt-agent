@@ -1,12 +1,11 @@
 import os
 import uuid
 import shutil
-from pathlib import Path
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, File, UploadFile
 from pydantic import BaseModel
+from templates.preview import FontCheckResponse, check_fonts_in_pptx_handler
 from utils.asset_directory_utils import get_app_data_directory_env
-import uuid
 
 try:
     from fontTools.ttLib import TTFont
@@ -285,6 +284,9 @@ async def get_uploaded_fonts():
             status_code=500,
             detail=f"Error getting uploaded fonts: {str(e)}"
         )
+
+
+FONTS_ROUTER.post("/check", response_model=FontCheckResponse)(check_fonts_in_pptx_handler)
 
 
 @FONTS_ROUTER.delete("/delete/{filename}")
