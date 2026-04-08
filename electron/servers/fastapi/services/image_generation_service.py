@@ -221,24 +221,92 @@ class ImageGenerationService:
             prompt, output_directory, "gemini-3-pro-image-preview"
         )
 
-    async def get_image_from_pexels(self, prompt: str) -> str:
-        async with aiohttp.ClientSession(trust_env=True) as session:
-            response = await session.get(
-                f"https://api.pexels.com/v1/search?query={prompt}&per_page=1",
-                headers={"Authorization": f"{get_pexels_api_key_env()}"},
-            )
-            data = await response.json()
-            image_url = data["photos"][0]["src"]["large"]
-            return image_url
+    async def get_image_from_pexels(
+        self, prompt: str, api_key: str | None = None, limit: int = 1
+    ) -> str | list[str]:
+        per_page = max(1, min(limit, 80))
+        resolved_api_key = (api_key or get_pexels_api_key_env() or "").strip()
 
-    async def get_image_from_pixabay(self, prompt: str) -> str:
         async with aiohttp.ClientSession(trust_env=True) as session:
             response = await session.get(
-                f"https://pixabay.com/api/?key={get_pixabay_api_key_env()}&q={prompt}&image_type=photo&per_page=3"
+                "https://api.pexels.com/v1/search",
+                params={"query": prompt, "per_page": per_page},
+                headers={"Authorization": resolved_api_key} if resolved_api_key else {},
+                timeout=aiohttp.ClientTimeout(total=20),
             )
+
+            if response.status in {401, 403}:
+                raise HTTPException(status_code=401, detail="Invalid Pexels API key")
+            if response.status != 200:
+                error_text = await response.text()
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Pexels request failed: {error_text}",
+                )
+
             data = await response.json()
-            image_url = data["hits"][0]["largeImageURL"]
-            return image_url
+            photos = data.get("photos", [])
+            image_urls = [
+                photo.get("src", {}).get("large")
+                for photo in photos
+                if photo.get("src", {}).get("large")
+            ]
+
+            if limit <= 1:
+                return image_urls[0] if image_urls else ""
+            return image_urls[:limit]
+
+    async def get_image_from_pixabay(
+        self, prompt: str, api_key: str | None = None, limit: int = 1
+    ) -> str | list[str]:
+        per_page = max(3, min(limit, 200))
+        resolved_api_key = (api_key or get_pixabay_api_key_env() or "").strip()
+
+        async with aiohttp.ClientSession(trust_env=True) as session:
+            response = await session.get(
+                "https://pixabay.com/api/",
+                params={
+                    "key": resolved_api_key,
+                    "q": prompt[:99],
+                    "image_type": "photo",
+                    "per_page": per_page,
+                },
+                timeout=aiohttp.ClientTimeout(total=20),
+            )
+
+            if response.status in {401, 403}:
+                error_text = await response.text()
+                raise HTTPException(
+                    status_code=401,
+                    detail=f"Invalid Pixabay API key: {error_text}",
+                )
+            if response.status == 400:
+                error_text = await response.text()
+                if "api key" in error_text.lower():
+                    raise HTTPException(
+                        status_code=401,
+                        detail=f"Invalid Pixabay API key: {error_text}",
+                    )
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Pixabay request invalid: {error_text}",
+                )
+            if response.status != 200:
+                error_text = await response.text()
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Pixabay request failed: {error_text}",
+                )
+
+            data = await response.json()
+            hits = data.get("hits", [])
+            image_urls = [
+                hit.get("largeImageURL") for hit in hits if hit.get("largeImageURL")
+            ]
+
+            if limit <= 1:
+                return image_urls[0] if image_urls else ""
+            return image_urls[:limit]
 
     async def generate_image_comfyui(self, prompt: str, output_directory: str) -> str:
         """

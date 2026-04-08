@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState, useRef } from "react";
+import { useSelector } from "react-redux";
 import {
   Sheet,
   SheetContent,
@@ -9,7 +10,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Wand2, Upload, Loader2, Delete, Trash } from "lucide-react";
+import { Wand2, Upload, Loader2, Trash } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PresentationGenerationApi } from "../services/api/presentation-generation";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,6 +19,10 @@ import { PreviousGeneratedImagesResponse } from "../services/api/params";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { ImagesApi } from "../services/api/images";
 import { ImageAssetResponse } from "../services/api/types";
+import { RootState } from "@/store/store";
+
+const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
+
 interface ImageEditorProps {
   initialImage: string | null;
   imageIdx?: number;
@@ -39,6 +44,10 @@ const ImageEditor = ({
   onFocusPointClick,
   onImageChange,
 }: ImageEditorProps) => {
+  const llmConfig = useSelector((state: RootState) => state.userConfig.llm_config);
+  const selectedImageProvider = (llmConfig?.IMAGE_PROVIDER || "").toLowerCase();
+  const isStockImageProvider = STOCK_IMAGE_PROVIDERS.has(selectedImageProvider);
+
   // State management
   const [previewImages, setPreviewImages] = useState(initialImage);
   const [previousGeneratedImages, setPreviousGeneratedImages] = useState<
@@ -53,6 +62,7 @@ const ImageEditor = ({
   const [isOpen, setIsOpen] = useState(true);
   const [uploadedImages, setUploadedImages] = useState<ImageAssetResponse[]>([]);
   const [uploadedImagesLoading, setUploadedImagesLoading] = useState(false);
+  const [stockSearchResults, setStockSearchResults] = useState<string[]>([]);
   // Focus point and object fit for image editing
   const [isFocusPointMode, setIsFocusPointMode] = useState(false);
   const [focusPoint, setFocusPoint] = useState(
@@ -190,18 +200,40 @@ const ImageEditor = ({
       setError("Please enter a prompt");
       return;
     }
+
+    const trimmedPrompt = prompt.trim();
+    if (!trimmedPrompt) {
+      setError("Please enter a prompt");
+      return;
+    }
+
     try {
       setIsGenerating(true);
       setError(null);
       trackEvent(MixpanelEvent.ImageEditor_GenerateImage_API_Call);
-      const response = await PresentationGenerationApi.generateImage({
-        prompt: prompt,
-      });
 
-      setPreviewImages(response);
+      if (isStockImageProvider) {
+        const providerApiKey =
+          selectedImageProvider === "pexels"
+            ? llmConfig?.PEXELS_API_KEY
+            : llmConfig?.PIXABAY_API_KEY;
+        const results = await ImagesApi.searchStockImages(trimmedPrompt, 12, {
+          provider: selectedImageProvider,
+          apiKey: providerApiKey,
+        });
+        setStockSearchResults(results);
+        if (results.length > 0) {
+          setPreviewImages(results[0]);
+        }
+      } else {
+        const response = await PresentationGenerationApi.generateImage({
+          prompt: trimmedPrompt,
+        });
+        setPreviewImages(response);
+      }
     } catch (err: any) {
       console.error("Error in image generation", err);
-      setError(err.message || "Failed to generate image. Please try again.");
+      setError(err.message || "Failed to fetch images. Please try again.");
     } finally {
       setIsGenerating(false);
     }
@@ -286,7 +318,7 @@ const ImageEditor = ({
             <Tabs defaultValue="generate" className="w-full" onValueChange={handleTabChange}>
               <TabsList className="grid bg-blue-100 border border-blue-300 w-full grid-cols-3 mx-auto">
                 <TabsTrigger className="font-medium" value="generate">
-                  AI Generate
+                  {isStockImageProvider ? "Stock Search" : "AI Generate"}
                 </TabsTrigger>
                 <TabsTrigger className="font-medium" value="upload">
                   Upload
@@ -305,10 +337,14 @@ const ImageEditor = ({
 
                   <div>
                     <h3 className="text-base font-medium mb-2">
-                      Image Description
+                      {isStockImageProvider ? "Image Keyword" : "Image Description"}
                     </h3>
                     <Textarea
-                      placeholder="Describe the image you want to generate..."
+                      placeholder={
+                        isStockImageProvider
+                          ? "Enter a keyword to search stock images..."
+                          : "Describe the image you want to generate..."
+                      }
                       value={prompt}
                       onChange={(e) => setPrompt(e.target.value)}
                       className="min-h-[100px]"
@@ -321,35 +357,62 @@ const ImageEditor = ({
                     disabled={!prompt || isGenerating}
                   >
                     <Wand2 className="w-4 h-4 mr-2" />
-                    {isGenerating ? "Generating..." : "Generate Image"}
+                    {isGenerating
+                      ? (isStockImageProvider ? "Searching..." : "Generating...")
+                      : (isStockImageProvider ? "Search Images" : "Generate Image")}
                   </Button>
 
                   {error && <p className="text-red-500 text-sm">{error}</p>}
 
                   <div className="grid grid-cols-2 gap-4">
-                    {isGenerating || !previewImages ? (
+                    {isGenerating ? (
                       Array.from({ length: 4 }).map((_, index) => (
                         <Skeleton
                           key={index}
                           className="aspect-[4/3] w-full rounded-lg"
                         />
                       ))
+                    ) : isStockImageProvider ? (
+                      stockSearchResults.length > 0 ? (
+                        stockSearchResults.map((imageUrl, index) => (
+                          <div
+                            key={`${imageUrl}-${index}`}
+                            onClick={() => handleImageChange(imageUrl)}
+                            className="aspect-[4/3] w-full overflow-hidden rounded-lg border cursor-pointer hover:border-blue-500 transition-colors"
+                          >
+                            <img
+                              src={imageUrl}
+                              alt={`Stock result ${index + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-gray-500 col-span-2">Search with a keyword to view stock images.</p>
+                      )
                     ) : (
-                      <div
-                        onClick={() => handleImageChange(previewImages)}
-                        className="aspect-[4/3] w-full overflow-hidden rounded-lg border cursor-pointer hover:border-blue-500 transition-colors"
-                      >
-                        {previewImages && (
+                      !previewImages ? (
+                        Array.from({ length: 4 }).map((_, index) => (
+                          <Skeleton
+                            key={index}
+                            className="aspect-[4/3] w-full rounded-lg"
+                          />
+                        ))
+                      ) : (
+                        <div
+                          onClick={() => handleImageChange(previewImages)}
+                          className="aspect-[4/3] w-full overflow-hidden rounded-lg border cursor-pointer hover:border-blue-500 transition-colors"
+                        >
                           <img
                             src={previewImages}
                             alt={`Preview`}
                             className="w-full h-full object-cover"
                           />
-                        )}
-                      </div>
+                        </div>
+                      )
                     )}
                   </div>
-                  {previousGeneratedImages.length > 0 && (
+                  {!isStockImageProvider && previousGeneratedImages.length > 0 && (
                     <div className="mt-4">
                       <h3 className="text-sm font-medium mb-2">
                         Previous Generated Images

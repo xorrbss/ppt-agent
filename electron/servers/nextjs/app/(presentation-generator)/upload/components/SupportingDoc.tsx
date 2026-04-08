@@ -11,6 +11,8 @@ interface SupportingDocProps {
     multiple?: boolean
 }
 
+const MAX_SUPPORTED_FILES = 8
+
 const PDF_TYPES = ['.pdf']
 const TEXT_TYPES = ['.txt']
 const WORD_TYPES = ['.doc', '.docx', '.docm', '.odt', '.rtf']
@@ -93,12 +95,24 @@ const SupportingDoc = ({
         }
     }
 
+    const applyFileLimit = (candidateFiles: File[]) => {
+        if (candidateFiles.length <= MAX_SUPPORTED_FILES) {
+            return candidateFiles
+        }
+
+        toast.warning('Maximum file limit reached', {
+            description: `You can upload up to ${MAX_SUPPORTED_FILES} documents only.`,
+        })
+
+        return candidateFiles.slice(0, MAX_SUPPORTED_FILES)
+    }
+
     const handleFilesSelected = (e: ChangeEvent<HTMLInputElement>) => {
         const selectedFiles = Array.from(e.target.files ?? [])
         if (selectedFiles.length === 0) return
 
         const nextFiles = multiple ? [...files, ...selectedFiles] : [selectedFiles[0]]
-        const allowedFiles = nextFiles.filter(isAllowedFile)
+        const allowedFiles = applyFileLimit(nextFiles.filter(isAllowedFile))
 
         onFilesChange(allowedFiles)
         handleValidate(nextFiles)
@@ -118,7 +132,7 @@ const SupportingDoc = ({
         if (droppedFiles.length === 0) return
 
         const nextFiles = multiple ? [...files, ...droppedFiles] : [droppedFiles[0]]
-        const allowedFiles = nextFiles.filter(isAllowedFile)
+        const allowedFiles = applyFileLimit(nextFiles.filter(isAllowedFile))
 
         onFilesChange(allowedFiles)
         handleValidate(nextFiles)
