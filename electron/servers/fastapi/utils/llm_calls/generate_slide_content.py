@@ -2,7 +2,7 @@ from datetime import datetime
 import json
 from typing import Optional
 from models.llm_message import LLMSystemMessage, LLMUserMessage
-from models.presentation_layout import SlideLayoutModel
+from templates.presentation_layout import SlideLayoutModel
 from models.presentation_outline_model import SlideOutlineModel
 from services.llm_client import LLMClient
 from utils.llm_client_error_handler import handle_llm_client_exceptions

@@ -1,4 +1,4 @@
-from models.presentation_layout import PresentationLayoutModel
+from templates.presentation_layout import PresentationLayoutModel
 from models.presentation_outline_model import PresentationOutlineModel
 import re
 from typing import List
