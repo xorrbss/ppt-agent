@@ -1,13 +1,14 @@
+import { Fragment } from "react/jsx-runtime";
 import * as z from "zod";
 
 const MetricSchema = z.object({
-  value: z.string().min(1).max(12).meta({
+  value: z.string().min(1).max(6).meta({
     description: "Primary metric value shown in the pill.",
   }),
-  label: z.string().min(3).max(24).meta({
+  label: z.string().min(3).max(10).meta({
     description: "Short label shown below the metric value.",
   }),
-  description: z.string().min(6).max(36).meta({
+  description: z.string().min(6).max(20).meta({
     description: "Supporting metric description shown below the label.",
   }),
 });
@@ -24,7 +25,7 @@ export const slideLayoutDescription =
   "A slide with a title at the top and three tall metric cards arranged horizontally below it. Each card can contain one or two stacked metric blocks, and each block includes a main value, a label, and a supporting description.";
 
 export const Schema = z.object({
-  title: z.string().min(3).max(40).default("Performance Snapshot").meta({
+  title: z.string().min(3).max(12).default("Performance Snapshot").meta({
     description: "Slide title shown at the top-left.",
   }),
   columns: z
@@ -82,7 +83,7 @@ function StatPill({
     <div className=" h-[438px] w-[248px] overflow-hidden rounded-[127px] bg-[#157CFF] px-[28px] py-[74px] text-center text-white">
 
       {metrics.map((metric, index) => (
-        <>
+        <Fragment key={`${metric.value}-${metric.label}-${index}`}>
           <div
             key={`${metric.value}-${metric.label}-${index}`}
             className={``}
@@ -102,7 +103,7 @@ function StatPill({
             </svg>
           </div>
           }
-        </>
+        </Fragment>
       ))}
 
 

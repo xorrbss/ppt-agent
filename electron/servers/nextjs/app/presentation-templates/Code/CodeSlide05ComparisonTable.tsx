@@ -1,17 +1,17 @@
 import * as z from "zod";
 
 const ComparisonRowSchema = z.object({
-  feature: z.string().min(4).max(20).meta({
+  feature: z.string().min(4).max(17).meta({
     description: "Feature label shown in the first column.",
   }),
-  react: z.string().min(1).max(12).meta({
-    description: "React cell value.",
+  column1: z.string().max(10).meta({
+    description: "Column 1 cell value.",
   }),
-  vue: z.string().min(1).max(12).meta({
-    description: "Vue cell value.",
+  column2: z.string().max(10).meta({
+    description: "Column 2 cell value.",
   }),
-  angular: z.string().min(1).max(12).meta({
-    description: "Angular cell value.",
+  column3: z.string().max(10).meta({
+    description: "Column 3 cell value.",
   }),
 });
 
@@ -24,17 +24,20 @@ export const Schema = z.object({
   title: z.string().min(6).max(18).default("Comparison").meta({
     description: "Slide title shown above the table.",
   }),
+  tableColumns: z.array(z.string().max(4)).meta({
+    description: "Table columns shown in the first row.",
+  }).default(["Feature", "Column 1", "Column 2", "Column 3"]),
   rows: z
     .array(ComparisonRowSchema)
     .min(6)
     .max(6)
     .default([
-      { feature: "Component-based", react: "check", vue: "check", angular: "check" },
-      { feature: "TypeScript Support", react: "check", vue: "check", angular: "check" },
-      { feature: "Learning Curve", react: "Medium", vue: "Easy", angular: "Steep" },
-      { feature: "Bundle Size", react: "40KB", vue: "34KB", angular: "167KB" },
-      { feature: "Performance", react: "Excellent", vue: "Excellent", angular: "Good" },
-      { feature: "Community Size", react: "Huge", vue: "Large", angular: "Large" },
+      { feature: "Component-based", column1: "check", column2: "check", column3: "check" },
+      { feature: "TypeScript Support", column1: "check", column2: "check", column3: "check" },
+      { feature: "Learning Curve", column1: "Medium", column2: "Easy", column3: "Steep" },
+      { feature: "Bundle Size", column1: "40KB", column2: "34KB", column3: "167KB" },
+      { feature: "Performance", column1: "Excellent", column2: "Excellent", column3: "Good" },
+      { feature: "Community Size", column1: "Huge", column2: "Large", column3: "Large" },
     ])
     .meta({
       description: "Six comparison rows shown in the table.",
@@ -62,23 +65,30 @@ const CodeSlide05ComparisonTable = ({ data }: { data: Partial<SchemaType> }) => 
       <h2 className="text-[64px] font-medium  text-[#ffffff]">{data.title}</h2>
 
       <div className="mt-[22px] min-h-0 flex-1 rounded-[16px]  bg-[#0F172BCC] border border-[#1D293D80]">
-        <div className="grid grid-cols-[0.4fr_0.20fr_0.20fr_0.20fr] items-center   text-[#8ea1da]">
-          <p className="px-[32px] py-[16px] text-[18px] text-center border-b border-r border-[#1D293D80]">Feature</p>
-          <p className="px-[32px] py-[16px] text-[18px] text-center text-[#ffffff] border-b border-r border-[#1D293D80]">React</p>
-          <p className="px-[32px] py-[16px] text-[18px] text-center text-[#ffffff] border-b border-r border-[#1D293D80]">Vue</p>
-          <p className="px-[32px] py-[16px] text-[18px] text-center text-[#ffffff]  border-b border-r border-[#1D293D80]">Angular</p>
+        <div className="grid grid-cols-[0.4fr_0.20fr_0.20fr_0.20fr] items-center   text-[#8ea1da]"
+          style={{
+            gridTemplateColumns: `repeat(${data?.tableColumns?.length || 1}, 1fr)`,
+          }}
+        >
+
+          {data?.tableColumns?.map((column) => (
+            <p className="px-[32px] py-[16px] text-[18px] text-center text-[#ffffff] border-b border-r border-[#1D293D80]">{column}</p>
+          ))}
         </div>
 
         <div className="">
           {data?.rows?.map((row) => (
             <div
               key={row.feature}
-              className="grid grid-cols-[0.4fr_0.20fr_0.20fr_0.20fr]   "
+              className="grid grid-cols-[0.4fr_0.20fr_0.20fr_0.20fr]"
+              style={{
+                gridTemplateColumns: `repeat(${data?.tableColumns?.length || 1}, 1fr)`,
+              }}
             >
               <p className="px-[32px] py-[20px] text-center text-[18px] text-[#d5dcff] border-b border-r border-[#1D293D80]">{row.feature}</p>
-              <div className="flex justify-center items-center text-[18px]  border-b border-r border-[#1D293D80]  ">{renderCell(row.react)}</div>
-              <div className="flex justify-center items-center text-[18px] border-b border-r border-[#1D293D80] ">{renderCell(row.vue)}</div>
-              <div className="flex justify-center items-center text-[18px] border-b border-r border-[#1D293D80] ">{renderCell(row.angular)}</div>
+              <div className="flex justify-center items-center text-[18px]  border-b border-r border-[#1D293D80]  ">{renderCell(row.column1)}</div>
+              <div className="flex justify-center items-center text-[18px] border-b border-r border-[#1D293D80] ">{renderCell(row.column2)}</div>
+              <div className="flex justify-center items-center text-[18px] border-b border-r border-[#1D293D80] ">{renderCell(row.column3)}</div>
             </div>
           ))}
         </div>

@@ -2,10 +2,10 @@ import * as z from "zod";
 
 
 const MemberSchema = z.object({
-  title: z.string().min(2).max(24).meta({
+  title: z.string().min(2).max(12).meta({
     description: "Short role or title shown above the member name.",
   }),
-  name: z.string().min(2).max(32).meta({
+  name: z.string().min(2).max(20).meta({
     description: "Member name shown at the bottom of the card.",
   }),
   image: z.object({
@@ -25,7 +25,7 @@ export const slideLayoutDescription =
 export const Schema = z.object({
   members: z
     .array(MemberSchema)
-    .min(5)
+    .min(2)
     .max(5)
     .default([
       {

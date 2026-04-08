@@ -10,13 +10,13 @@ const CardSchema = z.object({
   stepNumber: z.string().min(2).max(4).meta({
     description: "Short card step number such as 01, 02, or 03.",
   }),
-  description: z.string().min(20).max(90).meta({
+  description: z.string().min(20).max(50).meta({
     description: "Card body copy displayed inside the feature pill.",
   }),
 });
 
 export const Schema = z.object({
-  title: z.string().min(3).max(24).default("Solution").meta({
+  title: z.string().min(3).max(12).default("Solution").meta({
     description: "Slide heading shown in the top-left corner.",
   }),
   showImage: z.boolean().default(true).meta({

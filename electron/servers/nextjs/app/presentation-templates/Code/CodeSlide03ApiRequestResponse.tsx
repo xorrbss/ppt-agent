@@ -17,7 +17,7 @@ export const Schema = z.object({
     description: "Endpoint path text.",
   }),
   headers: z
-    .array(z.string().min(12).max(44))
+    .array(z.string().max(10))
     .min(2)
     .max(2)
     .default(["Content-Type: application/json", "Authorization: Bearer <token>"])

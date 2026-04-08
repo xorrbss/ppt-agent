@@ -1,18 +1,11 @@
+"use client";
+
+import { Fragment } from "react/jsx-runtime";
 import * as z from "zod";
 
-import { DualLineChart } from "./chartPrimitives";
+import { ResponsiveContainer } from "recharts";
 
-const LinePointSchema = z.object({
-  label: z.string().min(1).max(12).meta({
-    description: "Chart axis label.",
-  }),
-  valueA: z.number().min(0).max(1000).meta({
-    description: "First series value.",
-  }),
-  valueB: z.number().min(0).max(1000).meta({
-    description: "Second series value.",
-  }),
-});
+import { FlexibleReportChart, flexibleChartDataSchema } from "./flexibleReportChart";
 
 const MetricSchema = z.object({
   value: z.string().min(1).max(12).meta({
@@ -38,7 +31,7 @@ export const slideLayoutDescription =
   "A slide with a title at the top, a two-series line chart in the left content area, and two tall metric cards arranged side by side on the right. Each metric card contains two stacked metric blocks.";
 
 export const Schema = z.object({
-  title: z.string().min(3).max(28).default("Data Analysis").meta({
+  title: z.string().min(3).max(12).default("Data Analysis").meta({
     description: "Slide title shown at the top-left.",
   }),
   seriesALabel: z.string().min(3).max(20).default("Category A").meta({
@@ -47,11 +40,9 @@ export const Schema = z.object({
   seriesBLabel: z.string().min(3).max(20).default("Category B").meta({
     description: "Legend label for the second line series.",
   }),
-  lineData: z
-    .array(LinePointSchema)
-    .min(7)
-    .max(7)
-    .default([
+  chartData: flexibleChartDataSchema.default({
+    type: "pie",
+    data: [
       { label: "label", valueA: 24, valueB: 40 },
       { label: "label", valueA: 55, valueB: 72 },
       { label: "label", valueA: 50, valueB: 98 },
@@ -59,10 +50,11 @@ export const Schema = z.object({
       { label: "label", valueA: 70, valueB: 52 },
       { label: "label", valueA: 42, valueB: 78 },
       { label: "label", valueA: 63, valueB: 51 },
-    ])
-    .meta({
-      description: "Line chart data displayed on the left side of the slide.",
-    }),
+    ],
+  }),
+  legendLabel: z.string().min(3).max(32).default("Traditional Workflow").meta({
+    description: "Legend label shown below the chart.",
+  }),
   statColumns: z
     .array(StatColumnSchema)
     .min(2)
@@ -94,60 +86,41 @@ type StatMetric = {
   description: string;
 };
 
-function StatPill({
-  metrics,
-
-}: {
-  metrics: StatMetric[];
-
-}) {
-
-
+function StatPill({ metrics }: { metrics: StatMetric[] }) {
   return (
-    <div className=" h-[438px] w-[248px] overflow-hidden rounded-[127px] bg-[#157CFF] px-[28px] py-[74px] text-center text-white">
-
+    <div className="h-[438px] w-[248px] overflow-hidden rounded-[127px] bg-[#157CFF] px-[28px] py-[74px] text-center text-white">
       {metrics.map((metric, index) => (
-        <>
-          <div
-            key={`${metric.value}-${metric.label}-${index}`}
-            className={``}
-          >
-            <p className="text-[55px] font-medium leading-[ 44.353px] tracking-[-1.09px]">
-              {metric.value}
-            </p>
+        <Fragment key={`${metric.value}-${metric.label}-${index}`}>
+          <div key={`${metric.value}-${metric.label}-${index}`} className={``}>
+            <p className="text-[55px] font-medium leading-[ 44.353px] tracking-[-1.09px]">{metric.value}</p>
             <p className="mt-[6px] text-[20px] font-medium leading-none">{metric.label}</p>
-            <p className=" text-[20px] leading-[1.15] text-white/90">
-              {metric.description}
-            </p>
+            <p className="text-[20px] leading-[1.15] text-white/90">{metric.description}</p>
           </div>
-          {index === 0 && <div className="py-[22px]">
-
-            <svg xmlns="http://www.w3.org/2000/svg" width="181" height="1" viewBox="0 0 181 1" fill="none">
-              <path opacity="0.2" d="M0 0.487305H180.122" stroke="white" strokeWidth="0.974913" strokeDasharray="3.9 1.95" />
-            </svg>
-          </div>
-          }
-        </>
+          {index === 0 && (
+            <div className="py-[22px]">
+              <svg xmlns="http://www.w3.org/2000/svg" width="181" height="1" viewBox="0 0 181 1" fill="none">
+                <path opacity="0.2" d="M0 0.487305H180.122" stroke="white" strokeWidth="0.974913" strokeDasharray="3.9 1.95" />
+              </svg>
+            </div>
+          )}
+        </Fragment>
       ))}
-
-
     </div>
   );
 }
+
 const DataAnalysisLineStatsSlide = ({ data }: { data: Partial<SchemaType> }) => {
-  const { title, seriesALabel, seriesBLabel, lineData, statColumns } = data;
+  const { title, seriesALabel, seriesBLabel, chartData, statColumns, legendLabel } = data;
+  const rows = chartData?.data ?? [];
+  const chartType = chartData?.type ?? "line-dual";
+  const series = chartData?.series ?? [];
 
   return (
     <div className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#f9f8f8]">
-      <div
-        className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#157CFF]"
-        style={{ height: 185 }}
-      />
+      <div className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#157CFF]" style={{ height: 185 }} />
 
       <div className="px-[64px] pt-[48px]">
-        <h2 className="text-[80px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]">
-          {title}
-        </h2>
+        <h2 className="text-[80px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]">{title}</h2>
       </div>
 
       <div className="flex justify-between px-[74px] pt-[40px]">
@@ -164,11 +137,20 @@ const DataAnalysisLineStatsSlide = ({ data }: { data: Partial<SchemaType> }) => 
           </div>
 
           <div className="mt-[12px] h-[356px] w-full">
-            <DualLineChart data={lineData ?? []} />
+            <ResponsiveContainer width="100%" height="100%">
+              <FlexibleReportChart
+                chartType={chartType}
+                data={rows}
+                series={series}
+                colorFallback="#157CFF"
+                dualLineColors={["#9fb6ff", "#4d4ef3"]}
+              />
+            </ResponsiveContainer>
           </div>
 
-          <div className="mt-[2px] text-center text-[18px] text-[#4b5563]">
-            X axis name
+          <div className="mt-[12px] flex items-center gap-[10px] text-center justify-center text-[24px] tracking-[-0.03em] text-[#157CFF]">
+            <span className="h-[12px] w-[12px] rounded-full bg-[#157CFF]" />
+            <p>{data.legendLabel}</p>
           </div>
         </div>
 

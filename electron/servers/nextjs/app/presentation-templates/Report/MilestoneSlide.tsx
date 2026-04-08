@@ -4,10 +4,10 @@ const MilestoneItemSchema = z.object({
   stepNumber: z.string().min(2).max(4).meta({
     description: "Short milestone number such as 01 or 05.",
   }),
-  heading: z.string().min(3).max(18).meta({
+  heading: z.string().min(3).max(10).meta({
     description: "Heading displayed below the milestone marker.",
   }),
-  description: z.string().min(20).max(80).meta({
+  description: z.string().min(20).max(50).meta({
     description: "Supporting milestone description shown under the heading.",
   }),
 });
@@ -18,7 +18,7 @@ export const slideLayoutDescription =
   "A slide with a title at the top and a single horizontal milestone sequence below it. The sequence contains five circular markers aligned in one row, and each marker has a heading and description placed directly underneath. The activeIndex field controls which marker is emphasized while the remaining markers stay in the default state.";
 
 export const Schema = z.object({
-  title: z.string().min(3).max(24).default("Milestone").meta({
+  title: z.string().min(3).max(12).default("Milestone").meta({
     description: "Slide title shown at the top-left.",
   }),
   activeIndex: z.number().int().min(0).max(4).default(4).meta({

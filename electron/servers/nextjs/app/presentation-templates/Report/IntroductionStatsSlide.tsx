@@ -1,13 +1,14 @@
+import { Fragment } from "react/jsx-runtime";
 import * as z from "zod";
 
 const MetricSchema = z.object({
-  value: z.string().min(1).max(12).meta({
+  value: z.string().min(1).max(6).meta({
     description: "Primary metric value shown in the card.",
   }),
-  label: z.string().min(3).max(24).meta({
+  label: z.string().min(3).max(10).meta({
     description: "Short metric label shown below the value.",
   }),
-  description: z.string().min(6).max(36).meta({
+  description: z.string().min(6).max(20).meta({
     description: "Supporting text shown below the label.",
   }),
 });
@@ -24,17 +25,17 @@ export const slideLayoutDescription =
   "A slide with a title and explanatory text on the left, a bulleted list underneath the text, and two tall metric cards placed side by side on the right. Each metric card contains two stacked metric blocks.";
 
 export const Schema = z.object({
-  title: z.string().min(3).max(32).default("Introduction").meta({
+  title: z.string().min(3).max(12).default("Introduction").meta({
     description: "Slide title shown at the top-left.",
   }),
-  body: z.string().min(60).max(320).default(
+  body: z.string().max(250).default(
     "Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut alut enim ad minima veniam, quis. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut alut enim ad minima veniam, quis"
   ).meta({
     description: "Primary paragraph shown below the title.",
   }),
   bullets: z
-    .array(z.string().min(20).max(80))
-    .min(4)
+    .array(z.string().max(35))
+
     .max(4)
     .default([
       "Ut enim ad minima veniam, quis nostrum",
@@ -47,7 +48,7 @@ export const Schema = z.object({
     }),
   statColumns: z
     .array(StatColumnSchema)
-    .min(2)
+
     .max(2)
     .default([
       {
@@ -89,7 +90,7 @@ function StatPill({
     <div className=" h-[438px] w-[248px] overflow-hidden rounded-[127px] bg-[#157CFF] px-[28px] py-[74px] text-center text-white">
 
       {metrics.map((metric, index) => (
-        <>
+        <Fragment key={`${metric.value}-${metric.label}-${index}`}>
           <div
             key={`${metric.value}-${metric.label}-${index}`}
             className={``}
@@ -109,7 +110,7 @@ function StatPill({
             </svg>
           </div>
           }
-        </>
+        </Fragment>
       ))}
 
 

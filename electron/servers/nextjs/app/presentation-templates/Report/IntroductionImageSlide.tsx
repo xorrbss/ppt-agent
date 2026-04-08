@@ -7,17 +7,17 @@ export const slideLayoutDescription =
   "A slide with a title at the top-left, a paragraph block beneath the title, a short bulleted list in the lower-left area, and a large supporting image anchored on the right side of the slide.";
 
 export const Schema = z.object({
-  title: z.string().min(3).max(32).default("Introduction").meta({
+  title: z.string().min(3).max(12).default("Introduction").meta({
     description: "Slide title shown at the top-left.",
   }),
-  body: z.string().min(60).max(280).default(
+  body: z.string().max(250).default(
     "Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut alut enim ad minima veniam, quis. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut alut enim ad minima veniam, quis"
   ).meta({
     description: "Primary paragraph shown under the title.",
   }),
   bullets: z
-    .array(z.string().min(20).max(80))
-    .min(4)
+    .array(z.string().max(35))
+
     .max(4)
     .default([
       "Ut enim ad minima veniam, quis nostrum",

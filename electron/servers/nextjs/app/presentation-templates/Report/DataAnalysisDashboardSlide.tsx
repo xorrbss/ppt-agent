@@ -1,13 +1,20 @@
+"use client";
+
 import type { ReactNode } from "react";
 import * as z from "zod";
 
+import { ResponsiveContainer } from "recharts";
+
 import {
-  AreaTrendChart,
-  CompactBarChart,
-  CompactPieChart,
-  SemiDonutChart,
-  TrendLineChart,
-} from "./chartPrimitives";
+  DivergingDataPointSchema,
+  FlexibleReportChart,
+  MultiSeriesDataPointSchema,
+  ScatterDataPointSchema,
+  SimpleDataPointSchema,
+  flexibleChartDataSchema,
+  flexibleChartTypeSchema,
+  type FlexibleChartData,
+} from "./flexibleReportChart";
 
 const SummaryCardSchema = z.object({
   value: z.string().min(1).max(8).meta({
@@ -16,161 +23,110 @@ const SummaryCardSchema = z.object({
   label: z.string().min(3).max(20).meta({
     description: "Short summary card label.",
   }),
-});
-
-const ChartPointSchema = z.object({
-  label: z.string().min(1).max(12).meta({
-    description: "Chart axis label.",
-  }),
-  value: z.number().min(0).max(1000).meta({
-    description: "Single-series chart value.",
-  }),
-});
-
-const DualChartPointSchema = z.object({
-  label: z.string().min(1).max(12).meta({
-    description: "Chart axis label.",
-  }),
-  valueA: z.number().min(0).max(1000).meta({
-    description: "First series value.",
-  }),
-  valueB: z.number().min(0).max(1000).meta({
-    description: "Second series value.",
+  icon: z.object({
+    __icon_url__: z.string().default("https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg"),
+    __icon_query__: z.string().default("pulse icon"),
+  }).optional().meta({
+    description: "Icon shown in each compact summary card.",
+  }).default({
+    __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
+    __icon_query__: "pulse icon",
   }),
 });
 
-const PieSegmentSchema = z.object({
-  name: z.string().min(1).max(18).meta({
-    description: "Category name shown in chart legends.",
-  }),
-  value: z.number().min(1).max(1000).meta({
-    description: "Category value used in the chart.",
-  }),
-});
+
+
+
+
+
+
 
 export const slideLayoutId = "data-analysis-dashboard-slide";
 export const slideLayoutName = "Data Analysis Dashboard Slide";
 export const slideLayoutDescription =
-  "A dashboard-style slide with a title at the top, a row of compact summary cards underneath, and two stacked dashboard panels below. Each panel is split into three chart cells, creating a six-chart overview made of bar, donut, line, area, pie, and comparison charts.";
+  "A dashboard-style slide with a title, summary cards, and a responsive grid of chart panels (1–9). Each panel uses the same flexible chart types as other report slides; labels and margins are compact for small cells.";
+
+const ChartItemSchema = z.object({
+
+  type: flexibleChartTypeSchema.default('bar'),
+  data: z.union([
+    z.array(SimpleDataPointSchema),
+    z.array(MultiSeriesDataPointSchema),
+    z.array(DivergingDataPointSchema),
+    z.array(ScatterDataPointSchema),
+  ]).default([
+    { name: 'Q1', value: 45 },
+    { name: 'Q2', value: 72 },
+    { name: 'Q3', value: 58 },
+    { name: 'Q4', value: 89 },
+  ]),
+  series: z.array(z.string()).optional(),
+});
 
 export const Schema = z.object({
-  title: z.string().min(3).max(28).default("Data Analysis").meta({
+  title: z.string().min(3).max(12).default("Data Analysis").meta({
     description: "Slide title shown at the top-left.",
   }),
-  summaryIcon: z.object({
-    __icon_url__: z.string().default("https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg"),
-    __icon_query__: z.string().default("pulse icon"),
-  }).default({
-    __icon_url__:
-      "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
-    __icon_query__: "pulse icon",
-  }).meta({
-    description: "Icon shown in each compact summary card.",
-  }),
+
   summaryCards: z
     .array(SummaryCardSchema)
-    .min(4)
+    .min(2)
     .max(4)
+    .optional()
     .default([
-      { value: "5", label: "Text 1" },
-      { value: "52", label: "Text 2" },
-      { value: "4", label: "Text 3" },
-      { value: "80%", label: "Text 4" },
+      {
+        value: "5", label: "Text 1", icon: {
+          __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
+          __icon_query__: "placeholder icon",
+        }
+      },
+      {
+        value: "52", label: "Text 2", icon: {
+          __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
+          __icon_query__: "placeholder icon",
+        }
+      },
+      {
+        value: "4", label: "Text 3", icon: {
+          __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
+          __icon_query__: "placeholder icon",
+        }
+      },
+      {
+        value: "80%", label: "Text 4", icon: {
+          __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
+          __icon_query__: "placeholder icon",
+        }
+      },
     ])
     .meta({
       description: "Four compact summary cards displayed above the dashboard panels.",
     }),
-  workflowBars: z
-    .array(ChartPointSchema)
-    .min(7)
-    .max(7)
-    .default([
-      { label: "Mon", value: 120 },
-      { label: "Tue", value: 200 },
-      { label: "Wed", value: 150 },
-      { label: "Thu", value: 80 },
-      { label: "Fri", value: 70 },
-      { label: "Sat", value: 110 },
-      { label: "Sun", value: 130 },
-    ])
-    .meta({
-      description: "Bar chart data shown in the top-left dashboard cell.",
-    }),
-  gaugeSegments: z
-    .array(PieSegmentSchema)
-    .min(3)
-    .max(3)
-    .default([
-      { name: "Category A", value: 45 },
-      { name: "Category B", value: 30 },
-      { name: "Category C", value: 25 },
-    ])
-    .meta({
-      description: "Three segments used in the top-center semi-donut chart.",
-    }),
-  trendSeries: z
-    .array(DualChartPointSchema)
-    .min(7)
-    .max(7)
-    .default([
-      { label: "Label", valueA: 22, valueB: 35 },
-      { label: "Label", valueA: 54, valueB: 26 },
-      { label: "Label", valueA: 44, valueB: 70 },
-      { label: "Label", valueA: 78, valueB: 52 },
-      { label: "Label", valueA: 50, valueB: 44 },
-      { label: "Label", valueA: 32, valueB: 60 },
-      { label: "Label", valueA: 58, valueB: 40 },
-    ])
-    .meta({
-      description: "Two-series line chart data shown in the top-right cell.",
-    }),
-  detailedArea: z
-    .array(ChartPointSchema)
-    .min(7)
-    .max(7)
-    .default([
-      { label: "12:00", value: 22 },
-      { label: "13:00", value: 64 },
-      { label: "14:00", value: 48 },
-      { label: "15:00", value: 56 },
-      { label: "16:00", value: 41 },
-      { label: "17:00", value: 58 },
-      { label: "18:00", value: 63 },
-    ])
-    .meta({
-      description: "Area chart data shown in the bottom-left dashboard cell.",
-    }),
-  shareBreakdown: z
-    .array(PieSegmentSchema)
-    .min(3)
-    .max(3)
-    .default([
-      { name: "Category A", value: 50 },
-      { name: "Category B", value: 30 },
-      { name: "Category C", value: 20 },
-    ])
-    .meta({
-      description: "Pie chart data shown in the bottom-center dashboard cell.",
-    }),
-  comparisonBars: z
-    .array(ChartPointSchema)
-    .min(7)
-    .max(7)
-    .default([
-      { label: "Jan", value: 70 },
-      { label: "Feb", value: 170 },
-      { label: "Mar", value: 110 },
-      { label: "Apr", value: 42 },
-      { label: "May", value: 88 },
-      { label: "Jun", value: 106 },
-      { label: "Jul", value: 112 },
-    ])
-    .meta({
-      description: "Bar chart data shown in the bottom-right dashboard cell.",
-    }),
+  charts: z.array(ChartItemSchema).min(1).max(6).default([
+    { type: 'bar', data: [{ name: 'Q1', value: 125000 }, { name: 'Q2', value: 158000 }, { name: 'Q3', value: 142000 }, { name: 'Q4', value: 189000 }] },
+    { type: 'donut', data: [{ name: 'North America', value: 35 }, { name: 'Europe', value: 28 }, { name: 'Asia Pacific', value: 25 }, { name: 'Others', value: 12 }] },
+    { type: 'line', data: [{ name: 'Jan', value: 30 }, { name: 'Feb', value: 45 }, { name: 'Mar', value: 52 }, { name: 'Apr', value: 48 }, { name: 'May', value: 67 }, { name: 'Jun', value: 82 }] },
+    { type: 'bar', data: [{ name: 'Sales', value: 87 }, { name: 'Marketing', value: 72 }, { name: 'Engineering', value: 95 }, { name: 'Support', value: 68 }] },
+    { type: 'bar-clustered', data: [{ name: 'Q1', values: { 'Product A': 45, 'Product B': 62 } }, { name: 'Q2', values: { 'Product A': 58, 'Product B': 71 } }, { name: 'Q3', values: { 'Product A': 72, 'Product B': 65 } }], series: ['Product A', 'Product B'] },
+    { type: 'bar-diverging', data: [{ name: 'Quality', positive: 78, negative: 22 }, { name: 'Service', positive: 65, negative: 35 }, { name: 'Price', positive: 42, negative: 58 }], series: ['Satisfied', 'Unsatisfied'] },
+  ]),
 });
 
 export type SchemaType = z.infer<typeof Schema>;
+
+
+
+
+
+
+
+
+const getChartHeight = (count: number, hasMetrics: boolean) => {
+  if (count <= 2) return hasMetrics ? 230 : 280;
+  if (count <= 3) return hasMetrics ? 210 : 260;
+  return hasMetrics ? 160 : 180;
+};
+
 
 function SummaryCard({
   value,
@@ -184,164 +140,96 @@ function SummaryCard({
   iconAlt?: string;
 }) {
   return (
-    <div className="flex h-[74px] items-center rounded-[14px] bg-white px-[16px]">
-      <div className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-[#4d4ef3] text-white">
+    <div className="flex gap-[10px]  items-center rounded-[14px]  py-[9px]">
+      <div className="flex h-[36px] w-[36px] border border-[#ECF5FE] shrink-0 items-center justify-center rounded-full bg-[#ECF5FE] ">
         <img
           src={iconUrl ?? ""}
           alt={iconAlt ?? ""}
-          className="h-[10px] w-[10px] object-contain"
-          style={{ filter: "brightness(0) invert(1)" }}
+          className="h-[18px] w-[18px] object-contain"
+
         />
       </div>
-      <div className="ml-[10px]">
-        <p className="text-[22px] leading-none tracking-[-0.04em] text-[#232223]">
-          {value}
-        </p>
-        <p className="mt-[4px] text-[12px] leading-none text-[#535665]">{label}</p>
+      <div className="">
+        <p className="text-[18px] leading-none tracking-[-0.04em] text-[#4A4D53]">{value}</p>
+        <p className="mt-[4px] text-[14px] leading-none text-[#6C6C6C]">{label}</p>
       </div>
     </div>
   );
 }
 
-function ChartCell({
-  children,
-  footer,
-  topLegend,
-}: {
-  children: ReactNode;
-  footer?: ReactNode;
-  topLegend?: ReactNode;
-}) {
-  return (
-    <div className="flex h-full flex-col px-[10px] py-[10px]">
-      {topLegend && <div className="mb-[4px] flex justify-center">{topLegend}</div>}
-      <div className="min-h-0 flex-1">{children}</div>
-      {footer && <div className="mt-[4px] flex justify-center">{footer}</div>}
-    </div>
-  );
-}
 
-function DotLegend({
-  items,
-}: {
-  items: { label: string; color: string }[];
-}) {
-  return (
-    <div className="flex flex-wrap items-center justify-center gap-[10px] text-[8px] text-[#6b7280]">
-      {items.map((item) => (
-        <span key={item.label} className="flex items-center gap-[4px]">
-          <span
-            className="block h-[6px] w-[6px] rounded-full"
-            style={{ backgroundColor: item.color }}
-          />
-          {item.label}
-        </span>
-      ))}
-    </div>
-  );
-}
+
+
 
 const DataAnalysisDashboardSlide = ({ data }: { data: Partial<SchemaType> }) => {
-
-  const { title, summaryIcon, summaryCards, workflowBars, gaugeSegments, trendSeries, detailedArea, shareBreakdown, comparisonBars } = data;
+  const { title, summaryCards, charts } = data;
+  const halfChart = charts?.slice(0, Math.ceil(charts.length / 2));
+  const otherHalfChart = charts?.slice(Math.ceil(charts.length / 2));
 
   return (
-    <div className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#f9f8f8]">
-      <div
-        className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#4d4ef3]"
-        style={{ height: 188 }}
-      />
+    <div className="relative flex flex-col  h-[720px] w-[1280px] overflow-hidden  bg-[#F9F8F8]">
+      <div className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#157CFF]" style={{ height: 185 }} />
 
-      <div className="px-[74px] pt-[44px]">
-        <h2 className="text-[78px] font-semibold leading-none tracking-[-0.06em] text-[#232223]">
-          {title}
-        </h2>
+      <div className="px-[64px] pt-[48px]">
+        <h2 className="text-[80px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]">{title}</h2>
       </div>
 
-      <div className="grid grid-cols-4 gap-[16px] px-[74px] pt-[14px]">
+      {summaryCards && summaryCards.length > 0 && <div className=" mx-[64px] grid bg-white gap-[16px] p-[13px] mt-[22px] rounded-[14px]  "
+
+        style={{ gridTemplateColumns: `repeat(${summaryCards.length}, minmax(220px, 1fr))` }}>
         {summaryCards?.map((card, index) => (
           <SummaryCard
             key={`${card.label}-${index}`}
             value={card.value}
             label={card.label}
-            iconUrl={summaryIcon?.__icon_url__}
-            iconAlt={summaryIcon?.__icon_query__}
+            iconUrl={card.icon?.__icon_url__}
+            iconAlt={card.icon?.__icon_query__}
           />
         ))}
-      </div>
+      </div>}
+      <div className="flex-1 flex flex-col pb-[30px]">
 
-      <div className="flex flex-col gap-[12px] px-[74px] pt-[12px]">
-        <div className="grid h-[168px] grid-cols-3 divide-x divide-[#ecf0f6] rounded-[16px] bg-white">
-          <ChartCell
-            footer={
-              <DotLegend items={[{ label: "Traditional Workflow", color: "#4d4ef3" }]} />
-            }
+        {halfChart && halfChart.length > 0 && <div className="mt-[14px] px-[64px] flex-1">
+          <div
+            className={`grid h-full bg-white p-[13px] rounded-[14px] min-h-0 gap-[10px] grid-cols-3`}
+            style={{ gridAutoRows: `minmax(150px, 1fr)` }}
           >
-            <CompactBarChart data={workflowBars ?? []} />
-          </ChartCell>
+            {halfChart?.map((chart, index) => (
+              <div
+                key={index}
+                className="rounded-[6px]  flex flex-col overflow-hidden"
 
-          <ChartCell
-            footer={
-              <DotLegend
-                items={[
-                  { label: "Category A", color: "#4d4ef3" },
-                  { label: "Category B", color: "#9fb6ff" },
-                  { label: "Category C", color: "#e8eefb" },
-                ]}
-              />
-            }
-          >
-            <SemiDonutChart data={gaugeSegments ?? []} />
-          </ChartCell>
+              >
 
-          <ChartCell
-            topLegend={
-              <div className="flex gap-[10px] text-[8px] text-[#6b7280]">
-                <p>Category A</p>
-                <p>Category B</p>
+                <div className="flex-1 " >
+                  <FlexibleReportChart density="compact" chartType={chart.type} data={chart.data} series={chart.series} />
+                </div>
               </div>
-            }
+            ))}
+          </div>
+        </div>}
+        {otherHalfChart && otherHalfChart.length > 0 && <div className="mt-[14px] px-[64px] flex-1">
+          <div
+            className={`grid h-full bg-white p-[13px] rounded-[14px] min-h-0 gap-[10px] grid-cols-3`}
+            style={{ gridAutoRows: `minmax(150px, 1fr)` }}
           >
-            <TrendLineChart data={trendSeries ?? []} />
-          </ChartCell>
-        </div>
+            {otherHalfChart?.map((chart, index) => (
+              <div
+                key={index}
+                className="rounded-[6px] flex flex-col overflow-hidden"
 
-        <div className="grid h-[168px] grid-cols-3 divide-x divide-[#ecf0f6] rounded-[16px] bg-white">
-          <ChartCell
-            footer={
-              <DotLegend items={[{ label: "Detailed Workflow", color: "#4d4ef3" }]} />
-            }
-          >
-            <AreaTrendChart data={detailedArea ?? []} idPrefix="dashboard-area" />
-          </ChartCell>
+              >
 
-          <ChartCell
-            footer={
-              <DotLegend
-                items={[
-                  { label: "Category A", color: "#4d4ef3" },
-                  { label: "Category B", color: "#9fb6ff" },
-                  { label: "Category C", color: "#d7dff4" },
-                ]}
-              />
-            }
-          >
-            <CompactPieChart data={shareBreakdown ?? []} />
-          </ChartCell>
+                <div className="flex-1 " >
+                  <ResponsiveContainer width="100%" height="100%">
+                    <FlexibleReportChart density="compact" chartType={chart.type} data={chart.data} series={chart.series} />
+                  </ResponsiveContainer>
 
-          <ChartCell
-            footer={
-              <DotLegend
-                items={[
-                  { label: "Category A", color: "#4d4ef3" },
-                  { label: "Category B", color: "#9fb6ff" },
-                ]}
-              />
-            }
-          >
-            <CompactBarChart data={comparisonBars ?? []} />
-          </ChartCell>
-        </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>}
       </div>
     </div>
   );

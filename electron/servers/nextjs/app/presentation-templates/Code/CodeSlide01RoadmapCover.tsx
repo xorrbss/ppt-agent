@@ -6,7 +6,7 @@ export const slideLayoutDescription =
   "A centered opening slide with company name, roadmap title, and supporting subtitle.";
 
 export const Schema = z.object({
-  companyName: z.string().min(2).max(28).default("COMPANY NAME").meta({
+  companyName: z.string().min(2).max(18).default("COMPANY NAME").meta({
     description: "Organization name shown above the slide title.",
   }),
   title: z.string().min(8).max(28).default("Development Roadmap").meta({
@@ -15,7 +15,7 @@ export const Schema = z.object({
   subtitle: z
     .string()
     .min(24)
-    .max(92)
+    .max(40)
     .default(
       "We transform ideas into market-ready solutions through systematic development processes."
     )

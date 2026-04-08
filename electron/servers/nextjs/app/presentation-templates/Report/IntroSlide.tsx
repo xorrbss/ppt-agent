@@ -1,10 +1,10 @@
 import * as z from "zod";
 
 export const Schema = z.object({
-  title: z.string().min(1).default("Company's "),
-  subtitle: z.string().min(1).default("Report"),
-  name: z.string().min(1).default("John Doe"),
-  position: z.string().min(1).default("Company Name | Strategy, Content, growth"),
+  title: z.string().min(1).max(12).default("Company's "),
+  subtitle: z.string().min(1).max(15).default("Report"),
+  name: z.string().min(1).max(10).default("John Doe"),
+  position: z.string().min(1).max(20).default("Company Name | Strategy, Content, growth"),
 })
 export type SchemaType = z.infer<typeof Schema>;
 export const slideLayoutId = "intro-slide";

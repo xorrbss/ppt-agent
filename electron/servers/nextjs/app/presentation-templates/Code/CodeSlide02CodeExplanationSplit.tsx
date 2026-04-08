@@ -45,7 +45,7 @@ export function UserAuth() {
     .min(40)
     .max(360)
     .default(
-      "This component manages credentials as local state and submits them through an async handler. The login utility abstracts network details while the handler keeps the UI flow predictable. Keep validation and side effects isolated so changes remain safe when authentication requirements evolve."
+      "This component manages credentials as local state and submits them through an async handler. The login utility abstracts network details while the handler keeps the UI flow predictable. Keep validation and side effects isolated so changes remain safe when authentication requirements evolve. "
     )
     .meta({
       description: "Explanation paragraph shown in the right column.",

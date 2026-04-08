@@ -1,17 +1,17 @@
 import * as z from "zod";
 
 const FeatureCardSchema = z.object({
-  title: z.string().min(3).max(20).meta({
+  title: z.string().min(3).max(17).meta({
     description: "Feature title shown on each card.",
   }),
-  description: z.string().min(18).max(82).meta({
+  description: z.string().min(18).max(80).meta({
     description: "Supporting feature description.",
   }),
   icon: z.object({
-    __icon_url__: z.string().min(10).max(180).meta({
+    __icon_url__: z.string().meta({
       description: "URL to icon",
     }),
-    __icon_query__: z.string().min(3).max(28).meta({
+    __icon_query__: z.string().meta({
       description: "Query used to search the icon",
     }),
   }).default({
@@ -45,7 +45,7 @@ export const Schema = z.object({
         },
       },
       {
-        title: "Component Library",
+        title: "Component Library ",
         description: "Reusable UI components with consistent design patterns.",
         icon: {
           __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",

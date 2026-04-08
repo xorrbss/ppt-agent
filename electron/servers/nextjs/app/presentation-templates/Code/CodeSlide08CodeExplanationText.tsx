@@ -6,7 +6,7 @@ export const slideLayoutDescription =
   "A text-only explanation slide with generous whitespace for narrative documentation.";
 
 export const Schema = z.object({
-  title: z.string().min(8).max(24).default("Code + Explanation").meta({
+  title: z.string().min(8).max(30).default("Code + Explanation").meta({
     description: "Main slide title shown at the top-left.",
   }),
   explanationTitle: z.string().min(4).max(20).default("Explanation").meta({
@@ -14,7 +14,7 @@ export const Schema = z.object({
   }),
   explanation: z
     .string()
-    .min(60)
+
     .max(360)
     .default(
       "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."

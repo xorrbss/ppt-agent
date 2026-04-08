@@ -6,11 +6,11 @@ export const slideLayoutDescription =
   "A two-column numbered use-case list with eight compact items.";
 
 export const Schema = z.object({
-  title: z.string().min(6).max(16).default("Usecase").meta({
+  title: z.string().min(6).max(30).default("Usecase").meta({
     description: "Slide title shown above the numbered list.",
   }),
   items: z
-    .array(z.string().min(16).max(58))
+    .array(z.string().min(4).max(8))
     .min(4)
     .max(8)
     .default([

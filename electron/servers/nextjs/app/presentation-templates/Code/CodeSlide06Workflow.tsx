@@ -5,12 +5,16 @@ const WorkflowStepSchema = z.object({
   title: z.string().min(3).max(12).meta({
     description: "Step title shown in each workflow card.",
   }),
-  description: z.string().min(18).max(58).meta({
+  description: z.string().min(18).max(50).meta({
     description: "Short step description text.",
   }),
   icon: z.object({
-    __icon_url__: z.string().min(10).max(180),
-    __icon_query__: z.string().min(3).max(28),
+    __icon_url__: z.string().meta({
+      description: "URL to icon",
+    }),
+    __icon_query__: z.string().meta({
+      description: "Query used to search the icon",
+    }),
   }).default({
     __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
     __icon_query__: "check icon",

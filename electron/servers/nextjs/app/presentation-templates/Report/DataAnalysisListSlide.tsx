@@ -2,10 +2,10 @@ import * as z from "zod";
 
 
 const AnalysisItemSchema = z.object({
-  title: z.string().min(3).max(18).meta({
+  title: z.string().max(12).meta({
     description: "Short item title displayed next to the icon.",
   }),
-  description: z.string().min(20).max(84).meta({
+  description: z.string().max(30).meta({
     description: "Supporting sentence shown below the title.",
   }),
 });
@@ -16,7 +16,7 @@ export const slideLayoutDescription =
   "A slide with a title at the top and a two-column list of analysis points underneath. Each point contains a small circular icon badge, a short title on the same row, and a supporting description directly below.";
 
 export const Schema = z.object({
-  title: z.string().min(3).max(28).default("Data Analysis").meta({
+  title: z.string().min(3).max(12).default("Data Analysis").meta({
     description: "Slide title shown at the top-left.",
   }),
   itemIcon: z.object({
@@ -31,7 +31,7 @@ export const Schema = z.object({
   }),
   items: z
     .array(AnalysisItemSchema)
-    .min(6)
+
     .max(6)
     .default([
       { title: "Title 1", description: "Ut enim ad minima veniam, quis." },

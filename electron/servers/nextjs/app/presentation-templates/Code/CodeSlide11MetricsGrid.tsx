@@ -1,7 +1,7 @@
 import * as z from "zod";
 
 const MetricSchema = z.object({
-  value: z.string().min(2).max(8).meta({
+  value: z.string().min(2).max(6).meta({
     description: "Primary metric value.",
   }),
   label: z.string().min(3).max(14).meta({
