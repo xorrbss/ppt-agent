@@ -34,10 +34,10 @@ Provide reusable TSX code which can be used as template to generate new slides w
 - Properly identify between images and icons elements.
 - Image content:
     - Image field should be 'z.object({"image_url": z.string(), "image_prompt": z.string().max(100)})'
-    - Replace actual image url with 'https://presenton-public-assets.s3.ap-southeast-1.amazonaws.com/replaceable_template_image.png'
+    - Replace actual image url with '/static/images/replaceable_template_image.png'
 - Icon content:
     - Icon field should be 'z.object({"icon_url": z.string(), "icon_query": z.string().max(30)})'
-    - Replace actual icon url with 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg'
+    - Replace actual icon url with '/static/icons/placeholder.svg'
     - Add color styling to the icon to match the color in the image.
 - Make sure the urls are correct.
 
@@ -156,9 +156,9 @@ You need to edit the given TSX code of the slide layout code according to the pr
 # Icons and Images Rules
 Follow these rules if new icons/images are asked:
 - Image field should be 'z.object({"image_url": z.string(), "image_prompt": z.string().max(100)})'
-- Use this as default image url: 'https://presenton-public-assets.s3.ap-southeast-1.amazonaws.com/replaceable_template_image.png'
+- Use this as default image url: '/static/images/replaceable_template_image.png'
 - Icon field should be 'z.object({"icon_url": z.string(), "icon_query": z.string().max(30)})'
-- Use this as default icon url: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg'
+- Use this as default icon url: '/static/icons/placeholder.svg'
 
 # Schema Rules
 - "describe" must be added for every fields.
@@ -208,9 +208,9 @@ You need to edit the given TSX code of the slide layout code according to the pr
 # Icons and Images Rules
 Follow these rules if new icons/images are asked:
 - Image field should be 'z.object({"image_url": z.string(), "image_prompt": z.string().max(100)})'
-- Use this as default image url: 'https://presenton-public-assets.s3.ap-southeast-1.amazonaws.com/replaceable_template_image.png'
+- Use this as default image url: '/static/images/replaceable_template_image.png'
 - Icon field should be 'z.object({"icon_url": z.string(), "icon_query": z.string().max(30)})'
-- Use this as default icon url: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg'
+- Use this as default icon url: '/static/icons/placeholder.svg'
 
 # Output Rules
 - Make sure the schema and react component are valid.

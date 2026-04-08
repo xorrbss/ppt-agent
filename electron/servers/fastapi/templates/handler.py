@@ -17,9 +17,9 @@ from models.sql.presentation_layout_code import PresentationLayoutCodeModel
 from models.sql.template import TemplateModel
 from models.sql.template_create_info import TemplateCreateInfoModel
 from services.database import get_async_session
+from services.export_task_service import EXPORT_TASK_SERVICE
 from templates.example import build_template_example
 from templates.get_layout_by_name import get_layout_by_name
-from templates.pptx_html_stub import BASIC_TEMPLATE_HTML
 from templates.presentation_layout import PresentationLayoutModel
 from templates.preview import (
     FontsUploadAndSlidesPreviewResponse,
@@ -31,7 +31,10 @@ from templates.prompts import (
     SLIDE_LAYOUT_EDIT_SYSTEM_PROMPT,
 )
 from templates.providers import edit_slide_layout_code, generate_slide_layout_code
-from utils.asset_directory_utils import resolve_image_path_to_filesystem
+from utils.asset_directory_utils import (
+    resolve_app_path_to_filesystem,
+    resolve_image_path_to_filesystem,
+)
 
 
 class TemplateDetail(BaseModel):
@@ -378,13 +381,12 @@ async def upload_fonts_and_slides_preview(
         default=None, description="Font files to upload"
     ),
     original_font_names: Optional[List[str]] = Form(default=None),
-    max_slides: Optional[int] = Query(default=None),
 ):
     return await upload_fonts_and_slides_preview_handler(
         pptx_file=pptx_file,
         font_files=font_files,
         original_font_names=original_font_names,
-        max_slides=max_slides,
+        max_slides=25,
     )
 
 
@@ -397,11 +399,34 @@ async def init_create_template(
             status_code=400, detail="At least one slide image is required"
         )
 
+    pptx_path = resolve_app_path_to_filesystem(request.pptx_url)
+    if not pptx_path or not os.path.isfile(pptx_path):
+        raise HTTPException(status_code=400, detail="PPTX file not found")
+
+    pptx_document = await EXPORT_TASK_SERVICE.convert_pptx_to_html(
+        pptx_path, get_fonts=False
+    )
+    if not pptx_document.slides:
+        raise HTTPException(
+            status_code=500,
+            detail="PPTX-to-HTML export returned no slides",
+        )
+
+    if len(pptx_document.slides) < len(request.slide_image_urls):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "PPTX-to-HTML export returned fewer slides than the preview images. "
+                f"Expected at least {len(request.slide_image_urls)}, got {len(pptx_document.slides)}."
+            ),
+        )
+
+    slide_htmls = pptx_document.slides[: len(request.slide_image_urls)]
     template_create_info = TemplateCreateInfoModel(
         fonts=request.fonts or {},
         pptx_url=request.pptx_url,
         slide_image_urls=request.slide_image_urls,
-        slide_htmls=[BASIC_TEMPLATE_HTML for _ in request.slide_image_urls],
+        slide_htmls=slide_htmls,
     )
     sql_session.add(template_create_info)
     await sql_session.commit()
@@ -437,10 +462,9 @@ async def create_slide_layout(
         image_bytes=image_bytes,
         media_type=media_type,
     )
+    normalized_react_component = _normalize_layout_code_for_create(react_component)
 
-    return CreateSlideLayoutResponse(
-        react_component=_normalize_layout_code_for_create(react_component)
-    )
+    return CreateSlideLayoutResponse(react_component=normalized_react_component)
 
 
 async def edit_slide_layout(

@@ -2,7 +2,7 @@ import asyncio
 import base64
 from dataclasses import dataclass
 import time
-from typing import Awaitable, Callable, Optional
+from typing import Any, Awaitable, Callable, Optional
 
 from anthropic import AsyncAnthropic
 from fastapi import HTTPException
@@ -20,7 +20,7 @@ from utils.get_env import (
     get_google_api_key_env,
     get_openai_api_key_env,
 )
-from utils.llm_provider import get_llm_provider
+from utils.llm_provider import get_llm_provider, get_model
 from utils.set_env import (
     set_codex_access_token_env,
     set_codex_account_id_env,
@@ -28,10 +28,6 @@ from utils.set_env import (
     set_codex_token_expires_env,
 )
 
-OPENAI_TEMPLATE_MODEL = "gpt-5.4"
-CODEX_TEMPLATE_MODEL = "gpt-5.4"
-GOOGLE_TEMPLATE_MODEL = "gemini-3.1"
-ANTHROPIC_TEMPLATE_MODEL = "opus 4.6"
 MAX_ATTEMPTS_PER_PROVIDER = 4
 
 
@@ -46,17 +42,16 @@ class PlainLLMProvider:
     name: str
     call: Callable[[], Awaitable[str]]
 
-
 def get_template_provider_spec() -> TemplateProviderSpec:
     provider = get_llm_provider()
     if provider == LLMProvider.OPENAI:
-        return TemplateProviderSpec(provider=provider, model=OPENAI_TEMPLATE_MODEL)
+        return TemplateProviderSpec(provider=provider, model=get_model())
     if provider == LLMProvider.CODEX:
-        return TemplateProviderSpec(provider=provider, model=CODEX_TEMPLATE_MODEL)
+        return TemplateProviderSpec(provider=provider, model=get_model())
     if provider == LLMProvider.GOOGLE:
-        return TemplateProviderSpec(provider=provider, model=GOOGLE_TEMPLATE_MODEL)
+        return TemplateProviderSpec(provider=provider, model=get_model())
     if provider == LLMProvider.ANTHROPIC:
-        return TemplateProviderSpec(provider=provider, model=ANTHROPIC_TEMPLATE_MODEL)
+        return TemplateProviderSpec(provider=provider, model=get_model())
 
     raise HTTPException(
         status_code=400,
@@ -68,7 +63,7 @@ async def run_plain_provider_buckets(*, providers: list[PlainLLMProvider]) -> st
     last_exception: Optional[Exception] = None
 
     for provider in providers:
-        for _ in range(MAX_ATTEMPTS_PER_PROVIDER):
+        for attempt in range(1, MAX_ATTEMPTS_PER_PROVIDER + 1):
             try:
                 response_text = await provider.call()
                 if response_text:
@@ -180,7 +175,6 @@ async def _call_openai_like(
     user_text: str,
     image_bytes: Optional[bytes] = None,
     media_type: str = "image/png",
-    reasoning_effort: str = "medium",
 ) -> str:
     content = [{"type": "input_text", "text": user_text}]
     if image_bytes:
@@ -196,11 +190,82 @@ async def _call_openai_like(
         model=model,
         instructions=system_prompt,
         input=[{"role": "user", "content": content}],
-        reasoning={"effort": reasoning_effort},
         text={"verbosity": "medium"},
         store=False,
     )
     output_text = _read_openai_response_text(response)
+    if not output_text:
+        raise HTTPException(status_code=500, detail="No output from template provider")
+    return output_text
+
+
+def _response_event_to_dict(event: Any) -> dict:
+    if isinstance(event, dict):
+        return event
+    if hasattr(event, "model_dump"):
+        return event.model_dump()
+    return {
+        "type": getattr(event, "type", None),
+        "delta": getattr(event, "delta", None),
+        "text": getattr(event, "text", None),
+        "item": getattr(event, "item", None),
+        "response": getattr(event, "response", None),
+        "error": getattr(event, "error", None),
+        "message": getattr(event, "message", None),
+    }
+
+
+async def _call_codex(
+    *,
+    model: str,
+    system_prompt: str,
+    user_text: str,
+    image_bytes: Optional[bytes] = None,
+    media_type: str = "image/png",
+) -> str:
+    client = _get_codex_client()
+    content = [{"type": "input_text", "text": user_text}]
+    if image_bytes:
+        content.insert(
+            0,
+            {
+                "type": "input_image",
+                "image_url": f"data:{media_type};base64,{base64.b64encode(image_bytes).decode('utf-8')}",
+            },
+        )
+
+    stream = await client.responses.create(
+        model=model,
+        instructions=system_prompt,
+        input=[{"role": "user", "content": content}],
+        text={"verbosity": "medium"},
+        store=False,
+        stream=True,
+    )
+
+    text_parts: list[str] = []
+
+    async for event in stream:
+        payload = _response_event_to_dict(event)
+        event_type = payload.get("type") or ""
+
+        if event_type == "response.output_text.delta":
+            delta = payload.get("delta") or ""
+            if delta:
+                text_parts.append(delta)
+            continue
+
+        if event_type == "response.output_text.done":
+            text = payload.get("text") or ""
+            if text and not text_parts:
+                text_parts.append(text)
+            continue
+
+        if event_type in ("response.error", "response.failed", "error"):
+            error_detail = payload.get("message") or payload.get("error") or str(payload)
+            raise HTTPException(status_code=502, detail=f"Codex error: {error_detail}"[:400])
+
+    output_text = "".join(text_parts).strip()
     if not output_text:
         raise HTTPException(status_code=500, detail="No output from template provider")
     return output_text
@@ -272,13 +337,13 @@ async def _call_anthropic(
 
 def _build_provider_call(
     *,
+    spec: Optional[TemplateProviderSpec] = None,
     system_prompt: str,
     user_text: str,
     image_bytes: Optional[bytes] = None,
     media_type: str = "image/png",
-    reasoning_effort: str = "medium",
 ) -> PlainLLMProvider:
-    spec = get_template_provider_spec()
+    spec = spec or get_template_provider_spec()
 
     if spec.provider == LLMProvider.OPENAI:
         return PlainLLMProvider(
@@ -290,20 +355,17 @@ def _build_provider_call(
                 user_text=user_text,
                 image_bytes=image_bytes,
                 media_type=media_type,
-                reasoning_effort=reasoning_effort,
             ),
         )
     if spec.provider == LLMProvider.CODEX:
         return PlainLLMProvider(
             name="Codex",
-            call=lambda: _call_openai_like(
-                client=_get_codex_client(),
+            call=lambda: _call_codex(
                 model=spec.model,
                 system_prompt=system_prompt,
                 user_text=user_text,
                 image_bytes=image_bytes,
                 media_type=media_type,
-                reasoning_effort=reasoning_effort,
             ),
         )
     if spec.provider == LLMProvider.GOOGLE:
@@ -347,7 +409,6 @@ async def generate_slide_layout_code(
         user_text=user_text,
         image_bytes=image_bytes,
         media_type=media_type,
-        reasoning_effort="high",
     )
     return await run_plain_provider_buckets(providers=[provider])
 

@@ -4,6 +4,7 @@ import re
 from datetime import datetime, timezone
 
 import pytest
+from fastapi import HTTPException
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.sql import Delete, Select
@@ -13,6 +14,7 @@ from enums.llm_provider import LLMProvider
 from models.sql.presentation_layout_code import PresentationLayoutCodeModel
 from models.sql.template import TemplateModel
 from models.sql.template_create_info import TemplateCreateInfoModel
+from services.export_task_service import PptxToHtmlDocument
 from templates.handler import (
     CloneSlideLayoutRequest,
     CreateSlideLayoutRequest,
@@ -32,17 +34,13 @@ from templates.handler import (
     update_template,
     upload_fonts_and_slides_preview,
 )
-from templates.pptx_html_stub import BASIC_TEMPLATE_HTML
 from templates.preview import (
     FontCheckResponse,
     FontsUploadAndSlidesPreviewResponse,
     check_fonts_in_pptx_handler,
 )
 from templates.providers import (
-    ANTHROPIC_TEMPLATE_MODEL,
-    CODEX_TEMPLATE_MODEL,
-    GOOGLE_TEMPLATE_MODEL,
-    OPENAI_TEMPLATE_MODEL,
+    generate_slide_layout_code,
     get_template_provider_spec,
 )
 
@@ -200,8 +198,30 @@ def test_router_registration_replaces_old_routes(api_client):
     assert "/api/v1/ppt/pptx-fonts/process" not in paths
 
 
-def test_template_create_init_stores_stub_htmls():
+def test_template_create_init_stores_exported_htmls(tmp_path, monkeypatch):
     session = FakeAsyncSession()
+    pptx_path = tmp_path / "presentation.pptx"
+    pptx_path.write_bytes(b"pptx")
+
+    async def fake_convert(pptx_path_value: str, get_fonts: bool = False):
+        assert pptx_path_value == str(pptx_path)
+        assert get_fonts is False
+        return PptxToHtmlDocument(
+            slides=["<div>slide 1</div>", "<div>slide 2</div>"],
+            width=1280,
+            height=720,
+            images_dir="images",
+            fonts_dir="fonts",
+        )
+
+    monkeypatch.setattr(
+        "templates.handler.resolve_app_path_to_filesystem",
+        lambda _value: str(pptx_path),
+    )
+    monkeypatch.setattr(
+        "templates.handler.EXPORT_TASK_SERVICE.convert_pptx_to_html",
+        fake_convert,
+    )
 
     template_info_id = asyncio.run(
         init_create_template(
@@ -224,11 +244,100 @@ def test_template_create_init_stores_stub_htmls():
     )
 
     template_info = session.template_infos[template_info_id]
-    assert template_info.slide_htmls == [BASIC_TEMPLATE_HTML, BASIC_TEMPLATE_HTML]
+    assert template_info.slide_htmls == ["<div>slide 1</div>", "<div>slide 2</div>"]
     assert template_info.slide_image_urls == [
         "/app_data/images/a/slide_1.png",
         "/app_data/images/a/slide_2.png",
     ]
+
+
+def test_template_create_init_truncates_exported_htmls_to_preview_count(tmp_path, monkeypatch):
+    session = FakeAsyncSession()
+    pptx_path = tmp_path / "presentation.pptx"
+    pptx_path.write_bytes(b"pptx")
+
+    async def fake_convert(_pptx_path_value: str, get_fonts: bool = False):
+        assert get_fonts is False
+        return PptxToHtmlDocument(
+            slides=["<div>slide 1</div>", "<div>slide 2</div>", "<div>slide 3</div>"],
+            width=1280,
+            height=720,
+            images_dir="images",
+            fonts_dir="fonts",
+        )
+
+    monkeypatch.setattr(
+        "templates.handler.resolve_app_path_to_filesystem",
+        lambda _value: str(pptx_path),
+    )
+    monkeypatch.setattr(
+        "templates.handler.EXPORT_TASK_SERVICE.convert_pptx_to_html",
+        fake_convert,
+    )
+
+    template_info_id = asyncio.run(
+        init_create_template(
+            request=type(
+                "Request",
+                (),
+                {
+                    "pptx_url": "/app_data/uploads/template-previews/test/presentation.pptx",
+                    "slide_image_urls": ["/app_data/images/a/slide_1.png"],
+                    "fonts": {},
+                },
+            )(),
+            sql_session=session,
+        )
+    )
+
+    assert session.template_infos[template_info_id].slide_htmls == ["<div>slide 1</div>"]
+
+
+def test_template_create_init_fails_when_export_returns_too_few_slides(tmp_path, monkeypatch):
+    session = FakeAsyncSession()
+    pptx_path = tmp_path / "presentation.pptx"
+    pptx_path.write_bytes(b"pptx")
+
+    async def fake_convert(_pptx_path_value: str, get_fonts: bool = False):
+        assert get_fonts is False
+        return PptxToHtmlDocument(
+            slides=["<div>slide 1</div>"],
+            width=1280,
+            height=720,
+            images_dir="images",
+            fonts_dir="fonts",
+        )
+
+    monkeypatch.setattr(
+        "templates.handler.resolve_app_path_to_filesystem",
+        lambda _value: str(pptx_path),
+    )
+    monkeypatch.setattr(
+        "templates.handler.EXPORT_TASK_SERVICE.convert_pptx_to_html",
+        fake_convert,
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(
+            init_create_template(
+                request=type(
+                    "Request",
+                    (),
+                    {
+                        "pptx_url": "/app_data/uploads/template-previews/test/presentation.pptx",
+                        "slide_image_urls": [
+                            "/app_data/images/a/slide_1.png",
+                            "/app_data/images/a/slide_2.png",
+                        ],
+                        "fonts": {},
+                    },
+                )(),
+                sql_session=session,
+            )
+        )
+
+    assert exc.value.status_code == 400
+    assert "returned fewer slides than the preview images" in exc.value.detail
 
 
 def test_fonts_check_endpoint(monkeypatch):
@@ -293,30 +402,74 @@ def test_fonts_upload_and_preview_route_uses_new_handler(monkeypatch):
 
 
 def test_provider_spec_mapping_and_restrictions(monkeypatch):
+    monkeypatch.setattr("templates.providers.get_model", lambda: "user-selected-model")
+
     monkeypatch.setattr("templates.providers.get_llm_provider", lambda: LLMProvider.OPENAI)
     spec = get_template_provider_spec()
     assert spec.provider == LLMProvider.OPENAI
-    assert spec.model == OPENAI_TEMPLATE_MODEL
-
-    monkeypatch.setattr("templates.providers.get_llm_provider", lambda: LLMProvider.CODEX)
-    spec = get_template_provider_spec()
-    assert spec.provider == LLMProvider.CODEX
-    assert spec.model == CODEX_TEMPLATE_MODEL
+    assert spec.model == "user-selected-model"
 
     monkeypatch.setattr("templates.providers.get_llm_provider", lambda: LLMProvider.GOOGLE)
     spec = get_template_provider_spec()
     assert spec.provider == LLMProvider.GOOGLE
-    assert spec.model == GOOGLE_TEMPLATE_MODEL
+    assert spec.model == "user-selected-model"
 
     monkeypatch.setattr("templates.providers.get_llm_provider", lambda: LLMProvider.ANTHROPIC)
     spec = get_template_provider_spec()
     assert spec.provider == LLMProvider.ANTHROPIC
-    assert spec.model == ANTHROPIC_TEMPLATE_MODEL
+    assert spec.model == "user-selected-model"
+
+    monkeypatch.setattr("templates.providers.get_llm_provider", lambda: LLMProvider.CODEX)
+    spec = get_template_provider_spec()
+    assert spec.provider == LLMProvider.CODEX
+    assert spec.model == "user-selected-model"
 
     monkeypatch.setattr("templates.providers.get_llm_provider", lambda: LLMProvider.OLLAMA)
     with pytest.raises(Exception) as exc:
         get_template_provider_spec()
     assert "Template generation only supports OpenAI, Codex, Google, or Anthropic." in str(exc.value)
+
+
+def test_generate_slide_layout_code_uses_streaming_for_codex(monkeypatch):
+    create_kwargs = {}
+
+    class FakeResponses:
+        async def create(self, **kwargs):
+            create_kwargs.update(kwargs)
+
+            async def _stream():
+                yield {"type": "response.output_text.delta", "delta": "const layoutId = "}
+                yield {"type": "response.output_text.delta", "delta": '"title-image";'}
+
+            return _stream()
+
+    class FakeClient:
+        def __init__(self):
+            self.responses = FakeResponses()
+
+    monkeypatch.setattr("templates.providers.get_llm_provider", lambda: LLMProvider.CODEX)
+    monkeypatch.setattr("templates.providers.get_model", lambda: "user-selected-model")
+    monkeypatch.setattr("templates.providers._get_codex_client", lambda: FakeClient())
+
+    response = asyncio.run(
+        generate_slide_layout_code(
+            system_prompt="system prompt",
+            user_text="user text",
+            image_bytes=PNG_BYTES,
+            media_type="image/png",
+        )
+    )
+
+    assert response == 'const layoutId = "title-image";'
+    assert create_kwargs["model"] == "user-selected-model"
+    assert create_kwargs["stream"] is True
+    assert create_kwargs["store"] is False
+    assert create_kwargs["text"] == {"verbosity": "medium"}
+    assert create_kwargs["input"][0]["content"][0]["type"] == "input_image"
+    assert create_kwargs["input"][0]["content"][1] == {
+        "type": "input_text",
+        "text": "user text",
+    }
 
 
 def test_create_and_edit_slide_layout_routes_use_provider_layer(tmp_path, monkeypatch):

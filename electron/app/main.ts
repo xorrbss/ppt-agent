@@ -86,6 +86,7 @@ const createWindow = () => {
 
 async function startServers(fastApiPort: number, nextjsPort: number) {
   try {
+    const sofficePath = getSofficePath();
     const fastApi = await startFastApiServer(
       fastapiDir,
       fastApiPort,
@@ -122,9 +123,11 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         TEMP_DIRECTORY: tempDir,
         USER_CONFIG_PATH: userConfigPath,
         MIGRATE_DATABASE_ON_STARTUP: "True",
-        // Resolved by libreoffice-check.ts at startup; lets Python invoke the
-        // exact binary path instead of relying on the system PATH.
-        SOFFICE_PATH: getSofficePath(),
+        // Resolved by libreoffice-check.ts at startup when available; lets
+        // Python invoke the exact binary path instead of relying on PATH.
+        ...(sofficePath && {
+          SOFFICE_PATH: sofficePath,
+        }),
         IMAGEMAGICK_BINARY: getImageMagickBinaryPath(),
         LITEPARSE_RUNNER_PATH: getLiteParseRunnerPath(),
         // Use Electron's embedded runtime for LiteParse so parsing does not
@@ -163,25 +166,38 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
 
 async function stopServers() {
   if (fastApiProcess?.pid) {
-    console.log("Closing FastAPI...");
+    console.log("Force killing FastAPI...");
     try {
-      await killProcess(fastApiProcess.pid);
-    } catch {
       await killProcess(fastApiProcess.pid, "SIGKILL");
+    } catch (error) {
+      console.error("Failed to force kill FastAPI:", error);
     }
+    fastApiProcess = undefined;
   }
   if (nextjsProcess) {
-    if (isDev) {
-      console.log("Closing NextJS...");
+    if ("pid" in nextjsProcess && nextjsProcess.pid) {
+      console.log("Force killing NextJS...");
       try {
-        await killProcess(nextjsProcess.pid);
-      } catch {
         await killProcess(nextjsProcess.pid, "SIGKILL");
+      } catch (error) {
+        console.error("Failed to force kill NextJS:", error);
       }
-    } else {
+    } else if (typeof nextjsProcess.close === "function") {
       console.log("Closing NextJS...");
       nextjsProcess.close();
     }
+    nextjsProcess = undefined;
+  }
+}
+
+async function forceQuitApp(exitCode = 0) {
+  if (isStopping) return;
+  isStopping = true;
+  stopUpdateChecker();
+  try {
+    await stopServers();
+  } finally {
+    app.exit(exitCode);
   }
 }
 
@@ -280,29 +296,17 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", async () => {
-  stopUpdateChecker();
-  await stopServers();
-  app.quit();
+  await forceQuitApp(0);
 });
 
 app.on("before-quit", async (event) => {
   if (isStopping) return;
-  isStopping = true;
   event.preventDefault();
-  try {
-    await stopServers();
-  } finally {
-    app.quit();
-  }
+  await forceQuitApp(0);
 });
 
 app.on("will-quit", async (event) => {
   if (isStopping) return;
-  isStopping = true;
   event.preventDefault();
-  try {
-    await stopServers();
-  } finally {
-    app.quit();
-  }
+  await forceQuitApp(0);
 });

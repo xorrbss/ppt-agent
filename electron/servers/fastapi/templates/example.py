@@ -2,8 +2,8 @@ from typing import Any
 
 from templates.presentation_layout import PresentationLayoutModel
 
-PLACEHOLDER_IMAGE_URL = "https://presenton-public-assets.s3.ap-southeast-1.amazonaws.com/replaceable_template_image.png"
-PLACEHOLDER_ICON_URL = "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg"
+PLACEHOLDER_IMAGE_URL = "/static/images/replaceable_template_image.png"
+PLACEHOLDER_ICON_URL = "/static/icons/placeholder.svg"
 
 
 def build_schema_example(schema: dict) -> Any:
