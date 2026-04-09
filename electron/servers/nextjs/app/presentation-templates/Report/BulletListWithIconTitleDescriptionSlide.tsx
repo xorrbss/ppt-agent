@@ -1,3 +1,4 @@
+import { RemoteSvgIcon } from "@/app/hooks/useRemoteSvgIcon";
 import * as z from "zod";
 
 
@@ -52,62 +53,72 @@ const DataAnalysisListSlide = ({ data }: { data: Partial<SchemaType> }) => {
   const { title, itemIcon, items } = data;
 
   return (
-    <div
-      className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#f9f8f8]"
-      style={{
-        backgroundColor: "var(--background-color,#f9f8f8)",
-        fontFamily: "var(--body-font-family,Helvetica Neue)",
-      }}
-    >
+    <>
+      <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,200..900;1,200..900&display=swap" rel="stylesheet" />
       <div
-        className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#157CFF]"
-        style={{ height: 185, backgroundColor: "var(--primary-color,#157CFF)" }}
-      />
+        className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#f9f8f8]"
+        style={{
+          backgroundColor: "var(--background-color,#f9f8f8)",
+          fontFamily: "var(--body-font-family,'Source Sans 3')",
+        }}
+      >
+        <div
+          className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#157CFF]"
+          style={{ height: 185, backgroundColor: "var(--primary-color,#157CFF)" }}
+        />
 
-      <div className="px-[58px] pt-[52px]">
-        <h2
-          className="text-[80px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]"
-          style={{ color: "var(--background-text,#232223)" }}
-        >
-          {title}
-        </h2>
-      </div>
+        <div className="px-[58px] pt-[52px]">
+          <h2
+            className="text-[80px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]"
+            style={{ color: "var(--background-text,#232223)" }}
+          >
+            {title}
+          </h2>
+        </div>
 
-      <div className="grid grid-cols-2 gap-x-[112px] gap-y-[52px] px-[82px] pt-[58px]">
-        {items?.map((item, index) => (
-          <div key={`${item.title}-${index}`}>
-            <div className="flex items-center gap-[14px]">
-              <div
-                className="flex h-[55px] w-[55px] items-center justify-center rounded-full bg-[#157CFF] text-white"
-                style={{
-                  backgroundColor: "var(--primary-color,#157CFF)",
-                  color: "var(--primary-text,#ffffff)",
-                }}
-              >
-                <img
-                  src={itemIcon?.__icon_url__}
-                  alt={itemIcon?.__icon_query__}
-                  className="h-[26px] w-[26px] object-contain"
-                  style={{ filter: "brightness(0) invert(1)" }}
-                />
+        <div className="grid grid-cols-2 gap-x-[112px] gap-y-[52px] px-[82px] pt-[58px]">
+          {items?.map((item, index) => (
+            <div key={`${item.title}-${index}`}>
+              <div className="flex items-center gap-[14px]">
+                <div
+                  className="flex h-[55px] w-[55px] items-center justify-center rounded-full bg-[#157CFF] text-white"
+                  style={{
+                    backgroundColor: "var(--primary-color,#157CFF)",
+                    color: "var(--primary-text,#ffffff)",
+                  }}
+                >
+                  <RemoteSvgIcon
+                    url={itemIcon?.__icon_url__}
+                    strokeColor={"currentColor"}
+                    className="h-[26px] w-[26px] object-contain"
+                    color="var(--primary-text, #ffffff)"
+                    title={itemIcon?.__icon_query__}
+                  />
+                  {/* <img
+                    src={itemIcon?.__icon_url__}
+                    alt={itemIcon?.__icon_query__}
+                    className="h-[26px] w-[26px] object-contain"
+                    style={{ filter: "brightness(0) invert(1)" }}
+                  /> */}
+                </div>
+                <h3
+                  className="text-[20px] font-medium tracking-[2.074px] text-[#232223]"
+                  style={{ color: "var(--background-text,#232223)" }}
+                >
+                  {item.title}
+                </h3>
               </div>
-              <h3
-                className="text-[20px] font-medium tracking-[2.074px] text-[#232223]"
+              <p
+                className="mt-5 max-w-[420px] text-[24px] leading-[26.667px]  text-[#232223]"
                 style={{ color: "var(--background-text,#232223)" }}
               >
-                {item.title}
-              </h3>
+                {item.description}
+              </p>
             </div>
-            <p
-              className="mt-5 max-w-[420px] text-[24px] leading-[26.667px]  text-[#232223]"
-              style={{ color: "var(--background-text,#232223)" }}
-            >
-              {item.description}
-            </p>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

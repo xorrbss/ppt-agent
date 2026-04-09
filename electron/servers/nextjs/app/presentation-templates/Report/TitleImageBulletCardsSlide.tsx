@@ -89,45 +89,58 @@ const SolutionSlide = ({ data }: SolutionSlideProps) => {
   const { title, showImage, featureImage, cards } = data;
   const visibleCards = showImage ? cards?.slice(0, 2) : cards;
 
+
   return (
-    <div
-      className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#F9F8F8]"
-      style={{
-        backgroundColor: "var(--background-color,#F9F8F8)",
-        fontFamily: "var(--body-font-family,Helvetica Neue)",
-      }}
-    >
-      <div className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#157CFF]"
-        style={{ height: 185, backgroundColor: "var(--primary-color,#157CFF)" }}
-      />
+    <>  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,200..900;1,200..900&display=swap" rel="stylesheet" />
+      <div
+        className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#F9F8F8]"
+        style={{
+          backgroundColor: "var(--background-color,#F9F8F8)",
+          fontFamily: "var(--body-font-family,'Source Sans 3')",
+        }}
+      >
+        <div className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#157CFF]"
+          style={{ height: 185, backgroundColor: "var(--primary-color,#157CFF)" }}
+        />
 
-      <div className="relative z-10 h-full  py-[58px]">
-        {title && (
-          <h2
-            className="text-[80px] px-[64px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]"
-            style={{ color: "var(--background-text,#232223)" }}
-          >
-            {title}
-          </h2>
-        )}
+        <div className="relative z-10 h-full  py-[58px]">
+          {title && (
+            <h2
+              className="text-[80px] px-[64px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]"
+              style={{ color: "var(--background-text,#232223)" }}
+            >
+              {title}
+            </h2>
+          )}
 
-        <div className="mt-[70px]">
-          {showImage ? (
-            <div className="flex items-start gap-[40px]">
-              {featureImage?.__image_url__ && (
-                <div
-                  className="h-[396px] w-[534px] shrink-0 overflow-hidden rounded-r-[90px] bg-[#ece8dd]"
-                  style={{ backgroundColor: "var(--card-color,#ece8dd)" }}
-                >
-                  <img
-                    src={featureImage?.__image_url__}
-                    alt={featureImage?.__image_prompt__}
-                    className="h-full w-full object-cover"
-                  />
+          <div className="mt-[70px]">
+            {showImage ? (
+              <div className="flex items-start gap-[40px]">
+                {featureImage?.__image_url__ && (
+                  <div
+                    className="h-[396px] w-[534px] shrink-0 overflow-hidden rounded-r-[90px] bg-[#ece8dd]"
+                    style={{ backgroundColor: "var(--card-color,#ece8dd)" }}
+                  >
+                    <img
+                      src={featureImage?.__image_url__}
+                      alt={featureImage?.__image_prompt__}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                )}
+
+                <div className="flex gap-[40px]">
+                  {visibleCards?.map((card, index) => (
+                    <SolutionCard
+                      key={`${card.bulletNumber}-${index}`}
+                      stepNumber={card.bulletNumber}
+                      description={card.description}
+                    />
+                  ))}
                 </div>
-              )}
-
-              <div className="flex gap-[40px]">
+              </div>
+            ) : (
+              <div className="flex justify-center gap-[44px] pt-[6px]">
                 {visibleCards?.map((card, index) => (
                   <SolutionCard
                     key={`${card.bulletNumber}-${index}`}
@@ -136,21 +149,11 @@ const SolutionSlide = ({ data }: SolutionSlideProps) => {
                   />
                 ))}
               </div>
-            </div>
-          ) : (
-            <div className="flex justify-center gap-[44px] pt-[6px]">
-              {visibleCards?.map((card, index) => (
-                <SolutionCard
-                  key={`${card.bulletNumber}-${index}`}
-                  stepNumber={card.bulletNumber}
-                  description={card.description}
-                />
-              ))}
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

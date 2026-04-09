@@ -1,3 +1,4 @@
+import { RemoteSvgIcon } from "@/app/hooks/useRemoteSvgIcon";
 import { Fragment } from "react";
 import * as z from "zod";
 
@@ -108,11 +109,18 @@ const CodeSlide06Workflow = ({ data }: { data: Partial<SchemaType> }) => {
                     backgroundColor: "var(--primary-color,#2B7FFF33)",
                   }}
                 >
-                  <img src={step.icon.__icon_url__} alt={step.icon.__icon_query__} className="h-[37px] w-[37px] object-contain"
+                  <RemoteSvgIcon
+                    url={step.icon?.__icon_url__}
+                    strokeColor={"currentColor"}
+                    className="h-[37px] w-[37px] object-contain"
+                    color="var(--primary-text, #ffffff)"
+                    title={step.icon.__icon_query__}
+                  />
+                  {/* <img src={step.icon.__icon_url__} alt={step.icon.__icon_query__} className="h-[37px] w-[37px] object-contain"
                     style={{
                       filter: "invert(1)",
                     }}
-                  />
+                  /> */}
                 </div>
                 <h3 className="mt-[12px] text-[24px] font-medium" style={{ color: "var(--background-text,#ffffff)" }}>{step.title}</h3>
                 <p className="mt-[12px] text-[18px]" style={{ color: "var(--background-text,#90A1B9)" }}>{step.description}</p>

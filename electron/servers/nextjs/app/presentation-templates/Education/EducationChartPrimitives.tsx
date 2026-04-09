@@ -69,19 +69,8 @@ type TooltipPayloadItem = {
   value?: string | number;
 };
 
-type TooltipProps = {
-  active?: boolean;
-  label?: string | number;
-  payload?: TooltipPayloadItem[];
-};
 
-type PieLabelProps = {
-  name?: string;
-  percent?: number;
-  textAnchor?: "start" | "middle" | "end";
-  x?: number;
-  y?: number;
-};
+
 
 const DEFAULT_COLORS = [
   "var(--graph-0,#4A15A8)",
@@ -113,21 +102,7 @@ function isSimpleDatum(item: EducationChartDatum): item is SimpleDatum {
   return typeof (item as SimpleDatum).name === "string" && typeof (item as SimpleDatum).value === "number";
 }
 
-function isMultiSeriesDatum(item: EducationChartDatum): item is MultiSeriesDatum {
-  return (
-    typeof (item as MultiSeriesDatum).name === "string" &&
-    typeof (item as MultiSeriesDatum).values === "object" &&
-    (item as MultiSeriesDatum).values !== null
-  );
-}
 
-function isDivergingDatum(item: EducationChartDatum): item is DivergingDatum {
-  return (
-    typeof (item as DivergingDatum).name === "string" &&
-    typeof (item as DivergingDatum).positive === "number" &&
-    typeof (item as DivergingDatum).negative === "number"
-  );
-}
 
 function isScatterDatum(item: EducationChartDatum): item is ScatterDatum {
   return typeof (item as ScatterDatum).x === "number" && typeof (item as ScatterDatum).y === "number";
@@ -215,70 +190,14 @@ const renderPieInsideLabel = (props: any) => {
   );
 };
 
-function transformMultiSeriesData(data: EducationChartDatum[], series: string[]) {
-  return data
-    .filter(isMultiSeriesDatum)
-    .map((item) => {
-      const transformed: Record<string, string | number> = {
-        name: item.name,
-      };
 
-      series.forEach((serie) => {
-        transformed[serie] = item.values?.[serie] ?? 0;
-      });
 
-      return transformed;
-    });
-}
 
-function transformDivergingData(data: EducationChartDatum[]) {
-  return data
-    .filter(isDivergingDatum)
-    .map((item) => ({
-      name: item.name,
-      positive: item.positive,
-      negative: -Math.abs(item.negative),
-    }));
-}
-
-function CustomTooltip({ active, payload, label }: TooltipProps) {
-  if (!active || !payload || payload.length === 0) {
-    return null;
-  }
-
-  return (
-    <div
-      className="rounded-[8px] border px-[10px] py-[8px]"
-      style={{
-        borderColor: "var(--stroke,#ddd9e8)",
-        backgroundColor: "var(--card-color,#f7f6fa)",
-      }}
-    >
-      <p className="text-[11px] font-semibold" style={{ color: "var(--background-text,#3f3d47)" }}>{label}</p>
-      {payload.map((entry, index) => (
-        <p key={`${entry.name ?? "value"}-${index}`} className="text-[10px]" style={{ color: "var(--background-text,#5d5b67)" }}>
-          {entry.name ?? entry.dataKey}: {String(entry.value)}
-        </p>
-      ))}
-    </div>
-  );
-}
 
 function getChartColor(index: number) {
   return DEFAULT_COLORS[index % DEFAULT_COLORS.length];
 }
 
-function renderPieLabel({ name, percent = 0, x = 0, y = 0, textAnchor = "middle" }: PieLabelProps) {
-  if (percent < 0.08) {
-    return null;
-  }
-
-  return (
-    <text x={x} y={y} textAnchor={textAnchor} fill={AXIS} fontSize={10} fontFamily="var(--body-font-family,'Times New Roman')">
-      {`${name ?? ""} ${(percent * 100).toFixed(0)}%`}
-    </text>
-  );
-}
 
 function ChartLegend({ showLegend }: { showLegend: boolean }) {
   if (!showLegend) {

@@ -62,7 +62,7 @@ const CodeSlide07UseCaseList = ({ data }: { data: Partial<SchemaType> }) => {
                 style={{
                   borderColor: "var(--primary-color,#2B7FFF4D)",
                   backgroundColor: "var(--primary-color,#2B7FFF33)",
-                  color: "var(--primary-color,#51A2FF)",
+                  color: "var(--primary-text,#51A2FF)",
                 }}
               >
                 {index + 1}

@@ -1,3 +1,4 @@
+import { RemoteSvgIcon } from "@/app/hooks/useRemoteSvgIcon";
 import * as z from "zod";
 
 const FeatureCardSchema = z.object({
@@ -129,10 +130,17 @@ const CodeSlide04FeatureGrid = ({ data }: { data: Partial<SchemaType> }) => {
                     backgroundColor: "var(--primary-color,#2B7FFF33)",
                   }}
                 >
-                  <img src={feature.icon.__icon_url__} alt={feature.icon.__icon_query__} className="h-[24px] w-[24px] object-contain"
+                  {/* <img src={feature.icon.__icon_url__} alt={feature.icon.__icon_query__} className="h-[24px] w-[24px] object-contain"
                     style={{
                       filter: "invert(1)",
                     }}
+                  /> */}
+                  <RemoteSvgIcon
+                    url={feature.icon?.__icon_url__}
+                    strokeColor={"currentColor"}
+                    className="h-[24px] w-[24px] object-contain"
+                    color="var(--primary-text, #000000)"
+                    title={feature.icon.__icon_query__}
                   />
                 </span>
               </div>

@@ -46,25 +46,29 @@ const EducationTimelineSlide = ({ data }: { data: Partial<SchemaType> }) => {
   const isSixOrLess = milestones?.length && milestones?.length <= 6;
 
   return (
-    <div
-      className="relative h-[720px] w-[1280px] overflow-hidden flex flex-col"
-      style={{
-        backgroundColor: "var(--background-color,#efeff1)",
-        fontFamily: "var(--body-font-family,'Times New Roman')",
-      }}
-    >
-      <div className="relative z-10 px-[56px] pt-[86px]">
-        <h2 className="font-serif text-[84px] leading-none tracking-[-0.02em]" style={{ color: "var(--primary-color,#1a1752)" }}>
-          {title}
-        </h2>
-      </div>
+    <>
 
-      {isSixOrLess ? (
-        <TimelineUpToSix milestones={milestones || []} />
-      ) : (
-        <TimelineMoreThanSix milestones={milestones || []} />
-      )}
-    </div>
+      <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,200..900;1,8..60,200..900&display=swap" rel="stylesheet" />
+      <div
+        className="relative h-[720px] w-[1280px] overflow-hidden flex flex-col"
+        style={{
+          backgroundColor: "var(--background-color,#efeff1)",
+          fontFamily: "var(--body-font-family,'Source Serif 4')",
+        }}
+      >
+        <div className="relative z-10 px-[56px] pt-[86px]">
+          <h2 className="font-serif text-[84px] leading-none tracking-[-0.02em]" style={{ color: "var(--primary-color,#1a1752)" }}>
+            {title}
+          </h2>
+        </div>
+
+        {isSixOrLess ? (
+          <TimelineUpToSix milestones={milestones || []} />
+        ) : (
+          <TimelineMoreThanSix milestones={milestones || []} />
+        )}
+      </div>
+    </>
   );
 };
 
@@ -76,6 +80,7 @@ function TimelineUpToSix({
 
 
   return (
+
     <div className="relative z-10 mt-[160px] px-[56px]">
       <div
         className="grid "

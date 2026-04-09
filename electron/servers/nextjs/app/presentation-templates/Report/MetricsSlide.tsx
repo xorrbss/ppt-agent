@@ -135,54 +135,57 @@ const IntroductionStatsSlide = ({ data }: { data: Partial<SchemaType> }) => {
   const { title, body, bullets, statColumns } = data;
 
   return (
-    <div
-      className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#f9f8f8]"
-      style={{
-        backgroundColor: "var(--background-color,#f9f8f8)",
-        fontFamily: "var(--body-font-family,Helvetica Neue)",
-      }}
-    >
+    <>
+      <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,200..900;1,200..900&display=swap" rel="stylesheet" />
       <div
-        className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#157CFF]"
-        style={{ height: 185, backgroundColor: "var(--primary-color,#157CFF)" }}
-      />
+        className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#f9f8f8]"
+        style={{
+          backgroundColor: "var(--background-color,#f9f8f8)",
+          fontFamily: "var(--body-font-family,'Source Sans 3')",
+        }}
+      >
+        <div
+          className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#157CFF]"
+          style={{ height: 185, backgroundColor: "var(--primary-color,#157CFF)" }}
+        />
 
-      <div className="px-[64px] pt-[48px]">
-        <h2
-          className="text-[80px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]"
-          style={{ color: "var(--background-text,#232223)" }}
-        >
-          {title}
-        </h2>
-      </div>
-
-      <div className="flex justify-between px-[96px] pt-[38px]">
-        <div className="">
-          <p className="max-w-[400px] text-[24px] leading-[26.667px] text-[#232223]" style={{ color: "var(--background-text,#232223)" }}>
-            {body}
-          </p>
-
-          <div
-            className="mt-[34px] list-disc pl-[28px] text-[24px] leading-[26.667px] text-[#232223]"
+        <div className="px-[64px] pt-[48px]">
+          <h2
+            className="text-[80px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]"
             style={{ color: "var(--background-text,#232223)" }}
           >
-            {bullets?.map((bullet, index) => (
-              <div key={`${bullet}-${index}`} className="mt-[8px] flex items-center gap-2">
-                <div className="w-[8px] h-[8px] rounded-full bg-[#232223]" style={{ backgroundColor: "var(--background-text,#232223)" }} /> <p className="text-[24px] leading-[26.667px] text-[#232223]" style={{ color: "var(--background-text,#232223)" }}>
-                  {bullet}
-                </p>
-              </div>
+            {title}
+          </h2>
+        </div>
+
+        <div className="flex justify-between px-[96px] pt-[38px]">
+          <div className="">
+            <p className="max-w-[400px] text-[24px] leading-[26.667px] text-[#232223]" style={{ color: "var(--background-text,#232223)" }}>
+              {body}
+            </p>
+
+            <div
+              className="mt-[34px] list-disc pl-[28px] text-[24px] leading-[26.667px] text-[#232223]"
+              style={{ color: "var(--background-text,#232223)" }}
+            >
+              {bullets?.map((bullet, index) => (
+                <div key={`${bullet}-${index}`} className="mt-[8px] flex items-center gap-2">
+                  <div className="w-[8px] h-[8px] rounded-full bg-[#232223]" style={{ backgroundColor: "var(--background-text,#232223)" }} /> <p className="text-[24px] leading-[26.667px] text-[#232223]" style={{ color: "var(--background-text,#232223)" }}>
+                    {bullet}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="ml-[48px] flex gap-[34px]">
+            {statColumns?.map((column, index) => (
+              <StatPill key={`intro-stat-column-${index}`} metrics={column.metrics} />
             ))}
           </div>
         </div>
-
-        <div className="ml-[48px] flex gap-[34px]">
-          {statColumns?.map((column, index) => (
-            <StatPill key={`intro-stat-column-${index}`} metrics={column.metrics} />
-          ))}
-        </div>
       </div>
-    </div>
+    </>
   );
 };
 

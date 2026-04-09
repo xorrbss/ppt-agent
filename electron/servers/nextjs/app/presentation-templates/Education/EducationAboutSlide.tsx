@@ -54,13 +54,13 @@ const EducationAboutSlide = ({ data }: { data: Partial<SchemaType> }) => {
 
 
   return (<>
-    <link href="https://fonts.googleapis.com/css2?family=Corben:wght@400;700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,200..900;1,8..60,200..900&display=swap" rel="stylesheet" />
 
     <div
       className="relative h-[720px] w-[1280px] overflow-hidden"
       style={{
         backgroundColor: "var(--background-color,#efeff1)",
-        fontFamily: "var(--body-font-family,'Times New Roman')",
+        fontFamily: "var(--body-font-family,'Source Serif 4')",
       }}
     >
       <div className="grid  items-end grid-cols-[1fr_1fr]">

@@ -129,75 +129,78 @@ const DataAnalysisLineStatsSlide = ({ data }: { data: Partial<SchemaType> }) => 
   const series = chartData?.series ?? [];
 
   return (
-    <div
-      className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#f9f8f8]"
-      style={{
-        backgroundColor: "var(--background-color,#f9f8f8)",
-        fontFamily: "var(--body-font-family,Helvetica Neue)",
-      }}
-    >
+    <>
+      <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,200..900;1,200..900&display=swap" rel="stylesheet" />
       <div
-        className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#157CFF]"
-        style={{ height: 185, backgroundColor: "var(--primary-color,#157CFF)" }}
-      />
+        className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#f9f8f8]"
+        style={{
+          backgroundColor: "var(--background-color,#f9f8f8)",
+          fontFamily: "var(--body-font-family,'Source Sans 3')",
+        }}
+      >
+        <div
+          className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#157CFF]"
+          style={{ height: 185, backgroundColor: "var(--primary-color,#157CFF)" }}
+        />
 
-      <div className="px-[64px] pt-[48px]">
-        <h2
-          className="text-[80px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]"
-          style={{ color: "var(--background-text,#232223)" }}
-        >
-          {title}
-        </h2>
-      </div>
-
-      <div className="flex justify-between px-[74px] pt-[40px]">
-        <div className="w-[474px]">
-          {chartType === "line-dual" && <div
-            className="flex justify-center gap-[26px] text-[14px] text-[#353538]"
-            style={{ color: "var(--background-text,#353538)" }}
+        <div className="px-[64px] pt-[48px]">
+          <h2
+            className="text-[80px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]"
+            style={{ color: "var(--background-text,#232223)" }}
           >
-            <span className="flex items-center gap-[8px]">
-              <span className="h-[2px] w-[20px] bg-[#9fb6ff]" style={{ backgroundColor: "var(--graph-0,#9fb6ff)" }} />
-              {seriesALabel}
-            </span>
-            <span className="flex items-center gap-[8px]">
-              <span className="h-[2px] w-[20px] bg-[#4d4ef3]" style={{ backgroundColor: "var(--graph-1,#4d4ef3)" }} />
-              {seriesBLabel}
-            </span>
-          </div>}
+            {title}
+          </h2>
+        </div>
 
-          <div className="mt-[12px] h-[356px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <FlexibleReportChart
-                chartType={chartType}
-                data={rows}
-                series={series}
-                colorFallback="#157CFF"
-                density="default"
-                dualLineColors={["var(--graph-0,#9fb6ff)", "var(--graph-1,#4d4ef3)"]}
+        <div className="flex justify-between px-[74px] pt-[40px]">
+          <div className="w-[474px]">
+            {chartType === "line-dual" && <div
+              className="flex justify-center gap-[26px] text-[14px] text-[#353538]"
+              style={{ color: "var(--background-text,#353538)" }}
+            >
+              <span className="flex items-center gap-[8px]">
+                <span className="h-[2px] w-[20px] bg-[#9fb6ff]" style={{ backgroundColor: "var(--graph-0,#9fb6ff)" }} />
+                {seriesALabel}
+              </span>
+              <span className="flex items-center gap-[8px]">
+                <span className="h-[2px] w-[20px] bg-[#4d4ef3]" style={{ backgroundColor: "var(--graph-1,#4d4ef3)" }} />
+                {seriesBLabel}
+              </span>
+            </div>}
+
+            <div className="mt-[12px] h-[356px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <FlexibleReportChart
+                  chartType={chartType}
+                  data={rows}
+                  series={series}
+                  colorFallback="#157CFF"
+                  density="default"
+                  dualLineColors={["var(--graph-0,#9fb6ff)", "var(--graph-1,#4d4ef3)"]}
+                />
+              </ResponsiveContainer>
+            </div>
+
+            <div
+              className="mt-[12px] flex items-center gap-[10px] text-center justify-center text-[24px] tracking-[-0.03em] text-[#157CFF]"
+              style={{ color: "var(--primary-color,#157CFF)" }}
+            >
+              <span
+                className="h-[12px] w-[12px] rounded-full bg-[#157CFF]"
+                style={{ backgroundColor: "var(--primary-color,#157CFF)" }}
               />
-            </ResponsiveContainer>
+              <p>{data.legendLabel}</p>
+            </div>
           </div>
 
-          <div
-            className="mt-[12px] flex items-center gap-[10px] text-center justify-center text-[24px] tracking-[-0.03em] text-[#157CFF]"
-            style={{ color: "var(--primary-color,#157CFF)" }}
-          >
-            <span
-              className="h-[12px] w-[12px] rounded-full bg-[#157CFF]"
-              style={{ backgroundColor: "var(--primary-color,#157CFF)" }}
-            />
-            <p>{data.legendLabel}</p>
+          <div className="ml-[42px] flex gap-[30px]">
+            {statColumns?.map((column, index) => (
+              <StatPill key={`line-stat-column-${index}`} metrics={column.metrics} />
+            ))}
           </div>
-        </div>
-
-        <div className="ml-[42px] flex gap-[30px]">
-          {statColumns?.map((column, index) => (
-            <StatPill key={`line-stat-column-${index}`} metrics={column.metrics} />
-          ))}
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

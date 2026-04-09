@@ -91,64 +91,68 @@ const EducationServicesSplitSlide = ({ data }: { data: Partial<SchemaType> }) =>
 
 
   return (
-    <div
-      className="relative h-[720px] w-[1280px] overflow-hidden"
-      style={{
-        backgroundColor: "var(--background-color,#E6E7E8)",
-        fontFamily: "var(--body-font-family,'Times New Roman')",
-      }}
-    >
-      <div className="grid h-full grid-cols-[365px_1fr]">
-        <div className="px-[53px] pt-[53px]">
-          <h2 className="font-serif text-[64px] leading-[98%] tracking-[-0.02em]" style={{ color: "var(--primary-color,#1a1752)" }}>
-            {title}
-          </h2>
-        </div>
+    <>
+
+      <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,200..900;1,8..60,200..900&display=swap" rel="stylesheet" />
+      <div
+        className="relative h-[720px] w-[1280px] overflow-hidden"
+        style={{
+          backgroundColor: "var(--background-color,#E6E7E8)",
+          fontFamily: "var(--body-font-family,'Source Serif 4')",
+        }}
+      >
+        <div className="grid h-full grid-cols-[365px_1fr]">
+          <div className="px-[53px] pt-[53px]">
+            <h2 className="font-serif text-[64px] leading-[98%] tracking-[-0.02em]" style={{ color: "var(--primary-color,#1a1752)" }}>
+              {title}
+            </h2>
+          </div>
 
 
 
-        <div className="  grid  "
-          style={{
-            gridTemplateRows: `repeat(${sections?.length}, 1fr)`,
-          }}
-        >
-          {sections?.map((section, index) => (
-            <div key={`${section.heading}-${index}`} className=" flex items-center"
-              style={{
-                borderBottom:
-                  index !== (sections?.length ?? 1) - 1
-                    ? "5px solid var(--stroke,rgba(255, 255, 255, 0.10))"
-                    : "none",
-              }}
-            >
-              <div className=" min-w-[316px] max-w-[316px] "
+          <div className="  grid  "
+            style={{
+              gridTemplateRows: `repeat(${sections?.length}, 1fr)`,
+            }}
+          >
+            {sections?.map((section, index) => (
+              <div key={`${section.heading}-${index}`} className=" flex items-center"
                 style={{
-                  height: sections?.length === 4 ? '175px' : sections?.length === 3 ? '240px' : '357px'
+                  borderBottom:
+                    index !== (sections?.length ?? 1) - 1
+                      ? "5px solid var(--stroke,rgba(255, 255, 255, 0.10))"
+                      : "none",
                 }}
               >
+                <div className=" min-w-[316px] max-w-[316px] "
+                  style={{
+                    height: sections?.length === 4 ? '175px' : sections?.length === 3 ? '240px' : '357px'
+                  }}
+                >
 
-                <img
-                  src={section.image?.__image_url__}
-                  alt={section.image?.__image_prompt__}
-                  className="h-full w-full object-cover "
-                />
+                  <img
+                    src={section.image?.__image_url__}
+                    alt={section.image?.__image_prompt__}
+                    className="h-full w-full object-cover "
+                  />
+                </div>
+                <div
+                  className={`px-[56px] `}
+                >
+                  <h3 className="text-[24px] font-medium leading-none" style={{ color: "var(--background-text,#34394C)" }}>{section.heading}</h3>
+                  <p className="mt-[10px] text-[14px] font-medium uppercase leading-none" style={{ color: "var(--background-text,#454962)" }}>
+                    {section.tagline}
+                  </p>
+                  <p className="mt-[18px]  text-[22px] leading-[1.26] tracking-[0.04em]" style={{ color: "var(--background-text,#34394C)" }}>
+                    {section.body}
+                  </p>
+                </div>
               </div>
-              <div
-                className={`px-[56px] `}
-              >
-                <h3 className="text-[24px] font-medium leading-none" style={{ color: "var(--background-text,#34394C)" }}>{section.heading}</h3>
-                <p className="mt-[10px] text-[14px] font-medium uppercase leading-none" style={{ color: "var(--background-text,#454962)" }}>
-                  {section.tagline}
-                </p>
-                <p className="mt-[18px]  text-[22px] leading-[1.26] tracking-[0.04em]" style={{ color: "var(--background-text,#34394C)" }}>
-                  {section.body}
-                </p>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

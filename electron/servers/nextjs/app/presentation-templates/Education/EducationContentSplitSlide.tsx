@@ -47,45 +47,49 @@ const EducationContentSplitSlide = ({ data }: { data: Partial<SchemaType> }) => 
   const { heading, tagline, body, images } = data;
 
   return (
-    <div
-      className="relative h-[720px] w-[1280px] overflow-hidden"
-      style={{
-        backgroundColor: "var(--background-color,#E6E7E8)",
-        fontFamily: "var(--body-font-family,'Times New Roman')",
-      }}
-    >
-      <div className="w-full flex items-center h-full">
-        <div className="w-[660px] h-full">
-          <div className="h-[394px] w-full mb-[6px]">
-            <img
-              src={images?.[0]?.__image_url__}
-              alt={images?.[0]?.__image_prompt__}
-              className=" h-full w-full object-cover object-center"
-            />
-          </div>
-          <div className="flex w-full gap-[6px] h-[320px] ">
-            <div className="w-[330px]"> <img
-              src={images?.[1]?.__image_url__}
-              alt={images?.[1]?.__image_prompt__}
-              className="h-full w-full object-cover "
-            /></div>
-            <div className="w-[330px]"> <img
-              src={images?.[2]?.__image_url__}
-              alt={images?.[2]?.__image_prompt__}
-              className="h-full w-full object-cover "
-            /></div>
-          </div>
-        </div>
+    <>
 
-        <div className="w-1/2 px-[56px]">
-          <h2 className="text-[24px] font-medium leading-none" style={{ color: "var(--background-text,#34394C)" }}>{heading}</h2>
-          <p className=" text-[14px] font-medium mt-1 leading-none tracking-[0.04em]" style={{ color: "var(--background-text,#454962)" }}>
-            {tagline}
-          </p>
-          <p className="mt-[18px] text-[22px] leading-[1.28]" style={{ color: "var(--background-text,#34394C)" }}>{body}</p>
+      <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,200..900;1,8..60,200..900&display=swap" rel="stylesheet" />
+      <div
+        className="relative h-[720px] w-[1280px] overflow-hidden"
+        style={{
+          backgroundColor: "var(--background-color,#E6E7E8)",
+          fontFamily: "var(--body-font-family,'Source Serif 4')",
+        }}
+      >
+        <div className="w-full flex items-center h-full">
+          <div className="w-[660px] h-full">
+            <div className="h-[394px] w-full mb-[6px]">
+              <img
+                src={images?.[0]?.__image_url__}
+                alt={images?.[0]?.__image_prompt__}
+                className=" h-full w-full object-cover object-center"
+              />
+            </div>
+            <div className="flex w-full gap-[6px] h-[320px] ">
+              <div className="w-[330px]"> <img
+                src={images?.[1]?.__image_url__}
+                alt={images?.[1]?.__image_prompt__}
+                className="h-full w-full object-cover "
+              /></div>
+              <div className="w-[330px]"> <img
+                src={images?.[2]?.__image_url__}
+                alt={images?.[2]?.__image_prompt__}
+                className="h-full w-full object-cover "
+              /></div>
+            </div>
+          </div>
+
+          <div className="w-1/2 px-[56px]">
+            <h2 className="text-[24px] font-medium leading-none" style={{ color: "var(--background-text,#34394C)" }}>{heading}</h2>
+            <p className=" text-[14px] font-medium mt-1 leading-none tracking-[0.04em]" style={{ color: "var(--background-text,#454962)" }}>
+              {tagline}
+            </p>
+            <p className="mt-[18px] text-[22px] leading-[1.28]" style={{ color: "var(--background-text,#34394C)" }}>{body}</p>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

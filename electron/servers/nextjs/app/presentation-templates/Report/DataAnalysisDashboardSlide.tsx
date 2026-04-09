@@ -15,6 +15,7 @@ import {
   flexibleChartTypeSchema,
   type FlexibleChartData,
 } from "./flexibleReportChart";
+import { RemoteSvgIcon } from "@/app/hooks/useRemoteSvgIcon";
 
 const SummaryCardSchema = z.object({
   value: z.string().min(1).max(8).meta({
@@ -141,12 +142,19 @@ function SummaryCard({
           borderColor: "var(--stroke,#ECF5FE)",
         }}
       >
-        <img
+        <RemoteSvgIcon
+          url={iconUrl ?? ""}
+          strokeColor={"currentColor"}
+          className="h-[18px] w-[18px] object-contain"
+          color="var(--primary-text, #000000)"
+          title={iconAlt ?? ""}
+        />
+        {/* <img
           src={iconUrl ?? ""}
           alt={iconAlt ?? ""}
           className="h-[18px] w-[18px] object-contain"
 
-        />
+        /> */}
       </div>
       <div className="">
         <p
@@ -176,91 +184,94 @@ const DataAnalysisDashboardSlide = ({ data }: { data: Partial<SchemaType> }) => 
   const otherHalfChart = charts?.slice(Math.ceil(charts.length / 2));
 
   return (
-    <div
-      className="relative flex flex-col  h-[720px] w-[1280px] overflow-hidden  bg-[#F9F8F8]"
-      style={{
-        backgroundColor: "var(--background-color,#F9F8F8)",
-        fontFamily: "var(--body-font-family,Helvetica Neue)",
-      }}
-    >
+    <>
+      <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,200..900;1,200..900&display=swap" rel="stylesheet" />
       <div
-        className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#157CFF]"
-        style={{ height: 185, backgroundColor: "var(--primary-color,#157CFF)" }}
-      />
-
-      <div className="px-[64px] pt-[48px]">
-        <h2
-          className="text-[80px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]"
-          style={{ color: "var(--background-text,#232223)" }}
-        >
-          {title}
-        </h2>
-      </div>
-
-      {summaryCards && summaryCards.length > 0 && <div className=" mx-[64px] grid bg-white gap-[16px] p-[13px] mt-[22px] rounded-[14px]  "
+        className="relative flex flex-col  h-[720px] w-[1280px] overflow-hidden  bg-[#F9F8F8]"
         style={{
-          gridTemplateColumns: `repeat(${summaryCards.length}, minmax(220px, 1fr))`,
-          backgroundColor: "var(--card-color,#ffffff)",
-        }}>
-        {summaryCards?.map((card, index) => (
-          <SummaryCard
-            key={`${card.label}-${index}`}
-            value={card.value}
-            label={card.label}
-            iconUrl={card.icon?.__icon_url__}
-            iconAlt={card.icon?.__icon_query__}
-          />
-        ))}
-      </div>}
-      <div className="flex-1 flex flex-col pb-[30px]">
+          backgroundColor: "var(--background-color,#F9F8F8)",
+          fontFamily: "var(--body-font-family,'Source Sans 3')",
+        }}
+      >
+        <div
+          className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#157CFF]"
+          style={{ height: 185, backgroundColor: "var(--primary-color,#157CFF)" }}
+        />
 
-        {halfChart && halfChart.length > 0 && <div className="mt-[14px] px-[64px] flex-1">
-          <div
-            className={`grid h-full bg-white p-[13px] rounded-[14px] min-h-0 gap-[10px] `}
-            style={{
-              gridTemplateColumns: `repeat(${halfChart.length}, minmax(150px, 1fr))`,
-              backgroundColor: "var(--card-color,#ffffff)",
-            }}
+        <div className="px-[64px] pt-[48px]">
+          <h2
+            className="text-[80px] font-bold leading-[108.4%] tracking-[-2.419px] text-[#232223]"
+            style={{ color: "var(--background-text,#232223)" }}
           >
-            {halfChart?.map((chart, index) => (
-              <div
-                key={index}
-                className="rounded-[6px]  flex flex-col overflow-hidden"
+            {title}
+          </h2>
+        </div>
 
-              >
-
-                <div className="flex-1 " >
-                  <FlexibleReportChart density="compact" chartType={chart.type} data={chart.data} series={chart.series} />
-                </div>
-              </div>
-            ))}
-          </div>
+        {summaryCards && summaryCards.length > 0 && <div className=" mx-[64px] grid bg-white gap-[16px] p-[13px] mt-[22px] rounded-[14px]  "
+          style={{
+            gridTemplateColumns: `repeat(${summaryCards.length}, minmax(220px, 1fr))`,
+            backgroundColor: "var(--card-color,#ffffff)",
+          }}>
+          {summaryCards?.map((card, index) => (
+            <SummaryCard
+              key={`${card.label}-${index}`}
+              value={card.value}
+              label={card.label}
+              iconUrl={card.icon?.__icon_url__}
+              iconAlt={card.icon?.__icon_query__}
+            />
+          ))}
         </div>}
-        {otherHalfChart && otherHalfChart.length > 0 && <div className="mt-[14px] px-[64px] flex-1">
-          <div
-            className={`grid h-full bg-white p-[13px] rounded-[14px] min-h-0 gap-[10px] `}
-            style={{
-              gridTemplateColumns: `repeat(${otherHalfChart.length}, minmax(150px, 1fr))`,
-              backgroundColor: "var(--card-color,#ffffff)",
-            }}
-          >
-            {otherHalfChart?.map((chart, index) => (
-              <div
-                key={index}
-                className="rounded-[6px] flex flex-col overflow-hidden"
-              >
-                <div className="flex-1 " >
-                  <ResponsiveContainer width="100%" height="100%">
+        <div className="flex-1 flex flex-col pb-[30px]">
+
+          {halfChart && halfChart.length > 0 && <div className="mt-[14px] px-[64px] flex-1">
+            <div
+              className={`grid h-full bg-white p-[13px] rounded-[14px] min-h-0 gap-[10px] `}
+              style={{
+                gridTemplateColumns: `repeat(${halfChart.length}, minmax(150px, 1fr))`,
+                backgroundColor: "var(--card-color,#ffffff)",
+              }}
+            >
+              {halfChart?.map((chart, index) => (
+                <div
+                  key={index}
+                  className="rounded-[6px]  flex flex-col overflow-hidden"
+
+                >
+
+                  <div className="flex-1 " >
                     <FlexibleReportChart density="compact" chartType={chart.type} data={chart.data} series={chart.series} />
-                  </ResponsiveContainer>
-
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>}
+              ))}
+            </div>
+          </div>}
+          {otherHalfChart && otherHalfChart.length > 0 && <div className="mt-[14px] px-[64px] flex-1">
+            <div
+              className={`grid h-full bg-white p-[13px] rounded-[14px] min-h-0 gap-[10px] `}
+              style={{
+                gridTemplateColumns: `repeat(${otherHalfChart.length}, minmax(150px, 1fr))`,
+                backgroundColor: "var(--card-color,#ffffff)",
+              }}
+            >
+              {otherHalfChart?.map((chart, index) => (
+                <div
+                  key={index}
+                  className="rounded-[6px] flex flex-col overflow-hidden"
+                >
+                  <div className="flex-1 " >
+                    <ResponsiveContainer width="100%" height="100%">
+                      <FlexibleReportChart density="compact" chartType={chart.type} data={chart.data} series={chart.series} />
+                    </ResponsiveContainer>
+
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>}
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

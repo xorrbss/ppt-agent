@@ -136,50 +136,54 @@ const EducationReportChartSlide = ({ data }: { data: Partial<SchemaType> }) => {
   const chartHeightClass = slideData.showStatusMessage ? "h-[372px]" : "h-[486px]";
 
   return (
-    <div
-      className="relative h-[720px] w-[1280px] overflow-hidden"
-      style={{
-        backgroundColor: "var(--background-color,#efeff1)",
-        fontFamily: "var(--body-font-family,'Times New Roman')",
-      }}
-    >
-      <div className="grid h-full grid-cols-[1fr_560px] items-center ">
-        <div className="px-[52px] pb-[46px] mt-[111px]   ">
-          <div className="text-start">
-            <h2 className=" text-[64px] font-medium leading-[98%]" style={{ color: "var(--primary-color,#101C3D)" }}>
-              {slideData.title}
-            </h2>
-            <p className=" mt-[38px] max-w-[610px] text-[22px] leading-[1.22]" style={{ color: "var(--background-text,#3E3F4A)" }}>
-              {slideData.body}
+    <>
+
+      <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,200..900;1,8..60,200..900&display=swap" rel="stylesheet" />
+      <div
+        className="relative h-[720px] w-[1280px] overflow-hidden"
+        style={{
+          backgroundColor: "var(--background-color,#efeff1)",
+          fontFamily: "var(--body-font-family,'Times New Roman')",
+        }}
+      >
+        <div className="grid h-full grid-cols-[1fr_560px] items-center ">
+          <div className="px-[52px] pb-[46px] mt-[111px]   ">
+            <div className="text-start">
+              <h2 className=" text-[64px] font-medium leading-[98%]" style={{ color: "var(--primary-color,#101C3D)" }}>
+                {slideData.title}
+              </h2>
+              <p className=" mt-[38px] max-w-[610px] text-[22px] leading-[1.22]" style={{ color: "var(--background-text,#3E3F4A)" }}>
+                {slideData.body}
+              </p>
+            </div>
+
+            <p className="max-w-[610px] mt-[96px] text-[18px] leading-[1.22]" style={{ color: "var(--background-text,#4E4F57)" }}>
+              {slideData.footnote}
             </p>
           </div>
 
-          <p className="max-w-[610px] mt-[96px] text-[18px] leading-[1.22]" style={{ color: "var(--background-text,#4E4F57)" }}>
-            {slideData.footnote}
-          </p>
-        </div>
+          <div className="px-[42px] h-full flex flex-col justify-center" style={{ backgroundColor: "var(--card-color,#eceaf0)" }}>
+            <h3 className="text-center  text-[24px] font-semibold leading-none" style={{ color: "var(--background-text,#33313A)" }}>
+              {slideData.chartTitle}
+            </h3>
+            <p className="mt-1 text-center pb-6 text-[18px] leading-none" style={{ color: "var(--background-text,#4D4B55)" }}>
+              {slideData.dateRange}
+            </p>
 
-        <div className="px-[42px] h-full flex flex-col justify-center" style={{ backgroundColor: "var(--card-color,#eceaf0)" }}>
-          <h3 className="text-center  text-[24px] font-semibold leading-none" style={{ color: "var(--background-text,#33313A)" }}>
-            {slideData.chartTitle}
-          </h3>
-          <p className="mt-1 text-center pb-6 text-[18px] leading-none" style={{ color: "var(--background-text,#4D4B55)" }}>
-            {slideData.dateRange}
-          </p>
-
-          <div className={` ${chartHeightClass} h-[372px]`}>
-            <EducationChartPrimitives
-              chartType={slideData.chartType as EducationChartType}
-              chartData={slideData.chartData as EducationChartDatum[]}
-              series={slideData.series || []}
-              showLegend={slideData.showLegend || false}
-              divergingLabels={slideData.divergingLabels || ['', '']}
-              showTooltip={true}
-            />
+            <div className={` ${chartHeightClass} h-[372px]`}>
+              <EducationChartPrimitives
+                chartType={slideData.chartType as EducationChartType}
+                chartData={slideData.chartData as EducationChartDatum[]}
+                series={slideData.series || []}
+                showLegend={slideData.showLegend || false}
+                divergingLabels={slideData.divergingLabels || ['', '']}
+                showTooltip={true}
+              />
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 
