@@ -27,7 +27,7 @@ export const Schema = z.object({
   requestSnippet: z.object({
     language: z.string().min(2).max(10),
     fileName: z.string().min(3).max(24),
-    content: z.string().min(20).max(220),
+    content: z.string().min(20).max(500),
   }).default({
     language: "json",
     fileName: "request.json",
@@ -58,9 +58,6 @@ export const Schema = z.object({
 }`,
   }).meta({
     description: "Response payload example.",
-  }),
-  pageLabel: z.string().min(3).max(8).optional().default("3 / 11").meta({
-    description: "Bottom pagination label.",
   }),
 });
 
@@ -166,17 +163,6 @@ const CodeSlide03ApiRequestResponse = ({
               </pre>
             </div>
           </div>
-        </div>
-
-        <div
-          className="absolute bottom-[26px] z-50 left-1/2 -translate-x-1/2 rounded-full border px-[22px] py-[8px] text-[14px]"
-          style={{
-            borderColor: "var(--stroke,#31415880)",
-            backgroundColor: "var(--card-color,#1D293DCC)",
-            color: "var(--background-text,#CAD5E2)",
-          }}
-        >
-          {data.pageLabel}
         </div>
       </div>
     </>

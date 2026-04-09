@@ -88,9 +88,6 @@ export const Schema = z.object({
     .meta({
       description: "Six feature cards displayed in a 3x2 grid.",
     }),
-  pageLabel: z.string().min(3).max(8).optional().default("4 / 11").meta({
-    description: "Bottom pagination label.",
-  }),
 });
 
 export type SchemaType = z.infer<typeof Schema>;
@@ -142,18 +139,6 @@ const CodeSlide04FeatureGrid = ({ data }: { data: Partial<SchemaType> }) => {
               <p className="mt-[12px] text-[18px] leading-[136%]" style={{ color: "var(--background-text,#90A1B9)" }}>{feature.description}</p>
             </div>
           ))}
-        </div>
-
-
-        <div
-          className="absolute bottom-[26px] z-50 left-1/2 -translate-x-1/2 rounded-full border px-[22px] py-[8px] text-[14px]"
-          style={{
-            borderColor: "var(--stroke,#31415880)",
-            backgroundColor: "var(--card-color,#1D293DCC)",
-            color: "var(--background-text,#CAD5E2)",
-          }}
-        >
-          {data.pageLabel}
         </div>
       </div>
     </>

@@ -36,9 +36,6 @@ export const Schema = z.object({
     .meta({
       description: "Metrics cards in a grid.",
     }),
-  pageLabel: z.string().min(3).max(8).optional().default("11 / 11").meta({
-    description: "Bottom pagination label.",
-  }),
 });
 
 export type SchemaType = z.infer<typeof Schema>;
@@ -77,18 +74,6 @@ const CodeSlide11MetricsGrid = ({ data }: { data: Partial<SchemaType> }) => {
               <p className="mt-[13px] text-[18px]" style={{ color: "var(--background-text,#8fa2d8)" }}>{metric.subtext}</p>
             </div>
           ))}
-        </div>
-
-
-        <div
-          className="absolute bottom-[26px] left-1/2 -translate-x-1/2 rounded-full border px-[22px] py-[8px] text-[14px]"
-          style={{
-            borderColor: "var(--stroke,#31415880)",
-            backgroundColor: "var(--card-color,#1D293DCC)",
-            color: "var(--background-text,#CAD5E2)",
-          }}
-        >
-          {data.pageLabel}
         </div>
       </div>
     </>

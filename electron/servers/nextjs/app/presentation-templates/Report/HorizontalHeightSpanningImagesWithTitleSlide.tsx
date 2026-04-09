@@ -113,7 +113,7 @@ const TeamSlide = ({ data }: { data: Partial<SchemaType> }) => {
                 {member.title}
               </p>
               <p className="mt-[14px] text-[28px] ">
-                {member.name}
+                {member.subtext}
               </p>
             </div>
           </div>
