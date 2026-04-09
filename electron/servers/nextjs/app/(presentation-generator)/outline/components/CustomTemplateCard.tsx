@@ -18,7 +18,7 @@ export const CustomTemplateCard = memo(function CustomTemplateCard({
     onSelectTemplate: (template: string) => void;
     selectedTemplate: string | null;
 }) {
-    const { previewLayouts, loading, totalLayouts } = useCustomTemplatePreview(template.id);
+    const { previewLayouts, loading } = useCustomTemplatePreview(template.id);
     const isSelected = selectedTemplate === template.id;
 
     return (
@@ -32,7 +32,7 @@ export const CustomTemplateCard = memo(function CustomTemplateCard({
             onClick={() => onSelectTemplate(template.id)}
         >
             <TemplatePreviewStage>
-                <LayoutsBadge count={totalLayouts} />
+                <LayoutsBadge count={template.layoutCount} />
                 <CustomTemplatePreview
                     previewLayouts={previewLayouts}
                     loading={loading}

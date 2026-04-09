@@ -22,7 +22,7 @@ import {
 
 export const CustomTemplateCard = React.memo(function CustomTemplateCard({ template }: { template: CustomTemplates }) {
     const router = useRouter();
-    const { previewLayouts, loading, totalLayouts } = useCustomTemplatePreview(`${template.id}`);
+    const { previewLayouts, loading } = useCustomTemplatePreview(`${template.id}`);
     const handleOpen = useCallback(() => {
         trackEvent(MixpanelEvent.Templates_Custom_Opened, { template_id: template.id, template_name: template.name });
         if (template.id.startsWith('custom-')) {
@@ -38,7 +38,7 @@ export const CustomTemplateCard = React.memo(function CustomTemplateCard({ templ
             onClick={handleOpen}
         >
             <TemplatePreviewStage>
-                <LayoutsBadge count={totalLayouts} />
+                <LayoutsBadge count={template.layoutCount} />
                 <CustomTemplatePreview
                     previewLayouts={previewLayouts}
                     loading={loading}
