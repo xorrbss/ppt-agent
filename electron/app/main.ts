@@ -129,6 +129,7 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         DALL_E_3_QUALITY: process.env.DALL_E_3_QUALITY,
         GPT_IMAGE_1_5_QUALITY: process.env.GPT_IMAGE_1_5_QUALITY,
         APP_DATA_DIRECTORY: appDataDir,
+        FASTAPI_PUBLIC_URL: process.env.NEXT_PUBLIC_FAST_API,
         TEMP_DIRECTORY: tempDir,
         USER_CONFIG_PATH: userConfigPath,
         MIGRATE_DATABASE_ON_STARTUP: "True",

@@ -9,12 +9,6 @@ from utils.get_dynamic_models import get_presentation_outline_model_with_n_slide
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_provider import get_model
 
-"""
-Previously there was a dedicated search-query generation prompt constant.
-Removed in favor of embedding short, actionable web-search steps into the
-system prompt when web grounding is requested.
-"""
-
 
 def get_system_prompt(
     tone: Optional[str] = None,
@@ -49,7 +43,7 @@ def get_system_prompt(
     slide_outline_structure = (
         "Each slide content:\n"
         "   - Must have a ## title.\n"
-        "   - Must have content either in multiple bullet points or table or both.\n"
+        # "   - Must have content either in multiple bullet points or table or both.\n"
         "   - Must be in Markdown format.\n"
         "   - Don't use **bold** and __italic__ text."
         "   - First slide title must be the same as the presentation title."
@@ -62,7 +56,7 @@ def get_system_prompt(
         "Each slide content should contain the content for that slide.\n"
         f"{verbosity_instruction}\n"
         "Minimize repetitive content and make sure to use different words and phrases for different slides.\n"
-        "Include numerical data or tables if required or asked by the user.\n"
+        "Include numerical data, tables or code if required or asked by the user.\n"
         "If 'auto-detect' is used, figure it out from the content/context.\n"
         f"{title_slide_instruction}\n"
         f"{toc_block}"

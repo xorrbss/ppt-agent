@@ -1,10 +1,5 @@
 // Utility to get the FastAPI base URL
 export function getFastAPIUrl(): string {
-  const queryFastApiUrl = getFastApiUrlFromQuery();
-  if (queryFastApiUrl) {
-    return queryFastApiUrl;
-  }
-
   // Prefer Electron-preload env when available
   if (typeof window !== "undefined" && (window as any).env?.NEXT_PUBLIC_FAST_API) {
     return (window as any).env.NEXT_PUBLIC_FAST_API;
@@ -13,6 +8,11 @@ export function getFastAPIUrl(): string {
   // In Electron, NEXT_PUBLIC_FAST_API is set by setupEnv in main.ts
   if (process.env.NEXT_PUBLIC_FAST_API) {
     return process.env.NEXT_PUBLIC_FAST_API;
+  }
+
+  const queryFastApiUrl = getFastApiUrlFromQuery();
+  if (queryFastApiUrl) {
+    return queryFastApiUrl;
   }
 
   // Safe Electron fallback to local FastAPI

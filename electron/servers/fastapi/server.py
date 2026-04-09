@@ -15,8 +15,8 @@ if __name__ == "__main__":
     reload = args.reload == "true"
     host = "127.0.0.1"
 
-    # Provide a predictable public URL for services that need absolute asset links.
-    os.environ.setdefault("FASTAPI_PUBLIC_URL", f"http://{host}:{args.port}")
+    # Always bind absolute asset generation to the active runtime port.
+    os.environ["FASTAPI_PUBLIC_URL"] = f"http://{host}:{args.port}"
     
     uvicorn.run(
         "api.main:app",

@@ -28,6 +28,7 @@ interface FastApiEnv {
   DALL_E_3_QUALITY?: string,
   GPT_IMAGE_1_5_QUALITY?: string,
   APP_DATA_DIRECTORY?: string,
+  FASTAPI_PUBLIC_URL?: string,
   TEMP_DIRECTORY?: string,
   USER_CONFIG_PATH?: string,
   MIGRATE_DATABASE_ON_STARTUP?: string,
