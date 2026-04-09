@@ -92,13 +92,13 @@ const PricingPlanSlide = ({ data }: { data: Partial<SchemaType> }) => {
     <>
       <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap" rel="stylesheet" />
       <div
-        className="relative h-[720px] w-[1280px] overflow-hidden "
+        className="relative h-[720px] w-[1280px] overflow-hidden flex flex-col "
         style={{
           backgroundColor: "var(--background-color,#DAE1DE)",
           fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
         }}
       >
-        <div className="px-[68px] pt-[76px]">
+        <div className="px-[68px] pt-[50px]">
           <h2
             className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
             style={{ color: "var(--primary-color,#15342D)" }}
@@ -107,7 +107,7 @@ const PricingPlanSlide = ({ data }: { data: Partial<SchemaType> }) => {
           </h2>
         </div>
 
-        <div className="absolute left-[86px] right-[86px] top-[252px] grid grid-cols-3 items-start">
+        <div className=" px-[68px] mt-16  grid grid-cols-3 items-start">
           {plans?.map((plan, index) => {
             const active = plan.highlighted;
             return (

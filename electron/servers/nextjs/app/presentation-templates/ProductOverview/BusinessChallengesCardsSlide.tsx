@@ -82,7 +82,7 @@ const BusinessChallengesCardsSlide = ({ data }: { data: Partial<SchemaType> }) =
           fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
         }}
       >
-        <div className=" pl-[66px] pt-[60px] pb-[28px] pr-[40px]">
+        <div className=" pl-[66px] pt-[50px] pb-[28px] pr-[40px]">
           <h2
             className="text-[80px] max-w-[406px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
             style={{ color: "var(--primary-color,#15342D)" }}

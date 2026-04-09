@@ -101,7 +101,7 @@ const MeetTeamSlide = ({ data }: { data: Partial<SchemaType> }) => {
           fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
         }}
       >
-        <div className="flex items-start justify-between px-[64px] pt-[76px]">
+        <div className="flex items-start justify-between px-[64px] pt-[50px]">
           <h2
             className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
             style={{ color: "var(--primary-color,#15342D)" }}
@@ -125,7 +125,7 @@ const MeetTeamSlide = ({ data }: { data: Partial<SchemaType> }) => {
           </div>
         </div>
 
-        <div className="absolute bottom-[58px] left-[64px] grid grid-cols-4 gap-[22px]">
+        <div className="absolute bottom-[40px]  left-[64px] grid grid-cols-4 gap-[22px]">
           {members?.map((member, index) => (
             <div key={index} className="w-[252px] overflow-hidden">
               <img
@@ -134,7 +134,7 @@ const MeetTeamSlide = ({ data }: { data: Partial<SchemaType> }) => {
                 className="h-[244px] w-full object-cover"
               />
               <div
-                className="h-[154px] p-[23px]"
+                className="h-full p-[23px]"
                 style={{
                   backgroundColor: member.highlighted
                     ? "var(--primary-color,#15342D)"

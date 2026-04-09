@@ -122,7 +122,7 @@ const ComparisonTableWithTextSlide = ({ data }: { data: Partial<SchemaType> }) =
           fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
         }}
       >
-        <div className="px-[44px] pt-[46px]">
+        <div className="px-[44px] pt-[50px]">
           <h2
             className="text-[80px] font-semibold leading-[1.02] tracking-[-0.03em] text-[#0a443b]"
             style={{ color: "var(--primary-color,#0a443b)" }}

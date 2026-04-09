@@ -88,7 +88,7 @@ const ProcessSlide = ({ data }: { data: Partial<SchemaType> }) => {
           fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
         }}
       >
-        <div className="px-[66px] pt-[53px]">
+        <div className="px-[66px] pt-[50px]">
           <h2
             className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
             style={{ color: "var(--primary-color,#15342D)" }}
@@ -128,7 +128,7 @@ const ProcessSlide = ({ data }: { data: Partial<SchemaType> }) => {
                       </svg>
                     </div>
                   </div>
-                  <div className=" absolute bottom-[-110px] left-0   text-center mt-[60px]">
+                  <div className=" absolute bottom-[-120px] left-0   text-center mt-[60px]">
                     <p
                       className="text-[20px] font-semibold  tracking-[2.074px] text-[#15342D]"
                       style={{ color: "var(--primary-color,#15342D)" }}
@@ -149,10 +149,11 @@ const ProcessSlide = ({ data }: { data: Partial<SchemaType> }) => {
               return (
                 <div key={index} className="relative w-[230px]"
                   style={{
-                    marginLeft: index === 0 ? '0' : '-10px',
+                    marginLeft: index === 0 ? '0' : '-11px',
+                    marginTop: '2px',
                   }}
                 >
-                  <div className=" absolute top-[-100px] left-0   w-[224px]  text-center">
+                  <div className=" absolute top-[-140px] left-0     text-center">
                     <p
                       className="text-[20px] font-semibold  tracking-[2.074px] text-[#15342D]"
                       style={{ color: "var(--primary-color,#15342D)" }}

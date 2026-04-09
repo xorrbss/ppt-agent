@@ -63,7 +63,7 @@ const TableOfContentSlide = ({ data }: { data: Partial<SchemaType> }) => {
         }}
       >
         <div className="grid h-full grid-cols-[1fr_1fr]">
-          <div className="px-[56px] pt-[69px]" style={{ backgroundColor: PRODUCT_DARK }}>
+          <div className="px-[56px] pt-[50px]" style={{ backgroundColor: PRODUCT_DARK }}>
             <div className={`${sections && sections?.length > 3 ? 'space-y-[28px]' : 'space-y-[40px]'}`}>
               {sections?.map((section, index) => (
                 <div key={index} className="flex items-center gap-4 justify-between">

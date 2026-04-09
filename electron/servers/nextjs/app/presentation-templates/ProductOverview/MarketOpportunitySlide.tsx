@@ -65,7 +65,7 @@ const MarketOpportunitySlide = ({ data }: { data: Partial<SchemaType> }) => {
           fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
         }}
       >
-        <div className="px-[56px] pt-[72px]">
+        <div className="px-[56px] pt-[50px]">
           <h2
             className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
             style={{ color: "var(--primary-color,#15342D)" }}

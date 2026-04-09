@@ -53,7 +53,7 @@ const MissionVisionSlide = ({ data }: { data: Partial<SchemaType> }) => {
         }}
       >
         <div className="grid h-full grid-cols-2 grid-rows-2">
-          <div className="px-[74px] pt-[76px]">
+          <div className="px-[74px] pt-[50px]">
             <h2
               className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
               style={{ color: "var(--primary-color,#15342D)" }}

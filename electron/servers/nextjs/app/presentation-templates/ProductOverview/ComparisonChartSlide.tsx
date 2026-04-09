@@ -4,7 +4,7 @@ import * as z from "zod";
 export const slideLayoutId = "title-description-with-table-slide";
 export const slideLayoutName = "Title Description with Table Slide";
 export const slideLayoutDescription =
-  "A slide with a title on top and a description below, and a content section containing a table with column headers and rows of text content.";
+  "A slide with a title on top and a description below, and a content section containing a table with column headers and rows of check, cross and empty state of  content.";
 
 const CellStatusSchema = z.enum(["check", "cross", "empty"]);
 
@@ -29,21 +29,7 @@ const LegacyRowSchema = z.object({
 
 const RowSchema = z.union([GeneralRowSchema, LegacyRowSchema]);
 
-const DEFAULT_COLUMNS = ["HEADING 1", "HEADING 2", "HEADING 3", "HEADING 4"];
-const DEFAULT_ROWS: z.infer<typeof GeneralRowSchema>[] = [
-  {
-    label: "HEADING 1",
-    cells: ["check", "cross", "check", "cross"],
-  },
-  {
-    label: "HEADING 1",
-    cells: ["check", "empty", "check", "empty"],
-  },
-  {
-    label: "HEADING 2",
-    cells: ["check", "check", "check", "check"],
-  },
-];
+
 
 export const Schema = z.object({
   title: z.string().max(14).default("Comparison Chart").meta({
@@ -58,7 +44,7 @@ export const Schema = z.object({
     .array(z.string().max(18))
     .min(1)
     .max(4)
-    .default(DEFAULT_COLUMNS)
+    .default(["HEADING 1", "HEADING 2", "HEADING 3", "HEADING 4"])
     .meta({
       description: "Table column headings.",
     }),
@@ -69,7 +55,20 @@ export const Schema = z.object({
     .array(RowSchema)
     .min(1)
     .max(3)
-    .default(DEFAULT_ROWS)
+    .default([
+      {
+        label: "HEADING 1",
+        cells: ["check", "cross", "check", "cross"],
+      },
+      {
+        label: "HEADING 1",
+        cells: ["check", "empty", "check", "empty"],
+      },
+      {
+        label: "HEADING 2",
+        cells: ["check", "check", "check", "check"],
+      },
+    ])
     .meta({
       description: "Table rows with status indicators. Prefer the `cells` array format.",
     }),
@@ -105,7 +104,7 @@ function StatusIcon({
   crossIconUrl,
   crossIconAlt,
 }: {
-  status: "check" | "cross" | "empty";
+  status: any;
   checkIconUrl: string | undefined;
   checkIconAlt: string | undefined;
   crossIconUrl: string | undefined;
@@ -118,8 +117,12 @@ function StatusIcon({
   if (status === "cross") {
     return <img src={crossIconUrl} alt={crossIconAlt} className="h-[26px] w-[26px] object-contain" />;
   }
+  if (status === 'check') {
 
-  return <img src={checkIconUrl} alt={checkIconAlt} className="h-[26px] w-[26px] object-contain" />;
+
+    return <img src={checkIconUrl} alt={checkIconAlt} className="h-[26px] w-[26px] object-contain" />;
+  }
+  return <p>{status}</p>
 }
 
 const ComparisonChartSlide = ({ data }: { data: Partial<SchemaType> }) => {
@@ -168,7 +171,7 @@ const ComparisonChartSlide = ({ data }: { data: Partial<SchemaType> }) => {
           fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
         }}
       >
-        <div className="px-[56px] pt-[74px]">
+        <div className="px-[56px] pt-[50px]">
           <h2
             className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
             style={{ color: "var(--primary-color,#15342D)" }}
@@ -237,7 +240,7 @@ const ComparisonChartSlide = ({ data }: { data: Partial<SchemaType> }) => {
                 {row.cells.map((status, cellIndex) => (
                   <div
                     key={cellIndex}
-                    className="flex  p-[33px] items-center justify-center border-r"
+                    className="flex  p-[23px] items-center justify-center border-r"
                     style={{
                       backgroundColor: "var(--card-color,#ffffff)",
                       borderColor: "var(--stroke,#c5cccb)",

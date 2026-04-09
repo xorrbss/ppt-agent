@@ -15,7 +15,7 @@ const BlockSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().min(8).max(26).default("Business Challenges Business").meta({
+  title: z.string().min(8).max(24).default("Business Challenges Business").meta({
     description: "Main title shown in the top.",
   }),
   blocks: z
@@ -60,7 +60,7 @@ const BusinessChallengesGridSlide = ({ data }: { data: Partial<SchemaType> }) =>
           fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
         }}
       >
-        <div className=" px-[60px] pt-[60px] pb-[28px]">
+        <div className=" px-[60px] pt-[50px] pb-[28px]">
           <h2
             className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
             style={{ color: "var(--primary-color,#15342D)" }}
@@ -70,7 +70,7 @@ const BusinessChallengesGridSlide = ({ data }: { data: Partial<SchemaType> }) =>
         </div>
 
         <div
-          className="grid  grid-cols-2 justify-between items-center flex-1 gap-y-[63px] px-[84px] py-[70px] gap-x-[63px]"
+          className="grid  grid-cols-2 justify-between items-center flex-1 gap-y-[43px] px-[84px] py-[70px] gap-x-[63px]"
           style={{ backgroundColor: "var(--primary-color,#15342D)" }}
         >
           {blocks?.map((block, index) => (

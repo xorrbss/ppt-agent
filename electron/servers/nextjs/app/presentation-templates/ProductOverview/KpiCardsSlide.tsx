@@ -88,7 +88,7 @@ const KpiCardsSlide = ({ data }: { data: Partial<SchemaType> }) => {
           }}
         />
 
-        <div className="relative z-10 px-[66px] pt-[72px] mb-[33px]">
+        <div className="relative z-10 px-[66px] pt-[52px] mb-[33px]">
           <h2
             className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#FEFEFF]"
             style={{ color: "var(--primary-text,#FEFEFF)" }}

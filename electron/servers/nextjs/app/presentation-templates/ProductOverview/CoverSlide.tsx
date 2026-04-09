@@ -74,9 +74,8 @@ const CoverSlide = ({ data }: { data: Partial<SchemaType> }) => {
             <h1
               className="text-center text-[100px] font-semibold leading-[108.4%] tracking-[-3.024px]"
             >
-              {data.titleLine1}
-              <br />
-              {data.titleLine2}
+              <p> {data.titleLine1}</p>
+              <p>{data.titleLine2} </p>
             </h1>
           </div>
         </div>

@@ -70,7 +70,7 @@ const OurServicesSlide = ({ data }: { data: Partial<SchemaType> }) => {
           fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
         }}
       >
-        <div className=" pt-[74px]">
+        <div className=" pt-[50px]">
           <div className="px-[68px]">
 
             <h2
