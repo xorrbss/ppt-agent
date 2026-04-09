@@ -421,6 +421,5 @@ async def edit_slide_layout_code(
     provider = _build_provider_call(
         system_prompt=system_prompt,
         user_text=user_text,
-        reasoning_effort="medium",
     )
     return await run_plain_provider_buckets(providers=[provider])
