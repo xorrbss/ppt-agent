@@ -70,10 +70,6 @@ function syncMigrations() {
     throw new Error(`No migration files found in source directory: ${sourceDir}`);
   }
 
-  for (const filename of listPythonMigrations(targetDir)) {
-    fs.unlinkSync(path.join(targetDir, filename));
-  }
-
   for (const filename of sourceFiles) {
     fs.copyFileSync(path.join(sourceDir, filename), path.join(targetDir, filename));
   }
@@ -82,7 +78,7 @@ function syncMigrations() {
   validateSingleHead(targetDir, targetFiles);
 
   console.log(
-    `Synced ${targetFiles.length} migration files and verified a single Alembic head.`
+    `Synced ${sourceFiles.length} migration files into ${targetFiles.length} target migrations and verified a single Alembic head.`
   );
 }
 
