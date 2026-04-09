@@ -21,10 +21,10 @@ const WorkflowStepSchema = z.object({
   }),
 });
 
-export const slideLayoutId = "code-workflow-slide";
-export const slideLayoutName = "Code Workflow Slide";
+export const slideLayoutId = "workflow-slide";
+export const slideLayoutName = "Workflow Slide";
 export const slideLayoutDescription =
-  "A four-step workflow slide with cards and directional arrows between steps.";
+  "A workflow slide with cards and directional arrows between steps.";
 
 export const Schema = z.object({
   title: z.string().min(6).max(16).default("Workflow").meta({
@@ -32,7 +32,7 @@ export const Schema = z.object({
   }),
   steps: z
     .array(WorkflowStepSchema)
-    .min(4)
+    .min(1)
     .max(4)
     .default([
       {
@@ -69,9 +69,9 @@ export const Schema = z.object({
       },
     ])
     .meta({
-      description: "Four workflow steps shown in sequence.",
+      description: "Workflow steps shown in sequence.",
     }),
-  pageLabel: z.string().min(3).max(8).default("6 / 11").meta({
+  pageLabel: z.string().min(3).max(8).optional().default("6 / 11").meta({
     description: "Bottom pagination label.",
   }),
 });

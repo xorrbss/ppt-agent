@@ -1,8 +1,8 @@
 import * as z from "zod";
 
 
-export const slideLayoutId = "code-api-request-response-slide";
-export const slideLayoutName = "Code API Request Response Slide";
+export const slideLayoutId = "api-request-response-slide";
+export const slideLayoutName = "API Request Response Slide";
 export const slideLayoutDescription =
   "An API-focused slide with endpoint metadata, request payload, and response payload.";
 
@@ -59,7 +59,7 @@ export const Schema = z.object({
   }).meta({
     description: "Response payload example.",
   }),
-  pageLabel: z.string().min(3).max(8).default("3 / 11").meta({
+  pageLabel: z.string().min(3).max(8).optional().default("3 / 11").meta({
     description: "Bottom pagination label.",
   }),
 });

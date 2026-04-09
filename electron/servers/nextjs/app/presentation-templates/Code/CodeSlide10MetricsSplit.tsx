@@ -4,18 +4,18 @@ const MetricSchema = z.object({
   value: z.string().min(2).max(6).meta({
     description: "Primary metric value.",
   }),
-  label: z.string().min(3).max(14).meta({
+  label: z.string().min(3).max(15).meta({
     description: "Metric label text.",
   }),
-  period: z.string().min(3).max(16).meta({
-    description: "Metric period text.",
+  subtext: z.string().min(3).max(30).meta({
+    description: "Metric subtext/description.",
   }),
 });
 
-export const slideLayoutId = "code-metrics-split-slide";
-export const slideLayoutName = "Code Metrics Split Slide";
+export const slideLayoutId = "description-and-metrics-slide";
+export const slideLayoutName = "Description and Metrics Slide";
 export const slideLayoutDescription =
-  "A metrics slide with narrative text on the left and two stat cards on the right.";
+  "A metrics slide with description text on the left and metric cards on the right.";
 
 export const Schema = z.object({
   title: z.string().min(6).max(18).default("Metrics").meta({
@@ -35,16 +35,18 @@ export const Schema = z.object({
     }),
   metrics: z
     .array(MetricSchema)
-    .min(2)
-    .max(2)
+    .min(0)
+    .max(4)
     .default([
-      { value: "50k+", label: "Active Users", period: "Last 12 months" },
-      { value: "50k+", label: "Active Users", period: "Last 12 months" },
+      { value: "50k+", label: "Active Users", subtext: "Last 12 months" },
+      { value: "50k+", label: "Active Users", subtext: "Last 12 months" },
+      { value: "50k+", label: "Active Users", subtext: "Last 12 months" },
+      { value: "50k+", label: "Active Users", subtext: "Last 12 months" }
     ])
     .meta({
-      description: "Two metric cards shown in the right column.",
+      description: "Metric cards shown in the right column.",
     }),
-  pageLabel: z.string().min(3).max(8).default("10 / 11").meta({
+  pageLabel: z.string().min(3).max(8).optional().default("10 / 11").meta({
     description: "Bottom pagination label.",
   }),
 });
@@ -86,7 +88,7 @@ const CodeSlide10MetricsSplit = ({ data }: { data: Partial<SchemaType> }) => {
               >
                 <p className="text-[64px] font-semibold leading-none" style={{ color: "var(--graph-0,#8bb4ff)" }}>{metric.value}</p>
                 <p className="mt-[13px] text-[26px]" style={{ color: "var(--background-text,#edf1ff)" }}>{metric.label}</p>
-                <p className="mt-[13px] text-[18px]" style={{ color: "var(--background-text,#8fa2d8)" }}>{metric.period}</p>
+                <p className="mt-[13px] text-[18px]" style={{ color: "var(--background-text,#8fa2d8)" }}>{metric.subtext}</p>
               </div>
             ))}
           </div>

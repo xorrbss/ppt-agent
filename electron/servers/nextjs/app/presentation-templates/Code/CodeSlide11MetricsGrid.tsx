@@ -4,18 +4,18 @@ const MetricSchema = z.object({
   value: z.string().min(2).max(6).meta({
     description: "Primary metric value.",
   }),
-  label: z.string().min(3).max(14).meta({
+  label: z.string().min(3).max(15).meta({
     description: "Metric label text.",
   }),
-  period: z.string().min(3).max(16).meta({
-    description: "Metric period text.",
+  subtext: z.string().min(3).max(30).meta({
+      description: "Metric subtext/description.",
   }),
 });
 
-export const slideLayoutId = "code-metrics-grid-slide";
-export const slideLayoutName = "Code Metrics Grid Slide";
+export const slideLayoutId = "metrics-grid-slide";
+export const slideLayoutName = "Metrics Grid Slide";
 export const slideLayoutDescription =
-  "A six-card metrics grid for KPI overviews in code-focused decks.";
+  "A slide with metrics card grid and title at the top.";
 
 export const Schema = z.object({
   title: z.string().min(6).max(18).default("Metrics").meta({
@@ -23,20 +23,20 @@ export const Schema = z.object({
   }),
   metrics: z
     .array(MetricSchema)
-    .min(3)
+    .min(1)
     .max(6)
     .default([
-      { value: "99.9%", label: "Uptime", period: "Last 12 months" },
-      { value: "<100ms", label: "Response Time", period: "Last 12 months" },
-      { value: "50k+", label: "Active Users", period: "Last 12 months" },
-      { value: "99.9%", label: "Uptime", period: "Last 12 months" },
-      { value: "<100ms", label: "Response Time", period: "Last 12 months" },
-      { value: "50k+", label: "Active Users", period: "Last 12 months" },
+      { value: "99.9%", label: "Uptime", subtext: "Last 12 months" },
+      { value: "<100ms", label: "Response Time", subtext: "Last 12 months" },
+      { value: "50k+", label: "Active Users", subtext: "Last 12 months" },
+      { value: "99.9%", label: "Uptime", subtext: "Last 12 months" },
+      { value: "<100ms", label: "Response Time", subtext: "Last 12 months" },
+      { value: "50k+", label: "Active Users", subtext: "Last 12 months" },
     ])
     .meta({
-      description: "Six KPI cards in a 3x2 grid.",
+      description: "Metrics cards in a grid.",
     }),
-  pageLabel: z.string().min(3).max(8).default("11 / 11").meta({
+  pageLabel: z.string().min(3).max(8).optional().default("11 / 11").meta({
     description: "Bottom pagination label.",
   }),
 });
@@ -74,7 +74,7 @@ const CodeSlide11MetricsGrid = ({ data }: { data: Partial<SchemaType> }) => {
             >
               <p className="text-[64px] font-semibold leading-none" style={{ color: "var(--graph-0,#8bb4ff)" }}>{metric.value}</p>
               <p className="mt-[13px] text-[26px]" style={{ color: "var(--background-text,#edf1ff)" }}>{metric.label}</p>
-              <p className="mt-[13px] text-[18px]" style={{ color: "var(--background-text,#8fa2d8)" }}>{metric.period}</p>
+              <p className="mt-[13px] text-[18px]" style={{ color: "var(--background-text,#8fa2d8)" }}>{metric.subtext}</p>
             </div>
           ))}
         </div>

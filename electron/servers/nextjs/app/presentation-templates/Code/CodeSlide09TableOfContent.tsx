@@ -1,9 +1,9 @@
 import * as z from "zod";
 
-export const slideLayoutId = "code-table-of-content-slide";
-export const slideLayoutName = "Code Table Of Content Slide";
+export const slideLayoutId = "table-of-content-slide";
+export const slideLayoutName = "Table Of Content Slide";
 export const slideLayoutDescription =
-  "A two-column table of contents with numbered entries and folder-style bullets.";
+  "A two-column table of contents with numbered entries, labels and description.";
 
 export const Schema = z.object({
   title: z.string().min(8).max(24).default("Table of Content").meta({
@@ -11,18 +11,18 @@ export const Schema = z.object({
   }),
   items: z
     .array(z.object({
-      number: z.string().min(2).max(2),
-      label: z.string().min(3).max(16),
-      description: z.string().min(3).max(18),
+      number: z.string().min(2).max(2).meta({"description": "Bullet Serial Number"}),
+      label: z.string().min(3).max(30).meta({"description": "Page/Content Name"}),
+      description: z.string().min(3).max(100).optional().meta({"description": "Short description for the content section."}),
     }))
     .min(12)
     .max(12)
     .default([
-      { number: "01", label: "Content 1", description: "Section summary" },
-      { number: "02", label: "Content 2", description: "Section summary" },
-      { number: "03", label: "Content 3", description: "Section summary" },
-      { number: "04", label: "Content 4", description: "Section summary" },
-      { number: "05", label: "Content 5", description: "Section summary" },
+      { number: "01", label: "Content Section summary", description: "A quick brown fox jumps over a lazy dog." },
+      { number: "01", label: "Content Section summary", description: "A quick brown fox jumps over a lazy dog." },
+      { number: "01", label: "Content Section summary", description: "A quick brown fox jumps over a lazy dog." },
+      { number: "01", label: "Content Section summary", description: "A quick brown fox jumps over a lazy dog." },
+      { number: "01", label: "Content Section summary", description: "A quick brown fox jumps over a lazy dog." },
       { number: "06", label: "Content 6", description: "Section summary" },
       { number: "07", label: "Content 7", description: "Section summary" },
       { number: "08", label: "Content 8", description: "Section summary" },
@@ -32,10 +32,10 @@ export const Schema = z.object({
       { number: "12", label: "Content 12", description: "Section summary" },
     ])
     .meta({
-      description: "Left-column table of contents entries.",
+      description: "Table of contents entries.",
     }),
 
-  pageLabel: z.string().min(3).max(8).default("9 / 11").meta({
+  pageLabel: z.string().min(3).max(8).optional().default("9 / 11").meta({
     description: "Bottom pagination label.",
   }),
 });

@@ -2,10 +2,10 @@ import * as z from "zod";
 
 const FeatureCardSchema = z.object({
   title: z.string().min(3).max(17).meta({
-    description: "Feature title shown on each card.",
+    description: "Title shown on each card.",
   }),
   description: z.string().min(18).max(80).meta({
-    description: "Supporting feature description.",
+    description: "Description shown on each card.",
   }),
   icon: z.object({
     __icon_url__: z.string().meta({
@@ -18,14 +18,14 @@ const FeatureCardSchema = z.object({
     __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
     __icon_query__: "check icon",
   }).meta({
-    description: "Icon used for each feature bullet in plan cards.",
+    description: "Suiting icon used for each bullet in plan cards.",
   }),
 });
 
-export const slideLayoutId = "code-feature-grid-slide";
-export const slideLayoutName = "Code Feature Grid Slide";
+export const slideLayoutId = "cards-grid-slide";
+export const slideLayoutName = "Cards Grid Slide";
 export const slideLayoutDescription =
-  "A six-card feature summary grid with icon badges and compact descriptions.";
+  "A list of cards in grid with title, icon and compact description in each.";
 
 export const Schema = z.object({
   title: z.string().min(6).max(20).default("Feature Grid").meta({
@@ -33,7 +33,7 @@ export const Schema = z.object({
   }),
   features: z
     .array(FeatureCardSchema)
-    .min(3)
+    .min(1)
     .max(6)
     .default([
       {
@@ -88,7 +88,7 @@ export const Schema = z.object({
     .meta({
       description: "Six feature cards displayed in a 3x2 grid.",
     }),
-  pageLabel: z.string().min(3).max(8).default("4 / 11").meta({
+  pageLabel: z.string().min(3).max(8).optional().default("4 / 11").meta({
     description: "Bottom pagination label.",
   }),
 });
