@@ -47,7 +47,7 @@ import TableOfContentSlide, { Schema as PoTableOfContentSchema, slideLayoutId as
 
 // Report templates
 import ReportIntroSlide, { Schema as RepIntroSchema, slideLayoutId as RepIntroId, slideLayoutName as RepIntroName, slideLayoutDescription as RepIntroDesc } from "./Report/IntroSlide";
-import IntroductionImageSlide, { Schema as RepIntroductionImageSchema, slideLayoutId as RepIntroductionImageId, slideLayoutName as RepIntroductionImageName, slideLayoutDescription as RepIntroductionImageDesc } from "./Report/IntroductionImageSlide";
+import TitleDescriptionImageSlide, { Schema as RepIntroductionImageSchema, slideLayoutId as RepIntroductionImageId, slideLayoutName as RepIntroductionImageName, slideLayoutDescription as RepIntroductionImageDesc } from "./Report/TitleDescriptionImageSlide";
 import IntroductionStatsSlide, { Schema as RepIntroductionStatsSchema, slideLayoutId as RepIntroductionStatsId, slideLayoutName as RepIntroductionStatsName, slideLayoutDescription as RepIntroductionStatsDesc } from "./Report/IntroductionStatsSlide";
 import SolutionSlide, { Schema as RepSolutionSchema, slideLayoutId as RepSolutionId, slideLayoutName as RepSolutionName, slideLayoutDescription as RepSolutionDesc } from "./Report/SolutionSlide";
 import MilestoneSlide, { Schema as RepMilestoneSchema, slideLayoutId as RepMilestoneId, slideLayoutName as RepMilestoneName, slideLayoutDescription as RepMilestoneDesc } from "./Report/MilestoneSlide";
@@ -290,7 +290,7 @@ export const productOverviewTemplates: TemplateWithData[] = [
 
 export const reportTemplates: TemplateWithData[] = [
     createTemplateEntry(ReportIntroSlide, RepIntroSchema, RepIntroId, RepIntroName, RepIntroDesc, "report", "IntroSlide"),
-    createTemplateEntry(IntroductionImageSlide, RepIntroductionImageSchema, RepIntroductionImageId, RepIntroductionImageName, RepIntroductionImageDesc, "report", "IntroductionImageSlide"),
+    createTemplateEntry(TitleDescriptionImageSlide, RepIntroductionImageSchema, RepIntroductionImageId, RepIntroductionImageName, RepIntroductionImageDesc, "report", "TitleDescriptionImageSlide"),
     createTemplateEntry(IntroductionStatsSlide, RepIntroductionStatsSchema, RepIntroductionStatsId, RepIntroductionStatsName, RepIntroductionStatsDesc, "report", "IntroductionStatsSlide"),
     createTemplateEntry(SolutionSlide, RepSolutionSchema, RepSolutionId, RepSolutionName, RepSolutionDesc, "report", "SolutionSlide"),
     createTemplateEntry(MilestoneSlide, RepMilestoneSchema, RepMilestoneId, RepMilestoneName, RepMilestoneDesc, "report", "MilestoneSlide"),
