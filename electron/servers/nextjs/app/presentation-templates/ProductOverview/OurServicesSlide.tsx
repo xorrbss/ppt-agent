@@ -1,28 +1,28 @@
 import * as z from "zod";
 
 
-export const slideLayoutId = "product-overview-our-services-slide";
-export const slideLayoutName = "Product Overview Our Services Slide";
+export const slideLayoutId = "title-description-with-image-block-slide";
+export const slideLayoutName = "Title Description with Image Block Slide";
 export const slideLayoutDescription =
-  "A services slide with title and intro copy on the left, a large image below, and a two-by-two service card matrix on the right.";
+  "A slide with a title on top and a description below, and a content section containing an image and a grid of cards of text.";
 
-const ServiceSchema = z.object({
-  heading: z.string().min(4).max(12).meta({
-    description: "Service card heading.",
+const CardSchema = z.object({
+  heading: z.string().max(16).meta({
+    description: "Card heading.",
   }),
   body: z.string().max(30).meta({
-    description: "Service card short description.",
+    description: "Card short description.",
   }),
-  dark: z.boolean().default(false).meta({
-    description: "Whether this service card uses the dark style.",
+  isHighlighted: z.boolean().default(false).meta({
+    description: "Whether this card uses the dark style.",
   }),
 });
 
 export const Schema = z.object({
-  title: z.string().min(6).max(12).default("Our Services").meta({
+  title: z.string().max(16).default("Our Services").meta({
     description: "Main heading shown at the top-left.",
   }),
-  taglineLabel: z.string().min(3).max(10).default("TAGLINE").meta({
+  taglineLabel: z.string().max(16).default("TAGLINE").meta({
     description: "Small label above left paragraph.",
   }),
   taglineBody: z.string().max(30).default(
@@ -41,17 +41,17 @@ export const Schema = z.object({
     description: "Main image shown at the lower left side.",
   }),
   services: z
-    .array(ServiceSchema)
+    .array(CardSchema)
 
     .max(4)
     .default([
-      { heading: "HEADING 1", body: "Lorem ipsum dolor sit amet, consectetur", dark: false },
-      { heading: "HEADING 2", body: "Lorem ipsum dolor sit amet, consectetur", dark: true },
-      { heading: "HEADING 3", body: "Lorem ipsum dolor sit amet, consectetur", dark: false },
-      { heading: "HEADING 4", body: "Lorem ipsum dolor sit amet, consectetur", dark: false },
+      { heading: "HEADING 1", body: "Lorem ipsum dolor sit amet, consectetur", isHighlighted: false },
+      { heading: "HEADING 2", body: "Lorem ipsum dolor sit amet, consectetur", isHighlighted: true },
+      { heading: "HEADING 3", body: "Lorem ipsum dolor sit amet, consectetur", isHighlighted: false },
+      { heading: "HEADING 4", body: "Lorem ipsum dolor sit amet, consectetur", isHighlighted: false },
     ])
     .meta({
-      description: "Four service cards rendered on the right side.",
+      description: "Cards rendered on the right side.",
     }),
 });
 
@@ -64,7 +64,7 @@ const OurServicesSlide = ({ data }: { data: Partial<SchemaType> }) => {
     <>
       <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap" rel="stylesheet" />
       <div
-        className="relative h-[720px] w-[1280px] flex items-end pb-[56px]  justify-between overflow-hidden rounded-[24px]"
+        className="relative h-[720px] w-[1280px] flex items-end pb-[56px]  justify-between overflow-hidden "
         style={{
           backgroundColor: "var(--background-color,#DAE1DE)",
           fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
@@ -113,12 +113,12 @@ const OurServicesSlide = ({ data }: { data: Partial<SchemaType> }) => {
 
 
         <div className="grid grid-cols-2 gap-[22px] pr-[76px]">
-          {services?.map((service, index) => (
+          {services?.map((card, index) => (
             <div
               key={index}
               className=" p-[33px]"
               style={{
-                backgroundColor: service.dark
+                backgroundColor: card.isHighlighted
                   ? "var(--primary-color,#15342D)"
                   : "var(--card-color,#ececee)",
               }}
@@ -126,22 +126,22 @@ const OurServicesSlide = ({ data }: { data: Partial<SchemaType> }) => {
               <p
                 className="text-[20px] font-semibold tracking-[2.074px] text-white"
                 style={{
-                  color: service.dark
+                  color: card.isHighlighted
                     ? "var(--primary-text,#edf2f1)"
                     : "var(--primary-color,#15342D)",
                 }}
               >
-                {service.heading}
+                {card.heading}
               </p>
               <p
-                className={`${service.dark ? "text-white" : "text-[#15342DCC]"} mt-[20px] text-[28px] font-normal`}
+                className={`${card.isHighlighted ? "text-white" : "text-[#15342DCC]"} mt-[20px] text-[28px] font-normal`}
                 style={{
-                  color: service.dark
+                  color: card.isHighlighted
                     ? "var(--primary-text,#edf2f1)"
                     : "var(--background-text,#15342DCC)",
                 }}
               >
-                {service.body}
+                {card.body}
               </p>
             </div>
           ))}

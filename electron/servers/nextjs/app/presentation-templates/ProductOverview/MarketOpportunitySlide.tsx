@@ -1,9 +1,9 @@
 import * as z from "zod";
 
-export const slideLayoutId = "product-overview-market-opportunity-slide";
-export const slideLayoutName = "Product Overview Market Opportunity Slide";
+export const slideLayoutId = "title-description-with-lines-and-circles-slide";
+export const slideLayoutName = "Title Description with Lines and Circles";
 export const slideLayoutDescription =
-  "A market opportunity slide with title and intro text on the left, four bullet lines extending toward the right, and concentric value circles as the visual focal point.";
+  "A text slide with a title on top and a description below, and a content section containing a list of bullet points and a grid of circles.";
 
 const BulletSchema = z.object({
   text: z.string().min(12).max(46).meta({
@@ -12,7 +12,7 @@ const BulletSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().min(8).max(22).default("Market Opportunity").meta({
+  title: z.string().max(18).default("Market Opportunity").meta({
     description: "Main heading shown at the top-left.",
   }),
   subtitle: z.string().min(40).max(110).default(
@@ -59,7 +59,7 @@ const MarketOpportunitySlide = ({ data }: { data: Partial<SchemaType> }) => {
     <>
       <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap" rel="stylesheet" />
       <div
-        className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
+        className="relative h-[720px] w-[1280px] overflow-hidden "
         style={{
           backgroundColor: "var(--background-color,#DAE1DE)",
           fontFamily: "var(--body-font-family,'Bricolage Grotesque')",

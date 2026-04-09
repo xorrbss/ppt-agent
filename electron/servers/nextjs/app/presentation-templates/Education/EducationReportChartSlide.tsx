@@ -5,10 +5,10 @@ import EducationChartPrimitives, {
   type EducationChartType,
 } from "./EducationChartPrimitives";
 
-export const slideLayoutId = "education-report-chart-slide";
-export const slideLayoutName = "Education Report Chart Slide";
+export const slideLayoutId = "report-chart-slide";
+export const slideLayoutName = "Report Chart Slide";
 export const slideLayoutDescription =
-  "A split education report slide with one unified schema that supports multiple Recharts chart types in the right panel.";
+  "A left text column with a report title, body, footnote and a right-side chart.";
 
 const ChartTypeSchema = z.enum([
   "bar",
@@ -25,7 +25,7 @@ const SimpleDataSchema = z.object({
   name: z.string().min(1).max(20).meta({
     description: "Simple chart category label.",
   }),
-  value: z.number().min(-100000).max(100000).meta({
+  value: z.number().meta({
     description: "Simple chart numeric value.",
   }),
 });
@@ -71,7 +71,7 @@ const UnifiedChartDataSchema = z.union([
 ]);
 
 export const Schema = z.object({
-  title: z.string().min(3).max(20).default("Report").meta({
+  title: z.string().max(24).default("Report").meta({
     description: "Left-side report title.",
   }),
   body: z.string().min(80).max(260).default(

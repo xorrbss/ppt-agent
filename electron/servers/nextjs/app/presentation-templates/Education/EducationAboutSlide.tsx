@@ -1,22 +1,22 @@
 import * as z from "zod";
 
 
-export const slideLayoutId = "education-about-slide";
-export const slideLayoutName = "Education About Slide";
+export const slideLayoutId = "about-slide";
+export const slideLayoutName = "About Slide";
 export const slideLayoutDescription =
-  "A left text column with company introduction and a right-side visual grid made from one repeated image and tinted text panels.";
+  "A left text column with company/instructor/presenter/institute name and title introduction and a right-side visual grid made from one repeated image and tinted text panels.";
 
 export const Schema = z.object({
-  companyName: z.string().min(3).max(22).default("Company Name").meta({
+  name: z.string().min(3).max(22).default("Company Name").meta({
     description: "Main heading in the left content column.",
   }),
-  intro: z.string().min(40).max(120).default(
+  intro: z.string().min(40).max(100).default(
     "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et."
   ).meta({
     description: "Bold intro text shown beneath the company heading.",
   }),
   body: z.string().min(120).max(280).default(
-    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi."
+    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."
   ).meta({
     description: "Body paragraph in the left content section.",
   }),
@@ -28,23 +28,23 @@ export const Schema = z.object({
   }),
   topFeatureImage: z.object({
     __image_url__: z.string().default("https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1200&q=80"),
-    __image_prompt__: z.string().min(10).max(200).default("Office team collaboration"),
+    __image_prompt__: z.string().default("Office team collaboration"),
   }).default({
     __image_url__:
       "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1200&q=80",
     __image_prompt__: "Office team collaboration",
   }).meta({
-    description: "Single image reused in the right-side visual grid.",
+    description: "Single image reused in the top right-side visual grid.",
   }),
   bottomFeatureImage: z.object({
     __image_url__: z.string().default("https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1200&q=80"),
-    __image_prompt__: z.string().min(10).max(200).default("Office team collaboration"),
+    __image_prompt__: z.string().default("Office team collaboration"),
   }).default({
     __image_url__:
       "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1200&q=80",
     __image_prompt__: "Office team collaboration",
   }).meta({
-    description: "Single image reused in the right-side visual grid.",
+    description: "Single image reused in the bottom right-side visual grid.",
   }),
 });
 
@@ -66,7 +66,7 @@ const EducationAboutSlide = ({ data }: { data: Partial<SchemaType> }) => {
       <div className="grid  items-end grid-cols-[1fr_1fr]">
         <div className="px-[53px] pb-[56px] ">
           <h2 className="font-serif text-[64px] leading-[98%] tracking-[-0.02em]" style={{ color: "var(--primary-color,#101C3D)" }}>
-            {data.companyName}
+            {data.name}
           </h2>
           <p className="mt-[30px] max-w-[610px] text-[22px] font-semibold leading-[1.24]" style={{ color: "var(--background-text,#34394C)" }}>
             {data.intro}

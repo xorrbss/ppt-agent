@@ -1,16 +1,17 @@
+import { RemoteSvgIcon } from "@/app/hooks/useRemoteSvgIcon";
 import * as z from "zod";
 
 
-export const slideLayoutId = "product-overview-process-slide";
-export const slideLayoutName = "Product Overview Process Slide";
+export const slideLayoutId = "title-with-process-steps-slide";
+export const slideLayoutName = "Title with Process Steps Slide";
 export const slideLayoutDescription =
-  "A process diagram slide with five connected hexagon steps and alternating caption blocks above and below the flow.";
+  "A slide with a title on top and a content section containing a process diagrams with connected hexagon steps and alternating caption blocks above and below the flow.";
 
 const StepSchema = z.object({
-  label: z.string().min(3).max(10).meta({
+  label: z.string().max(16).meta({
     description: "Short uppercase label for a process step.",
   }),
-  body: z.string().max(20).meta({
+  body: z.string().max(32).meta({
     description: "Brief explanatory text for the process step.",
   }),
   icon: z.object({
@@ -26,23 +27,23 @@ const StepSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().min(5).max(14).default("PROCESS").meta({
+  title: z.string().max(14).default("PROCESS").meta({
     description: "Main title shown in the top-left corner.",
   }),
 
   steps: z
     .array(StepSchema)
-    .min(5)
+
     .max(5)
     .default([
       {
-        label: "TAGLINE", body: "Ut enim ad minim.", icon: {
+        label: "TAGLINE TAGLINE", body: "Ut enim ad minim. Ut enim ad minim. ", icon: {
           __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
           __icon_query__: "pulse icon",
         }, highlighted: false
       },
       {
-        label: "TAGLINE", body: "Ut enim ad minim.", icon: {
+        label: "TAGLINE", body: "Ut enim ad minim. Ut enim ad minim.", icon: {
           __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
           __icon_query__: "upload icon",
         }, highlighted: false
@@ -67,7 +68,7 @@ export const Schema = z.object({
       },
     ])
     .meta({
-      description: "Five process steps rendered from left to right.",
+      description: "Process steps rendered from left to right.",
     }),
 });
 
@@ -81,13 +82,13 @@ const ProcessSlide = ({ data }: { data: Partial<SchemaType> }) => {
     <>
       <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap" rel="stylesheet" />
       <div
-        className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
+        className="relative h-[720px] w-[1280px] overflow-hidden flex flex-col "
         style={{
           backgroundColor: "var(--background-color,#DAE1DE)",
           fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
         }}
       >
-        <div className="px-[66px] pt-[73px]">
+        <div className="px-[66px] pt-[53px]">
           <h2
             className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
             style={{ color: "var(--primary-color,#15342D)" }}
@@ -95,10 +96,7 @@ const ProcessSlide = ({ data }: { data: Partial<SchemaType> }) => {
             {title}
           </h2>
         </div>
-
-
-
-        <div className="flex justify-center  w-full px-[66px] mt-[110px] ">
+        <div className="flex justify-center  items-center w-full flex-1 px-[66px]  ">
           {steps?.map((step, index) => {
             if (index % 2 === 0) {
               return (
@@ -109,11 +107,17 @@ const ProcessSlide = ({ data }: { data: Partial<SchemaType> }) => {
                 >
                   <div className="relative  flex justify-center items-center h-[276px]">
                     <div className="relative">
-                      <img src={step.icon.__icon_url__} alt={step.icon.__icon_query__} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[42px] w-[42px] object-contain"
-                        style={{
-                          filter: step.highlighted ? "invert(1)" : "invert(0)",
-                        }}
-                      />
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[42px] h-[42px] flex items-center justify-center">
+
+                        <RemoteSvgIcon
+                          url={step.icon?.__icon_url__}
+                          strokeColor={"currentColor"}
+                          className="w-full h-full object-contain"
+                          color={step.highlighted ? "var(--primary-text, #4C68DF)" : "var(--background-text,#315f58)"}
+                          title={step.icon.__icon_query__}
+                        />
+                      </div>
+
                       <svg xmlns="http://www.w3.org/2000/svg" width="162" height="187" viewBox="0 0 162 187" fill="none">
                         <path d="M80.8291 0L161.658 46.6667V140L80.8291 186.667L2.28882e-05 140V46.6667L80.8291 0Z" fill={step.highlighted ? "var(--primary-color,#15342D)" : "var(--card-color,#FEFEFF)"} />
                       </svg>
@@ -168,7 +172,15 @@ const ProcessSlide = ({ data }: { data: Partial<SchemaType> }) => {
                       <svg xmlns="http://www.w3.org/2000/svg" width="162" height="187" viewBox="0 0 162 187" fill="none">
                         <path d="M80.8291 0L161.658 46.6667V140L80.8291 186.667L2.28882e-05 140V46.6667L80.8291 0Z" fill={step.highlighted ? "var(--primary-color,#15342D)" : "var(--card-color,#FEFEFF)"} />
                       </svg>
-                      <img src={step.icon.__icon_url__} alt={step.icon.__icon_query__} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[42px] w-[42px] object-contain" />
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[42px] h-[42px] flex items-center justify-center">
+                        <RemoteSvgIcon
+                          url={step.icon?.__icon_url__}
+                          strokeColor={"currentColor"}
+                          className="w-full h-full object-contain"
+                          color={step.highlighted ? "var(--primary-text, #4C68DF)" : "var(--background-text,#315f58)"}
+                          title={step.icon.__icon_query__}
+                        />
+                      </div>
                     </div>
                     <div className="absolute top-1 right-0">
                       <svg xmlns="http://www.w3.org/2000/svg" width="231" height="134" viewBox="0 0 231 134" fill="none">

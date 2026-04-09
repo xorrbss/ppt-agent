@@ -2,16 +2,16 @@ import * as z from "zod";
 
 
 
-export const slideLayoutId = "product-overview-business-challenges-cards-slide";
-export const slideLayoutName = "Product Overview Business Challenges Cards Slide";
+export const slideLayoutId = "title-description-with-cards-text-slide";
+export const slideLayoutName = "Title Description with Cards to Text Slide";
 export const slideLayoutDescription =
-  "A business challenges slide with headline and tagline on the left, a large supporting image in the top-right area, and three vertical detail cards across the lower center-right section.";
+  "A slide with a title on top and a description below, and a content section containing cards of text.";
 
 const CardSchema = z.object({
-  heading: z.string().min(4).max(12).meta({
+  heading: z.string().max(16).meta({
     description: "Card heading for one challenge column.",
   }),
-  body: z.string().max(40).meta({
+  body: z.string().max(45).meta({
     description: "Card body copy for one challenge column.",
   }),
   dark: z.boolean().default(false).meta({
@@ -20,13 +20,13 @@ const CardSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().min(8).max(24).default("Business Challenges").meta({
-    description: "Main slide title.",
+  title: z.string().min(8).max(16).default("Business Challenges").meta({
+    description: "Main slide title. Max 16 characters.",
   }),
-  taglineLabel: z.string().min(3).max(10).default("TAGLINE").meta({
+  taglineLabel: z.string().max(16).default("TAGLINE").meta({
     description: "Short label above the left-side paragraph.",
   }),
-  taglineBody: z.string().max(80).default(
+  taglineBody: z.string().max(100).default(
     "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea."
   ).meta({
     description: "Supporting paragraph on the left side.",
@@ -76,13 +76,13 @@ const BusinessChallengesCardsSlide = ({ data }: { data: Partial<SchemaType> }) =
     <>
       <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap" rel="stylesheet" />
       <div
-        className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
+        className="relative h-[720px] w-[1280px] overflow-hidden "
         style={{
           backgroundColor: "var(--background-color,#DAE1DE)",
           fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
         }}
       >
-        <div className=" pl-[66px] pt-[60px] pb-[28px]">
+        <div className=" pl-[66px] pt-[60px] pb-[28px] pr-[40px]">
           <h2
             className="text-[80px] max-w-[406px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
             style={{ color: "var(--primary-color,#15342D)" }}

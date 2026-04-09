@@ -1,17 +1,17 @@
 import * as z from "zod";
 
 
-export const slideLayoutId = "product-overview-image-gallery-slide";
-export const slideLayoutName = "Product Overview Image Gallery Slide";
+export const slideLayoutId = "title-description-with-image-gallery-slide";
+export const slideLayoutName = "Title Description with Image Gallery Slide";
 export const slideLayoutDescription =
-  "A gallery slide with a title and paragraph on the left and a five-image collage on the right and bottom.";
+  "A text slide with a title on top and a description below, and a section containing a gallery of images.";
 
 export const Schema = z.object({
   title: z.string().max(12).default("Image Gallery").meta({
-    description: "Main gallery heading.",
+    description: "Main Title of the slide",
   }),
-  description: z.string().max(80).default(
-    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore."
+  description: z.string().max(120).default(
+    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore."
   ).meta({
     description: "Supporting paragraph shown under the title.",
   }),
@@ -88,7 +88,7 @@ const ImageGallerySlide = ({ data }: { data: Partial<SchemaType> }) => {
     <>
       <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap" rel="stylesheet" />
       <div
-        className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] p-[56px]"
+        className="relative h-[720px] w-[1280px] overflow-hidden  p-[56px]"
         style={{
           backgroundColor: "var(--background-color,#DAE1DE)",
           fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
@@ -125,7 +125,7 @@ const ImageGallerySlide = ({ data }: { data: Partial<SchemaType> }) => {
         </div>
 
 
-        <div className="absolute bottom-[56px] w-full left-[58px] flex gap-[22px]">
+        <div className="mt-[22px] w-full  flex gap-[22px]">
           <img
             src={bottomWideImage?.__image_url__}
             alt={bottomWideImage?.__image_prompt__}

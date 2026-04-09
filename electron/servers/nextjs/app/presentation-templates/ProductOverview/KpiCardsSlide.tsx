@@ -1,10 +1,11 @@
+import { RemoteSvgIcon } from "@/app/hooks/useRemoteSvgIcon";
 import * as z from "zod";
 
 
-export const slideLayoutId = "product-overview-kpi-cards-slide";
-export const slideLayoutName = "Product Overview KPI Cards Slide";
+export const slideLayoutId = "title-with-kpi-cards-slide";
+export const slideLayoutName = "Title with KPI Cards Slide";
 export const slideLayoutDescription =
-  "A KPI overview slide with a dark-tinted background image, large title, and a two-row grid of six white KPI cards.";
+  "A slide with a title on top and a content section containing a grid of KPI cards.";
 
 const KpiSchema = z.object({
   value: z.string().max(5).meta({
@@ -44,7 +45,7 @@ export const Schema = z.object({
     .min(3)
     .max(6)
     .default([
-      { value: "X 5", body: "Lorem ipsum dolor sit." },
+      { value: "X 5 Lorem", body: "Lorem ipsum dolor sit. " },
       { value: "X 5", body: "Lorem ipsum dolor sit." },
       { value: "X 5", body: "Lorem ipsum dolor sit." },
       { value: "X 5", body: "Lorem ipsum dolor sit." },
@@ -65,7 +66,7 @@ const KpiCardsSlide = ({ data }: { data: Partial<SchemaType> }) => {
     <>
       <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap" rel="stylesheet" />
       <div
-        className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
+        className="relative h-[720px] w-[1280px] overflow-hidden "
         style={{
           backgroundColor: "var(--background-color,#DAE1DE)",
           fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
@@ -107,11 +108,20 @@ const KpiCardsSlide = ({ data }: { data: Partial<SchemaType> }) => {
                 className="flex h-[55px] w-[55px] items-center justify-center rounded-full bg-[#15342D]"
                 style={{ backgroundColor: "var(--primary-color,#15342D)" }}
               >
-                <img
+                {/* <img
                   src={kpiIcon?.__icon_url__}
                   alt={kpiIcon?.__icon_query__}
                   className="h-[25px] w-[25px] object-contain"
-                  style={{ filter: "brightness(0) invert(1)" }}
+                  s
+                  tyle={{ filter: "brightness(0) invert(1)" }}
+                /> */}
+
+                <RemoteSvgIcon
+                  url={kpiIcon?.__icon_url__}
+                  strokeColor={"currentColor"}
+                  className="w-[25px] h-[25px] object-contain"
+                  color="var(--primary-text, #FEFEFF)"
+                  title={kpiIcon?.__icon_query__}
                 />
               </div>
               <p

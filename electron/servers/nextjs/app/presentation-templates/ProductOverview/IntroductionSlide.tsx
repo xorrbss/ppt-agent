@@ -2,17 +2,17 @@ import * as z from "zod";
 
 
 
-export const slideLayoutId = "product-overview-introduction-slide";
-export const slideLayoutName = "Product Overview Introduction Slide";
+export const slideLayoutId = "introduction-slide";
+export const slideLayoutName = "Introduction Slide";
 export const slideLayoutDescription =
-  "A split slide with a large portrait image on the left and a structured introduction column on the right containing a main title and two labeled body paragraphs.";
+  "A split slide with a large portrait image on the left and a structured introduction column on the right containing a title and two labeled body paragraphs.";
 
 const IntroBlockSchema = z.object({
   label: z.string().min(3).max(12).meta({
-    description: "Uppercase mini-heading shown above each intro paragraph.",
+    description: "Uppercase mini-heading shown above each introduction paragraph.",
   }),
-  body: z.string().min(40).max(96).meta({
-    description: "Supporting paragraph content for the intro block.",
+  body: z.string().max(180).meta({
+    description: "Supporting paragraph content for the introduction block.",
   }),
 });
 
@@ -23,7 +23,7 @@ export const Schema = z.object({
   portraitImage: z.object({
     __image_url__: z.string().url().default("https://images.unsplash.com/photo-1521119989659-a83eee488004?auto=format&fit=crop&w=1200&q=80"),
     __image_prompt__: z.string().min(10).max(100).default("Two business professionals in office"),
-  }).default({
+  }).optional().default({
     __image_url__:
       "https://images.unsplash.com/photo-1521119989659-a83eee488004?auto=format&fit=crop&w=1200&q=80",
     __image_prompt__: "Two business professionals in office",
@@ -32,16 +32,16 @@ export const Schema = z.object({
   }),
   blocks: z
     .array(IntroBlockSchema)
-    .min(2)
+
     .max(2)
     .default([
       {
         label: "TAGLINE",
-        body: "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea.",
+        body: "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea.",
       },
       {
         label: "TAGLINE",
-        body: "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea.",
+        body: "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea.",
       },
     ])
     .meta({
@@ -58,7 +58,7 @@ const IntroductionSlide = ({ data }: { data: Partial<SchemaType> }) => {
     <>
       <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap" rel="stylesheet" />
       <div
-        className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
+        className="relative h-[720px] w-[1280px] overflow-hidden "
         style={{
           backgroundColor: "var(--background-color,#DAE1DE)",
           fontFamily: "var(--body-font-family,'Bricolage Grotesque')",

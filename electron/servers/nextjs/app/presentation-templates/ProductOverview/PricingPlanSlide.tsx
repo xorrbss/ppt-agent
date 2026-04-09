@@ -1,10 +1,11 @@
+import { RemoteSvgIcon } from "@/app/hooks/useRemoteSvgIcon";
 import * as z from "zod";
 
 
-export const slideLayoutId = "product-overview-pricing-plan-slide";
-export const slideLayoutName = "Product Overview Pricing Plan Slide";
+export const slideLayoutId = "title-cards-list-with-text-slide";
+export const slideLayoutName = "Title with Cards List with Text";
 export const slideLayoutDescription =
-  "A three-column pricing slide with one emphasized center plan and feature bullet lists for each plan.";
+  "A slide with a title on top and a content section containing a list of cards with text content.";
 
 const PlanSchema = z.object({
   price: z.string().min(4).max(12).meta({
@@ -14,7 +15,7 @@ const PlanSchema = z.object({
     description: "Short statement describing the plan.",
   }),
   features: z
-    .array(z.string().max(14))
+    .array(z.string().max(16))
 
     .max(4)
     .meta({
@@ -91,7 +92,7 @@ const PricingPlanSlide = ({ data }: { data: Partial<SchemaType> }) => {
     <>
       <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap" rel="stylesheet" />
       <div
-        className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
+        className="relative h-[720px] w-[1280px] overflow-hidden "
         style={{
           backgroundColor: "var(--background-color,#DAE1DE)",
           fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
@@ -143,12 +144,19 @@ const PricingPlanSlide = ({ data }: { data: Partial<SchemaType> }) => {
                 <div className="mt-[18px] space-y-[6px]">
                   {plan.features.map((feature, featureIndex) => (
                     <div key={featureIndex} className="flex items-center gap-[10px]">
-                      <img
+                      <RemoteSvgIcon
+                        url={featureIcon?.__icon_url__}
+                        strokeColor={"currentColor"}
+                        className="w-[28px] h-[28px] object-contain"
+                        color={active ? "var(--primary-text, #edf2f1)" : "var(--background-text, #15342DCC)"}
+                        title={featureIcon?.__icon_query__}
+                      />
+                      {/* <img
                         src={featureIcon?.__icon_url__}
                         alt={featureIcon?.__icon_query__}
                         className="h-[28px] w-[28px] object-contain"
                         style={{ filter: active ? "brightness(0) invert(1)" : "none" }}
-                      />
+                      /> */}
                       <p
                         className="text-[28px] font-normal  text-[#15342DCC]"
                         style={{

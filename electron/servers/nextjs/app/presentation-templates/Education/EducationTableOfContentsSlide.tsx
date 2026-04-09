@@ -1,8 +1,8 @@
 import * as z from "zod";
 
 
-export const slideLayoutId = "education-table-of-contents-slide";
-export const slideLayoutName = "Education Table Of Contents Slide";
+export const slideLayoutId = "table-of-contents-slide";
+export const slideLayoutName = "Table Of Contents Slide";
 export const slideLayoutDescription =
   "A split layout with a left title panel and a right list of numbered sections, with one subtle background image overlay.";
 
@@ -16,28 +16,27 @@ const TocItemSchema = z.object({
 });
 
 export const Schema = z.object({
-  titleLine1: z.string().min(4).max(12).default("Table of").meta({
-    description: "First line of the left-side heading.",
-  }),
-  titleLine2: z.string().min(4).max(12).default("Contents").meta({
-    description: "Second line of the left-side heading.",
+  title: z.string().min(6).max(32).default("Table of Contents").meta({
+    description: "Main centered title of the table of contents slide.",
   }),
   items: z
     .array(TocItemSchema)
-    .min(8)
-    .max(8)
+    .min(1)
+    .max(10)
     .default([
-      { number: "03", label: "ABOUT" },
-      { number: "04", label: "TIMELINE" },
-      { number: "05", label: "GROUP OF COMPANIES" },
-      { number: "06", label: "SERVICES" },
-      { number: "07", label: "IMAGE GALLERY" },
-      { number: "08", label: "STATISTICS" },
-      { number: "09", label: "REPORT" },
-      { number: "10", label: "CONCLUSION" },
+      { number: "01", label: "ABOUT" },
+      { number: "02", label: "TIMELINE" },
+      { number: "03", label: "GROUP OF COMPANIES" },
+      { number: "04", label: "SERVICES" },
+      { number: "05", label: "IMAGE GALLERY" },
+      { number: "06", label: "STATISTICS" },
+      { number: "07", label: "REPORT" },
+      { number: "08", label: "CONCLUSION" },
+      { number: "09", label: "QUESTIONS" },
+      { number: "10", label: "CONTACT" },
     ])
     .meta({
-      description: "Eight table-of-content entries listed on the right.",
+      description: "table-of-content entries listed on the right.",
     }),
 
 });
@@ -59,9 +58,7 @@ const EducationTableOfContentsSlide = ({ data }: { data: Partial<SchemaType> }) 
       <div className="relative z-10 grid h-full grid-cols-[430px_1fr]">
         <div className="px-[56px] pt-[74px]" style={{ backgroundColor: "var(--card-color,#f1efef)" }}>
           <h2 className="font-serif text-[64px] leading-[98%] tracking-[-0.02em]" style={{ color: "var(--primary-color,#1a1752)" }}>
-            {data.titleLine1}
-            <br />
-            {data.titleLine2}
+            {data.title}
           </h2>
         </div>
 
