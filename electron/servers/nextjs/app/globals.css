@@ -84,7 +84,7 @@ strong {
 
 @font-face {
   font-family: 'Times New Roman';
-  src: url('https: //presenton-public.s3.ap-southeast-1.amazonaws.com/static/fonts/times.ttf') format('truetype');
+  src: url('https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/fonts/times.ttf') format('truetype');
   font-style: normal;
   font-display: swap;
 
@@ -92,7 +92,7 @@ strong {
 
 @font-face {
   font-family: 'Helvetica Neue';
-  src: url('https: //presenton-public.s3.ap-southeast-1.amazonaws.com/static/fonts/HelveticaNeueBold.otf') format('truetype');
+  src: url('https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/fonts/HelveticaNeue-Bold.otf') format('truetype');
   font-weight: 600;
   font-style: normal;
   font-display: swap;
@@ -100,7 +100,7 @@ strong {
 
 @font-face {
   font-family: 'Helvetica Neue';
-  src: url('https: //presenton-public.s3.ap-southeast-1.amazonaws.com/static/fonts/HelveticaNeueMedium.otf') format('truetype');
+  src: url('https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/fonts/HelveticaNeue-Medium.otf') format('truetype');
   font-weight: 500;
   font-style: normal;
   font-display: swap;
@@ -108,7 +108,7 @@ strong {
 
 @font-face {
   font-family: 'Helvetica Neue';
-  src: url('https: //presenton-public.s3.ap-southeast-1.amazonaws.com/static/fonts/HelveticaNeueRoman.otf') format('truetype');
+  src: url('https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/fonts/HelveticaNeue-Roman.otf') format('truetype');
   font-weight: 400;
   font-style: normal;
   font-display: swap;

@@ -1,17 +1,17 @@
 import * as z from "zod";
 
 
-export const slideLayoutId = "education-image-gallery-slide";
-export const slideLayoutName = "Education Image Gallery Slide";
+export const slideLayoutId = "image-gallery-slide";
+export const slideLayoutName = "Image Gallery Slide";
 export const slideLayoutDescription =
-  "A slide with a left image collage (one repeated image) and right text block for gallery heading and description.";
+  "A slide with a left image gallery and right text block for gallery heading and description.";
 
 export const Schema = z.object({
-  title: z.string().min(3).max(16).default("Image Gallery").meta({
+  title: z.string().max(24).default("Image Gallery").meta({
     description: "Heading on the right side.",
   }),
-  body: z.string().min(70).max(200).default(
-    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris."
+  body: z.string().max(300).default(
+    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."
   ).meta({
     description: "Supporting paragraph shown below the heading.",
   }),

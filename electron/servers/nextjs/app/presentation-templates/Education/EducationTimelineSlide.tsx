@@ -1,16 +1,16 @@
 import * as z from "zod";
 
-export const slideLayoutId = "education-timeline-slide";
-export const slideLayoutName = "Education Timeline Slide";
+export const slideLayoutId = "timeline-slide";
+export const slideLayoutName = "Timeline Slide";
 export const slideLayoutDescription =
-  "A timeline slide with a title, a horizontal progress line, and year-based milestones with short descriptions.";
+  "A slide with a title, a horizontal progress line, and short heading and description pairs.";
 
 const MilestoneSchema = z.object({
-  year: z.string().min(4).max(6).meta({
-    description: "Year label displayed under each timeline marker.",
+  heading: z.string().max(6).meta({
+    description: "Heading displayed under each timeline marker.",
   }),
-  description: z.string().min(20).max(50).meta({
-    description: "Short text shown under each year label.",
+  description: z.string().max(50).meta({
+    description: "Short text shown under each heading. with max 50 characters",
   }),
 });
 
@@ -20,20 +20,17 @@ export const Schema = z.object({
   }),
   milestones: z
     .array(MilestoneSchema)
-    .min(6)
+    .min(2)
     .max(12)
     .default([
-      { year: "2022", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit." },
-      { year: "1994", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit." },
-      { year: "1993", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit." },
-      { year: "1991", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit." },
-      { year: "1991", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit." },
-      { year: "1988", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. " },
-      { year: "1988", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit." },
-      { year: "1988", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit." },
-      { year: "1988", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit." },
-      { year: "1988", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit." },
-      { year: "1988", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit." },
+      { heading: "2022", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit." },
+      { heading: "1994", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit." },
+      { heading: "1993", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit." },
+      { heading: "1991", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit." },
+      { heading: "1991", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit." },
+      { heading: "1988", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. " },
+      { heading: "1988", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit." },
+      { heading: "1988", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit." },
     ])
     .meta({
       description: "Timeline milestones displayed left to right.",
@@ -50,7 +47,7 @@ const EducationTimelineSlide = ({ data }: { data: Partial<SchemaType> }) => {
 
   return (
     <div
-      className="relative h-[720px] w-[1280px] overflow-hidden"
+      className="relative h-[720px] w-[1280px] overflow-hidden flex flex-col"
       style={{
         backgroundColor: "var(--background-color,#efeff1)",
         fontFamily: "var(--body-font-family,'Times New Roman')",
@@ -79,20 +76,20 @@ function TimelineUpToSix({
 
 
   return (
-    <div className="relative z-10 mt-[80px] px-[56px]">
+    <div className="relative z-10 mt-[160px] px-[56px]">
       <div
         className="grid "
         style={{ gridTemplateColumns: `repeat(${milestones.length}, minmax(0, 1fr))` }}
       >
         {milestones.map((milestone: any, index: number) => (
-          <div key={`${milestone.year}-${index}`} className="">
+          <div key={`${milestone.heading}-${index}`} className="">
             <div className="flex items-center ">
 
               <div className="h-[22px] z-10 relative w-[22px] rounded-full" style={{ backgroundColor: "var(--primary-color,#272272)" }} />
               {index !== milestones.length - 1 && <div className="h-[3px] flex-1" style={{ backgroundColor: "var(--stroke,#d8d8dd)" }} />}
             </div>
             <p className="mt-[18px] text-[20px] font-medium leading-none" style={{ color: "var(--background-text,#3c3f4b)" }}>
-              {milestone.year}
+              {milestone.heading}
             </p>
             <p className=" text-[18px] leading-[1.2]" style={{ color: "var(--background-text,#3a3d4c)" }}>
               {milestone.description}
@@ -130,7 +127,7 @@ function TimelineMoreThanSix({
           style={{ gridTemplateColumns: `repeat(${topItems.length}, minmax(0, 1fr))` }}
         >
           {topItems.map((milestone: any, index: number) => (
-            <div key={`${milestone.year}-${index}`} className="">
+            <div key={`${milestone.heading}-${index}`} className="">
               <div className="flex items-center ">
 
                 <div className="h-[22px] z-10 relative w-[22px] rounded-full" style={{ backgroundColor: "var(--primary-color,#272272)" }} />
@@ -139,7 +136,7 @@ function TimelineMoreThanSix({
               <div className="pr-2 mt-[18px]">
 
                 <p className=" text-[20px] font-medium leading-none" style={{ color: "var(--background-text,#3c3f4b)" }}>
-                  {milestone.year}
+                  {milestone.heading}
                 </p>
                 <p className="mt-2 text-[18px] leading-[1.2]" style={{ color: "var(--background-text,#3a3d4c)" }}>
                   {milestone.description}
@@ -162,7 +159,7 @@ function TimelineMoreThanSix({
           if (!item) return <div key={colIndex} />;
 
           return (
-            <div key={`${item.year}-${colIndex + 8}`} className="flex flex-col items-end">
+            <div key={`${item.heading}-${colIndex + 8}`} className="flex flex-col items-end">
               <div className="flex w-full items-center ">
                 {/* {colIndex === 0 && <div className="absolute h-[3px] flex-1" style={{ backgroundColor: "var(--stroke,#d8d8dd)" }} />} */}
                 <div className="h-[3px] flex-1" style={{ backgroundColor: colIndex === 0 ? "transparent" : "var(--stroke,#d8d8dd)" }} />
@@ -171,7 +168,7 @@ function TimelineMoreThanSix({
               <div className="pl-2 mt-[18px]">
 
                 <p className=" text-right text-[20px] font-medium leading-none" style={{ color: "var(--background-text,#3c3f4b)" }}>
-                  {item.year}
+                  {item.heading}
                 </p>
                 <p className="mt-2 text-[18px] text-right leading-[1.2]" style={{ color: "var(--background-text,#3a3d4c)" }}>
                   {item.description}

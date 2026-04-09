@@ -1,10 +1,10 @@
 import * as z from "zod";
 
 
-export const slideLayoutId = "product-overview-meet-team-slide";
-export const slideLayoutName = "Product Overview Meet Team Slide";
+export const slideLayoutId = "title-description-with-cards-slide";
+export const slideLayoutName = "Title Description with Cards Slide";
 export const slideLayoutDescription =
-  "A team introduction slide with a title and intro text on top, followed by four profile cards where one card can be highlighted with a dark footer style.";
+  "A team introduction slide with a title and intro text on top, followed by a grid of profile cards where one card can be highlighted with a footer style.";
 
 const MemberSchema = z.object({
   title: z.string().min(2).max(12).meta({
@@ -28,13 +28,13 @@ const MemberSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().min(8).max(18).default("Meet Our Team").meta({
+  title: z.string().max(18).default("Meet Our Team").meta({
     description: "Main title at the top-left.",
   }),
-  taglineLabel: z.string().min(3).max(10).default("TAGLINE").meta({
+  taglineLabel: z.string().max(16).default("TAGLINE").meta({
     description: "Small heading above team description.",
   }),
-  taglineBody: z.string().max(70).default(
+  taglineBody: z.string().max(80).default(
     "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea."
   ).meta({
     description: "Short descriptive paragraph at top-right.",
@@ -95,13 +95,13 @@ const MeetTeamSlide = ({ data }: { data: Partial<SchemaType> }) => {
     <>
       <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap" rel="stylesheet" />
       <div
-        className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
+        className="relative h-[720px] w-[1280px] overflow-hidden "
         style={{
           backgroundColor: "var(--background-color,#DAE1DE)",
           fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
         }}
       >
-        <div className="flex items-start justify-between px-[64px] pt-[76px]">
+        <div className="flex items-start justify-between px-[64px] pt-[50px]">
           <h2
             className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
             style={{ color: "var(--primary-color,#15342D)" }}
@@ -125,7 +125,7 @@ const MeetTeamSlide = ({ data }: { data: Partial<SchemaType> }) => {
           </div>
         </div>
 
-        <div className="absolute bottom-[58px] left-[64px] grid grid-cols-4 gap-[22px]">
+        <div className="absolute bottom-[40px]  left-[64px] grid grid-cols-4 gap-[22px]">
           {members?.map((member, index) => (
             <div key={index} className="w-[252px] overflow-hidden">
               <img
@@ -134,7 +134,7 @@ const MeetTeamSlide = ({ data }: { data: Partial<SchemaType> }) => {
                 className="h-[244px] w-full object-cover"
               />
               <div
-                className="h-[154px] p-[33px]"
+                className="h-full p-[23px]"
                 style={{
                   backgroundColor: member.highlighted
                     ? "var(--primary-color,#15342D)"

@@ -1,27 +1,27 @@
 import * as z from "zod";
 
-export const slideLayoutId = "education-statistics-grid-slide";
-export const slideLayoutName = "Education Statistics Grid Slide";
+export const slideLayoutId = "statistics-grid-slide";
+export const slideLayoutName = "Statistics Grid Slide";
 export const slideLayoutDescription =
-  "A two-column layout with a left title block and a right 2x4 grid of statistics cards, using one subtle background image texture.";
+  "A left text column with a title, description and a right-side grid of statistics cards,value and label each in a card";
 
 const StatisticSchema = z.object({
-  value: z.string().min(1).max(8).meta({
-    description: "Main metric value shown at the top of one card. with max 8 characters",
+  value: z.string().max(8).meta({
+    description: "Main metric value shown at the top of one card.",
   }),
-  label: z.string().min(3).max(20).meta({
-    description: "Label shown under the value. with max 20 characters",
+  label: z.string().max(20).meta({
+    description: "Label shown under the value.",
   }),
 });
 
 export const Schema = z.object({
-  title: z.string().min(4).max(14).default("Statistics").meta({
-    description: "Main title shown in the left column. with max 14 characters",
+  title: z.string().max(16).default("Statistics").meta({
+    description: "Main title shown in the left column.",
   }),
-  description: z.string().min(40).max(120).default(
-    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. with max 120 characters"
+  description: z.string().max(160).default(
+    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Lorem ipsum dolor sit amet, consectetur adipiscing elit."
   ).meta({
-    description: "Supporting line shown under the left title. with max 120 characters",
+    description: "Supporting line shown under the left title.",
   }),
   stats: z
     .array(StatisticSchema)
@@ -38,7 +38,7 @@ export const Schema = z.object({
       { value: "20", label: "Merchandising Team" },
     ])
     .meta({
-      description: "Eight statistic cards. with max 8 cards",
+      description: "statistic cards, with value and label each in a card",
     }),
 
 });
@@ -58,10 +58,8 @@ const EducationStatisticsGridSlide = ({ data }: { data: Partial<SchemaType> }) =
         fontFamily: "var(--body-font-family,'Times New Roman')",
       }}
     >
-
-
       <div className="relative z-10 grid h-full grid-cols-[490px_1fr]">
-        <div className="px-[44px] pb-[78px] pt-[96px]" style={{ backgroundColor: "var(--card-color,#f1efef)" }}>
+        <div className="px-[44px] pb-[78px] pt-[96px]">
           <div className="flex h-full flex-col justify-end">
             <h2 className="font-serif text-[64px] leading-[98%] tracking-[-0.02em]" style={{ color: "var(--primary-color,#1a1752)" }}>
               {data.title}
@@ -89,22 +87,7 @@ const EducationStatisticsGridSlide = ({ data }: { data: Partial<SchemaType> }) =
           ))}
         </div>}
 
-        {/* {stats && stats?.length > 4 && stats?.length <= 8 && <div className="grid h-full  grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
-          {stats?.map((stat, index) => (
-            <div
-              key={`${stat.value}-${index}`}
-              className="px-[52px] pt-[22px]"
-              style={{ backgroundColor: index % 2 === 1 ? 'var(--card-color,#5C0FD908)' : 'var(--card-color,white)' }}
-            >
-              <p className="font-serif text-[58px] leading-[56px]" style={{ color: "var(--background-text,#283E51)" }}>
-                {stat.value}
-              </p>
-              <p className="mt-[12px] text-[24px]" style={{ color: "var(--background-text,#434A63)" }}>
-                {stat.label}
-              </p>
-            </div>
-          ))}
-        </div>} */}
+
 
         {data.stats && data.stats?.length > 4 && data.stats?.length <= 8 && (() => {
           const rightArray = data.stats?.slice(0, Math.floor(data.stats?.length / 2));
@@ -112,7 +95,7 @@ const EducationStatisticsGridSlide = ({ data }: { data: Partial<SchemaType> }) =
 
           return (
             <div className="h-full flex w-full">
-              <div className="flex flex-col h-full w-full">
+              <div className="flex flex-col h-full flex-1">
 
                 {leftArray?.map((stat: any, index: number) => (
                   <div
@@ -120,7 +103,7 @@ const EducationStatisticsGridSlide = ({ data }: { data: Partial<SchemaType> }) =
                     className="px-[52px] pt-[22px] h-full"
                     style={{ backgroundColor: index % 2 === 0 ? 'var(--card-color,#5C0FD908)' : 'var(--card-color,white)' }}
                   >
-                    <p className="font-serif text-[58px] leading-[56px]" style={{ color: "var(--background-text,#283E51)" }}>
+                    <p className=" text-[58px] leading-[56px]" style={{ color: "var(--background-text,#283E51)" }}>
                       {stat?.value}
                     </p>
                     <p className="mt-[12px] text-[24px]" style={{ color: "var(--background-text,#434A63)" }}>
@@ -129,9 +112,7 @@ const EducationStatisticsGridSlide = ({ data }: { data: Partial<SchemaType> }) =
                   </div>
                 ))}
               </div>
-
-
-              <div className="flex flex-col w-full">
+              <div className="flex flex-col  flex-1">
 
                 {rightArray?.map((stat: any, index: number) => (
                   <div
@@ -139,7 +120,7 @@ const EducationStatisticsGridSlide = ({ data }: { data: Partial<SchemaType> }) =
                     className="px-[52px] pt-[22px] h-full"
                     style={{ backgroundColor: index % 2 === 1 ? 'var(--card-color,#5C0FD908)' : 'var(--card-color,white)' }}
                   >
-                    <p className="font-serif text-[58px] leading-[56px]" style={{ color: "var(--background-text,#283E51)" }}>
+                    <p className=" text-[58px] leading-[56px]" style={{ color: "var(--background-text,#283E51)" }}>
                       {stat.value}
                     </p>
                     <p className="mt-[12px] text-[24px]" style={{ color: "var(--background-text,#434A63)" }}>

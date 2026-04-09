@@ -1,13 +1,13 @@
 import * as z from "zod";
 
 
-export const slideLayoutId = "education-services-split-slide";
-export const slideLayoutName = "Education Services Split Slide";
+export const slideLayoutId = "services-split-slide";
+export const slideLayoutName = "Services Split Slide";
 export const slideLayoutDescription =
-  "A services layout with left heading, one repeated image column, and two stacked service description blocks on the right.";
+  "A left text column with a heading, one image column, and stacked service description blocks on the right side.";
 
 const ServiceSchema = z.object({
-  serviceImage: z.object({
+  image: z.object({
     __image_url__: z.string(),
     __image_prompt__: z.string(),
   }).default({
@@ -15,30 +15,30 @@ const ServiceSchema = z.object({
       "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1200&q=80",
     __image_prompt__: "Team meeting image reused across two rows",
   }).meta({
-    description: "Single image reused in the middle column.",
+    description: "Single image in the middle column.",
   }),
   heading: z.string().min(3).max(18).meta({
-    description: "Service heading shown in the right column.",
+    description: "Heading shown in the right column.",
   }),
   tagline: z.string().min(3).max(12).meta({
-    description: "Short label under each service heading.",
+    description: "Short label under each  heading.",
   }),
   body: z.string().max(40).meta({
-    description: "Service description paragraph.",
+    description: "Description paragraph shown below the heading and tagline.",
   }),
 });
 
 export const Schema = z.object({
-  title: z.string().min(4).max(12).default("Services").meta({
+  title: z.string().max(16).default("Services").meta({
     description: "Main slide title shown on the left.",
   }),
   sections: z
     .array(ServiceSchema)
-    .min(2)
+    .min(1)
     .max(4)
     .default([
       {
-        serviceImage: {
+        image: {
           __image_url__:
             "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1200&q=80",
           __image_prompt__: "Team meeting image reused across two rows",
@@ -48,7 +48,7 @@ export const Schema = z.object({
         body: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor.",
       },
       {
-        serviceImage: {
+        image: {
           __image_url__:
             "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1200&q=80",
           __image_prompt__: "Team meeting image reused across two rows",
@@ -58,7 +58,7 @@ export const Schema = z.object({
         body: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor.",
       },
       {
-        serviceImage: {
+        image: {
           __image_url__:
             "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1200&q=80",
           __image_prompt__: "Team meeting image reused across two rows",
@@ -68,7 +68,7 @@ export const Schema = z.object({
         body: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor.",
       },
       {
-        serviceImage: {
+        image: {
           __image_url__:
             "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1200&q=80",
           __image_prompt__: "Team meeting image reused across two rows",
@@ -128,8 +128,8 @@ const EducationServicesSplitSlide = ({ data }: { data: Partial<SchemaType> }) =>
               >
 
                 <img
-                  src={section.serviceImage.__image_url__}
-                  alt={section.serviceImage.__image_prompt__}
+                  src={section.image?.__image_url__}
+                  alt={section.image?.__image_prompt__}
                   className="h-full w-full object-cover "
                 />
               </div>
