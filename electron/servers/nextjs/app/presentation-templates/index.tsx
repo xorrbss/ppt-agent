@@ -46,19 +46,19 @@ import ReportSnapshotSlide, { Schema as PoReportSnapshotSchema, slideLayoutId as
 import TableOfContentSlide, { Schema as PoTableOfContentSchema, slideLayoutId as PoTableOfContentId, slideLayoutName as PoTableOfContentName, slideLayoutDescription as PoTableOfContentDesc } from "./ProductOverview/TableOfContentSlide";
 
 // Report templates
-import ReportIntroSlide, { Schema as RepIntroSchema, slideLayoutId as RepIntroId, slideLayoutName as RepIntroName, slideLayoutDescription as RepIntroDesc } from "./Report/IntroSlide";
+import ReportIntroSlide, { Schema as RepIntroSchema, slideLayoutId as RepIntroId, slideLayoutName as RepIntroName, slideLayoutDescription as RepIntroDesc } from "./Report/IntroCoverSlide";
 import TitleDescriptionImageSlide, { Schema as RepIntroductionImageSchema, slideLayoutId as RepIntroductionImageId, slideLayoutName as RepIntroductionImageName, slideLayoutDescription as RepIntroductionImageDesc } from "./Report/TitleDescriptionImageSlide";
-import IntroductionStatsSlide, { Schema as RepIntroductionStatsSchema, slideLayoutId as RepIntroductionStatsId, slideLayoutName as RepIntroductionStatsName, slideLayoutDescription as RepIntroductionStatsDesc } from "./Report/IntroductionStatsSlide";
-import SolutionSlide, { Schema as RepSolutionSchema, slideLayoutId as RepSolutionId, slideLayoutName as RepSolutionName, slideLayoutDescription as RepSolutionDesc } from "./Report/SolutionSlide";
+import IntroductionStatsSlide, { Schema as RepIntroductionStatsSchema, slideLayoutId as RepIntroductionStatsId, slideLayoutName as RepIntroductionStatsName, slideLayoutDescription as RepIntroductionStatsDesc } from "./Report/MetricsSlide";
+import SolutionSlide, { Schema as RepSolutionSchema, slideLayoutId as RepSolutionId, slideLayoutName as RepSolutionName, slideLayoutDescription as RepSolutionDesc } from "./Report/TitleImageBulletCardsSlide";
 import MilestoneSlide, { Schema as RepMilestoneSchema, slideLayoutId as RepMilestoneId, slideLayoutName as RepMilestoneName, slideLayoutDescription as RepMilestoneDesc } from "./Report/MilestoneSlide";
-import DataAnalysisListSlide, { Schema as RepDataAnalysisListSchema, slideLayoutId as RepDataAnalysisListId, slideLayoutName as RepDataAnalysisListName, slideLayoutDescription as RepDataAnalysisListDesc } from "./Report/DataAnalysisListSlide";
-import DataAnalysisBarSlide, { Schema as RepDataAnalysisBarSchema, slideLayoutId as RepDataAnalysisBarId, slideLayoutName as RepDataAnalysisBarName, slideLayoutDescription as RepDataAnalysisBarDesc } from "./Report/DataAnalysisBarSlide";
-import DataAnalysisInsightBarSlide, { Schema as RepDataAnalysisInsightBarSchema, slideLayoutId as RepDataAnalysisInsightBarId, slideLayoutName as RepDataAnalysisInsightBarName, slideLayoutDescription as RepDataAnalysisInsightBarDesc } from "./Report/DataAnalysisInsightBarSlide";
-import DataAnalysisLineStatsSlide, { Schema as RepDataAnalysisLineStatsSchema, slideLayoutId as RepDataAnalysisLineStatsId, slideLayoutName as RepDataAnalysisLineStatsName, slideLayoutDescription as RepDataAnalysisLineStatsDesc } from "./Report/DataAnalysisLineStatsSlide";
+import DataAnalysisListSlide, { Schema as RepDataAnalysisListSchema, slideLayoutId as RepDataAnalysisListId, slideLayoutName as RepDataAnalysisListName, slideLayoutDescription as RepDataAnalysisListDesc } from "./Report/BulletListWithIconTitleDescriptionSlide";
+import DataAnalysisBarSlide, { Schema as RepDataAnalysisBarSchema, slideLayoutId as RepDataAnalysisBarId, slideLayoutName as RepDataAnalysisBarName, slideLayoutDescription as RepDataAnalysisBarDesc } from "./Report/BarChartWithBulletListWithTitleDescriptionIconSlide";
+import DataAnalysisInsightBarSlide, { Schema as RepDataAnalysisInsightBarSchema, slideLayoutId as RepDataAnalysisInsightBarId, slideLayoutName as RepDataAnalysisInsightBarName, slideLayoutDescription as RepDataAnalysisInsightBarDesc } from "./Report/TitleDescriptionChartSlide";
+import DataAnalysisLineStatsSlide, { Schema as RepDataAnalysisLineStatsSchema, slideLayoutId as RepDataAnalysisLineStatsId, slideLayoutName as RepDataAnalysisLineStatsName, slideLayoutDescription as RepDataAnalysisLineStatsDesc } from "./Report/TitleChartWithMetricsCardsSlide";
 import DataAnalysisDashboardSlide, { Schema as RepDataAnalysisDashboardSchema, slideLayoutId as RepDataAnalysisDashboardId, slideLayoutName as RepDataAnalysisDashboardName, slideLayoutDescription as RepDataAnalysisDashboardDesc } from "./Report/DataAnalysisDashboardSlide";
-import PerformanceSnapshotSlide, { Schema as RepPerformanceSnapshotSchema, slideLayoutId as RepPerformanceSnapshotId, slideLayoutName as RepPerformanceSnapshotName, slideLayoutDescription as RepPerformanceSnapshotDesc } from "./Report/PerformanceSnapshotSlide";
-import ReportServicesSlide, { Schema as RepServicesSchema, slideLayoutId as RepServicesId, slideLayoutName as RepServicesName, slideLayoutDescription as RepServicesDesc } from "./Report/ServicesSlide";
-import ReportTeamSlide, { Schema as RepTeamSchema, slideLayoutId as RepTeamId, slideLayoutName as RepTeamName, slideLayoutDescription as RepTeamDesc } from "./Report/TeamSlide";
+import PerformanceSnapshotSlide, { Schema as RepPerformanceSnapshotSchema, slideLayoutId as RepPerformanceSnapshotId, slideLayoutName as RepPerformanceSnapshotName, slideLayoutDescription as RepPerformanceSnapshotDesc } from "./Report/TitleMetricsSlide";
+import ReportServicesSlide, { Schema as RepServicesSchema, slideLayoutId as RepServicesId, slideLayoutName as RepServicesName, slideLayoutDescription as RepServicesDesc } from "./Report/TitleWorkflowWithTitleDescriptionSlide";
+import ReportTeamSlide, { Schema as RepTeamSchema, slideLayoutId as RepTeamId, slideLayoutName as RepTeamName, slideLayoutDescription as RepTeamDesc } from "./Report/HorizontalHeightSpanningImagesWithTitleSlide";
 
 // General templates
 import GeneralIntroSlideLayout, { Schema as GeneralIntroSchema, layoutId as GeneralIntroId, layoutName as GeneralIntroName, layoutDescription as GeneralIntroDesc } from "./general/IntroSlideLayout";
@@ -289,19 +289,19 @@ export const productOverviewTemplates: TemplateWithData[] = [
 ];
 
 export const reportTemplates: TemplateWithData[] = [
-    createTemplateEntry(ReportIntroSlide, RepIntroSchema, RepIntroId, RepIntroName, RepIntroDesc, "report", "IntroSlide"),
+    createTemplateEntry(ReportIntroSlide, RepIntroSchema, RepIntroId, RepIntroName, RepIntroDesc, "report", "IntroCoverSlide"),
     createTemplateEntry(TitleDescriptionImageSlide, RepIntroductionImageSchema, RepIntroductionImageId, RepIntroductionImageName, RepIntroductionImageDesc, "report", "TitleDescriptionImageSlide"),
-    createTemplateEntry(IntroductionStatsSlide, RepIntroductionStatsSchema, RepIntroductionStatsId, RepIntroductionStatsName, RepIntroductionStatsDesc, "report", "IntroductionStatsSlide"),
-    createTemplateEntry(SolutionSlide, RepSolutionSchema, RepSolutionId, RepSolutionName, RepSolutionDesc, "report", "SolutionSlide"),
+    createTemplateEntry(IntroductionStatsSlide, RepIntroductionStatsSchema, RepIntroductionStatsId, RepIntroductionStatsName, RepIntroductionStatsDesc, "report", "MetricsSlide"),
+    createTemplateEntry(SolutionSlide, RepSolutionSchema, RepSolutionId, RepSolutionName, RepSolutionDesc, "report", "TitleImageBulletCardsSlide"),
     createTemplateEntry(MilestoneSlide, RepMilestoneSchema, RepMilestoneId, RepMilestoneName, RepMilestoneDesc, "report", "MilestoneSlide"),
-    createTemplateEntry(DataAnalysisListSlide, RepDataAnalysisListSchema, RepDataAnalysisListId, RepDataAnalysisListName, RepDataAnalysisListDesc, "report", "DataAnalysisListSlide"),
-    createTemplateEntry(DataAnalysisBarSlide, RepDataAnalysisBarSchema, RepDataAnalysisBarId, RepDataAnalysisBarName, RepDataAnalysisBarDesc, "report", "DataAnalysisBarSlide"),
-    createTemplateEntry(DataAnalysisInsightBarSlide, RepDataAnalysisInsightBarSchema, RepDataAnalysisInsightBarId, RepDataAnalysisInsightBarName, RepDataAnalysisInsightBarDesc, "report", "DataAnalysisInsightBarSlide"),
-    createTemplateEntry(DataAnalysisLineStatsSlide, RepDataAnalysisLineStatsSchema, RepDataAnalysisLineStatsId, RepDataAnalysisLineStatsName, RepDataAnalysisLineStatsDesc, "report", "DataAnalysisLineStatsSlide"),
+    createTemplateEntry(DataAnalysisListSlide, RepDataAnalysisListSchema, RepDataAnalysisListId, RepDataAnalysisListName, RepDataAnalysisListDesc, "report", "BulletListWithIconTitleDescriptionSlide"),
+    createTemplateEntry(DataAnalysisBarSlide, RepDataAnalysisBarSchema, RepDataAnalysisBarId, RepDataAnalysisBarName, RepDataAnalysisBarDesc, "report", "BarChartWithBulletListWithTitleDescriptionIconSlide"),
+    createTemplateEntry(DataAnalysisInsightBarSlide, RepDataAnalysisInsightBarSchema, RepDataAnalysisInsightBarId, RepDataAnalysisInsightBarName, RepDataAnalysisInsightBarDesc, "report", "TitleDescriptionChartSlide"),
+    createTemplateEntry(DataAnalysisLineStatsSlide, RepDataAnalysisLineStatsSchema, RepDataAnalysisLineStatsId, RepDataAnalysisLineStatsName, RepDataAnalysisLineStatsDesc, "report", "TitleChartWithMetricsCardsSlide"),
     createTemplateEntry(DataAnalysisDashboardSlide, RepDataAnalysisDashboardSchema, RepDataAnalysisDashboardId, RepDataAnalysisDashboardName, RepDataAnalysisDashboardDesc, "report", "DataAnalysisDashboardSlide"),
-    createTemplateEntry(PerformanceSnapshotSlide, RepPerformanceSnapshotSchema, RepPerformanceSnapshotId, RepPerformanceSnapshotName, RepPerformanceSnapshotDesc, "report", "PerformanceSnapshotSlide"),
-    createTemplateEntry(ReportServicesSlide, RepServicesSchema, RepServicesId, RepServicesName, RepServicesDesc, "report", "ServicesSlide"),
-    createTemplateEntry(ReportTeamSlide, RepTeamSchema, RepTeamId, RepTeamName, RepTeamDesc, "report", "TeamSlide"),
+    createTemplateEntry(PerformanceSnapshotSlide, RepPerformanceSnapshotSchema, RepPerformanceSnapshotId, RepPerformanceSnapshotName, RepPerformanceSnapshotDesc, "report", "TitleMetricsSlide"),
+    createTemplateEntry(ReportServicesSlide, RepServicesSchema, RepServicesId, RepServicesName, RepServicesDesc, "report", "TitleWorkflowWithTitleDescriptionSlide"),
+    createTemplateEntry(ReportTeamSlide, RepTeamSchema, RepTeamId, RepTeamName, RepTeamDesc, "report", "HorizontalHeightSpanningImagesWithTitleSlide"),
 ];
 
 export const neoGeneralTemplates: TemplateWithData[] = [
