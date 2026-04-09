@@ -129,7 +129,7 @@ const ImageGallerySlide = ({ data }: { data: Partial<SchemaType> }) => {
           <img
             src={bottomWideImage?.__image_url__}
             alt={bottomWideImage?.__image_prompt__}
-            className="h-[290px] w-[584px] object-cover"
+            className="h-[290px] w-[605px] object-cover"
           />
           <img
             src={bottomCenterImage?.__image_url__}

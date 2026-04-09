@@ -122,7 +122,7 @@ function StatusIcon({
 
     return <img src={checkIconUrl} alt={checkIconAlt} className="h-[26px] w-[26px] object-contain" />;
   }
-  return <p>{status}</p>
+  return <p className="text-base ">{status}</p>
 }
 
 const ComparisonChartSlide = ({ data }: { data: Partial<SchemaType> }) => {
@@ -135,14 +135,14 @@ const ComparisonChartSlide = ({ data }: { data: Partial<SchemaType> }) => {
     checkIcon,
     crossIcon,
   } = data;
-  const safeColumns = columns && columns.length > 0 ? columns : DEFAULT_COLUMNS;
+  const safeColumns = columns && columns.length > 0 ? columns : [];
   const resolvedHighlightedColumnIndex =
     highlightedColumnIndex &&
       highlightedColumnIndex >= 1 &&
       highlightedColumnIndex <= safeColumns.length
       ? highlightedColumnIndex
       : Math.min(4, safeColumns.length);
-  const safeRows = rows && rows.length > 0 ? rows : DEFAULT_ROWS;
+  const safeRows = rows && rows.length > 0 ? rows : [];
   const normalizedRows = safeRows.map((row) => {
     const rowCells =
       "cells" in row
@@ -195,7 +195,7 @@ const ComparisonChartSlide = ({ data }: { data: Partial<SchemaType> }) => {
             }}
           >
             <div className=" " />
-            {safeColumns.map((column, index) => (
+            {safeColumns.map((column: any, index: any) => (
               <div
                 key={index}
                 className="flex  items-center p-[33px] justify-center border-r text-[20px] font-semibold  tracking-[0.2em]"

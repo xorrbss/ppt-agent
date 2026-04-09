@@ -485,34 +485,6 @@ export const allLayouts: TemplateWithData[] = [
 // For UseCases we need to combine all templates into a single array with settings
 export const templates: TemplateLayoutsWithSettings[] = [
     {
-        id: "neo-general",
-        name: "Neo General",
-        description: neoGeneralSettings.description,
-        settings: neoGeneralSettings as TemplateGroupSettings,
-        layouts: neoGeneralTemplates,
-    },
-    {
-        id: "neo-standard",
-        name: "Neo Standard",
-        description: neoStandardSettings.description,
-        settings: neoStandardSettings as TemplateGroupSettings,
-        layouts: neoStandardTemplates,
-    },
-    {
-        id: "neo-modern",
-        name: "Neo Modern",
-        description: neoModernSettings.description,
-        settings: neoModernSettings as TemplateGroupSettings,
-        layouts: neoModernTemplates,
-    },
-    {
-        id: "neo-swift",
-        name: "Neo Swift",
-        description: neoSwiftSettings.description,
-        settings: neoSwiftSettings as TemplateGroupSettings,
-        layouts: neoSwiftTemplates,
-    },
-    {
         id: "general",
         name: "General",
         description: generalSettings.description,
@@ -568,6 +540,36 @@ export const templates: TemplateLayoutsWithSettings[] = [
         settings: reportSettings as TemplateGroupSettings,
         layouts: reportTemplates,
     },
+    {
+        id: "neo-general",
+        name: "Neo General",
+        description: neoGeneralSettings.description,
+        settings: neoGeneralSettings as TemplateGroupSettings,
+        layouts: neoGeneralTemplates,
+    },
+    {
+        id: "neo-standard",
+        name: "Neo Standard",
+        description: neoStandardSettings.description,
+        settings: neoStandardSettings as TemplateGroupSettings,
+        layouts: neoStandardTemplates,
+    },
+    {
+        id: "neo-modern",
+        name: "Neo Modern",
+        description: neoModernSettings.description,
+        settings: neoModernSettings as TemplateGroupSettings,
+        layouts: neoModernTemplates,
+    },
+    {
+        id: "neo-swift",
+        name: "Neo Swift",
+        description: neoSwiftSettings.description,
+        settings: neoSwiftSettings as TemplateGroupSettings,
+        layouts: neoSwiftTemplates,
+    },
+
+
 ];
 
 // Helper to get templates by group ID

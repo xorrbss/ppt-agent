@@ -14,7 +14,7 @@ export const Schema = z.object({
   topleftTextBlockLabel: z.string().min(3).max(20).default("MISSION").meta({
     description: "Mission section label.",
   }),
-  topleftTextBlockBody: z.string().min(40).max(98).default(
+  topleftTextBlockBody: z.string().min(40).max(90).default(
     "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore."
   ).meta({
     description: "Mission paragraph content.",
@@ -22,7 +22,7 @@ export const Schema = z.object({
   bottomleftTextBlockLabel: z.string().min(3).max(20).default("VISION").meta({
     description: "Vision section label.",
   }),
-  bottomleftTextBlockBody: z.string().min(40).max(98).default(
+  bottomleftTextBlockBody: z.string().min(40).max(90).default(
     "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore."
   ).meta({
     description: "Vision paragraph content.",

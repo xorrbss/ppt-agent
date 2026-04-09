@@ -7,10 +7,10 @@ export const slideLayoutDescription =
   "A slide with a title on top and a description below, and a content section containing an image and a grid of cards of text.";
 
 const CardSchema = z.object({
-  heading: z.string().max(16).meta({
+  heading: z.string().max(14).meta({
     description: "Card heading.",
   }),
-  body: z.string().max(30).meta({
+  body: z.string().max(25).meta({
     description: "Card short description.",
   }),
   isHighlighted: z.boolean().default(false).meta({
@@ -124,7 +124,7 @@ const OurServicesSlide = ({ data }: { data: Partial<SchemaType> }) => {
               }}
             >
               <p
-                className="text-[20px] font-semibold tracking-[2.074px] text-white"
+                className="text-[20px] font-semibold tracking-[4.354px] text-white"
                 style={{
                   color: card.isHighlighted
                     ? "var(--primary-text,#edf2f1)"
@@ -134,7 +134,7 @@ const OurServicesSlide = ({ data }: { data: Partial<SchemaType> }) => {
                 {card.heading}
               </p>
               <p
-                className={`${card.isHighlighted ? "text-white" : "text-[#15342DCC]"} mt-[20px] text-[28px] font-normal`}
+                className={`${card.isHighlighted ? "text-white" : "text-[#15342D]"} mt-[20px] text-[28px] font-normal`}
                 style={{
                   color: card.isHighlighted
                     ? "var(--primary-text,#edf2f1)"

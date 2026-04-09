@@ -9,7 +9,7 @@ const BlockSchema = z.object({
   heading: z.string().max(30).meta({
     description: "Short heading for a single block of text.",
   }),
-  body: z.string().max(100).meta({
+  body: z.string().max(80).meta({
     description: "Description text for a single block of text.",
   }),
 });
