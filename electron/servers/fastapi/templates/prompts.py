@@ -67,7 +67,8 @@ Provide reusable TSX code which can be used as template to generate new slides w
 
 # Zod Schema Rules:
 - "describe" must be added for every fields.
-- "default" must be added in top level fields of schema.
+- Add `.default(...)` to every top-level field directly inside the initial `z.object({ ... })` shape.
+- Must not put a single `default` on the whole object like `const Schema = z.object({ ... }).default({ ... })`.
 - Top level fields are those not nested inside other fields.
 - Don't mention string type in schema like "url()", "email()", etc.
 - Table must be object with "columns" and "rows" fields.
