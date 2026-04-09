@@ -78,72 +78,46 @@ const ComparisonTableWithTextSlide = ({ data }: { data: Partial<SchemaType> }) =
   const { title, subtitle, columns, highlightedHeaderIndex, rows } = data;
 
   return (
-    <div
-      className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
-      style={{
-        backgroundColor: "var(--background-color,#c3cccc)",
-        fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
-      }}
-    >
-      <div className="px-[44px] pt-[46px]">
-        <h2
-          className="text-[80px] font-semibold leading-[1.02] tracking-[-0.03em] text-[#0a443b]"
-          style={{ color: "var(--primary-color,#0a443b)" }}
-        >
-          {title}
-        </h2>
-        <p
-          className="mt-[22px] max-w-[700px] text-[24px] leading-[1.22] text-[#2d5d56]"
-          style={{ color: "var(--background-text,#2d5d56)" }}
-        >
-          {subtitle}
-        </p>
-      </div>
-
+    <>
+      <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap" rel="stylesheet" />
       <div
-        className="mx-[44px] mt-[30px] overflow-hidden border"
-        style={{ borderColor: "var(--stroke,#bcc3c3)" }}
+        className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
+        style={{
+          backgroundColor: "var(--background-color,#c3cccc)",
+          fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
+        }}
       >
-        <table
-          className="w-full table-fixed border-collapse"
-          style={{ backgroundColor: "var(--card-color,#ffffff)" }}
+        <div className="px-[44px] pt-[46px]">
+          <h2
+            className="text-[80px] font-semibold leading-[1.02] tracking-[-0.03em] text-[#0a443b]"
+            style={{ color: "var(--primary-color,#0a443b)" }}
+          >
+            {title}
+          </h2>
+          <p
+            className="mt-[22px] max-w-[700px] text-[24px] leading-[1.22] text-[#2d5d56]"
+            style={{ color: "var(--background-text,#2d5d56)" }}
+          >
+            {subtitle}
+          </p>
+        </div>
+
+        <div
+          className="mx-[44px] mt-[30px] overflow-hidden border"
+          style={{ borderColor: "var(--stroke,#bcc3c3)" }}
         >
-          <thead className="w-full">
-            <tr className="w-full">
-              {columns?.map((column, index) => {
-                const isHighlighted = index + 1 === highlightedHeaderIndex;
-                return (
-                  <th
-                    key={`${column}-${index}`}
-                    className=" border-r p-[33px]  text-left text-[20px] font-semibold uppercase tracking-[0.16em] last:border-r-0"
-                    style={{
-                      borderColor: "var(--stroke,#bcc3c3)",
-                      backgroundColor: isHighlighted
-                        ? "var(--primary-color,#05443a)"
-                        : "var(--card-color,#ffffff)",
-                      color: isHighlighted
-                        ? "var(--primary-text,#eef2f0)"
-                        : "var(--primary-color,#123f38)",
-                    }}
-                  >
-                    {column}
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-
-          <tbody>
-            {rows?.map((row, rowIndex) => {
-              const cells = [row.cell1, row.cell2, row.cell3, row.cell4];
-              const isHighlighted = rowIndex + 1 === highlightedHeaderIndex;
-
-              return (
-                <tr key={`row-${rowIndex}`}>
-                  {cells?.map((cell, cellIndex) => (
-                    <td
-                      key={`cell-${rowIndex}-${cellIndex}`}
-                      className=" border-r border-t bg-white p-[33px] text-left text-[18px] leading-[1.2] last:border-r-0"
+          <table
+            className="w-full table-fixed border-collapse"
+            style={{ backgroundColor: "var(--card-color,#ffffff)" }}
+          >
+            <thead className="w-full">
+              <tr className="w-full">
+                {columns?.map((column, index) => {
+                  const isHighlighted = index + 1 === highlightedHeaderIndex;
+                  return (
+                    <th
+                      key={`${column}-${index}`}
+                      className=" border-r p-[33px]  text-left text-[20px] font-semibold uppercase tracking-[0.16em] last:border-r-0"
                       style={{
                         borderColor: "var(--stroke,#bcc3c3)",
                         backgroundColor: isHighlighted
@@ -154,16 +128,45 @@ const ComparisonTableWithTextSlide = ({ data }: { data: Partial<SchemaType> }) =
                           : "var(--primary-color,#123f38)",
                       }}
                     >
-                      {cell}
-                    </td>
-                  ))}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                      {column}
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+
+            <tbody>
+              {rows?.map((row, rowIndex) => {
+                const cells = [row.cell1, row.cell2, row.cell3, row.cell4];
+                const isHighlighted = rowIndex + 1 === highlightedHeaderIndex;
+
+                return (
+                  <tr key={`row-${rowIndex}`}>
+                    {cells?.map((cell, cellIndex) => (
+                      <td
+                        key={`cell-${rowIndex}-${cellIndex}`}
+                        className=" border-r border-t bg-white p-[33px] text-left text-[18px] leading-[1.2] last:border-r-0"
+                        style={{
+                          borderColor: "var(--stroke,#bcc3c3)",
+                          backgroundColor: isHighlighted
+                            ? "var(--primary-color,#05443a)"
+                            : "var(--card-color,#ffffff)",
+                          color: isHighlighted
+                            ? "var(--primary-text,#eef2f0)"
+                            : "var(--primary-color,#123f38)",
+                        }}
+                      >
+                        {cell}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

@@ -286,13 +286,13 @@ export function FlexibleReportChart({
   const ui = {
     tickFs: compact ? 6 : 10,
     catAxisW: compact ? 36 : 60,
-    barSize: compact ? 12 : 35,
+    barSize: compact ? 20 : 35,
     labelFs: compact ? 8 : 14,
     labelOffTop: compact ? 2 : 10,
     labelOffSide: compact ? 2 : 8,
     margin: compact
       ? { top: 10, right: 15, left: -2, bottom: 0 }
-      : { top: 15, right: 20, left: 0, bottom: 5 },
+      : { top: 20, right: 20, left: 0, bottom: 5 },
     lineStroke: compact ? 2 : 3,
     dotR: compact ? 2.5 : 4,
     dotStroke: compact ? 1 : 2,

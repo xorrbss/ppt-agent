@@ -10,7 +10,7 @@ const InsightItemSchema = z.object({
   title: z.string().min(3).max(12).meta({
     description: "Short insight title shown next to the icon.",
   }),
-  description: z.string().min(20).max(84).meta({
+  description: z.string().min(20).max(40).meta({
     description: "Supporting text shown below the insight title.",
   }),
 });
@@ -40,7 +40,7 @@ export const Schema = z.object({
     }),
   items: z
     .array(InsightItemSchema)
-    .min(3)
+
     .max(3)
     .default([
       { title: "Title 1", description: "Ut enim ad minima veniam, quis." },
@@ -48,10 +48,10 @@ export const Schema = z.object({
       { title: "Title 2", description: "Ut enim ad minima veniam, quis." },
     ])
     .meta({
-      description: "Three analysis points shown in the left column.",
+      description: "Three analysis points shown in the left column,maximum 3 items",
     }),
   chartData: flexibleChartDataSchema.default({
-    type: "pie",
+    type: "bar",
     data: [
       { name: "Mon", value: 120 },
       { name: "Tue", value: 200 },
@@ -81,7 +81,7 @@ const DataAnalysisBarSlide = ({ data }: { data: Partial<SchemaType> }) => {
       className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#f9f8f8]"
       style={{
         backgroundColor: "var(--background-color,#f9f8f8)",
-        fontFamily: "var(--body-font-family,Nunito Sans)",
+        fontFamily: "var(--body-font-family,Helvetica Neue)",
       }}
     >
       <div

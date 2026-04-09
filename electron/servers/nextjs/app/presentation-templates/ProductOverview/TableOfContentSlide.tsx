@@ -53,60 +53,63 @@ const TableOfContentSlide = ({ data }: { data: Partial<SchemaType> }) => {
   const { title, description, sections } = data;
 
   return (
-    <div
-      className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
-      style={{
-        backgroundColor: PRODUCT_BG,
-        fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
-      }}
-    >
-      <div className="grid h-full grid-cols-[1fr_1fr]">
-        <div className="px-[128px] pt-[69px]" style={{ backgroundColor: PRODUCT_DARK }}>
-          <div className="space-y-[52px]">
-            {sections?.map((section, index) => (
-              <div key={index} className="flex items-center justify-between">
-                <div>
+    <>
+      <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap" rel="stylesheet" />
+      <div
+        className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
+        style={{
+          backgroundColor: PRODUCT_BG,
+          fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
+        }}
+      >
+        <div className="grid h-full grid-cols-[1fr_1fr]">
+          <div className="px-[128px] pt-[69px]" style={{ backgroundColor: PRODUCT_DARK }}>
+            <div className="space-y-[52px]">
+              {sections?.map((section, index) => (
+                <div key={index} className="flex items-center justify-between">
+                  <div>
 
+                    <p
+                      className="text-[20px] font-semibold  tracking-[0.2em] text-[#ecf2f1]"
+                      style={{ color: "var(--primary-text,#ecf2f1)" }}
+                    >
+                      {section.title}
+                    </p>
+                    <p
+                      className="mt-[6px] text-[18px] leading-[1.2] text-[#ecf2f1]"
+                      style={{ color: "var(--primary-text,#ecf2f1)" }}
+                    >
+                      {section.description}
+                    </p>
+                  </div>
                   <p
-                    className="text-[20px] font-semibold  tracking-[0.2em] text-[#ecf2f1]"
+                    className="text-[22px] font-medium text-[#ecf2f1]"
                     style={{ color: "var(--primary-text,#ecf2f1)" }}
                   >
-                    {section.title}
-                  </p>
-                  <p
-                    className="mt-[6px] text-[18px] leading-[1.2] text-[#ecf2f1]"
-                    style={{ color: "var(--primary-text,#ecf2f1)" }}
-                  >
-                    {section.description}
+                    {section.number}
                   </p>
                 </div>
-                <p
-                  className="text-[22px] font-medium text-[#ecf2f1]"
-                  style={{ color: "var(--primary-text,#ecf2f1)" }}
-                >
-                  {section.number}
-                </p>
-              </div>
-            ))}
+              ))}
+            </div>
+          </div>
+
+          <div className="px-[42px] pt-[118px]">
+            <h2
+              className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
+              style={{ color: "var(--primary-color,#15342D)" }}
+            >
+              {title}
+            </h2>
+            <p
+              className="mt-[28px] w-[560px] text-[24px] font-normal  text-[#15342DCC]"
+              style={{ color: "var(--background-text,#15342DCC)" }}
+            >
+              {description}
+            </p>
           </div>
         </div>
-
-        <div className="px-[42px] pt-[118px]">
-          <h2
-            className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
-            style={{ color: "var(--primary-color,#15342D)" }}
-          >
-            {title}
-          </h2>
-          <p
-            className="mt-[28px] w-[560px] text-[24px] font-normal  text-[#15342DCC]"
-            style={{ color: "var(--background-text,#15342DCC)" }}
-          >
-            {description}
-          </p>
-        </div>
       </div>
-    </div>
+    </>
   );
 };
 

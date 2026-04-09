@@ -62,72 +62,75 @@ const KpiCardsSlide = ({ data }: { data: Partial<SchemaType> }) => {
   const { title, kpiIcon, backgroundImage, items } = data;
 
   return (
-    <div
-      className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
-      style={{
-        backgroundColor: "var(--background-color,#DAE1DE)",
-        fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
-      }}
-    >
-      {backgroundImage?.__image_url__ && (
-        <img
-          src={backgroundImage?.__image_url__}
-          alt={backgroundImage?.__image_prompt__}
-          className="absolute inset-0 h-full w-full object-cover"
-        />
-      )}
-
+    <>
+      <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap" rel="stylesheet" />
       <div
-        className="absolute inset-0"
+        className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
         style={{
-          backgroundColor: "var(--primary-color,#15342D)",
-          opacity: 0.8,
+          backgroundColor: "var(--background-color,#DAE1DE)",
+          fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
         }}
-      />
+      >
+        {backgroundImage?.__image_url__ && (
+          <img
+            src={backgroundImage?.__image_url__}
+            alt={backgroundImage?.__image_prompt__}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        )}
 
-      <div className="relative z-10 px-[66px] pt-[72px] mb-[33px]">
-        <h2
-          className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#FEFEFF]"
-          style={{ color: "var(--primary-text,#FEFEFF)" }}
-        >
-          {title}
-        </h2>
-      </div>
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundColor: "var(--primary-color,#15342D)",
+            opacity: 0.8,
+          }}
+        />
 
-      <div className="relative z-10  grid grid-cols-3 gap-x-[30px] gap-y-[19px] px-[66px]">
-        {items?.map((item, index) => (
-          <div
-            key={index}
-            className=" bg-[#FEFEFF] p-[33px]"
-            style={{ backgroundColor: "var(--card-color,#FEFEFF)" }}
+        <div className="relative z-10 px-[66px] pt-[72px] mb-[33px]">
+          <h2
+            className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#FEFEFF]"
+            style={{ color: "var(--primary-text,#FEFEFF)" }}
           >
+            {title}
+          </h2>
+        </div>
+
+        <div className="relative z-10  grid grid-cols-3 gap-x-[30px] gap-y-[19px] px-[66px]">
+          {items?.map((item, index) => (
             <div
-              className="flex h-[55px] w-[55px] items-center justify-center rounded-full bg-[#15342D]"
-              style={{ backgroundColor: "var(--primary-color,#15342D)" }}
+              key={index}
+              className=" bg-[#FEFEFF] p-[33px]"
+              style={{ backgroundColor: "var(--card-color,#FEFEFF)" }}
             >
-              <img
-                src={kpiIcon?.__icon_url__}
-                alt={kpiIcon?.__icon_query__}
-                className="h-[25px] w-[25px] object-contain"
-                style={{ filter: "brightness(0) invert(1)" }}
-              />
+              <div
+                className="flex h-[55px] w-[55px] items-center justify-center rounded-full bg-[#15342D]"
+                style={{ backgroundColor: "var(--primary-color,#15342D)" }}
+              >
+                <img
+                  src={kpiIcon?.__icon_url__}
+                  alt={kpiIcon?.__icon_query__}
+                  className="h-[25px] w-[25px] object-contain"
+                  style={{ filter: "brightness(0) invert(1)" }}
+                />
+              </div>
+              <p
+                className="mt-[18px] text-[42px] font-semibold leading-none"
+                style={{ color: "var(--primary-color,#15342D)" }}
+              >
+                {item.value}
+              </p>
+              <p
+                className="mt-[18px] text-[28px] font-normal  text-[#15342DCC]"
+                style={{ color: "var(--background-text,#15342D)" }}
+              >
+                {item.body}
+              </p>
             </div>
-            <p
-              className="mt-[18px] text-[42px] font-semibold leading-none"
-              style={{ color: "var(--primary-color,#15342D)" }}
-            >
-              {item.value}
-            </p>
-            <p
-              className="mt-[18px] text-[28px] font-normal  text-[#15342DCC]"
-              style={{ color: "var(--background-text,#15342D)" }}
-            >
-              {item.body}
-            </p>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

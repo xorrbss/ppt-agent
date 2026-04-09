@@ -32,32 +32,35 @@ export type SchemaType = z.infer<typeof Schema>;
 const CodeSlide08CodeExplanationText = ({ data }: { data: Partial<SchemaType> }) => {
 
   return (
-    <div
-      className="relative h-[720px] w-[1280px] overflow-hidden p-[53px]"
-      style={{
-        backgroundColor: "var(--background-color,#101B37)",
-        fontFamily: "var(--body-font-family,Nunito Sans)",
-      }}
-    >
-
-
-      <h2 className="text-[64px] font-medium" style={{ color: "var(--background-text,#f2f4ff)" }}>{data.title}</h2>
-      <div className="relative z-10 h-full max-w-[560px]">
-        <h3 className="mt-[34px] text-[24px] font-medium" style={{ color: "var(--background-text,#f1f4ff)" }}>{data.explanationTitle}</h3>
-        <p className="mt-[16px] text-[22px] leading-[145%]" style={{ color: "var(--background-text,#d2d9ff)" }}>{data.explanation}</p>
-      </div>
-
+    <>
+      <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap" rel="stylesheet" />
       <div
-        className="absolute bottom-[26px] left-1/2 -translate-x-1/2 rounded-full border px-[22px] py-[8px] text-[14px]"
+        className="relative h-[720px] w-[1280px] overflow-hidden p-[53px]"
         style={{
-          borderColor: "var(--stroke,#31415880)",
-          backgroundColor: "var(--card-color,#1D293DCC)",
-          color: "var(--background-text,#CAD5E2)",
+          backgroundColor: "var(--background-color,#101B37)",
+          fontFamily: "var(--body-font-family,Nunito Sans)",
         }}
       >
-        {data.pageLabel}
+
+
+        <h2 className="text-[64px] font-medium" style={{ color: "var(--background-text,#f2f4ff)" }}>{data.title}</h2>
+        <div className="relative z-10 h-full max-w-[560px]">
+          <h3 className="mt-[34px] text-[24px] font-medium" style={{ color: "var(--background-text,#f1f4ff)" }}>{data.explanationTitle}</h3>
+          <p className="mt-[16px] text-[22px] leading-[145%]" style={{ color: "var(--background-text,#d2d9ff)" }}>{data.explanation}</p>
+        </div>
+
+        <div
+          className="absolute bottom-[26px] left-1/2 -translate-x-1/2 rounded-full border px-[22px] py-[8px] text-[14px]"
+          style={{
+            borderColor: "var(--stroke,#31415880)",
+            backgroundColor: "var(--card-color,#1D293DCC)",
+            color: "var(--background-text,#CAD5E2)",
+          }}
+        >
+          {data.pageLabel}
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

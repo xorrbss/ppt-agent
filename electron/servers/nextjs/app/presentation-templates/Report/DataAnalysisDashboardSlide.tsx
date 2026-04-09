@@ -121,13 +121,6 @@ export type SchemaType = z.infer<typeof Schema>;
 
 
 
-const getChartHeight = (count: number, hasMetrics: boolean) => {
-  if (count <= 2) return hasMetrics ? 230 : 280;
-  if (count <= 3) return hasMetrics ? 210 : 260;
-  return hasMetrics ? 160 : 180;
-};
-
-
 function SummaryCard({
   value,
   label,
@@ -187,7 +180,7 @@ const DataAnalysisDashboardSlide = ({ data }: { data: Partial<SchemaType> }) => 
       className="relative flex flex-col  h-[720px] w-[1280px] overflow-hidden  bg-[#F9F8F8]"
       style={{
         backgroundColor: "var(--background-color,#F9F8F8)",
-        fontFamily: "var(--body-font-family,Nunito Sans)",
+        fontFamily: "var(--body-font-family,Helvetica Neue)",
       }}
     >
       <div
@@ -223,9 +216,9 @@ const DataAnalysisDashboardSlide = ({ data }: { data: Partial<SchemaType> }) => 
 
         {halfChart && halfChart.length > 0 && <div className="mt-[14px] px-[64px] flex-1">
           <div
-            className={`grid h-full bg-white p-[13px] rounded-[14px] min-h-0 gap-[10px] grid-cols-3`}
+            className={`grid h-full bg-white p-[13px] rounded-[14px] min-h-0 gap-[10px] `}
             style={{
-              gridAutoRows: `minmax(150px, 1fr)`,
+              gridTemplateColumns: `repeat(${halfChart.length}, minmax(150px, 1fr))`,
               backgroundColor: "var(--card-color,#ffffff)",
             }}
           >
@@ -245,9 +238,9 @@ const DataAnalysisDashboardSlide = ({ data }: { data: Partial<SchemaType> }) => 
         </div>}
         {otherHalfChart && otherHalfChart.length > 0 && <div className="mt-[14px] px-[64px] flex-1">
           <div
-            className={`grid h-full bg-white p-[13px] rounded-[14px] min-h-0 gap-[10px] grid-cols-3`}
+            className={`grid h-full bg-white p-[13px] rounded-[14px] min-h-0 gap-[10px] `}
             style={{
-              gridAutoRows: `minmax(150px, 1fr)`,
+              gridTemplateColumns: `repeat(${otherHalfChart.length}, minmax(150px, 1fr))`,
               backgroundColor: "var(--card-color,#ffffff)",
             }}
           >
@@ -255,9 +248,7 @@ const DataAnalysisDashboardSlide = ({ data }: { data: Partial<SchemaType> }) => 
               <div
                 key={index}
                 className="rounded-[6px] flex flex-col overflow-hidden"
-
               >
-
                 <div className="flex-1 " >
                   <ResponsiveContainer width="100%" height="100%">
                     <FlexibleReportChart density="compact" chartType={chart.type} data={chart.data} series={chart.series} />

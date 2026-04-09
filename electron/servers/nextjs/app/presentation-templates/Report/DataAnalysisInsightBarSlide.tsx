@@ -41,13 +41,14 @@ export const Schema = z.object({
       description: "Featured insight paragraph shown in the left content area.",
     }),
   chartData: flexibleChartDataSchema.default({
-    type: "pie",
+    type: "line-dual",
     data: [
       { name: "Q1", value: 45 },
       { name: "Q2", value: 72 },
       { name: "Q3", value: 58 },
       { name: "Q4", value: 89 },
     ],
+
   }),
   legendLabel: z.string().min(3).max(32).default("Traditional Workflow").meta({
     description: "Legend label shown below the chart.",
@@ -70,7 +71,7 @@ const DataAnalysisInsightBarSlide = ({
       className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#f9f8f8]"
       style={{
         backgroundColor: "var(--background-color,#f9f8f8)",
-        fontFamily: "var(--body-font-family,Nunito Sans)",
+        fontFamily: "var(--body-font-family,Helvetica Neue)",
       }}
     >
       <div

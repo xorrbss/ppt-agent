@@ -99,61 +99,64 @@ const CodeSlide04FeatureGrid = ({ data }: { data: Partial<SchemaType> }) => {
 
 
   return (
-    <div
-      className="relative h-[720px] w-[1280px] overflow-hidden p-[53px]"
-      style={{
-        backgroundColor: "var(--background-color,#101B37)",
-        fontFamily: "var(--body-font-family,Nunito Sans)",
-      }}
-    >
-
-
-      <h2 className="text-[64px] font-medium tracking-[-0.03em]" style={{ color: "var(--background-text,#f2f4ff)" }}>{data.title}</h2>
-
-      <div className="mt-[26px] grid flex-1 grid-cols-3 items-center h-fit  gap-[26px]">
-        {data?.features?.map((feature) => (
-          <div
-            key={feature.title}
-            className="rounded-[18px] border p-[26px]"
-            style={{
-              boxShadow: "0 33.333px 66.667px -16px rgba(0, 0, 0, 0.25)",
-              borderColor: "var(--stroke,#1D293D80)",
-              backgroundColor: "var(--card-color,#0F172B80)",
-            }}
-          >
-            <div className="flex items-start justify-between gap-[8px]">
-              <h3 className="text-[26px] font-medium" style={{ color: "var(--background-text,#ffffff)" }}>{feature.title}</h3>
-              <span
-                className="flex h-[52px] w-[52px] items-center justify-center rounded-full border text-[18px]"
-                style={{
-                  borderColor: "var(--primary-color,#2B7FFF4D)",
-                  backgroundColor: "var(--primary-color,#2B7FFF33)",
-                }}
-              >
-                <img src={feature.icon.__icon_url__} alt={feature.icon.__icon_query__} className="h-[24px] w-[24px] object-contain"
-                  style={{
-                    filter: "invert(1)",
-                  }}
-                />
-              </span>
-            </div>
-            <p className="mt-[12px] text-[18px] leading-[136%]" style={{ color: "var(--background-text,#90A1B9)" }}>{feature.description}</p>
-          </div>
-        ))}
-      </div>
-
-
+    <>
+      <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap" rel="stylesheet" />
       <div
-        className="absolute bottom-[26px] z-50 left-1/2 -translate-x-1/2 rounded-full border px-[22px] py-[8px] text-[14px]"
+        className="relative h-[720px] w-[1280px] overflow-hidden p-[53px]"
         style={{
-          borderColor: "var(--stroke,#31415880)",
-          backgroundColor: "var(--card-color,#1D293DCC)",
-          color: "var(--background-text,#CAD5E2)",
+          backgroundColor: "var(--background-color,#101B37)",
+          fontFamily: "var(--body-font-family,Nunito Sans)",
         }}
       >
-        {data.pageLabel}
+
+
+        <h2 className="text-[64px] font-medium tracking-[-0.03em]" style={{ color: "var(--background-text,#f2f4ff)" }}>{data.title}</h2>
+
+        <div className="mt-[26px] grid flex-1 grid-cols-3 items-center h-fit  gap-[26px]">
+          {data?.features?.map((feature) => (
+            <div
+              key={feature.title}
+              className="rounded-[18px] border p-[26px]"
+              style={{
+                boxShadow: "0 33.333px 66.667px -16px rgba(0, 0, 0, 0.25)",
+                borderColor: "var(--stroke,#1D293D80)",
+                backgroundColor: "var(--card-color,#0F172B80)",
+              }}
+            >
+              <div className="flex items-start justify-between gap-[8px]">
+                <h3 className="text-[26px] font-medium" style={{ color: "var(--background-text,#ffffff)" }}>{feature.title}</h3>
+                <span
+                  className="flex h-[52px] w-[52px] items-center justify-center rounded-full border text-[18px]"
+                  style={{
+                    borderColor: "var(--primary-color,#2B7FFF4D)",
+                    backgroundColor: "var(--primary-color,#2B7FFF33)",
+                  }}
+                >
+                  <img src={feature.icon.__icon_url__} alt={feature.icon.__icon_query__} className="h-[24px] w-[24px] object-contain"
+                    style={{
+                      filter: "invert(1)",
+                    }}
+                  />
+                </span>
+              </div>
+              <p className="mt-[12px] text-[18px] leading-[136%]" style={{ color: "var(--background-text,#90A1B9)" }}>{feature.description}</p>
+            </div>
+          ))}
+        </div>
+
+
+        <div
+          className="absolute bottom-[26px] z-50 left-1/2 -translate-x-1/2 rounded-full border px-[22px] py-[8px] text-[14px]"
+          style={{
+            borderColor: "var(--stroke,#31415880)",
+            backgroundColor: "var(--card-color,#1D293DCC)",
+            color: "var(--background-text,#CAD5E2)",
+          }}
+        >
+          {data.pageLabel}
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

@@ -50,7 +50,7 @@ export const Schema = z.object({
 export type SchemaType = z.infer<typeof Schema>;
 
 function renderCell(value: string) {
-  if (value.toLowerCase() === "check") {
+  if (value && value.toLowerCase() === "check") {
     return <span className="text-[26px] px-[32px]" style={{ color: "var(--graph-2,#37f08e)" }}>✓</span>;
   }
 
@@ -60,83 +60,86 @@ function renderCell(value: string) {
 const CodeSlide05ComparisonTable = ({ data }: { data: Partial<SchemaType> }) => {
 
   return (
-    <div
-      className="relative h-[720px] w-[1280px] overflow-hidden p-[53px]"
-      style={{
-        backgroundColor: "var(--background-color,#101B37)",
-        fontFamily: "var(--body-font-family,Nunito Sans)",
-      }}
-    >
-
-      <h2 className="text-[64px] font-medium" style={{ color: "var(--background-text,#ffffff)" }}>{data.title}</h2>
-
+    <>
+      <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap" rel="stylesheet" />
       <div
-        className="mt-[22px] min-h-0 flex-1 rounded-[16px] border"
+        className="relative h-[720px] w-[1280px] overflow-hidden p-[53px]"
         style={{
-          backgroundColor: "var(--card-color,#0F172BCC)",
-          borderColor: "var(--stroke,#1D293D80)",
+          backgroundColor: "var(--background-color,#101B37)",
+          fontFamily: "var(--body-font-family,Nunito Sans)",
         }}
       >
+
+        <h2 className="text-[64px] font-medium" style={{ color: "var(--background-text,#ffffff)" }}>{data.title}</h2>
+
         <div
-          className="grid grid-cols-[0.4fr_0.20fr_0.20fr_0.20fr] items-center"
+          className="mt-[22px] min-h-0 flex-1 rounded-[16px] border"
           style={{
-            color: "var(--background-text,#8ea1da)",
-            gridTemplateColumns: `repeat(${data?.tableColumns?.length || 1}, 1fr)`,
+            backgroundColor: "var(--card-color,#0F172BCC)",
+            borderColor: "var(--stroke,#1D293D80)",
           }}
         >
+          <div
+            className="grid grid-cols-[0.4fr_0.20fr_0.20fr_0.20fr] items-center"
+            style={{
+              color: "var(--background-text,#8ea1da)",
+              gridTemplateColumns: `repeat(${data?.tableColumns?.length || 1}, 1fr)`,
+            }}
+          >
 
-          {data?.tableColumns?.map((column) => (
-            <p
-              key={column}
-              className="px-[32px] py-[16px] text-[18px] text-center border-b border-r"
-              style={{
-                color: "var(--background-text,#ffffff)",
-                borderColor: "var(--stroke,#1D293D80)",
-              }}
-            >
-              {column}
-            </p>
-          ))}
-        </div>
-
-        <div className="">
-          {data?.rows?.map((row) => (
-            <div
-              key={row.feature}
-              className="grid grid-cols-[0.4fr_0.20fr_0.20fr_0.20fr]"
-              style={{
-                gridTemplateColumns: `repeat(${data?.tableColumns?.length || 1}, 1fr)`,
-              }}
-            >
+            {data?.tableColumns?.map((column) => (
               <p
-                className="px-[32px] py-[20px] text-center text-[18px] border-b border-r"
+                key={column}
+                className="px-[32px] py-[16px] text-[18px] text-center border-b border-r"
                 style={{
-                  color: "var(--background-text,#d5dcff)",
+                  color: "var(--background-text,#ffffff)",
                   borderColor: "var(--stroke,#1D293D80)",
                 }}
               >
-                {row.feature}
+                {column}
               </p>
-              <div className="flex justify-center items-center text-[18px] border-b border-r" style={{ borderColor: "var(--stroke,#1D293D80)" }}>{renderCell(row.column1)}</div>
-              <div className="flex justify-center items-center text-[18px] border-b border-r" style={{ borderColor: "var(--stroke,#1D293D80)" }}>{renderCell(row.column2)}</div>
-              <div className="flex justify-center items-center text-[18px] border-b border-r" style={{ borderColor: "var(--stroke,#1D293D80)" }}>{renderCell(row.column3)}</div>
-            </div>
-          ))}
+            ))}
+          </div>
+
+          <div className="">
+            {data?.rows?.map((row) => (
+              <div
+                key={row.feature}
+                className="grid grid-cols-[0.4fr_0.20fr_0.20fr_0.20fr]"
+                style={{
+                  gridTemplateColumns: `repeat(${data?.tableColumns?.length || 1}, 1fr)`,
+                }}
+              >
+                <p
+                  className="px-[32px] py-[20px] text-center text-[18px] border-b border-r"
+                  style={{
+                    color: "var(--background-text,#d5dcff)",
+                    borderColor: "var(--stroke,#1D293D80)",
+                  }}
+                >
+                  {row.feature}
+                </p>
+                <div className="flex justify-center items-center text-[18px] border-b border-r" style={{ borderColor: "var(--stroke,#1D293D80)" }}>{renderCell(row.column1)}</div>
+                <div className="flex justify-center items-center text-[18px] border-b border-r" style={{ borderColor: "var(--stroke,#1D293D80)" }}>{renderCell(row.column2)}</div>
+                <div className="flex justify-center items-center text-[18px] border-b border-r" style={{ borderColor: "var(--stroke,#1D293D80)" }}>{renderCell(row.column3)}</div>
+              </div>
+            ))}
+          </div>
+
         </div>
 
+        <div
+          className="absolute bottom-[26px] z-50 left-1/2 -translate-x-1/2 rounded-full border px-[22px] py-[8px] text-[14px]"
+          style={{
+            borderColor: "var(--stroke,#31415880)",
+            backgroundColor: "var(--card-color,#1D293DCC)",
+            color: "var(--background-text,#CAD5E2)",
+          }}
+        >
+          {data.pageLabel}
+        </div>
       </div>
-
-      <div
-        className="absolute bottom-[26px] z-50 left-1/2 -translate-x-1/2 rounded-full border px-[22px] py-[8px] text-[14px]"
-        style={{
-          borderColor: "var(--stroke,#31415880)",
-          backgroundColor: "var(--card-color,#1D293DCC)",
-          color: "var(--background-text,#CAD5E2)",
-        }}
-      >
-        {data.pageLabel}
-      </div>
-    </div>
+    </>
   );
 };
 

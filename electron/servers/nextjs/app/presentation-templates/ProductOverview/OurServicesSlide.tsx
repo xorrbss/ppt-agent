@@ -61,90 +61,93 @@ const OurServicesSlide = ({ data }: { data: Partial<SchemaType> }) => {
   const { title, taglineLabel, taglineBody, featureImage, services } = data;
 
   return (
-    <div
-      className="relative h-[720px] w-[1280px] flex items-end pb-[56px]  justify-between overflow-hidden rounded-[24px]"
-      style={{
-        backgroundColor: "var(--background-color,#DAE1DE)",
-        fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
-      }}
-    >
-      <div className=" pt-[74px]">
-        <div className="px-[68px]">
+    <>
+      <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap" rel="stylesheet" />
+      <div
+        className="relative h-[720px] w-[1280px] flex items-end pb-[56px]  justify-between overflow-hidden rounded-[24px]"
+        style={{
+          backgroundColor: "var(--background-color,#DAE1DE)",
+          fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
+        }}
+      >
+        <div className=" pt-[74px]">
+          <div className="px-[68px]">
 
-          <h2
-            className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
-            style={{ color: "var(--primary-color,#15342D)" }}
-          >
-            {title}
-          </h2>
-
-          <div className="mt-[26px] w-[560px]">
-            <p
-              className="text-[20px] font-semibold tracking-[2.074px] text-white"
+            <h2
+              className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
               style={{ color: "var(--primary-color,#15342D)" }}
             >
-              {taglineLabel}
-            </p>
-            <p
-              className="mt-[14px] text-[24px] font-normal  text-[#15342DCC]"
-              style={{ color: "var(--background-text,#15342DCC)" }}
-            >
-              {taglineBody}
-            </p>
+              {title}
+            </h2>
+
+            <div className="mt-[26px] w-[560px]">
+              <p
+                className="text-[20px] font-semibold tracking-[2.074px] text-white"
+                style={{ color: "var(--primary-color,#15342D)" }}
+              >
+                {taglineLabel}
+              </p>
+              <p
+                className="mt-[14px] text-[24px] font-normal  text-[#15342DCC]"
+                style={{ color: "var(--background-text,#15342DCC)" }}
+              >
+                {taglineBody}
+              </p>
+            </div>
           </div>
-        </div>
-        <div
-          className="mt-[35px] h-[326px] w-[650px] bg-[#15342D]"
-          style={{ backgroundColor: "var(--primary-color,#15342D)" }}
-        >
-
-          {featureImage?.__image_url__ && (
-            <img
-              src={featureImage?.__image_url__}
-              alt={featureImage?.__image_prompt__}
-              className="h-[326px] w-[650px] object-cover"
-            />
-          )}
-        </div>
-      </div>
-
-
-
-      <div className="grid grid-cols-2 gap-[22px] pr-[76px]">
-        {services?.map((service, index) => (
           <div
-            key={index}
-            className=" p-[33px]"
-            style={{
-              backgroundColor: service.dark
-                ? "var(--primary-color,#15342D)"
-                : "var(--card-color,#ececee)",
-            }}
+            className="mt-[35px] h-[326px] w-[650px] bg-[#15342D]"
+            style={{ backgroundColor: "var(--primary-color,#15342D)" }}
           >
-            <p
-              className="text-[20px] font-semibold tracking-[2.074px] text-white"
-              style={{
-                color: service.dark
-                  ? "var(--primary-text,#edf2f1)"
-                  : "var(--primary-color,#15342D)",
-              }}
-            >
-              {service.heading}
-            </p>
-            <p
-              className={`${service.dark ? "text-white" : "text-[#15342DCC]"} mt-[20px] text-[28px] font-normal`}
-              style={{
-                color: service.dark
-                  ? "var(--primary-text,#edf2f1)"
-                  : "var(--background-text,#15342DCC)",
-              }}
-            >
-              {service.body}
-            </p>
+
+            {featureImage?.__image_url__ && (
+              <img
+                src={featureImage?.__image_url__}
+                alt={featureImage?.__image_prompt__}
+                className="h-[326px] w-[650px] object-cover"
+              />
+            )}
           </div>
-        ))}
+        </div>
+
+
+
+        <div className="grid grid-cols-2 gap-[22px] pr-[76px]">
+          {services?.map((service, index) => (
+            <div
+              key={index}
+              className=" p-[33px]"
+              style={{
+                backgroundColor: service.dark
+                  ? "var(--primary-color,#15342D)"
+                  : "var(--card-color,#ececee)",
+              }}
+            >
+              <p
+                className="text-[20px] font-semibold tracking-[2.074px] text-white"
+                style={{
+                  color: service.dark
+                    ? "var(--primary-text,#edf2f1)"
+                    : "var(--primary-color,#15342D)",
+                }}
+              >
+                {service.heading}
+              </p>
+              <p
+                className={`${service.dark ? "text-white" : "text-[#15342DCC]"} mt-[20px] text-[28px] font-normal`}
+                style={{
+                  color: service.dark
+                    ? "var(--primary-text,#edf2f1)"
+                    : "var(--background-text,#15342DCC)",
+                }}
+              >
+                {service.body}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

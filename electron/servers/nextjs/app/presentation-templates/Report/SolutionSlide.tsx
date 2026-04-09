@@ -94,7 +94,7 @@ const SolutionSlide = ({ data }: SolutionSlideProps) => {
       className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#F9F8F8]"
       style={{
         backgroundColor: "var(--background-color,#F9F8F8)",
-        fontFamily: "var(--body-font-family,Nunito Sans)",
+        fontFamily: "var(--body-font-family,Helvetica Neue)",
       }}
     >
       <div className="absolute left-0 top-0 w-[42px] rounded-b-[22px] bg-[#157CFF]"

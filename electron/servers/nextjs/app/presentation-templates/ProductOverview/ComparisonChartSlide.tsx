@@ -117,103 +117,106 @@ const ComparisonChartSlide = ({ data }: { data: Partial<SchemaType> }) => {
   const { title, subtitle, columns, rows, checkIcon, crossIcon } = data;
 
   return (
-    <div
-      className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
-      style={{
-        backgroundColor: "var(--background-color,#DAE1DE)",
-        fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
-      }}
-    >
-      <div className="px-[56px] pt-[74px]">
-        <h2
-          className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
-          style={{ color: "var(--primary-color,#15342D)" }}
-        >
-          {title}
-        </h2>
-        <p
-          className="mt-[20px] w-[740px] text-[24px] font-normal  text-[#15342DCC]"
-          style={{ color: "var(--background-text,#15342DCC)" }}
-        >
-          {subtitle}
-        </p>
-      </div>
-
-      <div className="absolute left-[54px] top-[268px] w-[1058px] ">
-        <div
-          className="grid grid-cols-[220px_repeat(4,1fr)] border-b"
-          style={{ borderColor: "var(--stroke,#c5cccb)" }}
-        >
-          <div className="h-[94px] " />
-          {columns?.map((column, index) => (
-            <div
-              key={index}
-              className="flex h-[94px] items-center justify-center border-r text-[20px] font-semibold uppercase tracking-[0.2em]"
-              style={{
-                backgroundColor:
-                  index === 3
-                    ? "var(--primary-color,#15342D)"
-                    : "var(--card-color,#ffffff)",
-                color:
-                  index === 3
-                    ? "var(--primary-text,#edf2f1)"
-                    : "var(--primary-color,#15342D)",
-                borderColor: "var(--stroke,#c5cccb)",
-              }}
-            >
-              {column}
-            </div>
-          ))}
+    <>
+      <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap" rel="stylesheet" />
+      <div
+        className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
+        style={{
+          backgroundColor: "var(--background-color,#DAE1DE)",
+          fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
+        }}
+      >
+        <div className="px-[56px] pt-[74px]">
+          <h2
+            className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
+            style={{ color: "var(--primary-color,#15342D)" }}
+          >
+            {title}
+          </h2>
+          <p
+            className="mt-[20px] w-[740px] text-[24px] font-normal  text-[#15342DCC]"
+            style={{ color: "var(--background-text,#15342DCC)" }}
+          >
+            {subtitle}
+          </p>
         </div>
 
-        {rows?.map((row, index) => {
-          const cells: ("check" | "cross" | "empty")[] = [
-            row.cell1,
-            row.cell2,
-            row.cell3,
-            row.cell4,
-          ];
-
-          return (
-            <div
-              key={index}
-              className={`grid grid-cols-[220px_repeat(4,1fr)] ${index < rows.length - 1 ? "border-b" : ""}`}
-              style={{ borderColor: "var(--stroke,#c5cccb)" }}
-            >
+        <div className="absolute left-[54px] top-[268px] w-[1058px] ">
+          <div
+            className="grid grid-cols-[220px_repeat(4,1fr)] border-b"
+            style={{ borderColor: "var(--stroke,#c5cccb)" }}
+          >
+            <div className="h-[94px] " />
+            {columns?.map((column, index) => (
               <div
-                className="flex h-[94px] items-center border-r pl-[34px] text-[20px] font-semibold uppercase tracking-[0.2em]"
+                key={index}
+                className="flex h-[94px] items-center justify-center border-r text-[20px] font-semibold uppercase tracking-[0.2em]"
                 style={{
-                  backgroundColor: "var(--card-color,#ffffff)",
+                  backgroundColor:
+                    index === 3
+                      ? "var(--primary-color,#15342D)"
+                      : "var(--card-color,#ffffff)",
+                  color:
+                    index === 3
+                      ? "var(--primary-text,#edf2f1)"
+                      : "var(--primary-color,#15342D)",
                   borderColor: "var(--stroke,#c5cccb)",
-                  color: "var(--primary-color,#15342D)",
                 }}
               >
-                {row.label}
+                {column}
               </div>
+            ))}
+          </div>
 
-              {cells?.map((status, cellIndex) => (
+          {rows?.map((row, index) => {
+            const cells: ("check" | "cross" | "empty")[] = [
+              row.cell1,
+              row.cell2,
+              row.cell3,
+              row.cell4,
+            ];
+
+            return (
+              <div
+                key={index}
+                className={`grid grid-cols-[220px_repeat(4,1fr)] ${index < rows.length - 1 ? "border-b" : ""}`}
+                style={{ borderColor: "var(--stroke,#c5cccb)" }}
+              >
                 <div
-                  key={cellIndex}
-                  className="flex h-[94px] items-center justify-center border-r"
+                  className="flex h-[94px] items-center border-r pl-[34px] text-[20px] font-semibold uppercase tracking-[0.2em]"
                   style={{
                     backgroundColor: "var(--card-color,#ffffff)",
                     borderColor: "var(--stroke,#c5cccb)",
+                    color: "var(--primary-color,#15342D)",
                   }}
                 >
-                  <StatusIcon
-                    status={status}
-                    checkIconUrl={checkIcon?.__icon_url__}
-                    checkIconAlt={checkIcon?.__icon_query__}
-                    crossIconUrl={crossIcon?.__icon_url__}
-                    crossIconAlt={crossIcon?.__icon_query__}
-                  />
+                  {row.label}
                 </div>
-              ))}
-            </div>
-          );
-        })}
+
+                {cells?.map((status, cellIndex) => (
+                  <div
+                    key={cellIndex}
+                    className="flex h-[94px] items-center justify-center border-r"
+                    style={{
+                      backgroundColor: "var(--card-color,#ffffff)",
+                      borderColor: "var(--stroke,#c5cccb)",
+                    }}
+                  >
+                    <StatusIcon
+                      status={status}
+                      checkIconUrl={checkIcon?.__icon_url__}
+                      checkIconAlt={checkIcon?.__icon_query__}
+                      crossIconUrl={crossIcon?.__icon_url__}
+                      crossIconAlt={crossIcon?.__icon_query__}
+                    />
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

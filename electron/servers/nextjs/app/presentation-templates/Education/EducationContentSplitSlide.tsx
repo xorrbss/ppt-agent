@@ -52,16 +52,16 @@ const EducationContentSplitSlide = ({ data }: { data: Partial<SchemaType> }) => 
               className=" h-full w-full object-cover object-center"
             />
           </div>
-          <div className="flex w-full gap-1.5 h-[320px] ">
-            <div className="w-[327px]"> <img
+          <div className="flex w-full gap-[6px] h-[320px] ">
+            <div className="w-[330px]"> <img
               src={collageImage?.__image_url__}
               alt={collageImage?.__image_prompt__}
-              className="h-full  object-cover "
+              className="h-full w-full object-cover "
             /></div>
-            <div className="w-[327px]"> <img
+            <div className="w-[330px]"> <img
               src={collageImage?.__image_url__}
               alt={collageImage?.__image_prompt__}
-              className="h-full  object-cover "
+              className="h-full w-full object-cover "
             /></div>
           </div>
         </div>

@@ -1,6 +1,5 @@
 "use client";
 
-import { Fragment } from "react/jsx-runtime";
 import * as z from "zod";
 
 import { ResponsiveContainer } from "recharts";
@@ -11,10 +10,10 @@ const MetricSchema = z.object({
   value: z.string().min(1).max(12).meta({
     description: "Primary metric value shown in the stat card.",
   }),
-  label: z.string().min(3).max(24).meta({
+  label: z.string().min(3).max(24).optional().meta({
     description: "Metric label shown below the value.",
   }),
-  description: z.string().min(6).max(36).meta({
+  description: z.string().min(6).max(36).optional().meta({
     description: "Supporting description shown below the label.",
   }),
 });
@@ -41,7 +40,7 @@ export const Schema = z.object({
     description: "Legend label for the second line series.",
   }),
   chartData: flexibleChartDataSchema.default({
-    type: "pie",
+    type: "line-dual",
     data: [
       { label: "label", valueA: 24, valueB: 40 },
       { label: "label", valueA: 55, valueB: 72 },
@@ -82,8 +81,8 @@ export type SchemaType = z.infer<typeof Schema>;
 
 type StatMetric = {
   value: string;
-  label: string;
-  description: string;
+  label?: string;
+  description?: string;
 };
 
 function StatPill({ metrics }: { metrics: StatMetric[] }) {
@@ -96,13 +95,13 @@ function StatPill({ metrics }: { metrics: StatMetric[] }) {
       }}
     >
       {metrics.map((metric, index) => (
-        <Fragment key={`${metric.value}-${metric.label}-${index}`}>
+        <div key={`${metric.value}-${metric.label}-${index}`} className="flex flex-col items-center justify-between gap-2">
           <div key={`${metric.value}-${metric.label}-${index}`} className={``}>
-            <p className="text-[55px] font-medium leading-[ 44.353px] tracking-[-1.09px]">{metric.value}</p>
-            <p className="mt-[6px] text-[20px] font-medium leading-none">{metric.label}</p>
-            <p className="text-[20px] leading-[1.15] text-white/90" style={{ color: "var(--primary-text,#ffffff)", opacity: 0.9 }}>
+            <p className="text-[55px]  leading-[44.353px] tracking-[-1.09px]">{metric.value}</p>
+            {metric.label && <p className="mt-[6px] text-[20px]  leading-none">{metric.label}</p>}
+            {metric.description && <p className="text-[20px] mt-1 leading-[1.15] text-white/90" style={{ color: "var(--primary-text,#ffffff)", opacity: 0.9 }}>
               {metric.description}
-            </p>
+            </p>}
           </div>
           {index === 0 && (
             <div className="py-[22px]">
@@ -117,7 +116,7 @@ function StatPill({ metrics }: { metrics: StatMetric[] }) {
               </svg>
             </div>
           )}
-        </Fragment>
+        </div>
       ))}
     </div>
   );
@@ -134,7 +133,7 @@ const DataAnalysisLineStatsSlide = ({ data }: { data: Partial<SchemaType> }) => 
       className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#f9f8f8]"
       style={{
         backgroundColor: "var(--background-color,#f9f8f8)",
-        fontFamily: "var(--body-font-family,Nunito Sans)",
+        fontFamily: "var(--body-font-family,Helvetica Neue)",
       }}
     >
       <div
@@ -153,7 +152,7 @@ const DataAnalysisLineStatsSlide = ({ data }: { data: Partial<SchemaType> }) => 
 
       <div className="flex justify-between px-[74px] pt-[40px]">
         <div className="w-[474px]">
-          <div
+          {chartType === "line-dual" && <div
             className="flex justify-center gap-[26px] text-[14px] text-[#353538]"
             style={{ color: "var(--background-text,#353538)" }}
           >
@@ -165,7 +164,7 @@ const DataAnalysisLineStatsSlide = ({ data }: { data: Partial<SchemaType> }) => 
               <span className="h-[2px] w-[20px] bg-[#4d4ef3]" style={{ backgroundColor: "var(--graph-1,#4d4ef3)" }} />
               {seriesBLabel}
             </span>
-          </div>
+          </div>}
 
           <div className="mt-[12px] h-[356px] w-full">
             <ResponsiveContainer width="100%" height="100%">

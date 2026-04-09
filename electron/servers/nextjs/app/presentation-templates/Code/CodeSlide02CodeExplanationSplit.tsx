@@ -64,63 +64,66 @@ const CodeSlide02CodeExplanationSplit = ({
 }) => {
 
   return (
-    <div
-      className="relative h-[720px] w-[1280px] overflow-hidden p-[53px]"
-      style={{
-        backgroundColor: "var(--background-color,#101B37)",
-        fontFamily: "var(--body-font-family,Nunito Sans)",
-      }}
-    >
+    <>
+      <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap" rel="stylesheet" />
+      <div
+        className="relative h-[720px] w-[1280px] overflow-hidden p-[53px]"
+        style={{
+          backgroundColor: "var(--background-color,#101B37)",
+          fontFamily: "var(--body-font-family,Nunito Sans)",
+        }}
+      >
 
-      <div className="relative z-10 flex h-full flex-col">
-        <h2 className="text-[64px] font-medium" style={{ color: "var(--background-text,#ffffff)" }}>{data.title}</h2>
+        <div className="relative z-10 flex h-full flex-col">
+          <h2 className="text-[64px] font-medium" style={{ color: "var(--background-text,#ffffff)" }}>{data.title}</h2>
 
-        <div className="mt-[22px] grid min-h-0  flex-1 grid-cols-2 gap-[34px]">
-          <div
-            className=" flex-1 border rounded-[18px]"
-            style={{
-              backgroundColor: "var(--card-color,#0F172B80)",
-              borderColor: "var(--stroke,#1D293D80)",
-            }}
-          >
-            <p
-              className="text-[18px] capitalize rounded-t-[18px] border px-[26px] py-3"
+          <div className="mt-[22px] grid min-h-0  flex-1 grid-cols-2 gap-[34px]">
+            <div
+              className=" flex-1 border rounded-[18px]"
               style={{
-                color: "var(--background-text,#CAD5E2)",
-                backgroundColor: "var(--card-color,#0F172BCC)",
+                backgroundColor: "var(--card-color,#0F172B80)",
                 borderColor: "var(--stroke,#1D293D80)",
               }}
             >
-              {data.codeSnippet?.fileName}
-            </p>
-            <pre className=" w-full px-[32px] py-[20px] whitespace-pre-wrap break-words overflow-hidden" style={{ color: "var(--background-text,#ffffff)" }}>
+              <p
+                className="text-[18px] capitalize rounded-t-[18px] border px-[26px] py-3"
+                style={{
+                  color: "var(--background-text,#CAD5E2)",
+                  backgroundColor: "var(--card-color,#0F172BCC)",
+                  borderColor: "var(--stroke,#1D293D80)",
+                }}
+              >
+                {data.codeSnippet?.fileName}
+              </p>
+              <pre className=" w-full px-[32px] py-[20px] whitespace-pre-wrap break-words overflow-hidden" style={{ color: "var(--background-text,#ffffff)" }}>
 
-              <code className="w-full ">
-                {data.codeSnippet?.content}
-              </code>
-            </pre>
-          </div>
+                <code className="w-full ">
+                  {data.codeSnippet?.content}
+                </code>
+              </pre>
+            </div>
 
-          <div className=" ">
-            <h3 className="text-[24px] font-medium" style={{ color: "var(--background-text,#f1f4ff)" }}>{data.explanationTitle}</h3>
-            <p className="mt-[18px] text-[22px] leading-[145%]" style={{ color: "var(--background-text,#d2d9ff)" }}>
-              {data.explanation}
-            </p>
+            <div className=" ">
+              <h3 className="text-[24px] font-medium" style={{ color: "var(--background-text,#f1f4ff)" }}>{data.explanationTitle}</h3>
+              <p className="mt-[18px] text-[22px] leading-[145%]" style={{ color: "var(--background-text,#d2d9ff)" }}>
+                {data.explanation}
+              </p>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div
-        className="absolute bottom-[26px] z-50 left-1/2 -translate-x-1/2 rounded-full border px-[22px] py-[8px] text-[14px]"
-        style={{
-          borderColor: "var(--stroke,#31415880)",
-          backgroundColor: "var(--card-color,#1D293DCC)",
-          color: "var(--background-text,#CAD5E2)",
-        }}
-      >
-        {data.pageLabel}
+        <div
+          className="absolute bottom-[26px] z-50 left-1/2 -translate-x-1/2 rounded-full border px-[22px] py-[8px] text-[14px]"
+          style={{
+            borderColor: "var(--stroke,#31415880)",
+            backgroundColor: "var(--card-color,#1D293DCC)",
+            color: "var(--background-text,#CAD5E2)",
+          }}
+        >
+          {data.pageLabel}
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

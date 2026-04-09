@@ -7,21 +7,21 @@ export const slideLayoutDescription =
 
 const StatisticSchema = z.object({
   value: z.string().min(1).max(8).meta({
-    description: "Main metric value shown at the top of one card.",
+    description: "Main metric value shown at the top of one card. with max 8 characters",
   }),
-  label: z.string().min(3).max(22).meta({
-    description: "Label shown under the value.",
+  label: z.string().min(3).max(20).meta({
+    description: "Label shown under the value. with max 20 characters",
   }),
 });
 
 export const Schema = z.object({
   title: z.string().min(4).max(14).default("Statistics").meta({
-    description: "Main title shown in the left column.",
+    description: "Main title shown in the left column. with max 14 characters",
   }),
   description: z.string().min(40).max(120).default(
-    "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. with max 120 characters"
   ).meta({
-    description: "Supporting line shown under the left title.",
+    description: "Supporting line shown under the left title. with max 120 characters",
   }),
   stats: z
     .array(StatisticSchema)
@@ -38,7 +38,7 @@ export const Schema = z.object({
       { value: "20", label: "Merchandising Team" },
     ])
     .meta({
-      description: "Eight statistic cards shown in a 2-column, 4-row grid.",
+      description: "Eight statistic cards. with max 8 cards",
     }),
 
 });

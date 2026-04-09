@@ -42,61 +42,64 @@ const CoverSlide = ({ data }: { data: Partial<SchemaType> }) => {
   const { logoImage, label, titleLine1, titleLine2, backgroundImage } = data;
 
   return (
-    <div
-      className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
-      style={{
-        backgroundColor: "var(--background-color,#DAE1DE)",
-        fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
-      }}
-    >
+    <>
+      <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap" rel="stylesheet" />
       <div
-        className="relative z-20 flex h-full flex-col px-[36px] pt-[62px] text-[#15342D]"
-        style={{ color: "var(--primary-color,#15342D)" }}
-      >
-        <div className="flex items-center justify-between">
-
-          <img
-            src={logoImage?.__image_url__ ?? ''}
-            alt={logoImage?.__image_prompt__ || ''}
-            className="h-[42px] w-[171px] object-cover"
-          />
-
-          <p
-            className="text-[18px] font-normal leading-[18.991px] text-[#15342D]"
-            style={{ color: "var(--primary-color,#15342D)" }}
-          >
-            {label}
-          </p>
-        </div>
-
-        <div className="flex flex-1 items-center justify-center pb-[80px]">
-          <h1
-            className="text-center text-[100px] font-semibold leading-[108.4%] tracking-[-3.024px]"
-          >
-            {titleLine1}
-            <br />
-            {titleLine2}
-          </h1>
-        </div>
-      </div>
-
-      {backgroundImage?.__image_url__ && (
-        <img
-          src={backgroundImage.__image_url__ || ''}
-          alt={backgroundImage.__image_prompt__ || ''}
-          className="absolute bottom-0 left-0 z-0 h-[360px] w-full object-cover"
-        />
-      )}
-
-      <div
-        className="pointer-events-none absolute bottom-0 left-0 w-full z-10"
+        className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
         style={{
-          height: "365px",
-          background:
-            "linear-gradient(0deg, rgba(218, 225, 222, 0.00) 0%, var(--background-color,#DAE1DE) 80.33%)",
+          backgroundColor: "var(--background-color,#DAE1DE)",
+          fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
         }}
-      />
-    </div>
+      >
+        <div
+          className="relative z-20 flex h-full flex-col px-[36px] pt-[62px] text-[#15342D]"
+          style={{ color: "var(--primary-color,#15342D)" }}
+        >
+          <div className="flex items-center justify-between">
+
+            <img
+              src={logoImage?.__image_url__ ?? ''}
+              alt={logoImage?.__image_prompt__ || ''}
+              className="h-[42px] w-[171px] object-cover"
+            />
+
+            <p
+              className="text-[18px] font-normal leading-[18.991px] text-[#15342D]"
+              style={{ color: "var(--primary-color,#15342D)" }}
+            >
+              {label}
+            </p>
+          </div>
+
+          <div className="flex flex-1 items-center justify-center pb-[80px]">
+            <h1
+              className="text-center text-[100px] font-semibold leading-[108.4%] tracking-[-3.024px]"
+            >
+              {titleLine1}
+              <br />
+              {titleLine2}
+            </h1>
+          </div>
+        </div>
+
+        {backgroundImage?.__image_url__ && (
+          <img
+            src={backgroundImage.__image_url__ || ''}
+            alt={backgroundImage.__image_prompt__ || ''}
+            className="absolute bottom-0 left-0 z-0 h-[360px] w-full object-cover"
+          />
+        )}
+
+        <div
+          className="pointer-events-none absolute bottom-0 left-0 w-full z-10"
+          style={{
+            height: "365px",
+            background:
+              "linear-gradient(0deg, rgba(218, 225, 222, 0.00) 0%, var(--background-color,#DAE1DE) 80.33%)",
+          }}
+        />
+      </div>
+    </>
   );
 };
 

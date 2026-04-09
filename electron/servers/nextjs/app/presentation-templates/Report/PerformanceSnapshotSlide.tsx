@@ -5,17 +5,17 @@ const MetricSchema = z.object({
   value: z.string().min(1).max(6).meta({
     description: "Primary metric value shown in the pill.",
   }),
-  label: z.string().min(3).max(10).meta({
+  label: z.string().max(10).optional().meta({
     description: "Short label shown below the metric value.",
   }),
-  description: z.string().min(6).max(20).meta({
+  description: z.string().min(6).max(20).optional().meta({
     description: "Supporting metric description shown below the label.",
   }),
 });
 
 const MetricColumnSchema = z.object({
-  metrics: z.array(MetricSchema).min(1).max(2).meta({
-    description: "One or two metrics shown in a single snapshot pill.",
+  metrics: z.array(MetricSchema).max(2).meta({
+    description: "One or two metrics shown in a single snapshot pill. Maximum two metrics.",
   }),
 });
 
@@ -30,7 +30,7 @@ export const Schema = z.object({
   }),
   columns: z
     .array(MetricColumnSchema)
-    .min(3)
+    .min(2)
     .max(4)
     .default([
       {
@@ -66,8 +66,8 @@ export type SchemaType = z.infer<typeof Schema>;
 
 type StatMetric = {
   value: string;
-  label: string;
-  description: string;
+  label?: string;
+  description?: string;
 };
 
 function StatPill({
@@ -94,13 +94,13 @@ function StatPill({
             key={`${metric.value}-${metric.label}-${index}`}
             className={``}
           >
-            <p className="text-[55px] font-medium leading-[ 44.353px] tracking-[-1.09px]">
+            <p className="text-[55px]  leading-[44.353px] tracking-[-1.09px]">
               {metric.value}
             </p>
-            <p className="mt-[6px] text-[20px] font-medium leading-none">{metric.label}</p>
-            <p className=" text-[20px] leading-[1.15] text-white/90" style={{ color: "var(--primary-text,#ffffff)", opacity: 0.9 }}>
+            {metric.label && <p className="mt-[10px] text-[20px] font-medium leading-none">{metric.label}</p>}
+            {metric.description && <p className=" text-[20px] mt-1 leading-[1.15] text-white/90" style={{ color: "var(--primary-text,#ffffff)", opacity: 0.9 }}>
               {metric.description}
-            </p>
+            </p>}
           </div>
           {index === 0 && <div className="py-[22px]">
 
@@ -131,7 +131,7 @@ const PerformanceSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
       className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#f9f8f8]"
       style={{
         backgroundColor: "var(--background-color,#f9f8f8)",
-        fontFamily: "var(--body-font-family,Nunito Sans)",
+        fontFamily: "var(--body-font-family,Helvetica Neue)",
       }}
     >
       <div

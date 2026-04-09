@@ -92,78 +92,81 @@ const MeetTeamSlide = ({ data }: { data: Partial<SchemaType> }) => {
   const { title, taglineLabel, taglineBody, members } = data;
 
   return (
-    <div
-      className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
-      style={{
-        backgroundColor: "var(--background-color,#DAE1DE)",
-        fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
-      }}
-    >
-      <div className="flex items-start justify-between px-[64px] pt-[76px]">
-        <h2
-          className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
-          style={{ color: "var(--primary-color,#15342D)" }}
-        >
-          {title}
-        </h2>
-
-        <div className="w-[520px]">
-          <p
-            className="text-[20px] font-semibold tracking-[2.074px] text-white"
+    <>
+      <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap" rel="stylesheet" />
+      <div
+        className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
+        style={{
+          backgroundColor: "var(--background-color,#DAE1DE)",
+          fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
+        }}
+      >
+        <div className="flex items-start justify-between px-[64px] pt-[76px]">
+          <h2
+            className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
             style={{ color: "var(--primary-color,#15342D)" }}
           >
-            {taglineLabel}
-          </p>
-          <p
-            className="mt-[14px] text-[24px] font-normal  text-[#15342DCC]"
-            style={{ color: "var(--background-text,#15342DCC)" }}
-          >
-            {taglineBody}
-          </p>
+            {title}
+          </h2>
+
+          <div className="w-[520px]">
+            <p
+              className="text-[20px] font-semibold tracking-[2.074px] text-white"
+              style={{ color: "var(--primary-color,#15342D)" }}
+            >
+              {taglineLabel}
+            </p>
+            <p
+              className="mt-[14px] text-[24px] font-normal  text-[#15342DCC]"
+              style={{ color: "var(--background-text,#15342DCC)" }}
+            >
+              {taglineBody}
+            </p>
+          </div>
+        </div>
+
+        <div className="absolute bottom-[58px] left-[64px] grid grid-cols-4 gap-[22px]">
+          {members?.map((member, index) => (
+            <div key={index} className="w-[252px] overflow-hidden">
+              <img
+                src={member.image.__image_url__}
+                alt={member.image.__image_prompt__}
+                className="h-[244px] w-full object-cover"
+              />
+              <div
+                className="h-[154px] p-[33px]"
+                style={{
+                  backgroundColor: member.highlighted
+                    ? "var(--primary-color,#15342D)"
+                    : "var(--card-color,#FEFEFF)",
+                }}
+              >
+                <p
+                  className="text-[20px] font-semibold tracking-[2.074px] text-white"
+                  style={{
+                    color: member.highlighted
+                      ? "var(--primary-text,#edf2f1)"
+                      : "var(--primary-color,#15342D)",
+                  }}
+                >
+                  {member.title}
+                </p>
+                <p
+                  className="mt-[20px] text-[28px] font-normal  text-white"
+                  style={{
+                    color: member.highlighted
+                      ? "var(--primary-text,#edf2f1)"
+                      : "var(--primary-color,#15342D)",
+                  }}
+                >
+                  {member.name}
+                </p>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
-
-      <div className="absolute bottom-[58px] left-[64px] grid grid-cols-4 gap-[22px]">
-        {members?.map((member, index) => (
-          <div key={index} className="w-[252px] overflow-hidden">
-            <img
-              src={member.image.__image_url__}
-              alt={member.image.__image_prompt__}
-              className="h-[244px] w-full object-cover"
-            />
-            <div
-              className="h-[154px] p-[33px]"
-              style={{
-                backgroundColor: member.highlighted
-                  ? "var(--primary-color,#15342D)"
-                  : "var(--card-color,#FEFEFF)",
-              }}
-            >
-              <p
-                className="text-[20px] font-semibold tracking-[2.074px] text-white"
-                style={{
-                  color: member.highlighted
-                    ? "var(--primary-text,#edf2f1)"
-                    : "var(--primary-color,#15342D)",
-                }}
-              >
-                {member.title}
-              </p>
-              <p
-                className="mt-[20px] text-[28px] font-normal  text-white"
-                style={{
-                  color: member.highlighted
-                    ? "var(--primary-text,#edf2f1)"
-                    : "var(--primary-color,#15342D)",
-                }}
-              >
-                {member.name}
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+    </>
   );
 };
 

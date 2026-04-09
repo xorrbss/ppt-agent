@@ -44,73 +44,76 @@ const MissionVisionSlide = ({ data }: { data: Partial<SchemaType> }) => {
   const { title, missionLabel, missionBody, visionLabel, visionBody, image } = data;
 
   return (
-    <div
-      className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
-      style={{
-        backgroundColor: "var(--background-color,#DAE1DE)",
-        fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
-      }}
-    >
-      <div className="grid h-full grid-cols-2 grid-rows-2">
-        <div className="px-[74px] pt-[76px]">
-          <h2
-            className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
-            style={{ color: "var(--primary-color,#15342D)" }}
-          >
-            {title}
-          </h2>
-        </div>
+    <>
+      <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap" rel="stylesheet" />
+      <div
+        className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
+        style={{
+          backgroundColor: "var(--background-color,#DAE1DE)",
+          fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
+        }}
+      >
+        <div className="grid h-full grid-cols-2 grid-rows-2">
+          <div className="px-[74px] pt-[76px]">
+            <h2
+              className="text-[80px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
+              style={{ color: "var(--primary-color,#15342D)" }}
+            >
+              {title}
+            </h2>
+          </div>
 
-        <div
-          className="pl-[60px] pt-[76px]"
-          style={{ backgroundColor: "var(--primary-color,#15342D)" }}
-        >
-          <p
-            className="text-[20px] font-semibold tracking-[2.074px] text-white"
-            style={{ color: "var(--primary-text,#edf2f1)" }}
+          <div
+            className="pl-[60px] pt-[76px]"
+            style={{ backgroundColor: "var(--primary-color,#15342D)" }}
           >
-            {missionLabel}
-          </p>
-          <p
-            className="mt-[26px] text-[28px] font-normal  text-white"
-            style={{ color: "var(--primary-text,#edf2f1)" }}
-          >
-            {missionBody}
-          </p>
-        </div>
+            <p
+              className="text-[20px] font-semibold tracking-[2.074px] text-white"
+              style={{ color: "var(--primary-text,#edf2f1)" }}
+            >
+              {missionLabel}
+            </p>
+            <p
+              className="mt-[26px] text-[28px] font-normal  text-white"
+              style={{ color: "var(--primary-text,#edf2f1)" }}
+            >
+              {missionBody}
+            </p>
+          </div>
 
-        <div
-          className="pl-[53px] py-[53px]"
-          style={{ backgroundColor: "var(--primary-color,#15342D)" }}
-        >
-          <p
-            className="text-[20px] font-semibold tracking-[2.074px] text-white"
-            style={{ color: "var(--primary-text,#edf2f1)" }}
+          <div
+            className="pl-[53px] py-[53px]"
+            style={{ backgroundColor: "var(--primary-color,#15342D)" }}
           >
-            {visionLabel}
-          </p>
-          <p
-            className="mt-[24px] text-[28px] font-normal  text-white"
-            style={{ color: "var(--primary-text,#edf2f1)" }}
+            <p
+              className="text-[20px] font-semibold tracking-[2.074px] text-white"
+              style={{ color: "var(--primary-text,#edf2f1)" }}
+            >
+              {visionLabel}
+            </p>
+            <p
+              className="mt-[24px] text-[28px] font-normal  text-white"
+              style={{ color: "var(--primary-text,#edf2f1)" }}
+            >
+              {visionBody}
+            </p>
+          </div>
+          <div
+            className="h-full w-full overflow-hidden bg-white"
+            style={{ backgroundColor: "var(--card-color,#ffffff)" }}
           >
-            {visionBody}
-          </p>
-        </div>
-        <div
-          className="h-full w-full overflow-hidden bg-white"
-          style={{ backgroundColor: "var(--card-color,#ffffff)" }}
-        >
 
-          {image?.__image_url__ && (
-            <img
-              src={image.__image_url__}
-              alt={image.__image_prompt__}
-              className="h-full w-full object-cover"
-            />
-          )}
+            {image?.__image_url__ && (
+              <img
+                src={image.__image_url__}
+                alt={image.__image_prompt__}
+                className="h-full w-full object-cover"
+              />
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

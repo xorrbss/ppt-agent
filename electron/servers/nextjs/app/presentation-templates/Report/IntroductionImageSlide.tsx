@@ -49,7 +49,7 @@ const IntroductionImageSlide = ({ data }: { data: Partial<SchemaType> }) => {
       className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#f9f8f8]"
       style={{
         backgroundColor: "var(--background-color,#f9f8f8)",
-        fontFamily: "var(--body-font-family,Nunito Sans)",
+        fontFamily: "var(--body-font-family,Helvetica Neue)",
       }}
     >
       <div
@@ -72,16 +72,18 @@ const IntroductionImageSlide = ({ data }: { data: Partial<SchemaType> }) => {
             {body}
           </p>
 
-          <ul
+          <div
             className="mt-8 list-disc pl-[28px] text-[24px] leading-[26.667px] text-[#232223]"
             style={{ color: "var(--background-text,#232223)" }}
           >
             {bullets?.map((bullet, index) => (
-              <li key={`${bullet}-${index}`} className="mt-[8px]">
-                {bullet}
-              </li>
+              <div key={`${bullet}-${index}`} className="mt-[8px] flex items-center gap-2">
+                <div className="w-[8px] h-[8px] rounded-full bg-[#232223]" style={{ backgroundColor: "var(--background-text,#232223)" }} /> <p className="text-[24px] leading-[26.667px] text-[#232223]" style={{ color: "var(--background-text,#232223)" }}>
+                  {bullet}
+                </p>
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
 
         <div className="flex flex-1 items-end justify-end">

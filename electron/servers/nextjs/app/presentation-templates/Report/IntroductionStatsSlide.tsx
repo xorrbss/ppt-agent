@@ -5,10 +5,10 @@ const MetricSchema = z.object({
   value: z.string().min(1).max(6).meta({
     description: "Primary metric value shown in the card.",
   }),
-  label: z.string().min(3).max(10).meta({
+  label: z.string().min(3).max(10).optional().meta({
     description: "Short metric label shown below the value.",
   }),
-  description: z.string().min(6).max(20).meta({
+  description: z.string().min(6).max(20).optional().meta({
     description: "Supporting text shown below the label.",
   }),
 });
@@ -73,8 +73,8 @@ export type SchemaType = z.infer<typeof Schema>;
 
 type StatMetric = {
   value: string;
-  label: string;
-  description: string;
+  label?: string;
+  description?: string;
 };
 
 function StatPill({
@@ -101,13 +101,13 @@ function StatPill({
             key={`${metric.value}-${metric.label}-${index}`}
             className={``}
           >
-            <p className="text-[55px] font-medium leading-[ 44.353px] tracking-[-1.09px]">
+            <p className="text-[55px]  leading-[44.353px] tracking-[-1.09px]">
               {metric.value}
             </p>
-            <p className="mt-[6px] text-[20px] font-medium leading-none">{metric.label}</p>
-            <p className=" text-[20px] leading-[1.15] text-white/90" style={{ color: "var(--primary-text,#ffffff)", opacity: 0.9 }}>
+            {metric.label && <p className="mt-[6px] text-[20px]  leading-none">{metric.label}</p>}
+            {metric.description && <p className=" text-[20px] mt-1 leading-[1.15] text-white/90" style={{ color: "var(--primary-text,#ffffff)", opacity: 0.9 }}>
               {metric.description}
-            </p>
+            </p>}
           </div>
           {index === 0 && <div className="py-[22px]">
 
@@ -139,7 +139,7 @@ const IntroductionStatsSlide = ({ data }: { data: Partial<SchemaType> }) => {
       className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-[#f9f8f8]"
       style={{
         backgroundColor: "var(--background-color,#f9f8f8)",
-        fontFamily: "var(--body-font-family,Nunito Sans)",
+        fontFamily: "var(--body-font-family,Helvetica Neue)",
       }}
     >
       <div
@@ -162,16 +162,18 @@ const IntroductionStatsSlide = ({ data }: { data: Partial<SchemaType> }) => {
             {body}
           </p>
 
-          <ul
+          <div
             className="mt-[34px] list-disc pl-[28px] text-[24px] leading-[26.667px] text-[#232223]"
             style={{ color: "var(--background-text,#232223)" }}
           >
             {bullets?.map((bullet, index) => (
-              <li key={`${bullet}-${index}`} className="mt-[8px]">
-                {bullet}
-              </li>
+              <div key={`${bullet}-${index}`} className="mt-[8px] flex items-center gap-2">
+                <div className="w-[8px] h-[8px] rounded-full bg-[#232223]" style={{ backgroundColor: "var(--background-text,#232223)" }} /> <p className="text-[24px] leading-[26.667px] text-[#232223]" style={{ color: "var(--background-text,#232223)" }}>
+                  {bullet}
+                </p>
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
 
         <div className="ml-[48px] flex gap-[34px]">

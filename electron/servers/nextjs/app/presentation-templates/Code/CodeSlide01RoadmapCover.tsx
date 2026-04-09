@@ -31,7 +31,8 @@ export type SchemaType = z.infer<typeof Schema>;
 
 const CodeSlide01RoadmapCover = ({ data }: { data: Partial<SchemaType> }) => {
 
-  return (
+  return (<>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap" rel="stylesheet" />
     <div
       className="relative h-[720px] w-[1280px] overflow-hidden p-[53px]"
       style={{
@@ -58,6 +59,7 @@ const CodeSlide01RoadmapCover = ({ data }: { data: Partial<SchemaType> }) => {
         {data.pageLabel}
       </div>
     </div>
+  </>
   );
 };
 

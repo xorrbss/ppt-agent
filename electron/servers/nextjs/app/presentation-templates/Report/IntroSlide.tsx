@@ -19,7 +19,7 @@ const IntroSlide = ({ data }: { data: Partial<SchemaType> }) => {
       className='relative w-[1280px] h-[720px] aspect-video  flex flex-col justify-center items-center bg-white'
       style={{
         backgroundColor: "var(--background-color,#ffffff)",
-        fontFamily: "var(--body-font-family,Nunito Sans)",
+        fontFamily: "var(--body-font-family,Helvetica Neue)",
       }}
     >
       <svg className="absolute top-0 left-10" xmlns="http://www.w3.org/2000/svg" width="116" height="251" viewBox="0 0 116 251" fill="none">

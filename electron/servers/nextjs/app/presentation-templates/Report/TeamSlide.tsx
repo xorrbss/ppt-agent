@@ -83,7 +83,7 @@ const TeamSlide = ({ data }: { data: Partial<SchemaType> }) => {
       className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] bg-white"
       style={{
         backgroundColor: "var(--background-color,#ffffff)",
-        fontFamily: "var(--body-font-family,Nunito Sans)",
+        fontFamily: "var(--body-font-family,Helvetica Neue)",
       }}
     >
       <div className="grid h-full "

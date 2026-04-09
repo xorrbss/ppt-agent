@@ -73,80 +73,83 @@ const BusinessChallengesCardsSlide = ({ data }: { data: Partial<SchemaType> }) =
   const { title, taglineLabel, taglineBody, heroImage, cards } = data;
 
   return (
-    <div
-      className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
-      style={{
-        backgroundColor: "var(--background-color,#DAE1DE)",
-        fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
-      }}
-    >
-      <div className=" pl-[66px] pt-[60px] pb-[28px]">
-        <h2
-          className="text-[80px] max-w-[406px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
-          style={{ color: "var(--primary-color,#15342D)" }}
-        >
-          {title}
-        </h2>
-
-        <div className="mt-[72px] w-[360px]">
-          <p
-            className="text-[20px] font-semibold tracking-[2.074px] text-white"
+    <>
+      <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap" rel="stylesheet" />
+      <div
+        className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
+        style={{
+          backgroundColor: "var(--background-color,#DAE1DE)",
+          fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
+        }}
+      >
+        <div className=" pl-[66px] pt-[60px] pb-[28px]">
+          <h2
+            className="text-[80px] max-w-[406px] font-semibold leading-[108.4%] tracking-[-2.419px] text-[#15342D]"
             style={{ color: "var(--primary-color,#15342D)" }}
           >
-            {taglineLabel}
-          </p>
-          <p
-            className="mt-[16px] text-[24px] font-normal  text-[#15342DCC]"
-            style={{ color: "var(--background-text,#15342DCC)" }}
-          >
-            {taglineBody}
-          </p>
-        </div>
-      </div>
+            {title}
+          </h2>
 
-      {heroImage?.__image_url__ && (
-        <img
-          src={heroImage.__image_url__}
-          alt={heroImage.__image_prompt__}
-          className="absolute right-0 top-[72px] h-[350px] w-[770px] object-cover bg-white"
-        />
-      )}
-
-      <div className="absolute bottom-[72px] right-[40px] flex items-start gap-[16px]">
-        {cards?.map((card, index) => (
-          <div
-            key={index}
-            className=" w-[248px] px-[34px] py-[34px]"
-            style={{
-              backgroundColor: card.dark
-                ? "var(--primary-color,#15342D)"
-                : "var(--card-color,#ebebee)",
-            }}
-          >
+          <div className="mt-[72px] w-[360px]">
             <p
               className="text-[20px] font-semibold tracking-[2.074px] text-white"
-              style={{
-                color: card.dark
-                  ? "var(--primary-text,#edf2f1)"
-                  : "var(--primary-color,#15342D)",
-              }}
+              style={{ color: "var(--primary-color,#15342D)" }}
             >
-              {card.heading}
+              {taglineLabel}
             </p>
             <p
-              className="mt-[18px] text-[28px] font-normal  text-white"
-              style={{
-                color: card.dark
-                  ? "var(--primary-text,#edf2f1)"
-                  : "var(--primary-color,#15342D)",
-              }}
+              className="mt-[16px] text-[24px] font-normal  text-[#15342DCC]"
+              style={{ color: "var(--background-text,#15342DCC)" }}
             >
-              {card.body}
+              {taglineBody}
             </p>
           </div>
-        ))}
+        </div>
+
+        {heroImage?.__image_url__ && (
+          <img
+            src={heroImage.__image_url__}
+            alt={heroImage.__image_prompt__}
+            className="absolute right-0 top-[72px] h-[350px] w-[770px] object-cover bg-white"
+          />
+        )}
+
+        <div className="absolute bottom-[72px] right-[40px] flex items-start gap-[16px]">
+          {cards?.map((card, index) => (
+            <div
+              key={index}
+              className=" w-[248px] px-[34px] py-[34px]"
+              style={{
+                backgroundColor: card.dark
+                  ? "var(--primary-color,#15342D)"
+                  : "var(--card-color,#ebebee)",
+              }}
+            >
+              <p
+                className="text-[20px] font-semibold tracking-[2.074px] text-white"
+                style={{
+                  color: card.dark
+                    ? "var(--primary-text,#edf2f1)"
+                    : "var(--primary-color,#15342D)",
+                }}
+              >
+                {card.heading}
+              </p>
+              <p
+                className="mt-[18px] text-[28px] font-normal  text-white"
+                style={{
+                  color: card.dark
+                    ? "var(--primary-text,#edf2f1)"
+                    : "var(--primary-color,#15342D)",
+                }}
+              >
+                {card.body}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 
