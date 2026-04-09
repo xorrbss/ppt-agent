@@ -5,10 +5,10 @@ const MetricSchema = z.object({
   value: z.string().min(1).max(6).meta({
     description: "Primary metric value shown in the pill.",
   }),
-  label: z.string().max(10).optional().meta({
+  label: z.string().max(20).optional().meta({
     description: "Short label shown below the metric value.",
   }),
-  description: z.string().min(6).max(20).optional().meta({
+  description: z.string().min(6).max(50).optional().meta({
     description: "Supporting metric description shown below the label.",
   }),
 });
@@ -19,18 +19,18 @@ const MetricColumnSchema = z.object({
   }),
 });
 
-export const slideLayoutId = "performance-snapshot-slide";
-export const slideLayoutName = "Performance Snapshot Slide";
+export const slideLayoutId = "title-metrics-slide";
+export const slideLayoutName = "Title Metrics Slide";
 export const slideLayoutDescription =
-  "A slide with a title at the top and three tall metric cards arranged horizontally below it. Each card can contain one or two stacked metric blocks, and each block includes a main value, a label, and a supporting description.";
+  "A slide with a title at the top and tall metric cards arranged horizontally below it. Each card can contain one or two stacked metric blocks, and each block includes a main value, a label, and a supporting description.";
 
 export const Schema = z.object({
-  title: z.string().min(3).max(12).default("Performance Snapshot").meta({
+  title: z.string().min(3).max(80).default("Performance Snapshot").meta({
     description: "Slide title shown at the top-left.",
   }),
   columns: z
     .array(MetricColumnSchema)
-    .min(2)
+    .min(1)
     .max(4)
     .default([
       {
@@ -50,12 +50,7 @@ export const Schema = z.object({
           { value: "25K", label: "Students", description: "Ut enim ad minima" },
           { value: "25K", label: "Students", description: "Ut enim ad minima" },
         ],
-      },
-      {
-        metrics: [
-          { value: "25K", label: "Students", description: "Ut enim ad minima" },
-        ],
-      },
+      }
     ])
     .meta({
       description: "Three metric columns displayed beneath the title.",
@@ -77,8 +72,6 @@ function StatPill({
   metrics: StatMetric[];
 
 }) {
-
-
   return (
     <div
       className=" h-[438px] w-[248px] overflow-hidden rounded-[127px] bg-[#157CFF] px-[28px] py-[74px] text-center text-white"
@@ -148,7 +141,7 @@ const PerformanceSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
         </h2>
       </div>
 
-      <div className="mt-[44px] flex justify-start gap-[33px] pl-[94px]">
+      <div className="mt-[44px] flex justify-center gap-[33px]">
         {columns?.map((column, index) => (
           <StatPill
             key={`snapshot-column-${index}`}

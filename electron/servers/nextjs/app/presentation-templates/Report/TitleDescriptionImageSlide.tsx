@@ -1,14 +1,14 @@
 import * as z from "zod";
 
 
-export const slideLayoutId = "introduction-image-slide";
-export const slideLayoutName = "Introduction Image Slide";
+export const slideLayoutId = "title-description-image-slide";
+export const slideLayoutName = "Title Description Image Slide";
 export const slideLayoutDescription =
-  "A slide with a title at the top-left, a paragraph block beneath the title, a short bulleted list in the lower-left area, and a large supporting image anchored on the right side of the slide.";
+  "A slide with a title at the top-left, a paragraph block beneath the title, a large supporting image anchored on the right side of the slide.";
 
 export const Schema = z.object({
   title: z.string().min(3).max(12).default("Introduction").meta({
-    description: "Slide title shown at the top-left.",
+    description: "Title/heading of the slide",
   }),
   body: z.string().max(250).default(
     "Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut alut enim ad minima veniam, quis. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut alut enim ad minima veniam, quis"
@@ -16,9 +16,10 @@ export const Schema = z.object({
     description: "Primary paragraph shown under the title.",
   }),
   bullets: z
-    .array(z.string().max(35))
-
+    .array(z.string().max(100))
+    .min(0)
     .max(4)
+    .optional()
     .default([
       "Ut enim ad minima veniam, quis nostrum",
       "Exercitationem ullam corporis suscipit",
@@ -26,7 +27,7 @@ export const Schema = z.object({
       "exercitationem ullam corporis suscipit",
     ])
     .meta({
-      description: "Bullet list shown in the lower-left area.",
+      description: "Optional bullet list shown after the description if required.",
     }),
   featureImage: z.object({
     __image_url__: z.string(),

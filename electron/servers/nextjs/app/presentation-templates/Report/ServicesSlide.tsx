@@ -13,21 +13,21 @@ const ServiceItemSchema = z.object({
   }).meta({
     description: "Icon used for service circles.",
   }),
-  heading: z.string().min(3).max(18).meta({
+  heading: z.string().min(3).max(30).meta({
     description: "Heading shown below the service icon.",
   }),
-  description: z.string().min(20).max(50).meta({
+  description: z.string().min(20).max(60).meta({
     description: "Supporting description below the service heading.",
   }),
 });
 
-export const slideLayoutId = "services-slide";
-export const slideLayoutName = "Services Slide";
+export const slideLayoutId = "title-workflow-with-title-description-slide";
+export const slideLayoutName = "Title Workflow with Title Description Slide";
 export const slideLayoutDescription =
-  "A slide with a title and a three-step horizontal service flow. Each step contains a circular icon area, a heading, and a description placed underneath. Directional connectors between the circles indicate sequence, and the activeIndex field determines which step is emphasized.";
+  "A slide with a title and a horizontal flow. Each step contains a circular icon area, a heading, and a description placed underneath. Directional connectors between the circles indicate sequence, and the activeIndex field determines which step is emphasized.";
 
 export const Schema = z.object({
-  title: z.string().min(3).max(12).default("Services").meta({
+  title: z.string().min(3).max(50).default("Services").meta({
     description: "Slide title shown at the top-left.",
   }),
 
@@ -36,7 +36,7 @@ export const Schema = z.object({
   }),
   items: z
     .array(ServiceItemSchema)
-    .min(3)
+    .min(1)
     .max(5)
     .default([
       {

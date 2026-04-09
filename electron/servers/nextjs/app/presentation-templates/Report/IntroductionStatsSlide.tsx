@@ -5,10 +5,10 @@ const MetricSchema = z.object({
   value: z.string().min(1).max(6).meta({
     description: "Primary metric value shown in the card.",
   }),
-  label: z.string().min(3).max(10).optional().meta({
+  label: z.string().min(0).max(10).optional().meta({
     description: "Short metric label shown below the value.",
   }),
-  description: z.string().min(6).max(20).optional().meta({
+  description: z.string().min(0).max(20).optional().meta({
     description: "Supporting text shown below the label.",
   }),
 });
@@ -19,10 +19,10 @@ const StatColumnSchema = z.object({
   }),
 });
 
-export const slideLayoutId = "introduction-stats-slide";
-export const slideLayoutName = "Introduction Stats Slide";
+export const slideLayoutId = "metrics-slide";
+export const slideLayoutName = "Metrics Slide";
 export const slideLayoutDescription =
-  "A slide with a title and explanatory text on the left, a bulleted list underneath the text, and two tall metric cards placed side by side on the right. Each metric card contains two stacked metric blocks.";
+  "A slide with a title and explanatory text on the left, an optional bulleted list underneath the text, and metric cards on the right. Each metric card contains two stacked metric blocks.";
 
 export const Schema = z.object({
   title: z.string().min(3).max(12).default("Introduction").meta({
@@ -34,9 +34,9 @@ export const Schema = z.object({
     description: "Primary paragraph shown below the title.",
   }),
   bullets: z
-    .array(z.string().max(35))
-
+    .array(z.string().max(100))
     .max(4)
+    .optional()
     .default([
       "Ut enim ad minima veniam, quis nostrum",
       "Exercitationem ullam corporis suscipit",
@@ -44,7 +44,7 @@ export const Schema = z.object({
       "exercitationem ullam corporis suscipit",
     ])
     .meta({
-      description: "Bullet list shown in the lower-left area.",
+      description: "Optional bullet list shown after the description if required.",
     }),
   statColumns: z
     .array(StatColumnSchema)

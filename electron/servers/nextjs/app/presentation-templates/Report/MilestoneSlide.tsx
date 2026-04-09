@@ -1,13 +1,13 @@
 import * as z from "zod";
 
 const MilestoneItemSchema = z.object({
-  stepNumber: z.string().min(2).max(4).meta({
+  bulletNumber: z.string().min(2).max(4).meta({
     description: "Short milestone number such as 01 or 05.",
   }),
-  heading: z.string().min(3).max(10).meta({
+  heading: z.string().min(3).max(30).meta({
     description: "Heading displayed below the milestone marker.",
   }),
-  description: z.string().min(20).max(50).meta({
+  description: z.string().min(10).max(80).meta({
     description: "Supporting milestone description shown under the heading.",
   }),
 });
@@ -26,37 +26,37 @@ export const Schema = z.object({
   }),
   items: z
     .array(MilestoneItemSchema)
-    .min(5)
+    .min(1)
     .max(5)
     .default([
       {
-        stepNumber: "01",
+        bulletNumber: "01",
         heading: "Heading",
         description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
       },
       {
-        stepNumber: "02",
+        bulletNumber: "02",
         heading: "Heading",
         description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
       },
       {
-        stepNumber: "03",
+        bulletNumber: "03",
         heading: "Heading",
         description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
       },
       {
-        stepNumber: "04",
+        bulletNumber: "04",
         heading: "Heading",
         description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
       },
       {
-        stepNumber: "05",
+        bulletNumber: "05",
         heading: "Heading",
         description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
       },
     ])
     .meta({
-      description: "Five milestone entries rendered across the slide.",
+      description: "Bullet with title and description.",
     }),
 });
 
@@ -110,7 +110,7 @@ const MilestoneSlide = ({ data }: { data: Partial<SchemaType> }) => {
                     className={`${isActive ? "text-white" : "text-[#157CFF]"} text-[42px] font-medium tracking-[0.18em]`}
                     style={{ color: isActive ? "var(--primary-text,#ffffff)" : "var(--primary-color,#157CFF)" }}
                   >
-                    {item.stepNumber}
+                    {item.bulletNumber}
                   </span>
 
                 </div>
@@ -130,8 +130,6 @@ const MilestoneSlide = ({ data }: { data: Partial<SchemaType> }) => {
             );
           })}
         </div>
-
-
       </div>
     </div>
   );
