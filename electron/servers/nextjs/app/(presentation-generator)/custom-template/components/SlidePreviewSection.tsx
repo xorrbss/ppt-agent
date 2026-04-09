@@ -9,6 +9,8 @@ import {
     Sparkles
 } from "lucide-react";
 import { SlidePreviewSectionProps } from "../types";
+import { resolveBackendAssetUrl } from '@/utils/api'
+
 
 export const SlidePreviewSection: React.FC<SlidePreviewSectionProps> = ({
     previewData,
@@ -16,7 +18,6 @@ export const SlidePreviewSection: React.FC<SlidePreviewSectionProps> = ({
     isLoading,
 }) => {
     const slideCount = previewData.slide_image_urls?.length || 0;
-
 
     return (
         <div className="my-8 max-w-[1440px] mx-auto">
@@ -48,7 +49,7 @@ export const SlidePreviewSection: React.FC<SlidePreviewSectionProps> = ({
                             className="group relative aspect-video w-full max-w-[1280px] mx-auto rounded-xl overflow-hidden "
                         >
                             <img
-                                src={`${process.env.NEXT_PUBLIC_FAST_API}${url}`}
+                                src={resolveBackendAssetUrl(url)}
                                 alt={`Slide ${index + 1}`}
                                 className="w-full h-full object-cover"
                             />
