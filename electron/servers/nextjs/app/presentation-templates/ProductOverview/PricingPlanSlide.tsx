@@ -10,11 +10,11 @@ const PlanSchema = z.object({
   price: z.string().min(4).max(12).meta({
     description: "Plan price label shown at the top of each card.",
   }),
-  description: z.string().max(20).meta({
+  description: z.string().max(18).meta({
     description: "Short statement describing the plan.",
   }),
   features: z
-    .array(z.string().max(18))
+    .array(z.string().max(14))
 
     .max(4)
     .meta({

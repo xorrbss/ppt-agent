@@ -54,7 +54,7 @@ const BusinessChallengesGridSlide = ({ data }: { data: Partial<SchemaType> }) =>
     <>
       <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap" rel="stylesheet" />
       <div
-        className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px]"
+        className="relative h-[720px] w-[1280px] overflow-hidden rounded-[24px] flex flex-col"
         style={{
           backgroundColor: "var(--background-color,#DAE1DE)",
           fontFamily: "var(--body-font-family,'Bricolage Grotesque')",
@@ -70,7 +70,7 @@ const BusinessChallengesGridSlide = ({ data }: { data: Partial<SchemaType> }) =>
         </div>
 
         <div
-          className="grid  grid-cols-2 justify-between items-center gap-y-[63px] px-[84px] py-[70px] gap-x-[63px]"
+          className="grid  grid-cols-2 justify-between items-center flex-1 gap-y-[63px] px-[84px] py-[70px] gap-x-[63px]"
           style={{ backgroundColor: "var(--primary-color,#15342D)" }}
         >
           {challenges?.map((challenge, index) => (

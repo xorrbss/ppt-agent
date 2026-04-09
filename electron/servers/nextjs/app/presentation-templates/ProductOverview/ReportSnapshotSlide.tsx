@@ -365,7 +365,7 @@ const ReportSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
               {taglineLabel}
             </p>
             <p
-              className="mt-[12px] text-[24px] leading-[1.11] text-[#083F37]/75"
+              className="mt-[12px] text-[24px] mb-5 leading-[1.11] text-[#083F37]/75"
               style={{ color: "var(--background-text,#083F37BF)" }}
             >
               {taglineBody}
@@ -374,7 +374,7 @@ const ReportSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
         </div>
 
         <div
-          className={`absolute bottom-[50px] left-[266px] w-[580px] bg-[#F3F3F3] px-[28px] pb-[18px] pt-[20px] ${activeChartStyle === "mini-bars" ? "h-[308px]" : "h-[350px]"
+          className={`absolute bottom-[40px]  left-[266px] w-[580px] bg-[#F3F3F3] px-[28px] pb-[18px] pt-[20px] ${activeChartStyle === "mini-bars" ? "h-[308px]" : "h-[350px]"
             }`}
           style={{ backgroundColor: "var(--card-color,#F3F3F3)" }}
         >
@@ -660,10 +660,10 @@ const ReportSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
         </div>
 
         <div
-          className={`absolute right-[38px] w-[362px] ${activeChartStyle === "mini-bars" ? "top-[382px]" : "top-[320px]"
+          className={`absolute right-[38px] bottom-[40px] w-[362px] ${activeChartStyle === "mini-bars" ? "top-[382px]" : "top-[320px]"
             }`}
         >
-          <div className="flex flex-col gap-[24px]">
+          <div className="flex flex-col justify-end items-end gap-[24px]">
             {visibleMetricCards.map((metric, index) => (
               <div
                 key={`${metric.value}-${index}`}

@@ -150,7 +150,7 @@ const ComparisonChartSlide = ({ data }: { data: Partial<SchemaType> }) => {
             {columns?.map((column, index) => (
               <div
                 key={index}
-                className="flex h-[94px] items-center justify-center border-r text-[20px] font-semibold uppercase tracking-[0.2em]"
+                className="flex h-[94px] items-center px-[33px] justify-center border-r text-[20px] font-semibold uppercase tracking-[0.2em]"
                 style={{
                   backgroundColor:
                     index === 3
@@ -183,7 +183,7 @@ const ComparisonChartSlide = ({ data }: { data: Partial<SchemaType> }) => {
                 style={{ borderColor: "var(--stroke,#c5cccb)" }}
               >
                 <div
-                  className="flex h-[94px] items-center border-r pl-[34px] text-[20px] font-semibold uppercase tracking-[0.2em]"
+                  className="flex  items-center border-r pl-[34px] text-[20px] font-semibold uppercase tracking-[0.2em]"
                   style={{
                     backgroundColor: "var(--card-color,#ffffff)",
                     borderColor: "var(--stroke,#c5cccb)",
@@ -196,7 +196,7 @@ const ComparisonChartSlide = ({ data }: { data: Partial<SchemaType> }) => {
                 {cells?.map((status, cellIndex) => (
                   <div
                     key={cellIndex}
-                    className="flex h-[94px] items-center justify-center border-r"
+                    className="flex  p-[33px] items-center justify-center border-r"
                     style={{
                       backgroundColor: "var(--card-color,#ffffff)",
                       borderColor: "var(--stroke,#c5cccb)",

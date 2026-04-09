@@ -32,7 +32,7 @@ export const Schema = z.object({
   }),
   sections: z
     .array(SectionSchema)
-    .min(6)
+
     .max(6)
     .default([
       { title: "SECTION TITLE", number: "01", description: "Lorem ipsum dolor sit." },
@@ -64,7 +64,7 @@ const TableOfContentSlide = ({ data }: { data: Partial<SchemaType> }) => {
       >
         <div className="grid h-full grid-cols-[1fr_1fr]">
           <div className="px-[128px] pt-[69px]" style={{ backgroundColor: PRODUCT_DARK }}>
-            <div className="space-y-[52px]">
+            <div className="space-y-[40px]">
               {sections?.map((section, index) => (
                 <div key={index} className="flex items-center justify-between">
                   <div>
@@ -75,12 +75,12 @@ const TableOfContentSlide = ({ data }: { data: Partial<SchemaType> }) => {
                     >
                       {section.title}
                     </p>
-                    <p
+                    {section.description && <p
                       className="mt-[6px] text-[18px] leading-[1.2] text-[#ecf2f1]"
                       style={{ color: "var(--primary-text,#ecf2f1)" }}
                     >
                       {section.description}
-                    </p>
+                    </p>}
                   </div>
                   <p
                     className="text-[22px] font-medium text-[#ecf2f1]"

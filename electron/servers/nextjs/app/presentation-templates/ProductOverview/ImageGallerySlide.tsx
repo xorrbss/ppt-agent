@@ -104,7 +104,7 @@ const ImageGallerySlide = ({ data }: { data: Partial<SchemaType> }) => {
               {title}
             </h2>
             <p
-              className="mt-[24px] w-[620px] text-[24px] font-normal  text-[#15342DCC]"
+              className="mt-[24px] w-[584px] text-[24px] font-normal  text-[#15342DCC]"
               style={{ color: "var(--background-text,#15342DCC)" }}
             >
               {description}
@@ -134,12 +134,12 @@ const ImageGallerySlide = ({ data }: { data: Partial<SchemaType> }) => {
           <img
             src={bottomCenterImage?.__image_url__}
             alt={bottomCenterImage?.__image_prompt__}
-            className="h-[290px] w-[270px] object-cover"
+            className="h-[294px] w-[270px] object-cover"
           />
           <img
             src={bottomRightImage?.__image_url__}
             alt={bottomRightImage?.__image_prompt__}
-            className="h-[290px] w-[270px] object-cover"
+            className="h-[294px] w-[270px] object-cover"
           />
         </div>
       </div>

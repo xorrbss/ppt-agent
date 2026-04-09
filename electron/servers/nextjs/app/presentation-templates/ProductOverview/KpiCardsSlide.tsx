@@ -8,10 +8,10 @@ export const slideLayoutDescription =
 
 const KpiSchema = z.object({
   value: z.string().max(5).meta({
-    description: "Primary KPI value shown in a card.",
+    description: "Primary KPI value shown in a card. Should be less than 5 characters.",
   }),
-  body: z.string().max(20).meta({
-    description: "Short KPI supporting text.",
+  body: z.string().max(16).meta({
+    description: "Short KPI supporting text. Should be less than 16 characters.",
   }),
 });
 
