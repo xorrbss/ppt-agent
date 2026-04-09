@@ -407,7 +407,7 @@ async def update_presentation(
         presentation_update_dict["n_slides"] = n_slides
     if title:
         presentation_update_dict["title"] = title
-    if theme:
+    if theme or theme is None:
         presentation_update_dict["theme"] = theme
 
     if presentation_update_dict:
