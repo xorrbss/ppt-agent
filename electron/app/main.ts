@@ -65,7 +65,8 @@ const createWindow = () => {
   win = new BrowserWindow({
     width: 1280,
     height: 720,
-    show: false, // Shown after LibreOffice check so "Skip" doesn't quit the app
+    show: false, // Reveal once the launch screen has painted to avoid a blank flash.
+    backgroundColor: "#f3f5ff",
     icon: path.join(baseDir, "resources/ui/assets/images/presenton_short_filled.png"),
     webPreferences: {
       webSecurity: false,
@@ -81,6 +82,14 @@ const createWindow = () => {
       return { action: "deny" };
     }
     return { action: "allow" };
+  });
+
+  win.once("ready-to-show", () => {
+    if (!win || win.isDestroyed()) {
+      return;
+    }
+    win.show();
+    win.focus();
   });
 };
 
@@ -233,7 +242,7 @@ app.whenReady().then(async () => {
   startupStatus.puppeteer = chromeOk ? "installed" : "missing";
   startupStatus.imagemagick = imageMagickOk ? "installed" : "missing";
 
-  // Show and focus main window
+  // Ensure the launch screen stays visible and focused during the server boot.
   win?.show();
   win?.focus();
 
