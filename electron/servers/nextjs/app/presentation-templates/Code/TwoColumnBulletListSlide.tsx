@@ -26,9 +26,6 @@ export const Schema = z.object({
     .meta({
       description: "Eight use-case items shown in two columns.",
     }),
-  pageLabel: z.string().min(3).max(8).optional().default("7 / 11").meta({
-    description: "Bottom pagination label.",
-  }),
 });
 
 export type SchemaType = z.infer<typeof Schema>;
@@ -73,18 +70,6 @@ const CodeSlide07UseCaseList = ({ data }: { data: Partial<SchemaType> }) => {
               <p className="text-[18px]" style={{ color: "var(--background-text,#d5dcff)" }}>{item}</p>
             </div>
           ))}
-        </div>
-
-
-        <div
-          className="absolute bottom-[26px] left-1/2 -translate-x-1/2 rounded-full border px-[22px] py-[8px] text-[14px]"
-          style={{
-            borderColor: "var(--stroke,#31415880)",
-            backgroundColor: "var(--card-color,#1D293DCC)",
-            color: "var(--background-text,#CAD5E2)",
-          }}
-        >
-          {data.pageLabel}
         </div>
       </div>
     </>

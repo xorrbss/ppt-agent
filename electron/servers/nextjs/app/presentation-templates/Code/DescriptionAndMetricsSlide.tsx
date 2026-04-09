@@ -41,14 +41,11 @@ export const Schema = z.object({
       { value: "50k+", label: "Active Users", subtext: "Last 12 months" },
       { value: "50k+", label: "Active Users", subtext: "Last 12 months" },
       { value: "50k+", label: "Active Users", subtext: "Last 12 months" },
-      { value: "50k+", label: "Active Users", subtext: "Last 12 months" }
+
     ])
     .meta({
       description: "Metric cards shown in the right column.",
     }),
-  pageLabel: z.string().min(3).max(8).optional().default("10 / 11").meta({
-    description: "Bottom pagination label.",
-  }),
 });
 
 export type SchemaType = z.infer<typeof Schema>;
@@ -70,17 +67,17 @@ const CodeSlide10MetricsSplit = ({ data }: { data: Partial<SchemaType> }) => {
 
 
         <h2 className="text-[64px] font-medium tracking-[-0.03em]" style={{ color: "var(--background-text,#f2f4ff)" }}>{data.title}</h2>
-        <div className="relative z-10 flex gap-10 ">
+        <div className="relative z-10 flex min-h-[520px] gap-10">
           <div className="w-1/2">
             <h3 className="mt-[28px] text-[24px] font-medium" style={{ color: "var(--background-text,#f1f4ff)" }}>{data.explanationTitle}</h3>
             <p className="mt-[16px] text-[22px] leading-[145%]" style={{ color: "var(--background-text,#d2d9ff)" }}>{data.explanation}</p>
           </div>
 
-          <div className="flex flex-col justify-center items-end gap-[25px] w-1/2">
+          <div className="grid w-1/2 grid-cols-2 auto-rows-max place-content-center justify-items-center gap-x-[16px] gap-y-[25px]">
             {data?.metrics?.map((metric, index) => (
               <div
                 key={`metric-grid-${index}`}
-                className="rounded-[16px] w-[310px] border pt-[26px] px-[26px] pb-[16px] text-center"
+                className="rounded-[16px] w-[280px] border pt-[26px] px-[26px] pb-[16px] text-center"
                 style={{
                   borderColor: "var(--stroke,#1D293D80)",
                   backgroundColor: "var(--card-color,#0F172B80)",
@@ -92,17 +89,6 @@ const CodeSlide10MetricsSplit = ({ data }: { data: Partial<SchemaType> }) => {
               </div>
             ))}
           </div>
-        </div>
-
-        <div
-          className="absolute bottom-[26px] left-1/2 -translate-x-1/2 rounded-full border px-[22px] py-[8px] text-[14px]"
-          style={{
-            borderColor: "var(--stroke,#31415880)",
-            backgroundColor: "var(--card-color,#1D293DCC)",
-            color: "var(--background-text,#CAD5E2)",
-          }}
-        >
-          {data?.pageLabel}
         </div>
       </div>
     </>

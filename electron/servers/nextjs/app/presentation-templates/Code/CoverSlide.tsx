@@ -22,9 +22,6 @@ export const Schema = z.object({
     .meta({
       description: "Supporting subtitle shown under the heading.",
     }),
-  pageLabel: z.string().min(3).max(8).optional().default("1 / 11").meta({
-    description: "",
-  }),
 });
 
 export type SchemaType = z.infer<typeof Schema>;
@@ -46,17 +43,6 @@ const CodeSlide01RoadmapCover = ({ data }: { data: Partial<SchemaType> }) => {
           {data.title}
         </h2>
         <p className="mt-[35px] text-[26px] leading-[132%]" style={{ color: "var(--background-text,#d8ddff)" }}>{data.subtitle}</p>
-      </div>
-
-      <div
-        className="absolute bottom-[26px] left-1/2 -translate-x-1/2 rounded-full border px-[22px] py-[8px] text-[14px]"
-        style={{
-          borderColor: "var(--stroke,#31415880)",
-          backgroundColor: "var(--card-color,#1D293DCC)",
-          color: "var(--background-text,#CAD5E2)",
-        }}
-      >
-        {data.pageLabel}
       </div>
     </div>
   </>

@@ -22,9 +22,6 @@ export const Schema = z.object({
     .meta({
       description: "Long-form explanation body.",
     }),
-  pageLabel: z.string().min(3).max(8).optional().default("8 / 11").meta({
-    description: "Bottom pagination label.",
-  }),
 });
 
 export type SchemaType = z.infer<typeof Schema>;
@@ -47,17 +44,6 @@ const CodeSlide08CodeExplanationText = ({ data }: { data: Partial<SchemaType> })
         <div className="relative z-10 h-full max-w-[560px]">
           <h3 className="mt-[34px] text-[24px] font-medium" style={{ color: "var(--background-text,#f1f4ff)" }}>{data.descriptionTitle}</h3>
           <p className="mt-[16px] text-[22px] leading-[145%]" style={{ color: "var(--background-text,#d2d9ff)" }}>{data.description}</p>
-        </div>
-
-        <div
-          className="absolute bottom-[26px] left-1/2 -translate-x-1/2 rounded-full border px-[22px] py-[8px] text-[14px]"
-          style={{
-            borderColor: "var(--stroke,#31415880)",
-            backgroundColor: "var(--card-color,#1D293DCC)",
-            color: "var(--background-text,#CAD5E2)",
-          }}
-        >
-          {data.pageLabel}
         </div>
       </div>
     </>

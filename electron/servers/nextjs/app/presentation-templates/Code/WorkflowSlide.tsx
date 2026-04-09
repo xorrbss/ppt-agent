@@ -71,9 +71,6 @@ export const Schema = z.object({
     .meta({
       description: "Workflow steps shown in sequence.",
     }),
-  pageLabel: z.string().min(3).max(8).optional().default("6 / 11").meta({
-    description: "Bottom pagination label.",
-  }),
 });
 
 export type SchemaType = z.infer<typeof Schema>;
@@ -129,17 +126,6 @@ const CodeSlide06Workflow = ({ data }: { data: Partial<SchemaType> }) => {
             </Fragment>
           ))}
 
-        </div>
-
-        <div
-          className="absolute bottom-[26px] left-1/2 -translate-x-1/2 rounded-full border px-[22px] py-[8px] text-[14px]"
-          style={{
-            borderColor: "var(--stroke,#31415880)",
-            backgroundColor: "var(--card-color,#1D293DCC)",
-            color: "var(--background-text,#CAD5E2)",
-          }}
-        >
-          {data.pageLabel}
         </div>
       </div>
     </>
