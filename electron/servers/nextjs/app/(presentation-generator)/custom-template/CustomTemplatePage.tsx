@@ -103,7 +103,7 @@ const CustomTemplatePage = () => {
     ): Promise<string | null> => {
         const id = await saveLayout(layoutName, description, template_info_id);
         if (id) {
-            router.push(`/template-preview?id=custom-${id}`);
+            router.push(`/template-preview?slug=custom-${id}`);
         }
         return id;
     }, [saveLayout, router]);
