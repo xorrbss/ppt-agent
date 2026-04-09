@@ -1,18 +1,26 @@
 import * as z from "zod";
 
 export const Schema = z.object({
-  title: z.string().min(1).max(12).default("Company's "),
-  subtitle: z.string().min(1).max(15).default("Report"),
-  name: z.string().min(1).max(10).default("John Doe"),
-  position: z.string().min(1).max(20).default("Company Name | Strategy, Content, growth"),
+  titleFirstLine: z.string().min(1).max(12).default("Company's ").meta({
+    description: "First half of title or heading",
+  }),
+  titleSecondLine: z.string().min(1).max(12).default("Annual Report").meta({
+    description: "Second half of title or heading",
+  }),
+  name: z.string().min(1).max(10).optional().default("John Doe").meta({
+    description: "Name of the presenter/individual/company/organization.",
+  }),
+  position: z.string().min(1).max(20).default("Company Name | Strategy, Content, growth").meta({
+    description: "Position or role of the presenter or address of the company/organization.",
+  }),
 })
 export type SchemaType = z.infer<typeof Schema>;
 export const slideLayoutId = "intro-slide";
-export const slideLayoutName = "Intro Slide";
+export const slideLayoutName = "Intro/Cover Slide";
 export const slideLayoutDescription =
-  "A report cover slide with decorative corner accents, a centered two-line title section, a divider directly beneath the title, and a presenter information block below the divider containing a name line and a supporting role or company line.";
+  "A cover/intro slide with a two-line title section, a divider directly beneath the title, and a presenter information block below the divider containing a name line and a supporting role or company line.";
 const IntroSlide = ({ data }: { data: Partial<SchemaType> }) => {
-  const { title, subtitle, name, position } = data;
+  const { titleFirstLine, titleSecondLine, name, position } = data;
 
   return (
     <div
@@ -36,13 +44,13 @@ const IntroSlide = ({ data }: { data: Partial<SchemaType> }) => {
           className="text-[#232223] text-[133px] italic text-center font-bold capitalize tracking-[-2.8px]"
           style={{ color: "var(--background-text,#232223)" }}
         >
-          {title}
+          {titleFirstLine}
         </h1>
         <p
           className="text-[#232223] text-[93px]  text-center font-medium capitalize tracking-[-2.8px]"
           style={{ color: "var(--background-text,#232223)" }}
         >
-          {subtitle}
+          {titleSecondLine}
         </p>
       </div>
       <div

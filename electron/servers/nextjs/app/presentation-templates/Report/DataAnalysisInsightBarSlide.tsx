@@ -6,14 +6,14 @@ import { ResponsiveContainer } from "recharts";
 
 import { FlexibleReportChart, flexibleChartDataSchema } from "./flexibleReportChart";
 
-export const slideLayoutId = "data-analysis-insight-bar-slide";
-export const slideLayoutName = "Data Analysis Insight Bar Slide";
+export const slideLayoutId = "title-description-chart-slide";
+export const slideLayoutName = "Title Description Chart Slide";
 export const slideLayoutDescription =
-  "A slide with a title at the top, a single featured insight block on the left containing an icon badge and a paragraph, and a chart on the right with a legend below it.";
+  "A slide with a title at the top, description text in left and chart in the right.";
 
 
 export const Schema = z.object({
-  title: z.string().min(3).max(12).default("Data Analysis").meta({
+  title: z.string().min(3).max(80).default("Data Analysis").meta({
     description: "Slide title shown at the top-left.",
   }),
   insightIcon: z
@@ -32,13 +32,13 @@ export const Schema = z.object({
     }),
   insightBody: z
     .string()
-    .min(80)
+    .min(30)
     .max(320)
     .default(
       "Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut alut enim ad minima veniam, quis. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut alut enim ad minima veniam, quis"
     )
     .meta({
-      description: "Featured insight paragraph shown in the left content area.",
+      description: "Description text shown in the left content area.",
     }),
   chartData: flexibleChartDataSchema.default({
     type: "line-dual",

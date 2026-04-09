@@ -19,18 +19,18 @@ const MetricSchema = z.object({
 });
 
 const StatColumnSchema = z.object({
-  metrics: z.array(MetricSchema).min(2).max(2).meta({
+  metrics: z.array(MetricSchema).min(0).max(2).meta({
     description: "Two stacked metrics shown in one stat card.",
   }),
 });
 
-export const slideLayoutId = "data-analysis-line-stats-slide";
-export const slideLayoutName = "Data Analysis Line Stats Slide";
+export const slideLayoutId = "title-chart-metrics-cards-slide";
+export const slideLayoutName = "Title Chart with Metrics Cards Slide";
 export const slideLayoutDescription =
-  "A slide with a title at the top, a two-series line chart in the left content area, and two tall metric cards arranged side by side on the right. Each metric card contains two stacked metric blocks.";
+  "A slide with a title at the top, chart in the left content area, and optional metric cards arranged side by side on the right.";
 
 export const Schema = z.object({
-  title: z.string().min(3).max(12).default("Data Analysis").meta({
+  title: z.string().min(3).max(80).default("Data Analysis").meta({
     description: "Slide title shown at the top-left.",
   }),
   seriesALabel: z.string().min(3).max(20).default("Category A").meta({
@@ -56,7 +56,7 @@ export const Schema = z.object({
   }),
   statColumns: z
     .array(StatColumnSchema)
-    .min(2)
+    .min(1)
     .max(2)
     .default([
       {
@@ -73,7 +73,7 @@ export const Schema = z.object({
       },
     ])
     .meta({
-      description: "Two stat cards shown on the right side of the slide.",
+      description: "Stat/metric cards shown on the right side of the slide.",
     }),
 });
 

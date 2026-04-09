@@ -2,11 +2,11 @@ import * as z from "zod";
 
 
 const MemberSchema = z.object({
-  title: z.string().min(2).max(12).meta({
-    description: "Short role or title shown above the member name.",
+  subtext: z.string().min(2).max(40).meta({
+    description: "Subtext for the image.",
   }),
-  name: z.string().min(2).max(20).meta({
-    description: "Member name shown at the bottom of the card.",
+  title: z.string().min(2).max(40).meta({
+    description: "Title/name/subject for the image",
   }),
   image: z.object({
     __image_url__: z.string().default("https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/images/placeholder.jpg"),
@@ -17,10 +17,10 @@ const MemberSchema = z.object({
   }),
 });
 
-export const slideLayoutId = "team-slide";
-export const slideLayoutName = "Team Slide";
+export const slideLayoutId = "horizontal-height-spanning-images-with-title-slide";
+export const slideLayoutName = "Horizontal Height Spanning Images with Title Slide";
 export const slideLayoutDescription =
-  "A team slide made of five vertical portrait cards placed side by side from edge to edge. Each card uses a full-height image background with a content overlay at the bottom containing a short title line and a larger name line.";
+  "A slide of portrait cards placed side by side from edge to edge. Each card uses a full-height image background with a content overlay at the bottom containing a short subtext line and a larger title line.";
 
 export const Schema = z.object({
   members: z
@@ -29,40 +29,40 @@ export const Schema = z.object({
     .max(5)
     .default([
       {
-        title: "Title",
-        name: "Lanny LA",
+        subtext: "Title",
+        title: "Lanny LA",
         image: {
           __image_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/images/placeholder.jpg",
           __image_prompt__: "Professional portrait of a male team member",
         },
       },
       {
-        title: "Title",
-        name: "Lanny LA",
+        subtext: "Title",
+        title: "Lanny LA",
         image: {
           __image_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/images/placeholder.jpg",
           __image_prompt__: "Professional portrait of a female team member",
         },
       },
       {
-        title: "Title",
-        name: "Lanny LA",
+        subtext: "Title",
+        title: "Lanny LA",
         image: {
           __image_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/images/placeholder.jpg",
           __image_prompt__: "Professional portrait of a business manager",
         },
       },
       {
-        title: "Title",
-        name: "Lanny LA",
+        subtext: "Title",
+        title: "Lanny LA",
         image: {
           __image_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/images/placeholder.jpg",
           __image_prompt__: "Professional portrait of a senior employee",
         },
       },
       {
-        title: "Title",
-        name: "Lanny LA",
+        subtext: "Title",
+        title: "Lanny LA",
         image: {
           __image_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/images/placeholder.jpg",
           __image_prompt__: "Professional portrait of a young executive",
@@ -70,7 +70,7 @@ export const Schema = z.object({
       },
     ])
     .meta({
-      description: "Five team members rendered as portrait cards.",
+      description: "List of team members shown as portrait cards. Each member contains a title, subtext, and image.",
     }),
 });
 

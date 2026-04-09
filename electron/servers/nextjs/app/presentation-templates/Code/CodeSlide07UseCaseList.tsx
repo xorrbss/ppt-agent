@@ -1,17 +1,17 @@
 import * as z from "zod";
 
-export const slideLayoutId = "code-use-case-list-slide";
-export const slideLayoutName = "Code Use Case List Slide";
+export const slideLayoutId = "bullet-list-slide";
+export const slideLayoutName = "Two Column Bullet List Slide";
 export const slideLayoutDescription =
-  "A two-column numbered use-case list with eight compact items.";
+  "A two-column numbered string list with items.";
 
 export const Schema = z.object({
   title: z.string().min(6).max(30).default("Usecase").meta({
     description: "Slide title shown above the numbered list.",
   }),
   items: z
-    .array(z.string().min(4).max(8))
-    .min(4)
+    .array(z.string().min(1).max(200))
+    .min(1)
     .max(8)
     .default([
       "Use pre-built component library for UI consistency",
@@ -26,7 +26,7 @@ export const Schema = z.object({
     .meta({
       description: "Eight use-case items shown in two columns.",
     }),
-  pageLabel: z.string().min(3).max(8).default("7 / 11").meta({
+  pageLabel: z.string().min(3).max(8).optional().default("7 / 11").meta({
     description: "Bottom pagination label.",
   }),
 });

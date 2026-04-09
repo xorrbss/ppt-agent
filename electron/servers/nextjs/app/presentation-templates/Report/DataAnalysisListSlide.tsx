@@ -10,10 +10,10 @@ const AnalysisItemSchema = z.object({
   }),
 });
 
-export const slideLayoutId = "data-analysis-list-slide";
-export const slideLayoutName = "Data Analysis List Slide";
+export const slideLayoutId = "bullet-list-with-icon-title-description-slide";
+export const slideLayoutName = "Bullet List with Icon Title Description Slide";
 export const slideLayoutDescription =
-  "A slide with a title at the top and a two-column list of analysis points underneath. Each point contains a small circular icon badge, a short title on the same row, and a supporting description directly below.";
+  "A slide with a title at the top and a two-column list of bullets points underneath. Each point contains a small circular icon badge, a short title on the same row, and a supporting description directly below.";
 
 export const Schema = z.object({
   title: z.string().min(3).max(12).default("Data Analysis").meta({
@@ -42,7 +42,7 @@ export const Schema = z.object({
       { title: "Title 5", description: "Ut enim ad minima veniam, quis." },
     ])
     .meta({
-      description: "Six analysis items distributed across two columns.",
+      description: "List of points contains a title and description.",
     }),
 });
 

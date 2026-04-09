@@ -15,10 +15,10 @@ const ComparisonRowSchema = z.object({
   }),
 });
 
-export const slideLayoutId = "code-comparison-table-slide";
-export const slideLayoutName = "Code Comparison Table Slide";
+export const slideLayoutId = "table-slide";
+export const slideLayoutName = "Table Slide";
 export const slideLayoutDescription =
-  "A framework comparison table with feature rows and highlighted compatibility marks.";
+  "A slide with title and a table.";
 
 export const Schema = z.object({
   title: z.string().min(6).max(18).default("Comparison").meta({
@@ -29,7 +29,7 @@ export const Schema = z.object({
   }).default(["Feature", "Column 1", "Column 2", "Column 3"]),
   rows: z
     .array(ComparisonRowSchema)
-    .min(6)
+    .min(1)
     .max(6)
     .default([
       { feature: "Component-based", column1: "check", column2: "check", column3: "check" },
@@ -42,7 +42,7 @@ export const Schema = z.object({
     .meta({
       description: "Six comparison rows shown in the table.",
     }),
-  pageLabel: z.string().min(3).max(8).default("5 / 11").meta({
+  pageLabel: z.string().min(3).max(8).optional().default("5 / 11").meta({
     description: "Bottom pagination label.",
   }),
 });

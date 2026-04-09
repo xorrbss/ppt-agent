@@ -7,21 +7,21 @@ import { ResponsiveContainer } from "recharts";
 import { FlexibleReportChart, flexibleChartDataSchema } from "./flexibleReportChart";
 
 const InsightItemSchema = z.object({
-  title: z.string().min(3).max(12).meta({
-    description: "Short insight title shown next to the icon.",
+  title: z.string().min(3).max(80).meta({
+    description: "Bullet point title shown next to the icon.",
   }),
-  description: z.string().min(20).max(40).meta({
-    description: "Supporting text shown below the insight title.",
+  description: z.string().min(20).max(120).meta({
+    description: "Bullet point description shown below the title.",
   }),
 });
 
-export const slideLayoutId = "data-analysis-bar-slide";
-export const slideLayoutName = "Data Analysis Bar Slide";
+export const slideLayoutId = "bar-chart-with-bullet-list-title-description-icon-slide";
+export const slideLayoutName = "Bar Chart with Bullet List with Title Description Icon Slide";
 export const slideLayoutDescription =
-  "A slide with a title at the top, a vertical list of three analysis points on the left, and a bar chart on the right. Each analysis point contains a small icon badge, a short title, and a supporting description.";
+  "A slide with a title at the top, a vertical list of three bullet points with icon, title and description on the left, and a bar chart on the right.";
 
 export const Schema = z.object({
-  title: z.string().min(3).max(28).default("Data Analysis").meta({
+  title: z.string().min(3).max(80).default("Data Analysis").meta({
     description: "Slide title shown at the top-left.",
   }),
   itemIcon: z
@@ -40,7 +40,7 @@ export const Schema = z.object({
     }),
   items: z
     .array(InsightItemSchema)
-
+    .min(1)
     .max(3)
     .default([
       { title: "Title 1", description: "Ut enim ad minima veniam, quis." },
@@ -63,7 +63,7 @@ export const Schema = z.object({
     ],
 
   }),
-  legendLabel: z.string().min(3).max(32).default("Traditional Workflow").meta({
+  legendLabel: z.string().min(3).max(50).default("Traditional Workflow").meta({
     description: "Legend label shown below the chart.",
   }),
 });

@@ -4,16 +4,22 @@ import * as z from "zod";
 export const slideLayoutId = "code-explanation-split-slide";
 export const slideLayoutName = "Code Explanation Split Slide";
 export const slideLayoutDescription =
-  "A two-column slide with a code panel on the left and descriptive explanation on the right.";
+  "A two-column slide with a code panel on the left and description on the right.";
 
 export const Schema = z.object({
   title: z.string().min(8).max(24).default("Code + Explanation").meta({
     description: "Slide heading shown at the top-left.",
   }),
   codeSnippet: z.object({
-    language: z.string().min(2).max(10),
-    fileName: z.string().min(3).max(30),
-    content: z.string().min(20).max(520),
+    language: z.string().min(2).max(10).meta({
+      description: "Programming language of the snippet",
+    }),
+    fileName: z.string().min(3).max(30).meta({
+      description: "File name label shown above the code snippet.",
+    }),
+    content: z.string().min(20).max(520).meta({
+      description: "The actual code content to be displayed.",
+    }),
   }).default({
     language: "tsx",
     fileName: "components/UserAuth.tsx",
@@ -37,10 +43,10 @@ export function UserAuth() {
   }).meta({
     description: "Code sample shown in the left panel.",
   }),
-  explanationTitle: z.string().min(4).max(20).default("Explanation").meta({
-    description: "Heading shown above the explanatory paragraph.",
+  descriptionTitle: z.string().min(4).max(20).default("Description").meta({
+    description: "Heading shown above the paragraph.",
   }),
-  explanation: z
+  description: z
     .string()
     .min(40)
     .max(360)
@@ -48,9 +54,9 @@ export function UserAuth() {
       "This component manages credentials as local state and submits them through an async handler. The login utility abstracts network details while the handler keeps the UI flow predictable. Keep validation and side effects isolated so changes remain safe when authentication requirements evolve. "
     )
     .meta({
-      description: "Explanation paragraph shown in the right column.",
+      description: "Description paragraph shown in the right column.",
     }),
-  pageLabel: z.string().min(3).max(8).default("2 / 11").meta({
+  pageLabel: z.string().min(3).max(8).optional().default("2 / 11").meta({
     description: "Bottom pagination label.",
   }),
 });
@@ -104,9 +110,9 @@ const CodeSlide02CodeExplanationSplit = ({
             </div>
 
             <div className=" ">
-              <h3 className="text-[24px] font-medium" style={{ color: "var(--background-text,#f1f4ff)" }}>{data.explanationTitle}</h3>
+              <h3 className="text-[24px] font-medium" style={{ color: "var(--background-text,#f1f4ff)" }}>{data.descriptionTitle}</h3>
               <p className="mt-[18px] text-[22px] leading-[145%]" style={{ color: "var(--background-text,#d2d9ff)" }}>
-                {data.explanation}
+                {data.description}
               </p>
             </div>
           </div>

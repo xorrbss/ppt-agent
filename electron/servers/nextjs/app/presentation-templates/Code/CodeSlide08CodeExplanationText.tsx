@@ -1,18 +1,18 @@
 import * as z from "zod";
 
-export const slideLayoutId = "code-explanation-text-slide";
-export const slideLayoutName = "Code Explanation Text Slide";
+export const slideLayoutId = "description-text-slide";
+export const slideLayoutName = "Description Text Slide";
 export const slideLayoutDescription =
-  "A text-only explanation slide with generous whitespace for narrative documentation.";
+  "A text-only description slide tihe title/heading.";
 
 export const Schema = z.object({
   title: z.string().min(8).max(30).default("Code + Explanation").meta({
     description: "Main slide title shown at the top-left.",
   }),
-  explanationTitle: z.string().min(4).max(20).default("Explanation").meta({
+  descriptionTitle: z.string().min(4).max(20).default("Explanation").meta({
     description: "Subheading above the paragraph body.",
   }),
-  explanation: z
+  description: z
     .string()
 
     .max(360)
@@ -22,7 +22,7 @@ export const Schema = z.object({
     .meta({
       description: "Long-form explanation body.",
     }),
-  pageLabel: z.string().min(3).max(8).default("8 / 11").meta({
+  pageLabel: z.string().min(3).max(8).optional().default("8 / 11").meta({
     description: "Bottom pagination label.",
   }),
 });
@@ -45,8 +45,8 @@ const CodeSlide08CodeExplanationText = ({ data }: { data: Partial<SchemaType> })
 
         <h2 className="text-[64px] font-medium" style={{ color: "var(--background-text,#f2f4ff)" }}>{data.title}</h2>
         <div className="relative z-10 h-full max-w-[560px]">
-          <h3 className="mt-[34px] text-[24px] font-medium" style={{ color: "var(--background-text,#f1f4ff)" }}>{data.explanationTitle}</h3>
-          <p className="mt-[16px] text-[22px] leading-[145%]" style={{ color: "var(--background-text,#d2d9ff)" }}>{data.explanation}</p>
+          <h3 className="mt-[34px] text-[24px] font-medium" style={{ color: "var(--background-text,#f1f4ff)" }}>{data.descriptionTitle}</h3>
+          <p className="mt-[16px] text-[22px] leading-[145%]" style={{ color: "var(--background-text,#d2d9ff)" }}>{data.description}</p>
         </div>
 
         <div

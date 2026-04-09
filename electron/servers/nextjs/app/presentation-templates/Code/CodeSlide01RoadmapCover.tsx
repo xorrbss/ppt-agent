@@ -1,16 +1,16 @@
 import * as z from "zod";
 
-export const slideLayoutId = "code-roadmap-cover-slide";
-export const slideLayoutName = "Code Roadmap Cover Slide";
+export const slideLayoutId = "cover-slide";
+export const slideLayoutName = "Cover Slide";
 export const slideLayoutDescription =
-  "A centered opening slide with company name, roadmap title, and supporting subtitle.";
+  "Opening/cover/intro slide with  organization/institution/presenter, presentation title/heading , and supporting subtitle.";
 
 export const Schema = z.object({
-  companyName: z.string().min(2).max(18).default("COMPANY NAME").meta({
-    description: "Organization name shown above the slide title.",
+  companyName: z.string().min(2).max(18).optional().default("COMPANY NAME").meta({
+    description: "Optional organization/institution/presenter name shown above the slide title.",
   }),
   title: z.string().min(8).max(28).default("Development Roadmap").meta({
-    description: "Primary slide heading.",
+    description: "Title/heading of the slide.",
   }),
   subtitle: z
     .string()
@@ -22,8 +22,8 @@ export const Schema = z.object({
     .meta({
       description: "Supporting subtitle shown under the heading.",
     }),
-  pageLabel: z.string().min(3).max(8).default("1 / 11").meta({
-    description: "Bottom pagination label.",
+  pageLabel: z.string().min(3).max(8).optional().default("1 / 11").meta({
+    description: "",
   }),
 });
 
