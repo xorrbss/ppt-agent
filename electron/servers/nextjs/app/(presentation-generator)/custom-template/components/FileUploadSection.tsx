@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from "react";
 import { UploadIcon, ChevronRight, Plus, FileText, X, Coins, Edit3, Info } from "lucide-react";
 import { ProcessedSlide } from "../types";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store/store";
 
 interface FileUploadSectionProps {
   selectedFile: File | null;
@@ -29,13 +31,10 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
   completedSlides,
 }) => {
   const isProcessing = isProcessingPptx || slides.some((s) => s.processing);
-  const [showCreditsDetails, setShowCreditsDetails] = useState(false);
-  const creditsButtonRef = useRef<HTMLButtonElement>(null);
-  const popoverRef = useRef<HTMLDivElement>(null);
-  // Calculate estimated credits
-  const totalSlides = slides.length;
-  const billedSlides = Math.max(totalSlides, 1);
-  const minRequired = billedSlides * COST_PER_SLIDE;
+  const [isAllowed, setIsAllowed] = useState(false);
+
+  const { llm_config } = useSelector((state: RootState) => state.userConfig);
+
 
 
   const handleCheckFonts = () => {
@@ -44,21 +43,15 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
 
   }
 
-
-  // Close popover when clicking outside
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (
-        creditsButtonRef.current && !creditsButtonRef.current.contains(target) &&
-        popoverRef.current && !popoverRef.current.contains(target)
-      ) {
-        setShowCreditsDetails(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+
+
+    if (llm_config?.LLM === 'custom' || llm_config?.LLM === 'ollama') {
+      setIsAllowed(false);
+    } else {
+      setIsAllowed(true);
+    }
+  }, [llm_config]);
 
 
   return (
@@ -106,8 +99,9 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
                     id="file-upload"
                     type="file"
                     accept=".pptx"
+                    disabled={!isAllowed}
                     onChange={handleFileSelect}
-                    className="opacity-0 w-full h-full cursor-pointer absolute top-0 left-0 z-10"
+                    className={`opacity-0 w-full h-full ${!isAllowed ? 'cursor-not-allowed' : 'cursor-pointer'} absolute top-0 left-0 z-10`}
                   />
                   <div className='absolute inset-0 flex flex-col items-center justify-center'>
                     <div className='w-[42px] h-[42px] flex justify-center items-center rounded-full bg-[#EBE9FE]' >
@@ -196,9 +190,10 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
                         style={{
                           borderRadius: '48px',
                           background: 'linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)',
+                          cursor: !isAllowed ? 'not-allowed' : 'pointer',
                         }}
                         onClick={handleCheckFonts}
-                        disabled={isProcessing}
+                        disabled={isProcessing || !isAllowed}
                       >
                         {isProcessingPptx
                           ? "Checking Fonts..."
@@ -237,6 +232,18 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
             <p className="md:text-sm text-[10px] font-normal text-[#3A3A3A] ">5min Generation</p>
           </li>
         </ul>
+
+        <div className="mt-4 px-4 py-3 rounded-lg border border-[#EBE9FE]  flex items-start gap-2 shadow-md">
+          <svg className="mt-0.5 shrink-0" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 20 20" fill="none">
+            <circle cx="10" cy="10" r="10" fill="#EBE9FE" />
+            <path d="M10 6V10M10 14H10.0088" stroke="#5B49A1" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          <p className="text-sm md:text-base font-medium text-[#20165C] tracking-[-0.13px]">
+            <span className="font-bold text-[#5B49A1]">Note:</span> Template generation relies on <span className="font-semibold">vision-capable models</span> and is currently supported only by providers: <span className="font-medium text-[#5246C3]">Google</span>, <span className="font-medium text-[#5246C3]">OpenAI</span>, and <span className="font-medium text-[#5246C3]">Anthropic</span>.
+            For optimal results, use state-of-the-art models from these providers, as performance may degrade with smaller models.
+          </p>
+        </div>
+
       </div>
     </div>
 

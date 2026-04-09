@@ -28,6 +28,7 @@ import Header from "@/app/(presentation-generator)/(dashboard)/dashboard/compone
 
 
 
+
 const CustomTemplatePage = () => {
     const router = useRouter();
 
@@ -76,6 +77,8 @@ const CustomTemplatePage = () => {
      * Step 1: Check fonts in uploaded PPTX
      */
     const handleCheckFonts = useCallback(async () => {
+
+
         if (selectedFile) {
             await checkFonts(selectedFile);
         }

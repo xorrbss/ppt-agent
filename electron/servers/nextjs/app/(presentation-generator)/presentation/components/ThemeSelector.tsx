@@ -27,10 +27,10 @@ const ThemeSelector = ({ current_theme, themes: allThemes }: { current_theme: an
         dispatch(updateTheme(theme));
     };
     const resetTheme = async () => {
+        dispatch(updateTheme({} as any));
         clearPresentationThemeFromElement(
             document.getElementById("presentation-slides-wrapper")
         );
-        dispatch(updateTheme(null));
     };
 
 
