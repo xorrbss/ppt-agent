@@ -1,6 +1,6 @@
 {
   "version": "0.7.1-beta",
-  "message": "Air-gapped privacy, revamped UI, improved stability, model fixes & OCR support. Please check the changelog for more details.",
+  "message": "What's Changed\n\n- feat: add telemetry in electron app & UI improvements by @ShivaRajBadu in #488\n- feat: Providers logs and UI display by @ShivaRajBadu in #489\n- feat: enhance Codex user profile management with username, email, and profile fields by @sudipnext in #490\n- refactor: update UI components in settings & templates by @ShivaRajBadu in #494\n- feat: prompt engineering improvements by @sudipnext in #495\n- feat: enhanced presentation generation and asset handling by @sudipnext in #498\n- refactor: content updates and issue fixes by @ShivaRajBadu in #499\n- feat: better template generation across OpenAI, Google, Anthropic, and Codex by @sauravniraula in #501\n- fix: various issues by @sudipnext in #502\n- refactor: custom template improvements by @ShivaRajBadu in #503\n- refactor: launch screen switched to light theme by @sauravniraula in #504\n- feat: new templates by @ShivaRajBadu in #505",
   "downloads": {
     "linux": "https://github.com/presenton/presenton/releases/download/electron-v0.7.1-beta/Presenton-0.7.1-beta.deb",
     "mac": "https://github.com/presenton/presenton/releases/download/electron-v0.7.1-beta/Presenton-0.7.1-beta.dmg",
