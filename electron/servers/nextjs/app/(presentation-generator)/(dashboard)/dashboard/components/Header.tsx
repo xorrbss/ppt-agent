@@ -28,10 +28,10 @@ const Header = () => {
 
   const backHref = backToUpload ? "/upload" : backToTemplates ? "/templates" : "/dashboard";
   const backLabel = backToUpload
-    ? "Back to upload"
+    ? "Back"
     : backToTemplates
-      ? "Back to templates"
-      : "Go to your dashboard";
+      ? "Back"
+      : "Back";
 
   return (
     <div className="w-full   sticky top-0 z-50 py-7 "

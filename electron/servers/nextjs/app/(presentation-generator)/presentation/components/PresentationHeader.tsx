@@ -307,7 +307,7 @@ const PresentationHeader = ({
       )}
     >
       {isEditingTitle ? (
-        <div className="flex items-stretch gap-0.5 rounded-[14px] border border-[#E4E2EB] bg-white pl-3.5 pr-1 py-1 shadow-[0_2px_12px_rgba(17,3,31,0.06)] ring-2 ring-[#5141e5]/15">
+        <div className="flex items-stretch w-[450px]  gap-0.5 rounded-[14px] border border-[#E4E2EB] bg-white pl-3.5 pr-1 py-1 shadow-[0_2px_12px_rgba(17,3,31,0.06)] ring-2 ring-[#5141e5]/15">
           <input
             ref={titleInputRef}
             value={draftTitle}
@@ -364,7 +364,7 @@ const PresentationHeader = ({
             "disabled:pointer-events-none disabled:opacity-100 disabled:hover:bg-transparent"
           )}
         >
-          <h2 className="min-w-0 flex-1 font-unbounded text-lg leading-snug text-[#101323]">
+          <h2 className="min-w-0 flex-1 font-unbounded text-lg w-[450px] leading-snug text-[#101323]">
             <MarkdownRenderer
               content={presentationData?.title || "Presentation"}
               className="mb-0 min-w-0 overflow-hidden text-ellipsis line-clamp-1 text-sm text-[#101323] prose-p:my-0 prose-headings:my-0"

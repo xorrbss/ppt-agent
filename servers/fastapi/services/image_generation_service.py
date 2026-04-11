@@ -261,26 +261,85 @@ class ImageGenerationService:
             return image_path
 
     def _inject_prompt_into_workflow(self, workflow: dict, prompt: str) -> dict:
-        """
-        Find the prompt node in the workflow and inject the prompt text.
-        Looks for a node with title 'Input Prompt' (case-insensitive).
+        def norm(x) -> str:
+            return str(x or "").strip().lower()
 
-        User must rename their prompt node to 'Input Prompt' in ComfyUI.
-        """
-        for node_id, node_data in workflow.items():
-            meta = node_data.get("_meta", {})
-            title = meta.get("title", "").lower()
+        def is_link(v) -> bool:
+            return (
+                isinstance(v, (list, tuple))
+                and len(v) >= 2
+                and isinstance(v[0], str)
+                and isinstance(v[1], int)
+            )
 
-            if title == "input prompt":
-                if "inputs" in node_data and "text" in node_data["inputs"]:
-                    node_data["inputs"]["text"] = prompt
-                    print(
-                        f"Injected prompt into node {node_id}: {meta.get('title', '')}"
-                    )
-                    return workflow
+        preferred_keys = (
+            "text", "value", "prompt", "string", "content", "instruction", "input", "query"
+        )
+
+        # string inputs that are usually NOT prompt text
+        ignore_keys = {
+            "filename_prefix", "ckpt_name", "clip_name", "vae_name", "unet_name",
+            "sampler_name", "scheduler", "type", "device", "model", "lora_name"
+        }
+
+        visited = set()
+
+        def try_set(node_id: str) -> bool:
+            node_id = str(node_id)
+            if node_id in visited:
+                return False
+            visited.add(node_id)
+
+            node = workflow.get(node_id)
+            if not isinstance(node, dict):
+                return False
+
+            inputs = node.setdefault("inputs", {})
+
+            # 1) preferred prompt-like keys
+            for k in preferred_keys:
+                if k in inputs and isinstance(inputs[k], str):
+                    inputs[k] = prompt
+                    return True
+
+            # 2) fallback: exactly one unambiguous writable string field
+            string_candidates = [
+                k for k, v in inputs.items()
+                if isinstance(v, str) and k not in ignore_keys
+            ]
+            if len(string_candidates) == 1:
+                inputs[string_candidates[0]] = prompt
+                return True
+
+            # 3) follow links from ANY input key (node-type agnostic)
+            for v in inputs.values():
+                if is_link(v):
+                    if try_set(v[0]):
+                        return True
+                elif isinstance(v, list):
+                    for item in v:
+                        if is_link(item) and try_set(item[0]):
+                            return True
+
+            return False
+
+        input_prompt_nodes = [
+            node_id
+            for node_id, node_data in workflow.items()
+            if norm(node_data.get("_meta", {}).get("title")) == "input prompt"
+        ]
+
+        if not input_prompt_nodes:
+            raise ValueError(
+                "Could not find node with title 'Input Prompt'. Rename your prompt node to 'Input Prompt'."
+            )
+
+        for nid in input_prompt_nodes:
+            if try_set(nid):
+                return workflow
 
         raise ValueError(
-            "Could not find a node with title 'Input Prompt' in the workflow. Please rename your prompt node to 'Input Prompt' in ComfyUI."
+            "Found 'Input Prompt', but no writable prompt string field was found directly or through linked nodes."
         )
 
     async def _submit_comfyui_workflow(

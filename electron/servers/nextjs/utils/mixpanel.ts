@@ -11,6 +11,7 @@ export enum MixpanelEvent {
   Home_SaveConfiguration_API_Call = 'Home Save Configuration API Call',
   Home_CheckOllamaModelPulled_API_Call = 'Home Check Ollama Model Pulled API Call',
   Home_DownloadOllamaModel_API_Call = 'Home Download Ollama Model API Call',
+  Codex_SignIn_API_Call = 'Codex Sign In API Call',
   Outline_Generate_Presentation_Button_Clicked = 'Outline Generate Presentation Button Clicked',
   Outline_Select_Template_Button_Clicked = 'Outline Select Template Button Clicked',
   Outline_Add_Slide_Button_Clicked = 'Outline Add Slide Button Clicked',

@@ -80,7 +80,7 @@ const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }
                     <div className='relative w-6 h-6 rounded-full overflow-hidden border border-[#EDEEEF] flex items-center justify-center bg-white'>
                         <Shield className='w-3.5 h-3.5 text-[#5146E5]' />
                     </div>
-                    <p className='text-[#191919] text-xs font-medium'>Privacy</p>
+                    <p className='text-[#191919] text-xs font-medium'>Usage Analytics</p>
                 </button>
             </div>
         </div>

@@ -21,3 +21,4 @@ container.db
 .cursor
 .agents
 skills-lock.json
+.codex/
