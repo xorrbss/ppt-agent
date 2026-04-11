@@ -2,11 +2,17 @@
 import React, { useEffect, useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import { setTelemetryEnabled } from "@/utils/mixpanel";
+import { getFastAPIUrl } from "@/utils/api";
 import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { notify } from "@/components/ui/sonner";
 
 const PrivacySettings = () => {
   const [trackingEnabled, setTrackingEnabled] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
+  const [testingMainSentry, setTestingMainSentry] = useState(false);
+  const [testingNextjsSentry, setTestingNextjsSentry] = useState(false);
+  const [testingFastapiSentry, setTestingFastapiSentry] = useState(false);
 
   useEffect(() => {
     async function fetchStatus() {
@@ -49,6 +55,73 @@ const PrivacySettings = () => {
       setTelemetryEnabled(prev ?? true);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSentryMainTest = async () => {
+    if (!window.electron?.captureSentryMainTestError) {
+      notify.error(
+        "Sentry test unavailable",
+        "Electron preload API is missing. Restart the desktop app and try again.",
+      );
+      return;
+    }
+
+    setTestingMainSentry(true);
+    try {
+      const eventId = await window.electron.captureSentryMainTestError("test error");
+      if (eventId) {
+        notify.success(
+          "Sentry test sent",
+          `Main process test event submitted. Event ID: ${eventId}`,
+        );
+      } else {
+        notify.info(
+          "Sentry test attempted",
+          "No event ID returned. Check main-process Sentry initialization logs.",
+        );
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Could not send Sentry test event.";
+      notify.error("Sentry test failed", message);
+    } finally {
+      setTestingMainSentry(false);
+    }
+  };
+
+  const handleSentryNextjsTest = async () => {
+    setTestingNextjsSentry(true);
+    try {
+      await fetch("/api/sentry-example-api", { cache: "no-store" });
+      notify.info(
+        "Next.js test triggered",
+        "If Sentry is configured, the Next.js API error event should appear shortly.",
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Could not call Next.js Sentry test route.";
+      notify.error("Next.js test failed", message);
+    } finally {
+      setTestingNextjsSentry(false);
+    }
+  };
+
+  const handleSentryFastapiTest = async () => {
+    setTestingFastapiSentry(true);
+    try {
+      const baseUrl = getFastAPIUrl();
+      await fetch(`${baseUrl}/sentry-debug`, { cache: "no-store" });
+      notify.info(
+        "FastAPI test triggered",
+        "If Sentry is configured, the FastAPI error event should appear shortly.",
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Could not call FastAPI Sentry test route.";
+      notify.error("FastAPI test failed", message);
+    } finally {
+      setTestingFastapiSentry(false);
     }
   };
 
@@ -95,6 +168,27 @@ const PrivacySettings = () => {
               disabled={saving}
             />
           </div>
+        </div>
+      </div>
+
+      <div className="bg-[#F9F8F8] p-7 rounded-[20px]">
+        <h4 className="text-sm font-semibold text-[#191919] mb-1">
+          Sentry Integration Test
+        </h4>
+        <p className="text-xs text-[#6B7280] mb-6 leading-relaxed max-w-lg">
+          Trigger test failures from Electron main, Next.js, and FastAPI to verify
+          all Sentry pipelines are reporting events.
+        </p>
+        <div className="flex flex-wrap gap-3">
+          <Button onClick={handleSentryMainTest} disabled={testingMainSentry}>
+            {testingMainSentry ? "Sending Main Event..." : "Test Electron Main"}
+          </Button>
+          <Button onClick={handleSentryNextjsTest} disabled={testingNextjsSentry} variant="outline">
+            {testingNextjsSentry ? "Triggering Next.js..." : "Test Next.js"}
+          </Button>
+          <Button onClick={handleSentryFastapiTest} disabled={testingFastapiSentry} variant="outline">
+            {testingFastapiSentry ? "Triggering FastAPI..." : "Test FastAPI"}
+          </Button>
         </div>
       </div>
     </div>

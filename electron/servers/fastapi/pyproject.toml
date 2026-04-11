@@ -27,6 +27,7 @@ dependencies = [
     "pytest>=8.4.1",
     "python-pptx>=1.0.2",
     "redis>=6.2.0",
+    "sentry-sdk>=2.34.1",
     "sqlmodel>=0.0.24",
 ]
 

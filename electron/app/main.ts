@@ -16,6 +16,7 @@ import { getPuppeteerExecutablePath, isChromeInstalled } from "./utils/puppeteer
 import { getLiteParseRunnerPath } from "./utils/liteparse-check";
 import { getImageMagickBinaryPath, isImageMagickInstalled } from "./utils/imagemagick-check";
 import { startUpdateChecker, stopUpdateChecker } from "./utils/update-checker";
+import { captureMainSentryTestError, initMainSentry } from "./sentry/main";
 
 
 var win: BrowserWindow | undefined;
@@ -30,6 +31,11 @@ const startupStatus: Record<string, string> = {
 
 // Allow renderer to query initial startup status as soon as it loads.
 ipcMain.handle("startup:get-status", () => startupStatus);
+ipcMain.handle("sentry:test-main-error", (_event, message?: string) => {
+  return captureMainSentryTestError(message);
+});
+
+initMainSentry();
 
 app.commandLine.appendSwitch('gtk-version', '3');
 
@@ -69,8 +75,23 @@ const createWindow = () => {
     backgroundColor: "#f3f5ff",
     icon: path.join(baseDir, "resources/ui/assets/images/presenton_short_filled.png"),
     webPreferences: {
-      webSecurity: false,
-      preload: path.join(__dirname, 'preloads/index.js'),
+        webSecurity: false,
+        // Ensure a known preload path and explicit isolation settings so
+        // the `contextBridge` API is exposed reliably to renderer pages.
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: false,
+        preload: (() => {
+          const p = path.join(__dirname, 'preloads/index.js');
+          try {
+            if (!fs.existsSync(p)) {
+              console.warn(`[Presenton] Preload not found at ${p}`);
+            }
+          } catch (e) {
+            console.warn('[Presenton] Failed to stat preload path', e);
+          }
+          return p;
+        })(),
     },
   });
 

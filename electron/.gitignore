@@ -1,4 +1,6 @@
 .env
+.env.*
+*.env
 .venv
 __pycache__
 .pytest_cache
@@ -32,3 +34,7 @@ electron/.cache/export-runtime/
 *.toc
 *.zip
 *.pyc
+
+# Agent skill artifacts
+.agents/
+skills-lock.json

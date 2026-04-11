@@ -3,13 +3,49 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+import sentry_sdk
 from api.lifespan import app_lifespan
 from api.middlewares import UserConfigEnvUpdateMiddleware
 from api.v1.ppt.router import API_V1_PPT_ROUTER
 from api.v1.webhook.router import API_V1_WEBHOOK_ROUTER
 from api.v1.mock.router import API_V1_MOCK_ROUTER
-from utils.get_env import get_app_data_directory_env
+from utils.get_env import (
+    get_app_data_directory_env,
+    get_sentry_send_default_pii_env,
+    get_sentry_traces_sample_rate_env,
+)
 from utils.path_helpers import get_resource_path
+
+FASTAPI_SENTRY_DSN = "https://a7831b44cb7096645e4b7569f53d070c@o4509882707410944.ingest.us.sentry.io/4511171447947264"
+
+
+
+
+
+def _get_sentry_traces_sample_rate() -> float:
+    traces_sample_rate = get_sentry_traces_sample_rate_env()
+    if traces_sample_rate is None:
+        return 1.0
+
+    try:
+        return float(traces_sample_rate)
+    except ValueError:
+        return 1.0
+
+
+def _get_sentry_send_default_pii() -> bool:
+    send_default_pii = get_sentry_send_default_pii_env()
+    if send_default_pii is None:
+        return True
+
+    return send_default_pii.lower() == "true"
+
+
+sentry_sdk.init(
+    dsn=FASTAPI_SENTRY_DSN,
+    send_default_pii=_get_sentry_send_default_pii(),
+    traces_sample_rate=_get_sentry_traces_sample_rate(),
+)
 
 
 app = FastAPI(lifespan=app_lifespan)
@@ -47,3 +83,8 @@ app.add_middleware(
 )
 
 app.add_middleware(UserConfigEnvUpdateMiddleware)
+
+
+@app.get("/sentry-debug")
+async def trigger_error():
+    return {"division_by_zero": 1 / 0}

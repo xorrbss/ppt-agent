@@ -33,6 +33,8 @@ export function getUserConfig(): UserConfig {
 export function setupEnv(fastApiPort: number, nextjsPort: number) {
   const { app } = require('electron');
   process.env.APP_VERSION = app.getVersion();
+  process.env.SENTRY_RELEASE = process.env.SENTRY_RELEASE || `presenton-electron@${process.env.APP_VERSION}`;
+  process.env.SENTRY_ENVIRONMENT = process.env.SENTRY_ENVIRONMENT || (app.isPackaged ? 'production' : 'development');
   process.env.NEXT_PUBLIC_FAST_API = `${localhost}:${fastApiPort}`;
   process.env.FASTAPI_PUBLIC_URL = process.env.NEXT_PUBLIC_FAST_API;
   process.env.TEMP_DIRECTORY = tempDir;

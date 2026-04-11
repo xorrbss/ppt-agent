@@ -33,6 +33,8 @@ interface ElectronAPI {
   hasRequiredKey: () => Promise<{ hasKey: boolean }>;
   telemetryStatus: () => Promise<{ telemetryEnabled: boolean }>;
   getTemplates: () => Promise<Array<{ templateName: string; templateID: string; files: string[]; settings: any }>>;
+  captureSentryRendererTestError: (message?: string) => Promise<string | null> | string | null;
+  captureSentryMainTestError: (message?: string) => Promise<string | null>;
 }
 
 interface Window {

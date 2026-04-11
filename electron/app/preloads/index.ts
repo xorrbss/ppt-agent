@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import { captureRendererSentryTestError } from './sentry';
 
 contextBridge.exposeInMainWorld('env', {
   NEXT_PUBLIC_FAST_API: process.env.NEXT_PUBLIC_FAST_API || '',
@@ -35,4 +36,6 @@ contextBridge.exposeInMainWorld('electron', {
   onStartupStatus: (callback: (payload: { name: string; status: string }) => void) =>
     ipcRenderer.on("startup:status", (_event, payload) => callback(payload)),
   getStartupStatus: () => ipcRenderer.invoke("startup:get-status"),
+  captureSentryRendererTestError: (message?: string) => captureRendererSentryTestError(message),
+  captureSentryMainTestError: (message?: string) => ipcRenderer.invoke("sentry:test-main-error", message),
 });
