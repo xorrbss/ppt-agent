@@ -3,6 +3,8 @@ import { IconSearch, ImageGenerate, ImageSearch, PreviousGeneratedImagesResponse
 import { ApiResponseHandler } from "./api-error-handler";
 
 export class PresentationGenerationApi {
+  private static readonly DECOMPOSE_TIMEOUT_MS = 10 * 60 * 1000;
+
   static async uploadDoc(documents: File[]) {
     const formData = new FormData();
 
@@ -29,6 +31,9 @@ export class PresentationGenerationApi {
   }
 
   static async decomposeDocuments(documentKeys: string[]) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.DECOMPOSE_TIMEOUT_MS);
+
     try {
       const response = await fetch(
         `/api/v1/ppt/files/decompose`,
@@ -39,13 +44,19 @@ export class PresentationGenerationApi {
             file_paths: documentKeys,
           }),
           cache: "no-cache",
+          signal: controller.signal,
         }
       );
       
       return await ApiResponseHandler.handleResponse(response, "Failed to decompose documents");
     } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw new Error("File decomposition timed out after 10 minutes");
+      }
       console.error("Error in Decompose Files", error);
       throw error;
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
  

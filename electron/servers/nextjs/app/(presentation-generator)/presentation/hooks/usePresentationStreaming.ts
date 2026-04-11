@@ -8,7 +8,27 @@ import {
 import { jsonrepair } from "jsonrepair";
 import { toast } from "sonner";
 import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
-import {getFastAPIUrl} from "@/utils/api";
+import { getFastAPIUrl, resolveBackendAssetUrl } from "@/utils/api";
+
+const normalizePresentationAssets = <T,>(input: T): T => {
+  if (Array.isArray(input)) {
+    return input.map((item) => normalizePresentationAssets(item)) as T;
+  }
+
+  if (input && typeof input === "object") {
+    const normalized: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+      if (typeof value === "string") {
+        normalized[key] = resolveBackendAssetUrl(value);
+      } else {
+        normalized[key] = normalizePresentationAssets(value);
+      }
+    }
+    return normalized as T;
+  }
+
+  return input;
+};
 
 export const usePresentationStreaming = (
   presentationId: string,
@@ -43,19 +63,20 @@ export const usePresentationStreaming = (
             try {
               const repairedJson = jsonrepair(accumulatedChunks);
               const partialData = JSON.parse(repairedJson);
+              const normalizedPartialData = normalizePresentationAssets(partialData);
 
-              if (partialData.slides) {
+              if (normalizedPartialData.slides) {
                 if (
-                  partialData.slides.length !== previousSlidesLength.current &&
-                  partialData.slides.length > 0
+                  normalizedPartialData.slides.length !== previousSlidesLength.current &&
+                  normalizedPartialData.slides.length > 0
                 ) {
                   dispatch(
                     setPresentationData({
-                      ...partialData,
-                      slides: partialData.slides,
+                      ...normalizedPartialData,
+                      slides: normalizedPartialData.slides,
                     })
                   );
-                  previousSlidesLength.current = partialData.slides.length;
+                  previousSlidesLength.current = normalizedPartialData.slides.length;
                   setLoading(false);
                 }
               }
@@ -66,7 +87,7 @@ export const usePresentationStreaming = (
 
           case "complete":
             try {
-              dispatch(setPresentationData(data.presentation));
+              dispatch(setPresentationData(normalizePresentationAssets(data.presentation)));
               dispatch(setStreaming(false));
               setLoading(false);
               eventSource.close();
@@ -83,7 +104,7 @@ export const usePresentationStreaming = (
             break;
 
           case "closing":
-            dispatch(setPresentationData(data.presentation));
+            dispatch(setPresentationData(normalizePresentationAssets(data.presentation)));
             setLoading(false);
             dispatch(setStreaming(false));
             eventSource.close();

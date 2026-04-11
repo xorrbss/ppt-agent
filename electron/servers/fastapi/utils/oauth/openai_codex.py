@@ -244,6 +244,7 @@ class TokenSuccess:
     access: str
     refresh: str
     expires: int  # Unix ms timestamp when the token expires
+    id_token: Optional[str] = None
 
 
 @dataclass
@@ -259,6 +260,14 @@ class AuthorizationFlow:
     verifier: str
     state: str
     url: str
+
+
+@dataclass
+class CodexAccountProfile:
+    account_id: Optional[str] = None
+    username: Optional[str] = None
+    email: Optional[str] = None
+    is_pro: Optional[bool] = None
 
 
 # ---------------------------------------------------------------------------
@@ -294,6 +303,51 @@ def get_account_id(access_token: str) -> Optional[str]:
     if isinstance(account_id, str) and account_id:
         return account_id
     return None
+
+
+def _as_non_empty_str(value) -> Optional[str]:
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped or None
+    return None
+
+
+def get_account_profile(access_token: str, id_token: Optional[str] = None) -> CodexAccountProfile:
+    """Extract profile from exact observed JWT paths in access/id tokens."""
+    access_payload = _decode_jwt_payload(access_token) or {}
+    access_auth = access_payload.get(JWT_CLAIM_PATH)
+    access_auth = access_auth if isinstance(access_auth, dict) else {}
+
+    access_profile = access_payload.get("https://api.openai.com/profile")
+    access_profile = access_profile if isinstance(access_profile, dict) else {}
+
+    id_payload = _decode_jwt_payload(id_token) if id_token else None
+    id_payload = id_payload if isinstance(id_payload, dict) else {}
+    id_auth = id_payload.get(JWT_CLAIM_PATH)
+    id_auth = id_auth if isinstance(id_auth, dict) else {}
+
+    account_id = _as_non_empty_str(access_auth.get("chatgpt_account_id")) or _as_non_empty_str(
+        id_auth.get("chatgpt_account_id")
+    )
+    username = _as_non_empty_str(id_payload.get("name"))
+    email = _as_non_empty_str(access_profile.get("email")) or _as_non_empty_str(
+        id_payload.get("email")
+    )
+
+    plan_type = _as_non_empty_str(access_auth.get("chatgpt_plan_type")) or _as_non_empty_str(
+        id_auth.get("chatgpt_plan_type")
+    )
+    if plan_type:
+        is_pro = plan_type.strip().lower() != "free"
+    else:
+        is_pro = None
+
+    return CodexAccountProfile(
+        account_id=account_id,
+        username=username,
+        email=email,
+        is_pro=is_pro,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -474,6 +528,7 @@ def exchange_authorization_code(
             return TokenFailure(reason=f"HTTP {response.status_code}: {response.text[:200]}")
 
         body = response.json()
+
         access = body.get("access_token")
         refresh = body.get("refresh_token")
         expires_in = body.get("expires_in")
@@ -482,7 +537,9 @@ def exchange_authorization_code(
             return TokenFailure(reason=f"Token response missing fields: {list(body.keys())}")
 
         expires_ms = int(time.time() * 1000) + int(expires_in) * 1000
-        return TokenSuccess(access=access, refresh=refresh, expires=expires_ms)
+        id_token = body.get("id_token")
+        id_token = id_token if isinstance(id_token, str) else None
+        return TokenSuccess(access=access, refresh=refresh, expires=expires_ms, id_token=id_token)
     except Exception as exc:
         return TokenFailure(reason=str(exc))
 

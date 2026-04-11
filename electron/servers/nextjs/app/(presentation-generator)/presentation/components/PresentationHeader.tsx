@@ -432,7 +432,7 @@ const PresentationHeader = ({
                   trackEvent(MixpanelEvent.Navigation, { from: pathname, to });
                   router.push(to);
                 }}
-                disabled={!presentationData?.slides || presentationData?.slides.length === 0} className="cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group">
+                disabled={isStreaming || !presentationData?.slides || presentationData?.slides.length === 0} className="cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group">
                 <Play className="w-3.5 h-3.5 text-[#101323] group-hover:text-[#5141e5] duration-300" />
               </button>
             </ToolTip>
@@ -444,7 +444,7 @@ const PresentationHeader = ({
                 style={{
                   background: "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
                 }}
-                disabled={isExporting}
+                disabled={isExporting || isStreaming === true}
               >
                 {isExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Export"} <ArrowRightFromLine className="w-3.5 h-3.5" />
               </button>

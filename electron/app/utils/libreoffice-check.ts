@@ -239,24 +239,81 @@ export function getLinuxInstallCommand(): { cmd: string; args: string[] } | null
 }
 
 // ---------------------------------------------------------------------------
-// Resolved path – set once by checkLibreOfficeBeforeWindow()
+// Resolved path – populated by successful detection
 // ---------------------------------------------------------------------------
 
 /**
- * The resolved soffice binary path discovered at startup.
- * Defaults to the bare command name so callers always get a usable string
- * even if the check has not run yet (e.g. in non-Electron environments).
+ * The resolved LibreOffice executable path discovered at startup.
+ * Empty until a successful detection populates it.
  */
-let resolvedSofficePath: string = "soffice";
+let resolvedSofficePath = "";
 
 /**
- * Returns the resolved soffice binary path found during startup detection.
+ * Returns the resolved LibreOffice executable path found during startup detection.
  *
  * Pass as the `SOFFICE_PATH` env var to the FastAPI subprocess so Python
  * code can invoke the exact binary rather than relying on `PATH`.
  */
-export function getSofficePath(): string {
-  return resolvedSofficePath;
+export function getSofficePath(): string | undefined {
+  return resolvedSofficePath || undefined;
+}
+
+function setResolvedSofficePath(candidate?: string): void {
+  if (!candidate) {
+    return;
+  }
+  resolvedSofficePath = candidate;
+}
+
+function firstNonEmptyLine(value: string): string | undefined {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+}
+
+async function getVersionForBinary(binaryPath: string): Promise<string | undefined> {
+  try {
+    const quoted = `"${binaryPath}"`;
+    const { stdout } = await execAsync(`${quoted} --version`, {
+      timeout: 8_000,
+      windowsHide: (process.platform as string) === "win32",
+    });
+    return stdout.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function resolveLibreOfficeFromPath(): Promise<string | undefined> {
+  if (process.platform === "win32") {
+    try {
+      const { stdout } = await execAsync("where soffice.exe", {
+        timeout: 8_000,
+        windowsHide: true,
+      });
+      return firstNonEmptyLine(stdout);
+    } catch {
+      return undefined;
+    }
+  }
+
+  try {
+    const { stdout } = await execAsync("command -v soffice || command -v libreoffice", {
+      timeout: 8_000,
+      windowsHide: false,
+    });
+    const resolved = firstNonEmptyLine(stdout);
+    if (!resolved) {
+      return undefined;
+    }
+    if (path.isAbsolute(resolved)) {
+      return resolved;
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -266,7 +323,7 @@ export function getSofficePath(): string {
 /**
  * Attempts to detect LibreOffice by:
  *  1. Checking well-known installation paths for the binary (fast, no shell).
- *  2. Falling back to `soffice --version` via the shell (catches PATH installs).
+ *  2. Falling back to resolving the binary from PATH.
  *
  * Returns an object indicating whether LibreOffice was found and, when it
  * was, the version string reported by the binary.
@@ -275,6 +332,7 @@ export async function isLibreOfficeInstalled(): Promise<LibreOfficeCheckResult> 
   // --- Step 1: check well-known paths synchronously (no exec overhead) ---
   for (const candidate of getCandidatePaths()) {
     if (fs.existsSync(candidate)) {
+      setResolvedSofficePath(candidate);
       // On Windows, avoid probing with "--version" because some LibreOffice
       // builds open a transient console window for this command.
       if (process.platform === "win32") {
@@ -282,53 +340,24 @@ export async function isLibreOfficeInstalled(): Promise<LibreOfficeCheckResult> 
       }
 
       // Binary found at a known location – try to get the version string.
-      try {
-        const quoted = `"${candidate}"`;
-        const { stdout } = await execAsync(`${quoted} --version`, {
-          timeout: 8_000,
-          windowsHide: (process.platform as string) === "win32",
-        });
-        return { installed: true, version: stdout.trim(), path: candidate };
-      } catch {
-        // Binary exists but failed to execute – still treat as installed.
-        return { installed: true, path: candidate };
+      const version = await getVersionForBinary(candidate);
+      if (version) {
+        return { installed: true, version, path: candidate };
       }
+      // Binary exists but failed to execute – still treat as installed.
+      return { installed: true, path: candidate };
     }
   }
 
   // --- Step 2: try the PATH-based command ---
-  if (process.platform === "win32") {
-    try {
-      // Use "where" for PATH detection without launching LibreOffice itself.
-      const { stdout } = await execAsync("where soffice.exe", {
-        timeout: 8_000,
-        windowsHide: true,
-      });
-      const firstPath = stdout
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .find((line) => line.length > 0);
-      if (firstPath) {
-        return { installed: true, path: firstPath };
-      }
-    } catch {
-      // Keep behavior: if PATH lookup fails, report not installed.
-    }
+  const pathBinary = await resolveLibreOfficeFromPath();
+  if (!pathBinary) {
     return { installed: false };
   }
 
-  try {
-    const { stdout } = await execAsync("soffice --version", {
-      timeout: 8_000,
-      windowsHide: (process.platform as string) === "win32",
-    });
-    // Found via PATH – record the bare command name as the path so callers
-    // can pass it directly to subprocess invocations.
-    return { installed: true, version: stdout.trim(), path: "soffice" };
-  } catch {
-    // Command not found or timed out – LibreOffice is not available.
-    return { installed: false };
-  }
+  setResolvedSofficePath(pathBinary);
+  const version = await getVersionForBinary(pathBinary);
+  return { installed: true, version, path: pathBinary };
 }
 
 // ---------------------------------------------------------------------------

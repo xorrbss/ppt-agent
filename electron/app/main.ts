@@ -71,7 +71,8 @@ const createWindow = () => {
   win = new BrowserWindow({
     width: 1280,
     height: 720,
-    show: false, // Shown after LibreOffice check so "Skip" doesn't quit the app
+    show: false, // Reveal once the launch screen has painted to avoid a blank flash.
+    backgroundColor: "#f3f5ff",
     icon: path.join(baseDir, "resources/ui/assets/images/presenton_short_filled.png"),
     webPreferences: {
         webSecurity: false,
@@ -103,10 +104,19 @@ const createWindow = () => {
     }
     return { action: "allow" };
   });
+
+  win.once("ready-to-show", () => {
+    if (!win || win.isDestroyed()) {
+      return;
+    }
+    win.show();
+    win.focus();
+  });
 };
 
 async function startServers(fastApiPort: number, nextjsPort: number) {
   try {
+    const sofficePath = getSofficePath();
     const fastApi = await startFastApiServer(
       fastapiDir,
       fastApiPort,
@@ -140,12 +150,15 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         DALL_E_3_QUALITY: process.env.DALL_E_3_QUALITY,
         GPT_IMAGE_1_5_QUALITY: process.env.GPT_IMAGE_1_5_QUALITY,
         APP_DATA_DIRECTORY: appDataDir,
+        FASTAPI_PUBLIC_URL: process.env.NEXT_PUBLIC_FAST_API,
         TEMP_DIRECTORY: tempDir,
         USER_CONFIG_PATH: userConfigPath,
         MIGRATE_DATABASE_ON_STARTUP: "True",
-        // Resolved by libreoffice-check.ts at startup; lets Python invoke the
-        // exact binary path instead of relying on the system PATH.
-        SOFFICE_PATH: getSofficePath(),
+        // Resolved by libreoffice-check.ts at startup when available; lets
+        // Python invoke the exact binary path instead of relying on PATH.
+        ...(sofficePath && {
+          SOFFICE_PATH: sofficePath,
+        }),
         IMAGEMAGICK_BINARY: getImageMagickBinaryPath(),
         LITEPARSE_RUNNER_PATH: getLiteParseRunnerPath(),
         // Use Electron's embedded runtime for LiteParse so parsing does not
@@ -184,25 +197,38 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
 
 async function stopServers() {
   if (fastApiProcess?.pid) {
-    console.log("Closing FastAPI...");
+    console.log("Force killing FastAPI...");
     try {
-      await killProcess(fastApiProcess.pid);
-    } catch {
       await killProcess(fastApiProcess.pid, "SIGKILL");
+    } catch (error) {
+      console.error("Failed to force kill FastAPI:", error);
     }
+    fastApiProcess = undefined;
   }
   if (nextjsProcess) {
-    if (isDev) {
-      console.log("Closing NextJS...");
+    if ("pid" in nextjsProcess && nextjsProcess.pid) {
+      console.log("Force killing NextJS...");
       try {
-        await killProcess(nextjsProcess.pid);
-      } catch {
         await killProcess(nextjsProcess.pid, "SIGKILL");
+      } catch (error) {
+        console.error("Failed to force kill NextJS:", error);
       }
-    } else {
+    } else if (typeof nextjsProcess.close === "function") {
       console.log("Closing NextJS...");
       nextjsProcess.close();
     }
+    nextjsProcess = undefined;
+  }
+}
+
+async function forceQuitApp(exitCode = 0) {
+  if (isStopping) return;
+  isStopping = true;
+  stopUpdateChecker();
+  try {
+    await stopServers();
+  } finally {
+    app.exit(exitCode);
   }
 }
 
@@ -238,7 +264,7 @@ app.whenReady().then(async () => {
   startupStatus.puppeteer = chromeOk ? "installed" : "missing";
   startupStatus.imagemagick = imageMagickOk ? "installed" : "missing";
 
-  // Show and focus main window
+  // Ensure the launch screen stays visible and focused during the server boot.
   win?.show();
   win?.focus();
 
@@ -301,29 +327,17 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", async () => {
-  stopUpdateChecker();
-  await stopServers();
-  app.quit();
+  await forceQuitApp(0);
 });
 
 app.on("before-quit", async (event) => {
   if (isStopping) return;
-  isStopping = true;
   event.preventDefault();
-  try {
-    await stopServers();
-  } finally {
-    app.quit();
-  }
+  await forceQuitApp(0);
 });
 
 app.on("will-quit", async (event) => {
   if (isStopping) return;
-  isStopping = true;
   event.preventDefault();
-  try {
-    await stopServers();
-  } finally {
-    app.quit();
-  }
+  await forceQuitApp(0);
 });

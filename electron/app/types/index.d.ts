@@ -28,10 +28,11 @@ interface FastApiEnv {
   DALL_E_3_QUALITY?: string,
   GPT_IMAGE_1_5_QUALITY?: string,
   APP_DATA_DIRECTORY?: string,
+  FASTAPI_PUBLIC_URL?: string,
   TEMP_DIRECTORY?: string,
   USER_CONFIG_PATH?: string,
   MIGRATE_DATABASE_ON_STARTUP?: string,
-  /** Absolute path to the soffice binary resolved at startup by libreoffice-check.ts. */
+  /** Absolute path to the resolved LibreOffice executable discovered at startup. */
   SOFFICE_PATH?: string,
   /** Absolute path to the ImageMagick binary resolved at startup by imagemagick-check.ts. */
   IMAGEMAGICK_BINARY?: string,

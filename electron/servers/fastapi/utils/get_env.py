@@ -136,6 +136,18 @@ def get_codex_account_id_env():
     return os.getenv("CODEX_ACCOUNT_ID")
 
 
+def get_codex_username_env():
+    return os.getenv("CODEX_USERNAME")
+
+
+def get_codex_email_env():
+    return os.getenv("CODEX_EMAIL")
+
+
+def get_codex_is_pro_env():
+    return os.getenv("CODEX_IS_PRO")
+
+
 def get_codex_model_env():
     return os.getenv("CODEX_MODEL")
 

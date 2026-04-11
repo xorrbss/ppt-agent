@@ -130,7 +130,7 @@ export const LLM_PROVIDERS: Record<string, LLMProviderOption> = {
     value: "custom",
     label: "Custom",
     description: "OpenAI-compatible LLM",
-    icon: "/icons/custom.png",
+    icon: "/providers/custom.svg",
   },
 
 };

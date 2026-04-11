@@ -33,6 +33,7 @@ import ThemeApi from '@/app/(presentation-generator)/services/api/theme'
 import { useFontLoader } from '@/app/(presentation-generator)/hooks/useFontLoad'
 import Link from 'next/link'
 import { trackEvent, MixpanelEvent } from '@/utils/mixpanel'
+import { resolveBackendAssetUrl } from '@/utils/api'
 
 // Fallback theme used before defaults are loaded from API (unified Theme type)
 const FALLBACK_THEME: Theme = {
@@ -153,7 +154,7 @@ const ThemePanel: React.FC = () => {
         setUserFonts({
           fonts: userFonts.fonts.map((font: any) => ({
             name: font.name,
-            url: `${process.env.NEXT_PUBLIC_FAST_API}${font.url}`,
+            url: resolveBackendAssetUrl(font.url),
           })),
         })
 
@@ -458,14 +459,14 @@ const ThemePanel: React.FC = () => {
       setCustomFonts({
         textFont: {
           name: font_name,
-          url: `${process.env.NEXT_PUBLIC_FAST_API}${font_url}`,
+          url: resolveBackendAssetUrl(font_url),
         }
       })
 
       // Add the newly uploaded font to userFonts if not already present
       if (!userFonts.fonts.find(f => f.name === font_name)) {
         setUserFonts(prev => ({
-          fonts: [...prev.fonts, { name: font_name, url: `${process.env.NEXT_PUBLIC_FAST_API}${font_url}` }]
+          fonts: [...prev.fonts, { name: font_name, url: resolveBackendAssetUrl(font_url) }]
         }))
       }
       toast.success(`Font "${font_name}" uploaded successfully`)

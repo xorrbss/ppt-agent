@@ -12,7 +12,7 @@
 "use client";
 import React, { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { clearOutlines, setPresentationId } from "@/store/slices/presentationGeneration";
 import { PromptInput } from "./PromptInput";
 import { LanguageType, PresentationConfig, ToneType, VerbosityType } from "../type";
@@ -26,6 +26,10 @@ import Wrapper from "@/components/Wrapper";
 import { setPptGenUploadState } from "@/store/slices/presentationGenUpload";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { ConfigurationSelects } from "./ConfigurationSelects";
+import { RootState } from "@/store/store";
+import { ImagesApi } from "../../services/api/images";
+
+const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
 
 // Types for loading state
 interface LoadingState {
@@ -40,11 +44,12 @@ const UploadPage = () => {
   const router = useRouter();
   const pathname = usePathname();
   const dispatch = useDispatch();
+  const llmConfig = useSelector((state: RootState) => state.userConfig.llm_config);
 
   const [files, setFiles] = useState<File[]>([]);
   const [config, setConfig] = useState<PresentationConfig>({
-    slides: "5",
-    language: LanguageType.English,
+    slides: null,
+    language: LanguageType.Auto,
     prompt: "",
     tone: ToneType.Default,
     verbosity: VerbosityType.Standard,
@@ -66,13 +71,48 @@ const UploadPage = () => {
     setConfig((prev) => ({ ...prev, [key]: value } as PresentationConfig));
   };
 
+  const ensureStockImageProviderReady = async (): Promise<boolean> => {
+    if (llmConfig?.DISABLE_IMAGE_GENERATION) {
+      return true;
+    }
+
+    const selectedProvider = (llmConfig?.IMAGE_PROVIDER || "").toLowerCase();
+    if (!STOCK_IMAGE_PROVIDERS.has(selectedProvider)) {
+      return true;
+    }
+
+    try {
+      const providerApiKey =
+        selectedProvider === "pexels"
+          ? llmConfig?.PEXELS_API_KEY
+          : llmConfig?.PIXABAY_API_KEY;
+      await ImagesApi.searchStockImages("business", 1, {
+        provider: selectedProvider,
+        apiKey: providerApiKey,
+        strictApiKey: true,
+      });
+      return true;
+    } catch (error: any) {
+      toast.error(
+        error?.message ||
+        `Unable to reach ${selectedProvider} right now. Please check your API key/settings and try again.`
+      );
+      return false;
+    }
+  };
+
   /**
    * Validates the current configuration and files
    * @returns boolean indicating if the configuration is valid
    */
   const validateConfiguration = (): boolean => {
-    if (!config.language || !config.slides) {
-      toast.error("Please select number of Slides & Language");
+    if (!config.language) {
+      toast.error("Please select language");
+      return false;
+    }
+
+    if (files.length > 0 && config.language === LanguageType.Auto) {
+      toast.error("Please choose a language before processing uploaded documents");
       return false;
     }
 
@@ -88,6 +128,9 @@ const UploadPage = () => {
    */
   const handleGeneratePresentation = async () => {
     if (!validateConfiguration()) return;
+
+    const isStockProviderReady = await ensureStockImageProviderReady();
+    if (!isStockProviderReady) return;
 
     try {
       const hasUploadedAssets = files.length > 0;
@@ -122,6 +165,8 @@ const UploadPage = () => {
       documents = uploadResponse;
     }
 
+    const selectedLanguage = config?.language ?? "";
+
     const promises: Promise<any>[] = [];
 
     if (documents.length > 0) {
@@ -129,7 +174,7 @@ const UploadPage = () => {
       promises.push(
         PresentationGenerationApi.decomposeDocuments(
           documents,
-          config?.language ?? null
+          selectedLanguage
         )
       );
     }
@@ -154,13 +199,15 @@ const UploadPage = () => {
       duration: 30,
     });
 
+    const selectedLanguage = config?.language ?? "";
+
     // Use the first available layout group for direct generation
     trackEvent(MixpanelEvent.Upload_Create_Presentation_API_Call);
     const createResponse = await PresentationGenerationApi.createPresentation({
       content: config?.prompt ?? "",
-      n_slides: config?.slides ? parseInt(config.slides) : null,
+      n_slides: config?.slides ? parseInt(config.slides, 10) : null,
       file_paths: [],
-      language: config?.language ?? "",
+      language: selectedLanguage,
       tone: config?.tone,
       verbosity: config?.verbosity,
       instructions: config?.instructions || null,

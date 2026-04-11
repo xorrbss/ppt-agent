@@ -12,6 +12,7 @@ app_data
 tmp
 debug
 .fastembed_cache
+.codex
 
 generated_models
 nltk

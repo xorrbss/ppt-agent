@@ -11,7 +11,7 @@ import { Search } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { PresentationGenerationApi } from "../services/api/presentation-generation";
-import { getStaticFileUrl } from "../utils/others";
+import { resolveBackendAssetUrl } from "@/utils/api";
 import { toast } from "sonner";
 interface IconsEditorProps {
   icon_prompt?: string[] | null;
@@ -147,7 +147,7 @@ const IconsEditor = ({
                       className="w-12 h-12 cursor-pointer group relative rounded-lg overflow-hidden hover:bg-gray-100 p-2 transition-colors"
                     >
                       <img
-                        src={iconSrc}
+                        src={resolveBackendAssetUrl(iconSrc)}
                         alt={`Icon ${idx + 1}`}
                         className="w-full h-full object-contain"
                       />

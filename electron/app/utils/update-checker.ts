@@ -11,6 +11,7 @@ const VERSION_JSON_URL =
   "https://raw.githubusercontent.com/presenton/presenton/refs/heads/main/electron/version.json";
 
 const CURRENT_VERSION = app.getVersion();
+const WEBSITE_DOWNLOAD_URL = "https://presenton.ai/download";
 
 /** Maximum number of fetch attempts (polls). */
 const MAX_ATTEMPTS = 3;
@@ -33,18 +34,11 @@ function log(msg: string): void {
 interface VersionResponse {
   version: string;
   message?: string;
-  downloads: {
+  downloads?: {
     linux: string;
     mac: string;
     windows: string;
   };
-}
-
-function getDownloadUrlForPlatform(downloads: VersionResponse["downloads"]): string {
-  const platform = process.platform;
-  if (platform === "darwin") return downloads.mac;
-  if (platform === "win32") return downloads.windows;
-  return downloads.linux;
 }
 
 /**
@@ -235,7 +229,7 @@ async function checkForUpdatesWithRetry(win: BrowserWindow): Promise<void> {
       const newer = isNewerVersion(CURRENT_VERSION, data.version);
       log(`Remote ${data.version} vs current ${CURRENT_VERSION} -> newer? ${newer}`);
       if (newer) {
-        const downloadUrl = getDownloadUrlForPlatform(data.downloads);
+        const downloadUrl = WEBSITE_DOWNLOAD_URL;
         log(`Injecting banner for ${data.version} (after ${INJECT_DELAY_MS}ms delay)`);
         scheduleBannerInjection(win, data.version, downloadUrl, data.message);
       } else {

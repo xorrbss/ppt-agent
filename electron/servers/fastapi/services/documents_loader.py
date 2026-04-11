@@ -31,6 +31,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class DocumentsLoader:
+    DECOMPOSE_TIMEOUT_SECONDS = 600
 
     def __init__(
         self,
@@ -39,7 +40,9 @@ class DocumentsLoader:
     ):
         self._file_paths = file_paths
         self._ocr_language = presentation_language_to_ocr_code(presentation_language)
-        self.liteparse_service = LiteParseService()
+        self.liteparse_service = LiteParseService(
+            timeout_seconds=self.DECOMPOSE_TIMEOUT_SECONDS
+        )
         self.document_conversion_service = DocumentConversionService()
         self.document_service: Any = (
             DocumentServiceCls() if DocumentServiceCls is not None else None
@@ -142,6 +145,7 @@ class DocumentsLoader:
             converted_path = self.document_conversion_service.convert_office_to_pdf(
                 file_path,
                 temp_dir,
+                timeout_seconds=self.DECOMPOSE_TIMEOUT_SECONDS,
             )
             return self._parse_with_liteparse(converted_path)
 
@@ -149,6 +153,7 @@ class DocumentsLoader:
             converted_path = self.document_conversion_service.convert_office_to_pdf(
                 file_path,
                 conversion_dir,
+                timeout_seconds=self.DECOMPOSE_TIMEOUT_SECONDS,
             )
             return self._parse_with_liteparse(converted_path)
 
@@ -157,6 +162,7 @@ class DocumentsLoader:
             converted_path = self.document_conversion_service.convert_image_to_png(
                 file_path,
                 temp_dir,
+                timeout_seconds=self.DECOMPOSE_TIMEOUT_SECONDS,
             )
             return self._parse_with_liteparse(converted_path)
 
@@ -164,6 +170,7 @@ class DocumentsLoader:
             converted_path = self.document_conversion_service.convert_image_to_png(
                 file_path,
                 conversion_dir,
+                timeout_seconds=self.DECOMPOSE_TIMEOUT_SECONDS,
             )
             return self._parse_with_liteparse(converted_path)
 

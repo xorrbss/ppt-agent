@@ -19,7 +19,5 @@ chroma
 container.db
 .next-build
 .cursor
-
-# Agent skill artifacts
-.agents/
+.agents
 skills-lock.json

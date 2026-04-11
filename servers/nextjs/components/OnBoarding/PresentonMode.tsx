@@ -341,7 +341,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
 
                         <h3 className="text-xl font-normal text-[#191919] pb-1.5">Text Generation Settings</h3>
                         <p className=" text-sm  text-gray-500">
-                            Choosing where text contets come from
+                            Choosing where text content comes from
                         </p>
                     </div>
                 </div>

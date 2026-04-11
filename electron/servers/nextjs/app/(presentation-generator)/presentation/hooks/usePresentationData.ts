@@ -5,6 +5,27 @@ import { setPresentationData } from "@/store/slices/presentationGeneration";
 import { DashboardApi } from '../../services/api/dashboard';
 import { clearHistory } from "@/store/slices/undoRedoSlice";
 import { applyPresentationThemeToElement } from "../utils/applyPresentationThemeDom";
+import { resolveBackendAssetUrl } from "@/utils/api";
+
+const normalizePresentationAssets = <T,>(input: T): T => {
+  if (Array.isArray(input)) {
+    return input.map((item) => normalizePresentationAssets(item)) as T;
+  }
+
+  if (input && typeof input === "object") {
+    const normalized: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+      if (typeof value === "string") {
+        normalized[key] = resolveBackendAssetUrl(value);
+      } else {
+        normalized[key] = normalizePresentationAssets(value);
+      }
+    }
+    return normalized as T;
+  }
+
+  return input;
+};
 
 export const usePresentationData = (
   presentationId: string,
@@ -16,14 +37,18 @@ export const usePresentationData = (
   const fetchUserSlides = useCallback(async () => {
     try {
       const data = await DashboardApi.getPresentation(presentationId);
-      if (data) {
-        dispatch(setPresentationData(data));
+      const normalizedData = data
+        ? normalizePresentationAssets(data)
+        : data;
+
+      if (normalizedData) {
+        dispatch(setPresentationData(normalizedData));
         dispatch(clearHistory());
         setLoading(false);
       }
-      if (data?.theme) {
+      if (normalizedData?.theme) {
         const el = document.getElementById("presentation-slides-wrapper");
-        applyPresentationThemeToElement(el, data.theme);
+        applyPresentationThemeToElement(el, normalizedData.theme);
       }
     } catch (error) {
       setError(true);

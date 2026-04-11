@@ -50,6 +50,9 @@ export async function POST(request: Request) {
     CODEX_REFRESH_TOKEN: existingConfig.CODEX_REFRESH_TOKEN,
     CODEX_TOKEN_EXPIRES: existingConfig.CODEX_TOKEN_EXPIRES,
     CODEX_ACCOUNT_ID: existingConfig.CODEX_ACCOUNT_ID,
+    CODEX_USERNAME: existingConfig.CODEX_USERNAME,
+    CODEX_EMAIL: existingConfig.CODEX_EMAIL,
+    CODEX_IS_PRO: existingConfig.CODEX_IS_PRO,
     USE_CUSTOM_URL:
       userConfig.USE_CUSTOM_URL === undefined
         ? existingConfig.USE_CUSTOM_URL
