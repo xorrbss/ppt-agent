@@ -141,7 +141,7 @@ const SidePanel = ({
           className="w-full h-[calc(100vh-120px)]   hide-scrollbar overflow-hidden slide-theme "
         >
 
-          <p className="text-xl font-normal pb-3.5 text-[#000000]">Slides ({presentationData?.slides?.length})</p>
+          <p className="text-xl font-normal font-syne pb-3.5 text-[#000000]">Slides ({presentationData?.slides?.length})</p>
 
           <DndContext
             sensors={sensors}

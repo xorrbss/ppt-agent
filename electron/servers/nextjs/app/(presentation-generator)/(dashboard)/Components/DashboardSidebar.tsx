@@ -121,10 +121,11 @@ const DashboardSidebar = () => {
                             aria-label={itemLabel}
                             title={itemLabel}
                         >
-                            <div className="flex items-center  ">
+                            {/* <div className="flex items-center  ">
                                 <img src={imageProviderIcon} alt="image provider" className="w-5 h-5 rounded-full object-cover border border-[#EDEEEF]" />
                                 <img src={textProviderIcon} alt="text provider" className="w-5 h-5 rounded-full object-cover border border-[#EDEEEF]" />
-                            </div>
+                            </div> */}
+                            <Settings className={`h-4 w-4 ${isActive ? "text-[#5146E5]" : "text-slate-600"}`} />
                             <span className="text-[11px] text-slate-800">{itemLabel}</span>
                         </Link>
                     );
