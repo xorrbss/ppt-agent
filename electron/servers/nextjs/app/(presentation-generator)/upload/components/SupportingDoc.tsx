@@ -1,7 +1,7 @@
 'use client'
 
 import React, { ChangeEvent, useEffect, useMemo, useState } from 'react'
-import { File, Paperclip, X } from 'lucide-react'
+import { File, Paperclip, Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface SupportingDocProps {
@@ -196,10 +196,12 @@ const SupportingDoc = ({
                     data-testid="file-upload-input"
                 />
                 <div className="flex flex-col items-center gap-2">
-                    <Paperclip className="h-6 w-6 text-[#5146E5]" />
-                    <p className="text-sm font-medium text-gray-800 font-syne">
-                        Drag and drop Office docs, spreadsheets, images, PDF/TXT, or <span className="text-[#5146E5]">click to browse</span>
-                    </p>
+                    <div className='w-[42px] h-[42px] flex justify-center items-center rounded-full bg-[#EBE9FE]' >
+                        <div className='w-[22px] h-[22px] rounded-full bg-[#7A5AF8] flex items-center justify-center text-white'>
+                            <Plus className='w-3 h-3' />
+                        </div>
+                    </div>
+                    <p className='text-[#808080] text-sm  font-normal'>(Office docs, spreadsheets, images, PDF/TXT)</p>
                 </div>
             </label>
 

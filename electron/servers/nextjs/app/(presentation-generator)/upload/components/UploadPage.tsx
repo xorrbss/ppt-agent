@@ -28,6 +28,7 @@ import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { ConfigurationSelects } from "./ConfigurationSelects";
 import { RootState } from "@/store/store";
 import { ImagesApi } from "../../services/api/images";
+import CurrentConfig from "./CurrentConfig";
 
 const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
 
@@ -248,20 +249,17 @@ const UploadPage = () => {
         duration={loadingState.duration}
         extra_info={loadingState.extra_info}
       />
-      <div className="rounded-2xl border border-slate-200/70 bg-white/80 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60" >
-        <div className="flex flex-col gap-4 md:items-center md:flex-row justify-between px-4 py-5">
-          <div >
-            <h2 className="text-lg font-unbounded tracking-tight text-[#191919] ">Configuration</h2>
-          </div>
+      <div className="rounded-2xl " >
+        <div className="flex flex-col gap-4 md:items-center md:flex-row justify-between px-4 ">
+          <CurrentConfig />
           <ConfigurationSelects
             config={config}
             onConfigChange={handleConfigChange}
           />
         </div>
-        <div className="border-t border-slate-200/70" />
 
-        <div className="p-4 mt-2 ">
-          <h3 className="text-sm font-normal font-unbounded  text-[#333333] mb-2">Content</h3>
+        <div className="p-4 ">
+
           <div className="relative">
             <PromptInput
               value={config.prompt}

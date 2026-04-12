@@ -81,19 +81,22 @@ const SlideCountSelect: React.FC<{
     return (
         <Popover open={open} onOpenChange={onOpenChange}>
             <PopoverTrigger asChild>
-                <Button
-                    variant="outline"
+                <button
                     role="combobox"
                     name="slides"
                     data-testid="slides-select"
                     aria-expanded={open}
-                    className="w-[105px] overflow-hidden font-syne font-medium bg-[#F6F6F9] text-slate-700 hover:bg-slate-50 focus-visible:ring-[#5146E5]/30 flex justify-between items-center gap-2 h-10 rounded-full px-3.5 ring-1 ring-inset ring-slate-200 shadow-sm"
+                    className=" overflow-hidden font-syne font-medium  text-[#191919]  focus-visible:ring-[#5146E5]/30 flex justify-between items-center gap-2 h-[34px] rounded-full px-3.5 ring-1 ring-inset ring-slate-200 shadow-sm"
                 >
-                    <span className="flex min-w-0 flex-1 items-center gap-2.5">
-                        <span className="text-sm font-medium ">{displayLabel}</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path d="M4.0835 12.25H9.91683" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M11.6665 1.75H2.33317C1.68884 1.75 1.1665 2.27233 1.1665 2.91667V8.75C1.1665 9.39433 1.68884 9.91667 2.33317 9.91667H11.6665C12.3108 9.91667 12.8332 9.39433 12.8332 8.75V2.91667C12.8332 2.27233 12.3108 1.75 11.6665 1.75Z" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <span className="flex flex-1 items-center gap-2.5">
+                        <span className="text-xs font-medium ">{displayLabel}</span>
                     </span>
                     <ChevronUp className="ml-2 h-4 w-4 shrink-0" />
-                </Button>
+                </button>
             </PopoverTrigger>
             <PopoverContent className="w-[140px] p-0 font-syne" align="end">
                 <div
@@ -170,21 +173,22 @@ const LanguageSelect: React.FC<{
 }> = ({ value, onValueChange, open, onOpenChange }) => (
     <Popover open={open} onOpenChange={onOpenChange}>
         <PopoverTrigger asChild>
-            <Button
-                variant="outline"
+            <button
                 role="combobox"
                 name="language"
                 data-testid="language-select"
                 aria-expanded={open}
-                className="w-[120px] overflow-hidden flex justify-between items-center gap-2 font-syne font-semibold bg-[#F6F6F9] text-slate-700 h-10 rounded-full px-3.5 ring-1 ring-inset ring-slate-200 shadow-sm"
+                className="w-[125px] flex items-center gap-2 overflow-hidden  font-syne font-semibold  text-[#191919] h-10 rounded-full px-3.5 ring-1 ring-inset ring-slate-200 shadow-sm"
             >
-                <span className="min-w-[65px] flex-1 text-left">
-                    <span className="text-sm font-medium truncate block">
+                <Languages className="w-3.5 h-3.5" />
+                <span className="w-[40px] text-left">
+                    <span className="text-xs font-medium truncate block">
                         {value || "Select language"}
                     </span>
                 </span>
                 <ChevronUp className="ml-2 h-4 w-4 shrink-0" />
-            </Button>
+
+            </button>
         </PopoverTrigger>
         <PopoverContent className="w-[300px] p-0" align="end">
             <Command>
@@ -284,7 +288,7 @@ export function ConfigurationSelects({
                     title="Advanced settings"
                     type="button"
                     onClick={() => handleOpenAdvancedChange(true)}
-                    className="ml-auto flex items-center gap-2 text-sm bg-[#F6F6F9] text-slate-700 hover:bg-slate-50 focus-visible:ring-[#5146E5]/30 h-10 rounded-xl px-3 ring-1 ring-inset ring-slate-200 shadow-sm font-instrument_sans font-medium"
+                    className="ml-auto flex items-center gap-2 text-sm  text-slate-700 hover:bg-slate-50 focus-visible:ring-[#5146E5]/30 h-10 rounded-xl px-3 ring-1 ring-inset ring-slate-200 shadow-sm font-instrument_sans font-medium"
                     data-testid="advanced-settings-button"
                 >
                     <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />

@@ -10,7 +10,6 @@ import {
     User,
     UserCheck,
 } from "lucide-react";
-import { Button } from "./ui/button";
 import {
     Command,
     CommandEmpty,
@@ -18,11 +17,12 @@ import {
     CommandInput,
     CommandItem,
     CommandList,
-} from "./ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+} from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getApiUrl } from "@/utils/api";
+import { Button } from "@/components/ui/button";
 
 interface CodexConfigProps {
     codexModel: string;
@@ -205,7 +205,8 @@ export default function CodexConfig({
             await fetch(getApiUrl("/api/v1/ppt/codex/auth/logout"), { method: "POST" });
             setAuthStatus("unauthenticated");
             applyProfile({});
-            onInputChange("", "codex_model");
+            onInputChange("codex", "LLM");
+            onInputChange('', "codex_model");
             toast.success("Signed out from ChatGPT");
         } catch {
             toast.error("Sign out failed");

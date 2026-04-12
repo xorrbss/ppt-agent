@@ -32,8 +32,7 @@ const DashboardSidebar = () => {
     const router = useRouter();
 
     const { llm_config } = useSelector((state: RootState) => state.userConfig)
-    const textProviderIcon = LLM_PROVIDERS[llm_config.LLM as keyof typeof LLM_PROVIDERS]?.icon
-    const imageProviderIcon = IMAGE_PROVIDERS[llm_config.IMAGE_PROVIDER as keyof typeof IMAGE_PROVIDERS]?.icon || '/providers/pexel.png'
+
 
 
 
@@ -45,11 +44,11 @@ const DashboardSidebar = () => {
         >
             <div>
 
-                <div onClick={() => { trackEvent(MixpanelEvent.Sidebar_Navigation_Clicked, { target: '/dashboard' }); router.push("/dashboard"); }} className="flex items-center  pb-6 border-b border-[#E1E1E5]   gap-2    ">
+                <Link href={`/dashboard`} onClick={() => { trackEvent(MixpanelEvent.Sidebar_Navigation_Clicked, { target: '/dashboard' }); }} className="flex items-center  pb-6 border-b border-[#E1E1E5]   gap-2    ">
                     <div className="bg-[#7C51F8] rounded-full cursor-pointer p-1 flex justify-center items-center mx-auto">
                         <img src="/logo-with-bg.png" alt="Presenton logo" className="h-[40px] object-contain w-full" />
                     </div>
-                </div>
+                </Link>
                 <nav className="pt-6 font-syne" aria-label="Dashboard sections">
                     <div className="  space-y-6">
 
