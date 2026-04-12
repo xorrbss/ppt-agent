@@ -28,10 +28,10 @@ const Header = () => {
 
   const backHref = backToUpload ? "/upload" : backToTemplates ? "/templates" : "/dashboard";
   const backLabel = backToUpload
-    ? "Back"
+    ? "BACK"
     : backToTemplates
-      ? "Back"
-      : "Back";
+      ? "BACK"
+      : "BACK";
 
   return (
     <div className="w-full   sticky top-0 z-50 py-7 "
@@ -55,12 +55,12 @@ const Header = () => {
             <div>
               <Link
                 href={backHref}
-                className="text-[#7A5AF8] text-xs font-syne font-semibold flex items-center gap-2"
+                className="text-[#333333] text-xs font-syne font-semibold flex items-center gap-2"
                 onClick={() =>
                   trackEvent(MixpanelEvent.Navigation, { from: pathname, to: backHref })
                 }
               >
-                <ArrowLeft className="w-4 h-4 shrink-0" aria-hidden />
+                <ArrowLeft className="w-4 h-4 shrink-0 text-[#333333]" aria-hidden />
                 <span>{backLabel}</span>
               </Link>
             </div>

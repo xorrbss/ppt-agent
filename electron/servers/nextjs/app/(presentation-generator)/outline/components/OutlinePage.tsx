@@ -37,6 +37,13 @@ const OutlinePage: React.FC = () => {
   if (!presentation_id) {
     return <EmptyStateView />;
   }
+  const handleTabChange = (tab: string) => {
+    if (streamState.isStreaming) {
+      return;
+    }
+    setActiveTab(tab);
+
+  };
 
 
   return (
@@ -51,10 +58,10 @@ const OutlinePage: React.FC = () => {
 
       <Wrapper className="flex flex-col w-full relative px-5 sm:px-10 lg:px-20 ">
         <div className="w-full mx-auto">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex w-full flex-col">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="flex w-full flex-col">
             {/* Reserves vertical space so content does not sit under the fixed tab bar */}
             <div className="h-[4.75rem] shrink-0 sm:h-[5rem]" aria-hidden />
-            <div className="fixed top-26 left-0 right-0 z-40  pb-2">
+            <div className="fixed top-26 left-0 right-0 z-50  pb-2">
               <div className="mx-auto w-full max-w-[1440px] px-5 sm:px-10 lg:px-20">
                 <TabsList className="my-4 h-auto w-fit rounded-full border border-[#EDEEEF] bg-white p-1.5">
                   <TabsTrigger
