@@ -1,27 +1,12 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import {
-  Check,
-  ChevronUp,
   Loader2,
   RefreshCw,
   Trash2,
-  Crown,
-  User,
   UserCheck,
   ArrowRight,
 } from "lucide-react";
-import { Button } from "./ui/button";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "./ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getApiUrl } from "@/utils/api";
 import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";

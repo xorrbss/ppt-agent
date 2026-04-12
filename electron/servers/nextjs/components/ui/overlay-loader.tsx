@@ -65,19 +65,19 @@ export const OverlayLoader = ({
                         />
                         {text && (
                             <div className="space-y-1">
-                                <p className="text-white text-base text-center font-semibold font-inter">
+                                <p className="text-[#191919] text-base text-center font-medium font-inter">
                                     {text}
                                 </p>
-                                {extra_info && <p className="text-white/80 text-xs text-center font-semibold font-inter">{extra_info}</p>}
+                                {extra_info && <p className="text-[#191919]/80 text-xs text-center font-medium font-inter">{extra_info}</p>}
                             </div>
                         )}
                     </div>
                 ) : (
                     <>
-                        <p className="text-white text-base text-center font-semibold font-inter">
+                        <p className="text-[#191919] text-base text-center font-medium font-inter">
                             {text}
                         </p>
-                        {extra_info && <p className="text-white/80 text-xs text-center font-semibold font-inter">{extra_info}</p>}
+                        {extra_info && <p className="text-[#191919]/80 text-xs text-center font-medium font-inter">{extra_info}</p>}
                     </>
 
                 )}

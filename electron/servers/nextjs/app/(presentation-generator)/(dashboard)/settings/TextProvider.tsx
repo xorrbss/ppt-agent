@@ -1,4 +1,3 @@
-import CodexConfig from '@/components/SettingCodex';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -10,6 +9,7 @@ import { LLM_PROVIDERS } from '@/utils/providerConstants';
 import { Check, Loader2, Eye, EyeOff, ChevronUp } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { notify } from '@/components/ui/sonner';
+import CodexConfig from './SettingCodex';
 
 
 interface OpenAIConfigProps {
