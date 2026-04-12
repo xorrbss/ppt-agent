@@ -83,8 +83,3 @@ app.add_middleware(
 )
 
 app.add_middleware(UserConfigEnvUpdateMiddleware)
-
-
-@app.get("/sentry-debug")
-async def trigger_error():
-    return {"division_by_zero": 1 / 0}

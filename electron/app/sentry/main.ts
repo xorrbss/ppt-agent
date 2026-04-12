@@ -81,12 +81,3 @@ export function initMainSentry(): void {
     console.error("[Sentry] Failed to initialize in Electron main process:", error);
   }
 }
-
-export function captureMainSentryTestError(message?: string): string | null {
-  if (!isSentryInitialized) {
-    return null;
-  }
-
-  const error = new Error(message || "Sentry test error in main process");
-  return Sentry.captureException(error);
-}

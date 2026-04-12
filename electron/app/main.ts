@@ -16,7 +16,7 @@ import { getPuppeteerExecutablePath, isChromeInstalled } from "./utils/puppeteer
 import { getLiteParseRunnerPath } from "./utils/liteparse-check";
 import { getImageMagickBinaryPath, isImageMagickInstalled } from "./utils/imagemagick-check";
 import { startUpdateChecker, stopUpdateChecker } from "./utils/update-checker";
-import { captureMainSentryTestError, initMainSentry } from "./sentry/main";
+import { initMainSentry } from "./sentry/main";
 
 
 var win: BrowserWindow | undefined;
@@ -31,9 +31,6 @@ const startupStatus: Record<string, string> = {
 
 // Allow renderer to query initial startup status as soon as it loads.
 ipcMain.handle("startup:get-status", () => startupStatus);
-ipcMain.handle("sentry:test-main-error", (_event, message?: string) => {
-  return captureMainSentryTestError(message);
-});
 
 initMainSentry();
 

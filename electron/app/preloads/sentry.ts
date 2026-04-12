@@ -74,13 +74,4 @@ export function initRendererSentry(): void {
   Sentry.setTag('process.type', 'renderer');
 }
 
-export function captureRendererSentryTestError(message?: string): string | null {
-  if (!isSentryInitialized) {
-    return null;
-  }
-
-  const error = new Error(message || 'Sentry test error in renderer process');
-  return Sentry.captureException(error);
-}
-
 initRendererSentry();
