@@ -1,126 +1,5 @@
 import * as z from "zod";
-
-const CODE_BLOCK_MAX_FONT_SIZE = 16;
-const CODE_BLOCK_MIN_FONT_SIZE = 8;
-const CODE_BLOCK_WIDTH = 506;
-const CODE_BLOCK_HEIGHT = 430;
-const CODE_CHAR_WIDTH_RATIO = 0.62;
-const CODE_LINE_HEIGHT_RATIO = 1.25;
-const CODE_FONT_FAMILY = "var(--code-font-family,'Liberation Mono', monospace)";
-
-function splitCollapsedPythonImports(line: string) {
-  const importSegments = line
-    .split(/(?=\sfrom\s+[A-Za-z0-9_.]+\s+import\s+)/g)
-    .map((segment) => segment.trim())
-    .filter(Boolean);
-
-  return importSegments.length > 1 ? importSegments : [line];
-}
-
-function expandInlinePythonStatement(line: string) {
-  const inlineReturnMatch = line.match(/^(\s*def\s+[^(]+\([^)]*\):)\s+return\s+(.+)$/);
-
-  if (!inlineReturnMatch) {
-    return [line];
-  }
-
-  return [inlineReturnMatch[1], `    return ${inlineReturnMatch[2]}`];
-}
-
-function expandPathListAssignment(line: string) {
-  const trimmedLine = line.trim();
-
-  if (!trimmedLine.startsWith("urlpatterns = [") || !trimmedLine.endsWith("]")) {
-    return [line];
-  }
-
-  const pathCalls = trimmedLine.match(/path\([^)]*\)/g);
-
-  if (!pathCalls?.length) {
-    return [line];
-  }
-
-  return [
-    "urlpatterns = [",
-    ...pathCalls.map((pathCall) => `    ${pathCall},`),
-    "]",
-  ];
-}
-
-function normalizePythonCode(content: string) {
-  const normalizedLines: string[] = [];
-
-  for (const line of content.split("\n")) {
-    const importLines = splitCollapsedPythonImports(line);
-
-    for (const importLine of importLines) {
-      const expandedPathLines = expandPathListAssignment(importLine);
-
-      for (const expandedPathLine of expandedPathLines) {
-        normalizedLines.push(...expandInlinePythonStatement(expandedPathLine));
-      }
-    }
-  }
-
-  return normalizedLines.join("\n").replace(/\n{3,}/g, "\n\n");
-}
-
-function normalizeCodeContent(language?: string, content?: string) {
-  let normalizedContent = (content || "")
-    .replace(/\r\n?/g, "\n")
-    .replace(/\\\[/g, "[")
-    .replace(/\\\]/g, "]")
-    .trimEnd();
-
-  if (language?.toLowerCase() === "python") {
-    normalizedContent = normalizePythonCode(normalizedContent);
-  }
-
-  return normalizedContent;
-}
-
-function getCodeBlockTypography(content?: string) {
-  const normalizedLines = (content || "").replace(/\t/g, "  ").split("\n");
-  const longestLineLength = Math.max(
-    1,
-    ...normalizedLines.map((line) => line.length)
-  );
-
-  for (let fontSize = CODE_BLOCK_MAX_FONT_SIZE; fontSize >= CODE_BLOCK_MIN_FONT_SIZE; fontSize -= 0.5) {
-    const lineHeight = Math.round(fontSize * CODE_LINE_HEIGHT_RATIO);
-    const fitsWidth = longestLineLength * fontSize * CODE_CHAR_WIDTH_RATIO <= CODE_BLOCK_WIDTH;
-    const fitsHeight = normalizedLines.length * lineHeight <= CODE_BLOCK_HEIGHT;
-
-    if (fitsWidth && fitsHeight) {
-      return { fontSize, lineHeight };
-    }
-  }
-
-  return {
-    fontSize: CODE_BLOCK_MIN_FONT_SIZE,
-    lineHeight: Math.round(CODE_BLOCK_MIN_FONT_SIZE * CODE_LINE_HEIGHT_RATIO),
-  };
-}
-
-function getCodeLineRuns(content: string, lineHeight: number) {
-  const codeLineRuns: { text: string; marginTop: number }[] = [];
-  let blankLineCount = 0;
-
-  for (const line of content.split("\n")) {
-    if (line.length === 0) {
-      blankLineCount += 1;
-      continue;
-    }
-
-    codeLineRuns.push({
-      text: line,
-      marginTop: blankLineCount * lineHeight,
-    });
-    blankLineCount = 0;
-  }
-
-  return codeLineRuns;
-}
+import { fitCodeBlock } from "./codeBlockFitting";
 
 export const slideLayoutId = "code-explanation-split-slide";
 export const slideLayoutName = "Code Explanation Split Slide";
@@ -186,12 +65,14 @@ const CodeSlide02CodeExplanationSplit = ({
 }: {
   data: Partial<SchemaType>;
 }) => {
-  const normalizedCodeContent = normalizeCodeContent(
-    data.codeSnippet?.language,
-    data.codeSnippet?.content
-  );
-  const codeTypography = getCodeBlockTypography(normalizedCodeContent);
-  const codeLineRuns = getCodeLineRuns(normalizedCodeContent, codeTypography.lineHeight);
+  const fittedCode = fitCodeBlock({
+    language: data.codeSnippet?.language,
+    content: data.codeSnippet?.content,
+    maxWidth: 506,
+    maxHeight: 430,
+    maxFontSize: 16,
+    minFontSize: 8,
+  });
 
   return (
     <>
@@ -229,22 +110,19 @@ const CodeSlide02CodeExplanationSplit = ({
                 className="min-h-0 w-full flex-1 overflow-hidden px-[32px] py-[20px]"
                 style={{
                   color: "var(--background-text,#ffffff)",
-                  fontFamily: CODE_FONT_FAMILY,
                 }}
               >
-                {codeLineRuns.map((codeLineRun, index) => (
-                  <div
-                    key={`code-line-${index}`}
-                    style={{
-                      marginTop: codeLineRun.marginTop ? `${codeLineRun.marginTop}px` : undefined,
-                      fontSize: `${codeTypography.fontSize}px`,
-                      lineHeight: `${codeTypography.lineHeight}px`,
-                      whiteSpace: "pre",
-                    }}
-                  >
-                    {codeLineRun.text}
-                  </div>
-                ))}
+                <pre
+                  className="m-0 w-full overflow-hidden"
+                  style={{
+                    fontFamily: fittedCode.fontFamily,
+                    fontSize: `${fittedCode.fontSize}px`,
+                    lineHeight: `${fittedCode.lineHeight}px`,
+                    whiteSpace: "pre",
+                  }}
+                >
+                  {fittedCode.text}
+                </pre>
               </div>
             </div>
 

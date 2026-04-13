@@ -9,7 +9,7 @@ const StatisticSchema = z.object({
   value: z.string().max(8).meta({
     description: "Main metric value shown at the top of one card.",
   }),
-  label: z.string().max(20).meta({
+  label: z.string().max(45).meta({
     description: "Label shown under the value.",
   }),
 });
@@ -28,14 +28,14 @@ export const Schema = z.object({
     .min(2)
     .max(8)
     .default([
-      { value: "120", label: "Sales Team Strength" },
-      { value: "15", label: "Senior Sales Officer" },
-      { value: "1", label: "National Manager" },
-      { value: "25", label: "Sales Officers" },
-      { value: "2", label: "Regional Manager" },
-      { value: "50", label: "Distributor Reps" },
-      { value: "5", label: "Zonal Manager" },
-      { value: "20", label: "Merchandising Team" },
+      { value: "120", label: "Sales Team Strength with a long label to test the layouts" },
+      { value: "15", label: "Senior Sales Officer with a long label to test the layout" },
+      { value: "1", label: "National Manager with a long label to test the layout" },
+      { value: "25", label: "Sales Officers with a long label to test the layout" },
+      { value: "2", label: "Regional Manager with a long label to test the layout" },
+      { value: "50", label: "Distributor Reps with a long label to test the layout" },
+      { value: "5", label: "Zonal Manager with a long label to test the layout" },
+      { value: "20", label: "Merchandising Team with a long label to the layout" },
     ])
     .meta({
       description: "statistic cards, with value and label each in a card",
@@ -93,29 +93,35 @@ const EducationStatisticsGridSlide = ({ data }: { data: Partial<SchemaType> }) =
 
 
           {data.stats && data.stats?.length > 4 && data.stats?.length <= 8 && (() => {
-            const rightArray = data.stats?.slice(0, Math.floor(data.stats?.length / 2));
-            const leftArray = data.stats?.slice(Math.floor(data.stats?.length / 2));
+            // const rightArray = data.stats?.slice(0, Math.floor(data.stats?.length / 2));
+            // const leftArray = data.stats?.slice(Math.floor(data.stats?.length / 2));
 
             return (
-              <div className="h-full flex w-full">
-                <div className="flex flex-col h-full flex-1">
+              <div className="h-full grid grid-cols-2 w-full">
+                {/* <div className="flex flex-col h-full flex-1"> */}
 
-                  {leftArray?.map((stat: any, index: number) => (
-                    <div
-                      key={`${stat?.value}-${index}`}
-                      className="px-[52px] pt-[22px] h-full"
-                      style={{ backgroundColor: index % 2 === 0 ? 'var(--card-color,#5C0FD908)' : 'var(--card-color,white)' }}
-                    >
-                      <p className=" text-[58px] leading-[56px]" style={{ color: "var(--background-text,#283E51)" }}>
-                        {stat?.value}
-                      </p>
-                      <p className="mt-[12px] text-[24px]" style={{ color: "var(--background-text,#434A63)" }}>
-                        {stat?.label}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex flex-col  flex-1">
+                {data.stats?.map((stat: any, index: number) => (
+                  <div
+                    key={`${stat?.value}-${index}`}
+                    className="px-[52px] pt-[22px] h-full"
+                    style={{
+                      backgroundColor: [0, 3, 4, 7].includes(index)
+                        ? 'var(--card-color,#5C0FD908)'
+                        : 'var(--card-color,white)'
+                    }}
+                  >
+                    <p className=" text-[58px] leading-[56px]" style={{ color: "var(--background-text,#283E51)" }}>
+                      {stat?.value}
+                    </p>
+                    <p className="mt-[12px] text-[24px]" style={{ color: "var(--background-text,#434A63)" }}>
+                      {stat?.label}
+                    </p>
+                  </div>
+                ))}
+
+                {/* </div> */}
+
+                {/* <div className="flex flex-col  flex-1">
 
                   {rightArray?.map((stat: any, index: number) => (
                     <div
@@ -131,7 +137,7 @@ const EducationStatisticsGridSlide = ({ data }: { data: Partial<SchemaType> }) =
                       </p>
                     </div>
                   ))}
-                </div>
+                </div> */}
               </div>
             );
           })()}

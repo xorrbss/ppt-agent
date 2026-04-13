@@ -76,7 +76,7 @@ export const SlidePreviewSection: React.FC<SlidePreviewSectionProps> = ({
                             size="lg"
                             onClick={onInitTemplate}
                             disabled={isLoading}
-                            className="px-4 py-2 h-auto text-xs font-semibold rounded-full shadow-lg hover:shadow-xl transition-all duration-300 "
+                            className="px-4 py-2 h-auto text-xs font-syne font-medium rounded-full shadow-lg hover:shadow-xl transition-all duration-300 "
                             style={{
                                 background: isLoading
                                     ? '#E5E7EB'
@@ -91,7 +91,7 @@ export const SlidePreviewSection: React.FC<SlidePreviewSectionProps> = ({
                                 </>
                             ) : (
                                 <>
-                                    <Sparkles className="w-4 h-4 mr-1" />
+
                                     Generate Template
                                     <ChevronRight className="w-4 h-4 ml-1" />
                                 </>

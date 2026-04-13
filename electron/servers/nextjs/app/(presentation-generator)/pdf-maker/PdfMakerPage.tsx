@@ -62,6 +62,10 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
       const data = await DashboardApi.getPresentation(presentation_id);
       dispatch(setPresentationData(data));
       setContentLoading(false);
+
+      if (data.fonts) {
+        useFontLoader(data.fonts);
+      }
       if (data?.theme) {
         try {
           applyTheme(data.theme);

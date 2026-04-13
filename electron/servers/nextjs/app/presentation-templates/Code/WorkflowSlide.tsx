@@ -91,11 +91,16 @@ const CodeSlide06Workflow = ({ data }: { data: Partial<SchemaType> }) => {
 
         <h2 className="text-[64px] font-medium" style={{ color: "var(--background-text,#ffffff)" }}>{data.title}</h2>
 
-        <div className="mt-[52px] grid flex-1 grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] items-center gap-[12px]">
+        <div className="mt-[52px] grid flex-1  justify-center items-center gap-[12px]"
+
+          style={{
+            gridTemplateColumns: data.steps?.length === 1 ? '1fr' : data?.steps?.length === 2 ? '1fr auto 1fr' : data?.steps?.length === 3 ? '1fr auto 1fr auto 1fr' : data?.steps?.length === 4 ? '1fr auto 1fr auto 1fr auto 1fr' : '1fr auto 1fr auto 1fr auto 1fr auto 1fr',
+          }}
+        >
           {data?.steps?.map((step, index) => (
             <Fragment key={`${step.title}-${index}`}>
               <div
-                className="rounded-[18px] border p-[21px] text-center"
+                className="rounded-[18px] border max-w-[500px] mx-auto  p-[21px] text-center"
                 style={{
                   boxShadow: "0 33.333px 66.667px -16px rgba(0, 0, 0, 0.25)",
                   borderColor: "var(--stroke,#1D293D80)",

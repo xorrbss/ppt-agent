@@ -1,8 +1,24 @@
 "use client"
 
 import type React from "react"
-import { BadgeCheck, Loader2, ShieldAlert } from "lucide-react"
+import { BadgeCheck, Info, Loader2, ShieldAlert } from "lucide-react"
 import { Toaster as Sonner, toast as sonnerToast } from "sonner"
+
+/** Blue circle for neutral / informational toasts (matches web `servers/nextjs` Toaster). */
+function NeutralToastIcon() {
+
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 19 19" fill="none">
+      <path d="M9.12333 17.4567C13.7257 17.4567 17.4567 13.7257 17.4567 9.12337C17.4567 4.521 13.7257 0.790039 9.12333 0.790039C4.52096 0.790039 0.790001 4.521 0.790001 9.12337C0.790001 13.7257 4.52096 17.4567 9.12333 17.4567Z" fill="url(#paint0_linear_4686_451)" stroke="#2863A3" strokeWidth="1.58" strokeLinecap="round" strokeLinejoin="round" />
+      <defs>
+        <linearGradient id="paint0_linear_4686_451" x1="9.12333" y1="0.790039" x2="9.12333" y2="17.4567" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#1880F6" />
+          <stop offset="1" stopColor="#75B5FF" />
+        </linearGradient>
+      </defs>
+    </svg>
+  )
+}
 
 /** Toasts with both title and description (matches styled [data-title] / [data-description]). */
 export const notify = {
@@ -20,7 +36,7 @@ const Toaster = ({ icons, ...props }: ToasterProps) => {
   const defaultIcons: NonNullable<ToasterProps["icons"]> = {
     success: <BadgeCheck aria-hidden="true" />,
     error: <ShieldAlert aria-hidden="true" />,
-    info: <ShieldAlert aria-hidden="true" />,
+    info: <Info className="fill-[#1880F6] stroke-white" />,
     warning: <ShieldAlert aria-hidden="true" />,
     loading: <Loader2 aria-hidden="true" className="animate-spin" />,
     close: <span aria-hidden="true">Got it!</span>,

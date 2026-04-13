@@ -382,8 +382,6 @@ export function FlexibleReportChart({
     case "bar":
       return (
         <ResponsiveContainer width="100%" height="100%">
-
-
           <BarChart data={normalizedData as any[]} {...commonProps}>
             <CartesianGrid vertical={false} {...gridProps} />
             <XAxis

@@ -6,6 +6,7 @@ import { DashboardApi } from '../../services/api/dashboard';
 import { clearHistory } from "@/store/slices/undoRedoSlice";
 import { applyPresentationThemeToElement } from "../utils/applyPresentationThemeDom";
 import { resolveBackendAssetUrl } from "@/utils/api";
+import { useFontLoader } from "../../hooks/useFontLoad";
 
 const normalizePresentationAssets = <T,>(input: T): T => {
   if (Array.isArray(input)) {
@@ -45,6 +46,9 @@ export const usePresentationData = (
         dispatch(setPresentationData(normalizedData));
         dispatch(clearHistory());
         setLoading(false);
+      }
+      if (data.fonts) {
+        useFontLoader(data.fonts);
       }
       if (normalizedData?.theme) {
         const el = document.getElementById("presentation-slides-wrapper");

@@ -139,7 +139,7 @@ const CodeSlide04FeatureGrid = ({ data }: { data: Partial<SchemaType> }) => {
                     url={feature.icon?.__icon_url__}
                     strokeColor={"currentColor"}
                     className="h-[24px] w-[24px] object-contain"
-                    color="var(--primary-text, #000000)"
+                    color="var(--primary-text, #ffffff)"
                     title={feature.icon.__icon_query__}
                   />
                 </span>

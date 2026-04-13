@@ -81,13 +81,13 @@ const MetricCardSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().min(4).max(12).default("Report").meta({
+  title: z.string().max(24).default("Report Report Report Report").meta({
     description: "Slide heading text.",
   }),
-  taglineLabel: z.string().min(3).max(10).default("TAGLINE").meta({
+  taglineLabel: z.string().max(24).default("TAGLINE").meta({
     description: "Small label above intro paragraph.",
   }),
-  taglineBody: z.string().min(40).max(120).default(
+  taglineBody: z.string().max(120).default(
     "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."
   ).meta({
     description: "Intro paragraph shown beneath the heading.",
@@ -361,7 +361,7 @@ const ReportSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
                 {title}
               </h2>
 
-              <div className="mt-[14px] w-[560px]">
+              <div className="mt-[14px] ">
                 <p
                   className="text-[20px] font-semibold tracking-[2.074px] text-[#083F37]"
                   style={{ color: "var(--primary-color,#083F37)" }}

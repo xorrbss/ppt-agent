@@ -17,7 +17,7 @@ const IntroBlockSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().min(4).max(16).default("Introduction").meta({
+  title: z.string().max(15).default("Introduction").meta({
     description: "Primary title in the right column.",
   }),
   portraitImage: z.object({

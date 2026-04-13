@@ -32,7 +32,7 @@ const RowSchema = z.union([GeneralRowSchema, LegacyRowSchema]);
 
 
 export const Schema = z.object({
-  title: z.string().max(14).default("Comparison Chart").meta({
+  title: z.string().max(24).default("Comparison Chart Comparison").meta({
     description: "Main heading shown above the table.",
   }),
   subtitle: z.string().max(80).default(

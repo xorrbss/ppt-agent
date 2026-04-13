@@ -1,4 +1,5 @@
 import * as z from "zod";
+import { fitCodeBlock } from "./codeBlockFitting";
 
 
 export const slideLayoutId = "api-request-response-slide";
@@ -68,6 +69,23 @@ const CodeSlide03ApiRequestResponse = ({
 }: {
   data: Partial<SchemaType>;
 }) => {
+  const requestCode = fitCodeBlock({
+    language: data.requestSnippet?.language,
+    content: data.requestSnippet?.content,
+    maxWidth: 540,
+    maxHeight: 230,
+    maxFontSize: 14,
+    minFontSize: 8,
+  });
+
+  const responseCode = fitCodeBlock({
+    language: data.responseSnippet?.language,
+    content: data.responseSnippet?.content,
+    maxWidth: 540,
+    maxHeight: 430,
+    maxFontSize: 14,
+    minFontSize: 8,
+  });
 
   return (
     <>
@@ -83,8 +101,8 @@ const CodeSlide03ApiRequestResponse = ({
         <div className="relative z-10 flex h-full flex-col">
           <h2 className="text-[64px] font-medium" style={{ color: "var(--background-text,#ffffff)" }}>{data.title}</h2>
 
-          <div className="mt-[22px] grid  flex-1 grid-cols-2 gap-[22px]">
-            <div className="flex  flex-col gap-[12px] ">
+          <div className="mt-[22px] grid min-h-0 flex-1 grid-cols-2 gap-[22px]">
+            <div className="flex min-h-0 flex-col gap-[12px]">
               <div
                 className="rounded-[14px] border p-[14px]"
                 style={{
@@ -113,7 +131,7 @@ const CodeSlide03ApiRequestResponse = ({
               </div>
 
               <div
-                className=" flex-1 border rounded-[18px]"
+                className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[18px] border"
                 style={{
                   backgroundColor: "var(--card-color,#0F172B80)",
                   borderColor: "var(--stroke,#1D293D80)",
@@ -129,17 +147,25 @@ const CodeSlide03ApiRequestResponse = ({
                 >
                   {data.requestSnippet?.fileName}
                 </p>
-                <pre className=" w-full px-[14px] py-[20px] whitespace-pre-wrap break-words overflow-hidden" style={{ color: "var(--background-text,#ffffff)" }}>
-
-                  <code className="w-full ">
-                    {data.requestSnippet?.content}
-                  </code>
-                </pre>
+                <div className="min-h-0 w-full flex-1 overflow-hidden px-[14px] py-[20px]">
+                  <pre
+                    className="m-0 w-full overflow-hidden"
+                    style={{
+                      color: "var(--background-text,#ffffff)",
+                      fontFamily: requestCode.fontFamily,
+                      fontSize: `${requestCode.fontSize}px`,
+                      lineHeight: `${requestCode.lineHeight}px`,
+                      whiteSpace: "pre",
+                    }}
+                  >
+                    {requestCode.text}
+                  </pre>
+                </div>
               </div>
             </div>
 
             <div
-              className=" flex-1 border rounded-[18px]"
+              className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[18px] border"
               style={{
                 backgroundColor: "var(--card-color,#0F172B80)",
                 borderColor: "var(--stroke,#1D293D80)",
@@ -155,12 +181,20 @@ const CodeSlide03ApiRequestResponse = ({
               >
                 {data.responseSnippet?.fileName}
               </p>
-              <pre className=" w-full px-[14px] py-[20px] whitespace-pre-wrap break-words overflow-hidden" style={{ color: "var(--background-text,#ffffff)" }}>
-
-                <code className="w-full ">
-                  {data.responseSnippet?.content}
-                </code>
-              </pre>
+              <div className="min-h-0 w-full flex-1 overflow-hidden px-[14px] py-[20px]">
+                <pre
+                  className="m-0 w-full overflow-hidden"
+                  style={{
+                    color: "var(--background-text,#ffffff)",
+                    fontFamily: responseCode.fontFamily,
+                    fontSize: `${responseCode.fontSize}px`,
+                    lineHeight: `${responseCode.lineHeight}px`,
+                    whiteSpace: "pre",
+                  }}
+                >
+                  {responseCode.text}
+                </pre>
+              </div>
             </div>
           </div>
         </div>

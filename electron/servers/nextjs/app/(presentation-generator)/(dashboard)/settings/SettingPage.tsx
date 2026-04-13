@@ -158,8 +158,7 @@ const SettingsPage = () => {
         isDisabled: false,
         text: "Save Configuration",
       }));
-      trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/upload" });
-      router.push("/upload");
+
     } catch (error) {
       const message =
         error instanceof Error
