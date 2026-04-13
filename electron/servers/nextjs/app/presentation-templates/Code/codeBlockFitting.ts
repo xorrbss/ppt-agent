@@ -1,9 +1,83 @@
+import { jsonrepair } from "jsonrepair";
+import Prism from "prismjs";
+import "prismjs/components/prism-json";
+import "prismjs/components/prism-javascript";
+import "prismjs/components/prism-typescript";
+import "prismjs/components/prism-jsx";
+import "prismjs/components/prism-tsx";
+import "prismjs/components/prism-python";
+import "prismjs/components/prism-bash";
+import "prismjs/components/prism-yaml";
+import "prismjs/components/prism-markdown";
+
 const DEFAULT_CODE_CHAR_WIDTH_RATIO = 0.62;
 const DEFAULT_CODE_LINE_HEIGHT_RATIO = 1.25;
 const DEFAULT_FONT_STEP = 0.5;
 const HARD_MIN_FONT_SIZE = 4;
 
 export const DEFAULT_CODE_FONT_FAMILY = "var(--code-font-family,'Liberation Mono', monospace)";
+export const PRISM_CODE_BLOCK_STYLES = `
+.prism-code-block .token {
+  display: inline !important;
+  white-space: inherit !important;
+}
+
+.prism-code-block .token.comment,
+.prism-code-block .token.prolog,
+.prism-code-block .token.doctype,
+.prism-code-block .token.cdata {
+  color: #7b8ebf;
+}
+
+.prism-code-block .token.punctuation {
+  color: #a8b7e0;
+}
+
+.prism-code-block .token.property,
+.prism-code-block .token.tag,
+.prism-code-block .token.constant,
+.prism-code-block .token.symbol,
+.prism-code-block .token.deleted {
+  color: #7bc4ff;
+}
+
+.prism-code-block .token.boolean,
+.prism-code-block .token.number {
+  color: #f5c97b;
+}
+
+.prism-code-block .token.selector,
+.prism-code-block .token.attr-name,
+.prism-code-block .token.string,
+.prism-code-block .token.char,
+.prism-code-block .token.builtin,
+.prism-code-block .token.inserted {
+  color: #9fe6b8;
+}
+
+.prism-code-block .token.operator,
+.prism-code-block .token.entity,
+.prism-code-block .token.url,
+.prism-code-block .token.variable {
+  color: #f5a97f;
+}
+
+.prism-code-block .token.atrule,
+.prism-code-block .token.attr-value,
+.prism-code-block .token.function,
+.prism-code-block .token.class-name {
+  color: #b8a8ff;
+}
+
+.prism-code-block .token.keyword {
+  color: #7aa2ff;
+}
+
+.prism-code-block .token.regex,
+.prism-code-block .token.important {
+  color: #f9e2af;
+}
+`;
 
 interface FitCodeBlockOptions {
   language?: string;
@@ -20,11 +94,13 @@ interface FitCodeBlockOptions {
 interface TypographyCandidate {
   lineHeight: number;
   maxCharsPerLine: number;
-  wrappedLines: string[];
+  renderedLineCount: number;
 }
 
 export interface FittedCodeBlock {
   text: string;
+  highlightedHtml: string;
+  prismLanguage: string;
   fontSize: number;
   lineHeight: number;
   fontFamily: string;
@@ -46,7 +122,7 @@ function expandInlinePythonStatement(line: string) {
     return [line];
   }
 
-  return [inlineReturnMatch[1], `    return ${inlineReturnMatch[2]}`];
+  return [inlineReturnMatch[1], `return ${inlineReturnMatch[2]}`];
 }
 
 function expandPathListAssignment(line: string) {
@@ -88,10 +164,272 @@ function normalizePythonCode(content: string) {
 }
 
 function tryFormatJson(content: string) {
+  const trimmedContent = content.replace(/^\uFEFF/, "").trim();
+
+  if (!trimmedContent) {
+    return "";
+  }
+
+  const normalizedSeparatorsContent = trimmedContent
+    .replace(/^\s*\/\s*$/gm, ",")
+    .replace(/\r\n?/g, "\n")
+    .replace(/\n\s*:\s*/g, ": ")
+    .replace(/\n\s*,\s*/g, ", ");
+
+  const parseAndFormat = (raw: string) => {
+    try {
+      const parsed = JSON.parse(raw);
+
+      if (typeof parsed === "string") {
+        try {
+          return JSON.stringify(JSON.parse(parsed), null, 2);
+        } catch {
+          return JSON.stringify(parsed, null, 2);
+        }
+      }
+
+      return JSON.stringify(parsed, null, 2);
+    } catch {
+      return null;
+    }
+  };
+
+  const extractedJsonMatch = normalizedSeparatorsContent.match(/[\[{][\s\S]*[\]}]/);
+  const extractedJsonCandidate = extractedJsonMatch?.[0];
+
+  const candidates = [
+    normalizedSeparatorsContent,
+    trimmedContent,
+    extractedJsonCandidate,
+  ].filter((candidate): candidate is string => Boolean(candidate));
+
+  for (const candidate of candidates) {
+    const direct = parseAndFormat(candidate);
+    if (direct !== null) {
+      return direct;
+    }
+
+    try {
+      const repairedJson = jsonrepair(candidate);
+      const repaired = parseAndFormat(repairedJson);
+      if (repaired !== null) {
+        return repaired;
+      }
+    } catch {
+      // Try next parsing strategy.
+    }
+  }
+
+  const jsonLikeTokenMatch = normalizedSeparatorsContent.match(
+    /"(?:\\.|[^"\\])*"|true|false|null|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|[{}\[\]:,\/]/g
+  );
+
+  if (jsonLikeTokenMatch?.length) {
+    const normalizedTokens = jsonLikeTokenMatch.map((token) => (token === "/" ? "," : token));
+    let rebuilt = "";
+
+    for (const token of normalizedTokens) {
+      if (token === ":" || token === ",") {
+        rebuilt = rebuilt.replace(/\s*$/, "");
+        rebuilt += `${token} `;
+        continue;
+      }
+
+      if (token === "}" || token === "]") {
+        rebuilt = rebuilt.replace(/\s*$/, "");
+        rebuilt += token;
+        continue;
+      }
+
+      if (token === "{" || token === "[") {
+        rebuilt = rebuilt.replace(/\s*$/, "");
+        rebuilt += token;
+        continue;
+      }
+
+      rebuilt += token;
+    }
+
+    const rebuiltDirect = parseAndFormat(rebuilt);
+    if (rebuiltDirect !== null) {
+      return rebuiltDirect;
+    }
+
+    try {
+      const rebuiltRepaired = parseAndFormat(jsonrepair(rebuilt));
+      if (rebuiltRepaired !== null) {
+        return rebuiltRepaired;
+      }
+    } catch {
+      // Continue to best-effort line merge fallback below.
+    }
+  }
+
+  const normalizedLines = normalizedSeparatorsContent
+    .replace(/\n\s*:\s*\n\s*/g, ": ")
+    .replace(/\n\s*\/\s*\n/g, ",\n")
+    .split("\n")
+    .map((line) => line.replace(/\s+$/g, ""));
+
+  const mergedLines: string[] = [];
+
+  for (const rawLine of normalizedLines) {
+    const trimmedLine = rawLine.trim();
+
+    if (!trimmedLine) {
+      continue;
+    }
+
+    if (trimmedLine === ":") {
+      if (mergedLines.length > 0) {
+        mergedLines[mergedLines.length - 1] = `${mergedLines[mergedLines.length - 1]}:`;
+      }
+      continue;
+    }
+
+    if (trimmedLine === "/") {
+      if (mergedLines.length > 0 && !mergedLines[mergedLines.length - 1].trim().endsWith(",")) {
+        mergedLines[mergedLines.length - 1] = `${mergedLines[mergedLines.length - 1]},`;
+      }
+      continue;
+    }
+
+    const previousLine = mergedLines[mergedLines.length - 1]?.trim() || "";
+    if (previousLine.endsWith(":")) {
+      mergedLines[mergedLines.length - 1] = `${mergedLines[mergedLines.length - 1]} ${trimmedLine}`;
+      continue;
+    }
+
+    mergedLines.push(rawLine);
+  }
+
+  for (let index = 0; index < mergedLines.length - 1; index += 1) {
+    const currentLine = mergedLines[index].trim();
+    const nextLine = mergedLines[index + 1].trim();
+    const currentEndsWithComma = currentLine.endsWith(",");
+    const currentIsContainerStart = currentLine.endsWith("{") || currentLine.endsWith("[");
+    const nextStartsNewKey = nextLine.startsWith("\"");
+    const nextIsContainerEnd = nextLine.startsWith("}") || nextLine.startsWith("]");
+
+    if (!currentEndsWithComma && !currentIsContainerStart && nextStartsNewKey && !nextIsContainerEnd) {
+      mergedLines[index] = `${mergedLines[index]},`;
+    }
+  }
+
+  return mergedLines
+    .join("\n")
+    .replace(/,\s*([}\]])/g, "$1");
+}
+
+function isValidJsonContent(content: string) {
   try {
-    return JSON.stringify(JSON.parse(content), null, 2);
+    JSON.parse(content.trim());
+    return true;
   } catch {
-    return content;
+    return false;
+  }
+}
+
+function seemsJsonLike(content: string) {
+  const trimmed = content.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  if (/^[\[{]/.test(trimmed)) {
+    return true;
+  }
+
+  return /"[^"\n]+"\s*:/.test(trimmed) || /[\[{][\s\S]*[\]}]/.test(trimmed);
+}
+
+function unwrapMarkdownCodeFence(content: string) {
+  const trimmedContent = content.trim();
+  const fencedCodeMatch = trimmedContent.match(/^```([^\n`]*)\n([\s\S]*?)\n```$/);
+
+  if (!fencedCodeMatch) {
+    return {
+      content: content,
+      fenceLanguage: undefined as string | undefined,
+    };
+  }
+
+  return {
+    content: fencedCodeMatch[2],
+    fenceLanguage: fencedCodeMatch[1]?.trim().toLowerCase() || undefined,
+  };
+}
+
+function escapeHtml(content: string) {
+  return content
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function resolvePrismLanguage(language?: string) {
+  const normalizedLanguage = language?.toLowerCase().trim();
+
+  if (!normalizedLanguage) {
+    return "clike";
+  }
+
+  if (normalizedLanguage.includes("json")) {
+    return "json";
+  }
+
+  if (normalizedLanguage.includes("python")) {
+    return "python";
+  }
+
+  if (normalizedLanguage === "ts") {
+    return "typescript";
+  }
+
+  if (normalizedLanguage === "js") {
+    return "javascript";
+  }
+
+  if (normalizedLanguage === "py") {
+    return "python";
+  }
+
+  if (normalizedLanguage === "sh" || normalizedLanguage === "shell") {
+    return "bash";
+  }
+
+  if (normalizedLanguage === "yml") {
+    return "yaml";
+  }
+
+  if (Prism.languages[normalizedLanguage]) {
+    return normalizedLanguage;
+  }
+
+  return "clike";
+}
+
+function highlightCode(content: string, language?: string) {
+  const prismLanguage = resolvePrismLanguage(language);
+  const grammar = Prism.languages[prismLanguage];
+
+  if (!grammar) {
+    return {
+      html: escapeHtml(content),
+      prismLanguage,
+    };
+  }
+
+  try {
+    return {
+      html: Prism.highlight(content, grammar, prismLanguage),
+      prismLanguage,
+    };
+  } catch {
+    return {
+      html: escapeHtml(content),
+      prismLanguage,
+    };
   }
 }
 
@@ -99,66 +437,85 @@ export function normalizeCodeContent(language?: string, content?: string) {
   let normalizedContent = (content || "")
     .replace(/\r\n?/g, "\n")
     .replace(/\\\[/g, "[")
-    .replace(/\\\]/g, "]")
-    .trimEnd();
+    .replace(/\\\]/g, "]");
+  const unwrappedContent = unwrapMarkdownCodeFence(normalizedContent);
+  normalizedContent = unwrappedContent.content.trimEnd();
 
-  const normalizedLanguage = language?.toLowerCase();
+  const normalizedLanguage = language?.toLowerCase()?.trim() || unwrappedContent.fenceLanguage;
   const isJsonLanguage = normalizedLanguage?.includes("json");
-  const looksLikeJsonPayload = !normalizedLanguage && /^[\[{]/.test(normalizedContent.trim());
+  const looksLikeJsonPayload = seemsJsonLike(normalizedContent);
 
   if (normalizedLanguage === "python") {
     normalizedContent = normalizePythonCode(normalizedContent);
   } else if (isJsonLanguage || looksLikeJsonPayload) {
-    normalizedContent = tryFormatJson(normalizedContent);
+    const formattedJson = tryFormatJson(normalizedContent);
+    normalizedContent = formattedJson;
   }
 
   return normalizedContent;
 }
 
-function wrapLineWithContinuation(line: string, maxCharsPerLine: number) {
-  if (line.length <= maxCharsPerLine) {
-    return [line];
-  }
-
-  const leadingWhitespace = line.match(/^\s*/)?.[0] ?? "";
-  const continuationPrefix = `${leadingWhitespace}  `;
-  const continuationCapacity = maxCharsPerLine - continuationPrefix.length;
-
-  if (continuationCapacity <= 8) {
-    const chunks: string[] = [];
-    for (let start = 0; start < line.length; start += maxCharsPerLine) {
-      chunks.push(line.slice(start, start + maxCharsPerLine));
-    }
-    return chunks;
-  }
-
-  const chunks = [line.slice(0, maxCharsPerLine)];
-  for (
-    let start = maxCharsPerLine;
-    start < line.length;
-    start += continuationCapacity
-  ) {
-    chunks.push(`${continuationPrefix}${line.slice(start, start + continuationCapacity)}`);
-  }
-  return chunks;
-}
-
-function wrapContentToWidth(content: string, maxCharsPerLine: number) {
-  const wrappedLines: string[] = [];
+function countRenderedLines(content: string, maxCharsPerLine: number) {
   const rawLines = content.split("\n");
+  let renderedLineCount = 0;
 
   for (const rawLine of rawLines) {
     const expandedLine = rawLine.replace(/\t/g, "  ");
 
     if (expandedLine.length === 0) {
-      wrappedLines.push("");
+      renderedLineCount += 1;
       continue;
     }
 
-    wrappedLines.push(...wrapLineWithContinuation(expandedLine, maxCharsPerLine));
+    renderedLineCount += Math.max(1, Math.ceil(expandedLine.length / maxCharsPerLine));
   }
 
-  return wrappedLines.length ? wrappedLines : [""];
+  return Math.max(1, renderedLineCount);
+}
+
+function splitLineForLineBudget(line: string, maxCharsPerLine: number) {
+  if (line.length === 0) {
+    return [""];
+  }
+
+  const chunks: string[] = [];
+
+  for (let start = 0; start < line.length; start += maxCharsPerLine) {
+    chunks.push(line.slice(start, start + maxCharsPerLine));
+  }
+
+  return chunks;
+}
+
+function truncateContentToLineBudget(
+  content: string,
+  lineBudget: number,
+  maxCharsPerLine: number
+) {
+  const linesForDisplay: string[] = [];
+  const rawLines = content.split("\n");
+
+  for (const rawLine of rawLines) {
+    const expandedLine = rawLine.replace(/\t/g, "  ");
+    const chunks = splitLineForLineBudget(expandedLine, maxCharsPerLine);
+
+    for (const chunk of chunks) {
+      if (linesForDisplay.length >= lineBudget) {
+        const lastLineIndex = Math.max(0, lineBudget - 1);
+        const ellipsis = "...";
+        const existingLastLine = linesForDisplay[lastLineIndex] ?? "";
+        linesForDisplay[lastLineIndex] = `${existingLastLine.slice(
+          0,
+          Math.max(0, maxCharsPerLine - ellipsis.length)
+        )}${ellipsis}`;
+        return linesForDisplay.join("\n");
+      }
+
+      linesForDisplay.push(chunk);
+    }
+  }
+
+  return linesForDisplay.join("\n");
 }
 
 function createTypographyCandidate(
@@ -170,12 +527,12 @@ function createTypographyCandidate(
 ): TypographyCandidate {
   const lineHeight = Math.max(1, Math.round(fontSize * lineHeightRatio));
   const maxCharsPerLine = Math.max(1, Math.floor(maxWidth / (fontSize * charWidthRatio)));
-  const wrappedLines = wrapContentToWidth(normalizedContent, maxCharsPerLine);
+  const renderedLineCount = countRenderedLines(normalizedContent, maxCharsPerLine);
 
   return {
     lineHeight,
     maxCharsPerLine,
-    wrappedLines,
+    renderedLineCount,
   };
 }
 
@@ -198,7 +555,7 @@ function findFittingTypography(
       lineHeightRatio
     );
 
-    if (candidate.wrappedLines.length * candidate.lineHeight <= maxHeight) {
+    if (candidate.renderedLineCount * candidate.lineHeight <= maxHeight) {
       return {
         candidate,
         fontSize,
@@ -207,21 +564,6 @@ function findFittingTypography(
   }
 
   return null;
-}
-
-function truncateToLineBudget(lines: string[], lineBudget: number, maxCharsPerLine: number) {
-  const visibleLines = lines.slice(0, lineBudget);
-
-  if (lines.length <= lineBudget || visibleLines.length === 0) {
-    return visibleLines;
-  }
-
-  const lastIndex = visibleLines.length - 1;
-  const ellipsis = "...";
-  const truncatedLastLine =
-    visibleLines[lastIndex].slice(0, Math.max(0, maxCharsPerLine - ellipsis.length));
-  visibleLines[lastIndex] = `${truncatedLastLine}${ellipsis}`;
-  return visibleLines;
 }
 
 export function fitCodeBlock({
@@ -236,6 +578,10 @@ export function fitCodeBlock({
   lineHeightRatio = DEFAULT_CODE_LINE_HEIGHT_RATIO,
 }: FitCodeBlockOptions): FittedCodeBlock {
   const normalizedContent = normalizeCodeContent(language, content);
+  const highlightLanguage =
+    isValidJsonContent(normalizedContent) || seemsJsonLike(normalizedContent)
+      ? "json"
+      : language;
   const preferredMinFont = Math.max(1, minFontSize);
   const hardMinFont = Math.max(1, Math.min(preferredMinFont, HARD_MIN_FONT_SIZE));
   const startFont = Math.max(maxFontSize, preferredMinFont);
@@ -252,8 +598,11 @@ export function fitCodeBlock({
   );
 
   if (preferredFit) {
+    const highlighted = highlightCode(normalizedContent, highlightLanguage);
     return {
-      text: preferredFit.candidate.wrappedLines.join("\n"),
+      text: normalizedContent,
+      highlightedHtml: highlighted.html,
+      prismLanguage: highlighted.prismLanguage,
       fontSize: Math.round(preferredFit.fontSize * 10) / 10,
       lineHeight: preferredFit.candidate.lineHeight,
       fontFamily: DEFAULT_CODE_FONT_FAMILY,
@@ -273,8 +622,11 @@ export function fitCodeBlock({
     );
 
     if (emergencyFit) {
+      const highlighted = highlightCode(normalizedContent, highlightLanguage);
       return {
-        text: emergencyFit.candidate.wrappedLines.join("\n"),
+        text: normalizedContent,
+        highlightedHtml: highlighted.html,
+        prismLanguage: highlighted.prismLanguage,
         fontSize: Math.round(emergencyFit.fontSize * 10) / 10,
         lineHeight: emergencyFit.candidate.lineHeight,
         fontFamily: DEFAULT_CODE_FONT_FAMILY,
@@ -290,14 +642,16 @@ export function fitCodeBlock({
     lineHeightRatio
   );
   const fallbackLineBudget = Math.max(1, Math.floor(maxHeight / fallback.lineHeight));
-  const fallbackLines = truncateToLineBudget(
-    fallback.wrappedLines,
+  const fallbackText = truncateContentToLineBudget(
+    normalizedContent,
     fallbackLineBudget,
     fallback.maxCharsPerLine
   );
-
+  const highlighted = highlightCode(fallbackText, highlightLanguage);
   return {
-    text: fallbackLines.join("\n"),
+    text: fallbackText,
+    highlightedHtml: highlighted.html,
+    prismLanguage: highlighted.prismLanguage,
     fontSize: Math.round(hardMinFont * 10) / 10,
     lineHeight: fallback.lineHeight,
     fontFamily: DEFAULT_CODE_FONT_FAMILY,

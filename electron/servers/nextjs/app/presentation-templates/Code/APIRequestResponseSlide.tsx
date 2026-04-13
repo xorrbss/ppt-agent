@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { fitCodeBlock } from "./codeBlockFitting";
+import { fitCodeBlock, PRISM_CODE_BLOCK_STYLES } from "./codeBlockFitting";
 
 
 export const slideLayoutId = "api-request-response-slide";
@@ -64,14 +64,24 @@ export const Schema = z.object({
 
 export type SchemaType = z.infer<typeof Schema>;
 
+function normalizeApiJsonSnippet(content?: string) {
+  return (content || "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/^\s*\/\s*$/gm, ",")
+    .replace(/\n\s*:\s*\n\s*/g, ": ")
+    .replace(/\n\s*\/\s*\n/g, ",\n")
+    .replace(/,\s*([}\]])/g, "$1")
+    .trimEnd();
+}
+
 const CodeSlide03ApiRequestResponse = ({
   data,
 }: {
   data: Partial<SchemaType>;
 }) => {
   const requestCode = fitCodeBlock({
-    language: data.requestSnippet?.language,
-    content: data.requestSnippet?.content,
+    language: "json",
+    content: normalizeApiJsonSnippet(data.requestSnippet?.content),
     maxWidth: 540,
     maxHeight: 230,
     maxFontSize: 14,
@@ -79,8 +89,8 @@ const CodeSlide03ApiRequestResponse = ({
   });
 
   const responseCode = fitCodeBlock({
-    language: data.responseSnippet?.language,
-    content: data.responseSnippet?.content,
+    language: "json",
+    content: normalizeApiJsonSnippet(data.responseSnippet?.content),
     maxWidth: 540,
     maxHeight: 430,
     maxFontSize: 14,
@@ -90,6 +100,7 @@ const CodeSlide03ApiRequestResponse = ({
   return (
     <>
       <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap" rel="stylesheet" />
+      <style>{PRISM_CODE_BLOCK_STYLES}</style>
       <div
         className="relative h-[720px] w-[1280px] overflow-hidden p-[53px]"
         style={{
@@ -149,17 +160,19 @@ const CodeSlide03ApiRequestResponse = ({
                 </p>
                 <div className="min-h-0 w-full flex-1 overflow-hidden px-[14px] py-[20px]">
                   <pre
-                    className="m-0 w-full overflow-hidden"
+                    className="prism-code-block m-0 w-full overflow-hidden"
                     style={{
                       color: "var(--background-text,#ffffff)",
                       fontFamily: requestCode.fontFamily,
                       fontSize: `${requestCode.fontSize}px`,
                       lineHeight: `${requestCode.lineHeight}px`,
-                      whiteSpace: "pre",
+                      whiteSpace: "pre-wrap",
+                      overflowWrap: "break-word",
+                      wordBreak: "normal",
+                      tabSize: 2,
                     }}
-                  >
-                    {requestCode.text}
-                  </pre>
+                    dangerouslySetInnerHTML={{ __html: requestCode.highlightedHtml }}
+                  />
                 </div>
               </div>
             </div>
@@ -183,17 +196,19 @@ const CodeSlide03ApiRequestResponse = ({
               </p>
               <div className="min-h-0 w-full flex-1 overflow-hidden px-[14px] py-[20px]">
                 <pre
-                  className="m-0 w-full overflow-hidden"
+                  className="prism-code-block m-0 w-full overflow-hidden"
                   style={{
                     color: "var(--background-text,#ffffff)",
                     fontFamily: responseCode.fontFamily,
                     fontSize: `${responseCode.fontSize}px`,
                     lineHeight: `${responseCode.lineHeight}px`,
-                    whiteSpace: "pre",
+                    whiteSpace: "pre-wrap",
+                    overflowWrap: "break-word",
+                    wordBreak: "normal",
+                    tabSize: 2,
                   }}
-                >
-                  {responseCode.text}
-                </pre>
+                  dangerouslySetInnerHTML={{ __html: responseCode.highlightedHtml }}
+                />
               </div>
             </div>
           </div>

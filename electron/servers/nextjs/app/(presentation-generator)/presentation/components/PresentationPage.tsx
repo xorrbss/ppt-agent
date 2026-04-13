@@ -2,6 +2,7 @@
 import React, { useLayoutEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
+import "../../utils/prism-languages";
 import { Skeleton } from "@/components/ui/skeleton";
 import PresentationMode from "./PresentationMode";
 import SidePanel from "./SidePanel";

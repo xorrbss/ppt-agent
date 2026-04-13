@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { fitCodeBlock } from "./codeBlockFitting";
+import { fitCodeBlock, PRISM_CODE_BLOCK_STYLES } from "./codeBlockFitting";
 
 export const slideLayoutId = "code-explanation-split-slide";
 export const slideLayoutName = "Code Explanation Split Slide";
@@ -77,6 +77,7 @@ const CodeSlide02CodeExplanationSplit = ({
   return (
     <>
       <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap" rel="stylesheet" />
+      <style>{PRISM_CODE_BLOCK_STYLES}</style>
       <div
         className="relative h-[720px] w-[1280px] overflow-hidden p-[53px]"
         style={{
@@ -113,16 +114,18 @@ const CodeSlide02CodeExplanationSplit = ({
                 }}
               >
                 <pre
-                  className="m-0 w-full overflow-hidden"
+                  className="prism-code-block m-0 w-full overflow-hidden"
                   style={{
                     fontFamily: fittedCode.fontFamily,
                     fontSize: `${fittedCode.fontSize}px`,
                     lineHeight: `${fittedCode.lineHeight}px`,
-                    whiteSpace: "pre",
+                    whiteSpace: "pre-wrap",
+                    overflowWrap: "break-word",
+                    wordBreak: "normal",
+                    tabSize: 2,
                   }}
-                >
-                  {fittedCode.text}
-                </pre>
+                  dangerouslySetInnerHTML={{ __html: fittedCode.highlightedHtml }}
+                />
               </div>
             </div>
 
