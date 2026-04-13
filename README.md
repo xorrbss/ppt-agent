@@ -27,7 +27,10 @@ What makes Presenton different?
 - Works with OpenAI, Gemini, Anthropic, Ollama, or custom models
 - API deployable
 - Fully open-source (Apache 2.0)
-- Use your **existing PPTX files as templates** _(coming soon)_
+- Use your **existing PPTX files as templates** for AI presentation generation
+
+> [!TIP]
+> **Star us!** A ⭐ shows your support and encourages us to keep building! 😇
 
 <p align="center">
   <img src="./readme_assets/images/banner_bg.gif" alt="Presenton" />
