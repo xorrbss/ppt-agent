@@ -22,15 +22,23 @@ export const PRISM_CODE_BLOCK_STYLES = `
   white-space: inherit !important;
 }
 
+.prism-code-block {
+  --code-fg: var(--background-text, #dbe5ff);
+  --code-accent: var(--primary-color, #7aa2ff);
+  color: var(--code-fg);
+}
+
 .prism-code-block .token.comment,
 .prism-code-block .token.prolog,
 .prism-code-block .token.doctype,
 .prism-code-block .token.cdata {
-  color: #7b8ebf;
+  color: var(--code-fg);
+  opacity: 0.62;
 }
 
 .prism-code-block .token.punctuation {
-  color: #a8b7e0;
+  color: var(--code-fg);
+  opacity: 0.82;
 }
 
 .prism-code-block .token.property,
@@ -38,12 +46,14 @@ export const PRISM_CODE_BLOCK_STYLES = `
 .prism-code-block .token.constant,
 .prism-code-block .token.symbol,
 .prism-code-block .token.deleted {
-  color: #7bc4ff;
+  color: var(--graph-0, #7bc4ff);
+  color: color-mix(in srgb, var(--graph-0, #7bc4ff) 72%, var(--code-fg) 28%);
 }
 
 .prism-code-block .token.boolean,
 .prism-code-block .token.number {
-  color: #f5c97b;
+  color: var(--graph-1, #f5c97b);
+  color: color-mix(in srgb, var(--graph-1, #f5c97b) 68%, var(--code-fg) 32%);
 }
 
 .prism-code-block .token.selector,
@@ -52,30 +62,36 @@ export const PRISM_CODE_BLOCK_STYLES = `
 .prism-code-block .token.char,
 .prism-code-block .token.builtin,
 .prism-code-block .token.inserted {
-  color: #9fe6b8;
+  color: var(--graph-2, #9fe6b8);
+  color: color-mix(in srgb, var(--graph-2, #9fe6b8) 72%, var(--code-fg) 28%);
 }
 
 .prism-code-block .token.operator,
 .prism-code-block .token.entity,
 .prism-code-block .token.url,
 .prism-code-block .token.variable {
-  color: #f5a97f;
+  color: var(--graph-3, #f5a97f);
+  color: color-mix(in srgb, var(--graph-3, #f5a97f) 70%, var(--code-fg) 30%);
 }
 
 .prism-code-block .token.atrule,
 .prism-code-block .token.attr-value,
 .prism-code-block .token.function,
 .prism-code-block .token.class-name {
-  color: #b8a8ff;
+  color: var(--graph-4, #b8a8ff);
+  color: color-mix(in srgb, var(--graph-4, #b8a8ff) 74%, var(--code-fg) 26%);
 }
 
 .prism-code-block .token.keyword {
-  color: #7aa2ff;
+  color: var(--code-accent);
+  color: color-mix(in srgb, var(--code-accent, #7aa2ff) 78%, var(--code-fg) 22%);
+  font-weight: 600;
 }
 
 .prism-code-block .token.regex,
 .prism-code-block .token.important {
-  color: #f9e2af;
+  color: var(--code-accent);
+  color: color-mix(in srgb, var(--code-accent, #7aa2ff) 64%, var(--graph-1, #f5c97b) 36%);
 }
 `;
 
