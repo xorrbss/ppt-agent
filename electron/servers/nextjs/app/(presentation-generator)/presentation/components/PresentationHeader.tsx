@@ -389,9 +389,7 @@ const PresentationHeader = ({
         ) : (
           titleBlock
         )}
-        <a href={`/pdf-maker?id=${presentation_id}`}>
-          pdf-maker
-        </a>
+
         <div className="flex items-center gap-2.5">
 
           {isPresentationSaving && <div className="flex items-center gap-2">
