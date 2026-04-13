@@ -521,7 +521,7 @@ const TextProvider = ({
 
 
 
-            <div className="bg-white flex justify-between items-center p-10 rounded-[12px]">
+            {/* <div className="bg-white flex justify-between items-center p-10 rounded-[12px]">
                 <div className=' max-w-[290px]'>
 
                     <h4 className="text-xl font-normal text-[#191919]">Advanced</h4>
@@ -542,7 +542,7 @@ const TextProvider = ({
                         </div>
                     </div>
                 </div>
-            </div>
+            </div> */}
         </div>
     )
 }
