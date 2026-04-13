@@ -298,7 +298,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
             setStep(3)
             // router.push("/upload");
         } catch (error) {
-            toast.info(error instanceof Error ? error.message : "Failed to save configuration");
+            toast.error(error instanceof Error ? error.message : "Failed to save configuration");
 
         }
         finally {
