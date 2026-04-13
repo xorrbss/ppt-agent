@@ -36,6 +36,7 @@ from utils.dict_utils import deep_update
 from utils.export_utils import export_presentation
 from utils.llm_calls.generate_presentation_outlines import generate_ppt_outline
 from models.sql.slide import SlideModel
+from models.sql.presentation_layout_code import PresentationLayoutCodeModel
 from models.sse_response import SSECompleteResponse, SSEErrorResponse, SSEResponse
 
 from services.database import get_async_session
@@ -75,6 +76,51 @@ import uuid
 PRESENTATION_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
 
 
+def _extract_custom_template_id(layout_name: Optional[str]) -> Optional[uuid.UUID]:
+    if not layout_name or not layout_name.startswith("custom-"):
+        return None
+    try:
+        return uuid.UUID(layout_name.replace("custom-", ""))
+    except Exception:
+        return None
+
+
+async def _resolve_presentation_fonts(
+    presentation: PresentationModel,
+    slides: List[SlideModel],
+    sql_session: AsyncSession,
+):
+    candidate_template_ids: List[uuid.UUID] = []
+    seen = set()
+
+    layout_name = None
+    if isinstance(presentation.layout, dict):
+        layout_name = presentation.layout.get("name")
+    layout_template_id = _extract_custom_template_id(layout_name)
+    if layout_template_id and layout_template_id not in seen:
+        candidate_template_ids.append(layout_template_id)
+        seen.add(layout_template_id)
+
+    for slide in slides:
+        template_id = _extract_custom_template_id(slide.layout_group)
+        if template_id and template_id not in seen:
+            candidate_template_ids.append(template_id)
+            seen.add(template_id)
+
+    for template_id in candidate_template_ids:
+        result = await sql_session.execute(
+            select(PresentationLayoutCodeModel.fonts).where(
+                PresentationLayoutCodeModel.presentation == template_id
+            )
+        )
+        fonts_list = result.scalars().all()
+        for fonts in fonts_list:
+            if fonts is not None:
+                return fonts
+
+    return None
+
+
 def _insert_toc_layouts(
     structure: PresentationStructureModel,
     n_toc_slides: int,
@@ -91,8 +137,6 @@ def _insert_toc_layouts(
 
 @PRESENTATION_ROUTER.get("/all", response_model=List[PresentationWithSlides])
 async def get_all_presentations(sql_session: AsyncSession = Depends(get_async_session)):
-    presentations_with_slides = []
-
     query = (
         select(PresentationModel, SlideModel)
         .join(
@@ -104,13 +148,17 @@ async def get_all_presentations(sql_session: AsyncSession = Depends(get_async_se
 
     results = await sql_session.execute(query)
     rows = results.all()
-    presentations_with_slides = [
-        PresentationWithSlides(
-            **presentation.model_dump(),
-            slides=[first_slide],
+    presentations_with_slides = []
+    for presentation, first_slide in rows:
+        slides = [first_slide]
+        fonts = await _resolve_presentation_fonts(presentation, slides, sql_session)
+        presentations_with_slides.append(
+            PresentationWithSlides(
+                **presentation.model_dump(),
+                slides=slides,
+                fonts=fonts,
+            )
         )
-        for presentation, first_slide in rows
-    ]
     return presentations_with_slides
 
 
@@ -121,14 +169,17 @@ async def get_presentation(
     presentation = await sql_session.get(PresentationModel, id)
     if not presentation:
         raise HTTPException(404, "Presentation not found")
-    slides = await sql_session.scalars(
+    slides_result = await sql_session.scalars(
         select(SlideModel)
         .where(SlideModel.presentation == id)
         .order_by(SlideModel.index)
     )
+    slides = list(slides_result)
+    fonts = await _resolve_presentation_fonts(presentation, slides, sql_session)
     return PresentationWithSlides(
         **presentation.model_dump(),
         slides=slides,
+        fonts=fonts,
     )
 
 
@@ -379,6 +430,7 @@ async def stream_presentation(
         response = PresentationWithSlides(
             **presentation.model_dump(),
             slides=slides,
+            fonts=await _resolve_presentation_fonts(presentation, slides, sql_session),
         )
 
         yield SSECompleteResponse(
@@ -425,9 +477,17 @@ async def update_presentation(
 
     await sql_session.commit()
 
+    response_slides = slides or []
+    fonts = await _resolve_presentation_fonts(
+        presentation,
+        response_slides,
+        sql_session,
+    )
+
     return PresentationWithSlides(
         **presentation.model_dump(),
-        slides=slides or [],
+        slides=response_slides,
+        fonts=fonts,
     )
 
 
