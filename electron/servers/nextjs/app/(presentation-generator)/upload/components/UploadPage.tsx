@@ -29,8 +29,15 @@ import { ConfigurationSelects } from "./ConfigurationSelects";
 import { RootState } from "@/store/store";
 import { ImagesApi } from "../../services/api/images";
 import CurrentConfig from "./CurrentConfig";
+import { LLMConfig } from "@/types/llm_config";
 
 const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
+const FILE_TYPE_WORD = new Set([".doc", ".docx", ".docm", ".odt", ".rtf"]);
+const FILE_TYPE_PRESENTATION = new Set([".ppt", ".pptx", ".pptm", ".odp"]);
+const FILE_TYPE_SPREADSHEET = new Set([".xls", ".xlsx", ".xlsm", ".ods", ".csv", ".tsv"]);
+const FILE_TYPE_IMAGE = new Set([".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".webp", ".svg"]);
+const FILE_TYPE_PDF = new Set([".pdf"]);
+const FILE_TYPE_TEXT = new Set([".txt"]);
 
 // Types for loading state
 interface LoadingState {
@@ -40,6 +47,50 @@ interface LoadingState {
   showProgress?: boolean;
   extra_info?: string;
 }
+
+const getFileExtension = (fileName: string): string => {
+  const index = fileName.lastIndexOf(".");
+  if (index < 0) return "";
+  return fileName.slice(index).toLowerCase();
+};
+
+const getFileCategory = (file: File): string => {
+  const extension = getFileExtension(file.name || "");
+  if (FILE_TYPE_WORD.has(extension)) return "word";
+  if (FILE_TYPE_PRESENTATION.has(extension)) return "presentation";
+  if (FILE_TYPE_SPREADSHEET.has(extension)) return "spreadsheet";
+  if (FILE_TYPE_IMAGE.has(extension) || (file.type || "").startsWith("image/")) return "image";
+  if (FILE_TYPE_PDF.has(extension) || file.type === "application/pdf") return "pdf";
+  if (FILE_TYPE_TEXT.has(extension) || file.type === "text/plain") return "text";
+  return "other";
+};
+
+const getSelectedTextModel = (config?: LLMConfig): string => {
+  if (!config) return "";
+  switch (config.LLM) {
+    case "openai":
+      return config.OPENAI_MODEL || "";
+    case "google":
+      return config.GOOGLE_MODEL || "";
+    case "anthropic":
+      return config.ANTHROPIC_MODEL || "";
+    case "ollama":
+      return config.OLLAMA_MODEL || "";
+    case "custom":
+      return config.CUSTOM_MODEL || "";
+    case "codex":
+      return config.CODEX_MODEL || "";
+    default:
+      return "";
+  }
+};
+
+const getSelectedImageQuality = (config?: LLMConfig): string => {
+  if (!config) return "";
+  if (config.IMAGE_PROVIDER === "dall-e-3") return config.DALL_E_3_QUALITY || "";
+  if (config.IMAGE_PROVIDER === "gpt-image-1.5") return config.GPT_IMAGE_1_5_QUALITY || "";
+  return "";
+};
 
 const UploadPage = () => {
   const router = useRouter();
@@ -67,6 +118,41 @@ const UploadPage = () => {
     showProgress: false,
     extra_info: "",
   });
+
+  const getUploadSnapshotProps = () => {
+    const trimmedPrompt = config.prompt.trim();
+    const trimmedInstructions = (config.instructions || "").trim();
+    const attachmentCategories = Array.from(new Set(files.map(getFileCategory))).sort();
+    const imageGenerationEnabled = !llmConfig?.DISABLE_IMAGE_GENERATION;
+    const parsedSlides =
+      config.slides && /^\d+$/.test(config.slides) ? Number(config.slides) : null;
+
+    return {
+      pathname,
+      generation_path: files.length > 0 ? "documents" : "prompt_only",
+      slides_selected: parsedSlides,
+      slides_mode: config.slides ? "selected" : "auto",
+      language: config.language || "",
+      tone: config.tone,
+      verbosity: config.verbosity,
+      include_table_of_contents: !!config.includeTableOfContents,
+      include_title_slide: !!config.includeTitleSlide,
+      web_search: !!config.webSearch,
+      has_prompt: Boolean(trimmedPrompt),
+      prompt_char_count: trimmedPrompt.length,
+      prompt_word_count: trimmedPrompt ? trimmedPrompt.split(/\s+/).filter(Boolean).length : 0,
+      has_instructions: Boolean(trimmedInstructions),
+      instructions_char_count: trimmedInstructions.length,
+      has_attachments: files.length > 0,
+      attachments_count: files.length,
+      attachment_categories: attachmentCategories.join(","),
+      text_provider: llmConfig?.LLM || "",
+      text_model: getSelectedTextModel(llmConfig),
+      image_generation_enabled: imageGenerationEnabled,
+      image_provider: imageGenerationEnabled ? (llmConfig?.IMAGE_PROVIDER || "") : "disabled",
+      image_quality: imageGenerationEnabled ? getSelectedImageQuality(llmConfig) : "",
+    };
+  };
 
   const handleConfigChange = (key: keyof PresentationConfig, value: unknown) => {
     setConfig((prev) => ({ ...prev, [key]: value } as PresentationConfig));
@@ -108,16 +194,28 @@ const UploadPage = () => {
    */
   const validateConfiguration = (): boolean => {
     if (!config.language) {
+      trackEvent(MixpanelEvent.Upload_Validation_Failed, {
+        ...getUploadSnapshotProps(),
+        reason: "language_missing",
+      });
       toast.error("Please select language");
       return false;
     }
 
     if (files.length > 0 && config.language === LanguageType.Auto) {
+      trackEvent(MixpanelEvent.Upload_Validation_Failed, {
+        ...getUploadSnapshotProps(),
+        reason: "language_auto_with_documents",
+      });
       toast.error("Please choose a language before processing uploaded documents");
       return false;
     }
 
     if (!config.prompt.trim() && files.length === 0) {
+      trackEvent(MixpanelEvent.Upload_Validation_Failed, {
+        ...getUploadSnapshotProps(),
+        reason: "prompt_or_document_missing",
+      });
       toast.error("No Prompt or Document Provided");
       return false;
     }
@@ -130,8 +228,16 @@ const UploadPage = () => {
   const handleGeneratePresentation = async () => {
     if (!validateConfiguration()) return;
 
+    trackEvent(MixpanelEvent.Upload_GetStarted_Button_Clicked, getUploadSnapshotProps());
+
     const isStockProviderReady = await ensureStockImageProviderReady();
-    if (!isStockProviderReady) return;
+    if (!isStockProviderReady) {
+      trackEvent(MixpanelEvent.Upload_Validation_Failed, {
+        ...getUploadSnapshotProps(),
+        reason: "stock_image_provider_unreachable",
+      });
+      return;
+    }
 
     try {
       const hasUploadedAssets = files.length > 0;

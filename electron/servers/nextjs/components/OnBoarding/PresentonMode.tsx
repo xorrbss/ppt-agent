@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Button } from '../ui/button';
-import { Check, CheckCircle, ChevronLeft, ChevronRight, ChevronUp, Download, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Check, CheckCircle, ChevronLeft, ChevronUp, Download, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
 import { DALLE_3_QUALITY_OPTIONS, GPT_IMAGE_1_5_QUALITY_OPTIONS, IMAGE_PROVIDERS, LLM_PROVIDERS } from '@/utils/providerConstants';
 import { cn } from '@/lib/utils';
@@ -13,7 +13,7 @@ import ToolTip from '../ToolTip';
 import { Switch } from '../ui/switch';
 import { Select, SelectItem, SelectContent, SelectValue, SelectTrigger } from '../ui/select';
 import { MixpanelEvent, trackEvent } from '@/utils/mixpanel';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { handleSaveLLMConfig } from '@/utils/storeHelpers';
 import { checkIfSelectedOllamaModelIsPulled, pullOllamaModel } from '@/utils/providerUtils';
 import { getApiUrl } from '@/utils/api';
@@ -21,7 +21,6 @@ import CodexConfig, { CHATGPT_MODELS } from '../CodexConfig';
 
 const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep: (step: number) => void }) => {
     const pathname = usePathname();
-    const router = useRouter();
     const [openProviderSelect, setOpenProviderSelect] = useState(false);
     const [openImageProviderSelect, setOpenImageProviderSelect] = useState(false);
     const userConfigState = useSelector((state: RootState) => state.userConfig);
@@ -45,7 +44,6 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
     } | null>(null);
 
     const handleProviderChange = (provider: string) => {
-
         setLlmConfig(prev => ({
             ...prev,
             LLM: provider
@@ -104,12 +102,36 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
     const currentOllamaUrl = llmConfig.OLLAMA_URL || '';
     const useCustomOllamaUrl = !!llmConfig.USE_CUSTOM_URL;
 
+    const getSelectedTextModel = (config: LLMConfig): string => {
+        switch (config.LLM) {
+            case 'openai':
+                return config.OPENAI_MODEL || '';
+            case 'google':
+                return config.GOOGLE_MODEL || '';
+            case 'anthropic':
+                return config.ANTHROPIC_MODEL || '';
+            case 'ollama':
+                return config.OLLAMA_MODEL || '';
+            case 'custom':
+                return config.CUSTOM_MODEL || '';
+            case 'codex':
+                return config.CODEX_MODEL || '';
+            default:
+                return '';
+        }
+    };
+
+    const getSelectedImageQuality = (config: LLMConfig): string => {
+        if (config.IMAGE_PROVIDER === 'dall-e-3') return config.DALL_E_3_QUALITY || '';
+        if (config.IMAGE_PROVIDER === 'gpt-image-1.5') return config.GPT_IMAGE_1_5_QUALITY || '';
+        return '';
+    };
+
     const fetchAvailableModels = async () => {
         if (llmConfig.LLM === 'openai' && !currentApiKey) return;
         if (llmConfig.LLM === 'google' && !currentApiKey) return;
         if (llmConfig.LLM === 'anthropic' && !currentApiKey) return;
         if (llmConfig.LLM === 'custom' && !llmConfig.CUSTOM_LLM_URL) return;
-
         setModelsLoading(true);
         try {
             let response: Response;
@@ -270,31 +292,39 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
             setShowDownloadModal(false);
         }
     };
-
-
     const handleSaveConfig = async () => {
-        trackEvent(MixpanelEvent.Home_SaveConfiguration_Button_Clicked, { pathname });
         try {
             setSavingConfig(true);
-            // API: save config
-            trackEvent(MixpanelEvent.Home_SaveConfiguration_API_Call);
-            // API CALL: save config
             await handleSaveLLMConfig(llmConfig);
 
             if (llmConfig.LLM === "ollama" && llmConfig.OLLAMA_MODEL) {
-                // API: check model pulled
-                trackEvent(MixpanelEvent.Home_CheckOllamaModelPulled_API_Call);
                 const isPulled = await checkIfSelectedOllamaModelIsPulled(llmConfig.OLLAMA_MODEL);
                 if (!isPulled) {
                     setShowDownloadModal(true);
-                    // API: download model
-                    trackEvent(MixpanelEvent.Home_DownloadOllamaModel_API_Call);
                     await handleModelDownload();
                 }
             }
+
+            const textProvider = llmConfig.LLM || '';
+            const textModel = getSelectedTextModel(llmConfig);
+            const imageGenerationEnabled = !llmConfig.DISABLE_IMAGE_GENERATION;
+            const imageProvider = imageGenerationEnabled ? (llmConfig.IMAGE_PROVIDER || '') : 'disabled';
+
+            trackEvent(MixpanelEvent.Onboarding_Providers_Models_Selected, {
+                pathname,
+                text_provider: textProvider,
+                text_provider_label: LLM_PROVIDERS[textProvider]?.label || textProvider || '',
+                text_model: textModel,
+                uses_chatgpt_login: textProvider === 'codex',
+                image_generation_enabled: imageGenerationEnabled,
+                image_provider: imageProvider,
+                image_provider_label: imageGenerationEnabled
+                    ? (IMAGE_PROVIDERS[imageProvider]?.label || imageProvider || '')
+                    : 'Image generation disabled',
+                image_quality: imageGenerationEnabled ? getSelectedImageQuality(llmConfig) : ''
+            });
+
             toast.info("Configuration saved successfully");
-            // Track navigation from -> to
-            trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/final onboarding step" });
             setStep(3)
             // router.push("/upload");
         } catch (error) {
@@ -315,7 +345,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
 
     useEffect(() => {
         if (llmConfig.LLM === 'ollama' && !modelsChecked && !modelsLoading) {
-            fetchAvailableModels();
+            void fetchAvailableModels();
         }
     }, [llmConfig.LLM, modelsChecked, modelsLoading]);
 

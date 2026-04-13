@@ -335,7 +335,7 @@ const ImageEditor = ({
                     <p className="text-sm text-gray-500">{promptContent}</p>
                   </div>
 
-                  <div>
+                  <div className="mx-0.5">
                     <h3 className="text-base font-medium mb-2">
                       {isStockImageProvider ? "Image Keyword" : "Image Description"}
                     </h3>
@@ -347,7 +347,7 @@ const ImageEditor = ({
                       }
                       value={prompt}
                       onChange={(e) => setPrompt(e.target.value)}
-                      className="min-h-[100px]"
+                      className="min-h-[100px] "
                     />
                   </div>
 
@@ -444,7 +444,7 @@ const ImageEditor = ({
                 <div className="space-y-4">
                   <div
                     className={cn(
-                      "border-2 border-dashed rounded-lg p-8 text-center transition-colors",
+                      "border-2  border-dashed rounded-lg p-8 text-center transition-colors",
                       isUploading
                         ? "border-gray-400 bg-gray-50"
                         : "border-gray-300 hover:border-blue-400"
