@@ -86,6 +86,10 @@ function showSetupInstallerWindow(): Promise<void> {
       ),
       webPreferences: {
         webSecurity: false,
+        contextIsolation: true,
+        nodeIntegration: false,
+        // Keep preload runtime consistent with the main window in packaged builds.
+        sandbox: false,
         preload: path.join(__dirname, "../preloads/setup-installer.js"),
       },
     });

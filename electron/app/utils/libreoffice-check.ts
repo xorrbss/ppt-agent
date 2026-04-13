@@ -382,6 +382,9 @@ async function showLibreOfficeInstallerWindow(): Promise<void> {
       icon: path.join(baseDir, "resources/ui/assets/images/presenton_short_filled.png"),
       webPreferences: {
         webSecurity: false,
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: false,
         preload: path.join(__dirname, "../preloads/libreoffice-installer.js"),
       },
     });

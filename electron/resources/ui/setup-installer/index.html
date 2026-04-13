@@ -211,6 +211,7 @@
 
   <script>
     const STATES = ['prompt','downloading','installing','success','error'];
+    const setupInstallerApi = window.setupInstaller;
     let logLines = 0;
     let currentStep = null; // 'libreoffice' | 'chrome' | 'imagemagick'
     let status = { needsLibreOffice: false, needsChrome: false, needsImageMagick: false };
@@ -295,17 +296,23 @@
     }
 
     function startInstall(step) {
+      if (!setupInstallerApi) {
+        showState('error');
+        document.getElementById('err-msg').textContent = 'Installer bridge is unavailable. Restart Presenton and try again.';
+        return;
+      }
+
       currentStep = step;
       showState('downloading');
       if (!logOpen) toggleLog();
       if (step === 'libreoffice') {
         document.getElementById('dl-heading').textContent = 'Downloading LibreOffice';
         document.getElementById('dl-phase').textContent = 'This may take a few minutes (~300 MB)';
-        window.setupInstaller.installLibreOffice();
+        setupInstallerApi.installLibreOffice();
       } else if (step === 'chrome') {
         document.getElementById('dl-heading').textContent = 'Downloading Chromium';
         document.getElementById('dl-phase').textContent = 'This may take a few minutes (~150 MB)';
-        window.setupInstaller.installChrome().then(res => {
+        setupInstallerApi.installChrome().then(res => {
           if (!res.ok && currentStep === 'chrome') {
             document.getElementById('err-msg').textContent = res.error || 'Chrome download failed.';
             showState('error');
@@ -316,7 +323,7 @@
       } else {
         document.getElementById('dl-heading').textContent = 'Installing ImageMagick';
         document.getElementById('dl-phase').textContent = 'Linux: apt-get | macOS: Homebrew + brew install | Windows: direct installer (Presenton runtime)';
-        window.setupInstaller.installImageMagick().then((installResult) => {
+        setupInstallerApi.installImageMagick().then((installResult) => {
           if (!installResult || !installResult.ok) {
             if (currentStep !== 'imagemagick') return;
             document.getElementById('err-msg').textContent = installResult?.error || 'ImageMagick installation needs manual completion. Follow the shown commands and then click Retry.';
@@ -326,7 +333,7 @@
             return;
           }
 
-          window.setupInstaller.checkImageMagick().then(res => {
+          setupInstallerApi.checkImageMagick().then(res => {
             if (!res.ok && currentStep === 'imagemagick') {
               document.getElementById('err-msg').textContent = res.error || 'ImageMagick is not installed yet.';
               showState('error');
@@ -339,12 +346,16 @@
     }
 
     function nextOrDone() {
+      if (!setupInstallerApi) {
+        return;
+      }
+
       const idx = steps.indexOf(currentStep);
       const nextStep = idx >= 0 ? steps[idx + 1] : null;
       if (nextStep) {
         showPromptForStep(nextStep);
       } else {
-        window.setupInstaller.done();
+        setupInstallerApi.done();
       }
     }
 
@@ -406,25 +417,33 @@
       appendLog(data.level || 'info', data.text || '');
     }
 
-    window.setupInstaller.onLibreOfficeProgress((data) => onProgress('libreoffice', data));
-    window.setupInstaller.onLibreOfficeLog((data) => onLog('libreoffice', data));
-    window.setupInstaller.onChromeProgress((data) => onProgress('chrome', data));
-    window.setupInstaller.onChromeLog((data) => onLog('chrome', data));
-    window.setupInstaller.onImageMagickProgress((data) => onProgress('imagemagick', data));
-    window.setupInstaller.onImageMagickLog((data) => onLog('imagemagick', data));
-
     document.getElementById('btn-retry').onclick = () => startInstall(currentStep);
     document.getElementById('btn-skip-error').onclick = () => nextOrDone();
 
-    window.setupInstaller.getStatus().then(s => {
-      status = s;
-      steps = getStepsFromStatus();
-      if (steps.length === 0) {
-        window.setupInstaller.done();
-        return;
-      }
-      showPromptForStep(steps[0]);
-    });
+    if (!setupInstallerApi) {
+      showState('error');
+      document.getElementById('err-msg').textContent = 'Installer bridge failed to initialize. Please restart Presenton and try again.';
+      document.getElementById('btn-retry').onclick = () => location.reload();
+      document.getElementById('btn-skip-error').onclick = () => window.close();
+      appendLog('error', 'setupInstaller API is unavailable in this renderer.');
+    } else {
+      setupInstallerApi.onLibreOfficeProgress((data) => onProgress('libreoffice', data));
+      setupInstallerApi.onLibreOfficeLog((data) => onLog('libreoffice', data));
+      setupInstallerApi.onChromeProgress((data) => onProgress('chrome', data));
+      setupInstallerApi.onChromeLog((data) => onLog('chrome', data));
+      setupInstallerApi.onImageMagickProgress((data) => onProgress('imagemagick', data));
+      setupInstallerApi.onImageMagickLog((data) => onLog('imagemagick', data));
+
+      setupInstallerApi.getStatus().then(s => {
+        status = s;
+        steps = getStepsFromStatus();
+        if (steps.length === 0) {
+          setupInstallerApi.done();
+          return;
+        }
+        showPromptForStep(steps[0]);
+      });
+    }
   </script>
 </body>
 </html>
