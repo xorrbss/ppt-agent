@@ -2,6 +2,7 @@
 import React, { Suspense } from "react";
 import { Loader2 } from "lucide-react";
 import GroupLayoutPreview from "./components/TemplatePreviewClient";
+import "../utils/prism-languages";
 
 const TemplatePreviewPage = () => {
   return (

@@ -7,13 +7,6 @@
   <title>Presenton</title>
   <style>
     @font-face {
-      font-family: "Unbounded";
-      src: url("../assets/fonts/Unbounded-Medium.ttf") format("truetype");
-      font-weight: 500;
-      font-style: normal;
-    }
-
-    @font-face {
       font-family: "Syne";
       src: url("../assets/fonts/Syne-Regular.ttf") format("truetype");
       font-weight: 400;
@@ -62,10 +55,7 @@
       overflow: hidden;
       font-family: "Syne", "Segoe UI", system-ui, sans-serif;
       color: var(--title);
-      background:
-        radial-gradient(circle at 20% 18%, rgba(127, 104, 255, 0.16), transparent 28%),
-        radial-gradient(circle at 82% 84%, rgba(108, 144, 255, 0.12), transparent 30%),
-        linear-gradient(135deg, var(--bg-top) 0%, #f8f9ff 42%, var(--bg-bottom) 100%);
+
     }
 
     body::before {
@@ -73,11 +63,7 @@
       position: fixed;
       inset: -20%;
       pointer-events: none;
-      background:
-        radial-gradient(circle at center, rgba(255, 255, 255, 0.55), transparent 45%),
-        radial-gradient(circle at 30% 20%, rgba(145, 124, 255, 0.14), transparent 24%);
-      filter: blur(90px);
-      opacity: 0.9;
+
     }
 
     .launch-screen {
@@ -98,7 +84,7 @@
       font-size: clamp(1.3rem, 2.05vw, 1.72rem);
       line-height: 1.12;
       letter-spacing: -0.045em;
-      font-family: "Unbounded", "Syne", system-ui, sans-serif;
+      font-family: "Syne", system-ui, sans-serif;
       font-weight: 500;
       white-space: nowrap;
     }
@@ -142,12 +128,7 @@
       content: "";
       position: absolute;
       inset: 0;
-      background: linear-gradient(90deg,
-          transparent 0%,
-          rgba(255, 255, 255, 0.12) 36%,
-          rgba(255, 255, 255, 0.58) 50%,
-          rgba(255, 255, 255, 0.12) 64%,
-          transparent 100%);
+
       animation: shimmer 1.85s linear infinite;
     }
 

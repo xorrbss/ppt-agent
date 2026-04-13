@@ -8,15 +8,7 @@ export const slideLayoutDescription =
   "A cover slide with a compact logo in the top-left, a date/text/label in the top-right, a centered title, and a image anchored to the bottom with a soft fade into the background.";
 
 export const Schema = z.object({
-  image: z.object({
-    __image_url__: z.string().default("https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/images/placeholder.jpg"),
 
-    __image_prompt__: z.string().default("Image of the company"),
-  }).optional().default({
-    __image_url__:
-      "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/images/placeholder.jpg",
-    __image_prompt__: "Image of the company",
-  }),
   label: z.string().min(3).max(16).optional().default("MARCH 2026").meta({
     description: "Date/text/label shown at the top-right corner.",
   }),
@@ -56,11 +48,7 @@ const CoverSlide = ({ data }: { data: Partial<SchemaType> }) => {
         >
           <div className="flex items-center justify-between">
 
-            {data.image?.__image_url__ ? <img
-              src={data.image?.__image_url__ ?? ''}
-              alt={data.image?.__image_prompt__ || ''}
-              className="h-[42px] w-[171px] object-cover"
-            /> : <p></p>}
+            <p></p>
 
             <p
               className="text-[18px] font-normal leading-[18.991px] text-[#15342D]"

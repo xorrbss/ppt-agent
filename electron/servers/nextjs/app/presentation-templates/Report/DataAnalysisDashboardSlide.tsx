@@ -136,9 +136,9 @@ function SummaryCard({
   return (
     <div className="flex gap-[10px]  items-center rounded-[14px]  py-[9px]">
       <div
-        className="flex h-[36px] w-[36px] border border-[#ECF5FE] shrink-0 items-center justify-center rounded-full bg-[#ECF5FE] "
+        className="flex h-[36px] w-[36px] items-center justify-center border border-[#ECF5FE] shrink-0 rounded-full bg-[#ECF5FE] "
         style={{
-          backgroundColor: "var(--card-color,#ECF5FE)",
+          backgroundColor: "var(--primary-color,#ECF5FE)",
           borderColor: "var(--stroke,#ECF5FE)",
         }}
       >
@@ -149,12 +149,7 @@ function SummaryCard({
           color="var(--primary-text, #000000)"
           title={iconAlt ?? ""}
         />
-        {/* <img
-          src={iconUrl ?? ""}
-          alt={iconAlt ?? ""}
-          className="h-[18px] w-[18px] object-contain"
 
-        /> */}
       </div>
       <div className="">
         <p
@@ -224,7 +219,11 @@ const DataAnalysisDashboardSlide = ({ data }: { data: Partial<SchemaType> }) => 
         </div>}
         <div className="flex-1 flex flex-col pb-[30px]">
 
-          {halfChart && halfChart.length > 0 && <div className="mt-[14px] px-[64px] flex-1">
+          {halfChart && halfChart.length > 0 && <div className="mt-[14px] px-[64px] flex-1 "
+            style={{
+              height: otherHalfChart && otherHalfChart?.length > 0 ? '200px' : 'auto',
+            }}
+          >
             <div
               className={`grid h-full bg-white p-[13px] rounded-[14px] min-h-0 gap-[10px] `}
               style={{
@@ -240,13 +239,16 @@ const DataAnalysisDashboardSlide = ({ data }: { data: Partial<SchemaType> }) => 
                 >
 
                   <div className="flex-1 " >
-                    <FlexibleReportChart density="compact" chartType={chart.type} data={chart.data} series={chart.series} />
+                    <ResponsiveContainer width="100%" height="100%" maxHeight={otherHalfChart && otherHalfChart?.length > 0 ? 200 : 400}>
+
+                      <FlexibleReportChart density="compact" chartType={chart.type} data={chart.data} series={chart.series} />
+                    </ResponsiveContainer>
                   </div>
                 </div>
               ))}
             </div>
           </div>}
-          {otherHalfChart && otherHalfChart.length > 0 && <div className="mt-[14px] px-[64px] flex-1">
+          {otherHalfChart && otherHalfChart.length > 0 && <div className="mt-[14px] px-[64px] flex-1 h-[200px] ">
             <div
               className={`grid h-full bg-white p-[13px] rounded-[14px] min-h-0 gap-[10px] `}
               style={{
@@ -260,10 +262,10 @@ const DataAnalysisDashboardSlide = ({ data }: { data: Partial<SchemaType> }) => 
                   className="rounded-[6px] flex flex-col overflow-hidden"
                 >
                   <div className="flex-1 " >
-                    <ResponsiveContainer width="100%" height="100%">
+                    <ResponsiveContainer width="100%" height="100%" maxHeight={180}>
+
                       <FlexibleReportChart density="compact" chartType={chart.type} data={chart.data} series={chart.series} />
                     </ResponsiveContainer>
-
                   </div>
                 </div>
               ))}

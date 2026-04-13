@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store/store";
+import "../utils/prism-languages";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -62,6 +63,10 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
       const data = await DashboardApi.getPresentation(presentation_id);
       dispatch(setPresentationData(data));
       setContentLoading(false);
+
+      if (data.fonts) {
+        useFontLoader(data.fonts);
+      }
       if (data?.theme) {
         try {
           applyTheme(data.theme);

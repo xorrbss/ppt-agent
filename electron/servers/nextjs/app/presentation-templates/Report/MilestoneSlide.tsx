@@ -8,7 +8,7 @@ const MilestoneItemSchema = z.object({
     description: "Heading displayed below the milestone marker.",
   }),
   description: z.string().min(10).max(80).meta({
-    description: "Supporting milestone description shown under the heading.",
+    description: "Supporting milestone description shown under the heading. with max 80 characters",
   }),
 });
 
@@ -32,27 +32,27 @@ export const Schema = z.object({
       {
         bulletNumber: "01",
         heading: "Heading",
-        description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+        description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Lorem ipsum dolor sit amet,",
       },
       {
         bulletNumber: "02",
         heading: "Heading",
-        description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+        description: "Lorem ipsum dolor sit amet,  Lorem ipsum dolor sit amet,",
       },
       {
         bulletNumber: "03",
         heading: "Heading",
-        description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+        description: "Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet, Lorem ipsum dolor sit amet",
       },
       {
         bulletNumber: "04",
         heading: "Heading",
-        description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+        description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Lorem ipsum dolor sit amet,",
       },
       {
         bulletNumber: "05",
         heading: "Heading",
-        description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+        description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Lorem ipsum dolor sit amet,",
       },
     ])
     .meta({
@@ -118,7 +118,7 @@ const MilestoneSlide = ({ data }: { data: Partial<SchemaType> }) => {
                   </div>
                   <div
                     key={`${item.heading}-${index}`}
-                    className={`text-center  mt-[20px] text-[#232223] ${index > 0 ? 'pr-[33px]' : ''} ${index === 0 ? 'px-[33px]' : ''}`}
+                    className={`text-center  h-[130px]  mt-[20px] text-[#232223] ${index > 0 ? 'pr-[33px]' : ''} ${index === 0 ? 'px-[33px]' : ''}`}
                     style={{ color: "var(--background-text,#232223)" }}
                   >
                     <h3 className="text-[20px] text-[#232223] font-medium tracking-[2.074px]" style={{ color: "var(--background-text,#232223)" }}>

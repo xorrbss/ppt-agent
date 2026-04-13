@@ -4,6 +4,7 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { useRouter, useSearchParams } from "next/navigation";
 import PdfMakerPage from "./PdfMakerPage";
+import "../utils/prism-languages";
 const page = () => {
 
     const router = useRouter();

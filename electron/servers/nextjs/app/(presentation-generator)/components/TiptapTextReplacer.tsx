@@ -178,6 +178,8 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
         "SCRIPT",
         "STYLE",
         "NOSCRIPT", // Script/style elements
+        "PRE",
+        "CODE", // Code block elements
       ];
 
       // List of class patterns that indicate ignored element trees
@@ -197,6 +199,10 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
         "flowchart",
         "mermaid",
         "diagram",
+        "prism",
+        "token",
+        "code-block",
+        "language-",
       ];
 
       // Check if current element or any parent is in ignored list
@@ -227,6 +233,14 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
           currentElement.hasAttribute("data-chart") ||
           currentElement.hasAttribute("data-visualization") ||
           currentElement.hasAttribute("data-interactive")
+        ) {
+          return true;
+        }
+
+        // Skip syntax-highlighted and code-rendered areas entirely
+        if (
+          currentElement.classList.contains("prism-code-block") ||
+          !!currentElement.closest("pre, code, .prism-code-block")
         ) {
           return true;
         }

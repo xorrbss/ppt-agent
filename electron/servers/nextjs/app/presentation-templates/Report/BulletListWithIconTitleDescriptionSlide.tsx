@@ -3,10 +3,10 @@ import * as z from "zod";
 
 
 const AnalysisItemSchema = z.object({
-  title: z.string().max(12).meta({
+  title: z.string().max(30).meta({
     description: "Short item title displayed next to the icon.",
   }),
-  description: z.string().max(30).meta({
+  description: z.string().max(60).meta({
     description: "Supporting sentence shown below the title.",
   }),
 });
@@ -35,12 +35,12 @@ export const Schema = z.object({
 
     .max(6)
     .default([
-      { title: "Title 1", description: "Ut enim ad minima veniam, quis." },
-      { title: "Title 3", description: "Ut enim ad minima veniam, quis." },
-      { title: "Title 2", description: "Ut enim ad minima veniam, quis." },
-      { title: "Title 4", description: "Ut enim ad minima veniam, quis." },
-      { title: "Title 2", description: "Ut enim ad minima veniam, quis." },
-      { title: "Title 5", description: "Ut enim ad minima veniam, quis." },
+      { title: "Title 1 title 1 title 1 title 1 title 1", description: "Ut enim ad minima veniam, quis. Ut enim ad minima veniam, quis. Ut enim" },
+      { title: "Title 3 title 3 title 3 title 3 title 3", description: "Ut enim ad minima veniam, quis. Ut enim ad minima veniam, quis. Ut enim " },
+      { title: "Title 2 title 2 title 2 title 2 title 2", description: "Ut enim ad minima veniam, quis. Ut enim ad minima veniam, quis. Ut enim " },
+      { title: "Title 4 title 4 title 4 title 4 title 4", description: "Ut enim ad minima veniam, quis. Ut enim ad minima veniam, quis. Ut enim " },
+      { title: "Title 2 title 2 title 2 title 2 title 2", description: "Ut enim ad minima veniam, quis. Ut enim ad minima veniam, quis. Ut enim " },
+      { title: "Title 5 title 5 title 5 title 5 title 5", description: "Ut enim ad minima veniam, quis. Ut enim ad minima veniam, quis. Ut enim " },
     ])
     .meta({
       description: "List of points contains a title and description.",
@@ -76,7 +76,7 @@ const DataAnalysisListSlide = ({ data }: { data: Partial<SchemaType> }) => {
           </h2>
         </div>
 
-        <div className="grid grid-cols-2 gap-x-[112px] gap-y-[52px] px-[82px] pt-[58px]">
+        <div className="grid grid-cols-2 gap-x-[92px] gap-y-[42px] px-[82px] pt-[58px]">
           {items?.map((item, index) => (
             <div key={`${item.title}-${index}`}>
               <div className="flex items-center gap-[14px]">
