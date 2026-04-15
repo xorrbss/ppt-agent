@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { setOutlines } from "@/store/slices/presentationGeneration";
 import { jsonrepair } from "jsonrepair";
 import { RootState } from "@/store/store";
+import { getApiUrl } from "@/utils/api";
 
 
 
@@ -29,7 +30,7 @@ export const useOutlineStreaming = (presentationId: string | null) => {
       setIsLoading(true)
       try {
         eventSource = new EventSource(
-          `/api/v1/ppt/outlines/stream/${presentationId}`
+          getApiUrl(`/api/v1/ppt/outlines/stream/${presentationId}`)
         );
 
         eventSource.addEventListener("response", (event) => {

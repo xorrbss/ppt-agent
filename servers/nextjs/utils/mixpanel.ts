@@ -9,6 +9,8 @@ export enum MixpanelEvent {
   Navigation = 'Navigation',
   Home_SaveConfiguration_Button_Clicked = 'Home Save Configuration Button Clicked',
   Home_SaveConfiguration_API_Call = 'Home Save Configuration API Call',
+  Onboarding_Providers_Models_Selected = 'Onboarding Providers Models Selected',
+  Codex_SignIn_API_Call = 'Codex Sign In API Call',
   Home_CheckOllamaModelPulled_API_Call = 'Home Check Ollama Model Pulled API Call',
   Home_DownloadOllamaModel_API_Call = 'Home Download Ollama Model API Call',
   Outline_Generate_Presentation_Button_Clicked = 'Outline Generate Presentation Button Clicked',
@@ -150,12 +152,31 @@ export function identifyAnonymous(): void {
   mixpanel.identify(mixpanel.get_distinct_id());
 }
 
+export function resetTelemetryCache(): void {
+  trackingCheckPromise = null;
+  if (typeof window !== 'undefined') {
+    delete window.__mixpanel_telemetry_enabled;
+  }
+}
+
+export function setTelemetryEnabled(enabled: boolean): void {
+  if (typeof window !== 'undefined') {
+    window.__mixpanel_telemetry_enabled = enabled;
+  }
+  trackingCheckPromise = null;
+  if (enabled && typeof window !== 'undefined' && !window.__mixpanel_initialized) {
+    initMixpanel();
+  }
+}
+
 export default {
   initMixpanel,
   track,
   trackEvent,
   getDistinctId,
   identifyAnonymous,
+  resetTelemetryCache,
+  setTelemetryEnabled,
 };
 
 

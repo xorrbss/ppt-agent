@@ -170,22 +170,33 @@ const startServers = async () => {
     console.error("Next.js process failed to start:", err);
   });
 
-  const ollamaProcess = spawn("ollama", ["serve"], {
-    cwd: "/",
-    stdio: "inherit",
-    env: process.env,
-  });
+  const startEmbeddedOllama =
+    process.env.START_EMBEDDED_OLLAMA !== "false" &&
+    process.env.START_EMBEDDED_OLLAMA !== "0";
 
-  ollamaProcess.on("error", (err) => {
-    console.error("Ollama process failed to start:", err);
-  });
-
-  // Keep the Node process alive until both servers exit
-  const exitCode = await Promise.race([
+  const exitPromises = [
     new Promise((resolve) => fastApiProcess.on("exit", resolve)),
     new Promise((resolve) => nextjsProcess.on("exit", resolve)),
-    new Promise((resolve) => ollamaProcess.on("exit", resolve)),
-  ]);
+  ];
+
+  if (startEmbeddedOllama) {
+    const ollamaProcess = spawn("ollama", ["serve"], {
+      cwd: "/",
+      stdio: "inherit",
+      env: process.env,
+    });
+    ollamaProcess.on("error", (err) => {
+      console.error("Ollama process failed to start:", err);
+    });
+    exitPromises.push(new Promise((resolve) => ollamaProcess.on("exit", resolve)));
+  } else {
+    console.log(
+      "Embedded Ollama disabled (START_EMBEDDED_OLLAMA=false); use OLLAMA_URL for a remote daemon if needed."
+    );
+  }
+
+  // Keep the Node process alive until one of the servers exits
+  const exitCode = await Promise.race(exitPromises);
 
   console.log(`One of the processes exited. Exit code: ${exitCode}`);
   process.exit(exitCode);

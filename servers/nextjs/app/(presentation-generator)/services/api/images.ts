@@ -1,3 +1,4 @@
+import { getApiUrl } from "@/utils/api";
 import { getHeaderForFormData } from "./header";
 import { ApiResponseHandler } from "./api-error-handler";
 import { ImageAssetResponse } from "./types";
@@ -9,7 +10,7 @@ export class ImagesApi {
     try {
           const formData = new FormData();
       formData.append("file", file);
-    const response = await fetch(`/api/v1/ppt/images/upload`, {
+    const response = await fetch(getApiUrl(`/api/v1/ppt/images/upload`), {
       method: "POST",
       headers: getHeaderForFormData(),
       body: formData,
@@ -23,7 +24,7 @@ export class ImagesApi {
 
   static async getUploadedImages(): Promise<ImageAssetResponse[]> {
     try {
-    const response = await fetch(`/api/v1/ppt/images/uploaded`);
+    const response = await fetch(getApiUrl(`/api/v1/ppt/images/uploaded`));
    return await ApiResponseHandler.handleResponse(response, "Failed to get uploaded images") as ImageAssetResponse[];
   } catch (error:any) {
     console.log("Get uploaded images error:", error);
@@ -33,7 +34,7 @@ export class ImagesApi {
 
   static async deleteImage(image_id: string): Promise<{success: boolean, message?: string}> {
     try {
-      const response = await fetch(`/api/v1/ppt/images/${image_id}`, {
+      const response = await fetch(getApiUrl(`/api/v1/ppt/images/${image_id}`), {
         method: "DELETE"
       });
       return await ApiResponseHandler.handleResponse(response, "Failed to delete image") as {success: boolean, message?: string};

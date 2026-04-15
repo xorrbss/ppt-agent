@@ -5,6 +5,7 @@ import { getHeader } from '@/app/(presentation-generator)/services/api/header';
 import { ApiResponseHandler } from '@/app/(presentation-generator)/services/api/api-error-handler';
 import { ProcessedSlide } from '@/app/(presentation-generator)/custom-template/types';
 import { CustomTemplateLayout } from '@/app/hooks/useCustomTemplates';
+import { getApiUrl } from '@/utils/api';
 
 interface LayoutPayload {
     layout_id: string;
@@ -77,7 +78,7 @@ export const useTemplateLayoutsAutoSave = ({
             setSaveStatus('saving');
             console.log('🔄 Auto-saving template layouts...');
 
-            const response = await fetch('/api/v1/ppt/template/update', {
+            const response = await fetch(getApiUrl('/api/v1/ppt/template/update'), {
                 method: 'PUT',
                 headers: getHeader(),
                 body: JSON.stringify({

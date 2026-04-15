@@ -94,6 +94,8 @@ services:
       - .:/app
       - ./app_data:/app_data
     environment:
+      # Dockerfile.dev does not install ollama; use a host daemon via OLLAMA_URL or omit.
+      - START_EMBEDDED_OLLAMA=false
       - MIGRATE_DATABASE_ON_STARTUP=true
       - CAN_CHANGE_KEYS=${CAN_CHANGE_KEYS}
       - LLM=${LLM}
@@ -138,6 +140,7 @@ services:
       - .:/app
       - ./app_data:/app_data
     environment:
+      - START_EMBEDDED_OLLAMA=false
       - MIGRATE_DATABASE_ON_STARTUP=true
       - CAN_CHANGE_KEYS=${CAN_CHANGE_KEYS}
       - LLM=${LLM}

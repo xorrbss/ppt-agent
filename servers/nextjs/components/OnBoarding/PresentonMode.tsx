@@ -16,6 +16,8 @@ import { MixpanelEvent, trackEvent } from '@/utils/mixpanel';
 import { usePathname, useRouter } from 'next/navigation';
 import { handleSaveLLMConfig } from '@/utils/storeHelpers';
 import { checkIfSelectedOllamaModelIsPulled, pullOllamaModel } from '@/utils/providerUtils';
+import { getApiUrl } from '@/utils/api';
+import CodexConfig, { CHATGPT_MODELS } from '../CodexConfig';
 
 const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep: (step: number) => void }) => {
     const pathname = usePathname();
@@ -71,6 +73,8 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 return 'OLLAMA_MODEL';
             case 'custom':
                 return 'CUSTOM_MODEL';
+            case 'codex':
+                return 'CODEX_MODEL';
             default:
                 return '';
         }
@@ -90,7 +94,30 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
         }
     }, [llmConfig.LLM]);
 
+    const getSelectedTextModel = (config: LLMConfig): string => {
+        switch (config.LLM) {
+            case 'openai':
+                return config.OPENAI_MODEL || '';
+            case 'google':
+                return config.GOOGLE_MODEL || '';
+            case 'anthropic':
+                return config.ANTHROPIC_MODEL || '';
+            case 'ollama':
+                return config.OLLAMA_MODEL || '';
+            case 'custom':
+                return config.CUSTOM_MODEL || '';
+            case 'codex':
+                return config.CODEX_MODEL || '';
+            default:
+                return '';
+        }
+    };
 
+    const getSelectedImageQuality = (config: LLMConfig): string => {
+        if (config.IMAGE_PROVIDER === 'dall-e-3') return config.DALL_E_3_QUALITY || '';
+        if (config.IMAGE_PROVIDER === 'gpt-image-1.5') return config.GPT_IMAGE_1_5_QUALITY || '';
+        return '';
+    };
 
     const getFieldValue = (field?: string) => {
         if (!field) return "";
@@ -112,7 +139,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
         try {
             let response: Response;
             if (llmConfig.LLM === 'google') {
-                response = await fetch('/api/v1/ppt/google/models/available', {
+                response = await fetch(getApiUrl('/api/v1/ppt/google/models/available'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -122,7 +149,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                     }),
                 });
             } else if (llmConfig.LLM === 'anthropic') {
-                response = await fetch('/api/v1/ppt/anthropic/models/available', {
+                response = await fetch(getApiUrl('/api/v1/ppt/anthropic/models/available'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -132,9 +159,9 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                     }),
                 });
             } else if (llmConfig.LLM === 'ollama') {
-                response = await fetch('/api/v1/ppt/ollama/models/supported');
+                response = await fetch(getApiUrl('/api/v1/ppt/ollama/models/supported'));
             } else {
-                response = await fetch('/api/v1/ppt/openai/models/available', {
+                response = await fetch(getApiUrl('/api/v1/ppt/openai/models/available'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -290,6 +317,26 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                     await handleModelDownload();
                 }
             }
+
+            const textProvider = llmConfig.LLM || '';
+            const textModel = getSelectedTextModel(llmConfig);
+            const imageGenerationEnabled = !llmConfig.DISABLE_IMAGE_GENERATION;
+            const imageProvider = imageGenerationEnabled ? (llmConfig.IMAGE_PROVIDER || '') : 'disabled';
+
+            trackEvent(MixpanelEvent.Onboarding_Providers_Models_Selected, {
+                pathname,
+                text_provider: textProvider,
+                text_provider_label: LLM_PROVIDERS[textProvider]?.label || textProvider || '',
+                text_model: textModel,
+                uses_chatgpt_login: textProvider === 'codex',
+                image_generation_enabled: imageGenerationEnabled,
+                image_provider: imageProvider,
+                image_provider_label: imageGenerationEnabled
+                    ? (IMAGE_PROVIDERS[imageProvider]?.label || imageProvider || '')
+                    : 'Image generation disabled',
+                image_quality: imageGenerationEnabled ? getSelectedImageQuality(llmConfig) : '',
+            });
+
             toast.info("Configuration saved successfully");
             // Track navigation from -> to
             trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/final onboarding step" });
@@ -325,6 +372,20 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 <h2 className='mb-4 text-black text-[26px] font-normal font-unbounded '>Choose your content providers</h2>
                 <p className='text-[#000000CC] text-xl font-normal font-syne'>Select the AI engines that will generate your slide text and visuals.</p>
             </div>
+            {llmConfig.LLM === 'codex' && (
+                <div className="mb-5">
+                    <CodexConfig
+                        codexModel={llmConfig.CODEX_MODEL || ''}
+                        onInputChange={(value, field) => {
+                            const normalizedField = field === 'codex_model' ? 'CODEX_MODEL' : field;
+                            setLlmConfig((prev) => ({
+                                ...prev,
+                                [normalizedField]: value,
+                            }));
+                        }}
+                    />
+                </div>
+            )}
             {/* Text Provider */}
             <div className='p-3 border border-[#EDEEEF] rounded-[11px] '>
                 <div className="flex items-center gap-6  mb-7">
@@ -466,6 +527,66 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                         </>
                                     )}
                                 </>
+                            ) : llmConfig.LLM === 'codex' ? (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Select GPT Model
+                                    </label>
+                                    <Popover open={openModelSelect} onOpenChange={setOpenModelSelect}>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                aria-expanded={openModelSelect}
+                                                className="w-full h-12 px-3 outline-none border border-gray-300 rounded-lg hover:border-gray-400 justify-between"
+                                            >
+                                                <span className="text-sm text-gray-900">
+                                                    {llmConfig.CODEX_MODEL
+                                                        ? (CHATGPT_MODELS.find((m) => m.id === llmConfig.CODEX_MODEL)?.name ?? llmConfig.CODEX_MODEL)
+                                                        : "Select a model"}
+                                                </span>
+                                                <ChevronUp className="w-4 h-4 text-gray-400" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent
+                                            className="p-0"
+                                            align="start"
+                                            style={{ width: "var(--radix-popover-trigger-width)" }}
+                                        >
+                                            <Command>
+                                                <CommandInput placeholder="Search models…" />
+                                                <CommandList>
+                                                    <CommandEmpty>No model found.</CommandEmpty>
+                                                    <CommandGroup>
+                                                        {CHATGPT_MODELS.map((model) => (
+                                                            <CommandItem
+                                                                key={model.id}
+                                                                value={model.id}
+                                                                onSelect={(value) => {
+                                                                    setLlmConfig((prev) => ({
+                                                                        ...prev,
+                                                                        CODEX_MODEL: value,
+                                                                    }));
+                                                                    setOpenModelSelect(false);
+                                                                }}
+                                                            >
+                                                                <Check
+                                                                    className={cn(
+                                                                        "mr-2 h-4 w-4",
+                                                                        llmConfig.CODEX_MODEL === model.id ? "opacity-100" : "opacity-0"
+                                                                    )}
+                                                                />
+                                                                <span className="text-sm text-gray-900">
+                                                                    {model.name}
+                                                                </span>
+                                                            </CommandItem>
+                                                        ))}
+                                                    </CommandGroup>
+                                                </CommandList>
+                                            </Command>
+                                        </PopoverContent>
+                                    </Popover>
+                                </div>
                             ) : (
                                 <>
                                     <label className="block text-sm font-medium capitalize text-gray-700 mb-2">
@@ -509,7 +630,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                         </div>
 
 
-                        {llmConfig.LLM !== 'ollama' && (!modelsChecked || (modelsChecked && availableModels.length === 0)) && (
+                        {llmConfig.LLM !== 'ollama' && llmConfig.LLM !== 'codex' && (!modelsChecked || (modelsChecked && availableModels.length === 0)) && (
 
                             <button
                                 onClick={fetchAvailableModels}
@@ -542,7 +663,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                     <p className='text-sm font-medium text-gray-700 mb-2 w-full'></p>
 
                     {/* Model Selection - only show if models are available */}
-                    {modelsChecked && availableModels.length > 0 && (
+                    {llmConfig.LLM !== 'codex' && modelsChecked && availableModels.length > 0 && (
                         <div className="w-full">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">

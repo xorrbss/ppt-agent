@@ -96,6 +96,12 @@ export async function POST(request: Request) {
     CODEX_REFRESH_TOKEN: existingConfig.CODEX_REFRESH_TOKEN,
     CODEX_TOKEN_EXPIRES: existingConfig.CODEX_TOKEN_EXPIRES,
     CODEX_ACCOUNT_ID: existingConfig.CODEX_ACCOUNT_ID,
+    DISABLE_ANONYMOUS_TRACKING: Object.prototype.hasOwnProperty.call(
+      userConfig,
+      "DISABLE_ANONYMOUS_TRACKING"
+    )
+      ? userConfig.DISABLE_ANONYMOUS_TRACKING
+      : existingConfig.DISABLE_ANONYMOUS_TRACKING,
   };
   fs.writeFileSync(userConfigPath, JSON.stringify(mergedConfig));
   return NextResponse.json(mergedConfig);

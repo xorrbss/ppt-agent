@@ -3,6 +3,8 @@ TEXT_MIME_TYPES = ["text/plain"]
 POWERPOINT_TYPES = [
     "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 ]
+# Alias used by font/PPTX validation helpers shared with the Electron server tree.
+PPTX_MIME_TYPES = POWERPOINT_TYPES
 WORD_TYPES = [
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",

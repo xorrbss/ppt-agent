@@ -6,10 +6,12 @@ import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { LLMConfig } from '@/types/llm_config';
 import { LLM_PROVIDERS } from '@/utils/providerConstants';
-import { Check, Loader2, Eye, EyeOff, ChevronUp, User, RefreshCw, LogOut } from 'lucide-react';
+import { Check, Loader2, Eye, EyeOff, ChevronUp } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { notify } from '@/components/ui/sonner';
 import { toast } from 'sonner';
+import { getApiUrl } from '@/utils/api';
+import CodexConfig from '@/components/CodexConfig';
 
 
 interface OpenAIConfigProps {
@@ -46,6 +48,8 @@ const TextProvider = ({
                 return 'OLLAMA_MODEL';
             case 'custom':
                 return 'CUSTOM_MODEL';
+            case 'codex':
+                return 'CODEX_MODEL';
             default:
                 return '';
         }
@@ -119,7 +123,7 @@ const TextProvider = ({
         try {
             let response: Response;
             if (selectedProvider === 'google') {
-                response = await fetch('/api/v1/ppt/google/models/available', {
+                response = await fetch(getApiUrl('/api/v1/ppt/google/models/available'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -129,7 +133,7 @@ const TextProvider = ({
                     }),
                 });
             } else if (selectedProvider === 'anthropic') {
-                response = await fetch('/api/v1/ppt/anthropic/models/available', {
+                response = await fetch(getApiUrl('/api/v1/ppt/anthropic/models/available'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -139,9 +143,9 @@ const TextProvider = ({
                     }),
                 });
             } else if (selectedProvider === 'ollama') {
-                response = await fetch('/api/v1/ppt/ollama/models/supported');
+                response = await fetch(getApiUrl('/api/v1/ppt/ollama/models/supported'));
             } else {
-                response = await fetch('/api/v1/ppt/openai/models/available', {
+                response = await fetch(getApiUrl('/api/v1/ppt/openai/models/available'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -228,33 +232,6 @@ const TextProvider = ({
                     </p>
                 </div>
                 <div>
-                    {selectedProvider === 'codex' && false && <div className='border border-[#EDEEEF] mb-4 rounded-[8px] p-5 flex justify-between items-center'>
-                        <div className='flex items-center gap-2.5'>
-                            <User className='w-4 h-4 text-gray-500' />
-                            <div>
-                                <h4 className='text-[#19001F] text-sm font-medium'>Acc: 123-455-acghk</h4>
-                                <p className='text-xs text-[#B3B3B3]'>Signed in to ChatGPT</p>
-                            </div>
-
-                        </div>
-                        <div className='flex items-center gap-2.5'>
-                            <ToolTip content='Refresh ChatGPT account'>
-
-
-                                <button className='px-3.5 py-2.5 rounded-full bg-[#EDEEEF]'>
-
-                                    <RefreshCw className='w-4 h-4 text-black' />
-                                </button>
-                            </ToolTip>
-                            <ToolTip content='Logout from ChatGPT'>
-                                <button className='px-3.5 py-2.5 rounded-full bg-[#EDEEEF]'>
-
-                                    <LogOut className='w-4 h-4 text-black' />
-                                </button>
-                            </ToolTip>
-                        </div>
-                    </div>}
-
                     <div className={`flex  gap-4 justify-end ${selectedProvider === 'codex' ? 'items-end' : 'items-start'}`}>
                         <div className="relative  w-[205px] ">
                             <div className="flex flex-col justify-start ">
@@ -380,11 +357,17 @@ const TextProvider = ({
                                             </>
                                         )}
                                     </>
-                                ) : selectedProvider === 'codex' ?
-                                    <>
-                                        <button className='px-3.5 py-2.5 bg-[#EDEEEF]  mt-auto rounded-[58px] w-full  text-xs font-medium text-[#101323]'>Sign in with ChatGPT</button>
-                                    </>
-                                    : (
+                                ) : selectedProvider === 'codex' ? (
+                                    <div className="w-full mt-0 rounded-[12px]">
+                                        <CodexConfig
+                                            codexModel={llmConfig.CODEX_MODEL || ''}
+                                            onInputChange={(value, field) => {
+                                                const normalizedField = field === 'codex_model' ? 'CODEX_MODEL' : field;
+                                                onInputChange(value, normalizedField);
+                                            }}
+                                        />
+                                    </div>
+                                ) : (
                                         <>
                                             <label className="block text-sm font-medium capitalize text-gray-700 mb-2">
                                                 {selectedProvider === 'custom' ? 'Custom LLM API Key' : `${llmConfig.LLM} API Key`}
@@ -452,7 +435,7 @@ const TextProvider = ({
 
 
                         {/* Model Selection - only show if models are available */}
-                        {modelsChecked && availableModels.length > 0 ? (
+                        {selectedProvider !== 'codex' && modelsChecked && availableModels.length > 0 ? (
                             <div className="w-[205px]">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-3">
@@ -532,7 +515,7 @@ const TextProvider = ({
                 </div>
             </div>
             {/* Show message if no models found */}
-            {modelsChecked && availableModels.length === 0 && (
+            {selectedProvider !== 'codex' && modelsChecked && availableModels.length === 0 && (
                 <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                     <p className="text-sm text-yellow-800">
                         No models found. Please make sure your provider credentials are valid and the selected provider is reachable.

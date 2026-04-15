@@ -1,5 +1,7 @@
-import uvicorn
 import argparse
+import os
+
+import uvicorn
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the FastAPI server")
@@ -11,7 +13,9 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     reload = args.reload == "true"
-    
+    host = "127.0.0.1"
+    os.environ["FASTAPI_PUBLIC_URL"] = f"http://{host}:{args.port}"
+
     uvicorn.run(
         "api.main:app",
         host="127.0.0.1",
