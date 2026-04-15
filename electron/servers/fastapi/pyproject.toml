@@ -17,6 +17,7 @@ dependencies = [
     "google-genai>=1.28.0",
     # Platform-specific: greenlet for macOS only (critical for SQLAlchemy async)
     "greenlet>=3.0.0; sys_platform == 'darwin'",
+    "jsonschema>=4.25.0",
     "nltk>=3.9.1",
     "openai>=1.98.0",
     "pathvalidate>=3.3.1",

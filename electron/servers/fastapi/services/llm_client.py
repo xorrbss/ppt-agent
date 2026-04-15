@@ -1,6 +1,7 @@
 import asyncio
 import dirtyjson
 import json
+import logging
 from typing import AsyncGenerator, List, Optional, Dict, Any
 from fastapi import HTTPException
 from openai import APIStatusError, AsyncOpenAI, OpenAIError
@@ -69,9 +70,13 @@ from utils.schema_utils import (
     ensure_array_schemas_have_items,
     ensure_strict_json_schema,
     flatten_json_schema,
+    get_schema_validation_errors,
     remove_titles_from_schema,
 )
 
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class LLMClient:
@@ -1067,6 +1072,101 @@ class LLMClient:
             depth=depth,
         )
 
+    async def _generate_structured_once(
+        self,
+        model: str,
+        messages: List[LLMMessage],
+        response_format: dict,
+        strict: bool = False,
+        tools: Optional[List[dict]] = None,
+        max_tokens: Optional[int] = None,
+    ) -> dict | None:
+        match self.llm_provider:
+            case LLMProvider.OPENAI:
+                return await self._generate_openai_structured(
+                    model=model,
+                    messages=messages,
+                    response_format=response_format,
+                    strict=strict,
+                    tools=tools,
+                    max_tokens=max_tokens,
+                )
+            case LLMProvider.CODEX:
+                return await self._generate_codex_structured(
+                    model=model,
+                    messages=messages,
+                    response_format=response_format,
+                    strict=strict,
+                    tools=tools,
+                    max_tokens=max_tokens,
+                )
+            case LLMProvider.GOOGLE:
+                return await self._generate_google_structured(
+                    model=model,
+                    messages=messages,
+                    response_format=response_format,
+                    tools=tools,
+                    max_tokens=max_tokens,
+                )
+            case LLMProvider.ANTHROPIC:
+                return await self._generate_anthropic_structured(
+                    model=model,
+                    messages=messages,
+                    response_format=response_format,
+                    tools=tools,
+                    max_tokens=max_tokens,
+                )
+            case LLMProvider.OLLAMA:
+                return await self._generate_ollama_structured(
+                    model=model,
+                    messages=messages,
+                    response_format=response_format,
+                    strict=strict,
+                    max_tokens=max_tokens,
+                )
+            case LLMProvider.CUSTOM:
+                return await self._generate_custom_structured(
+                    model=model,
+                    messages=messages,
+                    response_format=response_format,
+                    strict=strict,
+                    max_tokens=max_tokens,
+                )
+
+    def _get_structured_validation_feedback_message(
+        self,
+        content: dict,
+        validation_errors: List[str],
+    ) -> LLMUserMessage:
+        max_error_count = 10
+        max_json_chars = 6000
+
+        formatted_errors = validation_errors[:max_error_count]
+        if len(validation_errors) > max_error_count:
+            formatted_errors.append(
+                f"...and {len(validation_errors) - max_error_count} more validation errors."
+            )
+
+        previous_response = json.dumps(
+            content,
+            ensure_ascii=False,
+            indent=2,
+            default=str,
+        )
+        if len(previous_response) > max_json_chars:
+            previous_response = previous_response[:max_json_chars] + "\n... (truncated)"
+
+        return LLMUserMessage(
+            content=(
+                "The previous JSON response did not match the required response schema.\n\n"
+                "Validation errors:\n"
+                + "\n".join(f"- {error}" for error in formatted_errors)
+                + "\n\nPrevious invalid JSON:\n"
+                + f"```json\n{previous_response}\n```\n\n"
+                + "Return corrected JSON only. Make sure it fully matches the required schema."
+            )
+        )
+
     async def generate_structured(
         self,
         model: str,
@@ -1075,68 +1175,69 @@ class LLMClient:
         strict: bool = False,
         tools: Optional[List[type[LLMTool] | LLMDynamicTool]] = None,
         max_tokens: Optional[int] = None,
+        validate_schema: bool = False,
+        validate_schema_max_loop_count: int = 5,
     ) -> dict:
         parsed_tools = self.tool_calls_handler.parse_tools(tools)
+        max_validation_loops = max(1, validate_schema_max_loop_count)
+        working_messages = [*messages]
 
-        for attempt in range(3):
+        for validation_attempt in range(max_validation_loops):
             content = None
-            match self.llm_provider:
-                case LLMProvider.OPENAI:
-                    content = await self._generate_openai_structured(
-                        model=model,
-                        messages=messages,
-                        response_format=response_format,
-                        strict=strict,
-                        tools=parsed_tools,
-                        max_tokens=max_tokens,
-                    )
-                case LLMProvider.CODEX:
-                    content = await self._generate_codex_structured(
-                        model=model,
-                        messages=messages,
-                        response_format=response_format,
-                        strict=strict,
-                        tools=parsed_tools,
-                        max_tokens=max_tokens,
-                    )
-                case LLMProvider.GOOGLE:
-                    content = await self._generate_google_structured(
-                        model=model,
-                        messages=messages,
-                        response_format=response_format,
-                        tools=parsed_tools,
-                        max_tokens=max_tokens,
-                    )
-                case LLMProvider.ANTHROPIC:
-                    content = await self._generate_anthropic_structured(
-                        model=model,
-                        messages=messages,
-                        response_format=response_format,
-                        tools=parsed_tools,
-                        max_tokens=max_tokens,
-                    )
-                case LLMProvider.OLLAMA:
-                    content = await self._generate_ollama_structured(
-                        model=model,
-                        messages=messages,
-                        response_format=response_format,
-                        strict=strict,
-                        max_tokens=max_tokens,
-                    )
-                case LLMProvider.CUSTOM:
-                    content = await self._generate_custom_structured(
-                        model=model,
-                        messages=messages,
-                        response_format=response_format,
-                        strict=strict,
-                        max_tokens=max_tokens,
-                    )
+            for attempt in range(3):
+                content = await self._generate_structured_once(
+                    model=model,
+                    messages=working_messages,
+                    response_format=response_format,
+                    strict=strict,
+                    tools=parsed_tools,
+                    max_tokens=max_tokens,
+                )
 
-            if content is not None:
+                if content is not None:
+                    break
+
+                if attempt < 2:
+                    await asyncio.sleep(0.5 * (attempt + 1))
+
+            if content is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="LLM did not return any content",
+                )
+
+            if not validate_schema:
                 return content
 
-            if attempt < 2:
-                await asyncio.sleep(0.5 * (attempt + 1))
+            validation_errors = get_schema_validation_errors(
+                response_format,
+                content,
+                strict=strict,
+            )
+
+            if not validation_errors:
+                return content
+
+            formatted_validation_errors = " | ".join(validation_errors)
+            if validation_attempt == max_validation_loops - 1:
+                LOGGER.warning(
+                    "Validation error after max fixes, returning last response: %s",
+                    formatted_validation_errors,
+                )
+                return content
+
+            LOGGER.warning(
+                "Validation error, attempting fix %s/%s: %s",
+                validation_attempt + 1,
+                max_validation_loops - 1,
+                formatted_validation_errors,
+            )
+            working_messages.append(
+                self._get_structured_validation_feedback_message(
+                    content,
+                    validation_errors,
+                )
+            )
 
         raise HTTPException(
             status_code=400,
@@ -1753,8 +1854,6 @@ class LLMClient:
                 depth=depth + 1,
             ):
                 yield event
-
-
 
     async def _stream_codex_structured(
         self,

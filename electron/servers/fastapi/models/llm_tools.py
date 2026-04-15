@@ -1,4 +1,4 @@
-from typing import Any, Callable, Coroutine, Optional
+from typing import Any, Callable, Coroutine
 from pydantic import BaseModel, Field
 
 
