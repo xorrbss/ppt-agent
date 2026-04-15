@@ -57,6 +57,9 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
       if (data?.theme) {
         applyTheme(data.theme);
       }
+      if (data.fonts) {
+        useFontLoader(data.fonts);
+      }
     } catch (error) {
       setError(true);
       toast.error("Failed to load presentation");
