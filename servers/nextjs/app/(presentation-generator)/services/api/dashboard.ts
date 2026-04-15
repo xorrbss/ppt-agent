@@ -1,8 +1,8 @@
-import { getApiUrl } from "@/utils/api";
 import {
   getHeader,
 } from "@/app/(presentation-generator)/services/api/header";
 import { ApiResponseHandler } from "@/app/(presentation-generator)/services/api/api-error-handler";
+import { getApiUrl } from "@/utils/api";
 
 export interface PresentationResponse {
   id: string;

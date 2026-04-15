@@ -1,7 +1,7 @@
-import { getApiUrl } from "@/utils/api"
 import { ApiResponseHandler } from "./api-error-handler"
 import { getHeader, getHeaderForFormData } from "./header"
 import { Theme, ThemeParams } from "./types"
+import { getApiUrl } from "@/utils/api"
 
 
 
@@ -90,8 +90,8 @@ class ThemeApi {
   static async uploadFont(font: File) {
     try {
       const formData = new FormData();
-      formData.append("file", font);
-      const response = await fetch(getApiUrl(`/api/v1/ppt/fonts/upload`), {
+      formData.append("font_file", font);
+      const response: any = await fetch(getApiUrl(`/api/v1/ppt/fonts/upload`), {
         method: "POST",
         headers: getHeaderForFormData(),
         body: formData,

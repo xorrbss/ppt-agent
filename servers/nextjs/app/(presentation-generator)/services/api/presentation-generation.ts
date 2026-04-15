@@ -1,11 +1,9 @@
-import { getApiUrl } from "@/utils/api";
 import { getHeader, getHeaderForFormData } from "./header";
 import { IconSearch, ImageGenerate, ImageSearch, PreviousGeneratedImagesResponse } from "./params";
 import { ApiResponseHandler } from "./api-error-handler";
+import { getApiUrl } from "@/utils/api";
 
 export class PresentationGenerationApi {
-  private static readonly DECOMPOSE_TIMEOUT_MS = 10 * 60 * 1000;
-
   static async uploadDoc(documents: File[]) {
     const formData = new FormData();
 
@@ -31,10 +29,10 @@ export class PresentationGenerationApi {
     }
   }
 
-  static async decomposeDocuments(documentKeys: string[]) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.DECOMPOSE_TIMEOUT_MS);
-
+  static async decomposeDocuments(
+    documentKeys: string[],
+    language?: string | null
+  ) {
     try {
       const response = await fetch(
         getApiUrl(`/api/v1/ppt/files/decompose`),
@@ -43,21 +41,16 @@ export class PresentationGenerationApi {
           headers: getHeader(),
           body: JSON.stringify({
             file_paths: documentKeys,
+            language: language ?? null,
           }),
           cache: "no-cache",
-          signal: controller.signal,
         }
       );
       
       return await ApiResponseHandler.handleResponse(response, "Failed to decompose documents");
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        throw new Error("File decomposition timed out after 10 minutes");
-      }
       console.error("Error in Decompose Files", error);
       throw error;
-    } finally {
-      clearTimeout(timeoutId);
     }
   }
  
