@@ -41,7 +41,6 @@ import ThemeApi from "../../services/api/theme";
 import { Theme } from "../../services/api/types";
 import MarkdownRenderer from "@/components/MarkDownRender";
 import { cn } from "@/lib/utils";
-import { getApiUrl } from "@/utils/api";
 
 const PresentationHeader = ({
   presentation_id,
@@ -140,11 +139,28 @@ const PresentationHeader = ({
   };
 
   const get_presentation_pptx_model = async (id: string): Promise<PptxPresentationModel> => {
-    const response = await fetch(
-      getApiUrl(`/api/presentation_to_pptx_model?id=${encodeURIComponent(id)}`)
-    );
+    const response = await fetch(`/api/presentation_to_pptx_model?id=${id}`);
     const pptx_model = await response.json();
     return pptx_model;
+  };
+
+  const exportViaIpc = async (format: "pptx" | "pdf"): Promise<boolean> => {
+    if (typeof window === 'undefined') return false;
+    if (!(window as any).electron?.exportPresentation) return false;
+    trackEvent(
+      format === "pptx"
+        ? MixpanelEvent.Header_ExportAsPPTX_API_Call
+        : MixpanelEvent.Header_ExportAsPDF_API_Call
+    );
+    const result = await (window as any).electron.exportPresentation(
+      presentation_id,
+      presentationData?.title || 'presentation',
+      format
+    );
+    if (!result?.success) {
+      throw new Error(result?.message || 'Export failed');
+    }
+    return true;
   };
 
   const handleExportPptx = async () => {
@@ -156,6 +172,11 @@ const PresentationHeader = ({
       // Save the presentation data before exporting
       trackEvent(MixpanelEvent.Header_UpdatePresentationContent_API_Call);
       await PresentationGenerationApi.updatePresentationContent(presentationData);
+
+      if (await exportViaIpc("pptx")) {
+        toast.success("PPTX exported successfully!");
+        return;
+      }
 
       trackEvent(MixpanelEvent.Header_GetPptxModel_API_Call);
       const pptx_model = await get_presentation_pptx_model(presentation_id);
@@ -192,7 +213,11 @@ const PresentationHeader = ({
       await PresentationGenerationApi.updatePresentationContent(presentationData);
 
       trackEvent(MixpanelEvent.Header_ExportAsPDF_API_Call);
-      const response = await fetch(getApiUrl("/api/export-as-pdf"), {
+      if (await exportViaIpc("pdf")) {
+        toast.success("PDF exported successfully!");
+        return;
+      }
+      const response = await fetch('/api/export-as-pdf', {
         method: 'POST',
         body: JSON.stringify({
           id: presentation_id,
@@ -370,14 +395,7 @@ const PresentationHeader = ({
           {isPresentationSaving && <div className="flex items-center gap-2">
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
           </div>}
-          {presentationData?.slides?.[0]?.layout &&
-            !presentationData.slides[0].layout.includes("custom") && (
-              <ThemeSelector
-                presentation_id={presentation_id}
-                current_theme={presentationData?.theme || {}}
-                themes={themes}
-              />
-            )}
+          {presentationData && presentationData.slides && !presentationData.slides[0].layout.includes("custom") && <ThemeSelector current_theme={presentationData?.theme || {}} themes={themes} />}
 
           <div className="flex items-center gap-2 bg-[#F6F6F9] px-3.5 h-[38px] border border-[#EDECEC] rounded-[80px]">
 

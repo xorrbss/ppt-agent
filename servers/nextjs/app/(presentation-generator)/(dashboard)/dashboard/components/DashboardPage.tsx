@@ -6,6 +6,7 @@ import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashbo
 import { PresentationGrid } from "@/app/(presentation-generator)/(dashboard)/dashboard/components/PresentationGrid";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
+import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 
 
 
@@ -15,6 +16,7 @@ const DashboardPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    trackEvent(MixpanelEvent.Dashboard_Page_Viewed);
     const loadData = async () => {
       await fetchPresentations();
     };
@@ -58,7 +60,8 @@ const DashboardPage: React.FC = () => {
 
 
             <Link
-              href="/generate"
+              href="/upload"
+              onClick={() => trackEvent(MixpanelEvent.Dashboard_New_Presentation_Clicked)}
               className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-black text-sm font-semibold font-syne shadow-sm hover:shadow-md"
               aria-label="Create new presentation"
               style={{
@@ -71,21 +74,7 @@ const DashboardPage: React.FC = () => {
               <span className="md:hidden">New</span>
               <ChevronRight className="w-4 h-4" />
             </Link>
-            {/* {
-              <Link
-                href="/theme?tab=new-theme"
-                className="inline-flex items-center font-inter font-normal gap-2 rounded-xl px-4 py-2.5 text-black text-sm  shadow-sm hover:shadow-md"
-                aria-label="Create new themes"
-                style={{
-                  borderRadius: "48px",
-                  background: "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
-                }}
-              >
-                <span className="hidden md:inline">New Themes</span>
-                <span className="md:hidden">New</span>
-                <ChevronRight className="w-4 h-4" />
-              </Link>
-            } */}
+
           </div>
         </div>
       </div>

@@ -600,8 +600,8 @@ export function getTemplateByLayoutId(layoutId: string): TemplateWithData | unde
 export function getLayoutByLayoutId(layout: string): TemplateWithData | undefined {
     const templateName = layout.split(':')[0]
 
-
     const template = templates.find((t) => t.id === templateName)
+
     if (template) {
         return template.layouts.find((t) => t.layoutId === layout);
     }
