@@ -137,7 +137,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
         <div className="">
           <div
             id="presentation-slides-wrapper"
-            className="mx-auto flex flex-col items-center  overflow-hidden  justify-center   "
+            className="mx-auto flex flex-col font-inter items-center  overflow-hidden  justify-center   "
           >
             {!presentationData ||
 
