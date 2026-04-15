@@ -167,6 +167,7 @@ async def generate_presentation_structure(
             ),
             response_format=response_model.model_json_schema(),
             strict=True,
+            validate_schema=True,
         )
         return PresentationStructureModel(**response)
     except Exception as e:
