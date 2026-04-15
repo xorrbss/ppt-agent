@@ -102,6 +102,11 @@ export const getLLMConfigValidationError = (
           return "ComfyUI server URL is required.";
         }
         break;
+      case "open_webui":
+        if (!isProvided(llmConfig.OPEN_WEBUI_IMAGE_URL)) {
+          return "Open WebUI URL is required.";
+        }
+        break;
       default:
         return "Select a valid image provider.";
     }
