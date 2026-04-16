@@ -1,18 +1,23 @@
 import path from "path";
 import fs from "fs";
 import puppeteer from "puppeteer";
-
-import { sanitizeFilename } from "@/app/(presentation-generator)/utils/others";
 import { NextResponse, NextRequest } from "next/server";
 
-export async function POST(req: NextRequest) {
-  const { id, title } = await req.json();
-  if (!id) {
-    return NextResponse.json(
-      { error: "Missing Presentation ID" },
-      { status: 400 }
-    );
+import { sanitizeFilename } from "@/app/(presentation-generator)/utils/others";
+import {
+  bundledExportPackageAvailable,
+  runBundledPdfExport,
+} from "@/lib/run-bundled-pdf-export";
+
+async function exportPdfWithInlinePuppeteer(
+  id: string,
+  title: string | undefined
+): Promise<{ path: string }> {
+  let nextjsUrl = process.env.NEXT_PUBLIC_URL;
+  if (!nextjsUrl) {
+    nextjsUrl = "http://127.0.0.1";
   }
+
   const browser = await puppeteer.launch({
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
     headless: true,
@@ -34,7 +39,7 @@ export async function POST(req: NextRequest) {
   page.setDefaultNavigationTimeout(300000);
   page.setDefaultTimeout(300000);
 
-  await page.goto(`http://localhost/pdf-maker?id=${id}`, {
+  await page.goto(`${nextjsUrl}/pdf-maker?id=${id}`, {
     waitUntil: "networkidle0",
     timeout: 300000,
   });
@@ -78,15 +83,12 @@ export async function POST(req: NextRequest) {
     margin: { top: 0, right: 0, bottom: 0, left: 0 },
   });
 
-  browser.close();
+  await browser.close();
 
   const sanitizedTitle = sanitizeFilename(title ?? "presentation");
   const appDataDirectory = process.env.APP_DATA_DIRECTORY!;
   if (!appDataDirectory) {
-    return NextResponse.json({
-      error: "App data directory not found",
-      status: 500,
-    });
+    throw new Error("App data directory not found");
   }
   const destinationPath = path.join(
     appDataDirectory,
@@ -96,8 +98,41 @@ export async function POST(req: NextRequest) {
   await fs.promises.mkdir(path.dirname(destinationPath), { recursive: true });
   await fs.promises.writeFile(destinationPath, pdfBuffer);
 
-  return NextResponse.json({
-    success: true,
-    path: destinationPath,
-  });
+  return { path: destinationPath };
+}
+
+export async function POST(req: NextRequest) {
+  const { id, title } = await req.json();
+  if (!id) {
+    return NextResponse.json(
+      { error: "Missing Presentation ID" },
+      { status: 400 }
+    );
+  }
+
+  try {
+    if (await bundledExportPackageAvailable()) {
+      const { path: outPath } = await runBundledPdfExport({
+        presentationId: id,
+        title,
+      });
+      return NextResponse.json({
+        success: true,
+        path: outPath,
+      });
+    }
+
+    const { path: outPath } = await exportPdfWithInlinePuppeteer(id, title);
+    return NextResponse.json({
+      success: true,
+      path: outPath,
+    });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.error("[export-as-pdf]", message);
+    return NextResponse.json(
+      { error: message, success: false },
+      { status: 500 }
+    );
+  }
 }

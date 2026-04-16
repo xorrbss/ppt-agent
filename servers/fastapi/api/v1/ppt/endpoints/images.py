@@ -102,7 +102,7 @@ async def generate_image(
     sql_session.add(image)
     await sql_session.commit()
 
-    return image.file_url
+    return image.path
 
 
 @IMAGES_ROUTER.get("/generated", response_model=List[ImageAsset])
@@ -113,12 +113,7 @@ async def get_generated_images(sql_session: AsyncSession = Depends(get_async_ses
             .where(ImageAsset.is_uploaded == False)
             .order_by(ImageAsset.created_at.desc())
         )
-        images = list(images_result)
-        for image in images:
-            # Ensure path exposed to the frontend is a web-safe URL
-            if hasattr(image, "file_url"):
-                image.path = image.file_url  # type: ignore[attr-defined]
-        return images
+        return list(images_result)
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to retrieve generated images: {str(e)}"
@@ -145,10 +140,6 @@ async def upload_image(
         # Refresh to ensure all defaults are loaded
         await sql_session.refresh(image_asset)
 
-        # Expose a web-safe URL in the path field for the frontend
-        if hasattr(image_asset, "file_url"):
-            image_asset.path = image_asset.file_url  # type: ignore[attr-defined]
-
         return image_asset
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to upload image: {str(e)}")
@@ -162,12 +153,7 @@ async def get_uploaded_images(sql_session: AsyncSession = Depends(get_async_sess
             .where(ImageAsset.is_uploaded == True)
             .order_by(ImageAsset.created_at.desc())
         )
-        images = list(images_result)
-        for image in images:
-            # Ensure path exposed to the frontend is a web-safe URL
-            if hasattr(image, "file_url"):
-                image.path = image.file_url  # type: ignore[attr-defined]
-        return images
+        return list(images_result)
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to retrieve uploaded images: {str(e)}"

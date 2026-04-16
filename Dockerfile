@@ -3,26 +3,41 @@ FROM python:3.11-slim-bookworm
 
 WORKDIR /app
 
-# Docling + CPU torch: declared in pyproject.toml; lockfile uses PyTorch CPU index.
-# UV_EXTRA_INDEX_URL mirrors the old `pip install docling --extra-index-url .../cpu`.
+# LiteParse uses Node + @llamaindex/liteparse (same runner as Electron); OCR uses Tesseract.
 ENV APP_DATA_DIRECTORY=/app_data \
     TEMP_DIRECTORY=/tmp/presenton \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
     UV_SYSTEM_PYTHON=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
-    UV_EXTRA_INDEX_URL=https://download.pytorch.org/whl/cpu \
-    PATH="/root/.local/bin:${PATH}"
+    PATH="/root/.local/bin:${PATH}" \
+    EXPORT_PACKAGE_ROOT=/app/presentation-export \
+    BUILT_PYTHON_MODULE_PATH=/app/presentation-export/py/convert-linux-x64 \
+    PRESENTON_APP_ROOT=/app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates curl \
+      ca-certificates curl unzip \
       nginx libreoffice fontconfig chromium imagemagick zstd \
+      tesseract-ocr tesseract-ocr-eng \
     && curl -LsSf https://astral.sh/uv/install.sh | sh \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /app/document-extraction-liteparse \
+    && npm --prefix /app/document-extraction-liteparse init -y \
+    && npm --prefix /app/document-extraction-liteparse install @llamaindex/liteparse@1.4.0 --omit=dev
+COPY electron/resources/document-extraction/liteparse_runner.mjs /app/document-extraction-liteparse/liteparse_runner.mjs
+
+# PDF/PPTX export runtime: version pin in presentation-export/export-version.json (or build-arg).
+COPY presentation-export/export-version.json /app/presentation-export/export-version.json
+COPY scripts/sync-presentation-export.cjs /app/scripts/sync-presentation-export.cjs
+ARG EXPORT_RUNTIME_VERSION
+RUN export EXPORT_RUNTIME_VERSION="${EXPORT_RUNTIME_VERSION:-}" \
+    && node /app/scripts/sync-presentation-export.cjs --force \
+    && chmod +x /app/presentation-export/py/convert-linux-x64
 
 RUN curl -fsSL https://ollama.com/install.sh | sh
 

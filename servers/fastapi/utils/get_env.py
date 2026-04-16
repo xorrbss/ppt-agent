@@ -156,10 +156,6 @@ def get_migrate_database_on_startup_env():
     return os.getenv("MIGRATE_DATABASE_ON_STARTUP")
 
 
-def get_next_public_fast_api_env():
-    return os.getenv("FASTAPI_PUBLIC_URL")
-
-
 def get_sentry_dsn_env():
     return os.getenv("SENTRY_DSN")
 
