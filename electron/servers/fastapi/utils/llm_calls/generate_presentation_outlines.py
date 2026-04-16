@@ -16,6 +16,7 @@ def get_system_prompt(
     instructions: Optional[str] = None,
     include_title_slide: bool = True,
     include_table_of_contents: bool = False,
+    web_search: bool = False,
 ):
     verbosity_instruction = (
         "Slide content should be abound 20 words but detailed enough to generate a good slide."
@@ -40,6 +41,27 @@ def get_system_prompt(
     )
     toc_block = f"{toc_instruction}\n" if toc_instruction else ""
 
+    if web_search:
+        tools_hint = "Try to use available tools when they improve accuracy.\n"
+        web_block = (
+            "Web search is enabled: use any \"## Web research (current sources)\" section in Context when present, "
+            "and call SearchWebTool when it is available for fresh facts.\n"
+        )
+    else:
+        tools_hint = ""
+        web_block = "Do not use web search for this outline; rely on Content and Context only.\n"
+
+    url_line = (
+        "Only include URLs if they appear in Content, Context, or a \"## Web research (current sources)\" block.\n"
+        if web_search
+        else "Only include URLs if they appear in the provided content/context.\n"
+    )
+    data_line = (
+        "Ground slide data in Content and Context, and in \"## Web research (current sources)\" when that block is present.\n"
+        if web_search
+        else "Make sure data used is strictly from the provided content/context.\n"
+    )
+
     slide_outline_structure = (
         "Each slide content:\n"
         "   - Must have a ## title.\n"
@@ -60,11 +82,13 @@ def get_system_prompt(
         "If 'auto-detect' is used, figure it out from the content/context.\n"
         f"{title_slide_instruction}\n"
         f"{toc_block}"
+        f"{tools_hint}"
+        f"{web_block}"
         f"{slide_outline_structure}\n"
         "Slide content must not contain any presentation branding/styling information.\n"
         "Title slide must only contain title, presenter name, date and overview.\n"
-        "Only include URLs if they appear in the provided content/context.\n"
-        "Make sure data used is strictly from the provided content/context.\n"
+        f"{url_line}"
+        f"{data_line}"
         "Make sure data is consistent across all slides."
     )
 
@@ -124,6 +148,7 @@ def get_messages(
     instructions: Optional[str] = None,
     include_title_slide: bool = True,
     include_table_of_contents: bool = False,
+    web_search: bool = False,
 ):
     return [
         LLMSystemMessage(
@@ -133,6 +158,7 @@ def get_messages(
                 instructions,
                 include_title_slide,
                 include_table_of_contents,
+                web_search=web_search,
             ),
         ),
         LLMUserMessage(
@@ -171,6 +197,21 @@ async def generate_ppt_outline(
 
     client = LLMClient()
 
+    merged_context = additional_context
+    if client.outline_uses_prefetched_web_facts(web_search):
+        facts = await client.prefetch_outline_web_facts(content, additional_context)
+        if facts:
+            merged_context = (
+                f"{(additional_context or '').strip()}\n\n## Web research (current sources)\n{facts}"
+                if (additional_context or "").strip()
+                else f"## Web research (current sources)\n{facts}"
+            )
+
+    use_search_tool = (
+        client.web_search_enabled_for_request(web_search)
+        and not client.outline_uses_prefetched_web_facts(web_search)
+    )
+
     try:
         async for chunk in client.stream_structured(
             model,
@@ -178,20 +219,17 @@ async def generate_ppt_outline(
                 content,
                 n_slides,
                 language,
-                additional_context,
+                merged_context,
                 tone,
                 verbosity,
                 instructions,
                 include_title_slide,
                 include_table_of_contents,
+                web_search=bool(web_search),
             ),
             response_model.model_json_schema(),
             strict=True,
-            tools=(
-                [SearchWebTool]
-                if (client.enable_web_grounding() and web_search)
-                else None
-            ),
+            tools=([SearchWebTool] if use_search_tool else None),
         ):
             yield chunk
     except Exception as e:
