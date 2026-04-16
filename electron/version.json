@@ -1,9 +1,9 @@
 {
-  "version": "0.7.2-beta",
-  "message": "What's New\n\n:repeat: Smarter Streaming & Retries\n- Outline and slide generation now retries automatically on failure - fewer interrupted generations, smoother experience end to end\n\n:frame_photo: ComfyUI Fix\n- Image generation via ComfyUI is back to working correctly - mid-generation failures resolved\n\n:art: UI & Template Polish\n- Continued refinements to UI components - tighter layouts, cleaner interactions\n- Template improvements - more consistent rendering across providers\n\n:bar_chart: Better Analytics & Error Tracking\n- Sentry integrated for crash and error monitoring - helps us catch and fix issues faster\n\n:wrench: Fixes\n- Download URL and version message corrected in version.json\n- Various stability and content fixes across the board",
+  "version": "0.7.3-beta",
+  "message": "Presenton Desktop electron-v0.7.3-beta\n\nSmarter content generation, reliable web search, no more shady Windows popups, and a round of minor fixes under the hood. Clean update. 🙌\n\nWhat's New\n\n🧠 Smarter Slide Content Generation\n• Overflow mitigation loop added — slides no longer clip or overflow when content runs long\n• Improved system prompt for slide content generation — cleaner, better-fitting output every time\n\n🔍 Web Search Fixed\n• Web search is back to working reliably during presentation generation\n\n🪟 Windows Fix\n• Export tasks no longer flash a console window on Windows — cleaner, more polished experience\n\n🔧 Minor Fixes\n• Various small fixes and stability improvements across the app\n\n---\nView full diff: electron-v0.7.2-beta → electron-v0.7.3-beta\nhttps://github.com/presenton/presenton/compare/electron-v0.7.2-beta...electron-v0.7.3-beta\n\nInstallation\nDownload Link: https://presenton.ai/download\nLove the app? Star us on GitHub → github.com/presenton/presenton",
   "downloads": {
-    "linux": "https://github.com/presenton/presenton/releases/download/electron-v0.7.2-beta/Presenton-0.7.2-beta.deb",
-    "mac": "https://github.com/presenton/presenton/releases/download/electron-v0.7.2-beta/Presenton-0.7.2-beta.dmg",
-    "windows": "https://github.com/presenton/presenton/releases/download/electron-v0.7.2-beta/Presenton-0.7.2-beta.exe"
+    "linux": "https://github.com/presenton/presenton/releases/download/electron-v0.7.3-beta/Presenton-0.7.3-beta.deb",
+    "mac": "https://github.com/presenton/presenton/releases/download/electron-v0.7.3-beta/Presenton-0.7.3-beta.dmg",
+    "windows": "https://github.com/presenton/presenton/releases/download/electron-v0.7.3-beta/Presenton-0.7.3-beta.exe"
   }
 }
