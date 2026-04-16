@@ -307,7 +307,7 @@ const TextProvider = ({
                                             <CommandList>
                                                 <CommandEmpty>No provider found.</CommandEmpty>
                                                 <CommandGroup>
-                                                    {Object.values(LLM_PROVIDERS).map(
+                                                    {Object.values([{ value: 'codex', label: 'ChatGPT', description: 'ChatGPT Plus/Pro via OAuth', icon: '/providers/openai.png' }, ...Object.values(LLM_PROVIDERS)]).map(
                                                         (provider, index) => (
                                                             <CommandItem
                                                                 key={index}

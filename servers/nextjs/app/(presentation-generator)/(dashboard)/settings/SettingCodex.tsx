@@ -117,6 +117,7 @@ export default function CodexConfig({
 
     const handleSignIn = async () => {
         try {
+            onInputChange('codex', 'LLM');
             const res = await fetch(getApiUrl("/api/v1/ppt/codex/auth/initiate"), {
                 method: "POST",
             });

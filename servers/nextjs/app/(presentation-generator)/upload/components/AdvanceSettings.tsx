@@ -1,6 +1,6 @@
 import ToolTip from '@/components/ToolTip'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
@@ -66,6 +66,8 @@ const AdvanceSettings = ({ config, onConfigChange }: ConfigurationSelectsProps) 
                 <DialogContent className="max-w-2xl font-instrument_sans">
                     <DialogHeader>
                         <DialogTitle>Advanced settings</DialogTitle>
+                        <DialogDescription>Adjust Presentation Behavior</DialogDescription>
+                        <Button onClick={handleSaveAdvanced} className="bg-[#5141e5] text-white hover:bg-[#5141e5]/90">Save</Button>
                     </DialogHeader>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -159,10 +161,10 @@ const AdvanceSettings = ({ config, onConfigChange }: ConfigurationSelectsProps) 
                         </div>
                     </div>
 
-                    <DialogFooter>
+                    {/* <DialogFooter>
                         <Button variant="outline" onClick={() => handleOpenAdvancedChange(false)}>Cancel</Button>
-                        <Button onClick={handleSaveAdvanced} className="bg-[#5141e5] text-white hover:bg-[#5141e5]/90">Save</Button>
-                    </DialogFooter>
+                       
+                    </DialogFooter> */}
                 </DialogContent>
             </Dialog>
         </div>
