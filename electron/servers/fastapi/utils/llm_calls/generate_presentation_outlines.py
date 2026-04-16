@@ -196,6 +196,7 @@ async def generate_ppt_outline(
     )
 
     client = LLMClient()
+    web_search_enabled = client.web_search_enabled_for_request(web_search)
 
     merged_context = additional_context
     if client.outline_uses_prefetched_web_facts(web_search):
@@ -207,9 +208,8 @@ async def generate_ppt_outline(
                 else f"## Web research (current sources)\n{facts}"
             )
 
-    use_search_tool = (
-        client.web_search_enabled_for_request(web_search)
-        and not client.outline_uses_prefetched_web_facts(web_search)
+    use_search_tool = web_search_enabled and not client.outline_uses_prefetched_web_facts(
+        web_search
     )
 
     try:
@@ -225,7 +225,7 @@ async def generate_ppt_outline(
                 instructions,
                 include_title_slide,
                 include_table_of_contents,
-                web_search=bool(web_search),
+                web_search=web_search_enabled,
             ),
             response_model.model_json_schema(),
             strict=True,

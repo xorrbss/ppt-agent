@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
+from enums.llm_provider import LLMProvider
 from models.llm_message import LLMSystemMessage, LLMUserMessage
 from models.llm_tools import SearchWebTool
 from services.llm_client import LLMClient
@@ -97,6 +98,16 @@ async def generate_ppt_outline(
     response_model = get_presentation_outline_model_with_n_slides(n_slides)
 
     client = LLMClient()
+    providers_with_search_tool = {
+        LLMProvider.OPENAI,
+        LLMProvider.ANTHROPIC,
+        LLMProvider.GOOGLE,
+    }
+    use_search_tool = (
+        web_search
+        and client.enable_web_grounding()
+        and client.llm_provider in providers_with_search_tool
+    )
 
     try:
         async for chunk in client.stream_structured(
@@ -113,11 +124,7 @@ async def generate_ppt_outline(
             ),
             response_model.model_json_schema(),
             strict=True,
-            tools=(
-                [SearchWebTool]
-                if (client.enable_web_grounding() and web_search)
-                else None
-            ),
+            tools=([SearchWebTool] if use_search_tool else None),
         ):
             yield chunk
     except Exception as e:

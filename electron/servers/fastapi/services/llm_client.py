@@ -109,20 +109,24 @@ class LLMClient:
         """
         if not web_search:
             return False
-        if self.llm_provider in (LLMProvider.OLLAMA, LLMProvider.CUSTOM):
+        if self.llm_provider in (
+            LLMProvider.OLLAMA,
+            LLMProvider.CUSTOM,
+            LLMProvider.CODEX,
+        ):
             return False
         return True
 
     def outline_uses_prefetched_web_facts(self, web_search: bool) -> bool:
         """Chat Completions + json_schema rarely invoke custom function tools.
 
-        For OpenAI and Codex we prefetch via the Responses API (``web_search_preview``)
+        For OpenAI we can prefetch via the Responses API (``web_search_preview``)
         and attach the result as context so Advanced settings **Web search** still
         grounds outlines without relying on ``SearchWebTool`` in the same call.
         """
         if not self.web_search_enabled_for_request(web_search):
             return False
-        return self.llm_provider in (LLMProvider.OPENAI, LLMProvider.CODEX)
+        return self.llm_provider == LLMProvider.OPENAI
 
     async def prefetch_outline_web_facts(
         self,
