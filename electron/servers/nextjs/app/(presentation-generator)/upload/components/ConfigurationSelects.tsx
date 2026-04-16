@@ -375,7 +375,7 @@ export function ConfigurationSelects({
                                     onCheckedChange={(checked) => setAdvancedDraft((prev) => ({ ...prev, webSearch: checked }))}
                                 />
                             </div>
-                            <p className="text-xs text-gray-600">Allow the model to consult the web for fresher facts.</p>
+                            <p className="text-xs text-gray-600">Allow the model to consult the web for fresher facts. Turn on and click Save—this toggle alone controls web search for this deck.</p>
                         </div>
 
                         {/* Instructions */}

@@ -100,6 +100,55 @@ class LLMClient:
             return False
         return parse_bool_or_none(get_web_grounding_env()) or False
 
+    def web_search_enabled_for_request(self, web_search: bool) -> bool:
+        """Attach SearchWebTool only when the user enabled web search for this request.
+
+        Controlled solely by the presentation ``web_search`` flag (Advanced settings).
+        Legacy ``WEB_GROUNDING`` / settings toggles are not consulted here so a saved
+        false there cannot disable per-deck web search.
+        """
+        if not web_search:
+            return False
+        if self.llm_provider in (LLMProvider.OLLAMA, LLMProvider.CUSTOM):
+            return False
+        return True
+
+    def outline_uses_prefetched_web_facts(self, web_search: bool) -> bool:
+        """Chat Completions + json_schema rarely invoke custom function tools.
+
+        For OpenAI and Codex we prefetch via the Responses API (``web_search_preview``)
+        and attach the result as context so Advanced settings **Web search** still
+        grounds outlines without relying on ``SearchWebTool`` in the same call.
+        """
+        if not self.web_search_enabled_for_request(web_search):
+            return False
+        return self.llm_provider in (LLMProvider.OPENAI, LLMProvider.CODEX)
+
+    async def prefetch_outline_web_facts(
+        self,
+        content: str,
+        additional_context: Optional[str] = None,
+    ) -> Optional[str]:
+        if self.llm_provider not in (LLMProvider.OPENAI, LLMProvider.CODEX):
+            return None
+        parts = [(content or "").strip(), (additional_context or "").strip()]
+        topic = "\n\n".join(p for p in parts if p)
+        if not topic:
+            topic = "general presentation topic"
+        topic = topic[:12000]
+        query = (
+            "Search the web and summarize the most relevant current facts, statistics, "
+            "and notable recent developments for this presentation topic. Use concise "
+            "bullet points; include approximate dates or time ranges when known.\n\n"
+            f"Topic:\n{topic}"
+        )
+        try:
+            text = await self._search_openai(query)
+            out = (text or "").strip()
+            return out or None
+        except Exception:
+            return None
+
     # ? Disable thinking
     def disable_thinking(self) -> bool:
         return parse_bool_or_none(get_disable_thinking_env()) or False
@@ -1753,7 +1802,7 @@ class LLMClient:
         current_arguments = None
 
         has_response_schema_tool_call = False
-        async for event in await client.chat.completions.create(
+        completion_kwargs: Dict[str, Any] = dict(
             model=model,
             messages=[message.model_dump() for message in messages],
             max_completion_tokens=max_tokens,
@@ -1774,7 +1823,11 @@ class LLMClient:
             ),
             extra_body=extra_body,
             stream=True,
-        ):
+        )
+        if all_tools:
+            completion_kwargs["tool_choice"] = "auto"
+            completion_kwargs["parallel_tool_calls"] = True
+        async for event in await client.chat.completions.create(**completion_kwargs):
             event: OpenAIChatCompletionChunk = event
             if not event.choices:
                 continue
