@@ -63,6 +63,7 @@ export function setupExportHandlers() {
       const exportTaskProcess = spawn(process.execPath, [exportScriptPath, exportTaskPath], {
         stdio: ["ignore", "pipe", "pipe"],
         cwd: baseDir,
+        windowsHide: process.platform === "win32",
         env: {
           ...process.env,
           ELECTRON_RUN_AS_NODE: "1",
