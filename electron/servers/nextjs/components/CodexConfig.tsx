@@ -360,7 +360,7 @@ export default function CodexConfig({
   return (
     <button
       onClick={handleSignIn}
-      className=" w-full  p-5 border border-[#EDEEEF] font-syne   rounded-[12px] flex items-center   justify-between  "
+      className=" w-full  p-5 border border-[#EDEEEF] hover:bg-[#F7F6F9] transition-colors duration-300 font-syne   rounded-[12px] flex items-center   justify-between  "
     >
       <div className="flex items-center gap-2 flex-1">
         <div className="w-[40px] h-[40px] bg-[#333333] rounded-full flex items-center justify-center" >

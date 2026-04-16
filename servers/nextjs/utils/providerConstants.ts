@@ -101,12 +101,12 @@ export const IMAGE_PROVIDERS: Record<string, ImageProviderOption> = {
 };
 
 export const LLM_PROVIDERS: Record<string, LLMProviderOption> = {
-  // codex: {
-  //   value: "codex",
-  //   label: "ChatGPT",
-  //   description: "ChatGPT Plus/Pro via OAuth",
-  //   icon: "/providers/openai.png",
-  // },
+  codex: {
+    value: "codex",
+    label: "ChatGPT",
+    description: "ChatGPT Plus/Pro via OAuth",
+    icon: "/providers/openai.png",
+  },
   openai: {
     value: "openai",
     label: "OpenAI",

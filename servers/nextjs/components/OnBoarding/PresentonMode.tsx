@@ -292,9 +292,33 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
             setShowDownloadModal(false);
         }
     };
+    const checkCurrentAuthStatus = async () => {
+        try {
+            const res = await fetch(getApiUrl("/api/v1/ppt/codex/auth/status"));
+            if (!res.ok) {
+                return false;
+            }
+            const data = await res.json();
+            if (data.status === "authenticated") {
+                return true;
+            } else {
+                return false;
+            }
+        } catch {
+            return false;
+        }
+    };
     const handleSaveConfig = async () => {
         try {
+            if (llmConfig.LLM === 'codex') {
+                const isAuthenticated = await checkCurrentAuthStatus();
+                if (!isAuthenticated) {
+                    toast.error("Please sign in to ChatGPT to continue");
+                    return;
+                }
+            }
             setSavingConfig(true);
+
             await handleSaveLLMConfig(llmConfig);
 
             if (llmConfig.LLM === "ollama" && llmConfig.OLLAMA_MODEL) {
@@ -518,7 +542,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                         </>
                                     )}
                                 </>
-                            ) : llmConfig.LLM === 'chatgpt' ? (
+                            ) : llmConfig.LLM === 'chatgpt' || llmConfig.LLM === 'codex' ? (
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Select GPT Model
@@ -626,7 +650,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                         </div>
 
 
-                        {llmConfig.LLM !== 'ollama' && llmConfig.LLM !== 'chatgpt' && (!modelsChecked || (modelsChecked && availableModels.length === 0)) && (
+                        {llmConfig.LLM !== 'ollama' && llmConfig.LLM !== 'chatgpt' && llmConfig.LLM !== 'codex' && (!modelsChecked || (modelsChecked && availableModels.length === 0)) && (
 
                             <button
                                 onClick={fetchAvailableModels}
@@ -659,7 +683,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
 
 
                     {/* Model Selection - only show if models are available */}
-                    {llmConfig.LLM !== 'chatgpt' && modelsChecked && availableModels.length > 0 && (
+                    {llmConfig.LLM !== 'chatgpt' && llmConfig.LLM !== 'codex' && modelsChecked && availableModels.length > 0 && (
                         <div className="w-full">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">

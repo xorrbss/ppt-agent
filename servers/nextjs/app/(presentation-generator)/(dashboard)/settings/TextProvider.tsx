@@ -1,7 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { LLMConfig } from '@/types/llm_config';
 import { getApiUrl } from '@/utils/api';
@@ -249,6 +248,7 @@ const TextProvider = ({
             fetchAvailableModels();
         }
     }, [selectedProvider, modelsChecked, modelsLoading]);
+
     return (
         <div className="space-y-6 bg-[#F9F8F8] p-7 rounded-[12px] ">
             {/* API Key Input */}
@@ -307,7 +307,7 @@ const TextProvider = ({
                                             <CommandList>
                                                 <CommandEmpty>No provider found.</CommandEmpty>
                                                 <CommandGroup>
-                                                    {Object.values([{ value: 'codex', label: 'ChatGPT', description: 'ChatGPT Plus/Pro via OAuth', icon: '/providers/openai.png' }, ...Object.values(LLM_PROVIDERS)]).map(
+                                                    {Object.values(LLM_PROVIDERS).map(
                                                         (provider, index) => (
                                                             <CommandItem
                                                                 key={index}

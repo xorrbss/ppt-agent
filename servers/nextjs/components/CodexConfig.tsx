@@ -52,13 +52,11 @@ export default function CodexConfig({
   const [accountId, setAccountId] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
-  const [isPro, setIsPro] = useState<boolean | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [manualCode, setManualCode] = useState("");
   const [isExchanging, setIsExchanging] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [openModelSelect, setOpenModelSelect] = useState(false);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopPolling = () => {
@@ -77,7 +75,6 @@ export default function CodexConfig({
     setAccountId(data.account_id ?? null);
     setUsername(data.username ?? null);
     setEmail(data.email ?? null);
-    setIsPro(typeof data.is_pro === "boolean" ? data.is_pro : null);
   };
 
   const checkCurrentAuthStatus = async () => {
@@ -90,7 +87,7 @@ export default function CodexConfig({
       }
       const data: StatusResponse = await res.json();
       if (data.status === "authenticated") {
-        onInputChange('chatgpt', 'LLM');
+        onInputChange('codex', 'LLM');
         onInputChange(DEFAULT_CODEX_MODEL, 'codex_model');
         setAuthStatus("authenticated");
         applyProfile(data);
@@ -108,7 +105,7 @@ export default function CodexConfig({
     try {
 
       trackEvent(MixpanelEvent.Codex_SignIn_API_Call);
-      onInputChange('chatgpt', 'LLM');
+      onInputChange('codex', 'LLM');
 
       const res = await fetch(getApiUrl("/api/v1/ppt/codex/auth/initiate"), {
         method: "POST",
@@ -200,7 +197,6 @@ export default function CodexConfig({
       setAccountId(null);
       setUsername(null);
       setEmail(null);
-      setIsPro(null);
       onInputChange("openai", "LLM");
       onInputChange("", "codex_model");
       toast.success("Signed out from ChatGPT");
@@ -307,7 +303,10 @@ export default function CodexConfig({
         <div className="flex items-center justify-between gap-3 p-5  border border-[#EDEEEF] rounded-[8px]">
           <div className="flex items-center gap-3">
 
-            <UserCheck className="w-6 h-6 text-[#191919] shrink-0" />
+            <div className="w-[40px] h-[40px] bg-[#333333] rounded-full flex items-center justify-center" >
+
+              <img src="/providers/OpenAI-white.png" alt="openai Logo" className="w-[27px] h-[27px]" />
+            </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 min-w-0">
                 <p className="text-sm font-medium text-[#191919] truncate">
@@ -329,7 +328,7 @@ export default function CodexConfig({
               onClick={handleRefreshToken}
               disabled={isRefreshing}
               title="Refresh token"
-              className="flex items-center justify-center px-3.5 py-2.5  bg-[#EDEEEF] rounded-[58px] minid:opacity-40 transition-colors"
+              className="flex items-center justify-center px-3.5 py-2.5  border border-[#EDEEEF] rounded-[58px] minid:opacity-40 transition-colors"
             >
               {isRefreshing ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin text-[#191919]" />
@@ -341,7 +340,7 @@ export default function CodexConfig({
               onClick={handleSignOut}
               disabled={isLoggingOut}
               title="Sign out"
-              className="flex items-center justify-center px-3.5 py-2.5  bg-[#EDEEEF] rounded-[58px] hover:bg-[#E4E5E6] disabled:opacity-40 transition-colors"
+              className="flex items-center justify-center px-3.5 py-2.5  border border-[#EDEEEF] rounded-[58px]  disabled:opacity-40 transition-colors"
             >
               {isLoggingOut ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin text-[#191919]" />
@@ -360,7 +359,7 @@ export default function CodexConfig({
   return (
     <button
       onClick={handleSignIn}
-      className=" w-full  p-5 border border-[#EDEEEF] font-syne   rounded-[12px] flex items-center   justify-between  "
+      className=" w-full  p-5 border border-[#EDEEEF] font-syne  hover:bg-[#F7F6F9] transition-colors duration-300   rounded-[12px] flex items-center   justify-between  "
     >
       <div className="flex items-center gap-2 flex-1">
         <div className="w-[40px] h-[40px] bg-[#333333] rounded-full flex items-center justify-center" >

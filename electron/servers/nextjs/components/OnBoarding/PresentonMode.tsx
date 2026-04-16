@@ -292,8 +292,31 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
             setShowDownloadModal(false);
         }
     };
+    const checkCurrentAuthStatus = async () => {
+        try {
+            const res = await fetch(getApiUrl("/api/v1/ppt/codex/auth/status"));
+            if (!res.ok) {
+                return false;
+            }
+            const data = await res.json();
+            if (data.status === "authenticated") {
+                return true;
+            } else {
+                return false;
+            }
+        } catch {
+            return false;
+        }
+    };
     const handleSaveConfig = async () => {
         try {
+            if (llmConfig.LLM === 'codex') {
+                const isAuthenticated = await checkCurrentAuthStatus();
+                if (!isAuthenticated) {
+                    toast.error("Please sign in to ChatGPT to continue");
+                    return;
+                }
+            }
             setSavingConfig(true);
             await handleSaveLLMConfig(llmConfig);
 
@@ -518,7 +541,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                         </>
                                     )}
                                 </>
-                            ) : llmConfig.LLM === 'chatgpt' ? (
+                            ) : llmConfig.LLM === 'codex' || llmConfig.LLM === 'chatgpt' ? (
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Select GPT Model
