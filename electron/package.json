@@ -2,7 +2,7 @@
   "name": "presenton",
   "productName": "Presenton Open Source",
   "version": "0.7.3-beta",
-  "exportVersion": "v0.2.0",
+  "exportVersion": "v0.2.2",
   "main": "app_dist/main.js",
   "description": "Open-Source AI Presentation Generator",
   "homepage": "https://presenton.ai",
