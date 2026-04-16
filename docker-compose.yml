@@ -4,6 +4,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # Optional: override presentation-export release (else presentation-export/export-version.json)
+        EXPORT_RUNTIME_VERSION: ${EXPORT_RUNTIME_VERSION:-}
     ports:
       # You can replace 5000 with any other port number of your choice to run Presenton on a different port number.
       - "5000:80"
@@ -42,6 +45,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        EXPORT_RUNTIME_VERSION: ${EXPORT_RUNTIME_VERSION:-}
     deploy:
       resources:
         reservations:
@@ -86,6 +91,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
+      args:
+        EXPORT_RUNTIME_VERSION: ${EXPORT_RUNTIME_VERSION:-}
     ports:
       - "5000:80"
       # Required for Codex OAuth callback (OpenAI redirects browser directly to localhost:1455)
@@ -125,6 +132,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
+      args:
+        EXPORT_RUNTIME_VERSION: ${EXPORT_RUNTIME_VERSION:-}
     deploy:
       resources:
         reservations:

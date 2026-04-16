@@ -12,7 +12,6 @@ from models.sql.image_asset import ImageAsset
 from utils.get_env import (
     get_dall_e_3_quality_env,
     get_gpt_image_1_5_quality_env,
-    get_next_public_fast_api_env,
     get_pexels_api_key_env,
 )
 from utils.get_env import get_pixabay_api_key_env
@@ -60,17 +59,6 @@ class ImageGenerationService:
     def is_stock_provider_selected(self):
         return is_pixels_selected() or is_pixabay_selected()
 
-    def _to_frontend_url(self, path: str) -> str:
-        if path.startswith("http://") or path.startswith("https://"):
-            return path
-
-        fastapi_origin = (get_next_public_fast_api_env() or "").strip()
-        if not fastapi_origin:
-            return path
-
-        normalized_path = path if path.startswith("/") else f"/{path}"
-        return f"{fastapi_origin.rstrip('/')}{normalized_path}"
-
     async def generate_image(self, prompt: ImagePrompt) -> str | ImageAsset:
         """
         Generates an image based on the provided prompt.
@@ -81,11 +69,11 @@ class ImageGenerationService:
         """
         if self.is_image_generation_disabled:
             print("Image generation is disabled. Using placeholder image.")
-            return self._to_frontend_url("/static/images/placeholder.jpg")
+            return "/static/images/placeholder.jpg"
 
         if not self.image_gen_func:
             print("No image generation function found. Using placeholder image.")
-            return self._to_frontend_url("/static/images/placeholder.jpg")
+            return "/static/images/placeholder.jpg"
 
         image_prompt = prompt.get_image_prompt(
             with_theme=not self.is_stock_provider_selected()
@@ -114,12 +102,12 @@ class ImageGenerationService:
                 elif image_path.startswith("/app_data/") or image_path.startswith(
                     "/static/"
                 ):
-                    return self._to_frontend_url(image_path)
+                    return image_path
             raise Exception(f"Image not found at {image_path}")
 
         except Exception as e:
             print(f"Error generating image: {e}")
-            return self._to_frontend_url("/static/images/placeholder.jpg")
+            return "/static/images/placeholder.jpg"
 
     async def generate_image_openai(
         self, prompt: str, output_directory: str, model: str, quality: str
