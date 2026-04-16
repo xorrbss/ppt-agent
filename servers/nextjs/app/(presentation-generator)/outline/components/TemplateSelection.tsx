@@ -7,6 +7,8 @@ import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { CustomTemplates, useCustomTemplateSummaries } from "@/app/hooks/useCustomTemplates";
 import { Loader2 } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 
 import CreateCustomTemplate from "../../(dashboard)/templates/components/CreateCustomTemplate";
 import { CustomTemplateCard } from "./CustomTemplateCard";
@@ -64,6 +66,8 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = memo(function Templa
   selectedTemplate,
   onSelectTemplate,
 }) {
+  const pathname = usePathname();
+
   useEffect(() => {
     const existingScript = document.querySelector(
       'script[src*="tailwindcss.com"]'
@@ -79,13 +83,31 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = memo(function Templa
   const { templates: customTemplates, loading: customLoading } = useCustomTemplateSummaries();
 
   const handleCustomSelect = useCallback(
-    (template: TemplateLayoutsWithSettings | string) => onSelectTemplate(template),
-    [onSelectTemplate]
+    (template: CustomTemplates) => {
+      trackEvent(MixpanelEvent.Outline_Template_Selected, {
+        pathname,
+        template_type: "custom",
+        template_id: template.id,
+        template_name: template.name,
+        layout_count: template.layoutCount,
+      });
+      onSelectTemplate(template.id);
+    },
+    [onSelectTemplate, pathname]
   );
 
   const handleBuiltInSelect = useCallback(
-    (template: TemplateLayoutsWithSettings) => onSelectTemplate(template),
-    [onSelectTemplate]
+    (template: TemplateLayoutsWithSettings) => {
+      trackEvent(MixpanelEvent.Outline_Template_Selected, {
+        pathname,
+        template_type: "built_in",
+        template_id: template.id,
+        template_name: template.name,
+        layout_count: template.layouts.length,
+      });
+      onSelectTemplate(template);
+    },
+    [onSelectTemplate, pathname]
   );
 
   const selectedCustomId = useMemo(

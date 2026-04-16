@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Button } from '../ui/button';
-import { Check, CheckCircle, ChevronLeft, ChevronRight, ChevronUp, Download, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Check, CheckCircle, ChevronLeft, ChevronUp, Download, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
 import { DALLE_3_QUALITY_OPTIONS, GPT_IMAGE_1_5_QUALITY_OPTIONS, IMAGE_PROVIDERS, LLM_PROVIDERS } from '@/utils/providerConstants';
 import { cn } from '@/lib/utils';
@@ -13,7 +13,7 @@ import ToolTip from '../ToolTip';
 import { Switch } from '../ui/switch';
 import { Select, SelectItem, SelectContent, SelectValue, SelectTrigger } from '../ui/select';
 import { MixpanelEvent, trackEvent } from '@/utils/mixpanel';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { handleSaveLLMConfig } from '@/utils/storeHelpers';
 import { checkIfSelectedOllamaModelIsPulled, pullOllamaModel } from '@/utils/providerUtils';
 import { getApiUrl } from '@/utils/api';
@@ -21,7 +21,6 @@ import CodexConfig, { CHATGPT_MODELS } from '../CodexConfig';
 
 const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep: (step: number) => void }) => {
     const pathname = usePathname();
-    const router = useRouter();
     const [openProviderSelect, setOpenProviderSelect] = useState(false);
     const [openImageProviderSelect, setOpenImageProviderSelect] = useState(false);
     const userConfigState = useSelector((state: RootState) => state.userConfig);
@@ -45,7 +44,6 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
     } | null>(null);
 
     const handleProviderChange = (provider: string) => {
-
         setLlmConfig(prev => ({
             ...prev,
             LLM: provider
@@ -73,8 +71,6 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 return 'OLLAMA_MODEL';
             case 'custom':
                 return 'CUSTOM_MODEL';
-            case 'codex':
-                return 'CODEX_MODEL';
             default:
                 return '';
         }
@@ -93,6 +89,18 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 return '';
         }
     }, [llmConfig.LLM]);
+
+
+
+    const getFieldValue = (field?: string) => {
+        if (!field) return "";
+        return (llmConfig as Record<string, string | undefined>)[field] || "";
+    };
+
+    const currentApiKey = currentApiKeyField ? ((llmConfig as Record<string, unknown>)[currentApiKeyField] as string || '') : '';
+    const currentModel = currentModelField ? ((llmConfig as Record<string, unknown>)[currentModelField] as string || '') : '';
+    const currentOllamaUrl = llmConfig.OLLAMA_URL || '';
+    const useCustomOllamaUrl = !!llmConfig.USE_CUSTOM_URL;
 
     const getSelectedTextModel = (config: LLMConfig): string => {
         switch (config.LLM) {
@@ -119,22 +127,11 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
         return '';
     };
 
-    const getFieldValue = (field?: string) => {
-        if (!field) return "";
-        return (llmConfig as Record<string, string | undefined>)[field] || "";
-    };
-
-    const currentApiKey = currentApiKeyField ? ((llmConfig as Record<string, unknown>)[currentApiKeyField] as string || '') : '';
-    const currentModel = currentModelField ? ((llmConfig as Record<string, unknown>)[currentModelField] as string || '') : '';
-    const currentOllamaUrl = llmConfig.OLLAMA_URL || '';
-    const useCustomOllamaUrl = !!llmConfig.USE_CUSTOM_URL;
-
     const fetchAvailableModels = async () => {
         if (llmConfig.LLM === 'openai' && !currentApiKey) return;
         if (llmConfig.LLM === 'google' && !currentApiKey) return;
         if (llmConfig.LLM === 'anthropic' && !currentApiKey) return;
         if (llmConfig.LLM === 'custom' && !llmConfig.CUSTOM_LLM_URL) return;
-
         setModelsLoading(true);
         try {
             let response: Response;
@@ -295,25 +292,15 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
             setShowDownloadModal(false);
         }
     };
-
-
     const handleSaveConfig = async () => {
-        trackEvent(MixpanelEvent.Home_SaveConfiguration_Button_Clicked, { pathname });
         try {
             setSavingConfig(true);
-            // API: save config
-            trackEvent(MixpanelEvent.Home_SaveConfiguration_API_Call);
-            // API CALL: save config
             await handleSaveLLMConfig(llmConfig);
 
             if (llmConfig.LLM === "ollama" && llmConfig.OLLAMA_MODEL) {
-                // API: check model pulled
-                trackEvent(MixpanelEvent.Home_CheckOllamaModelPulled_API_Call);
                 const isPulled = await checkIfSelectedOllamaModelIsPulled(llmConfig.OLLAMA_MODEL);
                 if (!isPulled) {
                     setShowDownloadModal(true);
-                    // API: download model
-                    trackEvent(MixpanelEvent.Home_DownloadOllamaModel_API_Call);
                     await handleModelDownload();
                 }
             }
@@ -329,21 +316,30 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 text_provider_label: LLM_PROVIDERS[textProvider]?.label || textProvider || '',
                 text_model: textModel,
                 uses_chatgpt_login: textProvider === 'codex',
+                codex_model: llmConfig.CODEX_MODEL || '',
+                ollama_model: llmConfig.OLLAMA_MODEL || '',
+                ollama_uses_custom_url: !!llmConfig.USE_CUSTOM_URL,
+                custom_llm_url_set: Boolean((llmConfig.CUSTOM_LLM_URL || '').trim()),
                 image_generation_enabled: imageGenerationEnabled,
                 image_provider: imageProvider,
                 image_provider_label: imageGenerationEnabled
                     ? (IMAGE_PROVIDERS[imageProvider]?.label || imageProvider || '')
                     : 'Image generation disabled',
-                image_quality: imageGenerationEnabled ? getSelectedImageQuality(llmConfig) : '',
+                image_quality: imageGenerationEnabled ? getSelectedImageQuality(llmConfig) : ''
+            });
+            trackEvent(MixpanelEvent.Onboarding_Configuration_Saved, {
+                pathname,
+                text_provider: textProvider,
+                text_model: textModel,
+                image_generation_enabled: imageGenerationEnabled,
+                image_provider: imageProvider,
             });
 
             toast.info("Configuration saved successfully");
-            // Track navigation from -> to
-            trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/final onboarding step" });
             setStep(3)
             // router.push("/upload");
         } catch (error) {
-            toast.info(error instanceof Error ? error.message : "Failed to save configuration");
+            toast.error(error instanceof Error ? error.message : "Failed to save configuration");
 
         }
         finally {
@@ -360,7 +356,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
 
     useEffect(() => {
         if (llmConfig.LLM === 'ollama' && !modelsChecked && !modelsLoading) {
-            fetchAvailableModels();
+            void fetchAvailableModels();
         }
     }, [llmConfig.LLM, modelsChecked, modelsLoading]);
 
@@ -372,24 +368,20 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 <h2 className='mb-4 text-black text-[26px] font-normal font-unbounded '>Choose your content providers</h2>
                 <p className='text-[#000000CC] text-xl font-normal font-syne'>Select the AI engines that will generate your slide text and visuals.</p>
             </div>
-            {llmConfig.LLM === 'codex' && (
-                <div className="mb-5">
-                    <CodexConfig
-                        codexModel={llmConfig.CODEX_MODEL || ''}
-                        onInputChange={(value, field) => {
-                            const normalizedField = field === 'codex_model' ? 'CODEX_MODEL' : field;
-                            setLlmConfig((prev) => ({
-                                ...prev,
-                                [normalizedField]: value,
-                            }));
-                        }}
-                    />
-                </div>
-            )}
+            <CodexConfig
+                codexModel={llmConfig.CODEX_MODEL || ''}
+                onInputChange={(value, field) => {
+                    const normalizedField = field === 'codex_model' ? 'CODEX_MODEL' : field;
+                    setLlmConfig(prev => ({
+                        ...prev,
+                        [normalizedField]: value
+                    }));
+                }}
+            />
             {/* Text Provider */}
             <div className='p-3 border border-[#EDEEEF] rounded-[11px] '>
-                <div className="flex items-center gap-6  mb-7">
-                    <div className='w-[60px] h-[60px] rounded-[4px] flex items-center justify-center'
+                <div className="flex items-center gap-[24.3px]  mb-[42px]">
+                    <div className='w-[74px] h-[74px] rounded-[4px] pt-[16.8px] pr-[17.15px] pb-[17.2px] pl-[16.85px] flex items-center justify-center'
                         style={{ backgroundColor: '#4C55541A' }}
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40" fill="none">
@@ -421,7 +413,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                     variant="outline"
                                     role="combobox"
                                     aria-expanded={openProviderSelect}
-                                    className=" h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
+                                    className=" h-12 px-4 py-4 outline-none border border-[#E8E8E9] rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
                                 >
                                     <div className="flex gap-3 items-center">
                                         <span className="text-sm font-medium text-gray-900">
@@ -563,9 +555,9 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                                                 key={model.id}
                                                                 value={model.id}
                                                                 onSelect={(value) => {
-                                                                    setLlmConfig((prev) => ({
+                                                                    setLlmConfig(prev => ({
                                                                         ...prev,
-                                                                        CODEX_MODEL: value,
+                                                                        CODEX_MODEL: value
                                                                     }));
                                                                     setOpenModelSelect(false);
                                                                 }}
@@ -641,7 +633,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                     (llmConfig.LLM === 'anthropic' && !currentApiKey) ||
                                     (llmConfig.LLM === 'custom' && !llmConfig.CUSTOM_LLM_URL)
                                 }
-                                className={`mt-4 py-2.5 bg-[#EDEEEF] px-3.5 w-fit  rounded-[48px] text-xs font-semibold text-[#101323] transition-all duration-200 border ${modelsLoading
+                                className={`mt-4 py-2.5 bg-[#EDEEEF] disabled:opacity-50 disabled:cursor-not-allowed px-3.5 w-fit  rounded-[48px] text-xs font-semibold text-[#101323] transition-all duration-200 border ${modelsLoading
                                     ? " border-gray-300 cursor-not-allowed text-gray-500"
                                     : " border-[#EDEEEF] text-[#101323] hover:bg-[#E8F0FF]/90 focus:ring-2 focus:ring-blue-500/20"
                                     }`}
@@ -748,12 +740,12 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 </div>
             </div>
             {/* Image Provider */}
-            <div className='p-3 border border-[#EDEEEF] rounded-[11px] mt-5'>
-                <ToolTip content="Enable/Disable Image Generation" className='flex justify-end items-center'>
+            <div className={`p-3 border border-[#EDEEEF] rounded-[11px] relative mt-5 ${llmConfig.DISABLE_IMAGE_GENERATION ? "bg-[#F9FAFB]" : ""}`}>
+                <ToolTip content="Enable/Disable Image Generation" className='flex justify-end items-center absolute top-3 right-3'>
                     <div className='flex justify-end items-center'>
                         <Switch
                             checked={!llmConfig.DISABLE_IMAGE_GENERATION}
-                            className='data-[state=checked]:bg-[#4791FF] data-[state=unchecked]:bg-gray-400'
+                            className='data-[state=checked]:bg-[#4791FF] h-[22px] w-[36px] data-[state=unchecked]:bg-[#E2E0E1]'
                             onCheckedChange={(checked) => setLlmConfig(prev => ({
                                 ...prev,
                                 DISABLE_IMAGE_GENERATION: !checked
@@ -762,8 +754,8 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                     </div>
 
                 </ToolTip>
-                <div className=" mb-7 flex items-center gap-6">
-                    <div className='w-[60px] h-[60px] px-[13.5px] py-[14.2px] rounded-[4px] flex items-center justify-center'
+                <div className={` flex items-center gap-6 ${llmConfig.DISABLE_IMAGE_GENERATION ? "" : "mb-[42px]"}`}>
+                    <div className='w-[74px] h-[74px] px-[13.5px] py-[14.2px] rounded-[4px] flex items-center justify-center'
                         style={{ backgroundColor: '#F4F3FF' }}
                     >
                         <img src="/image-markup.svg" className='w-full h-full object-cover' alt='image-markup' />
@@ -964,7 +956,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 </div>}
             </div>
 
-            <div className='absolute bottom-16 mr-8  max-w-[1440px]  right-0 flex justify-end items-center gap-2.5 '>
+            <div className='fixed bottom-16 mr-8  max-w-[1440px]  right-16 flex justify-end items-center gap-2.5 '>
                 <button
                     disabled={currentStep === 1}
                     onClick={() => {
@@ -977,7 +969,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
 
                     disabled={savingConfig}
                     onClick={handleSaveConfig}
-                    className='border border-[#EDEEEF] bg-[#7C51F8]  rounded-[58px] px-5 py-2.5 text-white text-xs  font-semibold'>
+                    className='border font-syne border-[#EDEEEF] bg-[#7C51F8]  rounded-[58px] px-5 py-2.5 text-white text-xs  font-semibold'>
                     Continue to Finish
                 </button>
             </div>

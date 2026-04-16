@@ -16,8 +16,6 @@ import {
 import { OutlineItem } from "./OutlineItem";
 import { Button } from "@/components/ui/button";
 import { FileText, Loader2 } from "lucide-react";
-import { usePathname } from "next/navigation";
-import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 
 interface OutlineContentProps {
     outlines: { content: string }[] | null;
@@ -44,8 +42,6 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
             coordinateGetter: sortableKeyboardCoordinates,
         })
     );
-
-    const pathname = usePathname();
 
     return (
         <div className="space-y-6 font-syne ">
@@ -109,7 +105,6 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
                     <Button
                         variant="outline"
                         onClick={() => {
-                            trackEvent(MixpanelEvent.Outline_Add_Slide_Button_Clicked, { pathname });
                             onAddSlide();
                         }}
                         disabled={isLoading || isStreaming}
@@ -128,7 +123,6 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
                     <Button
                         variant="outline"
                         onClick={() => {
-                            trackEvent(MixpanelEvent.Outline_Add_Slide_Button_Clicked, { pathname });
                             onAddSlide();
                         }}
                         className="text-blue-600 border-blue-200"

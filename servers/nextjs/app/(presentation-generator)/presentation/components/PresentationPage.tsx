@@ -1,5 +1,5 @@
 "use client";
-import React, { useLayoutEffect, useState } from "react";
+import React, { useEffect, useLayoutEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import "../../utils/prism-languages";
@@ -80,6 +80,15 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
 
   usePresentationUndoRedo();
 
+  useEffect(() => {
+    trackEvent(MixpanelEvent.Presentation_Editor_Viewed, {
+      pathname,
+      presentation_id,
+      stream_mode: !!stream,
+      presentation_mode: isPresentMode ? "present" : "edit",
+    });
+  }, [pathname, presentation_id, stream, isPresentMode]);
+
   /** Editor tree unmounts in present mode; remount loses inline theme CSS — re-apply from Redux. */
   useLayoutEffect(() => {
     if (isPresentMode) return;
@@ -146,7 +155,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
             onSlideClick={handleSlideClick}
             presentationId={presentation_id}
             loading={loading}
-
           />
         </div>
         <div className=" w-full h-[calc(100vh-20px)]  pr-[25px] overflow-y-auto">

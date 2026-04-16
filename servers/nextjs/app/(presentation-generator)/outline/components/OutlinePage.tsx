@@ -10,7 +10,7 @@ import OutlineContent from "./OutlineContent";
 import EmptyStateView from "./EmptyStateView";
 import GenerateButton from "./GenerateButton";
 
-import { TABS, Template } from "../types/index";
+import { TABS } from "../types/index";
 import { useOutlineStreaming } from "../hooks/useOutlineStreaming";
 import { useOutlineManagement } from "../hooks/useOutlineManagement";
 import { usePresentationGeneration } from "../hooks/usePresentationGeneration";
@@ -105,7 +105,6 @@ const OutlinePage: React.FC = () => {
 
           <div className="fixed bottom-[26px] right-[26px] z-50">
             <GenerateButton
-              outlineCount={outlines.length}
               loadingState={loadingState}
               streamState={streamState}
               selectedTemplate={selectedTemplate}

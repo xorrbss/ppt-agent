@@ -154,6 +154,13 @@ const UploadPage = () => {
     };
   };
 
+  const trackUploadValidationFailure = (reason: string) => {
+    trackEvent(MixpanelEvent.Upload_Configuration_Invalid, {
+      ...getUploadSnapshotProps(),
+      reason,
+    });
+  };
+
   const handleConfigChange = (key: keyof PresentationConfig, value: unknown) => {
     setConfig((prev) => ({ ...prev, [key]: value } as PresentationConfig));
   };
@@ -194,28 +201,19 @@ const UploadPage = () => {
    */
   const validateConfiguration = (): boolean => {
     if (!config.language) {
-      trackEvent(MixpanelEvent.Upload_Validation_Failed, {
-        ...getUploadSnapshotProps(),
-        reason: "language_missing",
-      });
+      trackUploadValidationFailure("language_missing");
       toast.error("Please select language");
       return false;
     }
 
     if (files.length > 0 && config.language === LanguageType.Auto) {
-      trackEvent(MixpanelEvent.Upload_Validation_Failed, {
-        ...getUploadSnapshotProps(),
-        reason: "language_auto_with_documents",
-      });
+      trackUploadValidationFailure("language_auto_with_documents");
       toast.error("Please choose a language before processing uploaded documents");
       return false;
     }
 
     if (!config.prompt.trim() && files.length === 0) {
-      trackEvent(MixpanelEvent.Upload_Validation_Failed, {
-        ...getUploadSnapshotProps(),
-        reason: "prompt_or_document_missing",
-      });
+      trackUploadValidationFailure("prompt_or_document_missing");
       toast.error("No Prompt or Document Provided");
       return false;
     }
@@ -227,15 +225,12 @@ const UploadPage = () => {
    */
   const handleGeneratePresentation = async () => {
     if (!validateConfiguration()) return;
+    trackEvent(MixpanelEvent.Upload_Generation_Started, getUploadSnapshotProps());
 
-    trackEvent(MixpanelEvent.Upload_GetStarted_Button_Clicked, getUploadSnapshotProps());
 
     const isStockProviderReady = await ensureStockImageProviderReady();
     if (!isStockProviderReady) {
-      trackEvent(MixpanelEvent.Upload_Validation_Failed, {
-        ...getUploadSnapshotProps(),
-        reason: "stock_image_provider_unreachable",
-      });
+      trackUploadValidationFailure("stock_image_provider_unreachable");
       return;
     }
 
@@ -267,7 +262,6 @@ const UploadPage = () => {
     let documents = [];
 
     if (files.length > 0) {
-      trackEvent(MixpanelEvent.Upload_Upload_Documents_API_Call);
       const uploadResponse = await PresentationGenerationApi.uploadDoc(files);
       documents = uploadResponse;
     }
@@ -277,7 +271,6 @@ const UploadPage = () => {
     const promises: Promise<any>[] = [];
 
     if (documents.length > 0) {
-      trackEvent(MixpanelEvent.Upload_Decompose_Documents_API_Call);
       promises.push(
         PresentationGenerationApi.decomposeDocuments(
           documents,
@@ -291,6 +284,12 @@ const UploadPage = () => {
       files: responses,
     }));
     dispatch(clearOutlines())
+    trackEvent(MixpanelEvent.Upload_Documents_Processed, {
+      ...getUploadSnapshotProps(),
+      uploaded_documents_count: documents.length,
+      decompose_job_count: responses.length,
+      destination: "/documents-preview",
+    });
     trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/documents-preview" });
     router.push("/documents-preview");
   };
@@ -309,7 +308,6 @@ const UploadPage = () => {
     const selectedLanguage = config?.language ?? "";
 
     // Use the first available layout group for direct generation
-    trackEvent(MixpanelEvent.Upload_Create_Presentation_API_Call);
     const createResponse = await PresentationGenerationApi.createPresentation({
       content: config?.prompt ?? "",
       n_slides: config?.slides ? parseInt(config.slides, 10) : null,
@@ -326,6 +324,11 @@ const UploadPage = () => {
 
     dispatch(setPresentationId(createResponse.id));
     dispatch(clearOutlines())
+    trackEvent(MixpanelEvent.Upload_Outline_Generation_Requested, {
+      ...getUploadSnapshotProps(),
+      presentation_id: createResponse.id,
+      destination: "/outline",
+    });
     trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/outline" });
     router.push("/outline");
   };
@@ -375,7 +378,7 @@ const UploadPage = () => {
           </div>
         </div>
         <div className="p-4 ">
-          <h3 className="text-sm font-normal font-unbounded text-[#333333] mb-2">Attachments (optional)</h3>
+          <h3 className="text-sm font-medium text-[#333333] mb-2">Attachments (optional)</h3>
           <SupportingDoc
             files={[...files]}
             onFilesChange={setFiles}

@@ -70,10 +70,18 @@ const FinalStep = () => {
   );
 
   const handleGoToDashboard = () => {
+    trackEvent(MixpanelEvent.Onboarding_Completed, {
+      pathname,
+      destination: "/dashboard",
+    });
     trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/dashboard" });
     router.push("/dashboard");
   };
   const handleGoToUpload = () => {
+    trackEvent(MixpanelEvent.Onboarding_Completed, {
+      pathname,
+      destination: "/upload",
+    });
     trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/upload" });
     router.push("/upload");
   };

@@ -7,16 +7,17 @@ import { PresentationGrid } from "@/app/(presentation-generator)/(dashboard)/das
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
+import { usePathname } from "next/navigation";
 
 
 
 const DashboardPage: React.FC = () => {
+  const pathname = usePathname();
   const [presentations, setPresentations] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    trackEvent(MixpanelEvent.Dashboard_Page_Viewed);
     const loadData = async () => {
       await fetchPresentations();
     };
@@ -24,19 +25,28 @@ const DashboardPage: React.FC = () => {
   }, []);
 
   const fetchPresentations = async () => {
+    let fetchedCount = 0;
+    let hasError = false;
     try {
       setIsLoading(true);
       setError(null);
       const data = await DashboardApi.getPresentations();
+      fetchedCount = data.length;
       data.sort(
         (a: any, b: any) =>
           new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
       );
       setPresentations(data);
     } catch (err) {
+      hasError = true;
       setError(null);
       setPresentations([]);
     } finally {
+      trackEvent(MixpanelEvent.Dashboard_Page_Viewed, {
+        pathname,
+        presentation_count: fetchedCount,
+        load_failed: hasError,
+      });
       setIsLoading(false);
     }
   };
@@ -61,7 +71,7 @@ const DashboardPage: React.FC = () => {
 
             <Link
               href="/upload"
-              onClick={() => trackEvent(MixpanelEvent.Dashboard_New_Presentation_Clicked)}
+              onClick={() => trackEvent(MixpanelEvent.Dashboard_New_Presentation_Clicked, { pathname, source: "dashboard_header" })}
               className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-black text-sm font-semibold font-syne shadow-sm hover:shadow-md"
               aria-label="Create new presentation"
               style={{

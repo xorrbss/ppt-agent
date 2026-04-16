@@ -9,7 +9,7 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { useFontLoader } from "@/app/(presentation-generator)/hooks/useFontLoad";
@@ -29,9 +29,16 @@ export const PresentationCard = ({
   onDeleted?: (presentationId: string) => void;
 }) => {
   const router = useRouter();
+  const pathname = usePathname();
 
   const handlePreview = (e: React.MouseEvent) => {
     e.preventDefault();
+    trackEvent(MixpanelEvent.Dashboard_Presentation_Opened, {
+      pathname,
+      presentation_id: id,
+      title_length: (title || "").length,
+      slide_count: presentation?.slides?.length || 0,
+    });
     router.push(`/presentation?id=${id}&type=standard`);
   };
   useEffect(() => {
@@ -84,6 +91,11 @@ export const PresentationCard = ({
     const response = await DashboardApi.deletePresentation(id);
 
     if (response) {
+      trackEvent(MixpanelEvent.Dashboard_Presentation_Deleted, {
+        pathname,
+        presentation_id: id,
+        slide_count: presentation?.slides?.length || 0,
+      });
       toast.success("Presentation deleted", {
         description: "The presentation has been deleted successfully",
       });

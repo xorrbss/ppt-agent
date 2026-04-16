@@ -5,17 +5,19 @@ import { Palette } from 'lucide-react';
 
 import { useDispatch } from 'react-redux';
 import { updateTheme } from '@/store/slices/presentationGeneration';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
     applyPresentationThemeToElement,
     clearPresentationThemeFromElement,
 } from "../utils/applyPresentationThemeDom";
+import { trackEvent, MixpanelEvent } from '@/utils/mixpanel';
 
 const ThemeSelector = ({ current_theme, themes: allThemes }: { current_theme: any, themes: any[] }) => {
     const [currentTheme, setCurrentTheme] = useState<any>(current_theme)
     const dispatch = useDispatch()
     const [isOpen, setIsOpen] = useState(false)
     const router = useRouter()
+    const pathname = usePathname()
     const applyTheme = async (theme: any) => {
         const element = document.getElementById("presentation-slides-wrapper");
         if (!element) return;
@@ -25,12 +27,19 @@ const ThemeSelector = ({ current_theme, themes: allThemes }: { current_theme: an
         if (!theme.data?.colors?.["graph_0"]) return;
         applyPresentationThemeToElement(element, theme);
         dispatch(updateTheme(theme));
+        trackEvent(MixpanelEvent.Presentation_Theme_Changed, {
+            pathname,
+            theme_id: theme.id,
+            theme_name: theme.name,
+            theme_source: theme.user === "system" ? "built_in" : "custom",
+        });
     };
     const resetTheme = async () => {
         dispatch(updateTheme(null));
         clearPresentationThemeFromElement(
             document.getElementById("presentation-slides-wrapper")
         );
+        trackEvent(MixpanelEvent.Presentation_Theme_Reset, { pathname });
     };
 
 
@@ -43,7 +52,10 @@ const ThemeSelector = ({ current_theme, themes: allThemes }: { current_theme: an
             </PopoverTrigger>
             <PopoverContent className="w-fit rounded-[18px] max-h-80 overflow-y-auto hide-scrollbar">
                 <div className='pb-2 flex  gap-2 justify-end'>
-                    <button className='text-xs text-gray-500 pb-2 text-right underline' onClick={() => router.push(`/theme?tab=new-theme`)}>+Customize Theme</button>
+                    <button className='text-xs text-gray-500 pb-2 text-right underline' onClick={() => {
+                        trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/theme?tab=new-theme" });
+                        router.push(`/theme?tab=new-theme`)
+                    }}>+Customize Theme</button>
                     <button className='text-xs text-gray-500 pb-2 text-right underline' onClick={resetTheme}>Reset Theme</button>
                 </div>
                 <div className="grid grid-cols-3 gap-4">

@@ -19,7 +19,6 @@ import {
 import { usePathname } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { addToHistory } from "@/store/slices/undoRedoSlice";
-import { V1ContentRender } from "../../components/V1ContentRender";
 import NewSlide from "./NewSlide";
 import SlideScale from "../../components/PresentationRender";
 
@@ -52,8 +51,6 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
     setIsUpdating(true);
 
     try {
-      trackEvent(MixpanelEvent.Slide_Update_From_Prompt_Button_Clicked, { pathname });
-      trackEvent(MixpanelEvent.Slide_Edit_API_Call);
       const response = await PresentationGenerationApi.editSlide(
         slide.id,
         editPrompt
@@ -61,6 +58,15 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
 
       if (response) {
         dispatch(updateSlide({ index: slide.index, slide: response }));
+        trackEvent(MixpanelEvent.Presentation_Slide_Updated, {
+          pathname,
+          presentation_id: presentationId,
+          slide_id: slide.id,
+          slide_index: slide.index,
+          layout: slide.layout,
+          prompt_char_count: editPrompt.trim().length,
+          prompt_word_count: editPrompt.trim().split(/\s+/).filter(Boolean).length,
+        });
         toast.success("Slide updated successfully");
         setEditPrompt("");
       }
@@ -76,8 +82,13 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
 
   const onDeleteSlide = async () => {
     try {
-      trackEvent(MixpanelEvent.Slide_Delete_Slide_Button_Clicked, { pathname });
-      trackEvent(MixpanelEvent.Slide_Delete_API_Call);
+      trackEvent(MixpanelEvent.Presentation_Slide_Deleted, {
+        pathname,
+        presentation_id: presentationId,
+        slide_id: slide.id,
+        slide_index: slide.index,
+        layout: slide.layout,
+      });
       // Add current state to past
       dispatch(addToHistory({
         slides: presentationData?.slides,
@@ -154,7 +165,6 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
                 {!isStreaming && (
                   <div
                     onClick={() => {
-                      trackEvent(MixpanelEvent.Slide_Add_New_Slide_Button_Clicked, { pathname });
                       setShowNewSlideSelection(true);
                     }}
                     className="  bg-white shadow-md w-[80px] py-2 border hover:border-[#5141e5] duration-300  flex items-center justify-center rounded-lg cursor-pointer mx-auto"

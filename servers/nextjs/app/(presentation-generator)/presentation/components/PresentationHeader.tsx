@@ -110,6 +110,12 @@ const PresentationHeader = ({
       trimmed || presentationData.title || "Presentation";
     if (next !== presentationData.title) {
       dispatch(updateTitle(next));
+      trackEvent(MixpanelEvent.Presentation_Title_Updated, {
+        pathname,
+        presentation_id,
+        previous_title_length: (presentationData.title || "").length,
+        next_title_length: next.length,
+      });
     }
     setIsEditingTitle(false);
   };
@@ -147,11 +153,6 @@ const PresentationHeader = ({
   const exportViaIpc = async (format: "pptx" | "pdf"): Promise<boolean> => {
     if (typeof window === 'undefined') return false;
     if (!(window as any).electron?.exportPresentation) return false;
-    trackEvent(
-      format === "pptx"
-        ? MixpanelEvent.Header_ExportAsPPTX_API_Call
-        : MixpanelEvent.Header_ExportAsPDF_API_Call
-    );
     const result = await (window as any).electron.exportPresentation(
       presentation_id,
       presentationData?.title || 'presentation',
@@ -167,10 +168,15 @@ const PresentationHeader = ({
     if (isStreaming) return;
 
     try {
+      trackEvent(MixpanelEvent.Presentation_Export_Started, {
+        pathname,
+        presentation_id,
+        format: "pptx",
+        slide_count: presentationData?.slides?.length || 0,
+      });
       toast.info("Exporting PPTX...");
       setIsExporting(true);
       // Save the presentation data before exporting
-      trackEvent(MixpanelEvent.Header_UpdatePresentationContent_API_Call);
       await PresentationGenerationApi.updatePresentationContent(presentationData);
 
       if (await exportViaIpc("pptx")) {
@@ -178,12 +184,10 @@ const PresentationHeader = ({
         return;
       }
 
-      trackEvent(MixpanelEvent.Header_GetPptxModel_API_Call);
       const pptx_model = await get_presentation_pptx_model(presentation_id);
       if (!pptx_model) {
         throw new Error("Failed to get presentation PPTX model");
       }
-      trackEvent(MixpanelEvent.Header_ExportAsPPTX_API_Call);
       const pptx_path = await PresentationGenerationApi.exportAsPPTX(pptx_model);
       if (pptx_path) {
         // window.open(pptx_path, '_self');
@@ -206,13 +210,17 @@ const PresentationHeader = ({
     if (isStreaming) return;
 
     try {
+      trackEvent(MixpanelEvent.Presentation_Export_Started, {
+        pathname,
+        presentation_id,
+        format: "pdf",
+        slide_count: presentationData?.slides?.length || 0,
+      });
       toast.info("Exporting PDF...");
       setIsExporting(true);
       // Save the presentation data before exporting
-      trackEvent(MixpanelEvent.Header_UpdatePresentationContent_API_Call);
       await PresentationGenerationApi.updatePresentationContent(presentationData);
 
-      trackEvent(MixpanelEvent.Header_ExportAsPDF_API_Call);
       if (await exportViaIpc("pdf")) {
         toast.success("PDF exported successfully!");
         return;
@@ -246,7 +254,11 @@ const PresentationHeader = ({
   const handleReGenerate = () => {
     dispatch(clearPresentationData());
     dispatch(clearHistory())
-    trackEvent(MixpanelEvent.Header_ReGenerate_Button_Clicked, { pathname });
+    trackEvent(MixpanelEvent.Presentation_Regenerated, {
+      pathname,
+      presentation_id,
+      slide_count: presentationData?.slides?.length || 0,
+    });
     router.push(`/presentation?id=${presentation_id}&stream=true`);
   };
   const downloadLink = (path: string) => {
@@ -270,7 +282,6 @@ const PresentationHeader = ({
 
         <Button
           onClick={() => {
-            trackEvent(MixpanelEvent.Header_Export_PDF_Button_Clicked, { pathname });
             handleExportPdf();
             setOpen(false);
           }}
@@ -282,7 +293,6 @@ const PresentationHeader = ({
         </Button>
         <Button
           onClick={() => {
-            trackEvent(MixpanelEvent.Header_Export_PPTX_Button_Clicked, { pathname });
             handleExportPptx();
             setOpen(false);
           }}
@@ -430,6 +440,12 @@ const PresentationHeader = ({
               <button
                 onClick={() => {
                   const to = `?id=${presentation_id}&mode=present&slide=${currentSlide || 0}`;
+                  trackEvent(MixpanelEvent.Presentation_Mode_Entered, {
+                    pathname,
+                    presentation_id,
+                    slide_index: currentSlide || 0,
+                    slide_count: presentationData?.slides?.length || 0,
+                  });
                   trackEvent(MixpanelEvent.Navigation, { from: pathname, to });
                   router.push(to);
                 }}

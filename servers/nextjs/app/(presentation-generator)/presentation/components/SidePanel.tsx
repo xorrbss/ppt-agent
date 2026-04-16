@@ -21,8 +21,9 @@ import { setPresentationData } from "@/store/slices/presentationGeneration";
 import { SortableSlide } from "./SortableSlide";
 import SlideScale from "../../components/PresentationRender";
 import { Separator } from "@/components/ui/separator";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import NewSlide from "./NewSlide";
+import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 
 interface SidePanelProps {
   selectedSlide: number;
@@ -41,6 +42,7 @@ const SidePanel = ({
 }: SidePanelProps) => {
 
   const router = useRouter();
+  const pathname = usePathname();
   const [showNewSlideSelection, setShowNewSlideSelection] = useState(false);
 
   const { presentationData, isStreaming } = useSelector(
@@ -109,6 +111,13 @@ const SidePanel = ({
       dispatch(
         setPresentationData({ ...presentationData, slides: updatedArray })
       );
+      trackEvent(MixpanelEvent.Presentation_Slides_Reordered, {
+        pathname,
+        presentation_id: presentationId,
+        from_index: oldIndex,
+        to_index: newIndex,
+        slide_count: updatedArray.length,
+      });
     }
   };
 
