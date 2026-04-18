@@ -15,7 +15,7 @@ export const CustomTemplateCard = memo(function CustomTemplateCard({
     selectedTemplate,
 }: {
     template: CustomTemplates;
-    onSelectTemplate: (template: CustomTemplates) => void;
+    onSelectTemplate: (template: string) => void;
     selectedTemplate: string | null;
 }) {
     const { previewLayouts, loading } = useCustomTemplatePreview(template.id);
@@ -29,7 +29,7 @@ export const CustomTemplateCard = memo(function CustomTemplateCard({
                     ? " border-blue-500 ring-2 ring-blue-500/25 shadow-sm"
                     : " border-[#E8E9EC]"
             )}
-            onClick={() => onSelectTemplate(template)}
+            onClick={() => onSelectTemplate(template.id)}
         >
             <TemplatePreviewStage>
                 <LayoutsBadge count={template.layoutCount} />

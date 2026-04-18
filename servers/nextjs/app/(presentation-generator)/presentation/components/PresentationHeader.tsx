@@ -150,20 +150,6 @@ const PresentationHeader = ({
     return pptx_model;
   };
 
-  const exportViaIpc = async (format: "pptx" | "pdf"): Promise<boolean> => {
-    if (typeof window === 'undefined') return false;
-    if (!(window as any).electron?.exportPresentation) return false;
-    const result = await (window as any).electron.exportPresentation(
-      presentation_id,
-      presentationData?.title || 'presentation',
-      format
-    );
-    if (!result?.success) {
-      throw new Error(result?.message || 'Export failed');
-    }
-    return true;
-  };
-
   const handleExportPptx = async () => {
     if (isStreaming) return;
 
@@ -178,11 +164,6 @@ const PresentationHeader = ({
       setIsExporting(true);
       // Save the presentation data before exporting
       await PresentationGenerationApi.updatePresentationContent(presentationData);
-
-      if (await exportViaIpc("pptx")) {
-        toast.success("PPTX exported successfully!");
-        return;
-      }
 
       const pptx_model = await get_presentation_pptx_model(presentation_id);
       if (!pptx_model) {
@@ -220,11 +201,6 @@ const PresentationHeader = ({
       setIsExporting(true);
       // Save the presentation data before exporting
       await PresentationGenerationApi.updatePresentationContent(presentationData);
-
-      if (await exportViaIpc("pdf")) {
-        toast.success("PDF exported successfully!");
-        return;
-      }
       const response = await fetch('/api/export-as-pdf', {
         method: 'POST',
         body: JSON.stringify({

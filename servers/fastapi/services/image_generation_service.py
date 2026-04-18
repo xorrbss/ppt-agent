@@ -69,11 +69,11 @@ class ImageGenerationService:
         """
         if self.is_image_generation_disabled:
             print("Image generation is disabled. Using placeholder image.")
-            return "/static/images/placeholder.jpg"
+            return "/static/images/replaceable_template_image.png"
 
         if not self.image_gen_func:
             print("No image generation function found. Using placeholder image.")
-            return "/static/images/placeholder.jpg"
+            return "/static/images/replaceable_template_image.png"
 
         image_prompt = prompt.get_image_prompt(
             with_theme=not self.is_stock_provider_selected()
@@ -107,7 +107,7 @@ class ImageGenerationService:
 
         except Exception as e:
             print(f"Error generating image: {e}")
-            return "/static/images/placeholder.jpg"
+            return "/static/images/replaceable_template_image.png"
 
     async def generate_image_openai(
         self, prompt: str, output_directory: str, model: str, quality: str

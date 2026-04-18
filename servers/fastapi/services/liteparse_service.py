@@ -45,15 +45,8 @@ class LiteParseService:
         self._npm_project_root = self._resolve_npm_project_root()
 
     def _build_node_env(self) -> Dict[str, str]:
-        """Build environment for Node subprocesses.
-
-        When the configured runtime binary is not the canonical `node` executable
-        (for example Electron's app binary), force Node-compatible mode.
-        """
+        """Build environment for Node subprocesses."""
         env = os.environ.copy()
-        binary_name = os.path.basename(self.node_binary).lower()
-        if binary_name not in {"node", "node.exe"}:
-            env.setdefault("ELECTRON_RUN_AS_NODE", "1")
 
         # LiteParse checks ImageMagick availability with `which magick`.
         # On macOS app launches, PATH often excludes Homebrew bins, even when
@@ -97,36 +90,51 @@ class LiteParseService:
         return env
 
     def _resolve_npm_project_root(self) -> str:
-        """Directory whose node_modules contains @llamaindex/liteparse (runner dir or Electron app root)."""
-        local_nm = os.path.join(
-            self.runner_dir, "node_modules", "@llamaindex", "liteparse"
-        )
-        if os.path.isdir(local_nm):
-            return self.runner_dir
-        electron_nm = os.path.abspath(
-            os.path.join(self.runner_dir, "..", "..", "node_modules", "@llamaindex", "liteparse")
-        )
-        if os.path.isdir(electron_nm):
-            return os.path.abspath(os.path.join(self.runner_dir, "..", ".."))
-        return os.path.abspath(os.path.join(self.runner_dir, "..", ".."))
+        """Directory whose node_modules contains @llamaindex/liteparse."""
+        candidates = [
+            self.runner_dir,
+            os.path.abspath(os.path.join(self.runner_dir, "..")),
+            os.path.abspath(os.path.join(os.getcwd(), "..", "..", "document-extraction-liteparse")),
+            os.path.abspath(os.path.join(os.getcwd(), "..", "..")),
+            "/app/document-extraction-liteparse",
+            "/app",
+        ]
+
+        fallback = candidates[0]
+        for candidate in candidates:
+            if os.path.isdir(candidate):
+                fallback = candidate
+            local_nm = os.path.join(candidate, "node_modules", "@llamaindex", "liteparse")
+            if os.path.isdir(local_nm):
+                return candidate
+
+        return fallback
 
     @staticmethod
     def _resolve_runner_path() -> str:
         cwd = os.path.abspath(".")
+        service_dir = os.path.dirname(__file__)
         candidates = [
-            # electron/servers/fastapi → electron/resources/...
-            os.path.abspath(
-                os.path.join(
-                    cwd, "..", "..", "resources", "document-extraction", "liteparse_runner.mjs"
-                )
-            ),
-            # servers/fastapi (repo root layout) → electron/resources/...
+            # Dedicated Docker runtime path
+            "/app/document-extraction-liteparse/liteparse_runner.mjs",
+            # servers/fastapi (repo root layout) → resources/...
             os.path.abspath(
                 os.path.join(
                     cwd,
                     "..",
                     "..",
-                    "electron",
+                    "resources",
+                    "document-extraction",
+                    "liteparse_runner.mjs",
+                )
+            ),
+            # services/liteparse_service.py → resources/...
+            os.path.abspath(
+                os.path.join(
+                    service_dir,
+                    "..",
+                    "..",
+                    "..",
                     "resources",
                     "document-extraction",
                     "liteparse_runner.mjs",
@@ -138,8 +146,6 @@ class LiteParseService:
                     cwd, "..", "..", "app", "resources", "document-extraction", "liteparse_runner.mjs"
                 )
             ),
-            # Docker / explicit layout
-            "/app/document-extraction-liteparse/liteparse_runner.mjs",
         ]
         for path in candidates:
             if os.path.isfile(path):
@@ -169,7 +175,7 @@ class LiteParseService:
         if not os.path.isdir(liteparse_dir):
             return (
                 False,
-                f"LiteParse npm package missing at {liteparse_dir}. Run npm install in the Electron app directory.",
+                f"LiteParse npm package missing at {liteparse_dir}. Install @llamaindex/liteparse in the runtime project root.",
             )
 
         # @llamaindex/liteparse is ESM-only; require.resolve() fails. Use dynamic import.

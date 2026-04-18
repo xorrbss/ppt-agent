@@ -5,6 +5,9 @@ import { useState, useEffect, useCallback } from "react";
 import { compileCustomLayout, CompiledLayout } from "./compileLayout";
 import TemplateService from "../(presentation-generator)/services/api/template";
 
+/**
+ * API response types
+ */
 
 
 export interface TemplateSummary {
@@ -217,17 +220,15 @@ export function useCustomTemplateSummaries() {
             setError(null);
 
             const data: TemplateSummary[] = await TemplateService.getCustomTemplateSummaries();
-            const mappedTemplates: CustomTemplates[] = data
-                .filter((item) => item.total_layouts && item.total_layouts > 0)
-                .map((item) => {
-                    return {
-                        id: item.id,
-                        name: item.name || "Custom Template",
-                        layoutCount: item.total_layouts,
-                        isCustom: true as const,
-                    };
-                });
+            const mappedTemplates: CustomTemplates[] = data.filter(item => item.total_layouts && item.total_layouts > 0).map((item) => {
 
+                return {
+                    id: item.id,
+                    name: item.name || "Custom Template",
+                    layoutCount: item.total_layouts,
+                    isCustom: true as const,
+                }
+            });
 
             setTemplates(mappedTemplates);
         } catch (err) {
@@ -391,6 +392,7 @@ export function useCustomTemplatePreview(presentationId: string) {
             try {
                 setLoading(true);
                 const data = await TemplateService.getCustomTemplateDetails(presentationId);
+
                 // Compile first 4 layouts for preview
                 const compiled: CompiledLayout[] = [];
                 const layoutsToPreview = data.layouts.slice(0, 4);

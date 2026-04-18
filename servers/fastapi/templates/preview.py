@@ -367,7 +367,7 @@ async def store_slide_images(
             await asyncio.to_thread(_copy_file, screenshot_path, destination_path)
             slide_image_urls.append(f"/app_data/images/{session_id}/{file_name}")
         else:
-            slide_image_urls.append("/static/images/placeholder.jpg")
+            slide_image_urls.append("/static/images/replaceable_template_image.png")
 
     return slide_image_urls
 

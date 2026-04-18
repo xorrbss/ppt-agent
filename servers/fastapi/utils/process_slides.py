@@ -200,7 +200,7 @@ def process_slide_add_placeholder_assets(slide: SlideModel):
     for image_path in image_paths:
         image_dict = get_dict_at_path(slide.content, image_path)
         # Use FastAPI static path for placeholder image
-        image_dict["__image_url__"] = "/static/images/placeholder.jpg"
+        image_dict["__image_url__"] = "/static/images/replaceable_template_image.png"
         set_dict_at_path(slide.content, image_path, image_dict)
 
     for icon_path in icon_paths:

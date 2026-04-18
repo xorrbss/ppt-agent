@@ -12,6 +12,7 @@ import Header from "../../(dashboard)/dashboard/components/Header";
 import { toast } from "sonner";
 import { CustomTemplateLayout, useCustomTemplateDetails } from "@/app/hooks/useCustomTemplates";
 import { templates as templateGroups, getTemplatesByTemplateName } from "@/app/presentation-templates";
+import { setupImageUrlConverter } from "@/utils/image-url-converter";
 
 const GroupLayoutPreview = () => {
   const searchParams = useSearchParams();
@@ -42,6 +43,12 @@ const GroupLayoutPreview = () => {
       document.head.appendChild(script);
     }
   }, [templateParams]);
+
+  // Keep backend-served assets on the active origin in Docker/nginx preview mode.
+  useEffect(() => {
+    const observer = setupImageUrlConverter();
+    return () => observer?.disconnect();
+  }, []);
 
   const handleDeleteCustomTemplate = async () => {
     if (!customTemplateId) return;

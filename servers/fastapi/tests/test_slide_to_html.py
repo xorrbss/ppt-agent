@@ -42,7 +42,7 @@ def test_slide_to_html_endpoint():
     
     # Use a placeholder image path (since we can't easily test with real files)
     test_data = {
-        "image": "/static/images/placeholder.jpg",
+        "image": "/static/images/replaceable_template_image.png",
         "xml": test_xml
     }
     
@@ -92,7 +92,7 @@ def test_slide_to_html_missing_xml():
     """Test the endpoint with missing XML data."""
     
     test_data = {
-        "image": "/static/images/placeholder.jpg"
+        "image": "/static/images/replaceable_template_image.png"
         # No XML data provided
     }
     

@@ -156,7 +156,6 @@ export async function runBundledPdfExport(params: {
       env: {
         ...process.env,
         BUILT_PYTHON_MODULE_PATH: converter,
-        ELECTRON_RUN_AS_NODE: "0",
       },
     });
     const stderr: Buffer[] = [];

@@ -402,7 +402,7 @@ class _CallbackHandler(BaseHTTPRequestHandler):
             self.wfile.write(b"Missing authorization code")
             return
 
-        # In the desktop/Electron app context the redirect URI is a localhost-only
+        # In local callback flows the redirect URI is localhost-only.
         # callback, so strict CSRF protection via state comparison is less critical.
         # We've seen intermittent state mismatches in the field (likely from
         # overlapping auth attempts or stale callback servers), so we treat a

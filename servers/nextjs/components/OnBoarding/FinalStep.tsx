@@ -34,14 +34,9 @@ const FinalStep = () => {
     useEffect(() => {
         async function fetchStatus() {
             try {
-                if (window.electron?.telemetryStatus) {
-                    const data = await window.electron.telemetryStatus();
-                    setTrackingEnabled(data.telemetryEnabled);
-                } else {
-                    const res = await fetch('/api/telemetry-status');
-                    const data = await res.json();
-                    setTrackingEnabled(data.telemetryEnabled);
-                }
+                const res = await fetch('/api/telemetry-status');
+                const data = await res.json();
+                setTrackingEnabled(data.telemetryEnabled);
             } catch {
                 setTrackingEnabled(true);
             }
@@ -54,18 +49,12 @@ const FinalStep = () => {
         setTrackingEnabled(enabled);
         setTelemetryEnabled(enabled);
         try {
-            if (window.electron?.setUserConfig) {
-                await window.electron.setUserConfig({
+            await fetch('/api/user-config', {
+                method: 'POST',
+                body: JSON.stringify({
                     DISABLE_ANONYMOUS_TRACKING: enabled ? undefined : 'true',
-                } as any);
-            } else {
-                await fetch('/api/user-config', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        DISABLE_ANONYMOUS_TRACKING: enabled ? undefined : 'true',
-                    }),
-                });
-            }
+                }),
+            });
         } catch {
             setTrackingEnabled(prev);
             setTelemetryEnabled(prev ?? true);

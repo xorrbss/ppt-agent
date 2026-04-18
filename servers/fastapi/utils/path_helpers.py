@@ -1,7 +1,7 @@
 """Paths relative to the FastAPI process working directory (Docker / local dev).
 
 The API is always started with cwd set to the `servers/fastapi` package root
-(see start.js). No Electron, PyInstaller, or OS-specific layout handling.
+(see start.js), without OS-specific layout handling.
 """
 
 from __future__ import annotations

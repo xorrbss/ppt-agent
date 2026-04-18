@@ -90,9 +90,6 @@ class ExportTaskService:
 
     def _build_node_env(self) -> Mapping[str, str]:
         env = os.environ.copy()
-        binary_name = os.path.basename(self.node_binary).lower()
-        if binary_name not in {"node", "node.exe"}:
-            env.setdefault("ELECTRON_RUN_AS_NODE", "1")
 
         app_data_directory = get_app_data_directory_env()
         if not app_data_directory:

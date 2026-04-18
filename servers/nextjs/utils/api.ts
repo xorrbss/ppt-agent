@@ -1,47 +1,103 @@
-// Same-origin API and static assets: nginx proxies /api/v1, /static, /app_data to fixed internal ports.
+// Utility to get the FastAPI base URL
+export function getFastAPIUrl(): string {
+  if (process.env.NEXT_PUBLIC_FAST_API) {
+    return process.env.NEXT_PUBLIC_FAST_API;
+  }
 
-function withLeadingSlash(path: string): string {
-  return path.startsWith("/") ? path : `/${path}`;
+  const queryFastApiUrl = getFastApiUrlFromQuery();
+  if (queryFastApiUrl) {
+    return queryFastApiUrl;
+  }
+
+  // Docker/web runtime: route backend assets and APIs through current origin
+  // (nginx reverse-proxies /api/v1, /app_data, /static).
+  if (typeof window !== "undefined") {
+    return window.location.origin;
+  }
+
+  return "http://127.0.0.1:5000";
+}
+
+function getFastApiUrlFromQuery(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const value = params.get("fastapiUrl");
+    if (!value) return null;
+
+    const parsed = new URL(value);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return null;
+    }
+    return parsed.origin;
+  } catch {
+    return null;
+  }
 }
 
 function isAbsoluteHttpUrl(path: string): boolean {
   return /^https?:\/\//i.test(path);
 }
 
-/** Browser: current site origin. Server render: localhost FastAPI (dev only). */
-export function getFastAPIUrl(): string {
-  if (typeof window !== "undefined") {
-    return window.location.origin;
-  }
-  return "http://127.0.0.1:8000";
+function withLeadingSlash(path: string): string {
+  return path.startsWith("/") ? path : `/${path}`;
 }
 
-/** Use relative URLs; nginx serves /api/v1 on the same host as the UI. */
+// Utility to construct API URL for Docker/web runtime.
 export function getApiUrl(path: string): string {
   if (isAbsoluteHttpUrl(path)) {
     return path;
   }
-  return withLeadingSlash(path);
+
+  const normalizedPath = withLeadingSlash(path);
+  const isFastApiEndpoint = normalizedPath.startsWith("/api/v1/");
+  const hasConfiguredFastApi =
+    !!process.env.NEXT_PUBLIC_FAST_API || !!getFastApiUrlFromQuery();
+
+  // In web/docker, /api/v1 is typically reverse-proxied by the web server.
+  // If a FastAPI origin is explicitly configured, use it instead of same-origin proxy.
+  if (isFastApiEndpoint && hasConfiguredFastApi) {
+    return `${getFastAPIUrl()}${normalizedPath}`;
+  }
+
+  return normalizedPath;
 }
 
-/** Keep /static and /app_data as same-origin paths the browser resolves. */
+function hasBackendAssetPrefix(path: string): boolean {
+  return path.startsWith("/static/") || path.startsWith("/app_data/");
+}
+
+// Resolve backend-served asset paths to the FastAPI origin.
 export function resolveBackendAssetUrl(path?: string): string {
   if (!path) return "";
 
-  const trimmed = path.trim();
-  if (!trimmed) return "";
+  const trimmedPath = path.trim();
+  if (!trimmedPath) return "";
 
   if (
-    trimmed.startsWith("data:") ||
-    trimmed.startsWith("blob:") ||
-    trimmed.startsWith("file:")
+    trimmedPath.startsWith("data:") ||
+    trimmedPath.startsWith("blob:") ||
+    trimmedPath.startsWith("file:")
   ) {
-    return trimmed;
+    return trimmedPath;
   }
 
-  if (isAbsoluteHttpUrl(trimmed)) {
-    return trimmed;
+  if (isAbsoluteHttpUrl(trimmedPath)) {
+    try {
+      const parsed = new URL(trimmedPath);
+      if (hasBackendAssetPrefix(parsed.pathname)) {
+        return `${getFastAPIUrl()}${parsed.pathname}${parsed.search}${parsed.hash}`;
+      }
+      return trimmedPath;
+    } catch {
+      return trimmedPath;
+    }
   }
 
-  return withLeadingSlash(trimmed);
+  const normalizedPath = withLeadingSlash(trimmedPath);
+  if (hasBackendAssetPrefix(normalizedPath)) {
+    return `${getFastAPIUrl()}${normalizedPath}`;
+  }
+
+  return trimmedPath;
 }

@@ -12,7 +12,7 @@ def resolve_app_path_to_filesystem(path_or_url: str) -> Optional[str]:
     Handles:
     - Path strings: /app_data/images/..., /static/..., absolute paths, relative
     - file:// URLs returned by export runtimes
-    - HTTP URLs whose path component is an absolute filesystem path (Mac/Electron):
+        - HTTP URLs whose path component is an absolute filesystem path:
       When img src is /Users/.../images/xxx.png, browser resolves to
       http://origin/Users/.../images/xxx.png. Next.js returns 404 for these.
 
