@@ -19,6 +19,20 @@ export function getPresentonAppRoot(): string {
   );
 }
 
+async function resolveExportEntrypoint(exportRoot: string): Promise<string> {
+  const indexCjs = path.join(exportRoot, "index.cjs");
+  const indexJs = path.join(exportRoot, "index.js");
+
+  try {
+    await fs.access(indexCjs);
+    return indexCjs;
+  } catch {
+    await fs.access(indexJs);
+    await fs.copyFile(indexJs, indexCjs);
+    return indexCjs;
+  }
+}
+
 function bundledConverterPath(exportRoot: string): string {
   const fromEnv = process.env.BUILT_PYTHON_MODULE_PATH?.trim();
   if (fromEnv) {
@@ -35,7 +49,7 @@ function bundledConverterPath(exportRoot: string): string {
 export async function bundledExportPackageAvailable(): Promise<boolean> {
   try {
     const root = getExportPackageRoot();
-    await fs.access(path.join(root, "index.js"));
+    await resolveExportEntrypoint(root);
     await fs.access(bundledConverterPath(root));
     return true;
   } catch {
@@ -44,6 +58,53 @@ export async function bundledExportPackageAvailable(): Promise<boolean> {
 }
 
 export type BundledPdfExportResult = { path: string };
+
+function normalizeExportOutputPath(params: {
+  pathValue?: string;
+  urlValue?: string;
+}): string {
+  const { pathValue, urlValue } = params;
+  const appData = process.env.APP_DATA_DIRECTORY?.trim();
+
+  const resolveAppDataRelative = (value: string): string => {
+    if (!appData) {
+      throw new Error("APP_DATA_DIRECTORY is required for relative export paths.");
+    }
+
+    const normalized = value.startsWith("/") ? value.slice(1) : value;
+    if (!normalized.startsWith("app_data/")) {
+      return path.join(appData, normalized);
+    }
+    return path.join(appData, normalized.slice("app_data/".length));
+  };
+
+  if (pathValue && typeof pathValue === "string") {
+    if (path.isAbsolute(pathValue)) {
+      return pathValue;
+    }
+    return resolveAppDataRelative(pathValue);
+  }
+
+  if (urlValue && typeof urlValue === "string") {
+    if (urlValue.startsWith("file://")) {
+      const parsed = new URL(urlValue);
+      const fsPath = decodeURIComponent(parsed.pathname || "");
+      if (fsPath.startsWith("/app_data/")) {
+        return resolveAppDataRelative(fsPath);
+      }
+      if (path.isAbsolute(fsPath)) {
+        return fsPath;
+      }
+      return resolveAppDataRelative(fsPath);
+    }
+
+    if (urlValue.startsWith("/app_data/")) {
+      return resolveAppDataRelative(urlValue);
+    }
+  }
+
+  throw new Error("Export finished but response did not include a valid output path.");
+}
 
 /**
  * Runs the bundled export entrypoint (`presentation-export/index.js`) with
@@ -55,11 +116,10 @@ export async function runBundledPdfExport(params: {
 }): Promise<BundledPdfExportResult> {
   const { presentationId, title } = params;
   const exportRoot = getExportPackageRoot();
-  const indexJs = path.join(exportRoot, "index.js");
+  const entrypoint = await resolveExportEntrypoint(exportRoot);
   const converter = bundledConverterPath(exportRoot);
   const appRoot = getPresentonAppRoot();
 
-  await fs.access(indexJs);
   await fs.access(converter);
 
   const nextjsUrl =
@@ -90,7 +150,7 @@ export async function runBundledPdfExport(params: {
   const responsePath = exportTaskPath.replace(/\.json$/i, ".response.json");
 
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(process.execPath, [indexJs, exportTaskPath], {
+    const child = spawn(process.execPath, [entrypoint, exportTaskPath], {
       cwd: appRoot,
       stdio: ["ignore", "pipe", "pipe"],
       env: {
@@ -120,20 +180,12 @@ export async function runBundledPdfExport(params: {
   });
 
   const responseRaw = await fs.readFile(responsePath, "utf8");
-  const responseData = JSON.parse(responseRaw) as { path?: string };
+  const responseData = JSON.parse(responseRaw) as { path?: string; url?: string };
 
-  if (!responseData?.path || typeof responseData.path !== "string") {
-    throw new Error("Export finished but response did not include a path.");
-  }
-
-  let outPath = responseData.path;
-  if (!path.isAbsolute(outPath)) {
-    const appData = process.env.APP_DATA_DIRECTORY?.trim();
-    if (!appData) {
-      throw new Error("APP_DATA_DIRECTORY is required for relative export paths.");
-    }
-    outPath = path.join(appData, outPath);
-  }
+  const outPath = normalizeExportOutputPath({
+    pathValue: responseData?.path,
+    urlValue: responseData?.url,
+  });
 
   return { path: outPath };
 }

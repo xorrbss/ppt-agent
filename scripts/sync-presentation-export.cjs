@@ -4,10 +4,10 @@
  *
  * Version resolution (first match):
  *   1. EXPORT_RUNTIME_VERSION env
- *   2. presentation-export/export-version.json → exportVersion
+ *   2. package.json → presentationExportVersion
  *
  * CLI: --force  re-download even if valid runtime already exists
- *       --check-only  verify index.js + converter exist and exit 0/1
+ *       --check-only  verify index.cjs + converter exist and exit 0/1
  */
 const fs = require("fs");
 const path = require("path");
@@ -18,8 +18,9 @@ const { execFileSync } = require("child_process");
 const repoRoot = path.join(__dirname, "..");
 const targetRoot = path.join(repoRoot, "presentation-export");
 const targetPyDir = path.join(targetRoot, "py");
-const targetIndex = path.join(targetRoot, "index.js");
-const versionFile = path.join(targetRoot, "export-version.json");
+const targetIndexJs = path.join(targetRoot, "index.js");
+const targetIndexCjs = path.join(targetRoot, "index.cjs");
+const packageJsonFile = path.join(repoRoot, "package.json");
 const cacheDir = path.join(repoRoot, ".cache", "presentation-export");
 const exportRepoBase =
   "https://github.com/presenton/presenton-export/releases/download";
@@ -34,15 +35,17 @@ function ensureDir(dirPath) {
 }
 
 function readPinnedVersion() {
-  if (!fs.existsSync(versionFile)) {
+  if (!fs.existsSync(packageJsonFile)) {
     throw new Error(
-      `Missing ${path.relative(repoRoot, versionFile)}. Create it with { "exportVersion": "vX.Y.Z" }.`
+      `Missing ${path.relative(repoRoot, packageJsonFile)}. Add \"presentationExportVersion\": \"vX.Y.Z\".`
     );
   }
-  const raw = JSON.parse(fs.readFileSync(versionFile, "utf8"));
-  const v = (raw.exportVersion || "").trim();
+  const raw = JSON.parse(fs.readFileSync(packageJsonFile, "utf8"));
+  const v = (raw.presentationExportVersion || "").trim();
   if (!v) {
-    throw new Error(`${versionFile} must set "exportVersion" (e.g. "v0.2.0").`);
+    throw new Error(
+      `${path.relative(repoRoot, packageJsonFile)} must set \"presentationExportVersion\" (e.g. \"v0.2.0\").`
+    );
   }
   return v;
 }
@@ -124,10 +127,32 @@ function getConverterCandidates() {
   ];
 }
 
-function validateExistingRuntime() {
-  if (!fs.existsSync(targetIndex)) {
-    return { ok: false, reason: `Missing runtime bundle: ${targetIndex}` };
+function ensureCommonJsEntrypoint() {
+  if (!fs.existsSync(targetIndexJs)) {
+    return { ok: false, reason: `Missing runtime bundle: ${targetIndexJs}` };
   }
+
+  if (fs.existsSync(targetIndexCjs)) {
+    return { ok: true, entrypointPath: targetIndexCjs };
+  }
+
+  try {
+    fs.copyFileSync(targetIndexJs, targetIndexCjs);
+    return { ok: true, entrypointPath: targetIndexCjs };
+  } catch (err) {
+    return {
+      ok: false,
+      reason: `Failed to create CommonJS entrypoint ${targetIndexCjs}: ${err.message}`,
+    };
+  }
+}
+
+function validateExistingRuntime() {
+  const entrypoint = ensureCommonJsEntrypoint();
+  if (!entrypoint.ok) {
+    return { ok: false, reason: entrypoint.reason };
+  }
+
   const candidates = getConverterCandidates();
   const converterPath = candidates.find((c) => fs.existsSync(c));
   if (!converterPath) {
@@ -137,7 +162,7 @@ function validateExistingRuntime() {
     };
   }
   chmodIfPossible(converterPath);
-  return { ok: true, converterPath };
+  return { ok: true, entrypointPath: entrypoint.entrypointPath, converterPath };
 }
 
 function downloadFile(url, outputPath, redirects = 5) {
@@ -207,10 +232,6 @@ async function downloadAndInstallRuntime() {
   const tag = await getTargetVersion();
   const downloadUrl = `${exportRepoBase}/${tag}/${linuxAssetName}`;
 
-  const versionPinBackup = fs.existsSync(versionFile)
-    ? fs.readFileSync(versionFile, "utf8")
-    : JSON.stringify({ exportVersion: tag }, null, 2) + "\n";
-
   ensureDir(cacheDir);
   const zipPath = path.join(cacheDir, linuxAssetName);
   const extractDir = path.join(cacheDir, `extract-${Date.now()}`);
@@ -226,9 +247,6 @@ async function downloadAndInstallRuntime() {
   ensureDir(targetRoot);
   fs.cpSync(sourceRoot, targetRoot, { recursive: true, force: true });
 
-  ensureDir(path.dirname(versionFile));
-  fs.writeFileSync(versionFile, versionPinBackup, "utf8");
-
   fs.rmSync(extractDir, { recursive: true, force: true });
 
   return { tag, downloadUrl };
@@ -242,14 +260,14 @@ async function main() {
       throw new Error(existing.reason);
     }
     console.log("[presentation-export] OK");
-    console.log(`  - ${targetIndex}`);
+    console.log(`  - ${existing.entrypointPath}`);
     console.log(`  - ${existing.converterPath}`);
     return;
   }
 
   if (existing.ok && !forceDownload) {
     console.log("[presentation-export] Using existing runtime:");
-    console.log(`  - ${targetIndex}`);
+    console.log(`  - ${existing.entrypointPath}`);
     console.log(`  - ${existing.converterPath}`);
     return;
   }
@@ -263,7 +281,7 @@ async function main() {
   console.log("[presentation-export] Synced successfully:");
   console.log(`  - release: ${tag}`);
   console.log(`  - url: ${downloadUrl}`);
-  console.log(`  - ${targetIndex}`);
+  console.log(`  - ${installed.entrypointPath}`);
   console.log(`  - ${installed.converterPath}`);
 }
 

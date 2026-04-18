@@ -12,6 +12,7 @@ ENV APP_DATA_DIRECTORY=/app_data \
     UV_LINK_MODE=copy \
     PATH="/root/.local/bin:${PATH}" \
     EXPORT_PACKAGE_ROOT=/app/presentation-export \
+    EXPORT_RUNTIME_DIR=/app/presentation-export \
     BUILT_PYTHON_MODULE_PATH=/app/presentation-export/py/convert-linux-x64 \
     PRESENTON_APP_ROOT=/app
 
@@ -26,17 +27,16 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
+COPY package.json package-lock.json /app/
+RUN npm --prefix /app install --omit=dev
+
 RUN mkdir -p /app/document-extraction-liteparse \
     && npm --prefix /app/document-extraction-liteparse init -y \
     && npm --prefix /app/document-extraction-liteparse install @llamaindex/liteparse@1.4.0 --omit=dev
 COPY electron/resources/document-extraction/liteparse_runner.mjs /app/document-extraction-liteparse/liteparse_runner.mjs
 
-# PDF/PPTX export runtime: version pin in presentation-export/export-version.json (or build-arg).
-COPY presentation-export/export-version.json /app/presentation-export/export-version.json
 COPY scripts/sync-presentation-export.cjs /app/scripts/sync-presentation-export.cjs
-ARG EXPORT_RUNTIME_VERSION
-RUN export EXPORT_RUNTIME_VERSION="${EXPORT_RUNTIME_VERSION:-}" \
-    && node /app/scripts/sync-presentation-export.cjs --force \
+RUN node /app/scripts/sync-presentation-export.cjs --force \
     && chmod +x /app/presentation-export/py/convert-linux-x64
 
 RUN curl -fsSL https://ollama.com/install.sh | sh

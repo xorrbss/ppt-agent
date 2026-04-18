@@ -10,6 +10,7 @@ const __dirname = dirname(__filename);
 
 const fastapiDir = join(__dirname, "servers/fastapi");
 const nextjsDir = join(__dirname, "servers/nextjs");
+const exportSyncScript = join(__dirname, "scripts/sync-presentation-export.cjs");
 
 const args = process.argv.slice(2);
 const hasDevArg = args.includes("--dev") || args.includes("-d");
@@ -53,6 +54,52 @@ const setupNodeModules = () => {
       }
     });
   });
+};
+
+const runNodeScript = (scriptPath, scriptArgs) => {
+  return new Promise((resolve, reject) => {
+    const scriptProcess = spawn(process.execPath, [scriptPath, ...scriptArgs], {
+      cwd: __dirname,
+      stdio: "inherit",
+      env: process.env,
+    });
+
+    scriptProcess.on("error", (err) => {
+      reject(err);
+    });
+
+    scriptProcess.on("exit", (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`Script failed with exit code: ${code}`));
+      }
+    });
+  });
+};
+
+const ensurePresentationExportRuntime = async () => {
+  if (process.env.ENSURE_PRESENTATION_EXPORT_RUNTIME === "false") {
+    return;
+  }
+
+  if (!existsSync(exportSyncScript)) {
+    console.warn("presentation-export sync script not found; skipping runtime check");
+    return;
+  }
+
+  try {
+    await runNodeScript(exportSyncScript, ["--check-only"]);
+  } catch (err) {
+    if (!isDev) {
+      throw new Error(
+        "presentation-export runtime is missing in this container image. Rebuild the image so the runtime package is installed."
+      );
+    }
+
+    console.warn("presentation-export runtime missing in dev mount. Syncing runtime package...");
+    await runNodeScript(exportSyncScript, ["--force"]);
+  }
 };
 
 process.env.USER_CONFIG_PATH = userConfigPath;
@@ -223,6 +270,8 @@ const startNginx = () => {
 };
 
 const main = async () => {
+  await ensurePresentationExportRuntime();
+
   if (isDev) {
     await setupNodeModules();
   }
