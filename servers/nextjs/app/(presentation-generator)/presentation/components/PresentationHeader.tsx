@@ -42,6 +42,43 @@ import { Theme } from "../../services/api/types";
 import MarkdownRenderer from "@/components/MarkDownRender";
 import { cn } from "@/lib/utils";
 
+const MAX_EXPORT_TITLE_LENGTH = 40;
+
+const buildSafeExportFileName = (
+  rawTitle: string | null | undefined,
+  extension: "pdf" | "pptx"
+) => {
+  const normalizedTitle = (rawTitle || "presentation").trim();
+  const titleWithoutExtension = normalizedTitle.replace(
+    /\.(pdf|pptx)$/i,
+    ""
+  );
+
+  let safeBase = titleWithoutExtension
+    // Replace all punctuation/special chars (including dots) with dashes
+    .replace(/[^a-zA-Z0-9\s_-]+/g, "-")
+    // Replace whitespace with single dashes
+    .replace(/\s+/g, "-")
+    // Collapse repeated separators
+    .replace(/[-_]{2,}/g, "-")
+    // Trim separators from both ends
+    .replace(/^[-_]+|[-_]+$/g, "");
+
+  if (!safeBase) {
+    safeBase = "presentation";
+  }
+
+  if (safeBase.length > MAX_EXPORT_TITLE_LENGTH) {
+    safeBase = safeBase.slice(0, MAX_EXPORT_TITLE_LENGTH).replace(/[-_]+$/g, "");
+  }
+
+  if (!safeBase) {
+    safeBase = "presentation";
+  }
+
+  return `${safeBase}.${extension}`;
+};
+
 const PresentationHeader = ({
   presentation_id,
   isPresentationSaving,
@@ -169,10 +206,18 @@ const PresentationHeader = ({
       if (!pptx_model) {
         throw new Error("Failed to get presentation PPTX model");
       }
-      const pptx_path = await PresentationGenerationApi.exportAsPPTX(pptx_model);
+      const safePptxFileName = buildSafeExportFileName(
+        presentationData?.title,
+        "pptx"
+      );
+      const safePptxTitle = safePptxFileName.replace(/\.pptx$/i, "");
+      const pptx_path = await PresentationGenerationApi.exportAsPPTX({
+        ...pptx_model,
+        name: safePptxTitle,
+      });
       if (pptx_path) {
         // window.open(pptx_path, '_self');
-        downloadLink(pptx_path);
+        downloadLink(pptx_path, safePptxFileName);
       } else {
         throw new Error("No path returned from export");
       }
@@ -201,18 +246,23 @@ const PresentationHeader = ({
       setIsExporting(true);
       // Save the presentation data before exporting
       await PresentationGenerationApi.updatePresentationContent(presentationData);
+      const safePdfFileName = buildSafeExportFileName(
+        presentationData?.title,
+        "pdf"
+      );
+      const safePdfTitle = safePdfFileName.replace(/\.pdf$/i, "");
       const response = await fetch('/api/export-as-pdf', {
         method: 'POST',
         body: JSON.stringify({
           id: presentation_id,
-          title: presentationData?.title,
+          title: safePdfTitle,
         })
       });
 
       if (response.ok) {
         const { path: pdfPath } = await response.json();
         // window.open(pdfPath, '_blank');
-        downloadLink(pdfPath);
+        downloadLink(pdfPath, safePdfFileName);
       } else {
         throw new Error("Failed to export PDF");
       }
@@ -237,17 +287,14 @@ const PresentationHeader = ({
     });
     router.push(`/presentation?id=${presentation_id}&stream=true`);
   };
-  const downloadLink = (path: string) => {
-    // if we have popup access give direct download if not redirect to the path
-    if (window.opener) {
-      window.open(path, '_blank');
-    } else {
-      const link = document.createElement('a');
-      link.href = path;
-      link.download = path.split('/').pop() || 'download';
-      document.body.appendChild(link);
-      link.click();
-    }
+  const downloadLink = (path: string, fileName: string) => {
+    const link = document.createElement("a");
+    link.href = path;
+    link.download = fileName;
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const ExportOptions = ({ mobile }: { mobile: boolean }) => (

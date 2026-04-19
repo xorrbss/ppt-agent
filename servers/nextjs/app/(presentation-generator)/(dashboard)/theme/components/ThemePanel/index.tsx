@@ -517,11 +517,11 @@ const ThemePanel: React.FC = () => {
   const handleCustomFontChange = async (fontFile: File) => {
     try {
       setIsFontUploading(true)
-      const { name, url } = await ThemeApi.uploadFont(fontFile)
+      const { font_name, font_url } = await ThemeApi.uploadFont(fontFile)
       setCustomFonts({
         textFont: {
-          name: name,
-          url: url,
+          name: font_name,
+          url: font_url,
         }
       })
       trackEvent(MixpanelEvent.Theme_Custom_Font_Uploaded, {
@@ -533,17 +533,17 @@ const ThemePanel: React.FC = () => {
       trackEvent(MixpanelEvent.Theme_Font_Changed, {
         pathname,
         theme_id: selectedTheme.id,
-        font_name: name,
-        font_url: url,
+        font_name: font_name,
+        font_url: font_url,
         source: "uploaded_font",
       })
       // Add the newly uploaded font to userFonts if not already present
-      if (!userFonts.fonts.find(f => f.name === name)) {
+      if (!userFonts.fonts.find(f => f.name === font_name)) {
         setUserFonts(prev => ({
-          fonts: [...prev.fonts, { name, url }]
+          fonts: [...prev.fonts, { name: font_name, url: font_url }]
         }))
       }
-      toast.success(`Font "${name}" uploaded successfully`)
+      toast.success(`Font "${font_name}" uploaded successfully`)
     } catch (error: any) {
       console.error('Failed to upload font', error)
       toast.error(error?.message || 'Failed to upload font')

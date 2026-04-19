@@ -61,11 +61,10 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
       if (!llmConfig.LLM) {
         llmConfig.LLM = 'openai';
       }
-      if (!llmConfig.IMAGE_PROVIDER) {
-        llmConfig.IMAGE_PROVIDER = 'gpt-image-1.5';
-      }
+
       dispatch(setLLMConfig(llmConfig));
       const isValid = hasValidLLMConfig(llmConfig);
+      console.log('isValid', isValid);
       if (route.startsWith('/pdf-maker')) {
         setIsLoading(false);
         return;

@@ -35,9 +35,11 @@ export async function POST(request: Request) {
 
   const userConfig = await request.json();
 
+  console.log('userConfig', userConfig);
   let existingConfig: LLMConfig = {};
   if (fs.existsSync(userConfigPath)) {
     const configData = fs.readFileSync(userConfigPath, "utf-8");
+
     existingConfig = JSON.parse(configData);
   }
   const definedIncomingEntries = Object.entries(userConfig).filter(
@@ -57,6 +59,12 @@ export async function POST(request: Request) {
     CODEX_USERNAME: existingConfig.CODEX_USERNAME,
     CODEX_EMAIL: existingConfig.CODEX_EMAIL,
     CODEX_IS_PRO: existingConfig.CODEX_IS_PRO,
+    DISABLE_IMAGE_GENERATION: Object.prototype.hasOwnProperty.call(
+      userConfig,
+      "DISABLE_IMAGE_GENERATION"
+    )
+      ? userConfig.DISABLE_IMAGE_GENERATION
+      : existingConfig.DISABLE_IMAGE_GENERATION,
     DISABLE_ANONYMOUS_TRACKING: Object.prototype.hasOwnProperty.call(
       userConfig,
       "DISABLE_ANONYMOUS_TRACKING"
