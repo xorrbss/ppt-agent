@@ -54,6 +54,8 @@ export const updateLLMConfig = (
     comfyui_workflow: "COMFYUI_WORKFLOW",
     dall_e_3_quality: "DALL_E_3_QUALITY",
     gpt_image_1_5_quality: "GPT_IMAGE_1_5_QUALITY",
+    open_webui_image_url: "OPEN_WEBUI_IMAGE_URL",
+    open_webui_image_api_key: "OPEN_WEBUI_IMAGE_API_KEY",
     codex_model: "CODEX_MODEL",
   };
 

@@ -98,6 +98,15 @@ export const IMAGE_PROVIDERS: Record<string, ImageProviderOption> = {
     apiKeyField: "COMFYUI_URL",
     apiKeyFieldLabel: "ComfyUI Server URL",
   },
+  open_webui: {
+    value: "open_webui",
+    label: "Open WebUI",
+    description: "Use your Open WebUI server for image generation",
+    icon: "/icons/open-webui.png",
+    requiresApiKey: false,
+    apiKeyField: "OPEN_WEBUI_IMAGE_URL",
+    apiKeyFieldLabel: "Open WebUI URL",
+  },
 };
 
 export const LLM_PROVIDERS: Record<string, LLMProviderOption> = {

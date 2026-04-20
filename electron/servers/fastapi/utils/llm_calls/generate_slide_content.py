@@ -24,7 +24,7 @@ You need to generate structured content json based on the schema.
 # General Rules
 - Make sure to follow language guidelines.
 - Speaker note should be normal text, not markdown.
-- Never ever go over the max character limit.
+- Never ever go over the max character limit but don't clip the sentence to satisfy character limit instead rephrase it.
 - Do not add emoji in the content.
 - Don't provide $schema field in content json.
 {markdown_emphasis_rules}
@@ -167,7 +167,7 @@ async def get_slide_content_from_type_and_outline(
             "__speaker_note__": {
                 "type": "string",
                 "minLength": 100,
-                "maxLength": 250,
+                "maxLength": 500,
                 "description": "Speaker note for the slide",
             }
         },
@@ -187,6 +187,7 @@ async def get_slide_content_from_type_and_outline(
             ),
             response_format=response_schema,
             strict=False,
+            validate_schema=True,
         )
         return response
 

@@ -91,6 +91,7 @@ class LLMClient:
         if (
             self.llm_provider == LLMProvider.OLLAMA
             or self.llm_provider == LLMProvider.CUSTOM
+            or self.llm_provider == LLMProvider.CODEX
         ):
             return False
         return parse_bool_or_none(get_web_grounding_env()) or False

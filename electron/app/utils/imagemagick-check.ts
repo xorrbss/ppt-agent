@@ -173,7 +173,7 @@ export function getImageMagickBinaryPath(): string {
 
 export function getImageMagickDownloadUrl(): string {
   if (process.platform === "win32") {
-    return "https://imagemagick.org/archive/binaries/ImageMagick-7.1.2-18-Q16-HDRI-x64-dll.exe";
+    return "https://github.com/ImageMagick/ImageMagick/releases/download/7.1.2-18/ImageMagick-7.1.2-18-Q16-HDRI-x64-dll.exe";
   }
   if (process.platform === "darwin") {
     return "https://brew.sh/";

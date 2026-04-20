@@ -36,6 +36,10 @@ class UserConfig(BaseModel):
     COMFYUI_URL: Optional[str] = None
     COMFYUI_WORKFLOW: Optional[str] = None
 
+    # Open WebUI Image Provider
+    OPEN_WEBUI_IMAGE_URL: Optional[str] = None
+    OPEN_WEBUI_IMAGE_API_KEY: Optional[str] = None
+
     # Dalle 3 Quality
     DALL_E_3_QUALITY: Optional[str] = None
     # Gpt Image 1.5 Quality

@@ -43,6 +43,8 @@ services:
       - MEM0_EMBEDDING_DIMS=${MEM0_EMBEDDING_DIMS:-384}
       - LITEPARSE_DPI=${LITEPARSE_DPI:-120}
       - LITEPARSE_NUM_WORKERS=${LITEPARSE_NUM_WORKERS:-1}
+      - OPEN_WEBUI_IMAGE_URL=${OPEN_WEBUI_IMAGE_URL}
+      - OPEN_WEBUI_IMAGE_API_KEY=${OPEN_WEBUI_IMAGE_API_KEY}
 
   production-gpu:
     # image: ghcr.io/presenton/presenton:latest
@@ -96,6 +98,9 @@ services:
       - LITEPARSE_DPI=${LITEPARSE_DPI:-120}
       - LITEPARSE_NUM_WORKERS=${LITEPARSE_NUM_WORKERS:-1}
   
+      - OPEN_WEBUI_IMAGE_URL=${OPEN_WEBUI_IMAGE_URL}
+      - OPEN_WEBUI_IMAGE_API_KEY=${OPEN_WEBUI_IMAGE_API_KEY}
+
   development:
     build:
       context: .
@@ -143,6 +148,8 @@ services:
       - MEM0_EMBEDDING_DIMS=${MEM0_EMBEDDING_DIMS:-384}
       - LITEPARSE_DPI=${LITEPARSE_DPI:-120}
       - LITEPARSE_NUM_WORKERS=${LITEPARSE_NUM_WORKERS:-1}
+      - OPEN_WEBUI_IMAGE_URL=${OPEN_WEBUI_IMAGE_URL}
+      - OPEN_WEBUI_IMAGE_API_KEY=${OPEN_WEBUI_IMAGE_API_KEY}
 
   development-gpu:
     build:
@@ -201,3 +208,5 @@ services:
 volumes:
   presenton_root_node_modules:
   presenton_document_extraction_liteparse:
+      - OPEN_WEBUI_IMAGE_URL=${OPEN_WEBUI_IMAGE_URL}
+      - OPEN_WEBUI_IMAGE_API_KEY=${OPEN_WEBUI_IMAGE_API_KEY}

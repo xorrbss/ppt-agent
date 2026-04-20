@@ -32,6 +32,10 @@ export interface LLMConfig {
   COMFYUI_URL?: string;
   COMFYUI_WORKFLOW?: string;
 
+  // Open WebUI Image Provider
+  OPEN_WEBUI_IMAGE_URL?: string;
+  OPEN_WEBUI_IMAGE_API_KEY?: string;
+
   // Dalle 3 Quality
   DALL_E_3_QUALITY?: string;
   // GPT Image 1.5 Quality

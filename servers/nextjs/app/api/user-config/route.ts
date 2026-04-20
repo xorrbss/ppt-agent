@@ -52,6 +52,11 @@ export async function POST(request: Request) {
       userConfig.USE_CUSTOM_URL === undefined
         ? existingConfig.USE_CUSTOM_URL
         : userConfig.USE_CUSTOM_URL,
+    OPEN_WEBUI_IMAGE_URL:
+      userConfig.OPEN_WEBUI_IMAGE_URL || existingConfig.OPEN_WEBUI_IMAGE_URL,
+    OPEN_WEBUI_IMAGE_API_KEY:
+      userConfig.OPEN_WEBUI_IMAGE_API_KEY || existingConfig.OPEN_WEBUI_IMAGE_API_KEY,
+    CODEX_MODEL: userConfig.CODEX_MODEL || existingConfig.CODEX_MODEL,
     CODEX_ACCESS_TOKEN: existingConfig.CODEX_ACCESS_TOKEN,
     CODEX_REFRESH_TOKEN: existingConfig.CODEX_REFRESH_TOKEN,
     CODEX_TOKEN_EXPIRES: existingConfig.CODEX_TOKEN_EXPIRES,

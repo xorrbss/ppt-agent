@@ -58,6 +58,7 @@ async def get_slide_layout_from_prompt(
             ),
             response_format=SlideLayoutIndex.model_json_schema(),
             strict=True,
+            validate_schema=True,
         )
         index = SlideLayoutIndex(**response).index
         return layout.slides[index]

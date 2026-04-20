@@ -13,6 +13,8 @@ from utils.get_env import (
     get_dall_e_3_quality_env,
     get_gpt_image_1_5_quality_env,
     get_pexels_api_key_env,
+    get_open_webui_image_url_env,
+    get_open_webui_image_api_key_env,
 )
 from utils.get_env import get_pixabay_api_key_env
 from utils.get_env import get_comfyui_url_env
@@ -26,6 +28,7 @@ from utils.image_provider import (
     is_nanobanana_pro_selected,
     is_dalle3_selected,
     is_comfyui_selected,
+    is_open_webui_selected,
 )
 import uuid
 
@@ -54,6 +57,8 @@ class ImageGenerationService:
             return self.generate_image_openai_gpt_image_1_5
         elif is_comfyui_selected():
             return self.generate_image_comfyui
+        elif is_open_webui_selected():
+            return self.generate_image_open_webui
         return None
 
     def is_stock_provider_selected(self):
@@ -145,6 +150,88 @@ class ImageGenerationService:
             "gpt-image-1.5",
             get_gpt_image_1_5_quality_env() or "medium",
         )
+
+    async def generate_image_open_webui(
+        self, prompt: str, output_directory: str
+    ) -> str:
+        base_url = get_open_webui_image_url_env()
+        if not base_url:
+            raise ValueError("OPEN_WEBUI_IMAGE_URL environment variable is not set")
+
+        base_url = base_url.rstrip("/")
+        api_key = get_open_webui_image_api_key_env() or ""
+
+        from urllib.parse import urlparse
+
+        parsed = urlparse(base_url)
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        payload = {
+            "prompt": prompt,
+            "n": 1,
+            "size": "1024x1024",
+        }
+
+        async with aiohttp.ClientSession(trust_env=True) as session:
+            resp = await session.post(
+                f"{base_url}/images/generations",
+                json=payload,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=300),
+            )
+
+            if resp.status != 200:
+                error_text = await resp.text()
+                raise Exception(
+                    f"Open WebUI image generation returned {resp.status}: {error_text}"
+                )
+
+            body = await resp.json()
+
+            # Open WebUI returns a bare [...] array instead of {"data": [...]}.
+            if isinstance(body, list):
+                items = body
+            elif isinstance(body, dict) and "data" in body:
+                items = body["data"]
+            else:
+                raise Exception(f"Unexpected response format: {type(body)}")
+
+            if not items:
+                raise Exception("Open WebUI returned empty results")
+
+            item = items[0]
+            image_path = os.path.join(output_directory, f"{uuid.uuid4()}.png")
+
+            if item.get("b64_json"):
+                with open(image_path, "wb") as f:
+                    f.write(base64.b64decode(item["b64_json"]))
+            elif item.get("url"):
+                image_url = item["url"]
+                # Open WebUI returns relative URLs like /api/v1/files/.../content
+                if image_url.startswith("/"):
+                    image_url = origin + image_url
+                dl_headers = {}
+                if api_key:
+                    dl_headers["Authorization"] = f"Bearer {api_key}"
+                dl_resp = await session.get(
+                    image_url,
+                    headers=dl_headers,
+                    timeout=aiohttp.ClientTimeout(total=120),
+                )
+                if dl_resp.status != 200:
+                    raise Exception(
+                        f"Failed to download image: {dl_resp.status}"
+                    )
+                with open(image_path, "wb") as f:
+                    f.write(await dl_resp.read())
+            else:
+                raise Exception("Open WebUI returned no image data")
+
+        return image_path
 
     async def _generate_image_google(
         self, prompt: str, output_directory: str, model: str

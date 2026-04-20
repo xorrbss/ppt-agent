@@ -166,3 +166,10 @@ def get_sentry_traces_sample_rate_env():
 
 def get_sentry_send_default_pii_env():
     return os.getenv("SENTRY_SEND_DEFAULT_PII")
+# Open WebUI Image Provider
+def get_open_webui_image_url_env():
+    return os.getenv("OPEN_WEBUI_IMAGE_URL")
+
+
+def get_open_webui_image_api_key_env():
+    return os.getenv("OPEN_WEBUI_IMAGE_API_KEY")

@@ -108,7 +108,7 @@ async def get_edited_slide_content(
             "__speaker_note__": {
                 "type": "string",
                 "minLength": 100,
-                "maxLength": 250,
+                "maxLength": 500,
                 "description": "Speaker note for the slide",
             }
         },
@@ -124,6 +124,7 @@ async def get_edited_slide_content(
             ),
             response_format=response_schema,
             strict=False,
+            validate_schema=True,
         )
         return response
 
