@@ -32,11 +32,18 @@ system_prompt = """
 """
 
 
-def get_user_prompt(prompt: str, html: str):
+def get_user_prompt(prompt: str, html: str, memory_context: Optional[str] = None):
+    memory_block = (
+        f"\n        **Retrieved Presentation Memory Context:**\n        {memory_context}\n"
+        if memory_context
+        else ""
+    )
+
     return f"""
         Please edit the following slide HTML based on this prompt:
 
         **Edit Request:** {prompt}
+        {memory_block}
 
         **Current HTML:**
         ```html
@@ -47,7 +54,9 @@ def get_user_prompt(prompt: str, html: str):
     """
 
 
-async def get_edited_slide_html(prompt: str, html: str):
+async def get_edited_slide_html(
+    prompt: str, html: str, memory_context: Optional[str] = None
+):
     model = get_model()
 
     client = LLMClient()
@@ -56,7 +65,9 @@ async def get_edited_slide_html(prompt: str, html: str):
             model=model,
             messages=[
                 LLMSystemMessage(content=system_prompt),
-                LLMUserMessage(content=get_user_prompt(prompt, html)),
+                LLMUserMessage(
+                    content=get_user_prompt(prompt, html, memory_context)
+                ),
             ],
         )
         return extract_html_from_response(response) or html

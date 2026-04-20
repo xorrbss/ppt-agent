@@ -24,7 +24,17 @@ def get_system_prompt(
     tone: Optional[str] = None,
     verbosity: Optional[str] = None,
     instructions: Optional[str] = None,
+    memory_context: Optional[str] = None,
 ):
+    memory_block = (
+        "\n    # Retrieved Presentation Memory Context\n"
+        f"    {memory_context}\n"
+        "    - Use this context only if it is relevant to the user prompt.\n"
+        "    - Prefer this context over assumptions when resolving ambiguity.\n"
+        if memory_context
+        else ""
+    )
+
     return f"""
     Edit Slide data and speaker note based on provided prompt, follow mentioned steps and notes and provide structured output.
 
@@ -45,6 +55,7 @@ def get_system_prompt(
     - Make sure to follow language guidelines.
     - Speaker note should be normal text, not markdown.
     - Speaker note should be simple, clear, concise and to the point.
+    {memory_block}
 
     **Go through all notes and steps and make sure they are followed, including mentioned constraints**
     """
@@ -77,10 +88,11 @@ def get_messages(
     tone: Optional[str] = None,
     verbosity: Optional[str] = None,
     instructions: Optional[str] = None,
+    memory_context: Optional[str] = None,
 ):
     return [
         LLMSystemMessage(
-            content=get_system_prompt(tone, verbosity, instructions),
+            content=get_system_prompt(tone, verbosity, instructions, memory_context),
         ),
         LLMUserMessage(
             content=get_user_prompt(prompt, slide_data, language),
@@ -96,6 +108,7 @@ async def get_edited_slide_content(
     tone: Optional[str] = None,
     verbosity: Optional[str] = None,
     instructions: Optional[str] = None,
+    memory_context: Optional[str] = None,
 ):
     model = get_model()
 
@@ -120,7 +133,13 @@ async def get_edited_slide_content(
         response = await client.generate_structured(
             model=model,
             messages=get_messages(
-                prompt, slide.content, language, tone, verbosity, instructions
+                prompt,
+                slide.content,
+                language,
+                tone,
+                verbosity,
+                instructions,
+                memory_context,
             ),
             response_format=response_schema,
             strict=False,

@@ -12,12 +12,20 @@ def get_messages(
     slide_data: dict,
     layout: PresentationLayoutModel,
     current_slide_layout: int,
+    memory_context: str = "",
 ):
+    memory_block = (
+        f"\n                # Retrieved Presentation Memory Context\n                {memory_context}\n"
+        if memory_context
+        else ""
+    )
+
     return [
         LLMSystemMessage(
             content=f"""
                 Select a Slide Layout index based on provided user prompt and current slide data.
                 {layout.to_string()}
+                {memory_block}
 
                 # Notes
                 - Do not select different slide layout than current unless absolutely necessary as per user prompt. 
@@ -40,6 +48,7 @@ async def get_slide_layout_from_prompt(
     prompt: str,
     layout: PresentationLayoutModel,
     slide: SlideModel,
+    memory_context: str = "",
 ) -> SlideLayoutModel:
 
     client = LLMClient()
@@ -55,6 +64,7 @@ async def get_slide_layout_from_prompt(
                 slide.content,
                 layout,
                 slide_layout_index,
+                memory_context,
             ),
             response_format=SlideLayoutIndex.model_json_schema(),
             strict=True,
