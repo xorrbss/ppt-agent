@@ -18,11 +18,17 @@ from models.sse_response import (
 from services.temp_file_service import TEMP_FILE_SERVICE
 from services.database import get_async_session
 from services.documents_loader import DocumentsLoader
+from services.mem0_presentation_memory_service import (
+    MEM0_PRESENTATION_MEMORY_SERVICE,
+)
 from utils.outline_utils import (
     get_no_of_outlines_to_generate_for_n_slides,
     get_presentation_title_from_presentation_outline,
 )
-from utils.llm_calls.generate_presentation_outlines import generate_ppt_outline
+from utils.llm_calls.generate_presentation_outlines import (
+    generate_ppt_outline,
+    get_messages as get_outline_messages,
+)
 
 OUTLINES_ROUTER = APIRouter(prefix="/outlines", tags=["Outlines"])
 
@@ -64,6 +70,34 @@ async def stream_outlines(
             )
         else:
             n_slides_to_generate = None
+
+        outline_messages = get_outline_messages(
+            presentation.content,
+            n_slides_to_generate,
+            presentation.language,
+            additional_context,
+            presentation.tone,
+            presentation.verbosity,
+            presentation.instructions,
+            presentation.include_title_slide,
+            presentation.include_table_of_contents,
+        )
+        await MEM0_PRESENTATION_MEMORY_SERVICE.store_generation_context(
+            presentation_id=presentation.id,
+            system_prompt=(
+                outline_messages[0].content
+                if len(outline_messages) > 0
+                else None
+            ),
+            user_prompt=(
+                outline_messages[1].content
+                if len(outline_messages) > 1
+                else None
+            ),
+            extracted_document_text=additional_context,
+            source_content=presentation.content,
+            instructions=presentation.instructions,
+        )
 
         async for chunk in generate_ppt_outline(
             presentation.content,
@@ -131,6 +165,11 @@ async def stream_outlines(
 
         sql_session.add(presentation)
         await sql_session.commit()
+
+        await MEM0_PRESENTATION_MEMORY_SERVICE.store_generated_outlines(
+            presentation.id,
+            presentation.outlines,
+        )
 
         yield SSECompleteResponse(
             key="presentation", value=presentation.model_dump(mode="json")

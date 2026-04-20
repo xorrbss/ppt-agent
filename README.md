@@ -214,6 +214,15 @@ These settings apply to both Docker and the Electron app's backend. You may want
 - TOOL_CALLS=[Enable/Disable Tool Calls on Custom LLM]: If **true**, **LLM** will use Tool Call instead of Json Schema for Structured Output.
 - DISABLE_THINKING=[Enable/Disable Thinking on Custom LLM]: If **true**, Thinking will be disabled.
 - WEB_GROUNDING=[Enable/Disable Web Search for OpenAI, Google And Anthropic]: If **true**, LLM will be able to search web for better results.
+- MEM0_ENABLED=[true/false]: Enables mem0 OSS presentation memory. Default is **true**.
+- MEM0_DIR=[Path]: Directory for mem0 OSS local storage (Qdrant path + history DB). Default is **/app_data/mem0**.
+- MEM0_EMBEDDER_PROVIDER=[Provider]: Embedder provider for mem0 OSS. Default is **fastembed**.
+- MEM0_EMBEDDER_MODEL=[Model]: Mid-range local embedding model for memory search. Default is **BAAI/bge-small-en-v1.5**.
+- MEM0_EMBEDDING_DIMS=[Number]: Embedding dimensions used by mem0 embedder and qdrant collection. Default is **384**.
+- LITEPARSE_DPI=[Number]: LiteParse OCR render DPI (higher can increase memory use). Default is **120**.
+- LITEPARSE_NUM_WORKERS=[Number]: LiteParse OCR worker count. Default is **1** for stable Docker parsing.
+
+Mem0 in Docker uses OSS/self-hosted mode (not Mem0 Platform API). Memory is isolated per presentation ID. Prompt context, extracted document text, generated outline context, and subsequent edit interactions are stored and retrieved only for that same presentation (including when revisiting later).
 
 You can also set the following environment variables to customize the image generation provider and API keys:
 

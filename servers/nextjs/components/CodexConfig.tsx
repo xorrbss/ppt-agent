@@ -39,10 +39,9 @@ export const CHATGPT_MODELS: CodexModel[] = [
   { id: "gpt-5.4-mini", name: "GPT-5.4-Mini" },
   { id: "gpt-5.3-codex", name: "GPT-5.3-Codex" },
   { id: "gpt-5.2", name: "GPT-5.2" },
-  { id: "gpt-5.1-codex-mini", name: "GPT-5.1-Codex-Mini" },
 ];
 
-export const DEFAULT_CODEX_MODEL = "gpt-5.1-codex-mini";
+export const DEFAULT_CODEX_MODEL = "gpt-5.2";
 
 export default function CodexConfig({
   codexModel,

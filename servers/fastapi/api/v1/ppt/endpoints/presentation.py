@@ -32,9 +32,15 @@ from models.sql.template import TemplateModel
 from services.documents_loader import DocumentsLoader
 from services.webhook_service import WebhookService
 from services.image_generation_service import ImageGenerationService
+from services.mem0_presentation_memory_service import (
+    MEM0_PRESENTATION_MEMORY_SERVICE,
+)
 from utils.dict_utils import deep_update
 from utils.export_utils import export_presentation
-from utils.llm_calls.generate_presentation_outlines import generate_ppt_outline
+from utils.llm_calls.generate_presentation_outlines import (
+    generate_ppt_outline,
+    get_messages as get_outline_messages,
+)
 from models.sql.slide import SlideModel
 from models.sql.presentation_layout_code import PresentationLayoutCodeModel
 from models.sse_response import SSECompleteResponse, SSEErrorResponse, SSEResponse
@@ -319,6 +325,11 @@ async def prepare_presentation(
     presentation.set_layout(layout)
     presentation.set_structure(presentation_structure)
     await sql_session.commit()
+
+    await MEM0_PRESENTATION_MEMORY_SERVICE.store_generated_outlines(
+        presentation.id,
+        presentation.outlines,
+    )
 
     return presentation
 
@@ -606,14 +617,13 @@ async def generate_presentation_handler(
     try:
         using_slides_markdown = False
         language_to_use = (request.language or "").strip() or None
+        additional_context = ""
 
         if request.slides_markdown:
             using_slides_markdown = True
             request.n_slides = len(request.slides_markdown)
 
         if not using_slides_markdown:
-            additional_context = ""
-
             # Updating async status
             if async_status:
                 async_status.message = "Generating presentation outlines"
@@ -641,6 +651,34 @@ async def generate_presentation_handler(
                         title_slide=request.include_title_slide,
                     )
                 )
+
+            outline_messages = get_outline_messages(
+                request.content,
+                n_slides_to_generate,
+                language_to_use,
+                additional_context,
+                request.tone.value,
+                request.verbosity.value,
+                request.instructions,
+                request.include_title_slide,
+                request.include_table_of_contents,
+            )
+            await MEM0_PRESENTATION_MEMORY_SERVICE.store_generation_context(
+                presentation_id=presentation_id,
+                system_prompt=(
+                    outline_messages[0].content
+                    if len(outline_messages) > 0
+                    else None
+                ),
+                user_prompt=(
+                    outline_messages[1].content
+                    if len(outline_messages) > 1
+                    else None
+                ),
+                extracted_document_text=additional_context,
+                source_content=request.content,
+                instructions=request.instructions,
+            )
 
             presentation_outlines_text = ""
             async for chunk in generate_ppt_outline(
@@ -698,6 +736,20 @@ async def generate_presentation_handler(
                 ]
             )
             total_outlines = len(request.slides_markdown)
+
+            await MEM0_PRESENTATION_MEMORY_SERVICE.store_generation_context(
+                presentation_id=presentation_id,
+                system_prompt=None,
+                user_prompt=None,
+                extracted_document_text=None,
+                source_content=request.content,
+                instructions=request.instructions,
+            )
+
+        await MEM0_PRESENTATION_MEMORY_SERVICE.store_generated_outlines(
+            presentation_id,
+            presentation_outlines.model_dump(mode="json"),
+        )
 
         # Updating async status
         if async_status:

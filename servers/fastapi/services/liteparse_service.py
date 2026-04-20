@@ -11,6 +11,8 @@ class LiteParseError(Exception):
 
 LOGGER = logging.getLogger(__name__)
 _LOG_SNIPPET_LIMIT = 600
+_DEFAULT_DPI = 120
+_DEFAULT_NUM_WORKERS = 1
 
 
 def _snippet(value: str, limit: int = _LOG_SNIPPET_LIMIT) -> str:
@@ -36,10 +38,36 @@ def _subprocess_text_kwargs() -> Mapping[str, object]:
     return {"text": True, "encoding": "utf-8", "errors": "replace"}
 
 
+def _env_int(name: str, default: int, minimum: int, maximum: int) -> int:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return default
+
+    try:
+        parsed = int(raw)
+    except Exception:
+        LOGGER.warning(
+            "[LiteParse] Invalid %s=%r, using default=%s",
+            name,
+            raw,
+            default,
+        )
+        return default
+
+    return min(max(parsed, minimum), maximum)
+
+
 class LiteParseService:
     def __init__(self, timeout_seconds: int = 180):
         self.timeout_seconds = timeout_seconds
         self.node_binary = os.getenv("LITEPARSE_NODE_BINARY", "node")
+        self.dpi = _env_int("LITEPARSE_DPI", _DEFAULT_DPI, minimum=72, maximum=600)
+        self.num_workers = _env_int(
+            "LITEPARSE_NUM_WORKERS",
+            _DEFAULT_NUM_WORKERS,
+            minimum=1,
+            maximum=64,
+        )
         self.runner_path = os.getenv("LITEPARSE_RUNNER_PATH", self._resolve_runner_path())
         self.runner_dir = os.path.dirname(self.runner_path)
         self._npm_project_root = self._resolve_npm_project_root()
@@ -231,6 +259,10 @@ class LiteParseService:
             "true" if ocr_enabled else "false",
             "--ocr-language",
             ocr_language,
+            "--dpi",
+            str(self.dpi),
+            "--num-workers",
+            str(self.num_workers),
         ]
         ocr_server = (os.getenv("LITEPARSE_OCR_SERVER_URL") or "").strip()
         if ocr_server:
@@ -240,10 +272,12 @@ class LiteParseService:
             command.extend(["--tessdata-path", tessdata])
 
         LOGGER.info(
-            "[LiteParse] Parsing file=%s ocr_enabled=%s ocr_language=%s",
+            "[LiteParse] Parsing file=%s ocr_enabled=%s ocr_language=%s dpi=%s num_workers=%s",
             file_path,
             ocr_enabled,
             ocr_language,
+            self.dpi,
+            self.num_workers,
         )
 
         process = subprocess.run(
