@@ -136,6 +136,18 @@ def get_codex_account_id_env():
     return os.getenv("CODEX_ACCOUNT_ID")
 
 
+def get_codex_username_env():
+    return os.getenv("CODEX_USERNAME")
+
+
+def get_codex_email_env():
+    return os.getenv("CODEX_EMAIL")
+
+
+def get_codex_is_pro_env():
+    return os.getenv("CODEX_IS_PRO")
+
+
 def get_codex_model_env():
     return os.getenv("CODEX_MODEL")
 
@@ -144,6 +156,16 @@ def get_migrate_database_on_startup_env():
     return os.getenv("MIGRATE_DATABASE_ON_STARTUP")
 
 
+def get_sentry_dsn_env():
+    return os.getenv("SENTRY_DSN")
+
+
+def get_sentry_traces_sample_rate_env():
+    return os.getenv("SENTRY_TRACES_SAMPLE_RATE")
+
+
+def get_sentry_send_default_pii_env():
+    return os.getenv("SENTRY_SEND_DEFAULT_PII")
 # Open WebUI Image Provider
 def get_open_webui_image_url_env():
     return os.getenv("OPEN_WEBUI_IMAGE_URL")

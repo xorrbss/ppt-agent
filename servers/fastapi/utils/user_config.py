@@ -32,6 +32,9 @@ from utils.get_env import (
     get_codex_refresh_token_env,
     get_codex_token_expires_env,
     get_codex_account_id_env,
+    get_codex_username_env,
+    get_codex_email_env,
+    get_codex_is_pro_env,
     get_codex_model_env,
     get_open_webui_image_url_env,
     get_open_webui_image_api_key_env,
@@ -66,6 +69,9 @@ from utils.set_env import (
     set_codex_refresh_token_env,
     set_codex_token_expires_env,
     set_codex_account_id_env,
+    set_codex_username_env,
+    set_codex_email_env,
+    set_codex_is_pro_env,
     set_codex_model_env,
     set_open_webui_image_url_env,
     set_open_webui_image_api_key_env,
@@ -137,6 +143,13 @@ def get_user_config():
         CODEX_REFRESH_TOKEN=existing_config.CODEX_REFRESH_TOKEN or get_codex_refresh_token_env(),
         CODEX_TOKEN_EXPIRES=existing_config.CODEX_TOKEN_EXPIRES or get_codex_token_expires_env(),
         CODEX_ACCOUNT_ID=existing_config.CODEX_ACCOUNT_ID or get_codex_account_id_env(),
+        CODEX_USERNAME=existing_config.CODEX_USERNAME or get_codex_username_env(),
+        CODEX_EMAIL=existing_config.CODEX_EMAIL or get_codex_email_env(),
+        CODEX_IS_PRO=(
+            existing_config.CODEX_IS_PRO
+            if existing_config.CODEX_IS_PRO is not None
+            else parse_bool_or_none(get_codex_is_pro_env())
+        ),
         OPEN_WEBUI_IMAGE_URL=existing_config.OPEN_WEBUI_IMAGE_URL or get_open_webui_image_url_env(),
         OPEN_WEBUI_IMAGE_API_KEY=existing_config.OPEN_WEBUI_IMAGE_API_KEY or get_open_webui_image_api_key_env(),
     )
@@ -202,6 +215,12 @@ def update_env_with_user_config():
         set_codex_token_expires_env(user_config.CODEX_TOKEN_EXPIRES)
     if user_config.CODEX_ACCOUNT_ID:
         set_codex_account_id_env(user_config.CODEX_ACCOUNT_ID)
+    if user_config.CODEX_USERNAME:
+        set_codex_username_env(user_config.CODEX_USERNAME)
+    if user_config.CODEX_EMAIL:
+        set_codex_email_env(user_config.CODEX_EMAIL)
+    if user_config.CODEX_IS_PRO is not None:
+        set_codex_is_pro_env(str(user_config.CODEX_IS_PRO))
     if user_config.OPEN_WEBUI_IMAGE_URL:
         set_open_webui_image_url_env(user_config.OPEN_WEBUI_IMAGE_URL)
     if user_config.OPEN_WEBUI_IMAGE_API_KEY:
@@ -230,6 +249,9 @@ def save_codex_tokens_to_user_config() -> None:
     existing["CODEX_REFRESH_TOKEN"] = get_codex_refresh_token_env()
     existing["CODEX_TOKEN_EXPIRES"] = get_codex_token_expires_env()
     existing["CODEX_ACCOUNT_ID"] = get_codex_account_id_env()
+    existing["CODEX_USERNAME"] = get_codex_username_env()
+    existing["CODEX_EMAIL"] = get_codex_email_env()
+    existing["CODEX_IS_PRO"] = parse_bool_or_none(get_codex_is_pro_env())
 
     try:
         with open(user_config_path, "w") as f:

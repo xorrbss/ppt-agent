@@ -19,7 +19,13 @@ import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import SettingSideBar from "./SettingSideBar";
 import TextProvider from "./TextProvider";
 import ImageProvider from "./ImageProvider";
+import PrivacySettings from "./PrivacySettings";
 import { IMAGE_PROVIDERS, LLM_PROVIDERS } from "@/utils/providerConstants";
+import { ImagesApi } from "@/app/(presentation-generator)/services/api/images";
+import { getApiUrl } from "@/utils/api";
+import { toast } from "sonner";
+
+const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
 
 // Button state interface
 interface ButtonState {
@@ -35,7 +41,7 @@ const SettingsPage = () => {
   const router = useRouter();
   const pathname = usePathname();
   const [mode, setMode] = useState<'nanobanana' | 'presenton'>('presenton')
-  const [selectedProvider, setSelectedProvider] = useState<'text-provider' | 'image-provider'>('text-provider')
+  const [selectedProvider, setSelectedProvider] = useState<'text-provider' | 'image-provider' | 'privacy'>('text-provider')
   const userConfigState = useSelector((state: RootState) => state.userConfig);
   const [llmConfig, setLlmConfig] = useState<LLMConfig>(
     userConfigState.llm_config
@@ -71,15 +77,78 @@ const SettingsPage = () => {
     return 0;
   }, [downloadingModel?.downloaded, downloadingModel?.size]);
 
+  const ensureSelectedStockProviderReady = async (): Promise<boolean> => {
+    if (llmConfig.DISABLE_IMAGE_GENERATION) {
+      return true;
+    }
+
+    const provider = (llmConfig.IMAGE_PROVIDER || "").toLowerCase();
+    if (!STOCK_IMAGE_PROVIDERS.has(provider)) {
+      return true;
+    }
+
+    const providerApiKey =
+      provider === "pexels" ? llmConfig.PEXELS_API_KEY : llmConfig.PIXABAY_API_KEY;
+
+    try {
+      await ImagesApi.searchStockImages("business", 1, {
+        provider,
+        apiKey: providerApiKey,
+        strictApiKey: true,
+      });
+      return true;
+    } catch (error: any) {
+      notify.error(
+        "Cannot save settings",
+        error?.message ||
+        `Unable to reach ${provider} with the provided API key. Please verify your settings and try again.`
+      );
+      return false;
+    }
+  };
+
+
+  const checkCurrentAuthStatus = async () => {
+    try {
+      const res = await fetch(getApiUrl("/api/v1/ppt/codex/auth/status"));
+      if (!res.ok) {
+        return false;
+      }
+      const data = await res.json();
+      if (data.status === "authenticated") {
+        return true;
+      } else {
+        return false;
+      }
+    } catch {
+      return false;
+    }
+  };
   const handleSaveConfig = async () => {
-    trackEvent(MixpanelEvent.Settings_SaveConfiguration_Button_Clicked, { pathname });
+
+    if (llmConfig.LLM === 'codex') {
+      const isAuthenticated = await checkCurrentAuthStatus();
+      if (!isAuthenticated) {
+        toast.error("Please sign in to ChatGPT to continue");
+        return;
+      }
+    }
+    trackEvent(MixpanelEvent.Settings_SaveConfiguration_Button_Clicked, {
+      pathname,
+    });
     const validationError = getLLMConfigValidationError(llmConfig);
     if (validationError) {
       notify.error("Cannot save settings", validationError);
       return;
     }
+
+    const providerReady = await ensureSelectedStockProviderReady();
+    if (!providerReady) {
+      return;
+    }
+
     try {
-      setButtonState(prev => ({
+      setButtonState((prev) => ({
         ...prev,
         isLoading: true,
         isDisabled: true,
@@ -112,21 +181,19 @@ const SettingsPage = () => {
         "Settings saved",
         "Your configuration was saved successfully."
       );
-      setButtonState(prev => ({
+      setButtonState((prev) => ({
         ...prev,
         isLoading: false,
         isDisabled: false,
         text: "Save Configuration",
       }));
-      trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/upload" });
-      router.push("/upload");
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
           : "Something went wrong while saving.";
       notify.error("Could not save settings", message);
-      setButtonState(prev => ({
+      setButtonState((prev) => ({
         ...prev,
         isLoading: false,
         isDisabled: false,
@@ -211,7 +278,6 @@ const SettingsPage = () => {
     return null;
   }
 
-
   const textProviderKey = llmConfig.LLM || "openai";
   const textProviderLabel =
     LLM_PROVIDERS[textProviderKey]?.label || textProviderKey;
@@ -226,7 +292,9 @@ const SettingsPage = () => {
             ? llmConfig.OLLAMA_MODEL
             : textProviderKey === "custom"
               ? llmConfig.CUSTOM_MODEL
-              : "";
+              : textProviderKey === "codex"
+                ? llmConfig.CODEX_MODEL
+                : "";
   const textSummary = selectedTextModel
     ? `${textProviderLabel} (${selectedTextModel})`
     : textProviderLabel;
@@ -234,22 +302,90 @@ const SettingsPage = () => {
   const imageSummary = llmConfig.DISABLE_IMAGE_GENERATION
     ? "Image generation disabled"
     : llmConfig.IMAGE_PROVIDER
-      ? IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]?.label || llmConfig.IMAGE_PROVIDER
+      ? IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]?.label ||
+      llmConfig.IMAGE_PROVIDER
       : "No image provider";
+
+
+  useEffect(() => {
+
+    if (llmConfig.LLM === "codex" && !llmConfig.CODEX_MODEL || llmConfig.LLM === "openai" && !llmConfig.OPENAI_MODEL || llmConfig.LLM === "google" && !llmConfig.GOOGLE_MODEL || llmConfig.LLM === "anthropic" && !llmConfig.ANTHROPIC_MODEL || llmConfig.LLM === "ollama" && !llmConfig.OLLAMA_MODEL || llmConfig.LLM === "custom" && !llmConfig.CUSTOM_MODEL) {
+      notify.error("Cannot save settings", "Please select a model for the selected provider");
+
+      const currentUrl = window.location.href;
+
+      const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+        console.log("beforeunload");
+        e.preventDefault();
+        e.returnValue = "";
+      };
+
+      const handleClick = (e: MouseEvent) => {
+
+
+        const target = e.target as HTMLElement | null;
+        const link = target?.closest("a");
+
+        if (!link) return;
+
+        const href = link.getAttribute("href");
+        const targetAttr = link.getAttribute("target");
+
+        if (
+          href &&
+          href !== "#" &&
+          !href.startsWith("javascript:") &&
+          targetAttr !== "_blank"
+        ) {
+
+          // notify.error("Cannot save settings", "Please select a model for the selected provider");
+          e.preventDefault();
+          window.history.pushState(null, "", pathname);
+        }
+      };
+
+      const handlePopState = () => {
+        console.log("popstate");
+        window.history.pushState(null, "", pathname);
+      };
+
+      window.addEventListener("beforeunload", handleBeforeUnload);
+      window.addEventListener("popstate", handlePopState);
+      document.addEventListener("click", handleClick, true);
+
+      // keep current page in history
+      window.history.pushState(null, "", currentUrl);
+
+      return () => {
+        window.removeEventListener("beforeunload", handleBeforeUnload);
+        window.removeEventListener("popstate", handlePopState);
+        document.removeEventListener("click", handleClick, true);
+      };
+    }
+
+  }, [llmConfig, pathname]);
+
+
 
   return (
     <div className="h-screen font-syne flex flex-col overflow-hidden relative">
       <div
-        className='fixed z-0 bottom-[-14.5rem] left-0 w-full h-full'
+        className="fixed z-0 bottom-[-14.5rem] left-0 w-full h-full"
         style={{
           height: "341px",
-          borderRadius: '1440px',
-          background: 'radial-gradient(5.92% 104.69% at 50% 100%, rgba(122, 90, 248, 0.00) 0%, rgba(255, 255, 255, 0.00) 100%), radial-gradient(50% 50% at 50% 50%, rgba(122, 90, 248, 0.80) 0%, rgba(122, 90, 248, 0.00) 100%)',
+          borderRadius: "1440px",
+          background:
+            "radial-gradient(5.92% 104.69% at 50% 100%, rgba(122, 90, 248, 0.00) 0%, rgba(255, 255, 255, 0.00) 100%), radial-gradient(50% 50% at 50% 50%, rgba(122, 90, 248, 0.80) 0%, rgba(122, 90, 248, 0.00) 100%)",
         }}
       />
 
       <main className="w-full mx-auto gap-6   overflow-hidden flex ">
-        <SettingSideBar mode={mode} setMode={setMode} selectedProvider={selectedProvider} setSelectedProvider={setSelectedProvider} />
+        <SettingSideBar
+          mode={mode}
+          setMode={setMode}
+          selectedProvider={selectedProvider}
+          setSelectedProvider={setSelectedProvider}
+        />
         <div className="w-full">
           <div className="sticky top-0 right-0 z-50 py-[28px]   backdrop-blur mb-4 ">
             <div className="flex  gap-3 items-center ">
@@ -259,7 +395,6 @@ const SettingsPage = () => {
               <p className="text-[10px] px-2.5 py-0.5 rounded-[50px] text-[#7A5AF8] border border-[#EDEEEF]  font-medium ">
                 {textSummary} · {imageSummary}
               </p>
-
             </div>
           </div>
 
@@ -278,6 +413,7 @@ const SettingsPage = () => {
             llmConfig={llmConfig}
           />}
           {mode === 'presenton' && selectedProvider === 'image-provider' && <ImageProvider llmConfig={llmConfig} setLlmConfig={setLlmConfig} />}
+          {selectedProvider === 'privacy' && <PrivacySettings />}
 
         </div>
       </main>
@@ -288,7 +424,8 @@ const SettingsPage = () => {
           onClick={handleSaveConfig}
           disabled={buttonState.isDisabled}
           style={{
-            background: "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
+            background:
+              "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
             color: "#101323",
           }}
           className={`w-full font-syne font-semibold flex items-center justify-center gap-2 py-3 px-5 rounded-[58px] transition-all duration-500 ${buttonState.isDisabled

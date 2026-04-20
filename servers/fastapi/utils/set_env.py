@@ -122,6 +122,18 @@ def set_codex_account_id_env(value: str):
     os.environ["CODEX_ACCOUNT_ID"] = value
 
 
+def set_codex_username_env(value: str):
+    os.environ["CODEX_USERNAME"] = value
+
+
+def set_codex_email_env(value: str):
+    os.environ["CODEX_EMAIL"] = value
+
+
+def set_codex_is_pro_env(value: str):
+    os.environ["CODEX_IS_PRO"] = value
+
+
 def set_codex_model_env(value: str):
     os.environ["CODEX_MODEL"] = value
 

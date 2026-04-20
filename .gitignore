@@ -22,3 +22,8 @@ container.db
 .agents
 skills-lock.json
 .codex/
+
+# presentation-export runtime (downloaded via scripts/sync-presentation-export.cjs or Docker build)
+presentation-export/index.js
+presentation-export/py/
+.cache/presentation-export/

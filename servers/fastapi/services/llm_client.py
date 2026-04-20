@@ -1824,7 +1824,7 @@ class LLMClient:
         """
         client: AsyncOpenAI = self._client
         response_schema = response_format
-        # Apply strict schema once at root (includes array "items" fix in ensure_strict_json_schema).
+        # Apply strict schema once at root (includes array "items" fix at lines 135–155).
         if strict and depth == 0:
             response_schema = ensure_strict_json_schema(
                 response_schema,

@@ -53,7 +53,13 @@ export interface LLMConfig {
   CODEX_REFRESH_TOKEN?: string;
   CODEX_TOKEN_EXPIRES?: string;
   CODEX_ACCOUNT_ID?: string;
+  CODEX_USERNAME?: string;
+  CODEX_EMAIL?: string;
+  CODEX_IS_PRO?: boolean;
 
   // Only used in UI settings
   USE_CUSTOM_URL?: boolean;
+
+  /** When `"true"`, anonymous analytics (Mixpanel) are off */
+  DISABLE_ANONYMOUS_TRACKING?: string;
 }
