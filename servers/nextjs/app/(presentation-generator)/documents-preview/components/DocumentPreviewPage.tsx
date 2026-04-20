@@ -13,7 +13,7 @@
 
 "use client";
 
-import { useEffect, useState, useRef, useMemo } from "react";
+import { Fragment, useEffect, useState, useRef, useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OverlayLoader } from "@/components/ui/overlay-loader";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
@@ -23,7 +23,6 @@ import { useRouter, usePathname } from "next/navigation";
 import { RootState } from "@/store/store";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import MarkdownRenderer from "./MarkdownRenderer";
 import { getIconFromFile } from "../../utils/others";
 import { ChevronRight, PanelRightOpen, X } from "lucide-react";
 import ToolTip from "@/components/ToolTip";
@@ -202,6 +201,23 @@ const DocumentsPreviewPage: React.FC = () => {
 
     if (!isDocument) return null;
 
+    const renderParsedContent = (content: string) => {
+      const normalizedContent = content.replace(/\r\n/g, "\n");
+      return normalizedContent.split("\n\n").map((paragraph, paragraphIndex) => {
+        const lines = paragraph.split("\n");
+        return (
+          <p key={paragraphIndex} className="mb-4">
+            {lines.map((line, lineIndex) => (
+              <Fragment key={`${paragraphIndex}-${lineIndex}`}>
+                {line}
+                {lineIndex < lines.length - 1 && <br />}
+              </Fragment>
+            ))}
+          </p>
+        );
+      });
+    };
+
     return (
       <div className="h-full mr-4">
         <div className="overflow-y-auto custom_scrollbar h-full">
@@ -210,9 +226,7 @@ const DocumentsPreviewPage: React.FC = () => {
             {downloadingDocuments.includes(selectedDocument) ? (
               <Skeleton className="w-full h-full" />
             ) : (
-              <MarkdownRenderer
-                content={textContents[selectedDocument] || ""}
-              />
+              <div>{renderParsedContent(textContents[selectedDocument] || "")}</div>
             )}
           </div>
         </div>
