@@ -13,7 +13,7 @@
 
 "use client";
 
-import { Fragment, useEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OverlayLoader } from "@/components/ui/overlay-loader";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
@@ -201,23 +201,6 @@ const DocumentsPreviewPage: React.FC = () => {
 
     if (!isDocument) return null;
 
-    const renderParsedContent = (content: string) => {
-      const normalizedContent = content.replace(/\r\n/g, "\n");
-      return normalizedContent.split("\n\n").map((paragraph, paragraphIndex) => {
-        const lines = paragraph.split("\n");
-        return (
-          <p key={paragraphIndex} className="mb-4">
-            {lines.map((line, lineIndex) => (
-              <Fragment key={`${paragraphIndex}-${lineIndex}`}>
-                {line}
-                {lineIndex < lines.length - 1 && <br />}
-              </Fragment>
-            ))}
-          </p>
-        );
-      });
-    };
-
     return (
       <div className="h-full mr-4">
         <div className="overflow-y-auto custom_scrollbar h-full">
@@ -226,7 +209,9 @@ const DocumentsPreviewPage: React.FC = () => {
             {downloadingDocuments.includes(selectedDocument) ? (
               <Skeleton className="w-full h-full" />
             ) : (
-              <div>{renderParsedContent(textContents[selectedDocument] || "")}</div>
+              <div className="whitespace-pre-wrap break-words text-sm leading-7 text-[#2E2E2E]">
+                {textContents[selectedDocument] || ""}
+              </div>
             )}
           </div>
         </div>
