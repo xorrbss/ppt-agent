@@ -23,6 +23,7 @@ services:
       - ANTHROPIC_MODEL=${ANTHROPIC_MODEL}
       - OLLAMA_URL=${OLLAMA_URL}
       - OLLAMA_MODEL=${OLLAMA_MODEL}
+      - START_OLLAMA=${START_OLLAMA:-false}
       - CUSTOM_LLM_URL=${CUSTOM_LLM_URL}
       - CUSTOM_LLM_API_KEY=${CUSTOM_LLM_API_KEY}
       - CUSTOM_MODEL=${CUSTOM_MODEL}
@@ -77,6 +78,7 @@ services:
       - ANTHROPIC_MODEL=${ANTHROPIC_MODEL}
       - OLLAMA_URL=${OLLAMA_URL}
       - OLLAMA_MODEL=${OLLAMA_MODEL}
+      - START_OLLAMA=${START_OLLAMA:-false}
       - CUSTOM_LLM_URL=${CUSTOM_LLM_URL}
       - CUSTOM_LLM_API_KEY=${CUSTOM_LLM_API_KEY}
       - CUSTOM_MODEL=${CUSTOM_MODEL}
@@ -115,8 +117,8 @@ services:
       - presenton_document_extraction_liteparse:/app/document-extraction-liteparse
       - ./app_data:/app_data
     environment:
-      # Dockerfile.dev does not install ollama; use a host daemon via OLLAMA_URL or omit.
-      - START_EMBEDDED_OLLAMA=false
+      # Ollama is not baked into the image; set START_OLLAMA=true for runtime install, or use OLLAMA_URL.
+      - START_OLLAMA=${START_OLLAMA:-false}
       - MIGRATE_DATABASE_ON_STARTUP=true
       - CAN_CHANGE_KEYS=${CAN_CHANGE_KEYS}
       - LLM=${LLM}
@@ -172,7 +174,7 @@ services:
       - presenton_document_extraction_liteparse:/app/document-extraction-liteparse
       - ./app_data:/app_data
     environment:
-      - START_EMBEDDED_OLLAMA=false
+      - START_OLLAMA=${START_OLLAMA:-false}
       - MIGRATE_DATABASE_ON_STARTUP=true
       - CAN_CHANGE_KEYS=${CAN_CHANGE_KEYS}
       - LLM=${LLM}

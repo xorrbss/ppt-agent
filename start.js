@@ -10,6 +10,7 @@ const __dirname = dirname(__filename);
 
 const fastapiDir = join(__dirname, "servers/fastapi");
 const nextjsDir = join(__dirname, "servers/nextjs");
+const nextjsStandaloneServer = join(nextjsDir, "server.js");
 const exportSyncScript = join(__dirname, "scripts/sync-presentation-export.cjs");
 
 const args = process.argv.slice(2);
@@ -56,25 +57,57 @@ const setupNodeModules = () => {
   });
 };
 
-const runNodeScript = (scriptPath, scriptArgs) => {
+const runCommand = (command, commandArgs, options = {}) => {
   return new Promise((resolve, reject) => {
-    const scriptProcess = spawn(process.execPath, [scriptPath, ...scriptArgs], {
-      cwd: __dirname,
-      stdio: "inherit",
-      env: process.env,
+    const child = spawn(command, commandArgs, {
+      cwd: options.cwd || __dirname,
+      stdio: options.stdio || "inherit",
+      env: options.env || process.env,
     });
 
-    scriptProcess.on("error", (err) => {
+    child.on("error", (err) => {
       reject(err);
     });
 
-    scriptProcess.on("exit", (code) => {
+    child.on("exit", (code) => {
       if (code === 0) {
         resolve();
       } else {
-        reject(new Error(`Script failed with exit code: ${code}`));
+        reject(new Error(`${command} exited with code: ${code}`));
       }
     });
+  });
+};
+
+const runNodeScript = (scriptPath, scriptArgs) => {
+  return runCommand(process.execPath, [scriptPath, ...scriptArgs], {
+    cwd: __dirname,
+  });
+};
+
+const isTruthyEnv = (value) => {
+  if (value == null) {
+    return false;
+  }
+
+  return !["", "0", "false", "no", "off"].includes(
+    String(value).trim().toLowerCase()
+  );
+};
+
+const isOllamaInstalled = () =>
+  existsSync("/usr/bin/ollama") || existsSync("/usr/local/bin/ollama");
+
+const shouldStartOllama = () => isTruthyEnv(process.env.START_OLLAMA);
+
+const ensureOllamaRuntime = async () => {
+  if (!shouldStartOllama() || isOllamaInstalled()) {
+    return;
+  }
+
+  console.log("START_OLLAMA=true; installing Ollama runtime...");
+  await runCommand("sh", ["-c", "curl -fsSL https://ollama.com/install.sh | sh"], {
+    cwd: "/",
   });
 };
 
@@ -195,21 +228,32 @@ const startServers = async () => {
     console.error("App MCP process failed to start:", err);
   });
 
+  const useStandaloneNextjs = !isDev && existsSync(nextjsStandaloneServer);
+
   const nextjsProcess = spawn(
-    "npm",
-    [
-      "run",
-      isDev ? "dev" : "start",
-      "--",
-      "-H",
-      "127.0.0.1",
-      "-p",
-      nextjsPort.toString(),
-    ],
+    useStandaloneNextjs ? process.execPath : "npm",
+    useStandaloneNextjs
+      ? [nextjsStandaloneServer]
+      : [
+          "run",
+          isDev ? "dev" : "start",
+          "--",
+          "-H",
+          "127.0.0.1",
+          "-p",
+          nextjsPort.toString(),
+        ],
     {
       cwd: nextjsDir,
       stdio: "inherit",
-      env: process.env,
+      env:
+        useStandaloneNextjs
+          ? {
+              ...process.env,
+              HOSTNAME: "127.0.0.1",
+              PORT: nextjsPort.toString(),
+            }
+          : process.env,
     }
   );
 
@@ -217,16 +261,15 @@ const startServers = async () => {
     console.error("Next.js process failed to start:", err);
   });
 
-  const startEmbeddedOllama =
-    process.env.START_EMBEDDED_OLLAMA !== "false" &&
-    process.env.START_EMBEDDED_OLLAMA !== "0";
+  const shouldStartOllamaRuntime = shouldStartOllama();
+  const ollamaInstalled = isOllamaInstalled();
 
   const exitPromises = [
     new Promise((resolve) => fastApiProcess.on("exit", resolve)),
     new Promise((resolve) => nextjsProcess.on("exit", resolve)),
   ];
 
-  if (startEmbeddedOllama) {
+  if (shouldStartOllamaRuntime && ollamaInstalled) {
     const ollamaProcess = spawn("ollama", ["serve"], {
       cwd: "/",
       stdio: "inherit",
@@ -236,9 +279,13 @@ const startServers = async () => {
       console.error("Ollama process failed to start:", err);
     });
     exitPromises.push(new Promise((resolve) => ollamaProcess.on("exit", resolve)));
+  } else if (shouldStartOllamaRuntime) {
+    console.log(
+      "Ollama requested, but the binary is not installed. Set START_OLLAMA=true to install it at startup, or set OLLAMA_URL to a remote daemon."
+    );
   } else {
     console.log(
-      "Embedded Ollama disabled (START_EMBEDDED_OLLAMA=false); use OLLAMA_URL for a remote daemon if needed."
+      "Ollama disabled (START_OLLAMA=false); use OLLAMA_URL for a remote daemon if needed."
     );
   }
 
@@ -271,6 +318,7 @@ const startNginx = () => {
 
 const main = async () => {
   await ensurePresentationExportRuntime();
+  await ensureOllamaRuntime();
 
   if (isDev) {
     await setupNodeModules();
