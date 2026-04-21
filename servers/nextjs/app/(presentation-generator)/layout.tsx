@@ -1,13 +1,16 @@
-import React from 'react'
-import { ConfigurationInitializer } from '../ConfigurationInitializer'
+import React from "react";
+
+import ProtectedRouteGuard from "@/components/Auth/ProtectedRouteGuard";
+import { ConfigurationInitializer } from "../ConfigurationInitializer";
+
 const layout = ({ children }: { children: React.ReactNode }) => {
   return (
     <div>
-      <ConfigurationInitializer>
-        {children}
-      </ConfigurationInitializer>
+      <ProtectedRouteGuard>
+        <ConfigurationInitializer>{children}</ConfigurationInitializer>
+      </ProtectedRouteGuard>
     </div>
-  )
-}
+  );
+};
 
-export default layout
+export default layout;

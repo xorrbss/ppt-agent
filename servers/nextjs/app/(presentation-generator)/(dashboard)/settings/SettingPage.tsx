@@ -24,6 +24,7 @@ import { IMAGE_PROVIDERS, LLM_PROVIDERS } from "@/utils/providerConstants";
 import { ImagesApi } from "@/app/(presentation-generator)/services/api/images";
 import { getApiUrl } from "@/utils/api";
 import { toast } from "sonner";
+import LogoutButton from "@/components/Auth/LogoutButton";
 
 const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
 
@@ -41,7 +42,9 @@ const SettingsPage = () => {
   const router = useRouter();
   const pathname = usePathname();
   const [mode, setMode] = useState<'nanobanana' | 'presenton'>('presenton')
-  const [selectedProvider, setSelectedProvider] = useState<'text-provider' | 'image-provider' | 'privacy'>('text-provider')
+  const [selectedProvider, setSelectedProvider] = useState<
+    "text-provider" | "image-provider" | "privacy" | "session"
+  >("text-provider");
   const userConfigState = useSelector((state: RootState) => state.userConfig);
   const [llmConfig, setLlmConfig] = useState<LLMConfig>(
     userConfigState.llm_config
@@ -414,36 +417,52 @@ const SettingsPage = () => {
           />}
           {mode === 'presenton' && selectedProvider === 'image-provider' && <ImageProvider llmConfig={llmConfig} setLlmConfig={setLlmConfig} />}
           {selectedProvider === 'privacy' && <PrivacySettings />}
+          {selectedProvider === "session" && (
+            <div className="w-full max-w-lg space-y-5 rounded-[20px] border border-[#EDEEEF] bg-white p-7">
+              <div>
+                <h4 className="font-unbounded text-lg font-normal text-black">Sign out</h4>
+                <p className="mt-2 font-syne text-sm leading-relaxed text-[#494A4D]">
+                  End your session on this deployment. You will need to sign in again to use the app and access the API.
+                </p>
+              </div>
+              <LogoutButton
+                label="Sign out"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-[58px] border border-[#EDEEEF] bg-[#7C51F8] px-5 py-3 font-syne text-xs font-semibold text-white transition hover:bg-[#6d46e6] disabled:cursor-not-allowed disabled:opacity-60"
+              />
+            </div>
+          )}
 
         </div>
       </main>
 
-      {/* Fixed Bottom Button */}
-      <div className=" mx-auto fixed bottom-20 right-5 ">
-        <button
-          onClick={handleSaveConfig}
-          disabled={buttonState.isDisabled}
-          style={{
-            background:
-              "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
-            color: "#101323",
-          }}
-          className={`w-full font-syne font-semibold flex items-center justify-center gap-2 py-3 px-5 rounded-[58px] transition-all duration-500 ${buttonState.isDisabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:ring-4 focus:ring-blue-200"
-            } text-white`}
-        >
-          {buttonState.isLoading ? (
-            <div className="flex items-center justify-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              {buttonState.text}
-            </div>
-          ) : (
-            buttonState.text
-          )}
-          <ChevronRight className="w-4 h-4" />
-        </button>
-      </div>
+      {/* Fixed Bottom Button — hidden on Sign out; nothing to save there */}
+      {selectedProvider !== "session" ? (
+        <div className=" mx-auto fixed bottom-20 right-5 ">
+          <button
+            onClick={handleSaveConfig}
+            disabled={buttonState.isDisabled}
+            style={{
+              background:
+                "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
+              color: "#101323",
+            }}
+            className={`w-full font-syne font-semibold flex items-center justify-center gap-2 py-3 px-5 rounded-[58px] transition-all duration-500 ${buttonState.isDisabled
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:ring-4 focus:ring-blue-200"
+              } text-white`}
+          >
+            {buttonState.isLoading ? (
+              <div className="flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                {buttonState.text}
+              </div>
+            ) : (
+              buttonState.text
+            )}
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      ) : null}
 
       {/* Download Progress Modal */}
       {showDownloadModal && downloadingModel && (

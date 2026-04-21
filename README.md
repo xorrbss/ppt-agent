@@ -241,6 +241,53 @@ You can disable anonymous telemetry using the following environment variable:
 
 - DISABLE_ANONYMOUS_TRACKING=[true/false]: Set this to **true** to disable anonymous telemetry.
 
+### Web login (Docker / self-hosted)
+
+The web image can require a single admin username and password before the app and API are usable. Credentials are stored under your `app_data` volume (hashed in `userConfig.json`). Optional environment variables (also wired in `docker-compose.yml` for `production`, `production-gpu`, `development`, and `development-gpu`):
+
+- **AUTH_USERNAME** / **AUTH_PASSWORD** — Preseed the admin login on first boot (password at least 6 characters). If credentials already exist, these are ignored unless **AUTH_OVERRIDE_FROM_ENV** is set.
+- **AUTH_OVERRIDE_FROM_ENV**=[true/false] — If **true**, overwrite stored credentials from **AUTH_USERNAME** / **AUTH_PASSWORD** on every container start and rotate the session signing secret (all existing sessions end). Remove after a one-off rotation.
+- **RESET_AUTH**=[true/false] — If **true**, clear stored login data on startup (recovery). Use for one boot only, then unset so credentials are not wiped again.
+
+**Examples**
+
+Default (first visit opens the setup UI on `/`):
+
+```bash
+docker compose up -d production
+# open http://localhost:5000
+```
+
+Preseed credentials via `.env` then start:
+
+```bash
+# .env
+AUTH_USERNAME=admin
+AUTH_PASSWORD=your-secure-password
+
+docker compose up -d production
+```
+
+Rotate password from the environment (then remove `AUTH_OVERRIDE_FROM_ENV` from `.env` and redeploy):
+
+```bash
+AUTH_USERNAME=admin
+AUTH_PASSWORD=new-password
+AUTH_OVERRIDE_FROM_ENV=true
+docker compose up -d production
+```
+
+Locked out — reset and set up again:
+
+```bash
+RESET_AUTH=true docker compose up -d production
+# after one successful start, remove RESET_AUTH from .env and run compose again
+```
+
+**Manual reset:** stop the container, edit `./app_data/userConfig.json`, delete `AUTH_USERNAME`, `AUTH_PASSWORD_HASH`, and `AUTH_SECRET_KEY`, save, and start again.
+
+Sign out from the app: **Settings → Other → Sign out**.
+
 > Note: You can freely choose both the LLM (text generation) and the image provider. Supported image providers: **dall-e-3**, **gpt-image-1.5** (OpenAI), **gemini_flash**, **nanobanana_pro** (Google), **pexels**, **pixabay**, and **comfyui** (self-hosted).
 
 <br>

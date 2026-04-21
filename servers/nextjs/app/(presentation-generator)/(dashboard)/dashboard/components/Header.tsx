@@ -51,8 +51,8 @@ const Header = () => {
               />
             </Link>
           </div>
-          {showHeaderBack ? (
-            <div>
+          <div className="flex items-center">
+            {showHeaderBack ? (
               <Link
                 href={backHref}
                 className="text-[#333333] text-xs font-syne font-semibold flex items-center gap-2"
@@ -63,9 +63,8 @@ const Header = () => {
                 <ArrowLeft className="w-4 h-4 shrink-0 text-[#333333]" aria-hidden />
                 <span>{backLabel}</span>
               </Link>
-            </div>
-          ) : null}
-
+            ) : null}
+          </div>
         </div>
       </Wrapper>
     </div>

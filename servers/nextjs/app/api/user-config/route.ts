@@ -4,6 +4,25 @@ import { LLMConfig } from "@/types/llm_config";
 
 const userConfigPath = process.env.USER_CONFIG_PATH!;
 const canChangeKeys = process.env.CAN_CHANGE_KEYS !== "false";
+const AUTH_FIELDS = new Set([
+  "AUTH_USERNAME",
+  "AUTH_PASSWORD_HASH",
+  "AUTH_SECRET_KEY",
+]);
+
+function stripAuthFields(config: Record<string, unknown>) {
+  const sanitized = { ...config };
+  for (const key of AUTH_FIELDS) {
+    delete sanitized[key];
+  }
+  return sanitized;
+}
+
+function stripAuthFieldsFromIncoming(config: Record<string, unknown>) {
+  return Object.fromEntries(
+    Object.entries(config).filter(([key]) => !AUTH_FIELDS.has(key))
+  );
+}
 
 export async function GET() {
   if (!canChangeKeys) {
@@ -23,7 +42,8 @@ export async function GET() {
     return NextResponse.json({});
   }
   const configData = fs.readFileSync(userConfigPath, "utf-8");
-  return NextResponse.json(JSON.parse(configData));
+  const parsedConfig = JSON.parse(configData) as Record<string, unknown>;
+  return NextResponse.json(stripAuthFields(parsedConfig));
 }
 
 export async function POST(request: Request) {
@@ -33,9 +53,9 @@ export async function POST(request: Request) {
     });
   }
 
-  const userConfig = await request.json();
-
-  console.log('userConfig', userConfig);
+  const userConfig = stripAuthFieldsFromIncoming(
+    (await request.json()) as Record<string, unknown>
+  ) as LLMConfig;
   let existingConfig: LLMConfig = {};
   if (fs.existsSync(userConfigPath)) {
     const configData = fs.readFileSync(userConfigPath, "utf-8");
@@ -78,5 +98,7 @@ export async function POST(request: Request) {
       : existingConfig.DISABLE_ANONYMOUS_TRACKING,
   };
   fs.writeFileSync(userConfigPath, JSON.stringify(mergedConfig));
-  return NextResponse.json(mergedConfig);
+  return NextResponse.json(
+    stripAuthFields(mergedConfig as Record<string, unknown>)
+  );
 }
