@@ -54,8 +54,12 @@ RUN mkdir -p /app/document-extraction-liteparse \
 
 COPY electron/resources/document-extraction/liteparse_runner.mjs /app/document-extraction-liteparse/liteparse_runner.mjs
 COPY scripts/sync-presentation-export.cjs /app/scripts/sync-presentation-export.cjs
+# Bundled export still loads @img/sharp-* native addons from node_modules (not inlined).
 RUN node /app/scripts/sync-presentation-export.cjs --force \
-    && chmod +x /app/presentation-export/py/convert-linux-x64
+    && chmod +x /app/presentation-export/py/convert-linux-x64 \
+    && cd /app/presentation-export \
+    && npm init -y \
+    && npm install "sharp@^0.34.5" --include=optional --omit=dev --no-fund --no-audit --no-package-lock
 
 
 FROM python:3.11-slim-trixie AS runtime
