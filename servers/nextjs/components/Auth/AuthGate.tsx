@@ -126,10 +126,25 @@ export default function AuthGate() {
         return;
       }
 
+      if (isSetupMode) {
+        setStatus({
+          configured: true,
+          authenticated: false,
+          username: (payload as AuthStatus).username ?? cleanedUsername,
+        });
+        setPassword("");
+        setConfirmPassword("");
+        toast.success("Account created", {
+          description: "Sign in with your new username and password to continue.",
+          duration: 6000,
+        });
+        return;
+      }
+
       setStatus({
-        configured: Boolean(payload.configured),
-        authenticated: Boolean(payload.authenticated),
-        username: payload.username ?? cleanedUsername,
+        configured: Boolean((payload as AuthStatus).configured),
+        authenticated: Boolean((payload as AuthStatus).authenticated),
+        username: (payload as AuthStatus).username ?? cleanedUsername,
       });
       setPassword("");
       setConfirmPassword("");
@@ -289,7 +304,7 @@ export default function AuthGate() {
                 ? "Saving credentials…"
                 : "Signing in…"
               : isSetupMode
-                ? "Create login and continue"
+                ? "Create account"
                 : "Sign in"}
           </button>
         </form>

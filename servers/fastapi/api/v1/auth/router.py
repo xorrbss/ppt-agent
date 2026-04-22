@@ -49,16 +49,14 @@ async def setup_credentials(body: AuthCredentialsRequest, request: Request):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    token = create_session_token(body.username.strip())
-    response = JSONResponse(
+    username = body.username.strip()
+    return JSONResponse(
         {
             "configured": True,
-            "authenticated": True,
-            "username": body.username.strip(),
+            "authenticated": False,
+            "username": username,
         }
     )
-    set_session_cookie(response, token, request)
-    return response
 
 
 @API_V1_AUTH_ROUTER.post("/login")
