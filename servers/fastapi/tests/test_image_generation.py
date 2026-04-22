@@ -195,7 +195,7 @@ class TestImageGenerationService:
                                 result = await service.generate_image(sample_image_prompt)
                                 
                                 # Should return placeholder
-                                assert result == "/static/images/replaceable_template_image.png"
+                                assert result == "/static/images/placeholder.jpg"
         
         asyncio.run(run_test())
     
@@ -221,7 +221,7 @@ class TestImageGenerationService:
                                 
                                 result = await service.generate_image(sample_image_prompt)
                                 
-                                assert result == "/static/images/replaceable_template_image.png"
+                                assert result == "/static/images/placeholder.jpg"
         
         asyncio.run(run_test())
     
@@ -367,7 +367,7 @@ class TestImageGenerationEndpoint:
         with patch('api.v1.ppt.endpoints.images.get_images_directory', return_value=mock_images_directory):
             with patch('api.v1.ppt.endpoints.images.ImageGenerationService') as mock_service_class:
                 mock_service_instance = Mock()
-                mock_service_instance.generate_image = AsyncMock(return_value="/static/images/replaceable_template_image.png")
+                mock_service_instance.generate_image = AsyncMock(return_value="/static/images/placeholder.jpg")
                 mock_service_class.return_value = mock_service_instance
                 
                 response = client.get(f"/images/generate?prompt={test_prompt}")

@@ -42,7 +42,7 @@ def test_slide_to_html_endpoint():
     
     # Use a placeholder image path (since we can't easily test with real files)
     test_data = {
-        "image": "/static/images/replaceable_template_image.png",
+        "image": "/static/images/placeholder.jpg",
         "xml": test_xml
     }
     
