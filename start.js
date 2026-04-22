@@ -103,6 +103,12 @@ const ensurePresentationExportRuntime = async () => {
 };
 
 process.env.USER_CONFIG_PATH = userConfigPath;
+// Let Next.js middleware reach FastAPI over the loopback interface inside the
+// container without having to bounce through nginx (the host-facing port is
+// not reachable from inside the Next.js process).
+if (!process.env.FAST_API_INTERNAL_URL) {
+  process.env.FAST_API_INTERNAL_URL = `http://127.0.0.1:${fastapiPort}`;
+}
 
 //? UserConfig is only setup if API Keys can be changed
 const setupUserConfigFromEnv = () => {
@@ -155,6 +161,9 @@ const setupUserConfigFromEnv = () => {
     CODEX_REFRESH_TOKEN: existingConfig.CODEX_REFRESH_TOKEN,
     CODEX_TOKEN_EXPIRES: existingConfig.CODEX_TOKEN_EXPIRES,
     CODEX_ACCOUNT_ID: existingConfig.CODEX_ACCOUNT_ID,
+    AUTH_USERNAME: existingConfig.AUTH_USERNAME,
+    AUTH_PASSWORD_HASH: existingConfig.AUTH_PASSWORD_HASH,
+    AUTH_SECRET_KEY: existingConfig.AUTH_SECRET_KEY,
   };
 
   writeFileSync(userConfigPath, JSON.stringify(userConfig));

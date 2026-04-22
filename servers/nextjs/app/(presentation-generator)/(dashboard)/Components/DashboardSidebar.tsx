@@ -4,11 +4,6 @@ import React from "react";
 import { LayoutDashboard, Star, Brain, Settings, Palette, HelpCircle } from "lucide-react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
-import { useSelector } from "react-redux";
-import { RootState } from "@/store/store";
-import { IMAGE_PROVIDERS, LLM_PROVIDERS } from "@/utils/providerConstants";
 
 
 
@@ -29,9 +24,6 @@ const DashboardSidebar = () => {
 
     const pathname = usePathname();
     const activeTab = pathname.split("?")[0].split("/").pop();
-    const router = useRouter();
-
-    const { llm_config } = useSelector((state: RootState) => state.userConfig)
 
 
 
@@ -135,8 +127,6 @@ const DashboardSidebar = () => {
                         </Link>
                     );
                 })}
-
-
 
             </div>
 

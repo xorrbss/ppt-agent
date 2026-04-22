@@ -1,10 +1,12 @@
 import React from 'react'
-import { Shield } from 'lucide-react'
+import { LogOut, Shield } from 'lucide-react'
 import { IMAGE_PROVIDERS, LLM_PROVIDERS } from '@/utils/providerConstants'
 import { useSelector } from 'react-redux'
 import { RootState } from '@/store/store'
 
-const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }: { mode: 'nanobanana' | 'presenton', setMode: (mode: 'nanobanana' | 'presenton') => void, selectedProvider: 'text-provider' | 'image-provider' | 'privacy', setSelectedProvider: (provider: 'text-provider' | 'image-provider' | 'privacy') => void }) => {
+type SettingsSection = 'text-provider' | 'image-provider' | 'privacy' | 'session'
+
+const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }: { mode: 'nanobanana' | 'presenton', setMode: (mode: 'nanobanana' | 'presenton') => void, selectedProvider: SettingsSection, setSelectedProvider: (provider: SettingsSection) => void }) => {
     const { llm_config } = useSelector((state: RootState) => state.userConfig)
     const textProviderIcon = LLM_PROVIDERS[llm_config.LLM as keyof typeof LLM_PROVIDERS]?.icon
     const imageProviderIcon = IMAGE_PROVIDERS[llm_config.IMAGE_PROVIDER as keyof typeof IMAGE_PROVIDERS]?.icon || '/providers/pexel.png'
@@ -73,15 +75,26 @@ const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }
 
             <div className='border-t border-[#E1E1E5] py-5 relative z-50'>
                 <p className='text-[#3A3A3A] text-xs font-medium pb-2.5'>Other</p>
-                <button
-                    className={`w-full rounded-[6px]  p-3 py-4 flex items-center gap-1.5 border ${selectedProvider === 'privacy' ? 'bg-[#F4F3FF] border-[#D9D6FE]' : 'bg-white border-[#EDEEEF]'}`}
-                    onClick={() => setSelectedProvider('privacy')}
-                >
-                    <div className='relative w-6 h-6 rounded-full overflow-hidden border border-[#EDEEEF] flex items-center justify-center bg-white'>
-                        <Shield className='w-3.5 h-3.5 text-[#5146E5]' />
-                    </div>
-                    <p className='text-[#191919] text-xs font-medium'>Usage Analytics</p>
-                </button>
+                <div className='space-y-2.5'>
+                    <button
+                        className={`w-full rounded-[6px] p-3 py-4 flex items-center gap-1.5 border ${selectedProvider === 'privacy' ? 'bg-[#F4F3FF] border-[#D9D6FE]' : 'bg-white border-[#EDEEEF]'}`}
+                        onClick={() => setSelectedProvider('privacy')}
+                    >
+                        <div className='relative w-6 h-6 rounded-full overflow-hidden border border-[#EDEEEF] flex items-center justify-center bg-white'>
+                            <Shield className='w-3.5 h-3.5 text-[#5146E5]' />
+                        </div>
+                        <p className='text-[#191919] text-xs font-medium'>Usage Analytics</p>
+                    </button>
+                    <button
+                        className={`w-full rounded-[6px] p-3 py-4 flex items-center gap-1.5 border ${selectedProvider === 'session' ? 'bg-[#F4F3FF] border-[#D9D6FE]' : 'bg-white border-[#EDEEEF]'}`}
+                        onClick={() => setSelectedProvider('session')}
+                    >
+                        <div className='relative w-6 h-6 rounded-full overflow-hidden border border-[#EDEEEF] flex items-center justify-center bg-white'>
+                            <LogOut className='w-3.5 h-3.5 text-[#5146E5]' />
+                        </div>
+                        <p className='text-[#191919] text-xs font-medium'>Sign out</p>
+                    </button>
+                </div>
             </div>
         </div>
     )
