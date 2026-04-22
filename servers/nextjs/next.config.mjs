@@ -2,6 +2,7 @@
 const nextConfig = {
   reactStrictMode: false,
   distDir: ".next-build",
+  output: "standalone",
   
 
   // Rewrites for development - proxy font requests to FastAPI backend

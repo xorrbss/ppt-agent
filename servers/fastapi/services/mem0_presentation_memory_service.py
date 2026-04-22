@@ -89,6 +89,10 @@ class Mem0PresentationMemoryService:
             "history_db_path": self._history_db_path,
         }
 
+    @staticmethod
+    def _is_nonfatal_mem0_error(exc: BaseException) -> bool:
+        return isinstance(exc, (Exception, SystemExit))
+
     async def _get_client(self):
         if not self._enabled:
             return None
@@ -121,7 +125,9 @@ class Mem0PresentationMemoryService:
                 self._qdrant_path,
                 self._history_db_path,
             )
-        except Exception:
+        except BaseException as exc:
+            if not self._is_nonfatal_mem0_error(exc):
+                raise
             LOGGER.exception("Failed to initialize Mem0 OSS Memory")
             self._client = None
 
@@ -147,7 +153,9 @@ class Mem0PresentationMemoryService:
 
         try:
             await asyncio.to_thread(_add)
-        except Exception:
+        except BaseException as exc:
+            if not self._is_nonfatal_mem0_error(exc):
+                raise
             LOGGER.exception(
                 "Failed to add mem0 memory for presentation_id=%s", presentation_id
             )
@@ -257,7 +265,9 @@ class Mem0PresentationMemoryService:
 
         try:
             response = await asyncio.to_thread(_search)
-        except Exception:
+        except BaseException as exc:
+            if not self._is_nonfatal_mem0_error(exc):
+                raise
             LOGGER.exception(
                 "Failed to search mem0 context for presentation_id=%s", presentation_id
             )

@@ -112,11 +112,13 @@ class IconFinderService:
             self._initialization_failed = True
             # Keep vectorstore as None so search_icons returns empty results
 
-    async def search_icons(self, query: str, k: int = 1):
+    def ensure_initialized(self) -> bool:
         if not self._initialized and not self._initialization_failed:
             self._initialize_icons_collection()
-        
-        if not self.vectorstore or self._initialization_failed:
+        return self.vectorstore is not None and not self._initialization_failed
+
+    async def search_icons(self, query: str, k: int = 1):
+        if not self.ensure_initialized():
             # Return empty list if vectorstore failed to initialize
             return []
             
