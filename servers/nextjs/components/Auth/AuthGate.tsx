@@ -5,6 +5,7 @@ import { ConfigurationInitializer } from "@/app/ConfigurationInitializer";
 import Home from "@/components/Home";
 import { getApiUrl } from "@/utils/api";
 import { formatFastApiDetail, UNAUTHORIZED_DETAIL } from "@/utils/authErrors";
+import { toast } from "sonner";
 
 type AuthStatus = {
   configured: boolean;
@@ -26,8 +27,6 @@ export default function AuthGate() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [blockedAccessMessage, setBlockedAccessMessage] = useState<string | null>(null);
-
   const isSetupMode = useMemo(() => !status.configured, [status.configured]);
 
   useEffect(() => {
@@ -40,9 +39,12 @@ export default function AuthGate() {
     }
     const params = new URLSearchParams(window.location.search);
     if (params.get("reason") === "unauthorized") {
-      setBlockedAccessMessage(UNAUTHORIZED_DETAIL);
-      const clean = `${window.location.pathname}`;
-      window.history.replaceState({}, "", clean);
+      toast.error("Unauthorized", {
+        id: "auth-unauthorized-redirect",
+        description: "Sign in to view this page.",
+        duration: 5000,
+      });
+      window.history.replaceState({}, "", window.location.pathname);
     }
   }, []);
 
@@ -78,7 +80,6 @@ export default function AuthGate() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
-    setBlockedAccessMessage(null);
 
     const cleanedUsername = username.trim();
     if (cleanedUsername.length < 3) {
@@ -154,7 +155,7 @@ export default function AuthGate() {
           <div className="rounded-2xl border border-white/40 bg-white/80 p-8 text-center shadow-xl backdrop-blur-sm">
             <img src="/Logo.png" alt="Presenton" className="mx-auto mb-5 h-12 opacity-95" />
             <div className="mx-auto mb-4 h-1 w-16 rounded-full bg-gradient-to-r from-[#5146E5] to-[#7C51F8]" />
-            <h1 className="font-unbounded text-lg font-semibold text-black">Presenton</h1>
+            <h1 className="font-syne text-lg font-semibold text-black">Presenton</h1>
             <p className="mt-3 font-syne text-sm text-[#000000CC]">Preparing your workspace…</p>
             <div className="mt-6 flex justify-center gap-1.5">
               <span className="h-2 w-2 animate-pulse rounded-full bg-[#5146E5]" />
@@ -203,7 +204,7 @@ export default function AuthGate() {
               <p className="font-syne text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7A5AF8]">
                 Secure instance
               </p>
-              <h1 className="mt-1 font-unbounded text-2xl font-normal leading-tight text-black sm:text-[26px]">
+              <h1 className="mt-1 font-syne text-2xl font-semibold leading-tight text-black sm:text-[26px]">
                 {isSetupMode ? "Create your admin login" : "Sign in to continue"}
               </h1>
             </div>
@@ -215,12 +216,6 @@ export default function AuthGate() {
             ? "One-time setup for this deployment. You will use the same username and password on future visits."
             : "This deployment is protected. Enter your credentials to open the app."}
         </p>
-
-        {blockedAccessMessage ? (
-          <div className="mt-6 rounded-[11px] border border-red-200 bg-red-50 px-4 py-3 font-syne text-sm font-medium text-red-800">
-            {blockedAccessMessage}. All other routes require a valid session.
-          </div>
-        ) : null}
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-5">
           <div className="space-y-2">

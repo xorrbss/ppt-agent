@@ -1,16 +1,13 @@
 import React from "react";
 
-import ProtectedRouteGuard from "@/components/Auth/ProtectedRouteGuard";
+import { requireAppSession } from "@/utils/serverAuth";
 import { ConfigurationInitializer } from "../ConfigurationInitializer";
 
-const layout = ({ children }: { children: React.ReactNode }) => {
+export default async function Layout({ children }: { children: React.ReactNode }) {
+  await requireAppSession();
   return (
     <div>
-      <ProtectedRouteGuard>
-        <ConfigurationInitializer>{children}</ConfigurationInitializer>
-      </ProtectedRouteGuard>
+      <ConfigurationInitializer>{children}</ConfigurationInitializer>
     </div>
   );
-};
-
-export default layout;
+}
