@@ -18,6 +18,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY servers/fastapi /app/servers/fastapi
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/venv/bin/python --no-deps .
+# mem0/spaCy BM25 lemmatization loads en_core_web_sm at runtime; spaCy tries pip to
+# download it otherwise. Runtime image has no pip in PATH (--without-pip venv).
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python /opt/venv/bin/python \
+    "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl"
 RUN --mount=type=cache,target=/root/.cache \
     /opt/venv/bin/python scripts/warm_fastembed_cache.py
 
