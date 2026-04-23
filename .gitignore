@@ -1,4 +1,6 @@
 .env
+.env.*
+*.env
 .venv
 __pycache__
 .pytest_cache
@@ -17,3 +19,11 @@ chroma
 container.db
 .next-build
 .cursor
+.agents
+skills-lock.json
+.codex/
+
+# presentation-export runtime (downloaded via scripts/sync-presentation-export.cjs or Docker build)
+presentation-export/index.js
+presentation-export/py/
+.cache/presentation-export/

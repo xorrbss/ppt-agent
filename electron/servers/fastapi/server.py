@@ -1,5 +1,6 @@
 import uvicorn
 import argparse
+import os
 from api.main import app
 
 if __name__ == "__main__":
@@ -12,10 +13,14 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     reload = args.reload == "true"
+    host = "127.0.0.1"
+
+    # Always bind absolute asset generation to the active runtime port.
+    os.environ["FASTAPI_PUBLIC_URL"] = f"http://{host}:{args.port}"
     
     uvicorn.run(
         "api.main:app",
-        host="127.0.0.1",
+        host=host,
         port=args.port,
         log_level="info",
         reload=reload,

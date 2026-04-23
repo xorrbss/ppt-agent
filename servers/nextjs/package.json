@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@babel/standalone": "^7.28.2",
+    "@babel/traverse": "^7.29.0",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -39,6 +40,7 @@
     "@tiptap/extension-underline": "^2.0.0",
     "@tiptap/react": "^2.11.5",
     "@tiptap/starter-kit": "^2.11.5",
+    "canvas-confetti": "^1.9.4",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
@@ -68,6 +70,7 @@
   },
   "devDependencies": {
     "@types/babel__standalone": "^7.1.9",
+    "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^20",
     "@types/prismjs": "^1.26.5",
     "@types/puppeteer": "^5.4.7",

@@ -5,6 +5,7 @@ import * as z from "zod";
 import * as Recharts from "recharts";
 import * as Babel from "@babel/standalone";
 import * as d3 from "d3";
+import { resolveBackendAssetUrl } from "@/utils/api";
 // import * as d3Cloud from "d3-cloud";
 
 export interface CompiledLayout {
@@ -15,6 +16,37 @@ export interface CompiledLayout {
     schema: any;
     sampleData: Record<string, any>;
     schemaJSON: any;
+}
+
+function isLikelyBackendAssetPath(value: string): boolean {
+    if (!value) return false;
+    if (value.startsWith("file://")) return true;
+    if (value.startsWith("/app_data/") || value.startsWith("/static/")) return true;
+    if (value.startsWith("app_data/") || value.startsWith("static/")) return true;
+    return value.includes("/app_data/") || value.includes("/static/");
+}
+
+function normalizeLayoutAssetUrls<T>(value: T): T {
+    if (typeof value === "string") {
+        const trimmedValue = value.trim();
+        if (!isLikelyBackendAssetPath(trimmedValue)) {
+            return value;
+        }
+        return resolveBackendAssetUrl(trimmedValue) as T;
+    }
+
+    if (Array.isArray(value)) {
+        return value.map((item) => normalizeLayoutAssetUrls(item)) as T;
+    }
+
+    if (value && typeof value === "object") {
+        const normalizedEntries = Object.entries(value as Record<string, unknown>).map(
+            ([key, item]) => [key, normalizeLayoutAssetUrls(item)]
+        );
+        return Object.fromEntries(normalizedEntries) as T;
+    }
+
+    return value;
 }
 
 /**
@@ -101,11 +133,17 @@ export function compileCustomLayout(layoutCode: string): CompiledLayout | null {
             return null;
         }
 
+        const wrappedComponent: React.ComponentType<{ data: any }> = ({ data, ...props }) => {
+            const normalizedData = React.useMemo(() => normalizeLayoutAssetUrls(data), [data]);
+            return React.createElement(result.component, { ...(props as any), data: normalizedData });
+        };
+        wrappedComponent.displayName = `CompiledTemplateLayout(${result.layoutName || result.layoutId || "Custom"})`;
+
         // Parse schema to get sample data
         let sampleData: Record<string, any> = {};
         if (result.Schema) {
             try {
-                sampleData = result.Schema.parse({});
+                sampleData = normalizeLayoutAssetUrls(result.Schema.parse({}));
             } catch (e) {
                 console.warn("Could not parse schema defaults:", e);
             }
@@ -113,7 +151,7 @@ export function compileCustomLayout(layoutCode: string): CompiledLayout | null {
         const schemaJSON = z.toJSONSchema(result.Schema);
 
         return {
-            component: result.component,
+            component: wrappedComponent,
             layoutId: result.layoutId,
             layoutName: result.layoutName,
             layoutDescription: result.layoutDescription,

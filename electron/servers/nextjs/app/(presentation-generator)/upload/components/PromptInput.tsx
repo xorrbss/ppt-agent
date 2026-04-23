@@ -1,42 +1,42 @@
 import { Textarea } from "@/components/ui/textarea";
+import { PencilIcon } from "lucide-react";
 import { useState } from "react";
-
 
 interface PromptInputProps {
   value: string;
   onChange: (value: string) => void;
-
 }
 
-export function PromptInput({
-  value,
-  onChange,
+export function PromptInput({ value, onChange }: PromptInputProps) {
 
-}: PromptInputProps) {
-  const [showHint, setShowHint] = useState(false);
-  const handleChange = (value: string) => {
-    setShowHint(value.length > 0);
-    onChange(value);
+
+  const handleChange = (val: string) => {
+
+    onChange(val);
   };
+
   return (
-    <div className="space-y-2">
-      <div className="relative">
-        <Textarea
-          value={value}
-          rows={5}
-          onChange={(e) => handleChange(e.target.value)}
-          placeholder="Tell us about your presentation"
-          data-testid="prompt-input"
-          className={`py-4 px-5 border-2 font-medium font-instrument_sans text-base min-h-[150px] max-h-[300px] border-[#5146E5] focus-visible:ring-offset-0  focus-visible:ring-[#5146E5] overflow-y-auto  custom_scrollbar  `}
-        />
+
+    <div className="relative font-syne border border-[#DBDBDB99] rounded-[8px] px-[10px] py-3"
+      style={{
+        boxShadow: "0 4px 14px 0 rgba(0, 0, 0, 0.04)",
+
+      }}
+    >
+      <div className="flex items-center gap-2 mb-1">
+        <PencilIcon className="w-3.5 h-3.5" />
+        <p className="text-sm font-normal text-[#333333] font-syne ">Write prompt</p>
       </div>
-      <p
-        className={`text-sm text-gray-500 font-inter font-medium ${showHint ? "opacity-100" : "opacity-0"
-          }`}
-      >
-        Provide specific details about your presentation needs (e.g., topic,
-        style, key points) for more accurate results
-      </p>
+      <Textarea
+        value={value}
+        autoFocus={true}
+        rows={4}
+        onChange={(e) => handleChange(e.target.value)}
+        placeholder="Start with your idea… we’ll handle the slides"
+        data-testid="prompt-input"
+        className={`px-2 py-0 font-medium shadow-none font-syne indent-4 text-base min-h-[120px] max-h-[250px] focus-visible:ring-offset-0  focus-visible:ring-transparent focus-visible:ring-0 border-none overflow-y-auto  custom_scrollbar  `}
+      />
     </div>
+
   );
 }

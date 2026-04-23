@@ -55,7 +55,7 @@ class LLMToolCallsHandler:
             self.dynamic_tools.append(tool)
 
         match self.client.llm_provider:
-            case LLMProvider.OPENAI | LLMProvider.OLLAMA | LLMProvider.CUSTOM:
+            case LLMProvider.OPENAI | LLMProvider.OLLAMA | LLMProvider.CUSTOM | LLMProvider.CODEX:
                 return self.parse_tool_openai(tool, strict)
             case LLMProvider.ANTHROPIC:
                 return self.parse_tool_anthropic(tool)
@@ -63,7 +63,7 @@ class LLMToolCallsHandler:
                 return self.parse_tool_google(tool)
             case _:
                 raise ValueError(
-                    f"LLM provider must be either openai, anthropic, or google"
+                    "LLM provider must be one of: openai, anthropic, google, codex, ollama, custom"
                 )
 
     def parse_tool_openai(
@@ -181,7 +181,7 @@ class LLMToolCallsHandler:
     # Search web tool call handler
     async def search_web_tool_call_handler(self, arguments: str) -> str:
         match self.client.llm_provider:
-            case LLMProvider.OPENAI:
+            case LLMProvider.OPENAI | LLMProvider.CODEX:
                 return await self.search_web_tool_call_handler_openai(arguments)
             case LLMProvider.ANTHROPIC:
                 return await self.search_web_tool_call_handler_anthropic(arguments)

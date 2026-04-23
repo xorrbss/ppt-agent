@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import "./sentry";
 
 contextBridge.exposeInMainWorld("loInstaller", {
   startInstall: () => ipcRenderer.invoke("lo:start-install"),

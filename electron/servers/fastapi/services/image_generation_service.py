@@ -5,12 +5,14 @@ import os
 import aiohttp
 from fastapi import HTTPException
 from google import genai
+from google.genai import types
 from openai import NOT_GIVEN, AsyncOpenAI
 from models.image_prompt import ImagePrompt
 from models.sql.image_asset import ImageAsset
 from utils.get_env import (
     get_dall_e_3_quality_env,
     get_gpt_image_1_5_quality_env,
+    get_next_public_fast_api_env,
     get_pexels_api_key_env,
 )
 from utils.get_env import get_pixabay_api_key_env
@@ -58,6 +60,17 @@ class ImageGenerationService:
     def is_stock_provider_selected(self):
         return is_pixels_selected() or is_pixabay_selected()
 
+    def _to_frontend_url(self, path: str) -> str:
+        if path.startswith("http://") or path.startswith("https://"):
+            return path
+
+        fastapi_origin = (get_next_public_fast_api_env() or "").strip()
+        if not fastapi_origin:
+            return path
+
+        normalized_path = path if path.startswith("/") else f"/{path}"
+        return f"{fastapi_origin.rstrip('/')}{normalized_path}"
+
     async def generate_image(self, prompt: ImagePrompt) -> str | ImageAsset:
         """
         Generates an image based on the provided prompt.
@@ -68,11 +81,11 @@ class ImageGenerationService:
         """
         if self.is_image_generation_disabled:
             print("Image generation is disabled. Using placeholder image.")
-            return "/static/images/placeholder.jpg"
+            return self._to_frontend_url("/static/images/placeholder.jpg")
 
         if not self.image_gen_func:
             print("No image generation function found. Using placeholder image.")
-            return "/static/images/placeholder.jpg"
+            return self._to_frontend_url("/static/images/placeholder.jpg")
 
         image_prompt = prompt.get_image_prompt(
             with_theme=not self.is_stock_provider_selected()
@@ -98,11 +111,15 @@ class ImageGenerationService:
                             "theme_prompt": prompt.theme_prompt,
                         },
                     )
+                elif image_path.startswith("/app_data/") or image_path.startswith(
+                    "/static/"
+                ):
+                    return self._to_frontend_url(image_path)
             raise Exception(f"Image not found at {image_path}")
 
         except Exception as e:
             print(f"Error generating image: {e}")
-            return "/static/images/placeholder.jpg"
+            return self._to_frontend_url("/static/images/placeholder.jpg")
 
     async def generate_image_openai(
         self, prompt: str, output_directory: str, model: str, quality: str
@@ -149,15 +166,45 @@ class ImageGenerationService:
         response = await asyncio.to_thread(
             client.models.generate_content,
             model=model,
-            contents=[prompt],
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_modalities=["IMAGE"],
+            ),
         )
 
+        # Latest SDK docs expose images in response.parts.
+        response_parts = getattr(response, "parts", None)
+        if not response_parts and getattr(response, "candidates", None):
+            first_candidate = response.candidates[0] if response.candidates else None
+            content = (
+                getattr(first_candidate, "content", None) if first_candidate else None
+            )
+            response_parts = getattr(content, "parts", None) if content else None
+
         image_path = None
-        for part in response.candidates[0].content.parts:
+        for part in response_parts or []:
             if part.inline_data is not None:
-                image = part.as_image()
-                image_path = os.path.join(output_directory, f"{uuid.uuid4()}.jpg")
-                image.save(image_path)
+                mime_type = getattr(part.inline_data, "mime_type", "") or ""
+                ext = (
+                    mime_type.split("/")[-1]
+                    if mime_type.startswith("image/")
+                    else "png"
+                )
+                image_path = os.path.join(output_directory, f"{uuid.uuid4()}.{ext}")
+                if hasattr(part, "as_image"):
+                    part.as_image().save(image_path)
+                else:
+                    # Backward-compatible fallback if helper method is unavailable.
+                    image_data = getattr(part.inline_data, "data", None)
+                    if image_data is None:
+                        continue
+                    image_bytes = (
+                        base64.b64decode(image_data)
+                        if isinstance(image_data, str)
+                        else image_data
+                    )
+                    with open(image_path, "wb") as image_file:
+                        image_file.write(image_bytes)
 
         if not image_path:
             raise HTTPException(
@@ -169,9 +216,9 @@ class ImageGenerationService:
     async def generate_image_gemini_flash(
         self, prompt: str, output_directory: str
     ) -> str:
-        """Generate image using Gemini Flash (gemini-2.5-flash-image-preview)."""
+        """Generate image using Gemini Flash (gemini-2.5-flash-image)."""
         return await self._generate_image_google(
-            prompt, output_directory, "gemini-2.5-flash-image-preview"
+            prompt, output_directory, "gemini-2.5-flash-image"
         )
 
     async def generate_image_nanobanana_pro(
@@ -182,24 +229,92 @@ class ImageGenerationService:
             prompt, output_directory, "gemini-3-pro-image-preview"
         )
 
-    async def get_image_from_pexels(self, prompt: str) -> str:
-        async with aiohttp.ClientSession(trust_env=True) as session:
-            response = await session.get(
-                f"https://api.pexels.com/v1/search?query={prompt}&per_page=1",
-                headers={"Authorization": f"{get_pexels_api_key_env()}"},
-            )
-            data = await response.json()
-            image_url = data["photos"][0]["src"]["large"]
-            return image_url
+    async def get_image_from_pexels(
+        self, prompt: str, api_key: str | None = None, limit: int = 1
+    ) -> str | list[str]:
+        per_page = max(1, min(limit, 80))
+        resolved_api_key = (api_key or get_pexels_api_key_env() or "").strip()
 
-    async def get_image_from_pixabay(self, prompt: str) -> str:
         async with aiohttp.ClientSession(trust_env=True) as session:
             response = await session.get(
-                f"https://pixabay.com/api/?key={get_pixabay_api_key_env()}&q={prompt}&image_type=photo&per_page=3"
+                "https://api.pexels.com/v1/search",
+                params={"query": prompt, "per_page": per_page},
+                headers={"Authorization": resolved_api_key} if resolved_api_key else {},
+                timeout=aiohttp.ClientTimeout(total=20),
             )
+
+            if response.status in {401, 403}:
+                raise HTTPException(status_code=401, detail="Invalid Pexels API key")
+            if response.status != 200:
+                error_text = await response.text()
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Pexels request failed: {error_text}",
+                )
+
             data = await response.json()
-            image_url = data["hits"][0]["largeImageURL"]
-            return image_url
+            photos = data.get("photos", [])
+            image_urls = [
+                photo.get("src", {}).get("large")
+                for photo in photos
+                if photo.get("src", {}).get("large")
+            ]
+
+            if limit <= 1:
+                return image_urls[0] if image_urls else ""
+            return image_urls[:limit]
+
+    async def get_image_from_pixabay(
+        self, prompt: str, api_key: str | None = None, limit: int = 1
+    ) -> str | list[str]:
+        per_page = max(3, min(limit, 200))
+        resolved_api_key = (api_key or get_pixabay_api_key_env() or "").strip()
+
+        async with aiohttp.ClientSession(trust_env=True) as session:
+            response = await session.get(
+                "https://pixabay.com/api/",
+                params={
+                    "key": resolved_api_key,
+                    "q": prompt[:99],
+                    "image_type": "photo",
+                    "per_page": per_page,
+                },
+                timeout=aiohttp.ClientTimeout(total=20),
+            )
+
+            if response.status in {401, 403}:
+                error_text = await response.text()
+                raise HTTPException(
+                    status_code=401,
+                    detail=f"Invalid Pixabay API key: {error_text}",
+                )
+            if response.status == 400:
+                error_text = await response.text()
+                if "api key" in error_text.lower():
+                    raise HTTPException(
+                        status_code=401,
+                        detail=f"Invalid Pixabay API key: {error_text}",
+                    )
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Pixabay request invalid: {error_text}",
+                )
+            if response.status != 200:
+                error_text = await response.text()
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Pixabay request failed: {error_text}",
+                )
+
+            data = await response.json()
+            hits = data.get("hits", [])
+            image_urls = [
+                hit.get("largeImageURL") for hit in hits if hit.get("largeImageURL")
+            ]
+
+            if limit <= 1:
+                return image_urls[0] if image_urls else ""
+            return image_urls[:limit]
 
     async def generate_image_comfyui(self, prompt: str, output_directory: str) -> str:
         """
@@ -261,27 +376,88 @@ class ImageGenerationService:
             return image_path
 
     def _inject_prompt_into_workflow(self, workflow: dict, prompt: str) -> dict:
-        """
-        Find the prompt node in the workflow and inject the prompt text.
-        Looks for a node with title 'Input Prompt' (case-insensitive).
+        def norm(x) -> str:
+            return str(x or "").strip().lower()
 
-        User must rename their prompt node to 'Input Prompt' in ComfyUI.
-        """
-        for node_id, node_data in workflow.items():
-            meta = node_data.get("_meta", {})
-            title = meta.get("title", "").lower()
+        def is_link(v) -> bool:
+            return (
+                isinstance(v, (list, tuple))
+                and len(v) >= 2
+                and isinstance(v[0], str)
+                and isinstance(v[1], int)
+            )
 
-            if title == "input prompt":
-                if "inputs" in node_data and "text" in node_data["inputs"]:
-                    node_data["inputs"]["text"] = prompt
-                    print(
-                        f"Injected prompt into node {node_id}: {meta.get('title', '')}"
-                    )
-                    return workflow
+        preferred_keys = (
+            "text", "value", "prompt", "string", "content", "instruction", "input", "query"
+        )
+
+        # string inputs that are usually NOT prompt text
+        ignore_keys = {
+            "filename_prefix", "ckpt_name", "clip_name", "vae_name", "unet_name",
+            "sampler_name", "scheduler", "type", "device", "model", "lora_name"
+        }
+
+        visited = set()
+
+        def try_set(node_id: str) -> bool:
+            node_id = str(node_id)
+            if node_id in visited:
+                return False
+            visited.add(node_id)
+
+            node = workflow.get(node_id)
+            if not isinstance(node, dict):
+                return False
+
+            inputs = node.setdefault("inputs", {})
+
+            # 1) preferred prompt-like keys
+            for k in preferred_keys:
+                if k in inputs and isinstance(inputs[k], str):
+                    inputs[k] = prompt
+                    return True
+
+            # 2) fallback: exactly one unambiguous writable string field
+            string_candidates = [
+                k for k, v in inputs.items()
+                if isinstance(v, str) and k not in ignore_keys
+            ]
+            if len(string_candidates) == 1:
+                inputs[string_candidates[0]] = prompt
+                return True
+
+            # 3) follow links from ANY input key (node-type agnostic)
+            for v in inputs.values():
+                if is_link(v):
+                    if try_set(v[0]):
+                        return True
+                elif isinstance(v, list):
+                    for item in v:
+                        if is_link(item) and try_set(item[0]):
+                            return True
+
+            return False
+
+        input_prompt_nodes = [
+            node_id
+            for node_id, node_data in workflow.items()
+            if norm(node_data.get("_meta", {}).get("title")) == "input prompt"
+        ]
+
+        if not input_prompt_nodes:
+            raise ValueError(
+                "Could not find node with title 'Input Prompt'. Rename your prompt node to 'Input Prompt'."
+            )
+
+        for nid in input_prompt_nodes:
+            if try_set(nid):
+                return workflow
 
         raise ValueError(
-            "Could not find a node with title 'Input Prompt' in the workflow. Please rename your prompt node to 'Input Prompt' in ComfyUI."
+            "Found 'Input Prompt', but no writable prompt string field was found directly or through linked nodes."
         )
+
+
 
     async def _submit_comfyui_workflow(
         self, session: aiohttp.ClientSession, comfyui_url: str, workflow: dict

@@ -13,7 +13,10 @@ import { setupSetupInstallHandlers } from "./ipc/setup_install_handlers";
 import { checkDependenciesBeforeWindow } from "./utils/setup-dependencies";
 import { getSofficePath, isLibreOfficeInstalled } from "./utils/libreoffice-check";
 import { getPuppeteerExecutablePath, isChromeInstalled } from "./utils/puppeteer-check";
+import { getLiteParseRunnerPath } from "./utils/liteparse-check";
+import { getImageMagickBinaryPath, isImageMagickInstalled } from "./utils/imagemagick-check";
 import { startUpdateChecker, stopUpdateChecker } from "./utils/update-checker";
+import { initMainSentry } from "./sentry/main";
 
 
 var win: BrowserWindow | undefined;
@@ -23,12 +26,19 @@ let isStopping = false;
 const startupStatus: Record<string, string> = {
   libreoffice: "checking",
   puppeteer: "checking",
+  imagemagick: "checking",
 };
 
 // Allow renderer to query initial startup status as soon as it loads.
 ipcMain.handle("startup:get-status", () => startupStatus);
 
+initMainSentry();
+
 app.commandLine.appendSwitch('gtk-version', '3');
+
+// Work around Chromium/Electron GPU compositor issues that can cause
+// startup white screens on some Linux/driver combinations.
+app.disableHardwareAcceleration();
 
 // Mitigate "Unable to move the cache: Access is denied" on Windows (Chromium disk cache).
 // Use explicit cache paths and remove stale old_* dirs that cause move failures.
@@ -58,11 +68,27 @@ const createWindow = () => {
   win = new BrowserWindow({
     width: 1280,
     height: 720,
-    show: false, // Shown after LibreOffice check so "Skip" doesn't quit the app
+    show: false, // Reveal once the launch screen has painted to avoid a blank flash.
+    backgroundColor: "#f3f5ff",
     icon: path.join(baseDir, "resources/ui/assets/images/presenton_short_filled.png"),
     webPreferences: {
-      webSecurity: false,
-      preload: path.join(__dirname, 'preloads/index.js'),
+        webSecurity: false,
+        // Ensure a known preload path and explicit isolation settings so
+        // the `contextBridge` API is exposed reliably to renderer pages.
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: false,
+        preload: (() => {
+          const p = path.join(__dirname, 'preloads/index.js');
+          try {
+            if (!fs.existsSync(p)) {
+              console.warn(`[Presenton] Preload not found at ${p}`);
+            }
+          } catch (e) {
+            console.warn('[Presenton] Failed to stat preload path', e);
+          }
+          return p;
+        })(),
     },
   });
 
@@ -75,10 +101,19 @@ const createWindow = () => {
     }
     return { action: "allow" };
   });
+
+  win.once("ready-to-show", () => {
+    if (!win || win.isDestroyed()) {
+      return;
+    }
+    win.show();
+    win.focus();
+  });
 };
 
 async function startServers(fastApiPort: number, nextjsPort: number) {
   try {
+    const sofficePath = getSofficePath();
     const fastApi = await startFastApiServer(
       fastapiDir,
       fastApiPort,
@@ -112,12 +147,21 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         DALL_E_3_QUALITY: process.env.DALL_E_3_QUALITY,
         GPT_IMAGE_1_5_QUALITY: process.env.GPT_IMAGE_1_5_QUALITY,
         APP_DATA_DIRECTORY: appDataDir,
+        FASTAPI_PUBLIC_URL: process.env.NEXT_PUBLIC_FAST_API,
         TEMP_DIRECTORY: tempDir,
         USER_CONFIG_PATH: userConfigPath,
         MIGRATE_DATABASE_ON_STARTUP: "True",
-        // Resolved by libreoffice-check.ts at startup; lets Python invoke the
-        // exact binary path instead of relying on the system PATH.
-        SOFFICE_PATH: getSofficePath(),
+        // Resolved by libreoffice-check.ts at startup when available; lets
+        // Python invoke the exact binary path instead of relying on PATH.
+        ...(sofficePath && {
+          SOFFICE_PATH: sofficePath,
+        }),
+        IMAGEMAGICK_BINARY: getImageMagickBinaryPath(),
+        LITEPARSE_RUNNER_PATH: getLiteParseRunnerPath(),
+        // Use Electron's embedded runtime for LiteParse so parsing does not
+        // depend on a system-wide Node installation.
+        LITEPARSE_NODE_BINARY: process.execPath,
+        ELECTRON_RUN_AS_NODE: "1",
       },
       isDev,
     );
@@ -150,25 +194,38 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
 
 async function stopServers() {
   if (fastApiProcess?.pid) {
-    console.log("Closing FastAPI...");
+    console.log("Force killing FastAPI...");
     try {
-      await killProcess(fastApiProcess.pid);
-    } catch {
       await killProcess(fastApiProcess.pid, "SIGKILL");
+    } catch (error) {
+      console.error("Failed to force kill FastAPI:", error);
     }
+    fastApiProcess = undefined;
   }
   if (nextjsProcess) {
-    if (isDev) {
-      console.log("Closing NextJS...");
+    if ("pid" in nextjsProcess && nextjsProcess.pid) {
+      console.log("Force killing NextJS...");
       try {
-        await killProcess(nextjsProcess.pid);
-      } catch {
         await killProcess(nextjsProcess.pid, "SIGKILL");
+      } catch (error) {
+        console.error("Failed to force kill NextJS:", error);
       }
-    } else {
+    } else if (typeof nextjsProcess.close === "function") {
       console.log("Closing NextJS...");
       nextjsProcess.close();
     }
+    nextjsProcess = undefined;
+  }
+}
+
+async function forceQuitApp(exitCode = 0) {
+  if (isStopping) return;
+  isStopping = true;
+  stopUpdateChecker();
+  try {
+    await stopServers();
+  } finally {
+    app.exit(exitCode);
   }
 }
 
@@ -184,7 +241,7 @@ app.whenReady().then(async () => {
   createWindow();
   win?.loadFile(path.join(baseDir, "resources/ui/homepage/index.html"));
 
-  // Single installer: checks LibreOffice and Chrome; if either is missing, shows one
+  // Single installer: checks LibreOffice, Chrome, and ImageMagick; if any are missing, shows one
   // window that installs them one after another. Resolves when the window closes.
   const setupCompleted = await checkDependenciesBeforeWindow();
   if (!setupCompleted) {
@@ -195,14 +252,16 @@ app.whenReady().then(async () => {
   }
 
   // Update startup status after setup (user may have installed one or both)
-  const [loResult, chromeOk] = await Promise.all([
+  const [loResult, chromeOk, imageMagickOk] = await Promise.all([
     isLibreOfficeInstalled(),
     isChromeInstalled(),
+    Promise.resolve(isImageMagickInstalled()),
   ]);
   startupStatus.libreoffice = loResult.installed ? "installed" : "missing";
   startupStatus.puppeteer = chromeOk ? "installed" : "missing";
+  startupStatus.imagemagick = imageMagickOk ? "installed" : "missing";
 
-  // Show and focus main window
+  // Ensure the launch screen stays visible and focused during the server boot.
   win?.show();
   win?.focus();
 
@@ -214,6 +273,7 @@ app.whenReady().then(async () => {
   win?.webContents.once("did-finish-load", () => {
     sendStartupStatus("libreoffice", startupStatus.libreoffice);
     sendStartupStatus("puppeteer", startupStatus.puppeteer);
+    sendStartupStatus("imagemagick", startupStatus.imagemagick);
   });
 
   setUserConfig({
@@ -264,29 +324,17 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", async () => {
-  stopUpdateChecker();
-  await stopServers();
-  app.quit();
+  await forceQuitApp(0);
 });
 
 app.on("before-quit", async (event) => {
   if (isStopping) return;
-  isStopping = true;
   event.preventDefault();
-  try {
-    await stopServers();
-  } finally {
-    app.quit();
-  }
+  await forceQuitApp(0);
 });
 
 app.on("will-quit", async (event) => {
   if (isStopping) return;
-  isStopping = true;
   event.preventDefault();
-  try {
-    await stopServers();
-  } finally {
-    app.quit();
-  }
+  await forceQuitApp(0);
 });

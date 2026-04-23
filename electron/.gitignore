@@ -1,4 +1,6 @@
 .env
+.env.*
+*.env
 .venv
 __pycache__
 .pytest_cache
@@ -10,6 +12,7 @@ app_data
 tmp
 debug
 .fastembed_cache
+.codex
 
 generated_models
 nltk
@@ -21,4 +24,17 @@ app_dist
 resources/fastapi
 resources/nextjs
 dist
+eng.traineddata
+servers/fastapi/build/
+servers/fastapi/dist/
 servers/fastapi/fastembed_cache/
+electron/.cache/
+electron/.cache/export-runtime/
+*.pkg
+*.toc
+*.zip
+*.pyc
+
+# Agent skill artifacts
+.agents/
+skills-lock.json

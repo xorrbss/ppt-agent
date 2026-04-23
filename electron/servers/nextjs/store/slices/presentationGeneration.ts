@@ -1,3 +1,4 @@
+import { Theme } from "@/app/(presentation-generator)/services/api/types";
 import { Slide } from "@/app/(presentation-generator)/types/slide";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
@@ -12,6 +13,7 @@ export interface PresentationData {
   n_slides: number;
   title: string;
   slides: any;
+  theme: Theme | null;
 }
 
 interface PresentationGenerationState {
@@ -47,6 +49,12 @@ const presentationGenerationSlice = createSlice({
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.isLoading = action.payload;
     },
+    // update title
+    updateTitle: (state, action: PayloadAction<string>) => {
+      if (state.presentationData) {
+        state.presentationData.title = action.payload;
+      }
+    },
     setLayoutLoading: (state, action: PayloadAction<boolean>) => {
       state.isLayoutLoading = action.payload;
     },
@@ -55,7 +63,7 @@ const presentationGenerationSlice = createSlice({
       state.presentation_id = action.payload;
       state.error = null;
     },
-    // Slides rendereimport { useEffect } from "react"d
+    // Slides rendered
     setSlidesRendered: (state, action: PayloadAction<boolean>) => {
       state.isSlidesRendered = action.payload;
     },
@@ -377,12 +385,19 @@ const presentationGenerationSlice = createSlice({
         }
       }
     },
+    updateTheme: (state, action: PayloadAction<Theme | null>) => {
+      if (state.presentationData) {
+        state.presentationData['theme'] = action.payload;
+      }
+    },
   },
+
 });
 
 export const {
   setStreaming,
   setLoading,
+  updateTitle,
   setLayoutLoading,
   setPresentationId,
   setSlidesRendered,
@@ -401,6 +416,7 @@ export const {
   updateImageProperties,
   updateSlideIcon,
   addNewSlide,
+  updateTheme,
 } = presentationGenerationSlice.actions;
 
 export default presentationGenerationSlice.reducer;

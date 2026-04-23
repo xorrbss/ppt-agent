@@ -211,6 +211,7 @@ async function installWindows(wc: WebContents): Promise<void> {
     const ps = `$p = Start-Process -FilePath "msiexec" -ArgumentList "/i", '${destEscaped}', "/qn", "/norestart" -Verb RunAs -Wait -PassThru; if ($p) { exit $p.ExitCode } else { exit 1 }`;
     const child = spawn("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps], {
       stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
     });
     child.stdout?.on("data", (d: Buffer) => sendLog(wc, "info", d.toString()));
     child.stderr?.on("data", (d: Buffer) => sendLog(wc, "warn", d.toString()));

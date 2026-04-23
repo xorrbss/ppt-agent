@@ -129,7 +129,7 @@ export const usePresentationGeneration = (
         layout = {
           name: selectedTemplate.id,
           ordered: false,
-          slides: selectedTemplate.layouts.map((layoutItem) => ({
+          slides: selectedTemplate.layouts.map((layoutItem: any) => ({
             id: layoutItem.layoutId,
             name: layoutItem.layoutName,
             description: layoutItem.layoutDescription,

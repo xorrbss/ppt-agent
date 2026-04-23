@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import { useEditor, EditorContent } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
 import { Markdown } from "tiptap-markdown"
@@ -19,12 +20,14 @@ export default function MarkdownEditor({ content, onChange }: { content: string;
         immediatelyRender: false,
     });
 
-    // Update editor content when the content prop changes (for streaming)
-    // useEffect(() => {
-    //     if (editor && content !== editor.storage.markdown.getMarkdown()) {
-    //         editor.commands.setContent(content);
-    //     }
-    // }, [content, editor]);
+    // Keep editor state in sync when parent changes content (e.g. reorder)
+    useEffect(() => {
+        if (!editor) return;
+        const currentMarkdown = editor.storage.markdown.getMarkdown();
+        if (content !== currentMarkdown) {
+            editor.commands.setContent(content, false);
+        }
+    }, [content, editor]);
 
     return (
         <div className="relative">

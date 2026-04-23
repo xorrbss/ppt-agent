@@ -4,9 +4,9 @@ import uuid
 from sqlalchemy import JSON, Column, DateTime, String
 from sqlmodel import Boolean, Field, SQLModel
 
-from models.presentation_layout import PresentationLayoutModel
 from models.presentation_outline_model import PresentationOutlineModel
 from models.presentation_structure_model import PresentationStructureModel
+from templates.presentation_layout import PresentationLayoutModel
 from utils.datetime_utils import get_current_utc_datetime
 
 
@@ -41,6 +41,7 @@ class PresentationModel(SQLModel, table=True):
     include_table_of_contents: bool = Field(sa_column=Column(Boolean), default=False)
     include_title_slide: bool = Field(sa_column=Column(Boolean), default=True)
     web_search: bool = Field(sa_column=Column(Boolean), default=False)
+    theme: Optional[dict] = Field(sa_column=Column(JSON), default=None)
 
     def get_new_presentation(self):
         return PresentationModel(

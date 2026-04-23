@@ -10,11 +10,9 @@ interface SortableSlideProps {
     selectedSlide: number;
     onSlideClick: (index: any) => void;
 }
-const SCALE = 0.2;
+const SCALE = 0.125;
 
 export function SortableSlide({ slide, index, selectedSlide, onSlideClick }: SortableSlideProps) {
-    const searchParams = useSearchParams();
-    const type = searchParams.get("type") as 'standard' | 'smart';
     const lastClickTime = useRef(0);
     const {
         attributes,
@@ -55,7 +53,7 @@ export function SortableSlide({ slide, index, selectedSlide, onSlideClick }: Sor
             {...attributes}
             {...listeners}
             onClick={handleClick}
-            className={` cursor-pointer border-[3px] relative  p-1 shadow-lg   rounded-md transition-all duration-200 ${selectedSlide === index ? ' border-[#5141e5]' : 'border-gray-300'
+            className={` cursor-pointer border relative  p-1    rounded-[12px] transition-all duration-200 ${selectedSlide === index ? ' border-[#BDB4FE]' : 'border-[#EDEEEF]'
                 }`}
         >
 
@@ -75,14 +73,7 @@ export function SortableSlide({ slide, index, selectedSlide, onSlideClick }: Sor
                     <V1ContentRender slide={slide} isEditMode={true} />
                 </div>
             </div>
-            {/* <div className=" slide-box relative z-50  overflow-hidden aspect-video">
-                <div className="absolute bg-transparent z-50 top-0 left-0 w-full h-full" />
-                <div className="transform scale-[0.2] flex  pointer-events-none justify-center items-center origin-top-left  w-[500%] h-[500%]"
 
-                >
-                    <ContentRender slide={slide} isEditMode={true} />
-                </div>
-            </div> */}
         </div>
     );
 } 

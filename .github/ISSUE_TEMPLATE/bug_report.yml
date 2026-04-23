@@ -92,6 +92,8 @@ body:
         - Docker
         - Local Development
         - API Only
+    validations:
+      required: true
 
   - type: dropdown
     id: llm_provider
@@ -105,7 +107,7 @@ body:
         - Ollama
         - Custom OpenAI-compatible API
         - Not relevant
-
+  
   - type: textarea
     id: logs
     attributes:
