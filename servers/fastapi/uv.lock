@@ -1187,8 +1187,8 @@ wheels = [
 
 [[package]]
 name = "llmai"
-version = "0.1.8"
-source = { url = "https://files.pythonhosted.org/packages/49/9e/64fb2453d9eace7fd50b25635ae267422d014c64861ac511a5e953884f85/llmai-0.1.8-py3-none-any.whl" }
+version = "0.1.9"
+source = { url = "https://files.pythonhosted.org/packages/c6/86/5dcfd77b634947cd570680b13217b40bc72cd7d9e7f04cc1a52ff5f549a0/llmai-0.1.9-py3-none-any.whl" }
 dependencies = [
     { name = "anthropic" },
     { name = "boto3" },
@@ -1196,7 +1196,7 @@ dependencies = [
     { name = "openai" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/49/9e/64fb2453d9eace7fd50b25635ae267422d014c64861ac511a5e953884f85/llmai-0.1.8-py3-none-any.whl", hash = "sha256:c4bae504dae928e88e8437bd3e2e5eb573f459d6df9ed8fc182671ee99b3cf1b" },
+    { url = "https://files.pythonhosted.org/packages/c6/86/5dcfd77b634947cd570680b13217b40bc72cd7d9e7f04cc1a52ff5f549a0/llmai-0.1.9-py3-none-any.whl", hash = "sha256:dcd94502516586bbd6394fe2c9c610941ff4c19eae0f1316825435f35134cfb4" },
 ]
 
 [package.metadata]
@@ -1693,7 +1693,7 @@ requires-dist = [
     { name = "fastembed-vectorstore", specifier = ">=0.5.2" },
     { name = "fastmcp", specifier = ">=2.11.0" },
     { name = "google-genai", specifier = ">=1.28.0" },
-    { name = "llmai", url = "https://files.pythonhosted.org/packages/49/9e/64fb2453d9eace7fd50b25635ae267422d014c64861ac511a5e953884f85/llmai-0.1.8-py3-none-any.whl" },
+    { name = "llmai", url = "https://files.pythonhosted.org/packages/c6/86/5dcfd77b634947cd570680b13217b40bc72cd7d9e7f04cc1a52ff5f549a0/llmai-0.1.9-py3-none-any.whl" },
     { name = "mem0ai", extras = ["nlp"], specifier = ">=0.1.115" },
     { name = "nltk", specifier = ">=3.9.1" },
     { name = "openai", specifier = ">=1.98.0" },

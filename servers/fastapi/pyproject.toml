@@ -31,9 +31,14 @@ dependencies = [
 [tool.uv]
 index-strategy = "unsafe-best-match"
 
-[tool.uv.sources]
-llmai = { url = "https://files.pythonhosted.org/packages/49/9e/64fb2453d9eace7fd50b25635ae267422d014c64861ac511a5e953884f85/llmai-0.1.8-py3-none-any.whl" }
-
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["api*", "enums*", "models*", "services*", "constants*", "utils*", "templates*"]
+include = [
+    "api*",
+    "enums*",
+    "models*",
+    "services*",
+    "constants*",
+    "utils*",
+    "templates*",
+]
