@@ -531,11 +531,3 @@ Prepend your server’s root URL to <code>path</code> and
 ### 🚀 Roadmap
 
 Track the public roadmap on GitHub Projects: [https://github.com/orgs/presenton/projects/2](https://github.com/orgs/presenton/projects/2)
-
-#
-
-<p align="left">
-  <a href="https://www.youtube.com/@presentonai?sub_confirmation=1">
-    <img src="https://img.shields.io/badge/Subscribe-6C47FF?style=for-the-badge&logo=cloud&logoColor=white" />
-  </a>
-</p>
