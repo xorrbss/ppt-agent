@@ -42,7 +42,6 @@ export interface LLMConfig {
   GPT_IMAGE_1_5_QUALITY?: string;
 
   // Other Configs
-  TOOL_CALLS?: boolean;
   DISABLE_THINKING?: boolean;
   EXTENDED_REASONING?: boolean;
   WEB_GROUNDING?: boolean;

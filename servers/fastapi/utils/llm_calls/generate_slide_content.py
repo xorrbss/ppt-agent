@@ -1,11 +1,15 @@
+import asyncio
 from datetime import datetime
 import json
 from typing import Optional
-from models.llm_message import LLMSystemMessage, LLMUserMessage
+from fastapi import HTTPException
+from llmai import get_client
+from llmai.shared import JSONSchemaResponse, Message, SystemMessage, UserMessage
 from models.presentation_layout import SlideLayoutModel
 from models.presentation_outline_model import SlideOutlineModel
-from services.llm_client import LLMClient
+from utils.llm_config import get_llm_config
 from utils.llm_client_error_handler import handle_llm_client_exceptions
+from utils.llm_utils import extract_structured_content, get_generate_kwargs
 from utils.llm_provider import get_model
 from utils.schema_utils import add_field_in_schema, remove_fields_from_schema
 
@@ -130,10 +134,10 @@ def get_messages(
     verbosity: Optional[str] = None,
     instructions: Optional[str] = None,
     response_schema: Optional[dict] = None,
-):
+) -> list[Message]:
 
     return [
-        LLMSystemMessage(
+        SystemMessage(
             content=get_system_prompt(
                 tone,
                 verbosity,
@@ -141,7 +145,7 @@ def get_messages(
                 response_schema,
             ),
         ),
-        LLMUserMessage(
+        UserMessage(
             content=get_user_prompt(outline, language),
         ),
     ]
@@ -155,7 +159,7 @@ async def get_slide_content_from_type_and_outline(
     verbosity: Optional[str] = None,
     instructions: Optional[str] = None,
 ):
-    client = LLMClient()
+    client = get_client(config=get_llm_config())
     model = get_model()
 
     response_schema = remove_fields_from_schema(
@@ -175,20 +179,37 @@ async def get_slide_content_from_type_and_outline(
     )
 
     try:
-        response = await client.generate_structured(
-            model=model,
-            messages=get_messages(
-                outline.content,
-                language,
-                tone,
-                verbosity,
-                instructions,
-                response_schema,
-            ),
-            response_format=response_schema,
+        response_format = JSONSchemaResponse(
+            name="response",
+            json_schema=response_schema,
             strict=False,
         )
-        return response
+        messages = get_messages(
+            outline.content,
+            language,
+            tone,
+            verbosity,
+            instructions,
+            response_schema,
+        )
+
+        for attempt in range(3):
+            response = await asyncio.to_thread(
+                client.generate,
+                **get_generate_kwargs(
+                    model=model,
+                    messages=messages,
+                    response_format=response_format,
+                ),
+            )
+            content = extract_structured_content(response.content)
+            if content is not None:
+                return content
+
+            if attempt < 2:
+                await asyncio.sleep(0.5 * (attempt + 1))
+
+        raise HTTPException(status_code=400, detail="LLM did not return any content")
 
     except Exception as e:
         raise handle_llm_client_exceptions(e)

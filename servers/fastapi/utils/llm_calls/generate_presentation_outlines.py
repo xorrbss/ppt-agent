@@ -1,14 +1,26 @@
 from datetime import datetime
 from typing import Optional
 
-from enums.llm_provider import LLMProvider
-from models.llm_message import LLMSystemMessage, LLMUserMessage
+from llmai import get_client
+from llmai.shared import (
+    JSONSchemaResponse,
+    Message,
+    ResponseStreamCompletionChunk,
+    SystemMessage,
+    UserMessage,
+    WebSearchTool,
+)
+
 from models.presentation_outline_model import PresentationOutlineModel
-from models.llm_tools import SearchWebTool
-from services.llm_client import LLMClient
 from utils.get_dynamic_models import get_presentation_outline_model_with_n_slides
+from utils.llm_config import enable_web_grounding, get_llm_config
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_provider import get_model
+from utils.llm_utils import (
+    get_generate_kwargs,
+    serialize_structured_content,
+    stream_generate_events,
+)
 
 
 def get_system_prompt(
@@ -125,9 +137,9 @@ def get_messages(
     instructions: Optional[str] = None,
     include_title_slide: bool = True,
     include_table_of_contents: bool = False,
-):
+) -> list[Message]:
     return [
-        LLMSystemMessage(
+        SystemMessage(
             content=get_system_prompt(
                 tone,
                 verbosity,
@@ -136,7 +148,7 @@ def get_messages(
                 include_table_of_contents,
             ),
         ),
-        LLMUserMessage(
+        UserMessage(
             content=get_user_prompt(
                 content,
                 n_slides,
@@ -170,36 +182,47 @@ async def generate_ppt_outline(
         else PresentationOutlineModel
     )
 
-    client = LLMClient()
-    providers_with_search_tool = {
-        LLMProvider.OPENAI,
-        LLMProvider.ANTHROPIC,
-        LLMProvider.GOOGLE,
-    }
-    use_search_tool = (
-        web_search
-        and client.enable_web_grounding()
-        and client.llm_provider in providers_with_search_tool
-    )
+    client = get_client(config=get_llm_config())
+    use_search_tool = web_search and enable_web_grounding()
 
     try:
-        async for chunk in client.stream_structured(
-            model,
-            get_messages(
-                content,
-                n_slides,
-                language,
-                additional_context,
-                tone,
-                verbosity,
-                instructions,
-                include_title_slide,
-                include_table_of_contents,
-            ),
-            response_model.model_json_schema(),
+        response_format = JSONSchemaResponse(
+            name="response",
+            json_schema=response_model.model_json_schema(),
             strict=True,
-            tools=([SearchWebTool] if use_search_tool else None),
+        )
+        emitted_content = False
+        async for event in stream_generate_events(
+            client,
+            **get_generate_kwargs(
+                model=model,
+                messages=get_messages(
+                    content,
+                    n_slides,
+                    language,
+                    additional_context,
+                    tone,
+                    verbosity,
+                    instructions,
+                    include_title_slide,
+                    include_table_of_contents,
+                ),
+                response_format=response_format,
+                tools=([WebSearchTool()] if use_search_tool else None),
+                stream=True,
+            ),
         ):
-            yield chunk
+            if getattr(event, "type", None) == "content":
+                chunk = getattr(event, "chunk", None)
+                if chunk:
+                    emitted_content = True
+                    yield chunk
+            elif (
+                isinstance(event, ResponseStreamCompletionChunk)
+                and not emitted_content
+            ):
+                final_content = serialize_structured_content(event.content)
+                if final_content:
+                    yield final_content
     except Exception as e:
         yield handle_llm_client_exceptions(e)

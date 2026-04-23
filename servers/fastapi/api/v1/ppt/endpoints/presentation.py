@@ -75,6 +75,7 @@ from utils.process_slides import (
     process_slide_and_fetch_assets,
 )
 from utils.get_layout_by_name import get_layout_by_name
+from utils.llm_utils import message_content_to_text
 from models.presentation_layout import PresentationLayoutModel
 import uuid
 
@@ -666,12 +667,12 @@ async def generate_presentation_handler(
             await MEM0_PRESENTATION_MEMORY_SERVICE.store_generation_context(
                 presentation_id=presentation_id,
                 system_prompt=(
-                    outline_messages[0].content
+                    message_content_to_text(outline_messages[0].content)
                     if len(outline_messages) > 0
                     else None
                 ),
                 user_prompt=(
-                    outline_messages[1].content
+                    message_content_to_text(outline_messages[1].content)
                     if len(outline_messages) > 1
                     else None
                 ),

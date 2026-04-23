@@ -73,10 +73,6 @@ def set_disable_image_generation_env(value):
     os.environ["DISABLE_IMAGE_GENERATION"] = value
 
 
-def set_tool_calls_env(value):
-    os.environ["TOOL_CALLS"] = value
-
-
 def set_disable_thinking_env(value):
     os.environ["DISABLE_THINKING"] = value
 

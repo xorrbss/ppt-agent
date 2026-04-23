@@ -3,6 +3,7 @@ api/__init__.py
 api/lifespan.py
 api/main.py
 api/middlewares.py
+api/v1/auth/router.py
 api/v1/mock/router.py
 api/v1/ppt/background_tasks.py
 api/v1/ppt/router.py
@@ -46,9 +47,6 @@ models/document_chunk.py
 models/generate_presentation_request.py
 models/image_prompt.py
 models/json_path_guide.py
-models/llm_message.py
-models/llm_tool_call.py
-models/llm_tools.py
 models/ollama_model_metadata.py
 models/ollama_model_status.py
 models/pptx_models.py
@@ -78,7 +76,6 @@ presenton_backend.egg-info/dependency_links.txt
 presenton_backend.egg-info/requires.txt
 presenton_backend.egg-info/top_level.txt
 services/__init__.py
-services/codex_llm.py
 services/concurrent_service.py
 services/database.py
 services/document_conversion_service.py
@@ -88,8 +85,7 @@ services/html_to_text_runs_service.py
 services/icon_finder_service.py
 services/image_generation_service.py
 services/liteparse_service.py
-services/llm_client.py
-services/llm_tool_calls_handler.py
+services/mem0_presentation_memory_service.py
 services/pptx_presentation_creator.py
 services/score_based_chunker.py
 services/temp_file_service.py
@@ -106,7 +102,9 @@ templates/providers.py
 templates/router.py
 tests/test_gemini_schema_support.py
 tests/test_image_generation.py
+tests/test_liteparse_service.py
 tests/test_mcp_server.py
+tests/test_mem0_presentation_memory_service.py
 tests/test_openai_schema_support.py
 tests/test_pptx_creator.py
 tests/test_pptx_slides_processing.py
@@ -130,7 +128,9 @@ utils/get_layout_by_name.py
 utils/image_provider.py
 utils/image_utils.py
 utils/llm_client_error_handler.py
+utils/llm_config.py
 utils/llm_provider.py
+utils/llm_utils.py
 utils/model_availability.py
 utils/ocr_language.py
 utils/ollama.py
@@ -141,6 +141,7 @@ utils/ppt_utils.py
 utils/process_slides.py
 utils/schema_utils.py
 utils/set_env.py
+utils/simple_auth.py
 utils/theme_utils.py
 utils/user_config.py
 utils/validators.py

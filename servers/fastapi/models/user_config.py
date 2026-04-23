@@ -46,7 +46,6 @@ class UserConfig(BaseModel):
     GPT_IMAGE_1_5_QUALITY: Optional[str] = None
 
     # Reasoning
-    TOOL_CALLS: Optional[bool] = None
     DISABLE_THINKING: Optional[bool] = None
     EXTENDED_REASONING: Optional[bool] = None
 

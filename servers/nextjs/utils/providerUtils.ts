@@ -46,7 +46,6 @@ export const updateLLMConfig = (
     image_provider: "IMAGE_PROVIDER",
     disable_image_generation: "DISABLE_IMAGE_GENERATION",
     use_custom_url: "USE_CUSTOM_URL",
-    tool_calls: "TOOL_CALLS",
     disable_thinking: "DISABLE_THINKING",
     extended_reasoning: "EXTENDED_REASONING",
     web_grounding: "WEB_GROUNDING",

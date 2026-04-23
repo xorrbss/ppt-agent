@@ -214,7 +214,6 @@ Other optional variables exist in code (for example advanced Mem0 paths, LitePar
 - **CUSTOM_LLM_URL**: OpenAI-compatible base URL if **LLM** is **custom**.
 - **CUSTOM_LLM_API_KEY**: API key if **LLM** is **custom**.
 - **CUSTOM_MODEL**: Model id if **LLM** is **custom**.
-- **TOOL_CALLS**=[true/false]: If **true**, the custom LLM uses tool calls instead of JSON schema for structured output.
 - **DISABLE_THINKING**=[true/false]: If **true**, disables “thinking” on the custom LLM.
 - **WEB_GROUNDING**=[true/false]: If **true**, enables web search for OpenAI, Google, and Anthropic models.
 - **EXTENDED_REASONING**=[true/false]: Enables extended reasoning where supported by the configured stack.
