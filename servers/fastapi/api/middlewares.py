@@ -3,7 +3,12 @@ from starlette.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from utils.get_env import get_can_change_keys_env
-from utils.simple_auth import get_auth_status, get_session_token_from_request
+from utils.simple_auth import (
+    get_auth_status,
+    get_basic_auth_credentials_from_request,
+    get_session_token_from_request,
+    verify_credentials,
+)
 from utils.user_config import update_env_with_user_config
 
 
@@ -55,6 +60,13 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
             )
 
         if not auth_status["authenticated"]:
+            basic_credentials = get_basic_auth_credentials_from_request(request)
+            if basic_credentials and verify_credentials(
+                basic_credentials[0], basic_credentials[1]
+            ):
+                request.state.auth_username = basic_credentials[0].strip()
+                return await call_next(request)
+
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Unauthorized"},
