@@ -98,6 +98,14 @@ def is_auth_configured() -> bool:
     return bool(config.get("AUTH_USERNAME") and config.get("AUTH_PASSWORD_HASH"))
 
 
+def get_configured_auth_username() -> Optional[str]:
+    config = _load_user_config()
+    username = config.get("AUTH_USERNAME")
+    if isinstance(username, str) and username.strip():
+        return username.strip()
+    return None
+
+
 def setup_initial_credentials(username: str, password: str) -> None:
     cleaned_username = (username or "").strip()
     if len(cleaned_username) < 3:
@@ -242,6 +250,29 @@ def get_session_token_from_request(request: Request) -> Optional[str]:
         return auth_header[7:].strip() or None
 
     return None
+
+
+def get_basic_auth_credentials_from_request(
+    request: Request,
+) -> Optional[tuple[str, str]]:
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.lower().startswith("basic "):
+        return None
+
+    encoded_value = auth_header[6:].strip()
+    if not encoded_value:
+        return None
+
+    try:
+        decoded_value = base64.b64decode(encoded_value).decode("utf-8")
+    except Exception:
+        return None
+
+    if ":" not in decoded_value:
+        return None
+
+    username, password = decoded_value.split(":", 1)
+    return username, password
 
 
 def get_auth_status(session_token: Optional[str] = None) -> dict:
