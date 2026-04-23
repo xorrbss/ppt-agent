@@ -26,9 +26,9 @@ What makes Presenton different?
 - Use Fully **self-hosted** in Web through [Docker Package](https://docs.presenton.ai/v3/get-started/quickstart)
 - Or Download [Desktop App](https://presenton.ai/download) (Mac, Windows & Linux)
 - Works with OpenAI, Gemini, Anthropic, Ollama, or custom models
-- API deployable
+- Comes with AI Presentation Generation API
 - Fully open-source (Apache 2.0)
-- Use your **existing PPTX files as templates** for AI presentation generation
+- Works with your own design/templates
 
 > [!TIP]
 > **Star us!** A ⭐ shows your support and encourages us to keep building! 😇
