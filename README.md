@@ -349,7 +349,7 @@ Same variables as compose; use `-e` instead of `.env` when running `docker run` 
 
 <p>
 <strong>Authentication (HTTP Basic):</strong><br>
-All <code>/api/v1/</code> routes except <code>/api/v1/auth/*</code> require authentication. Send your Presenton admin username and password (same as the web UI, or <strong>AUTH_USERNAME</strong> / <strong>AUTH_PASSWORD</strong> when preseeding Docker). With <code>curl</code>, put them right after <code>-u</code> as <code>-u USERNAME:PASSWORD</code> — that is HTTP Basic auth and sets <code>Authorization: Basic …</code> for you. Replace the sample <code>sudipnext:sudipnext</code> below with your real credentials.
+All <code>/api/v1/</code> routes except <code>/api/v1/auth/*</code> require authentication. Send your Presenton admin username and password (same as the web UI, or <strong>AUTH_USERNAME</strong> / <strong>AUTH_PASSWORD</strong> when preseeding Docker). With <code>curl</code>, put them right after <code>-u</code> as <code>-u USERNAME:PASSWORD</code> — that is HTTP Basic auth and sets <code>Authorization: Basic …</code> for you. Replace the sample <code>username:password</code> below with your real credentials.
 </p>
 
 **Request Body**
