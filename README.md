@@ -347,6 +347,11 @@ Same variables as compose; use `-e` instead of `.env` when running `docker run` 
 <strong>Content-Type:</strong> <code>application/json</code>
 </p>
 
+<p>
+<strong>Authentication (HTTP Basic):</strong><br>
+All <code>/api/v1/</code> routes except <code>/api/v1/auth/*</code> require authentication. Send your Presenton admin username and password (same as the web UI, or <strong>AUTH_USERNAME</strong> / <strong>AUTH_PASSWORD</strong> when preseeding Docker). With <code>curl</code>, put them right after <code>-u</code> as <code>-u USERNAME:PASSWORD</code> — that is HTTP Basic auth and sets <code>Authorization: Basic …</code> for you. Replace the sample <code>sudipnext:sudipnext</code> below with your real credentials.
+</p>
+
 **Request Body**
 
 <table>
@@ -475,17 +480,19 @@ Options: <code>pptx</code>, <code>pdf</code>
   "edit_path": "string"
 }</code></pre>
 
-**Example Request**
+**Example (curl + HTTP Basic auth with <code>-u</code>)**
 
-<pre><code class="language-bash">curl -X POST http://localhost:5000/api/v1/ppt/presentation/generate \
+<pre><code class="language-bash">curl -u username:password \
+  -X POST http://localhost:5000/api/v1/ppt/presentation/generate \
   -H "Content-Type: application/json" \
   -d '{
-    "content": "Introduction to Machine Learning",
+   "content": "Introduction to Machine Learning",
     "n_slides": 5,
     "language": "English",
     "template": "general",
     "export_as": "pptx"
   }'</code></pre>
+
 
 **Example Response**
 
