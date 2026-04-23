@@ -21,6 +21,7 @@ from services.documents_loader import DocumentsLoader
 from services.mem0_presentation_memory_service import (
     MEM0_PRESENTATION_MEMORY_SERVICE,
 )
+from utils.llm_utils import message_content_to_text
 from utils.outline_utils import (
     get_no_of_outlines_to_generate_for_n_slides,
     get_presentation_title_from_presentation_outline,
@@ -85,12 +86,12 @@ async def stream_outlines(
         await MEM0_PRESENTATION_MEMORY_SERVICE.store_generation_context(
             presentation_id=presentation.id,
             system_prompt=(
-                outline_messages[0].content
+                message_content_to_text(outline_messages[0].content)
                 if len(outline_messages) > 0
                 else None
             ),
             user_prompt=(
-                outline_messages[1].content
+                message_content_to_text(outline_messages[1].content)
                 if len(outline_messages) > 1
                 else None
             ),

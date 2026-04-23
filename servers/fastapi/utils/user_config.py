@@ -22,7 +22,6 @@ from utils.get_env import (
     get_openai_api_key_env,
     get_openai_model_env,
     get_pexels_api_key_env,
-    get_tool_calls_env,
     get_user_config_path_env,
     get_image_provider_env,
     get_pixabay_api_key_env,
@@ -63,7 +62,6 @@ from utils.set_env import (
     set_pexels_api_key_env,
     set_image_provider_env,
     set_pixabay_api_key_env,
-    set_tool_calls_env,
     set_web_grounding_env,
     set_codex_access_token_env,
     set_codex_refresh_token_env,
@@ -118,11 +116,6 @@ def get_user_config():
         DALL_E_3_QUALITY=existing_config.DALL_E_3_QUALITY or get_dall_e_3_quality_env(),
         GPT_IMAGE_1_5_QUALITY=existing_config.GPT_IMAGE_1_5_QUALITY
         or get_gpt_image_1_5_quality_env(),
-        TOOL_CALLS=(
-            existing_config.TOOL_CALLS
-            if existing_config.TOOL_CALLS is not None
-            else (parse_bool_or_none(get_tool_calls_env()) or False)
-        ),
         DISABLE_THINKING=(
             existing_config.DISABLE_THINKING
             if existing_config.DISABLE_THINKING is not None
@@ -197,8 +190,6 @@ def update_env_with_user_config():
         set_dall_e_3_quality_env(user_config.DALL_E_3_QUALITY)
     if user_config.GPT_IMAGE_1_5_QUALITY:
         set_gpt_image_1_5_quality_env(user_config.GPT_IMAGE_1_5_QUALITY)
-    if user_config.TOOL_CALLS is not None:
-        set_tool_calls_env(str(user_config.TOOL_CALLS))
     if user_config.DISABLE_THINKING is not None:
         set_disable_thinking_env(str(user_config.DISABLE_THINKING))
     if user_config.EXTENDED_REASONING is not None:

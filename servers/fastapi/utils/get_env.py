@@ -85,10 +85,6 @@ def get_pixabay_api_key_env():
     return os.getenv("PIXABAY_API_KEY")
 
 
-def get_tool_calls_env():
-    return os.getenv("TOOL_CALLS")
-
-
 def get_disable_thinking_env():
     return os.getenv("DISABLE_THINKING")
 

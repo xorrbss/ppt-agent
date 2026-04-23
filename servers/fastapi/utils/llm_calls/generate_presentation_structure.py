@@ -1,10 +1,14 @@
-from typing import Optional, Dict
+import asyncio
+from typing import Optional
 
-from models.llm_message import LLMSystemMessage, LLMUserMessage
+from fastapi import HTTPException
+from llmai import get_client
+from llmai.shared import JSONSchemaResponse, Message, SystemMessage, UserMessage
 from models.presentation_layout import PresentationLayoutModel
 from models.presentation_outline_model import PresentationOutlineModel
-from services.llm_client import LLMClient
+from utils.llm_config import get_llm_config
 from utils.llm_client_error_handler import handle_llm_client_exceptions
+from utils.llm_utils import extract_structured_content, get_generate_kwargs
 from utils.llm_provider import get_model
 from utils.get_dynamic_models import get_presentation_structure_model_with_n_slides
 from models.presentation_structure_model import PresentationStructureModel
@@ -97,19 +101,21 @@ def get_messages(
     n_slides: int,
     data: str,
     instructions: Optional[str] = None,
-):
+) -> list[Message]:
     system_prompt = GET_MESSAGES_SYSTEM_PROMPT.format(
         user_instruction_header="# User Instruction:" if instructions else "",
         n_slides=n_slides,
     )
 
     return [
-        LLMSystemMessage(content=system_prompt),
-        LLMUserMessage(content=(
-            f"{presentation_layout.to_string()}\n\n"
-            "--------------------------------------\n\n"
-            f"{data}"
-        )),
+        SystemMessage(content=system_prompt),
+        UserMessage(
+            content=(
+                f"{presentation_layout.to_string()}\n\n"
+                "--------------------------------------\n\n"
+                f"{data}"
+            )
+        ),
     ]
 
 
@@ -118,20 +124,13 @@ def get_messages_for_slides_markdown(
     n_slides: int,
     data: str,
     instructions: Optional[str] = None,
-):
+) -> list[Message]:
     system_prompt = STRUCTURE_FROM_SLIDES_MARKDOWN_SYSTEM_PROMPT.format(
         user_instructions=instructions or "",
         presentation_layout=presentation_layout.to_string(with_schema=True),
     )
 
-    return [
-        LLMSystemMessage(
-            content=system_prompt
-        ),
-        LLMUserMessage(
-            content=data
-        )
-    ]
+    return [SystemMessage(content=system_prompt), UserMessage(content=data)]
 
 
 async def generate_presentation_structure(
@@ -140,34 +139,50 @@ async def generate_presentation_structure(
     instructions: Optional[str] = None,
     using_slides_markdown: bool = False,
 ) -> PresentationStructureModel:
-
-    client = LLMClient()
+    client = get_client(config=get_llm_config())
     model = get_model()
     response_model = get_presentation_structure_model_with_n_slides(
         len(presentation_outline.slides)
     )
 
     try:
-        response = await client.generate_structured(
-            model=model,
-            messages=(
-                get_messages_for_slides_markdown(
-                    presentation_layout,
-                    len(presentation_outline.slides),
-                    presentation_outline.to_string(),
-                    instructions,
-                )
-                if using_slides_markdown
-                else get_messages(
-                    presentation_layout,
-                    len(presentation_outline.slides),
-                    presentation_outline.to_string(),
-                    instructions,
-                )
-            ),
-            response_format=response_model.model_json_schema(),
+        messages = (
+            get_messages_for_slides_markdown(
+                presentation_layout,
+                len(presentation_outline.slides),
+                presentation_outline.to_string(),
+                instructions,
+            )
+            if using_slides_markdown
+            else get_messages(
+                presentation_layout,
+                len(presentation_outline.slides),
+                presentation_outline.to_string(),
+                instructions,
+            )
+        )
+        response_format = JSONSchemaResponse(
+            name="response",
+            json_schema=response_model.model_json_schema(),
             strict=True,
         )
-        return PresentationStructureModel(**response)
+
+        for attempt in range(3):
+            response = await asyncio.to_thread(
+                client.generate,
+                **get_generate_kwargs(
+                    model=model,
+                    messages=messages,
+                    response_format=response_format,
+                ),
+            )
+            content = extract_structured_content(response.content)
+            if content is not None:
+                return PresentationStructureModel(**content)
+
+            if attempt < 2:
+                await asyncio.sleep(0.5 * (attempt + 1))
+
+        raise HTTPException(status_code=400, detail="LLM did not return any content")
     except Exception as e:
         raise handle_llm_client_exceptions(e)

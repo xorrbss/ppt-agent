@@ -4,10 +4,17 @@ from dataclasses import dataclass
 import time
 from typing import Any, Awaitable, Callable, Optional
 
-from anthropic import AsyncAnthropic
 from fastapi import HTTPException
 from google import genai
 from google.genai import types as google_types
+from llmai import AnthropicClient
+from llmai.shared import (
+    AnthropicClientConfig,
+    ImageContentPart,
+    SystemMessage,
+    TextResponse,
+    UserMessage,
+)
 from openai import AsyncOpenAI
 
 from enums.llm_provider import LLMProvider
@@ -160,11 +167,28 @@ def _get_google_client() -> genai.Client:
     return genai.Client(api_key=api_key)
 
 
-def _get_anthropic_client() -> AsyncAnthropic:
+def _get_anthropic_client() -> AnthropicClient:
     api_key = get_anthropic_api_key_env()
     if not api_key:
         raise HTTPException(status_code=400, detail="ANTHROPIC_API_KEY is not set")
-    return AsyncAnthropic(api_key=api_key)
+    return AnthropicClient(config=AnthropicClientConfig(api_key=api_key))
+
+
+def _read_llmai_response_text(response: Any) -> str:
+    content = getattr(response, "content", None)
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for part in content:
+            if isinstance(part, str):
+                parts.append(part)
+                continue
+            text = getattr(part, "text", None)
+            if isinstance(text, str):
+                parts.append(text)
+        return "".join(parts)
+    return getattr(content, "text", None) or ""
 
 
 async def _call_openai_like(
@@ -308,28 +332,24 @@ async def _call_anthropic(
     media_type: str = "image/png",
 ) -> str:
     client = _get_anthropic_client()
-    content = [{"type": "text", "text": user_text}]
+    content: str | list[object] = user_text
     if image_bytes:
-        content.append(
-            {
-                "type": "image",
-                "source": {
-                    "type": "base64",
-                    "media_type": media_type,
-                    "data": base64.b64encode(image_bytes).decode("utf-8"),
-                },
-            }
-        )
+        content = [
+            user_text,
+            ImageContentPart(data=image_bytes, mime_type=media_type),
+        ]
 
-    response = await client.messages.create(
+    response = await asyncio.to_thread(
+        client.generate,
         model=model,
+        messages=[
+            SystemMessage(content=system_prompt),
+            UserMessage(content=content),
+        ],
+        response_format=TextResponse(),
         max_tokens=8192,
-        system=system_prompt,
-        messages=[{"role": "user", "content": content}],
     )
-    output_text = "".join(
-        block.text for block in response.content if getattr(block, "type", None) == "text"
-    )
+    output_text = _read_llmai_response_text(response)
     if not output_text:
         raise HTTPException(status_code=500, detail="No output from template provider")
     return output_text
