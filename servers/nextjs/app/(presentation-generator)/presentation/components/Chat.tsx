@@ -473,7 +473,7 @@ const Chat = ({
                     <p className="whitespace-pre-wrap">{message.content}</p>
                   </div>
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FF8617] text-sm font-semibold text-white">
-                    A
+                    U
                   </div>
                 </div>
               ) : (

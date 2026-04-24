@@ -151,8 +151,8 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
         className="relative flex h-full flex-col overflow-hidden"
       >
         <PresentationHeader presentation_id={presentation_id} isPresentationSaving={isSaving} currentSlide={selectedSlide} />
-        <div className="flex flex-1 min-h-0 gap-6">
-          <div className="w-[120px] h-full shrink-0 self-start sticky top-0">
+        <div className="flex flex-1 min-h-0 gap-6 ">
+          <div className="w-[120px] h-full shrink-0  self-start sticky top-0 mt-[18px]">
             <SidePanel
               selectedSlide={selectedSlide}
               onSlideClick={handleSlideClick}
@@ -160,7 +160,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
               loading={loading}
             />
           </div>
-          <div className="w-full min-w-0 h-full flex-1 ">
+          <div className="w-full min-w-0 h-full flex-1  mt-[18px]">
             <div className="font-inter h-full overflow-y-auto hide-scrollbar">
               <div className="w-full max-w-[1280px] min-h-full mx-auto flex flex-col items-center pb-8">
                 {!presentationData ||
