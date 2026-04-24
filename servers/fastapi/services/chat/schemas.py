@@ -15,6 +15,9 @@ class NoArgsInput(StrictSchemaModel):
 
 class GetSlideAtIndexInput(StrictSchemaModel):
     index: int = Field(ge=0, le=1000)
+    include_full_content: bool = Field(alias="includeFullContent")
+
+    model_config = ConfigDict(extra="forbid", strict=True, populate_by_name=True)
 
 
 class SearchSlidesInput(StrictSchemaModel):

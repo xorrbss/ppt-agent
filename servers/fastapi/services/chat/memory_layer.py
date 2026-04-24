@@ -25,7 +25,9 @@ from utils.process_slides import (
 
 LOGGER = logging.getLogger(__name__)
 MAX_SCHEMA_ERRORS = 10
-RUNTIME_CONTENT_FIELDS = {"__speaker_note__", "__image_url__", "__icon_url__"}
+# Keep URL runtime fields during validation because many slide schemas require them.
+# Speaker note is handled separately and should not affect JSON-schema checks.
+RUNTIME_CONTENT_FIELDS = {"__speaker_note__"}
 
 
 class PresentationChatMemoryLayer:
@@ -45,6 +47,34 @@ class PresentationChatMemoryLayer:
         if key != "presentation_outline":
             return None
 
+        # Prefer live slides from SQL so slide count and slide indices are always current.
+        slides_result = await self._sql_session.scalars(
+            select(SlideModel)
+            .where(SlideModel.presentation == self._presentation_id)
+            .order_by(SlideModel.index)
+        )
+        slides = list(slides_result)
+        if slides:
+            LOGGER.info(
+                "Chat outline loaded from slides table (presentation_id=%s, slides=%d)",
+                self._presentation_id,
+                len(slides),
+            )
+            return {
+                "source": "slides_table",
+                "slide_count": len(slides),
+                "slides": [
+                    {
+                        "slide_id": str(slide.id),
+                        "index": slide.index,
+                        "layout_id": slide.layout,
+                        "content": slide.content,
+                        "speaker_note": slide.speaker_note,
+                    }
+                    for slide in slides
+                ],
+            }
+
         presentation = await self._sql_session.get(PresentationModel, self._presentation_id)
         if not presentation or not presentation.outlines:
             LOGGER.info(
@@ -54,18 +84,17 @@ class PresentationChatMemoryLayer:
             return None
 
         LOGGER.info(
-            "Chat memory hit for outline (presentation_id=%s)",
+            "Chat outline fallback hit from presentation.outlines (presentation_id=%s)",
             self._presentation_id,
         )
         return presentation.outlines
 
     async def search(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
         """
-        Search stored slide memory.
+        Search slides directly from SQL-backed slide rows.
 
-        We use a keyword-ranking fallback over persisted slides so this works even
-        when semantic/vector memories are missing. This still satisfies memory-only
-        lookup because it reads from local presentation memory state.
+        Results are intentionally compact (snippet-first) to keep tool-call payloads
+        small for models with limited context windows.
         """
 
         trimmed_query = (query or "").strip()
@@ -104,8 +133,8 @@ class PresentationChatMemoryLayer:
                     {
                         "slide_id": str(slide.id),
                         "index": slide.index,
+                        "slide_number": slide.index + 1,
                         "layout_id": slide.layout,
-                        "content": slide.content,
                         "snippet": self._build_snippet(serialized, query_lower),
                         "score": score,
                     },
@@ -115,14 +144,16 @@ class PresentationChatMemoryLayer:
         ranked.sort(key=lambda item: (-item[0], item[1]["index"]))
         results = [entry for _, entry in ranked[: max(1, limit)]]
         LOGGER.info(
-            "Chat memory search completed (presentation_id=%s, query=%r, hits=%d)",
+            "Chat DB slide search completed (presentation_id=%s, query=%r, hits=%d)",
             self._presentation_id,
             trimmed_query,
             len(results),
         )
         return results
 
-    async def get_slide_at_index(self, index: int) -> dict[str, Any] | None:
+    async def get_slide_at_index(
+        self, index: int, *, include_full_content: bool = False
+    ) -> dict[str, Any] | None:
         slide = await self._sql_session.scalar(
             select(SlideModel).where(
                 SlideModel.presentation == self._presentation_id,
@@ -137,13 +168,21 @@ class PresentationChatMemoryLayer:
             )
             return None
 
-        return {
+        response: dict[str, Any] = {
             "slide_id": str(slide.id),
             "index": slide.index,
+            "slide_number": slide.index + 1,
             "layout_id": slide.layout,
-            "content": slide.content,
+            "content_preview": self._build_snippet(
+                self._serialize_slide(slide),
+                query_lower="",
+                window=420,
+            ),
             "speaker_note": slide.speaker_note,
         }
+        if include_full_content:
+            response["content"] = slide.content
+        return response
 
     async def get_available_layouts(self) -> list[dict[str, Any]]:
         presentation = await self._sql_session.get(PresentationModel, self._presentation_id)

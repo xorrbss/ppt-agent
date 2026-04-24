@@ -27,7 +27,7 @@ from utils.llm_provider import get_model
 from utils.llm_utils import extract_text, get_generate_kwargs
 
 LOGGER = logging.getLogger(__name__)
-MAX_TOOL_ROUNDS = 6
+MAX_TOOL_ROUNDS = 16
 
 
 @dataclass(frozen=True)

@@ -48,8 +48,10 @@ class ChatTools:
             Tool(
                 name="getPresentationOutline",
                 description=(
-                    "Retrieve the current presentation outline from memory. "
-                    "Use when the user asks about sections, flow, or slide plan."
+                    "Retrieve the current presentation outline from live slides "
+                    "database state (with memory fallback when needed). "
+                    "Return compact sections (no full slide JSON) to save context "
+                    "window. Use when the user asks about sections, flow, or slide plan."
                 ),
                 schema=NoArgsInput,
                 strict=True,
@@ -57,8 +59,8 @@ class ChatTools:
             Tool(
                 name="searchSlides",
                 description=(
-                    "Search slide memory by semantic intent or keywords and return "
-                    "relevant slide snippets with identifiers. "
+                    "Search SQL slides by semantic intent/keywords and return "
+                    "compact relevant snippets with slide identifiers. "
                     "Always provide both query and limit."
                 ),
                 schema=SearchSlidesInput,
@@ -68,7 +70,10 @@ class ChatTools:
                 name="getSlideAtIndex",
                 description=(
                     "Retrieve a single slide by zero-based index, including its "
-                    "layout id and current structured content."
+                    "layout id and compact preview by default. "
+                    "Set includeFullContent=true only when full JSON is explicitly needed "
+                    "(for example before editing existing content). "
+                    "If user says slide N, convert to zero-based index N-1."
                 ),
                 schema=GetSlideAtIndexInput,
                 strict=True,
@@ -159,10 +164,21 @@ class ChatTools:
             }
 
         sections: list[dict[str, Any]] = []
-        for index, slide in enumerate(slides):
+        for position, slide in enumerate(slides):
+            index = position
             content = ""
             if isinstance(slide, dict):
-                content = str(slide.get("content") or "")
+                raw_index = slide.get("index")
+                if isinstance(raw_index, int):
+                    index = raw_index
+                raw_content = slide.get("content")
+                if isinstance(raw_content, str):
+                    content = raw_content
+                elif raw_content is not None:
+                    try:
+                        content = json.dumps(raw_content, ensure_ascii=False)
+                    except Exception:
+                        content = str(raw_content)
             elif isinstance(slide, str):
                 content = slide
 
@@ -170,8 +186,8 @@ class ChatTools:
             sections.append(
                 {
                     "index": index,
+                    "slide_number": index + 1,
                     "title": title,
-                    "preview": self._truncate(" ".join(content.split()), 220),
                 }
             )
 
@@ -179,7 +195,7 @@ class ChatTools:
             "found": True,
             "slide_count": len(sections),
             "sections": sections,
-            "outline": outline,
+            "source": outline.get("source", "memory"),
         }
 
     async def _search_slides(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -192,8 +208,31 @@ class ChatTools:
         }
 
     async def _get_slide_at_index(self, args: dict[str, Any]) -> dict[str, Any]:
-        payload = GetSlideAtIndexInput(**args)
-        slide = await self._memory.get_slide_at_index(payload.index)
+        normalized_args = dict(args)
+        normalized_args.setdefault("includeFullContent", False)
+        payload = GetSlideAtIndexInput(**normalized_args)
+        slide = await self._memory.get_slide_at_index(
+            payload.index,
+            include_full_content=payload.include_full_content,
+        )
+        if not slide and payload.index > 0:
+            # Users often refer to slides as 1-based; allow a safe fallback.
+            fallback_index = payload.index - 1
+            fallback_slide = await self._memory.get_slide_at_index(
+                fallback_index,
+                include_full_content=payload.include_full_content,
+            )
+            if fallback_slide:
+                return {
+                    "found": True,
+                    "slide": fallback_slide,
+                    "requested_index": payload.index,
+                    "resolved_index": fallback_index,
+                    "note": (
+                        "No slide found at requested index; returned one-based fallback "
+                        f"at index {fallback_index}."
+                    ),
+                }
         if not slide:
             return {
                 "found": False,
