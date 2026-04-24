@@ -128,10 +128,5 @@ export const handleSaveLLMConfig = async (llmConfig: LLMConfig) => {
   store.dispatch(setLLMConfig(llmConfig));
 };
 
-export const hasValidLLMConfig = (llmConfig: LLMConfig) => {
-  console.log('llmConfig', llmConfig);
-
-  const validationError = getLLMConfigValidationError(llmConfig);
-  console.log('validationError', validationError);
-  return validationError === null;
-}
+export const hasValidLLMConfig = (llmConfig: LLMConfig) =>
+  getLLMConfigValidationError(llmConfig) === null;
