@@ -7,7 +7,6 @@ import { setupThemeHandlers } from "./theme_handlers";
 import { setupUploadImage } from "./upload_image";
 import { setupLogHandler } from "./log_handler";
 import { setupApiHandlers } from "./api_handlers";
-import { setupPresentationToPptxModelHandlers } from "./presentation_to_pptx_model_handlers";
 
 export function setupIpcHandlers() {
   setupExportHandlers();
@@ -19,5 +18,4 @@ export function setupIpcHandlers() {
   setupUploadImage();
   setupLogHandler();
   setupApiHandlers();
-  setupPresentationToPptxModelHandlers();
 }

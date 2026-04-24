@@ -11,8 +11,7 @@ contextBridge.exposeInMainWorld('env', {
 
 contextBridge.exposeInMainWorld('electron', {
   fileDownloaded: (filePath: string) => ipcRenderer.invoke("file-downloaded", filePath),
-  exportAsPDF: (id: string, title: string) => ipcRenderer.invoke("export-as-pdf", id, title),
-  exportPresentation: (id: string, title: string, format: "pptx" | "pdf" | "png") =>
+  exportPresentation: (id: string, title: string, format: "pptx" | "pdf") =>
     ipcRenderer.invoke("export-presentation", id, title, format),
   getUserConfig: () => ipcRenderer.invoke("get-user-config"),
   setUserConfig: (userConfig: UserConfig) => ipcRenderer.invoke("set-user-config", userConfig),
@@ -31,7 +30,6 @@ contextBridge.exposeInMainWorld('electron', {
   hasRequiredKey: () => ipcRenderer.invoke("api:has-required-key"),
   telemetryStatus: () => ipcRenderer.invoke("api:telemetry-status"),
   getTemplates: () => ipcRenderer.invoke("api:templates"),
-  getPresentationPptxModel: (presentationId: string) => ipcRenderer.invoke("presentation-to-pptx-model", presentationId),
   onStartupStatus: (callback: (payload: { name: string; status: string }) => void) =>
     ipcRenderer.on("startup:status", (_event, payload) => callback(payload)),
   getStartupStatus: () => ipcRenderer.invoke("startup:get-status"),

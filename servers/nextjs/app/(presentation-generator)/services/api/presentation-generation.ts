@@ -226,27 +226,4 @@ export class PresentationGenerationApi {
     }
   }
 
-
-
-  // EXPORT PRESENTATION
-  static async exportAsPPTX(presentationData: any) {
-    try {
-      const response = await fetch(
-        getApiUrl(`/api/v1/ppt/presentation/export/pptx`),
-        {
-          method: "POST",
-          headers: getHeader(),
-          body: JSON.stringify(presentationData),
-          cache: "no-cache",
-        }
-      );
-      return await ApiResponseHandler.handleResponse(response, "Failed to export as PowerPoint");
-    } catch (error) {
-      console.error("error in pptx export", error);
-      throw error;
-    }
-  }
-  
-  
-
 }

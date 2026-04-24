@@ -57,7 +57,9 @@ export async function bundledExportPackageAvailable(): Promise<boolean> {
   }
 }
 
-export type BundledPdfExportResult = { path: string };
+export type BundledPresentationExportFormat = "pdf" | "pptx";
+
+export type BundledPresentationExportResult = { path: string };
 
 function normalizeExportOutputPath(params: {
   pathValue?: string;
@@ -110,11 +112,12 @@ function normalizeExportOutputPath(params: {
  * Runs the bundled export entrypoint (`presentation-export/index.js`) with
  * `BUILT_PYTHON_MODULE_PATH` pointing at the PyInstaller converter binary.
  */
-export async function runBundledPdfExport(params: {
+export async function runBundledPresentationExport(params: {
   presentationId: string;
   title: string | undefined;
-}): Promise<BundledPdfExportResult> {
-  const { presentationId, title } = params;
+  format: BundledPresentationExportFormat;
+}): Promise<BundledPresentationExportResult> {
+  const { presentationId, title, format } = params;
   const exportRoot = getExportPackageRoot();
   const entrypoint = await resolveExportEntrypoint(exportRoot);
   const converter = bundledConverterPath(exportRoot);
@@ -140,7 +143,7 @@ export async function runBundledPdfExport(params: {
   const exportTask = {
     type: "export",
     url: pptUrl,
-    format: "pdf",
+    format,
     title: sanitizeFilename(title ?? "presentation"),
     fastapiUrl: fastapiUrl || undefined,
   };

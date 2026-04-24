@@ -25,7 +25,6 @@ import { useDispatch, useSelector } from "react-redux";
 
 import { RootState } from "@/store/store";
 import { toast } from "sonner";
-import { PptxPresentationModel } from "@/types/pptx_models";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { usePresentationUndoRedo } from "../hooks/PresentationUndoRedo";
 import ToolTip from "@/components/ToolTip";
@@ -181,12 +180,6 @@ const PresentationHeader = ({
     titleBlurIntentRef.current = "cancel";
   };
 
-  const get_presentation_pptx_model = async (id: string): Promise<PptxPresentationModel> => {
-    const response = await fetch(`/api/presentation_to_pptx_model?id=${id}`);
-    const pptx_model = await response.json();
-    return pptx_model;
-  };
-
   const handleExportPptx = async () => {
     if (isStreaming) return;
 
@@ -201,26 +194,30 @@ const PresentationHeader = ({
       setIsExporting(true);
       // Save the presentation data before exporting
       await PresentationGenerationApi.updatePresentationContent(presentationData);
-
-      const pptx_model = await get_presentation_pptx_model(presentation_id);
-      if (!pptx_model) {
-        throw new Error("Failed to get presentation PPTX model");
-      }
       const safePptxFileName = buildSafeExportFileName(
         presentationData?.title,
         "pptx"
       );
       const safePptxTitle = safePptxFileName.replace(/\.pptx$/i, "");
-      const pptx_path = await PresentationGenerationApi.exportAsPPTX({
-        ...pptx_model,
-        name: safePptxTitle,
+      const response = await fetch("/api/export-presentation", {
+        method: "POST",
+        body: JSON.stringify({
+          format: "pptx",
+          id: presentation_id,
+          title: safePptxTitle,
+        }),
       });
-      if (pptx_path) {
-        // window.open(pptx_path, '_self');
-        downloadLink(pptx_path, safePptxFileName);
-      } else {
+
+      if (!response.ok) {
+        throw new Error("Failed to export PPTX");
+      }
+
+      const { path: pptxPath } = await response.json();
+      if (!pptxPath) {
         throw new Error("No path returned from export");
       }
+
+      downloadLink(pptxPath, safePptxFileName);
     } catch (error) {
       console.error("Export failed:", error);
       toast.error("Having trouble exporting!", {
@@ -251,17 +248,17 @@ const PresentationHeader = ({
         "pdf"
       );
       const safePdfTitle = safePdfFileName.replace(/\.pdf$/i, "");
-      const response = await fetch('/api/export-as-pdf', {
-        method: 'POST',
+      const response = await fetch("/api/export-presentation", {
+        method: "POST",
         body: JSON.stringify({
+          format: "pdf",
           id: presentation_id,
           title: safePdfTitle,
-        })
+        }),
       });
 
       if (response.ok) {
         const { path: pdfPath } = await response.json();
-        // window.open(pdfPath, '_blank');
         downloadLink(pdfPath, safePdfFileName);
       } else {
         throw new Error("Failed to export PDF");
