@@ -3,14 +3,13 @@ import { CSS } from '@dnd-kit/utilities';
 import { Slide } from '../../types/slide';
 import { useRef } from 'react';
 import { V1ContentRender } from '../../components/V1ContentRender';
-import { useSearchParams } from 'next/navigation';
 interface SortableSlideProps {
     slide: Slide;
     index: number;
     selectedSlide: number;
     onSlideClick: (index: any) => void;
 }
-const SCALE = 0.125;
+const SCALE = 0.0625;
 
 export function SortableSlide({ slide, index, selectedSlide, onSlideClick }: SortableSlideProps) {
     const lastClickTime = useRef(0);
@@ -56,11 +55,17 @@ export function SortableSlide({ slide, index, selectedSlide, onSlideClick }: Sor
             className={` cursor-pointer border relative  p-1    rounded-[12px] transition-all duration-200 ${selectedSlide === index ? ' border-[#BDB4FE]' : 'border-[#EDEEEF]'
                 }`}
         >
+            <p className='absolute top-1/2 translate-y-1/2 -left-3 bg-white border border-[#EDEEEF]  rounded-[40px] text-[#191919] text-[10px] font-medium px-1 z-50
+                '>
+                {index + 1}
+            </p>
+
 
             <div
                 className="relative"
                 style={{ height: `${720 * SCALE}px`, overflow: "hidden" }}
             >
+
                 <div
                     className="absolute top-0 left-0 pointer-events-none"
                     style={{

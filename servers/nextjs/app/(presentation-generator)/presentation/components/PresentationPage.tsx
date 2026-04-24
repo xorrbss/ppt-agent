@@ -23,6 +23,7 @@ import { applyPresentationThemeToElement } from "../utils/applyPresentationTheme
 
 import { usePresentationUndoRedo } from "../hooks/PresentationUndoRedo";
 import PresentationHeader from "./PresentationHeader";
+import Chat from "./Chat";
 
 const PresentationPage: React.FC<PresentationPageProps> = ({
   presentation_id,
@@ -141,65 +142,62 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   }
 
   return (
-    <div className="h-screen overflow-hidden font-syne ">
+    <div className="h-screen overflow-hidden font-syne">
       <div
         style={{
-          background: "#ffffff",
+          background: "#EDEEEF",
         }}
         id="presentation-slides-wrapper"
-        className="flex  gap-6 relative "
+        className="relative flex h-full flex-col overflow-hidden"
       >
-        <div className="w-[200px]">
-          <SidePanel
-            selectedSlide={selectedSlide}
-            onSlideClick={handleSlideClick}
-            presentationId={presentation_id}
-            loading={loading}
-          />
-        </div>
-        <div className=" w-full h-[calc(100vh-20px)]  pr-[25px] overflow-y-auto">
-          <PresentationHeader presentation_id={presentation_id} isPresentationSaving={isSaving} currentSlide={selectedSlide} />
-          <div
-
-            style={{
-              background: "rgba(255, 255, 255, 0.10)",
-              boxShadow: "0 0 20.01px 0 rgba(122, 90, 248, 0.16) inset",
-            }}
-            className="p-6 rounded-[20px] font-inter flex flex-col items-center overflow-hidden justify-center  border border-[#EDECEC] "
-          >
-            <div className="w-full max-w-[1280px] h-full">
-
-              {!presentationData ||
-                loading ||
-                !presentationData?.slides ||
-                presentationData?.slides.length === 0 ? (
-                <div className="relative w-full h-[calc(100vh-120px)]   mx-auto">
-                  <div className="">
-                    {Array.from({ length: 2 }).map((_, index) => (
-                      <Skeleton
-                        key={index}
-                        className="aspect-video bg-gray-400 my-4 w-full mx-auto "
-                      />
-                    ))}
+        <PresentationHeader presentation_id={presentation_id} isPresentationSaving={isSaving} currentSlide={selectedSlide} />
+        <div className="flex flex-1 min-h-0 gap-6">
+          <div className="w-[120px] h-full shrink-0 self-start sticky top-0">
+            <SidePanel
+              selectedSlide={selectedSlide}
+              onSlideClick={handleSlideClick}
+              presentationId={presentation_id}
+              loading={loading}
+            />
+          </div>
+          <div className="w-full min-w-0 h-full flex-1 ">
+            <div className="font-inter h-full overflow-y-auto hide-scrollbar">
+              <div className="w-full max-w-[1280px] min-h-full mx-auto flex flex-col items-center pb-8">
+                {!presentationData ||
+                  loading ||
+                  !presentationData?.slides ||
+                  presentationData?.slides.length === 0 ? (
+                  <div className="relative w-full h-[calc(100vh-120px)] mx-auto hide-scrollbar">
+                    <div className="">
+                      {Array.from({ length: 2 }).map((_, index) => (
+                        <Skeleton
+                          key={index}
+                          className="aspect-video bg-gray-400 my-4 w-full mx-auto "
+                        />
+                      ))}
+                    </div>
+                    {stream && <LoadingState />}
                   </div>
-                  {stream && <LoadingState />}
-                </div>
-              ) : (
-                <>
-                  {presentationData &&
-                    presentationData.slides &&
-                    presentationData.slides.length > 0 &&
-                    presentationData.slides.map((slide: any, index: number) => (
-                      <SlideContent
-                        key={`${slide.type}-${index}-${slide.index}`}
-                        slide={slide}
-                        index={index}
-                        presentationId={presentation_id}
-                      />
-                    ))}
-                </>
-              )}
+                ) : (
+                  <>
+                    {presentationData &&
+                      presentationData.slides &&
+                      presentationData.slides.length > 0 &&
+                      presentationData.slides.map((slide: any, index: number) => (
+                        <SlideContent
+                          key={`${slide.type}-${index}-${slide.index}`}
+                          slide={slide}
+                          index={index}
+                          presentationId={presentation_id}
+                        />
+                      ))}
+                  </>
+                )}
+              </div>
             </div>
+          </div>
+          <div className="w-full max-w-[370px] h-full shrink-0 self-start sticky top-0">
+            <Chat />
           </div>
         </div>
       </div>

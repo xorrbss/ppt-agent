@@ -21,7 +21,7 @@ import { setPresentationData } from "@/store/slices/presentationGeneration";
 import { SortableSlide } from "./SortableSlide";
 import SlideScale from "../../components/PresentationRender";
 import { Separator } from "@/components/ui/separator";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import NewSlide from "./NewSlide";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 
@@ -40,8 +40,6 @@ const SidePanel = ({
 
   loading,
 }: SidePanelProps) => {
-
-  const router = useRouter();
   const pathname = usePathname();
   const [showNewSlideSelection, setShowNewSlideSelection] = useState(false);
 
@@ -132,32 +130,26 @@ const SidePanel = ({
   }
 
   return (
-    <div className="bg-[#F6F6F9] pt-8 px-4 w-[200px]">
+    <div className="px-4 w-[120px] h-full">
 
-      <img onClick={() => {
-        router.push("/dashboard");
-      }} src="/logo-with-bg.png" alt="" className="w-10 h-10 cursor-pointer object-contain" />
 
-      <Separator orientation="horizontal" className="my-6 " />
       <div
         className={`
-          relative bg-[#F6F6F9] h-full z-50 xl:z-auto 
+          relative  h-full z-50 xl:z-auto 
           transition-all duration-300 ease-in-out
         `}
       >
         <div
-
-          className="w-full h-[calc(100vh-120px)]   hide-scrollbar overflow-hidden slide-theme "
+          className="w-full h-full hide-scrollbar overflow-hidden slide-theme flex flex-col"
         >
 
-          <p className="text-xl font-normal font-syne pb-3.5 text-[#000000]">Slides ({presentationData?.slides?.length})</p>
 
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
           >
-            <div className=" overflow-y-auto w-full hide-scrollbar h-[calc(100%-140px)] space-y-3.5">
+            <div className="overflow-y-auto w-full hide-scrollbar min-h-0 flex-1 space-y-3.5">
               {isStreaming ? (
                 presentationData &&
                 presentationData?.slides.map((slide: any, index: number) => (
@@ -203,7 +195,7 @@ const SidePanel = ({
           <button
             type="button"
             onClick={handleAddSlideClick}
-            className="pt-6 gap-2 flex flex-col py-2 duration-300 items-center justify-center rounded-lg cursor-pointer mx-auto"
+            className="py-4 gap-2 flex flex-col duration-300 items-center justify-center rounded-lg cursor-pointer mx-auto"
           >
             <Plus className="w-3.5 h-3.5" />
             <span className="text-[11px] font-normal text-[#000000]">Add Slide</span>
