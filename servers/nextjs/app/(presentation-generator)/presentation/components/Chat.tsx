@@ -1,13 +1,18 @@
 "use client";
 
 import {
+  Activity,
+  CheckCircle2,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
+  CircleDot,
   Loader2,
-  MessageCircle,
   MessageCircleMore,
   Plus,
   RefreshCw,
   Send,
+  XCircle,
 } from "lucide-react";
 import React, {
   FormEvent,
@@ -19,6 +24,7 @@ import React, {
 } from "react";
 import { toast } from "sonner";
 import { PresentationChatApi } from "../../services/api/chat";
+import type { ChatStreamTrace } from "../../services/api/chat";
 
 const suggestions: { id: string; icon: ReactNode; suggestion: string }[] = [
   {
@@ -223,12 +229,19 @@ type ChatMessage = {
   role: "user" | "assistant" | "error";
   content: string;
   toolCalls?: string[];
+  activity?: AssistantActivity[];
 };
 
 type ChatProps = {
   presentationId: string;
   currentSlide?: number;
   onPresentationChanged?: () => Promise<void> | void;
+};
+
+type AssistantActivity = {
+  id: string;
+  label: string;
+  state: "running" | "success" | "error" | "info";
 };
 
 const createMessageId = () => {
@@ -246,6 +259,73 @@ const AssistantMarker = () => (
   </div>
 );
 
+const inferStatusState = (status: string): AssistantActivity["state"] => {
+  const normalized = status.trim().toLowerCase();
+  if (
+    normalized.includes("preparing") ||
+    normalized.includes("thinking") ||
+    normalized.includes("finalizing") ||
+    normalized.includes("saving")
+  ) {
+    return "running";
+  }
+
+  return "info";
+};
+
+const formatTraceActivity = (
+  trace: ChatStreamTrace
+): Omit<AssistantActivity, "id"> | null => {
+  if (typeof trace.message === "string" && trace.message.trim().length > 0) {
+    return {
+      label: trace.message.trim(),
+      state:
+        trace.status === "error"
+          ? "error"
+          : trace.status === "success"
+            ? "success"
+            : "running",
+    };
+  }
+
+  if (trace.tool && trace.status === "start") {
+    return { label: `Running ${trace.tool}`, state: "running" };
+  }
+
+  if (trace.tool && trace.status === "success") {
+    return { label: `${trace.tool} completed`, state: "success" };
+  }
+
+  if (trace.tool && trace.status === "error") {
+    return { label: `${trace.tool} failed`, state: "error" };
+  }
+
+  if (trace.kind === "tool_plan" && Array.isArray(trace.tools) && trace.tools.length) {
+    return {
+      label: `Using tools: ${trace.tools.join(", ")}`,
+      state: "info",
+    };
+  }
+
+  return null;
+};
+
+const ActivityIcon = ({ state }: { state: AssistantActivity["state"] }) => {
+  if (state === "running") {
+    return <Loader2 className="h-3 w-3 animate-spin text-[#98A2B3]" />;
+  }
+
+  if (state === "success") {
+    return <CheckCircle2 className="h-3 w-3 text-[#12B76A]" />;
+  }
+
+  if (state === "error") {
+    return <XCircle className="h-3 w-3 text-[#F04438]" />;
+  }
+
+  return <CircleDot className="h-3 w-3 text-[#98A2B3]" />;
+};
+
 const Chat = ({
   presentationId,
   currentSlide,
@@ -253,8 +333,12 @@ const Chat = ({
 }: ChatProps) => {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [expandedActivityByMessage, setExpandedActivityByMessage] = useState<
+    Record<string, boolean>
+  >({});
 
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -262,7 +346,9 @@ const Chat = ({
   useEffect(() => {
     setMessages([]);
     setInput("");
+    setConversationId(null);
     setErrorMessage(null);
+    setExpandedActivityByMessage({});
   }, [presentationId]);
 
   useEffect(() => {
@@ -283,7 +369,9 @@ const Chat = ({
   const resetChat = () => {
     setMessages([]);
     setInput("");
+    setConversationId(null);
     setErrorMessage(null);
+    setExpandedActivityByMessage({});
 
     inputRef.current?.focus();
   };
@@ -299,6 +387,107 @@ const Chat = ({
       console.error("Failed to refresh presentation after chat update:", error);
       toast.error("Chat completed, but slide refresh failed");
     }
+  };
+
+  const appendAssistantActivity = (
+    assistantMessageId: string,
+    activity: Omit<AssistantActivity, "id">
+  ) => {
+    const normalizedLabel = activity.label.trim();
+    if (!normalizedLabel) {
+      return;
+    }
+
+    setMessages((previous) =>
+      previous.map((message) => {
+        if (message.id !== assistantMessageId) {
+          return message;
+        }
+
+        const currentActivity = message.activity ?? [];
+        const lastActivity = currentActivity[currentActivity.length - 1];
+        if (
+          lastActivity &&
+          lastActivity.label === normalizedLabel &&
+          lastActivity.state === activity.state
+        ) {
+          return message;
+        }
+
+        const settledActivity: AssistantActivity[] =
+          lastActivity && lastActivity.state === "running"
+            ? [
+                ...currentActivity.slice(0, -1),
+                {
+                  ...lastActivity,
+                  state:
+                    activity.state === "error"
+                      ? "error"
+                      : ("success" as AssistantActivity["state"]),
+                },
+              ]
+            : currentActivity;
+
+        const lastSettledActivity = settledActivity[settledActivity.length - 1];
+        if (
+          lastSettledActivity &&
+          lastSettledActivity.label === normalizedLabel &&
+          lastSettledActivity.state !== activity.state
+        ) {
+          return {
+            ...message,
+            activity: [
+              ...settledActivity.slice(0, -1),
+              {
+                ...lastSettledActivity,
+                state: activity.state,
+              },
+            ],
+          };
+        }
+
+        return {
+          ...message,
+          activity: [
+            ...settledActivity,
+            {
+              id: createMessageId(),
+              label: normalizedLabel,
+              state: activity.state,
+            },
+          ],
+        };
+      })
+    );
+  };
+
+  const settleAssistantActivities = (
+    assistantMessageId: string,
+    finalState: "success" | "error"
+  ) => {
+    setMessages((previous) =>
+      previous.map((message) => {
+        if (message.id !== assistantMessageId || !message.activity?.length) {
+          return message;
+        }
+
+        return {
+          ...message,
+          activity: message.activity.map((activityItem) =>
+            activityItem.state === "running"
+              ? { ...activityItem, state: finalState }
+              : activityItem
+          ),
+        };
+      })
+    );
+  };
+
+  const toggleActivityExpanded = (messageId: string) => {
+    setExpandedActivityByMessage((previous) => ({
+      ...previous,
+      [messageId]: !previous[messageId],
+    }));
   };
 
   const submitMessage = async (rawMessage: string) => {
@@ -319,28 +508,81 @@ const Chat = ({
       content: trimmedMessage,
     };
 
-    setMessages((previous) => [...previous, userMessage]);
+    const assistantMessageId = createMessageId();
+    setMessages((previous) => [
+      ...previous,
+      userMessage,
+      {
+        id: assistantMessageId,
+        role: "assistant",
+        content: "",
+        toolCalls: [],
+        activity: [],
+      },
+    ]);
+    setExpandedActivityByMessage((previous) => ({
+      ...previous,
+      [assistantMessageId]: true,
+    }));
     setInput("");
     setErrorMessage(null);
     setIsSending(true);
 
     try {
-      const response = await PresentationChatApi.sendMessage({
-        presentation_id: presentationId,
-        message: buildBackendMessage(trimmedMessage),
-      });
-
-      setMessages((previous) => [
-        ...previous,
+      const response = await PresentationChatApi.streamMessage(
         {
-          id: createMessageId(),
-          role: "assistant",
-          content: response.response,
-          toolCalls: Array.isArray(response.tool_calls)
-            ? response.tool_calls
-            : [],
+          presentation_id: presentationId,
+          message: buildBackendMessage(trimmedMessage),
+          conversation_id: conversationId ?? undefined,
         },
-      ]);
+        {
+          onChunk: (chunk) => {
+            setMessages((previous) =>
+              previous.map((message) =>
+                message.id === assistantMessageId
+                  ? {
+                      ...message,
+                      content: `${message.content}${chunk}`,
+                    }
+                  : message
+              )
+            );
+          },
+          onStatus: (status) => {
+            appendAssistantActivity(assistantMessageId, {
+              label: status,
+              state: inferStatusState(status),
+            });
+          },
+          onTrace: (trace) => {
+            const traceActivity = formatTraceActivity(trace);
+            if (!traceActivity) {
+              return;
+            }
+            appendAssistantActivity(assistantMessageId, traceActivity);
+          },
+        }
+      );
+
+      setMessages((previous) =>
+        previous.map((message) =>
+          message.id === assistantMessageId
+            ? {
+              ...message,
+              content: response.response,
+              toolCalls: Array.isArray(response.tool_calls)
+                ? response.tool_calls
+                : [],
+            }
+            : message
+        )
+      );
+      settleAssistantActivities(assistantMessageId, "success");
+      setConversationId((previous) =>
+        typeof response.conversation_id === "string"
+          ? response.conversation_id
+          : previous
+      );
 
       await refreshPresentationIfNeeded(
         Array.isArray(response.tool_calls) ? response.tool_calls : []
@@ -349,6 +591,11 @@ const Chat = ({
       const message =
         error instanceof Error ? error.message : "Failed to send chat message";
 
+      settleAssistantActivities(assistantMessageId, "error");
+      appendAssistantActivity(assistantMessageId, {
+        label: message,
+        state: "error",
+      });
       setErrorMessage(message);
       setMessages((previous) => [
         ...previous,
@@ -485,8 +732,58 @@ const Chat = ({
                       : "text-[#535862]"
                       }`}
                   >
-                    {message.content}
+                    {message.content ||
+                      (isSending && message.role === "assistant"
+                        ? message.activity?.[message.activity.length - 1]?.label ||
+                          "Working on it..."
+                        : "")}
                   </div>
+                  {message.activity && message.activity.length > 0 && (
+                    <div className="mt-3 overflow-hidden rounded-[10px] border border-[#ECEEF2] bg-[#FAFAFB]">
+                      <button
+                        type="button"
+                        onClick={() => toggleActivityExpanded(message.id)}
+                        className="flex w-full items-center justify-between px-3 py-2 text-left"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Activity className="h-3.5 w-3.5 text-[#667085]" />
+                          <span className="text-[11px] font-medium text-[#667085]">
+                            Trace
+                          </span>
+                          <span className="text-[11px] text-[#98A2B3]">
+                            {message.activity.length} events
+                          </span>
+                        </div>
+                        {expandedActivityByMessage[message.id] ? (
+                          <ChevronUp className="h-3.5 w-3.5 text-[#98A2B3]" />
+                        ) : (
+                          <ChevronDown className="h-3.5 w-3.5 text-[#98A2B3]" />
+                        )}
+                      </button>
+                      {!expandedActivityByMessage[message.id] && (
+                        <div className="px-3 pb-2 text-xs leading-4 text-[#98A2B3]">
+                          {message.activity[message.activity.length - 1]?.label}
+                        </div>
+                      )}
+                      {expandedActivityByMessage[message.id] && (
+                        <div className="border-t border-[#ECEEF2] px-3 py-2">
+                          <div className="flex flex-col gap-1.5">
+                            {message.activity.map((activityItem) => (
+                              <div
+                                key={activityItem.id}
+                                className="flex items-start gap-2 text-xs leading-4 text-[#667085]"
+                              >
+                                <span className="mt-0.5 shrink-0">
+                                  <ActivityIcon state={activityItem.state} />
+                                </span>
+                                <span>{activityItem.label}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {message.toolCalls && message.toolCalls.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-1">
                       {message.toolCalls.map((toolCall) => (
@@ -502,16 +799,6 @@ const Chat = ({
                 </div>
               )
             )}
-          </div>
-        )}
-
-        {isSending && (
-          <div className="mt-9 max-w-[92%]">
-            <AssistantMarker />
-            <div className="flex items-center gap-2 text-sm font-normal leading-5 text-[#A4A7AE]">
-              <span>Got it. Let me analyze your slide</span>
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-[#D5D7DA]" />
-            </div>
           </div>
         )}
 
