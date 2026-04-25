@@ -252,6 +252,9 @@ const createMessageId = () => {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
+const conversationStorageKey = (presentationId: string) =>
+  `presenton:chat:conversationId:${presentationId}`;
+
 const AssistantMarker = () => (
   <div className="mb-3 flex items-center gap-1.5 text-[#A4A7AE]">
     <MessageCircleMore className="h-4 w-4" />
@@ -334,6 +337,7 @@ const Chat = ({
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [expandedActivityByMessage, setExpandedActivityByMessage] = useState<
@@ -344,11 +348,70 @@ const Chat = ({
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     setMessages([]);
     setInput("");
     setConversationId(null);
     setErrorMessage(null);
     setExpandedActivityByMessage({});
+
+    if (!presentationId) {
+      return;
+    }
+
+    setIsHistoryLoading(true);
+    const run = async () => {
+      try {
+        if (typeof sessionStorage === "undefined") {
+          return;
+        }
+        const sKey = conversationStorageKey(presentationId);
+        let activeId = sessionStorage.getItem(sKey) ?? null;
+        if (!activeId) {
+          const list = await PresentationChatApi.listConversations(
+            presentationId
+          );
+          if (list.length > 0) {
+            activeId = list[0]!.conversation_id;
+            sessionStorage.setItem(sKey, activeId);
+          }
+        }
+        if (!activeId) {
+          return;
+        }
+        const data = await PresentationChatApi.getHistory(
+          presentationId,
+          activeId
+        );
+        if (cancelled) {
+          return;
+        }
+        setConversationId(activeId);
+        setMessages(
+          data.messages.map((m) => ({
+            id: createMessageId(),
+            role:
+              m.role === "assistant"
+                ? "assistant"
+                : m.role === "user"
+                  ? "user"
+                  : "user",
+            content: m.content,
+          }))
+        );
+      } catch (error) {
+        console.error("Failed to load chat history:", error);
+        toast.error("Could not load previous chat");
+      } finally {
+        if (!cancelled) {
+          setIsHistoryLoading(false);
+        }
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
   }, [presentationId]);
 
   useEffect(() => {
@@ -372,6 +435,9 @@ const Chat = ({
     setConversationId(null);
     setErrorMessage(null);
     setExpandedActivityByMessage({});
+    if (presentationId && typeof sessionStorage !== "undefined") {
+      sessionStorage.removeItem(conversationStorageKey(presentationId));
+    }
 
     inputRef.current?.focus();
   };
@@ -493,7 +559,7 @@ const Chat = ({
   const submitMessage = async (rawMessage: string) => {
     const trimmedMessage = rawMessage.trim();
 
-    if (!trimmedMessage || isSending) {
+    if (!trimmedMessage || isSending || isHistoryLoading) {
       return;
     }
 
@@ -578,11 +644,23 @@ const Chat = ({
         )
       );
       settleAssistantActivities(assistantMessageId, "success");
-      setConversationId((previous) =>
-        typeof response.conversation_id === "string"
-          ? response.conversation_id
-          : previous
-      );
+      setConversationId((previous) => {
+        const next =
+          typeof response.conversation_id === "string"
+            ? response.conversation_id
+            : previous;
+        if (
+          next &&
+          presentationId &&
+          typeof sessionStorage !== "undefined"
+        ) {
+          sessionStorage.setItem(
+            conversationStorageKey(presentationId),
+            next
+          );
+        }
+        return next;
+      });
 
       await refreshPresentationIfNeeded(
         Array.isArray(response.tool_calls) ? response.tool_calls : []
@@ -655,7 +733,7 @@ const Chat = ({
         <button
           type="button"
           onClick={resetChat}
-          disabled={isSending}
+          disabled={isSending || isHistoryLoading}
           className="rounded-full p-1 text-[#8C8C8C] transition-colors hover:bg-[#F7F7F7] hover:text-[#191919] disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Reset chat"
           title="Reset chat"
@@ -665,7 +743,12 @@ const Chat = ({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-9 hide-scrollbar">
-        {messages.length === 0 ? (
+        {isHistoryLoading && messages.length === 0 ? (
+          <div className="flex items-center justify-center py-8 text-sm text-[#99A1AF]">
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Loading chat…
+          </div>
+        ) : messages.length === 0 ? (
           <>
             <div>
               <h4 className="mb-2 text-[10px] font-normal leading-[15px] tracking-[0.367px] text-[#99A1AF]">
@@ -819,7 +902,7 @@ const Chat = ({
           className="min-h-[92px] w-full resize-none bg-transparent pb-10 text-sm text-[#101828] placeholder:text-[#99A1AF] focus:outline-none focus:ring-0"
           rows={4}
           value={input}
-          disabled={isSending}
+          disabled={isSending || isHistoryLoading}
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Improve your slides..."
@@ -836,7 +919,7 @@ const Chat = ({
         </button>
         <button
           type="submit"
-          disabled={!input.trim() || isSending}
+          disabled={!input.trim() || isSending || isHistoryLoading}
           className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-[#191919] disabled:cursor-not-allowed disabled:opacity-60"
           style={{
             background:

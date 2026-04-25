@@ -18,3 +18,27 @@ class ChatMessageResponse(BaseModel):
     tool_calls: list[str] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="forbid")
+
+
+class ChatHistoryMessageItem(BaseModel):
+    role: str
+    content: str
+    created_at: Optional[str] = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ChatHistoryResponse(BaseModel):
+    presentation_id: uuid.UUID
+    conversation_id: uuid.UUID
+    messages: list[ChatHistoryMessageItem]
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ChatConversationListItem(BaseModel):
+    conversation_id: uuid.UUID
+    updated_at: Optional[str] = None
+    last_message_preview: Optional[str] = None
+
+    model_config = ConfigDict(extra="forbid")

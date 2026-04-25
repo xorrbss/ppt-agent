@@ -14,6 +14,24 @@ export interface ChatMessageResponse {
   tool_calls?: string[];
 }
 
+export interface ChatHistoryMessage {
+  role: string;
+  content: string;
+  created_at?: string;
+}
+
+export interface ChatHistoryData {
+  presentation_id: string;
+  conversation_id: string;
+  messages: ChatHistoryMessage[];
+}
+
+export interface ChatConversationSummary {
+  conversation_id: string;
+  updated_at?: string | null;
+  last_message_preview?: string | null;
+}
+
 export interface ChatStreamTrace {
   kind?: string;
   round?: number;
@@ -64,6 +82,38 @@ type ChatStreamData =
   | Record<string, unknown>;
 
 export class PresentationChatApi {
+  static async listConversations(
+    presentationId: string
+  ): Promise<ChatConversationSummary[]> {
+    const u = new URL(getApiUrl("/api/v1/ppt/chat/conversations"));
+    u.searchParams.set("presentation_id", presentationId);
+    const response = await fetch(u.toString(), {
+      headers: getHeader(),
+      cache: "no-cache",
+    });
+    return await ApiResponseHandler.handleResponse(
+      response,
+      "Failed to list chat conversations"
+    );
+  }
+
+  static async getHistory(
+    presentationId: string,
+    conversationId: string
+  ): Promise<ChatHistoryData> {
+    const u = new URL(getApiUrl("/api/v1/ppt/chat/history"));
+    u.searchParams.set("presentation_id", presentationId);
+    u.searchParams.set("conversation_id", conversationId);
+    const response = await fetch(u.toString(), {
+      headers: getHeader(),
+      cache: "no-cache",
+    });
+    return await ApiResponseHandler.handleResponse(
+      response,
+      "Failed to load chat history"
+    );
+  }
+
   static async sendMessage(
     payload: ChatMessageRequest
   ): Promise<ChatMessageResponse> {

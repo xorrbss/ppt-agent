@@ -15,7 +15,7 @@ from services.chat.schemas import (
     SaveSlideInput,
     SearchSlidesInput,
 )
-from services.chat.memory_layer import PresentationChatMemoryLayer
+from services.chat.presentation_context_store import PresentationContextStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ class ChatTools:
     provider-specific logic, keeping them portable across llmai backends.
     """
 
-    def __init__(self, memory: PresentationChatMemoryLayer):
+    def __init__(self, memory: PresentationContextStore):
         self._memory = memory
         self._tool_handlers: dict[str, ToolHandler] = {
             "getPresentationOutline": self._get_presentation_outline,

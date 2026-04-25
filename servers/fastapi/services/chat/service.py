@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.presentation import PresentationModel
 from services.chat.conversation_store import ChatConversationStore
-from services.chat.memory_layer import PresentationChatMemoryLayer
+from services.chat.presentation_context_store import PresentationContextStore
 from services.chat.prompts import build_system_prompt
 from services.chat.tools import ChatTools
 from utils.llm_client_error_handler import handle_llm_client_exceptions
@@ -58,7 +58,7 @@ class PresentationChatService:
         self._conversation_id = conversation_id
 
         self._conversation_store = ChatConversationStore(sql_session)
-        self._memory = PresentationChatMemoryLayer(sql_session, presentation_id)
+        self._memory = PresentationContextStore(sql_session, presentation_id)
         self._tools = ChatTools(self._memory)
 
     async def generate_reply(self, user_message: str) -> ChatTurnResult:
@@ -209,6 +209,8 @@ class PresentationChatService:
         if not presentation:
             raise HTTPException(status_code=404, detail="Presentation not found")
 
+        # A stable conversation_id is created here before the first user message
+        # so mem0 and SQL can scope the thread; the client need not "chat" first.
         conversation_id = await self._conversation_store.ensure_conversation_id(
             self._conversation_id
         )
@@ -218,9 +220,19 @@ class PresentationChatService:
         )
         history_messages = self._convert_history_to_messages(history)
 
-        memory_context = await self._memory.retrieve_context(user_message)
+        presentation_memory = await self._memory.retrieve_context(user_message)
+        chat_memory = await self._conversation_store.retrieve_semantic_context(
+            presentation_id=self._presentation_id,
+            conversation_id=conversation_id,
+            query=user_message,
+        )
         messages: list[Message] = [
-            SystemMessage(content=build_system_prompt(memory_context)),
+            SystemMessage(
+                content=build_system_prompt(
+                    presentation_memory_context=presentation_memory,
+                    chat_memory_context=chat_memory,
+                )
+            ),
             *history_messages,
             UserMessage(content=user_message),
         ]
