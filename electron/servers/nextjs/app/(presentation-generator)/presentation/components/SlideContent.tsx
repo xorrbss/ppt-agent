@@ -147,7 +147,7 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
           className={` w-full  group font-syne  `}
         >
           {/* <V1ContentRender slide={slide} isEditMode={true} theme={null} /> */}
-          <SlideScale slide={slide} theme={presentationData?.theme || null} />
+          <SlideScale slide={slide}  theme={presentationData?.theme || null} />
           {!showNewSlideSelection && (
             <div className="group-hover:opacity-100 hidden md:block opacity-0 transition-opacity my-4 duration-300">
               <ToolTip content="Add new slide below">
