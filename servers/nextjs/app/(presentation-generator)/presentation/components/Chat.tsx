@@ -23,6 +23,7 @@ import React, {
   useState,
 } from "react";
 import { toast } from "sonner";
+import MarkdownRenderer from "@/components/MarkDownRender";
 import { PresentationChatApi } from "../../services/api/chat";
 import type { ChatStreamTrace } from "../../services/api/chat";
 
@@ -241,6 +242,9 @@ type ChatProps = {
 type AssistantActivity = {
   id: string;
   label: string;
+  kind?: string;
+  round?: number;
+  tool?: string;
   state: "running" | "success" | "error" | "info";
 };
 
@@ -282,30 +286,55 @@ const formatTraceActivity = (
   if (typeof trace.message === "string" && trace.message.trim().length > 0) {
     return {
       label: trace.message.trim(),
+      kind: trace.kind,
+      round: trace.round,
+      tool: trace.tool,
       state:
         trace.status === "error"
           ? "error"
           : trace.status === "success"
             ? "success"
+            : trace.status === "ready" || trace.status === "info"
+              ? "info"
             : "running",
     };
   }
 
   if (trace.tool && trace.status === "start") {
-    return { label: `Running ${trace.tool}`, state: "running" };
+    return {
+      label: `Running ${trace.tool}`,
+      kind: trace.kind,
+      round: trace.round,
+      tool: trace.tool,
+      state: "running",
+    };
   }
 
   if (trace.tool && trace.status === "success") {
-    return { label: `${trace.tool} completed`, state: "success" };
+    return {
+      label: `${trace.tool} completed`,
+      kind: trace.kind,
+      round: trace.round,
+      tool: trace.tool,
+      state: "success",
+    };
   }
 
   if (trace.tool && trace.status === "error") {
-    return { label: `${trace.tool} failed`, state: "error" };
+    return {
+      label: `${trace.tool} failed`,
+      kind: trace.kind,
+      round: trace.round,
+      tool: trace.tool,
+      state: "error",
+    };
   }
 
   if (trace.kind === "tool_plan" && Array.isArray(trace.tools) && trace.tools.length) {
     return {
       label: `Using tools: ${trace.tools.join(", ")}`,
+      kind: trace.kind,
+      round: trace.round,
       state: "info",
     };
   }
@@ -328,6 +357,59 @@ const ActivityIcon = ({ state }: { state: AssistantActivity["state"] }) => {
 
   return <CircleDot className="h-3 w-3 text-[#98A2B3]" />;
 };
+
+const getActivityHeading = (activity: AssistantActivity[]) => {
+  if (activity.some((item) => item.state === "running")) {
+    return "Thinking";
+  }
+
+  if (activity.some((item) => item.state === "error")) {
+    return "Needs attention";
+  }
+
+  return "Thought process";
+};
+
+const getActivitySummary = (activity: AssistantActivity[]) => {
+  return activity[activity.length - 1]?.label ?? "Working through the request";
+};
+
+const ActivityTimeline = ({ activity }: { activity: AssistantActivity[] }) => (
+  <div className="border-t border-[#ECEEF2] px-3 py-3">
+    <div className="flex flex-col">
+      {activity.map((activityItem, index) => (
+        <div
+          key={activityItem.id}
+          className="relative flex gap-3 pb-3 last:pb-0"
+        >
+          {index < activity.length - 1 && (
+            <span className="absolute left-[5px] top-4 h-[calc(100%-0.5rem)] w-px bg-[#E4E7EC]" />
+          )}
+          <span className="relative z-10 mt-0.5 flex h-3 w-3 shrink-0 items-center justify-center bg-[#FAFAFB]">
+            <ActivityIcon state={activityItem.state} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {activityItem.tool && (
+                <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] font-medium text-[#667085] ring-1 ring-[#EAECF0]">
+                  {activityItem.tool}
+                </span>
+              )}
+              {activityItem.round && (
+                <span className="text-[10px] text-[#98A2B3]">
+                  step {activityItem.round}
+                </span>
+              )}
+            </div>
+            <p className="mt-0.5 whitespace-pre-wrap break-words text-xs leading-4 text-[#667085]">
+              {activityItem.label}
+            </p>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
 
 const Chat = ({
   presentationId,
@@ -371,7 +453,7 @@ const Chat = ({
           const list = await PresentationChatApi.listConversations(
             presentationId
           );
-          if (list.length > 0) {
+          if (Array.isArray(list) && list.length > 0) {
             activeId = list[0]!.conversation_id;
             sessionStorage.setItem(sKey, activeId);
           }
@@ -387,8 +469,9 @@ const Chat = ({
           return;
         }
         setConversationId(activeId);
+        const rows = Array.isArray(data?.messages) ? data.messages : [];
         setMessages(
-          data.messages.map((m) => ({
+          rows.map((m) => ({
             id: createMessageId(),
             role:
               m.role === "assistant"
@@ -401,7 +484,11 @@ const Chat = ({
         );
       } catch (error) {
         console.error("Failed to load chat history:", error);
-        toast.error("Could not load previous chat");
+        const detail =
+          error instanceof Error
+            ? error.message
+            : "Could not load previous chat";
+        toast.error(detail);
       } finally {
         if (!cancelled) {
           setIsHistoryLoading(false);
@@ -506,6 +593,8 @@ const Chat = ({
               ...settledActivity.slice(0, -1),
               {
                 ...lastSettledActivity,
+                ...activity,
+                label: normalizedLabel,
                 state: activity.state,
               },
             ],
@@ -518,6 +607,7 @@ const Chat = ({
             ...settledActivity,
             {
               id: createMessageId(),
+              ...activity,
               label: normalizedLabel,
               state: activity.state,
             },
@@ -809,61 +899,54 @@ const Chat = ({
               ) : (
                 <div key={message.id} className="max-w-[92%]">
                   <AssistantMarker />
-                  <div
-                    className={`whitespace-pre-wrap text-sm font-normal leading-5 ${message.role === "error"
-                      ? "text-red-600"
-                      : "text-[#535862]"
-                      }`}
-                  >
-                    {message.content ||
-                      (isSending && message.role === "assistant"
+                  {message.content ? (
+                    message.role === "error" ? (
+                      <div className="whitespace-pre-wrap text-sm font-normal leading-5 text-red-600">
+                        {message.content}
+                      </div>
+                    ) : (
+                      <MarkdownRenderer
+                        content={message.content}
+                        className="chat-markdown mb-0 text-sm font-normal leading-5 text-[#535862]"
+                      />
+                    )
+                  ) : (
+                    <div className="text-sm font-normal leading-5 text-[#535862]">
+                      {isSending && message.role === "assistant"
                         ? message.activity?.[message.activity.length - 1]?.label ||
                           "Working on it..."
-                        : "")}
-                  </div>
+                        : ""}
+                    </div>
+                  )}
                   {message.activity && message.activity.length > 0 && (
-                    <div className="mt-3 overflow-hidden rounded-[10px] border border-[#ECEEF2] bg-[#FAFAFB]">
+                    <div className="mt-3 overflow-hidden rounded-2xl border border-[#ECEEF2] bg-[#FAFAFB] shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
                       <button
                         type="button"
                         onClick={() => toggleActivityExpanded(message.id)}
-                        className="flex w-full items-center justify-between px-3 py-2 text-left"
+                        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors hover:bg-[#F6F7F9]"
                       >
-                        <div className="flex items-center gap-2">
-                          <Activity className="h-3.5 w-3.5 text-[#667085]" />
-                          <span className="text-[11px] font-medium text-[#667085]">
-                            Trace
-                          </span>
-                          <span className="text-[11px] text-[#98A2B3]">
-                            {message.activity.length} events
-                          </span>
-                        </div>
-                        {expandedActivityByMessage[message.id] ? (
-                          <ChevronUp className="h-3.5 w-3.5 text-[#98A2B3]" />
-                        ) : (
-                          <ChevronDown className="h-3.5 w-3.5 text-[#98A2B3]" />
-                        )}
-                      </button>
-                      {!expandedActivityByMessage[message.id] && (
-                        <div className="px-3 pb-2 text-xs leading-4 text-[#98A2B3]">
-                          {message.activity[message.activity.length - 1]?.label}
-                        </div>
-                      )}
-                      {expandedActivityByMessage[message.id] && (
-                        <div className="border-t border-[#ECEEF2] px-3 py-2">
-                          <div className="flex flex-col gap-1.5">
-                            {message.activity.map((activityItem) => (
-                              <div
-                                key={activityItem.id}
-                                className="flex items-start gap-2 text-xs leading-4 text-[#667085]"
-                              >
-                                <span className="mt-0.5 shrink-0">
-                                  <ActivityIcon state={activityItem.state} />
-                                </span>
-                                <span>{activityItem.label}</span>
-                              </div>
-                            ))}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <Activity className="h-3.5 w-3.5 text-[#667085]" />
+                            <span className="text-[11px] font-semibold text-[#475467]">
+                              {getActivityHeading(message.activity)}
+                            </span>
+                            <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] text-[#98A2B3] ring-1 ring-[#EAECF0]">
+                              {message.activity.length} steps
+                            </span>
+                          </div>
+                          <div className="mt-1 truncate text-xs leading-4 text-[#98A2B3]">
+                            {getActivitySummary(message.activity)}
                           </div>
                         </div>
+                        {expandedActivityByMessage[message.id] ? (
+                          <ChevronUp className="h-3.5 w-3.5 shrink-0 text-[#98A2B3]" />
+                        ) : (
+                          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#98A2B3]" />
+                        )}
+                      </button>
+                      {expandedActivityByMessage[message.id] && (
+                        <ActivityTimeline activity={message.activity} />
                       )}
                     </div>
                   )}

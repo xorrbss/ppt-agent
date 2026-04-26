@@ -1,4 +1,4 @@
-import { getApiUrl } from "@/utils/api";
+import { buildAbsoluteApiRequestUrl, getApiUrl } from "@/utils/api";
 import { ApiResponseHandler } from "./api-error-handler";
 import { getHeader } from "./header";
 
@@ -85,7 +85,9 @@ export class PresentationChatApi {
   static async listConversations(
     presentationId: string
   ): Promise<ChatConversationSummary[]> {
-    const u = new URL(getApiUrl("/api/v1/ppt/chat/conversations"));
+    const u = new URL(
+      buildAbsoluteApiRequestUrl("/api/v1/ppt/chat/conversations")
+    );
     u.searchParams.set("presentation_id", presentationId);
     const response = await fetch(u.toString(), {
       headers: getHeader(),
@@ -101,7 +103,7 @@ export class PresentationChatApi {
     presentationId: string,
     conversationId: string
   ): Promise<ChatHistoryData> {
-    const u = new URL(getApiUrl("/api/v1/ppt/chat/history"));
+    const u = new URL(buildAbsoluteApiRequestUrl("/api/v1/ppt/chat/history"));
     u.searchParams.set("presentation_id", presentationId);
     u.searchParams.set("conversation_id", conversationId);
     const response = await fetch(u.toString(), {

@@ -7,6 +7,7 @@ import dirtyjson  # type: ignore[import-untyped]
 from llmai.shared import AssistantToolCall, Tool  # type: ignore[import-not-found]
 
 from services.chat.schemas import (
+    GenerateAssetsInput,
     GenerateIconInput,
     GenerateImageInput,
     GetContentSchemaFromLayoutIdInput,
@@ -23,13 +24,6 @@ ToolHandler = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
 
 
 class ChatTools:
-    """
-    llmai function tools for presentation chat.
-
-    Tool implementations only use the memory abstraction layer and avoid external
-    provider-specific logic, keeping them portable across llmai backends.
-    """
-
     def __init__(self, memory: PresentationContextStore):
         self._memory = memory
         self._tool_handlers: dict[str, ToolHandler] = {
@@ -38,6 +32,7 @@ class ChatTools:
             "getSlideAtIndex": self._get_slide_at_index,
             "getAvailableLayouts": self._get_available_layouts,
             "getContentSchemaFromLayoutId": self._get_content_schema_from_layout_id,
+            "generateAssets": self._generate_assets,
             "generateImage": self._generate_image,
             "generateIcon": self._generate_icon,
             "saveSlide": self._save_slide,
@@ -97,18 +92,14 @@ class ChatTools:
                 strict=True,
             ),
             Tool(
-                name="generateImage",
+                name="generateAssets",
                 description=(
-                    "Generate or fetch an image URL/path from a prompt and return "
-                    "the usable URL/path."
+                    "Generate multiple media assets in one call. Use for all slide "
+                    "images and icons before saving content; include every needed "
+                    "asset in the assets array instead of calling image/icon tools "
+                    "one at a time."
                 ),
-                schema=GenerateImageInput,
-                strict=True,
-            ),
-            Tool(
-                name="generateIcon",
-                description="Search icon memory and return the most relevant icon URL.",
-                schema=GenerateIconInput,
+                schema=GenerateAssetsInput,
                 strict=True,
             ),
             Tool(
@@ -281,6 +272,31 @@ class ChatTools:
         return {
             "query": payload.query,
             "url": icon_url,
+        }
+
+    async def _generate_assets(self, args: dict[str, Any]) -> dict[str, Any]:
+        payload = GenerateAssetsInput(**args)
+        generated_assets: list[dict[str, Any]] = []
+
+        for index, asset in enumerate(payload.assets):
+            if asset.kind == "image":
+                result = await self._generate_image({"prompt": asset.prompt})
+            else:
+                result = await self._generate_icon({"query": asset.prompt})
+
+            generated_assets.append(
+                {
+                    "index": index,
+                    "kind": asset.kind,
+                    "prompt": asset.prompt,
+                    "url": result.get("url"),
+                }
+            )
+
+        return {
+            "count": len(generated_assets),
+            "assets": generated_assets,
+            "message": f"Generated {len(generated_assets)} asset(s).",
         }
 
     async def _save_slide(self, args: dict[str, Any]) -> dict[str, Any]:

@@ -1,41 +1,51 @@
-"""Persist presentation chat threads in ``KeyValueSqlModel``.
-
-Each conversation is one row: key ``ppt_chat:{presentation_id}:{conversation_id}``,
-value is JSON: ``{version, messages, updated_at, ...}``.
-"""
+"""Persist presentation chat threads in SQL rows."""
 
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from sqlalchemy import delete as sa_delete
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from models.sql.key_value import KeyValueSqlModel
-
-CHAT_HISTORY_KEY_PREFIX = "ppt_chat"
-SCHEMA_VERSION = 1
+from models.sql.chat_history_message import ChatHistoryMessageModel
+from utils.datetime_utils import get_current_utc_datetime
 
 
-def chat_history_key(presentation_id: uuid.UUID, conversation_id: uuid.UUID) -> str:
-    return f"{CHAT_HISTORY_KEY_PREFIX}:{presentation_id}:{conversation_id}"
+def _compact_preview(content: str) -> str:
+    preview = content.strip()
+    if len(preview) > 200:
+        return f"{preview[:200]}…"
+    return preview
 
 
-def _parse_conversation_key(key: str, presentation_id: uuid.UUID) -> uuid.UUID | None:
-    expected_prefix = f"{CHAT_HISTORY_KEY_PREFIX}:{presentation_id}:"
-    if not key.startswith(expected_prefix):
+def _serialize_created_at(value: Any) -> str | None:
+    if value is None:
         return None
-    rest = key[len(expected_prefix) :]
+    if hasattr(value, "isoformat"):
+        try:
+            return value.isoformat()
+        except Exception:
+            return None
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
+def _parse_created_at(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if not isinstance(value, str) or not value.strip():
+        return None
+    normalized = value.strip().replace("Z", "+00:00")
     try:
-        return uuid.UUID(rest)
+        parsed = datetime.fromisoformat(normalized)
     except ValueError:
         return None
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
 async def load_messages(
@@ -44,27 +54,16 @@ async def load_messages(
     presentation_id: uuid.UUID,
     conversation_id: uuid.UUID,
 ) -> list[dict[str, str]]:
-    """Load ordered user/assistant messages for LLM context (role + content only)."""
-    key = chat_history_key(presentation_id, conversation_id)
-    row = await session.scalar(
-        select(KeyValueSqlModel).where(KeyValueSqlModel.key == key)
+    rows = await load_messages_with_meta(
+        session,
+        presentation_id=presentation_id,
+        conversation_id=conversation_id,
     )
-    if not row or not isinstance(row.value, dict):
-        return []
-    messages = row.value.get("messages")
-    if not isinstance(messages, list):
-        return []
-    out: list[dict[str, str]] = []
-    for item in messages:
-        if not isinstance(item, dict):
-            continue
-        if item.get("role") not in ("user", "assistant"):
-            continue
-        content = item.get("content")
-        if not isinstance(content, str) or not content.strip():
-            continue
-        out.append({"role": item["role"], "content": content})
-    return out
+    return [
+        {"role": row["role"], "content": row["content"]}
+        for row in rows
+        if isinstance(row.get("role"), str) and isinstance(row.get("content"), str)
+    ]
 
 
 async def load_messages_with_meta(
@@ -73,32 +72,27 @@ async def load_messages_with_meta(
     presentation_id: uuid.UUID,
     conversation_id: uuid.UUID,
 ) -> list[dict[str, Any]]:
-    """Load messages including optional ``created_at`` for API / UI."""
-    key = chat_history_key(presentation_id, conversation_id)
-    row = await session.scalar(
-        select(KeyValueSqlModel).where(KeyValueSqlModel.key == key)
+    rows = list(
+        (
+            await session.scalars(
+                select(ChatHistoryMessageModel)
+                .where(
+                    ChatHistoryMessageModel.presentation_id == presentation_id,
+                    ChatHistoryMessageModel.conversation_id == conversation_id,
+                )
+                .order_by(ChatHistoryMessageModel.position.asc())
+            )
+        ).all()
     )
-    if not row or not isinstance(row.value, dict):
-        return []
-    messages = row.value.get("messages")
-    if not isinstance(messages, list):
-        return []
     out: list[dict[str, Any]] = []
-    for item in messages:
-        if not isinstance(item, dict):
-            continue
-        if item.get("role") not in ("user", "assistant"):
-            continue
-        content = item.get("content")
-        if not isinstance(content, str) or not content.strip():
-            continue
+    for row in rows:
         entry: dict[str, Any] = {
-            "role": item["role"],
-            "content": content,
+            "role": row.role,
+            "content": row.content,
         }
-        created = item.get("created_at")
-        if isinstance(created, str) and created.strip():
-            entry["created_at"] = created.strip()
+        created = _serialize_created_at(row.created_at)
+        if created:
+            entry["created_at"] = created
         out.append(entry)
     return out
 
@@ -110,37 +104,37 @@ async def replace_messages(
     conversation_id: uuid.UUID,
     messages: list[dict[str, str]],
 ) -> None:
-    """Replace transcript (e.g. one-time sync from mem0)."""
-    key = chat_history_key(presentation_id, conversation_id)
-    row = await session.scalar(
-        select(KeyValueSqlModel).where(KeyValueSqlModel.key == key)
-    )
-    now = _utc_now_iso()
-    built: list[dict[str, Any]] = []
-    for m in messages:
-        if m.get("role") not in ("user", "assistant"):
-            continue
-        content = m.get("content")
-        if not isinstance(content, str):
-            continue
-        built.append(
-            {
-                "role": m["role"],
-                "content": content,
-                "created_at": now,
-            }
+    await session.execute(
+        sa_delete(ChatHistoryMessageModel).where(
+            ChatHistoryMessageModel.presentation_id == presentation_id,
+            ChatHistoryMessageModel.conversation_id == conversation_id,
         )
-    value = {
-        "version": SCHEMA_VERSION,
-        "presentation_id": str(presentation_id),
-        "conversation_id": str(conversation_id),
-        "messages": built,
-        "updated_at": now,
-    }
-    if row is None:
-        session.add(KeyValueSqlModel(key=key, value=value))
-    else:
-        row.value = value
+    )
+
+    next_position = 1
+    base_time = get_current_utc_datetime()
+    for index, message in enumerate(messages):
+        role = message.get("role")
+        content = message.get("content")
+        if role not in ("user", "assistant"):
+            continue
+        if not isinstance(content, str) or not content.strip():
+            continue
+
+        created_at = _parse_created_at(message.get("created_at")) or (
+            base_time + timedelta(microseconds=index)
+        )
+        session.add(
+            ChatHistoryMessageModel(
+                presentation_id=presentation_id,
+                conversation_id=conversation_id,
+                position=next_position,
+                role=role,
+                content=content,
+                created_at=created_at,
+            )
+        )
+        next_position += 1
     await session.flush()
 
 
@@ -151,81 +145,68 @@ async def append_turn(
     conversation_id: uuid.UUID,
     user_message: str,
     assistant_message: str,
+    tool_calls: list[str] | None = None,
 ) -> None:
-    key = chat_history_key(presentation_id, conversation_id)
-    row = await session.scalar(
-        select(KeyValueSqlModel).where(KeyValueSqlModel.key == key)
+    max_position = await session.scalar(
+        select(func.max(ChatHistoryMessageModel.position)).where(
+            ChatHistoryMessageModel.presentation_id == presentation_id,
+            ChatHistoryMessageModel.conversation_id == conversation_id,
+        )
     )
-    now = _utc_now_iso()
-    new_messages: list[dict[str, Any]] = [
-        {"role": "user", "content": user_message, "created_at": now},
-        {"role": "assistant", "content": assistant_message, "created_at": now},
-    ]
-    if row is None:
-        value: dict[str, Any] = {
-            "version": SCHEMA_VERSION,
-            "presentation_id": str(presentation_id),
-            "conversation_id": str(conversation_id),
-            "messages": new_messages,
-            "updated_at": now,
-        }
-        session.add(KeyValueSqlModel(key=key, value=value))
-    else:
-        data = row.value if isinstance(row.value, dict) else {}
-        existing = data.get("messages")
-        if not isinstance(existing, list):
-            existing = []
-        combined = [m for m in existing if isinstance(m, dict)]
-        combined.extend(new_messages)
-        data["version"] = SCHEMA_VERSION
-        data["presentation_id"] = str(presentation_id)
-        data["conversation_id"] = str(conversation_id)
-        data["messages"] = combined
-        data["updated_at"] = now
-        row.value = data
+    next_position = int(max_position or 0) + 1
+    now = get_current_utc_datetime()
+
+    session.add(
+        ChatHistoryMessageModel(
+            presentation_id=presentation_id,
+            conversation_id=conversation_id,
+            position=next_position,
+            role="user",
+            content=user_message,
+            created_at=now,
+        )
+    )
+    session.add(
+        ChatHistoryMessageModel(
+            presentation_id=presentation_id,
+            conversation_id=conversation_id,
+            position=next_position + 1,
+            role="assistant",
+            content=assistant_message,
+            created_at=now + timedelta(microseconds=1),
+            tool_calls=tool_calls or None,
+        )
+    )
     await session.flush()
 
 
 async def list_conversations(
     session: AsyncSession, *, presentation_id: uuid.UUID
 ) -> list[dict[str, Any]]:
-    """Return conversation summaries for a presentation, newest ``updated_at`` first."""
-    prefix = f"{CHAT_HISTORY_KEY_PREFIX}:{presentation_id}:"
-    result = await session.scalars(
-        select(KeyValueSqlModel).where(KeyValueSqlModel.key.startswith(prefix))
+    rows = list(
+        (
+            await session.scalars(
+                select(ChatHistoryMessageModel)
+                .where(ChatHistoryMessageModel.presentation_id == presentation_id)
+                .order_by(
+                    ChatHistoryMessageModel.created_at.desc(),
+                    ChatHistoryMessageModel.position.desc(),
+                )
+            )
+        ).all()
     )
-    rows = list(result.all())
-    summaries: list[dict[str, Any]] = []
+
+    summary_by_conversation: dict[str, dict[str, Any]] = {}
     for row in rows:
-        cid = _parse_conversation_key(row.key, presentation_id)
-        if cid is None:
+        conversation_key = str(row.conversation_id)
+        if conversation_key in summary_by_conversation:
             continue
-        data = row.value if isinstance(row.value, dict) else {}
-        updated_at: str | None = None
-        raw_u = data.get("updated_at")
-        if isinstance(raw_u, str) and raw_u.strip():
-            updated_at = raw_u.strip()
-        messages = data.get("messages")
-        preview: str | None = None
-        if isinstance(messages, list) and messages:
-            for item in reversed(messages):
-                if not isinstance(item, dict):
-                    continue
-                c = item.get("content")
-                if isinstance(c, str) and c.strip():
-                    preview = c.strip()
-                    if len(preview) > 200:
-                        preview = f"{preview[:200]}…"
-                    break
-        summaries.append(
-            {
-                "conversation_id": str(cid),
-                "updated_at": updated_at,
-                "last_message_preview": preview,
-            }
-        )
-    summaries.sort(
-        key=lambda s: s.get("updated_at") or "",
-        reverse=True,
-    )
+        summary_by_conversation[conversation_key] = {
+            "conversation_id": conversation_key,
+            "updated_at": _serialize_created_at(row.created_at),
+            "last_message_preview": _compact_preview(row.content),
+        }
+
+    summaries = list(summary_by_conversation.values())
+    summaries.sort(key=lambda item: item.get("updated_at") or "", reverse=True)
     return summaries

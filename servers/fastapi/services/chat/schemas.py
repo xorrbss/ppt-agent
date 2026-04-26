@@ -1,5 +1,5 @@
 import json
-from typing import Any
+from typing import Any, Literal
 
 import dirtyjson  # type: ignore[import-untyped]
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -37,6 +37,19 @@ class GenerateImageInput(StrictSchemaModel):
 
 class GenerateIconInput(StrictSchemaModel):
     query: str = Field(min_length=1, max_length=1000)
+
+
+class GenerateAssetItemInput(StrictSchemaModel):
+    kind: Literal["image", "icon"]
+    prompt: str = Field(
+        min_length=1,
+        max_length=4000,
+        description="Image prompt or icon search query.",
+    )
+
+
+class GenerateAssetsInput(StrictSchemaModel):
+    assets: list[GenerateAssetItemInput] = Field(min_length=1, max_length=12)
 
 
 class SaveSlideInput(StrictSchemaModel):

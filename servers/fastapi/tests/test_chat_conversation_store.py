@@ -103,6 +103,7 @@ class TestChatConversationStore:
             conversation_id=conversation_id,
             user_message="Can you improve slide 2?",
             assistant_message="Yes, I will tighten the bullet points.",
+            tool_calls=None,
         )
         store_mem0.assert_awaited_once_with(
             presentation_id=presentation_id,

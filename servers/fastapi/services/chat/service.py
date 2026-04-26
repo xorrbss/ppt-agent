@@ -74,9 +74,8 @@ class PresentationChatService:
     async def stream_reply(
         self, user_message: str
     ) -> AsyncGenerator[tuple[ChatStreamEventType, ChatStreamEventValue], None]:
-        yield "status", "Preparing context"
+        yield "status", "Reading deck context"
         conversation_id, messages = await self._prepare_turn_context(user_message)
-        yield "status", "Thinking"
 
         client = get_client(config=get_llm_config())
         model = get_model()
@@ -89,6 +88,7 @@ class PresentationChatService:
         for round_index in range(MAX_TOOL_ROUNDS):
             completion_chunk: Any | None = None
             round_content_chunks: list[str] = []
+            thinking_chunks: list[str] = []
 
             try:
                 async for event in stream_generate_events(
@@ -100,15 +100,29 @@ class PresentationChatService:
                         stream=True,
                     ),
                 ):
-                    if getattr(event, "type", None) == "content":
+                    event_type = getattr(event, "type", None)
+                    if event_type == "content":
                         chunk = getattr(event, "chunk", None)
                         if chunk:
                             round_content_chunks.append(chunk)
                             yield "chunk", chunk
-                    elif getattr(event, "type", None) == "completion":
+                    elif event_type == "thinking":
+                        thinking_text = self._event_text(event)
+                        if thinking_text:
+                            thinking_chunks.append(thinking_text)
+                    elif event_type == "completion":
                         completion_chunk = event
             except Exception as exc:
                 raise handle_llm_client_exceptions(exc)
+
+            thinking_summary = self._summarize_model_note(thinking_chunks)
+            if thinking_summary:
+                yield "trace", {
+                    "kind": "model_note",
+                    "round": round_index + 1,
+                    "status": "info",
+                    "message": thinking_summary,
+                }
 
             completion_tool_calls = list(
                 getattr(completion_chunk, "tool_calls", []) or []
@@ -135,7 +149,7 @@ class PresentationChatService:
                         "round": round_index + 1,
                         "tool": tool_call.name,
                         "status": "start",
-                        "message": f"Running {tool_call.name}",
+                        "message": self._tool_start_message(tool_call.name),
                     }
                     tool_result = await self._tools.execute_tool_call(tool_call)
                     last_tool_results.append(tool_result)
@@ -155,7 +169,6 @@ class PresentationChatService:
                             content=[tool_response_content],
                         )
                     )
-                yield "status", "Thinking"
                 continue
 
             response_text = "".join(round_content_chunks)
@@ -190,7 +203,7 @@ class PresentationChatService:
         if response_text is None:
             yield "chunk", final_response_text
 
-        yield "status", "Saving conversation"
+        yield "status", "Saving chat"
         result = await self._persist_turn(
             conversation_id=conversation_id,
             user_message=user_message,
@@ -209,8 +222,6 @@ class PresentationChatService:
         if not presentation:
             raise HTTPException(status_code=404, detail="Presentation not found")
 
-        # A stable conversation_id is created here before the first user message
-        # so mem0 and SQL can scope the thread; the client need not "chat" first.
         conversation_id = await self._conversation_store.ensure_conversation_id(
             self._conversation_id
         )
@@ -251,7 +262,9 @@ class PresentationChatService:
             conversation_id=conversation_id,
             user_message=user_message,
             assistant_message=response_text,
+            tool_calls=tool_calls,
         )
+        await self._sql_session.commit()
 
         return ChatTurnResult(
             conversation_id=conversation_id,
@@ -260,7 +273,6 @@ class PresentationChatService:
         )
 
     async def _run_llm_with_tools(self, messages: list[Message]) -> tuple[str, list[str]]:
-        # llmai is the only LLM entrypoint; provider selection comes from app config.
         client = get_client(config=get_llm_config())
         model = get_model()
         tools = self._tools.get_tool_definitions()
@@ -288,7 +300,6 @@ class PresentationChatService:
                 return response_text, called_tools
 
             called_tools.extend([tool_call.name for tool_call in response.tool_calls])
-            # Reuse llmai-returned threaded messages so provider adapters keep state.
             messages = list(response.messages) if response.messages else list(messages)
 
             last_tool_results = []
@@ -296,7 +307,6 @@ class PresentationChatService:
                 tool_result = await self._tools.execute_tool_call(tool_call)
                 last_tool_results.append(tool_result)
                 tool_response_content = json.dumps(tool_result, ensure_ascii=False)
-                # Tool responses are fed back into llmai to let the model continue.
                 messages.append(
                     ToolResponseMessage(
                         id=tool_call.id,
@@ -322,10 +332,6 @@ class PresentationChatService:
         model: str,
         messages: list[Message],
     ) -> str | None:
-        """
-        Give the model one final chance to synthesize a natural-language answer
-        from already-executed tool outputs, without allowing more tool calls.
-        """
         try:
             response = await asyncio.to_thread(
                 client.generate,
@@ -339,6 +345,40 @@ class PresentationChatService:
             return None
 
         return extract_text(response.content)
+
+    @staticmethod
+    def _summarize_model_note(chunks: list[str]) -> str:
+        text = "".join(chunks).strip()
+        if not text or text in {"{}", "[]"}:
+            return ""
+
+        compact = " ".join(text.split())
+        if compact.lower() in {"start", "end"}:
+            return ""
+        if len(compact) > 600:
+            return f"{compact[:600].rstrip()}..."
+        return compact
+
+    @staticmethod
+    def _event_text(event: Any) -> str:
+        for attr in ("chunk", "delta", "text", "content"):
+            value = getattr(event, attr, None)
+            if isinstance(value, str):
+                return value
+        return ""
+
+    @staticmethod
+    def _tool_start_message(tool_name: str) -> str:
+        labels = {
+            "getPresentationOutline": "Reading the presentation outline",
+            "searchSlides": "Searching relevant slides",
+            "getSlideAtIndex": "Opening the requested slide",
+            "getAvailableLayouts": "Checking available layouts",
+            "getContentSchemaFromLayoutId": "Checking the layout schema",
+            "generateAssets": "Generating slide assets",
+            "saveSlide": "Saving the slide",
+        }
+        return labels.get(tool_name, f"Running {tool_name}")
 
     @staticmethod
     def _build_tool_limit_fallback(last_tool_results: list[dict[str, Any]]) -> str:

@@ -10,6 +10,7 @@ from sqlmodel import SQLModel
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
+from models.sql.chat_history_message import ChatHistoryMessageModel
 from models.sql.image_asset import ImageAsset
 from models.sql.key_value import KeyValueSqlModel
 from models.sql.ollama_pull_status import OllamaPullStatus
@@ -52,6 +53,7 @@ async def create_db_and_tables():
                         PresentationModel.__table__,
                         SlideModel.__table__,
                         KeyValueSqlModel.__table__,
+                        ChatHistoryMessageModel.__table__,
                         ImageAsset.__table__,
                         PresentationLayoutCodeModel.__table__,
                         TemplateCreateInfoModel.__table__,
