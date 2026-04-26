@@ -19,11 +19,11 @@ import {
 } from "@dnd-kit/sortable";
 import { setPresentationData } from "@/store/slices/presentationGeneration";
 import { SortableSlide } from "./SortableSlide";
-import SlideScale from "../../components/PresentationRender";
 import { Separator } from "@/components/ui/separator";
 import { usePathname } from "next/navigation";
 import NewSlide from "./NewSlide";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
+import { SlideThumbnailCard } from "./SlideThumbnailCard";
 
 interface SidePanelProps {
   selectedSlide: number;
@@ -153,19 +153,13 @@ const SidePanel = ({
               {isStreaming ? (
                 presentationData &&
                 presentationData?.slides.map((slide: any, index: number) => (
-                  <div
+                  <SlideThumbnailCard
                     key={`${slide.id}-${index}`}
-                    onClick={() => onSlideClick(index)}
-                    className={` cursor-pointer ring-2   rounded-[12px] transition-all duration-200 ${selectedSlide === index ? ' ring-[#5141e5]' : 'ring-gray-200'
-                      }`}
-                  >
-                    <div className=" bg-white pointer-events-none  relative overflow-hidden aspect-video">
-                      <div className="absolute bg-gray-100/5 z-50  top-0 left-0 w-full h-full" />
-                      <div className="transform scale-[0.2] flex justify-center items-center origin-top-left  w-[500%] h-[500%]">
-                        <SlideScale slide={slide} />
-                      </div>
-                    </div>
-                  </div>
+                    slide={slide}
+                    index={index}
+                    selected={selectedSlide === index}
+                    onClick={() => onSlideClick(slide.index ?? index)}
+                  />
                 ))
               ) : (
                 <SortableContext

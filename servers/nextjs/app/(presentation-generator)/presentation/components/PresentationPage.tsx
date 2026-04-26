@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useLayoutEffect, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import "../../utils/prism-languages";
@@ -34,6 +34,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   const [selectedSlide, setSelectedSlide] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [error, setError] = useState(false);
+  const slidesScrollContainerRef = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
 
 
@@ -41,6 +42,11 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   const { presentationData, isStreaming } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
+  const slidesLength = presentationData?.slides?.length ?? 0;
+  const lastStreamingSlideIndex =
+    slidesLength > 0
+      ? presentationData?.slides?.[slidesLength - 1]?.index
+      : undefined;
 
   // Auto-save functionality
   const { isSaving } = useAutoSave({
@@ -80,6 +86,39 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   );
 
   usePresentationUndoRedo();
+
+  useEffect(() => {
+    if (!isStreaming) return;
+
+    const scrollContainer = slidesScrollContainerRef.current;
+    if (!scrollContainer) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      if (slidesLength <= 1) {
+        scrollContainer.scrollTo({ top: 0, behavior: "auto" });
+        return;
+      }
+
+      if (lastStreamingSlideIndex === undefined) return;
+
+      const slideElement = document.getElementById(
+        `slide-${lastStreamingSlideIndex}`
+      );
+      if (!slideElement) return;
+
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const slideRect = slideElement.getBoundingClientRect();
+      const slideTop =
+        slideRect.top - containerRect.top + scrollContainer.scrollTop;
+
+      scrollContainer.scrollTo({
+        top: Math.max(slideTop, 0),
+        behavior: "smooth",
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [isStreaming, lastStreamingSlideIndex, slidesLength]);
 
   useEffect(() => {
     trackEvent(MixpanelEvent.Presentation_Editor_Viewed, {
@@ -151,8 +190,8 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
         className="relative flex h-full flex-col overflow-hidden"
       >
         <PresentationHeader presentation_id={presentation_id} isPresentationSaving={isSaving} currentSlide={selectedSlide} />
-        <div className="flex flex-1 min-h-0 gap-6 ">
-          <div className="w-[120px] h-full shrink-0  self-start sticky top-0 mt-[18px]">
+        <div className="flex flex-1 min-h-0 gap-6 overflow-hidden">
+          <div className="w-[120px] h-full shrink-0 self-start sticky top-0 pt-[18px]">
             <SidePanel
               selectedSlide={selectedSlide}
               onSlideClick={handleSlideClick}
@@ -160,8 +199,11 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
               loading={loading}
             />
           </div>
-          <div className="w-full min-w-0 h-full flex-1  mt-[18px]">
-            <div className="font-inter h-full overflow-y-auto hide-scrollbar">
+          <div className="w-full min-w-0 h-full flex-1 pt-[18px]">
+            <div
+              ref={slidesScrollContainerRef}
+              className="font-inter h-full overflow-y-auto hide-scrollbar scroll-pt-[18px]"
+            >
               <div className="w-full max-w-[1280px] min-h-full mx-auto flex flex-col items-center pb-8">
                 {!presentationData ||
                   loading ||

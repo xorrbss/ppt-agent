@@ -1,15 +1,14 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Slide } from '../../types/slide';
+import type { Slide } from '../../types/slide';
 import { useRef } from 'react';
-import { V1ContentRender } from '../../components/V1ContentRender';
+import { SlideThumbnailCard } from './SlideThumbnailCard';
 interface SortableSlideProps {
     slide: Slide;
     index: number;
     selectedSlide: number;
     onSlideClick: (index: any) => void;
 }
-const SCALE = 0.0625;
 
 export function SortableSlide({ slide, index, selectedSlide, onSlideClick }: SortableSlideProps) {
     const lastClickTime = useRef(0);
@@ -26,8 +25,6 @@ export function SortableSlide({ slide, index, selectedSlide, onSlideClick }: Sor
         transform: CSS.Transform.toString(transform),
         transition,
         opacity: isDragging ? 0.5 : 1,
-        backgroundColor: `var(--card-color, #ffffff)`,
-        borderColor: selectedSlide === index ? `#5141e5` : `var(--stroke, #e5e7eb)`
     };
 
     const handleClick = (e: React.MouseEvent) => {
@@ -46,39 +43,15 @@ export function SortableSlide({ slide, index, selectedSlide, onSlideClick }: Sor
     };
 
     return (
-        <div
+        <SlideThumbnailCard
             ref={setNodeRef}
+            slide={slide}
+            index={index}
+            selected={selectedSlide === index}
             style={style}
             {...attributes}
             {...listeners}
             onClick={handleClick}
-            className={` cursor-pointer border relative  p-1    rounded-[12px] transition-all duration-200 ${selectedSlide === index ? ' border-[#BDB4FE]' : 'border-[#EDEEEF]'
-                }`}
-        >
-            <p className='absolute top-1/2 translate-y-1/2 -left-3 bg-white border border-[#EDEEEF]  rounded-[40px] text-[#191919] text-[10px] font-medium px-1 z-50
-                '>
-                {index + 1}
-            </p>
-
-
-            <div
-                className="relative"
-                style={{ height: `${720 * SCALE}px`, overflow: "hidden" }}
-            >
-
-                <div
-                    className="absolute top-0 left-0 pointer-events-none"
-                    style={{
-                        width: 1280,
-                        height: 720,
-                        transformOrigin: "top left",
-                        transform: `scale(${SCALE})`,
-                    }}
-                >
-                    <V1ContentRender slide={slide} isEditMode={true} />
-                </div>
-            </div>
-
-        </div>
+        />
     );
-} 
+}
