@@ -31,8 +31,7 @@ FROM node:20-bookworm-slim AS nextjs-builder
 
 WORKDIR /app/servers/nextjs
 
-ENV NEXT_TELEMETRY_DISABLED=1 \
-    PUPPETEER_SKIP_DOWNLOAD=true
+ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY servers/nextjs/package.json servers/nextjs/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm \
@@ -71,14 +70,12 @@ FROM python:3.11-slim-trixie AS runtime
 
 WORKDIR /app
 
-ARG INSTALL_CHROMIUM=true
 ARG INSTALL_TESSERACT=true
 ARG INSTALL_LIBREOFFICE=true
 
 # LiteParse uses Node + @llamaindex/liteparse (same runner as Electron); OCR uses Tesseract.
 ENV APP_DATA_DIRECTORY=/app_data \
     TEMP_DIRECTORY=/tmp/presenton \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
     EXPORT_PACKAGE_ROOT=/app/presentation-export \
     EXPORT_RUNTIME_DIR=/app/presentation-export \
     BUILT_PYTHON_MODULE_PATH=/app/presentation-export/py/convert-linux-x64 \
@@ -90,7 +87,6 @@ ENV APP_DATA_DIRECTORY=/app_data \
 RUN set -eux; \
     packages="ca-certificates curl nginx fontconfig imagemagick zstd"; \
     if [ "$INSTALL_LIBREOFFICE" = "true" ]; then packages="$packages libreoffice"; fi; \
-    if [ "$INSTALL_CHROMIUM" = "true" ]; then packages="$packages chromium"; fi; \
     if [ "$INSTALL_TESSERACT" = "true" ]; then packages="$packages tesseract-ocr tesseract-ocr-eng"; fi; \
     apt-get update; \
     apt-get install -y --no-install-recommends $packages; \

@@ -23,7 +23,6 @@ from models.presentation_outline_model import (
 )
 from enums.tone import Tone
 from enums.verbosity import Verbosity
-from models.pptx_models import PptxPresentationModel
 from models.presentation_structure_model import PresentationStructureModel
 from models.presentation_with_slides import (
     PresentationWithSlides,
@@ -46,14 +45,12 @@ from models.sql.presentation_layout_code import PresentationLayoutCodeModel
 from models.sse_response import SSECompleteResponse, SSEErrorResponse, SSEResponse
 
 from services.database import get_async_session
-from services.temp_file_service import TEMP_FILE_SERVICE
 from services.concurrent_service import CONCURRENT_SERVICE
 from models.sql.presentation import PresentationModel
-from services.pptx_presentation_creator import PptxPresentationCreator
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
-from utils.asset_directory_utils import get_exports_directory, get_images_directory
+from utils.asset_directory_utils import get_images_directory
 from utils.llm_calls.generate_presentation_structure import (
     generate_presentation_structure,
 )
@@ -501,56 +498,6 @@ async def update_presentation(
         slides=response_slides,
         fonts=fonts,
     )
-
-
-@PRESENTATION_ROUTER.post("/export/pptx", response_model=str)
-async def export_presentation_as_pptx(
-    pptx_model: Annotated[PptxPresentationModel, Body()],
-):
-    temp_dir = TEMP_FILE_SERVICE.create_temp_dir()
-
-    pptx_creator = PptxPresentationCreator(pptx_model, temp_dir)
-    await pptx_creator.create_ppt()
-
-    export_directory = get_exports_directory()
-    pptx_path = os.path.join(
-        export_directory, f"{pptx_model.name or uuid.uuid4()}.pptx"
-    )
-    pptx_creator.save(pptx_path)
-
-    return pptx_path
-
-
-@PRESENTATION_ROUTER.post("/export", response_model=PresentationPathAndEditPath)
-async def export_presentation_as_pptx_or_pdf(
-    id: Annotated[uuid.UUID, Body(description="Presentation ID to export")],
-    export_as: Annotated[
-        Literal["pptx", "pdf"], Body(description="Format to export the presentation as")
-    ] = "pptx",
-    sql_session: AsyncSession = Depends(get_async_session),
-):
-    """
-    Export a presentation as PPTX or PDF.
-    This Api is used to export via the nextjs app i.e using the puppeteer to export the presentation.
-    
-    """
-    presentation = await sql_session.get(PresentationModel, id)
-
-    if not presentation:
-        raise HTTPException(status_code=404, detail="Presentation not found")
-
-    presentation_and_path = await export_presentation(
-        id,
-        presentation.title or str(uuid.uuid4()),
-        export_as,
-    )
-
-    return PresentationPathAndEditPath(
-        **presentation_and_path.model_dump(),
-        edit_path=f"/presentation?id={id}",
-    )
-
-
 async def check_if_api_request_is_valid(
     request: GeneratePresentationRequest,
     sql_session: AsyncSession = Depends(get_async_session),

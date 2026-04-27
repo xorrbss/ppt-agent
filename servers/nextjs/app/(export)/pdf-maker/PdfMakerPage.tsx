@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store/store";
-import "../utils/prism-languages";
+import "@/app/(presentation-generator)/utils/prism-languages";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -10,13 +10,12 @@ import { usePathname } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { AlertCircle } from "lucide-react";
 import { setPresentationData } from "@/store/slices/presentationGeneration";
-import { DashboardApi } from "../services/api/dashboard";
+import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
 import { setupImageUrlConverter } from "@/utils/image-url-converter";
 
-
-import { V1ContentRender } from "../components/V1ContentRender";
-import { useFontLoader } from "../hooks/useFontLoad";
-import { Theme } from "../services/api/types";
+import { V1ContentRender } from "@/app/(presentation-generator)/components/V1ContentRender";
+import { useFontLoader } from "@/app/(presentation-generator)/hooks/useFontLoad";
+import { Theme } from "@/app/(presentation-generator)/services/api/types";
 
 
 

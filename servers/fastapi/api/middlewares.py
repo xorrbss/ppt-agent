@@ -1,3 +1,5 @@
+import re
+
 from fastapi import Request
 from starlette.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -23,6 +25,12 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
     _EXEMPT_PREFIXES = (
         "/api/v1/auth/",
     )
+    # PPTX/PDF export loads /pdf-maker in a headless browser with no session cookie; it
+    # only needs a single-deck read by id. (UUID is not a secret; this matches prior behavior
+    # when auth middleware did not protect these routes during export.)
+    _PRESENTATION_GET_BY_ID = re.compile(
+        r"^/api/v1/ppt/presentation/[0-9a-fA-F-]{36}/?$"
+    )
     _PROTECTED_NON_API_PATHS = {
         "/docs",
         "/openapi.json",
@@ -31,6 +39,11 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
 
     def _is_exempt(self, path: str) -> bool:
         return any(path.startswith(prefix) for prefix in self._EXEMPT_PREFIXES)
+
+    def _is_presentation_get_by_id(self, request: Request, path: str) -> bool:
+        if request.method != "GET":
+            return False
+        return bool(self._PRESENTATION_GET_BY_ID.match(path))
 
     def _requires_auth(self, path: str) -> bool:
         if path.startswith("/api/"):
@@ -46,6 +59,7 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
             request.method == "OPTIONS"
             or not self._requires_auth(path)
             or self._is_exempt(path)
+            or self._is_presentation_get_by_id(request, path)
         ):
             return await call_next(request)
 

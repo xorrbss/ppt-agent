@@ -12,9 +12,11 @@ import { getApiUrl } from '@/utils/api';
 export function ConfigurationInitializer({ children }: { children: React.ReactNode }) {
   const dispatch = useDispatch();
 
-  const [isLoading, setIsLoading] = useState(true);
-  const router = useRouter();
   const route = usePathname();
+  const [isLoading, setIsLoading] = useState(
+    () => !route?.startsWith("/pdf-maker")
+  );
+  const router = useRouter();
 
   // Fetch user config state
   useEffect(() => {
@@ -31,12 +33,12 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
   }
 
   const fetchUserConfigState = async () => {
-    setIsLoading(true);
-
-    if (route.startsWith('/pdf-maker')) {
+    if (route.startsWith("/pdf-maker")) {
       setIsLoading(false);
       return;
     }
+
+    setIsLoading(true);
 
     let canChangeKeys = false;
     try {
@@ -64,7 +66,6 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
 
       dispatch(setLLMConfig(llmConfig));
       const isValid = hasValidLLMConfig(llmConfig);
-      console.log('isValid', isValid);
       if (route.startsWith('/pdf-maker')) {
         setIsLoading(false);
         return;

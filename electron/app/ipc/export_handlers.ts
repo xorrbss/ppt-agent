@@ -20,7 +20,7 @@ export function setupExportHandlers() {
     return { success };
   });
 
-  ipcMain.handle("export-presentation", async (_, id: string, title: string, exportAs: "pptx" | "pdf" | "png") => {
+  ipcMain.handle("export-presentation", async (_, id: string, title: string, exportAs: "pptx" | "pdf") => {
     try {
       const params = new URLSearchParams({ id });
       if (process.env.NEXT_PUBLIC_FAST_API) {
