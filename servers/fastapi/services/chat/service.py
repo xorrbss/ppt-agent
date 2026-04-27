@@ -12,6 +12,7 @@ from llmai.shared import (  # type: ignore[import-not-found]
     AssistantMessage,
     Message,
     SystemMessage,
+    TextContentPart,
     ToolResponseMessage,
     UserMessage,
 )
@@ -166,7 +167,7 @@ class PresentationChatService:
                     messages.append(
                         ToolResponseMessage(
                             id=tool_call.id,
-                            content=[tool_response_content],
+                            content=[TextContentPart(text=tool_response_content)],
                         )
                     )
                 continue
@@ -310,7 +311,7 @@ class PresentationChatService:
                 messages.append(
                     ToolResponseMessage(
                         id=tool_call.id,
-                        content=[tool_response_content],
+                        content=[TextContentPart(text=tool_response_content)],
                     )
                 )
 

@@ -1,18 +1,14 @@
 "use client";
 
 import {
-  Activity,
-  CheckCircle2,
   ChevronDown,
   ChevronRight,
-  ChevronUp,
-  CircleDot,
   Loader2,
   MessageCircleMore,
   Plus,
   RefreshCw,
   Send,
-  XCircle,
+  Square,
 } from "lucide-react";
 import React, {
   FormEvent,
@@ -266,11 +262,94 @@ const AssistantMarker = () => (
   </div>
 );
 
+const TOOL_LABELS: Record<string, string> = {
+  getPresentationOutline: "Outline reader",
+  searchSlides: "Slide search",
+  getSlideAtIndex: "Slide reader",
+  getAvailableLayouts: "Layout finder",
+  getContentSchemaFromLayoutId: "Schema checker",
+  generateAssets: "Asset generator",
+  saveSlide: "Slide saver",
+};
+
+const getToolLabel = (tool?: string) => {
+  if (!tool) {
+    return "";
+  }
+  return TOOL_LABELS[tool] ?? tool;
+};
+
+const humanizeTraceMessage = (message: string, tool?: string) => {
+  const trimmed = message.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const lower = trimmed.toLowerCase();
+  if (lower === "reading deck context") {
+    return "Reviewing your presentation context.";
+  }
+  if (lower === "reading the presentation outline") {
+    return "Reading the presentation outline.";
+  }
+  if (lower === "searching relevant slides") {
+    return "Searching slides for relevant content.";
+  }
+  if (lower === "opening the requested slide") {
+    return "Opening the selected slide.";
+  }
+  if (lower === "checking available layouts") {
+    return "Checking available layouts.";
+  }
+  if (lower === "checking the layout schema") {
+    return "Validating the slide schema.";
+  }
+  if (lower === "generating slide assets") {
+    return "Generating images and icons.";
+  }
+  if (lower === "saving the slide") {
+    return "Saving slide updates.";
+  }
+  if (lower.startsWith("using tools:")) {
+    const toolNames = trimmed
+      .slice("using tools:".length)
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .map((entry) => getToolLabel(entry));
+    if (toolNames.length === 0) {
+      return "Planning tool steps.";
+    }
+    return `Planning tools: ${toolNames.join(", ")}.`;
+  }
+  if (lower.includes("found requested data")) {
+    if (tool === "getSlideAtIndex") {
+      return "Found the requested slide details.";
+    }
+    if (tool === "getPresentationOutline") {
+      return "Found the requested outline details.";
+    }
+    return "Found the requested information.";
+  }
+  if (lower.endsWith("completed.")) {
+    return trimmed;
+  }
+  if (lower.includes("failed")) {
+    return trimmed;
+  }
+  return trimmed;
+};
+
 const inferStatusState = (status: string): AssistantActivity["state"] => {
   const normalized = status.trim().toLowerCase();
   if (
     normalized.includes("preparing") ||
     normalized.includes("thinking") ||
+    normalized.includes("reading") ||
+    normalized.includes("searching") ||
+    normalized.includes("opening") ||
+    normalized.includes("generating") ||
+    normalized.includes("processing") ||
     normalized.includes("finalizing") ||
     normalized.includes("saving")
   ) {
@@ -280,12 +359,18 @@ const inferStatusState = (status: string): AssistantActivity["state"] => {
   return "info";
 };
 
+const isAbortError = (error: unknown) =>
+  (error instanceof DOMException && error.name === "AbortError") ||
+  (error instanceof Error &&
+    error.message.toLowerCase().includes("aborted") &&
+    error.message.toLowerCase().includes("request"));
+
 const formatTraceActivity = (
   trace: ChatStreamTrace
 ): Omit<AssistantActivity, "id"> | null => {
   if (typeof trace.message === "string" && trace.message.trim().length > 0) {
     return {
-      label: trace.message.trim(),
+      label: humanizeTraceMessage(trace.message, trace.tool),
       kind: trace.kind,
       round: trace.round,
       tool: trace.tool,
@@ -302,7 +387,7 @@ const formatTraceActivity = (
 
   if (trace.tool && trace.status === "start") {
     return {
-      label: `Running ${trace.tool}`,
+      label: `Running ${getToolLabel(trace.tool)}...`,
       kind: trace.kind,
       round: trace.round,
       tool: trace.tool,
@@ -312,7 +397,7 @@ const formatTraceActivity = (
 
   if (trace.tool && trace.status === "success") {
     return {
-      label: `${trace.tool} completed`,
+      label: `${getToolLabel(trace.tool)} completed.`,
       kind: trace.kind,
       round: trace.round,
       tool: trace.tool,
@@ -322,7 +407,7 @@ const formatTraceActivity = (
 
   if (trace.tool && trace.status === "error") {
     return {
-      label: `${trace.tool} failed`,
+      label: `${getToolLabel(trace.tool)} failed.`,
       kind: trace.kind,
       round: trace.round,
       tool: trace.tool,
@@ -332,7 +417,7 @@ const formatTraceActivity = (
 
   if (trace.kind === "tool_plan" && Array.isArray(trace.tools) && trace.tools.length) {
     return {
-      label: `Using tools: ${trace.tools.join(", ")}`,
+      label: `Planning tools: ${trace.tools.map((tool) => getToolLabel(tool)).join(", ")}.`,
       kind: trace.kind,
       round: trace.round,
       state: "info",
@@ -341,75 +426,6 @@ const formatTraceActivity = (
 
   return null;
 };
-
-const ActivityIcon = ({ state }: { state: AssistantActivity["state"] }) => {
-  if (state === "running") {
-    return <Loader2 className="h-3 w-3 animate-spin text-[#98A2B3]" />;
-  }
-
-  if (state === "success") {
-    return <CheckCircle2 className="h-3 w-3 text-[#12B76A]" />;
-  }
-
-  if (state === "error") {
-    return <XCircle className="h-3 w-3 text-[#F04438]" />;
-  }
-
-  return <CircleDot className="h-3 w-3 text-[#98A2B3]" />;
-};
-
-const getActivityHeading = (activity: AssistantActivity[]) => {
-  if (activity.some((item) => item.state === "running")) {
-    return "Thinking";
-  }
-
-  if (activity.some((item) => item.state === "error")) {
-    return "Needs attention";
-  }
-
-  return "Thought process";
-};
-
-const getActivitySummary = (activity: AssistantActivity[]) => {
-  return activity[activity.length - 1]?.label ?? "Working through the request";
-};
-
-const ActivityTimeline = ({ activity }: { activity: AssistantActivity[] }) => (
-  <div className="border-t border-[#ECEEF2] px-3 py-3">
-    <div className="flex flex-col">
-      {activity.map((activityItem, index) => (
-        <div
-          key={activityItem.id}
-          className="relative flex gap-3 pb-3 last:pb-0"
-        >
-          {index < activity.length - 1 && (
-            <span className="absolute left-[5px] top-4 h-[calc(100%-0.5rem)] w-px bg-[#E4E7EC]" />
-          )}
-          <span className="relative z-10 mt-0.5 flex h-3 w-3 shrink-0 items-center justify-center bg-[#FAFAFB]">
-            <ActivityIcon state={activityItem.state} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-1.5">
-              {activityItem.tool && (
-                <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] font-medium text-[#667085] ring-1 ring-[#EAECF0]">
-                  {activityItem.tool}
-                </span>
-              )}
-              {activityItem.round && (
-                <span className="text-[10px] text-[#98A2B3]">
-                  step {activityItem.round}
-                </span>
-              )}
-            </div>
-            <p className="mt-0.5 whitespace-pre-wrap break-words text-xs leading-4 text-[#667085]">
-              {activityItem.label}
-            </p>
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-);
 
 const Chat = ({
   presentationId,
@@ -421,6 +437,9 @@ const Chat = ({
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [activeAssistantMessageId, setActiveAssistantMessageId] = useState<
+    string | null
+  >(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [expandedActivityByMessage, setExpandedActivityByMessage] = useState<
     Record<string, boolean>
@@ -428,12 +447,17 @@ const Chat = ({
 
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
     setMessages([]);
     setInput("");
     setConversationId(null);
+    setIsSending(false);
+    setActiveAssistantMessageId(null);
     setErrorMessage(null);
     setExpandedActivityByMessage({});
 
@@ -617,33 +641,15 @@ const Chat = ({
     );
   };
 
-  const settleAssistantActivities = (
-    assistantMessageId: string,
-    finalState: "success" | "error"
-  ) => {
-    setMessages((previous) =>
-      previous.map((message) => {
-        if (message.id !== assistantMessageId || !message.activity?.length) {
-          return message;
-        }
-
-        return {
-          ...message,
-          activity: message.activity.map((activityItem) =>
-            activityItem.state === "running"
-              ? { ...activityItem, state: finalState }
-              : activityItem
-          ),
-        };
-      })
-    );
-  };
-
   const toggleActivityExpanded = (messageId: string) => {
     setExpandedActivityByMessage((previous) => ({
       ...previous,
       [messageId]: !previous[messageId],
     }));
+  };
+
+  const stopStreaming = () => {
+    abortControllerRef.current?.abort();
   };
 
   const submitMessage = async (rawMessage: string) => {
@@ -678,11 +684,14 @@ const Chat = ({
     ]);
     setExpandedActivityByMessage((previous) => ({
       ...previous,
-      [assistantMessageId]: true,
+      [assistantMessageId]: false,
     }));
     setInput("");
     setErrorMessage(null);
     setIsSending(true);
+    setActiveAssistantMessageId(assistantMessageId);
+    const streamAbortController = new AbortController();
+    abortControllerRef.current = streamAbortController;
 
     try {
       const response = await PresentationChatApi.streamMessage(
@@ -717,7 +726,8 @@ const Chat = ({
             }
             appendAssistantActivity(assistantMessageId, traceActivity);
           },
-        }
+        },
+        { signal: streamAbortController.signal }
       );
 
       setMessages((previous) =>
@@ -726,14 +736,17 @@ const Chat = ({
             ? {
               ...message,
               content: response.response,
-              toolCalls: Array.isArray(response.tool_calls)
-                ? response.tool_calls
-                : [],
+                toolCalls: [],
+                activity: [],
             }
             : message
         )
       );
-      settleAssistantActivities(assistantMessageId, "success");
+      setExpandedActivityByMessage((previous) => {
+        const next = { ...previous };
+        delete next[assistantMessageId];
+        return next;
+      });
       setConversationId((previous) => {
         const next =
           typeof response.conversation_id === "string"
@@ -756,13 +769,44 @@ const Chat = ({
         Array.isArray(response.tool_calls) ? response.tool_calls : []
       );
     } catch (error) {
+      if (isAbortError(error)) {
+        setMessages((previous) =>
+          previous.map((message) =>
+            message.id === assistantMessageId
+              ? {
+                  ...message,
+                  toolCalls: [],
+                  activity: [],
+                }
+              : message
+          )
+        );
+        setExpandedActivityByMessage((previous) => {
+          const next = { ...previous };
+          delete next[assistantMessageId];
+          return next;
+        });
+        return;
+      }
+
       const message =
         error instanceof Error ? error.message : "Failed to send chat message";
 
-      settleAssistantActivities(assistantMessageId, "error");
-      appendAssistantActivity(assistantMessageId, {
-        label: message,
-        state: "error",
+      setMessages((previous) =>
+        previous.map((entry) =>
+          entry.id === assistantMessageId
+            ? {
+                ...entry,
+                toolCalls: [],
+                activity: [],
+              }
+            : entry
+        )
+      );
+      setExpandedActivityByMessage((previous) => {
+        const next = { ...previous };
+        delete next[assistantMessageId];
+        return next;
       });
       setErrorMessage(message);
       setMessages((previous) => [
@@ -775,6 +819,12 @@ const Chat = ({
       ]);
       toast.error(message);
     } finally {
+      if (abortControllerRef.current === streamAbortController) {
+        abortControllerRef.current = null;
+      }
+      setActiveAssistantMessageId((current) =>
+        current === assistantMessageId ? null : current
+      );
       setIsSending(false);
     }
   };
@@ -800,26 +850,34 @@ const Chat = ({
   return (
     <div className="flex h-full w-full flex-col bg-white">
       <div className="flex items-center justify-between px-4 pt-8">
-        <h4 className="flex items-center gap-2 text-sm font-semibold text-[#101828]">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            aria-hidden="true"
-          >
-            <path
-              d="M19.1407 9.46542C16.5537 9.21616 14.5067 7.17009 14.2577 4.58528L13.8376 0.220703L13.4175 4.58528C13.1685 7.17053 11.1215 9.2166 8.53451 9.46542L4.1731 9.88521L8.53451 10.305C11.1215 10.5543 13.1685 12.6003 13.4175 15.1852L13.8376 19.5497L14.2577 15.1852C14.5067 12.5999 16.5537 10.5538 19.1407 10.305L23.5021 9.88521L19.1407 9.46542Z"
-              fill="#7A5AF8"
-            />
-            <path
-              d="M9.07681 16.8431C7.62808 16.7035 6.48175 15.5577 6.34232 14.1102L6.10707 11.666L5.87183 14.1102C5.7324 15.5579 4.58606 16.7037 3.13734 16.8431L0.694946 17.0781L3.13734 17.3132C4.58606 17.4528 5.7324 18.5986 5.87183 20.0461L6.10707 22.4903L6.34232 20.0461C6.48175 18.5984 7.62808 17.4526 9.07681 17.3132L11.5192 17.0781L9.07681 16.8431Z"
-              fill="#7A5AF8"
-            />
-          </svg>
-          AI Assistant
-        </h4>
+        <div className="flex items-center gap-2">
+          <h4 className="flex items-center gap-2 text-sm font-semibold text-[#101828]">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M19.1407 9.46542C16.5537 9.21616 14.5067 7.17009 14.2577 4.58528L13.8376 0.220703L13.4175 4.58528C13.1685 7.17053 11.1215 9.2166 8.53451 9.46542L4.1731 9.88521L8.53451 10.305C11.1215 10.5543 13.1685 12.6003 13.4175 15.1852L13.8376 19.5497L14.2577 15.1852C14.5067 12.5999 16.5537 10.5538 19.1407 10.305L23.5021 9.88521L19.1407 9.46542Z"
+                fill="#7A5AF8"
+              />
+              <path
+                d="M9.07681 16.8431C7.62808 16.7035 6.48175 15.5577 6.34232 14.1102L6.10707 11.666L5.87183 14.1102C5.7324 15.5579 4.58606 16.7037 3.13734 16.8431L0.694946 17.0781L3.13734 17.3132C4.58606 17.4528 5.7324 18.5986 5.87183 20.0461L6.10707 22.4903L6.34232 20.0461C6.48175 18.5984 7.62808 17.4526 9.07681 17.3132L11.5192 17.0781L9.07681 16.8431Z"
+                fill="#7A5AF8"
+              />
+            </svg>
+            AI Assistant
+          </h4>
+          {isSending && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#F4F3FF] px-2 py-0.5 text-[10px] font-medium text-[#6941C6]">
+              <Loader2 className="h-2.5 w-2.5 animate-spin" />
+              Live
+            </span>
+          )}
+        </div>
         <button
           type="button"
           onClick={resetChat}
@@ -905,10 +963,18 @@ const Chat = ({
                         {message.content}
                       </div>
                     ) : (
-                      <MarkdownRenderer
-                        content={message.content}
-                        className="chat-markdown mb-0 text-sm font-normal leading-5 text-[#535862]"
-                      />
+                      <div className="chat-markdown mb-0 text-sm font-normal leading-5 text-[#535862]">
+                        <MarkdownRenderer
+                          content={message.content}
+                          className="chat-markdown mb-0 text-sm font-normal leading-5 text-[#535862]"
+                        />
+                        {isSending && message.id === activeAssistantMessageId && (
+                          <span
+                            aria-hidden="true"
+                            className="ml-1 inline-block h-4 w-0.5 animate-pulse rounded-full bg-[#98A2B3] align-middle"
+                          />
+                        )}
+                      </div>
                     )
                   ) : (
                     <div className="text-sm font-normal leading-5 text-[#535862]">
@@ -919,47 +985,45 @@ const Chat = ({
                     </div>
                   )}
                   {message.activity && message.activity.length > 0 && (
-                    <div className="mt-3 overflow-hidden rounded-2xl border border-[#ECEEF2] bg-[#FAFAFB] shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+                    <div className="mt-2">
                       <button
                         type="button"
                         onClick={() => toggleActivityExpanded(message.id)}
-                        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors hover:bg-[#F6F7F9]"
+                        className="inline-flex items-center gap-1 text-left text-xs font-medium text-[#667085] hover:text-[#475467]"
                       >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <Activity className="h-3.5 w-3.5 text-[#667085]" />
-                            <span className="text-[11px] font-semibold text-[#475467]">
-                              {getActivityHeading(message.activity)}
-                            </span>
-                            <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] text-[#98A2B3] ring-1 ring-[#EAECF0]">
-                              {message.activity.length} steps
-                            </span>
-                          </div>
-                          <div className="mt-1 truncate text-xs leading-4 text-[#98A2B3]">
-                            {getActivitySummary(message.activity)}
-                          </div>
-                        </div>
                         {expandedActivityByMessage[message.id] ? (
-                          <ChevronUp className="h-3.5 w-3.5 shrink-0 text-[#98A2B3]" />
+                          <ChevronDown className="h-3 w-3" />
                         ) : (
-                          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#98A2B3]" />
+                          <ChevronRight className="h-3 w-3" />
+                        )}
+                        <span>Thinking</span>
+                        {message.activity.some((item) => item.state === "running") && (
+                          <Loader2 className="h-3 w-3 animate-spin text-[#98A2B3]" />
                         )}
                       </button>
+
                       {expandedActivityByMessage[message.id] && (
-                        <ActivityTimeline activity={message.activity} />
+                        <div className="mt-2 space-y-1.5 pl-4">
+                          {message.activity.map((activityItem) => (
+                            <div
+                              key={activityItem.id}
+                              className="text-xs leading-4 text-[#667085]"
+                            >
+                              {activityItem.tool && (
+                                <span className="mr-1 text-[#475467]">
+                                  {getToolLabel(activityItem.tool)}:
+                                </span>
+                              )}
+                              <span>{activityItem.label}</span>
+                            </div>
+                          ))}
+                          {message.toolCalls && message.toolCalls.length > 0 && (
+                            <div className="pt-0.5 text-[11px] text-[#98A2B3]">
+                              Tools called: {message.toolCalls.join(", ")}
+                            </div>
+                          )}
+                        </div>
                       )}
-                    </div>
-                  )}
-                  {message.toolCalls && message.toolCalls.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-1">
-                      {message.toolCalls.map((toolCall) => (
-                        <span
-                          key={`${message.id}-${toolCall}`}
-                          className="rounded-full bg-[#F5F5F5] px-2 py-0.5 text-[10px] text-[#8C8C8C]"
-                        >
-                          Used {toolCall}
-                        </span>
-                      ))}
                     </div>
                   )}
                 </div>
@@ -1000,23 +1064,42 @@ const Chat = ({
         >
           <Plus className="h-3 w-3 text-black" />
         </button>
-        <button
-          type="submit"
-          disabled={!input.trim() || isSending || isHistoryLoading}
-          className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-[#191919] disabled:cursor-not-allowed disabled:opacity-60"
-          style={{
-            background:
-              "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
-            borderRadius: "34px",
-          }}
-        >
-          {isSending ? (
-            <Loader2 className="h-3 w-3 animate-spin text-[#191919]" />
-          ) : (
+        {isSending ? (
+          <div className="absolute bottom-3 right-3 flex items-center gap-2">
+            <button
+              type="button"
+              disabled
+              className="flex cursor-wait items-center gap-1.5 rounded-[34px] border border-[#EAECF0] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#667085]"
+              aria-label="Chat is processing"
+            >
+              <Loader2 className="h-3 w-3 animate-spin text-[#667085]" />
+              Processing
+            </button>
+            <button
+              type="button"
+              onClick={stopStreaming}
+              className="flex items-center gap-1.5 rounded-[34px] border border-[#E4E7EC] bg-white px-3 py-2 text-sm font-medium text-[#344054] transition-colors hover:bg-[#F9FAFB]"
+              aria-label="Stop chat response"
+            >
+              <Square className="h-3 w-3 fill-current" />
+              Stop
+            </button>
+          </div>
+        ) : (
+          <button
+            type="submit"
+            disabled={!input.trim() || isHistoryLoading}
+            className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-[#191919] disabled:cursor-not-allowed disabled:opacity-60"
+            style={{
+              background:
+                "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
+              borderRadius: "34px",
+            }}
+          >
             <Send className="h-3 w-3 text-[#191919]" />
-          )}
-          Send
-        </button>
+            Send
+          </button>
+        )}
       </form>
     </div>
   );

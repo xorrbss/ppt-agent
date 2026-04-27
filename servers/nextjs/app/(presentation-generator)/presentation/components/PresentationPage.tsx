@@ -21,7 +21,6 @@ import { PresentationPageProps } from "../types";
 import LoadingState from "./LoadingState";
 import { applyPresentationThemeToElement } from "../utils/applyPresentationThemeDom";
 
-import { usePresentationUndoRedo } from "../hooks/PresentationUndoRedo";
 import PresentationHeader from "./PresentationHeader";
 import Chat from "./Chat";
 
@@ -84,8 +83,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     setError,
     fetchUserSlides
   );
-
-  usePresentationUndoRedo();
 
   useEffect(() => {
     if (!isStreaming) return;
@@ -242,7 +239,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
             <Chat
               presentationId={presentation_id}
               currentSlide={selectedSlide}
-              onPresentationChanged={fetchUserSlides}
+              onPresentationChanged={() => fetchUserSlides({ clearHistory: false })}
             />
           </div>
         </div>

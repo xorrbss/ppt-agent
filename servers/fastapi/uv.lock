@@ -1185,7 +1185,7 @@ wheels = [
 
 [[package]]
 name = "llmai"
-version = "0.2.1"
+version = "0.2.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anthropic" },
@@ -1193,9 +1193,9 @@ dependencies = [
     { name = "google-genai" },
     { name = "openai" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f1/34/1d4188bd842f336726004896be9ae04b693b9c21d349918631433b9f1b63/llmai-0.2.1.tar.gz", hash = "sha256:f911bd7df3eb06d1c56612ce293f926df7b3bf6c36283a353cf780c697d39d31", size = 47862, upload-time = "2026-04-24T16:28:52.417Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/1f/28/7dc14f9a417d933f8c799665a0a86ee31489dde40e9264ef6dc41b32759c/llmai-0.2.2.tar.gz", hash = "sha256:1f62d1e3d05fa5c43bbd948275398668d8f85c8d2fde252d34562332101dd7b3", size = 47863, upload-time = "2026-04-27T10:32:08.726Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/45/7d/63b3da1be92b721b0681db5b9e96c1cbc000b63cb70ede40b20cc5302699/llmai-0.2.1-py3-none-any.whl", hash = "sha256:4c51d1186cce1e621f74a9ec70376dc1bd2e996eee484db17dce6a6e7b79a0a7", size = 59880, upload-time = "2026-04-24T16:28:50.706Z" },
+    { url = "https://files.pythonhosted.org/packages/b0/a1/e34d8aaa015fd7a2cfefa391b6eb2995aee675d7f8d93f636f4da8b07c13/llmai-0.2.2-py3-none-any.whl", hash = "sha256:d65c016983036319df704927b5e7fece494efde25b4865caf9a95d555a25449c", size = 59874, upload-time = "2026-04-27T10:32:07.272Z" },
 ]
 
 [[package]]
@@ -1686,7 +1686,7 @@ requires-dist = [
     { name = "fastmcp", specifier = ">=2.11.0" },
     { name = "google-genai", specifier = ">=1.28.0" },
     { name = "jsonschema", specifier = ">=4.26.0" },
-    { name = "llmai", specifier = "==0.2.1" },
+    { name = "llmai", specifier = "==0.2.2" },
     { name = "mem0ai", extras = ["nlp"], specifier = ">=0.1.115" },
     { name = "nltk", specifier = ">=3.9.1" },
     { name = "openai", specifier = ">=1.98.0" },
