@@ -7,7 +7,7 @@ import tempfile
 from typing import Literal, Mapping
 
 from fastapi import HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from services.liteparse_service import _snippet, _subprocess_text_kwargs
 from utils.asset_directory_utils import resolve_app_path_to_filesystem
@@ -25,6 +25,19 @@ class PptxToHtmlDocument(BaseModel):
 
 class PresentationExportTaskResult(BaseModel):
     path: str
+
+
+class ExtractSchemaSlide(BaseModel):
+    id: str
+    name: str | None = None
+    description: str | None = None
+    json_schema: dict
+
+
+class ExtractSchemaDocument(BaseModel):
+    name: str
+    ordered: bool = False
+    slides: list[ExtractSchemaSlide]
 
 
 class ExportTaskService:
@@ -262,6 +275,22 @@ class ExportTaskService:
             raise HTTPException(
                 status_code=500,
                 detail="PPTX-to-HTML export produced invalid JSON output",
+            ) from exc
+
+    async def extract_schema(self, url: str) -> ExtractSchemaDocument:
+        try:
+            response_data = await self._run_task(
+                {
+                    "type": "extract-schema",
+                    "url": url,
+                },
+                "Extract-schema task did not produce a response file",
+            )
+            return ExtractSchemaDocument(**response_data)
+        except ValidationError as exc:
+            raise HTTPException(
+                status_code=500,
+                detail="Extract-schema task produced invalid output",
             ) from exc
 
 
