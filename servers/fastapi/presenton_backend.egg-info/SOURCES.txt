@@ -49,7 +49,6 @@ models/image_prompt.py
 models/json_path_guide.py
 models/ollama_model_metadata.py
 models/ollama_model_status.py
-models/pptx_models.py
 models/presentation_and_path.py
 models/presentation_from_template.py
 models/presentation_layout.py
@@ -81,7 +80,6 @@ services/database.py
 services/document_conversion_service.py
 services/documents_loader.py
 services/export_task_service.py
-services/html_to_text_runs_service.py
 services/icon_finder_service.py
 services/image_generation_service.py
 services/liteparse_service.py
@@ -106,7 +104,6 @@ tests/test_liteparse_service.py
 tests/test_mcp_server.py
 tests/test_mem0_presentation_memory_service.py
 tests/test_openai_schema_support.py
-tests/test_pptx_creator.py
 tests/test_pptx_slides_processing.py
 tests/test_presentation_generation_api.py
 tests/test_slide_to_html.py
@@ -126,7 +123,6 @@ utils/get_dynamic_models.py
 utils/get_env.py
 utils/get_layout_by_name.py
 utils/image_provider.py
-utils/image_utils.py
 utils/llm_client_error_handler.py
 utils/llm_config.py
 utils/llm_provider.py

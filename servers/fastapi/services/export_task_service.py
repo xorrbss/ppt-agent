@@ -4,7 +4,7 @@ import os
 import shutil
 import subprocess
 import tempfile
-from typing import Mapping
+from typing import Literal, Mapping
 
 from fastapi import HTTPException
 from pydantic import BaseModel
@@ -21,6 +21,10 @@ class PptxToHtmlDocument(BaseModel):
     height: float
     images_dir: str
     fonts_dir: str
+
+
+class PresentationExportTaskResult(BaseModel):
+    path: str
 
 
 class ExportTaskService:
@@ -147,29 +151,24 @@ class ExportTaskService:
             detail="PPTX-to-HTML task completed without a valid output path",
         )
 
-    async def convert_pptx_to_html(
-        self, pptx_path: str, get_fonts: bool = False
-    ) -> PptxToHtmlDocument:
-        self._ensure_runtime_ready()
-        if not os.path.isfile(pptx_path):
-            raise HTTPException(status_code=400, detail=f"PPTX not found: {pptx_path}")
-
-        temp_root = get_temp_directory_env() or os.path.join(tempfile.gettempdir(), "presenton")
+    @staticmethod
+    def _create_task_paths() -> tuple[str, str, str]:
+        temp_root = get_temp_directory_env() or os.path.join(
+            tempfile.gettempdir(), "presenton"
+        )
         os.makedirs(temp_root, exist_ok=True)
         temp_dir = tempfile.mkdtemp(prefix="export-task-", dir=temp_root)
         task_path = os.path.join(temp_dir, "export_task.json")
         response_path = os.path.join(temp_dir, "export_task.response.json")
+        return temp_dir, task_path, response_path
+
+    async def _run_task(self, task_payload: dict, response_error_detail: str) -> dict:
+        self._ensure_runtime_ready()
+        temp_dir, task_path, response_path = self._create_task_paths()
 
         try:
             with open(task_path, "w", encoding="utf-8") as task_file:
-                json.dump(
-                    {
-                        "type": "pptx-to-html",
-                        "pptx_path": pptx_path,
-                        "get_fonts": get_fonts,
-                    },
-                    task_file,
-                )
+                json.dump(task_payload, task_file)
 
             result = await asyncio.to_thread(
                 subprocess.run,
@@ -185,7 +184,7 @@ class ExportTaskService:
                 raise HTTPException(
                     status_code=500,
                     detail=(
-                        "PPTX-to-HTML export task failed. "
+                        "Export task failed. "
                         f"stderr={_snippet(result.stderr)} stdout={_snippet(result.stdout)}"
                     ),
                 )
@@ -193,34 +192,77 @@ class ExportTaskService:
             if not os.path.isfile(response_path):
                 raise HTTPException(
                     status_code=500,
-                    detail="PPTX-to-HTML export task did not produce a response file",
+                    detail=response_error_detail,
                 )
 
             with open(response_path, "r", encoding="utf-8") as response_file:
-                response_data = json.load(response_file)
+                return json.load(response_file)
+        except subprocess.TimeoutExpired as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Export task timed out after {self.timeout_seconds} seconds",
+            ) from exc
+        except json.JSONDecodeError as exc:
+            raise HTTPException(
+                status_code=500,
+                detail="Export task produced invalid JSON output",
+            ) from exc
+        except OSError as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to run export task: {exc}",
+            ) from exc
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    async def export_from_url(
+        self,
+        url: str,
+        title: str,
+        export_as: Literal["pdf", "pptx"],
+        fastapi_url: str | None = None,
+    ) -> PresentationExportTaskResult:
+        response_data = await self._run_task(
+            {
+                "type": "export",
+                "url": url,
+                "format": export_as,
+                "title": title,
+                "fastapiUrl": fastapi_url or None,
+            },
+            "Export task did not produce a response file",
+        )
+
+        return PresentationExportTaskResult(
+            path=self._resolve_output_path(response_data),
+        )
+
+    async def convert_pptx_to_html(
+        self, pptx_path: str, get_fonts: bool = False
+    ) -> PptxToHtmlDocument:
+        if not os.path.isfile(pptx_path):
+            raise HTTPException(status_code=400, detail=f"PPTX not found: {pptx_path}")
+
+        try:
+            response_data = await self._run_task(
+                {
+                    "type": "pptx-to-html",
+                    "pptx_path": pptx_path,
+                    "get_fonts": get_fonts,
+                },
+                "PPTX-to-HTML export task did not produce a response file",
+            )
 
             output_path = self._resolve_output_path(response_data)
             with open(output_path, "r", encoding="utf-8") as output_file:
                 output_data = json.load(output_file)
 
             return PptxToHtmlDocument(**output_data)
-        except subprocess.TimeoutExpired as exc:
-            raise HTTPException(
-                status_code=500,
-                detail=f"PPTX-to-HTML export timed out after {self.timeout_seconds} seconds",
-            ) from exc
         except json.JSONDecodeError as exc:
             raise HTTPException(
                 status_code=500,
                 detail="PPTX-to-HTML export produced invalid JSON output",
             ) from exc
-        except OSError as exc:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to run PPTX-to-HTML export task: {exc}",
-            ) from exc
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 def sys_platform() -> str:

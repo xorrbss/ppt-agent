@@ -53,6 +53,7 @@ export class DashboardApi {
         getApiUrl(`/api/v1/ppt/presentation/${id}`),
         {
           method: "GET",
+          credentials: "include",
         }
       );
 

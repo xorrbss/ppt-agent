@@ -1,5 +1,90 @@
 import { NextResponse } from "next/server";
-import puppeteer from "puppeteer";
+import { validate as uuidValidate } from "uuid";
+
+import { getSchemaByTemplateId, getSettingsByTemplateId } from "@/app/presentation-templates";
+import { compileTemplateSchema } from "@/lib/compile-template-schema";
+
+type CustomTemplateLayoutsResponse = {
+  layouts: Array<{
+    layout_code: string;
+    layout_id: string;
+    layout_name: string;
+    template: string;
+  }>;
+  template?: {
+    description?: string | null;
+    id: string;
+    name?: string | null;
+  } | null;
+};
+
+function getFastApiBaseUrl(): string {
+  return (
+    process.env.FAST_API_INTERNAL_URL?.trim() ||
+    process.env.NEXT_PUBLIC_FAST_API?.trim() ||
+    "http://127.0.0.1:8000"
+  );
+}
+
+function isCustomTemplateId(groupName: string): boolean {
+  return groupName.startsWith("custom-") || uuidValidate(groupName);
+}
+
+async function getCustomTemplateResponse(groupName: string) {
+  const templateId = groupName.startsWith("custom-")
+    ? groupName.slice("custom-".length)
+    : groupName;
+  const response = await fetch(
+    `${getFastApiBaseUrl()}/api/v1/ppt/template/${templateId}/layouts`,
+    {
+      cache: "no-store",
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch template data. HTTP ${response.status}`);
+  }
+
+  const data = (await response.json()) as CustomTemplateLayoutsResponse;
+  return {
+    name: data.template?.name || groupName,
+    ordered: false,
+    slides: data.layouts
+      .map((layout) => {
+        const compiledLayout = compileTemplateSchema(layout.layout_code);
+        if (!compiledLayout) {
+          return null;
+        }
+
+        return {
+          description: compiledLayout.layoutDescription,
+          id: `custom-${templateId}:${compiledLayout.layoutId}`,
+          json_schema: compiledLayout.schemaJSON,
+          name: compiledLayout.layoutName,
+        };
+      })
+      .filter(
+        (
+          layout
+        ): layout is {
+          description: string;
+          id: string;
+          json_schema: unknown;
+          name: string;
+        } => layout !== null
+      ),
+  };
+}
+
+function getBuiltInTemplateResponse(groupName: string) {
+  const settings = getSettingsByTemplateId(groupName);
+
+  return {
+    name: groupName,
+    ordered: settings?.ordered ?? false,
+    slides: getSchemaByTemplateId(groupName),
+  };
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -9,78 +94,17 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Missing group name" }, { status: 400 });
   }
 
-  const schemaPageUrl = `http://localhost/schema?group=${encodeURIComponent(
-    groupName
-  )}`;
-
-  let browser;
   try {
-    browser = await puppeteer.launch({
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
-      headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--disable-web-security",
-        "--disable-background-timer-throttling",
-        "--disable-backgrounding-occluded-windows",
-        "--disable-renderer-backgrounding",
-        "--disable-features=TranslateUI",
-        "--disable-ipc-flooding-protection",
-      ],
-    });
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1280, height: 720 });
-    page.setDefaultNavigationTimeout(300000);
-    page.setDefaultTimeout(300000);
-    await page.goto(schemaPageUrl, {
-      waitUntil: "networkidle0",
-      timeout: 300000,
-    });
-
-    await page.waitForSelector("[data-layouts]", { timeout: 300000 });
-    await page.waitForSelector("[data-settings]", { timeout: 300000 });
-
-    const { dataLayouts, dataGroupSettings } = await page.$eval(
-      "[data-layouts]",
-      (el) => ({
-        dataLayouts: el.getAttribute("data-layouts"),
-        dataGroupSettings: el.getAttribute("data-settings"),
-      })
-    );
-
-    let slides, groupSettings;
-    try {
-      slides = JSON.parse(dataLayouts || "[]");
-    } catch (e) {
-      slides = [];
-    }
-    try {
-      groupSettings = JSON.parse(dataGroupSettings || "null");
-    } catch (e) {
-      groupSettings = null;
-    }
-
-    const response = {
-      name: groupName,
-      ordered: groupSettings?.ordered ?? false,
-      slides: slides.map((slide: any) => ({
-        id: slide.id,
-        name: slide.name,
-        description: slide.description,
-        json_schema: slide.json_schema,
-      })),
-    };
+    const response = isCustomTemplateId(groupName)
+      ? await getCustomTemplateResponse(groupName)
+      : getBuiltInTemplateResponse(groupName);
 
     return NextResponse.json(response);
-  } catch (err) {
+  } catch (error) {
+    console.error("[api/template]", error);
     return NextResponse.json(
-      { error: "Failed to fetch or parse client page" },
+      { error: "Failed to fetch template data" },
       { status: 500 }
     );
-  } finally {
-    if (browser) await browser.close();
   }
 }

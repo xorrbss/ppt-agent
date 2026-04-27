@@ -47,7 +47,6 @@ export enum MixpanelEvent {
   Header_Export_PPTX_Button_Clicked = 'Header Export PPTX Button Clicked',
   Header_UpdatePresentationContent_API_Call = 'Header Update Presentation Content API Call',
   Header_ExportAsPDF_API_Call = 'Header Export As PDF API Call',
-  Header_GetPptxModel_API_Call = 'Header Get PPTX Model API Call',
   Header_ExportAsPPTX_API_Call = 'Header Export As PPTX API Call',
   Slide_Add_New_Slide_Button_Clicked = 'Slide Add New Slide Button Clicked',
   Slide_Delete_Slide_Button_Clicked = 'Slide Delete Slide Button Clicked',

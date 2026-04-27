@@ -16,7 +16,11 @@ interface TextFrameProps {
 // Electron IPC types
 interface ElectronAPI {
   fileDownloaded: (filePath: string) => Promise<any>;
-  exportAsPDF: (id: string, title: string) => Promise<any>;
+  exportPresentation: (
+    id: string,
+    title: string,
+    format: "pptx" | "pdf"
+  ) => Promise<any>;
   getUserConfig: () => Promise<any>;
   setUserConfig: (userConfig: any) => Promise<any>;
   getCanChangeKeys: () => Promise<boolean>;

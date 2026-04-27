@@ -120,11 +120,54 @@ function chmodIfPossible(filePath) {
   }
 }
 
-function getConverterCandidates() {
+function getConverterCandidates(baseDir = targetPyDir) {
   return [
-    path.join(targetPyDir, "convert-linux-x64"),
-    path.join(targetPyDir, "convert-linux-amd64"),
+    path.join(baseDir, "convert-linux-x64"),
+    path.join(baseDir, "convert-linux-amd64"),
+    path.join(baseDir, "convert"),
   ];
+}
+
+function hasRuntimeBundle(baseDir) {
+  const indexPath = path.join(baseDir, "index.js");
+  if (!fs.existsSync(indexPath)) {
+    return false;
+  }
+
+  const pyCandidates = getConverterCandidates(path.join(baseDir, "py"));
+  const rootCandidates = getConverterCandidates(baseDir);
+  return [...pyCandidates, ...rootCandidates].some((candidate) =>
+    fs.existsSync(candidate)
+  );
+}
+
+function moveFileAtomic(src, dest) {
+  try {
+    fs.renameSync(src, dest);
+  } catch {
+    fs.copyFileSync(src, dest);
+    fs.rmSync(src, { force: true });
+  }
+}
+
+function normalizeRuntimeLayout() {
+  if (!fs.existsSync(targetRoot)) {
+    return;
+  }
+
+  ensureDir(targetPyDir);
+
+  const rootCandidates = getConverterCandidates(targetRoot);
+  for (const sourcePath of rootCandidates) {
+    if (!fs.existsSync(sourcePath)) {
+      continue;
+    }
+
+    const destinationPath = path.join(targetPyDir, path.basename(sourcePath));
+    if (!fs.existsSync(destinationPath)) {
+      moveFileAtomic(sourcePath, destinationPath);
+    }
+  }
 }
 
 function ensureCommonJsEntrypoint() {
@@ -148,6 +191,8 @@ function ensureCommonJsEntrypoint() {
 }
 
 function validateExistingRuntime() {
+  normalizeRuntimeLayout();
+
   const entrypoint = ensureCommonJsEntrypoint();
   if (!entrypoint.ok) {
     return { ok: false, reason: entrypoint.reason };
@@ -158,7 +203,7 @@ function validateExistingRuntime() {
   if (!converterPath) {
     return {
       ok: false,
-      reason: `No Linux converter binary under ${targetPyDir}.`,
+      reason: `No Linux converter binary under ${targetPyDir} or ${targetRoot}.`,
     };
   }
   chmodIfPossible(converterPath);
@@ -210,18 +255,15 @@ function unzipArchive(zipPath, destDir) {
 }
 
 function resolveExtractedRoot(extractDir) {
-  const directIndex = path.join(extractDir, "index.js");
-  const directPy = path.join(extractDir, "py");
-  if (fs.existsSync(directIndex) && fs.existsSync(directPy)) {
+  if (hasRuntimeBundle(extractDir)) {
     return extractDir;
   }
+
   const children = fs.readdirSync(extractDir, { withFileTypes: true });
   for (const entry of children) {
     if (!entry.isDirectory()) continue;
     const candidate = path.join(extractDir, entry.name);
-    const candidateIndex = path.join(candidate, "index.js");
-    const candidatePy = path.join(candidate, "py");
-    if (fs.existsSync(candidateIndex) && fs.existsSync(candidatePy)) {
+    if (hasRuntimeBundle(candidate)) {
       return candidate;
     }
   }
