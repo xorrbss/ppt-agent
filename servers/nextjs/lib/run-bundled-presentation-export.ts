@@ -19,6 +19,19 @@ export function getPresentonAppRoot(): string {
   );
 }
 
+function extractSessionTokenFromCookieHeader(cookieHeader?: string): string | undefined {
+  if (!cookieHeader) {
+    return undefined;
+  }
+
+  const match = cookieHeader.match(/(?:^|;\s*)presenton_session=([^;]+)/);
+  if (!match?.[1]) {
+    return undefined;
+  }
+
+  return decodeURIComponent(match[1]);
+}
+
 async function resolveExportEntrypoint(exportRoot: string): Promise<string> {
   const indexCjs = path.join(exportRoot, "index.cjs");
   const indexJs = path.join(exportRoot, "index.js");
@@ -129,11 +142,18 @@ export async function runBundledPresentationExport(params: {
   const nextjsUrl =
     process.env.NEXT_PUBLIC_URL?.trim() || "http://127.0.0.1";
   const q = new URLSearchParams({ id: presentationId });
+  const sessionToken = extractSessionTokenFromCookieHeader(cookieHeader);
+  if (sessionToken) {
+    q.set("exportSession", sessionToken);
+  }
   const fastapiUrl = process.env.NEXT_PUBLIC_FAST_API?.trim();
   if (fastapiUrl) {
     q.set("fastapiUrl", fastapiUrl);
   }
-  const pptUrl = `${nextjsUrl}/pdf-maker?${q.toString()}`;
+  const basePptUrl = `${nextjsUrl}/pdf-maker?${q.toString()}`;
+  const pptUrl = cookieHeader?.trim()
+    ? `${basePptUrl}#exportCookie=${encodeURIComponent(cookieHeader)}`
+    : basePptUrl;
 
   const tempBase =
     process.env.TEMP_DIRECTORY?.trim() || path.join(os.tmpdir(), "presenton");

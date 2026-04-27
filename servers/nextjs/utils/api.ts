@@ -51,12 +51,12 @@ export function getApiUrl(path: string): string {
 
   const normalizedPath = withLeadingSlash(path);
   const isFastApiEndpoint = normalizedPath.startsWith("/api/v1/");
-  const hasConfiguredFastApi =
-    !!process.env.NEXT_PUBLIC_FAST_API || !!getFastApiUrlFromQuery();
+  const hasConfiguredFastApi = !!process.env.NEXT_PUBLIC_FAST_API;
 
   // In web/docker, /api/v1 is typically reverse-proxied by the web server.
-  // If a FastAPI origin is explicitly configured, use it instead of same-origin proxy.
-  if (isFastApiEndpoint && hasConfiguredFastApi) {
+  // Keep browser requests same-origin so session cookies stay attached.
+  // Server-side callers can still use configured FastAPI base URLs directly.
+  if (isFastApiEndpoint && typeof window === "undefined" && hasConfiguredFastApi) {
     return `${getFastAPIUrl()}${normalizedPath}`;
   }
 

@@ -11,6 +11,7 @@ import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { AlertCircle } from "lucide-react";
 import { setPresentationData } from "@/store/slices/presentationGeneration";
 import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
+import { ApiResponseHandler } from "@/app/(presentation-generator)/services/api/api-error-handler";
 import { setupImageUrlConverter } from "@/utils/image-url-converter";
 
 import { V1ContentRender } from "@/app/(presentation-generator)/components/V1ContentRender";
@@ -21,9 +22,21 @@ import { Theme } from "@/app/(presentation-generator)/services/api/types";
 
 
 
-const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
+type PresentationPageProps = {
+  presentation_id: string;
+  exportCookie?: string;
+};
+
+const PresentationPage = ({ presentation_id, exportCookie }: PresentationPageProps) => {
   const pathname = usePathname();
   const [contentLoading, setContentLoading] = useState(true);
+  const exportCookieFromHash =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.hash.replace(/^#/, "")).get(
+          "exportCookie"
+        ) ?? undefined
+      : undefined;
+  const effectiveExportCookie = exportCookie ?? exportCookieFromHash;
 
   const dispatch = useDispatch();
   const { presentationData } = useSelector(
@@ -55,7 +68,9 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
   // Function to fetch the user slides
   const fetchUserSlides = async () => {
     try {
-      const data = await DashboardApi.getPresentation(presentation_id);
+      const data = effectiveExportCookie
+        ? await fetchPresentationForExport(presentation_id, effectiveExportCookie)
+        : await DashboardApi.getPresentation(presentation_id);
       dispatch(setPresentationData(data));
       setContentLoading(false);
 
@@ -76,6 +91,24 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
       console.error("Error fetching user slides:", error);
       setContentLoading(false);
     }
+  };
+
+  const fetchPresentationForExport = async (
+    id: string,
+    cookieHeader: string
+  ) => {
+    const response = await fetch(`/api/export-presentation-data/${id}`, {
+      method: "GET",
+      headers: {
+        "x-export-cookie": cookieHeader,
+      },
+      cache: "no-store",
+    });
+
+    return ApiResponseHandler.handleResponse(
+      response,
+      "Presentation not found"
+    );
   };
 
   const applyTheme = async (theme: Theme) => {
