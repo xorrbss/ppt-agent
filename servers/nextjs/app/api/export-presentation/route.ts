@@ -12,6 +12,7 @@ function isValidFormat(value: unknown): value is BundledPresentationExportFormat
 
 export async function POST(req: NextRequest) {
   const { format, id, title } = await req.json();
+  const cookieHeader = req.headers.get("cookie") ?? "";
 
   if (!id) {
     return NextResponse.json(
@@ -38,6 +39,7 @@ export async function POST(req: NextRequest) {
       format,
       presentationId: id,
       title,
+      cookieHeader,
     });
 
     return NextResponse.json({

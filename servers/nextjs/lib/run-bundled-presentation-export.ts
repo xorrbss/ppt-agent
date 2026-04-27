@@ -116,8 +116,9 @@ export async function runBundledPresentationExport(params: {
   presentationId: string;
   title: string | undefined;
   format: BundledPresentationExportFormat;
+  cookieHeader?: string;
 }): Promise<BundledPresentationExportResult> {
-  const { presentationId, title, format } = params;
+  const { presentationId, title, format, cookieHeader } = params;
   const exportRoot = getExportPackageRoot();
   const entrypoint = await resolveExportEntrypoint(exportRoot);
   const converter = bundledConverterPath(exportRoot);
@@ -146,6 +147,7 @@ export async function runBundledPresentationExport(params: {
     format,
     title: sanitizeFilename(title ?? "presentation"),
     fastapiUrl: fastapiUrl || undefined,
+    cookieHeader: cookieHeader || undefined,
   };
 
   await fs.writeFile(exportTaskPath, JSON.stringify(exportTask), "utf8");
