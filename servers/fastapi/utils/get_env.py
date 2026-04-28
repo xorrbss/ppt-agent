@@ -1,6 +1,12 @@
 import os
 
 
+def _is_truthy(value: str | None) -> bool:
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def get_can_change_keys_env():
     return os.getenv("CAN_CHANGE_KEYS")
 
@@ -19,6 +25,14 @@ def get_temp_directory_env():
 
 def get_user_config_path_env():
     return os.getenv("USER_CONFIG_PATH")
+
+
+def get_disable_auth_env():
+    return os.getenv("DISABLE_AUTH")
+
+
+def is_disable_auth_enabled():
+    return _is_truthy(get_disable_auth_env())
 
 
 def get_llm_provider_env():

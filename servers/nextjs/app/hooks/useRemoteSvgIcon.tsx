@@ -1,4 +1,5 @@
 import React from "react";
+import { resolveBackendAssetUrl } from "@/utils/api";
 
 export type RemoteSvgOptions = {
   strokeColor?: string;
@@ -114,11 +115,15 @@ function cacheSet(key: string, value: string) {
 export function useRemoteSvgIcon(url?: string, options: RemoteSvgOptions = {}) {
   const [svgMarkup, setSvgMarkup] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const resolvedUrl = React.useMemo(
+    () => resolveBackendAssetUrl(url),
+    [url]
+  );
 
   React.useEffect(() => {
     let cancelled = false;
     async function run() {
-      if (!url) {
+      if (!resolvedUrl) {
         // build simple fallback svg
         const stroke = options.strokeColor || "currentColor";
         const fill = options.fillColor ?? "none";
@@ -127,7 +132,7 @@ export function useRemoteSvgIcon(url?: string, options: RemoteSvgOptions = {}) {
         return;
       }
       // non-svg extensions fallback
-      if (/\.(png|jpe?g|gif|webp)(\?.*)?$/i.test(url)) {
+      if (/\.(png|jpe?g|gif|webp)(\?.*)?$/i.test(resolvedUrl)) {
         const stroke = options.strokeColor || "currentColor";
         const fill = options.fillColor ?? "none";
         const cls = options.className ? ` class=\"${options.className}\"` : "";
@@ -136,7 +141,7 @@ export function useRemoteSvgIcon(url?: string, options: RemoteSvgOptions = {}) {
       }
 
       // Cache lookup
-      const cacheKey = makeCacheKey(url, options);
+      const cacheKey = makeCacheKey(resolvedUrl, options);
       const cached = cacheGet(cacheKey);
       if (cached) {
         setSvgMarkup(cached);
@@ -145,7 +150,7 @@ export function useRemoteSvgIcon(url?: string, options: RemoteSvgOptions = {}) {
       }
       try {
        
-        const res = await fetch(url);
+        const res = await fetch(resolvedUrl);
         if (!res.ok) {
           throw new Error(`HTTP ${res.status}`);
         }
@@ -176,7 +181,7 @@ export function useRemoteSvgIcon(url?: string, options: RemoteSvgOptions = {}) {
     return () => {
       cancelled = true;
     };
-  }, [url, options.strokeColor, options.fillColor, options.className]);
+  }, [resolvedUrl, options.strokeColor, options.fillColor, options.className]);
 
   return { svgMarkup, error };
 }
@@ -189,11 +194,12 @@ export const RemoteSvgIcon: React.FC<{
   title?: string;
   color?: string;
 }> = ({ url, strokeColor, fillColor, className, title, color }) => {
-  const { svgMarkup } = useRemoteSvgIcon(url, { strokeColor, fillColor, className, title, color });
+  const resolvedUrl = resolveBackendAssetUrl(url);
+  const { svgMarkup } = useRemoteSvgIcon(resolvedUrl, { strokeColor, fillColor, className, title, color });
   if (!svgMarkup) return null;
   return (
     <span
-      data-path={url}
+      data-path={resolvedUrl}
       role={title ? "img" : undefined}
       aria-label={title}
       dangerouslySetInnerHTML={{ __html: svgMarkup }}

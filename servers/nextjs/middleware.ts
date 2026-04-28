@@ -24,6 +24,11 @@ type AuthStatus = {
   authenticated: boolean;
 };
 
+function isAuthDisabled(): boolean {
+  const raw = process.env.DISABLE_AUTH?.trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
+}
+
 const SESSION_COOKIE_NAME = "presenton_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
 
@@ -81,6 +86,10 @@ export async function middleware(request: NextRequest) {
       return response;
     }
 
+    return NextResponse.next();
+  }
+
+  if (isAuthDisabled()) {
     return NextResponse.next();
   }
 

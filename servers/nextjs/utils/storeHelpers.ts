@@ -115,15 +115,57 @@ export const getLLMConfigValidationError = (
   return null;
 };
 
+/** Codex is selected but no model chosen - block navigation away from Settings. */
+export function isCodexMissingSelectedModel(llmConfig: LLMConfig): boolean {
+  return llmConfig.LLM === "codex" && !isProvided(llmConfig.CODEX_MODEL);
+}
+
+/**
+ * While on Settings with Codex selected and no model (e.g. after sign-out),
+ * block leaving for non-Settings destinations.
+ */
+export function shouldBlockCodexOutboundNav(
+  llmConfig: LLMConfig,
+  destinationPath: string,
+  currentPathname: string | null
+): boolean {
+  if (!isCodexMissingSelectedModel(llmConfig)) return false;
+  const onSettings =
+    currentPathname === "/settings" ||
+    (currentPathname?.startsWith("/settings/") ?? false);
+  if (!onSettings) return false;
+  const path = destinationPath.split("?")[0] || "";
+  if (path === "/settings" || path.startsWith("/settings/")) return false;
+  return true;
+}
+
+/** Keep Redux in sync when Codex signs out so guards observe cleared CODEX_MODEL. */
+export function syncStoreAfterCodexSignOut(): void {
+  const prev = store.getState().userConfig.llm_config;
+  store.dispatch(
+    setLLMConfig({
+      ...prev,
+      LLM: "codex",
+      CODEX_MODEL: "",
+    })
+  );
+}
+
 export const handleSaveLLMConfig = async (llmConfig: LLMConfig) => {
   const validationError = getLLMConfigValidationError(llmConfig);
   if (validationError) {
     throw new Error(validationError);
   }
-  await fetch("/api/user-config", {
-    method: "POST",
-    body: JSON.stringify(llmConfig),
-  });
+
+  // Prefer shared API routes; fallback to Electron IPC for packaged compatibility.
+  if (typeof window !== "undefined" && window.electron?.setUserConfig) {
+    await window.electron.setUserConfig(llmConfig);
+  } else {
+    await fetch("/api/user-config", {
+      method: "POST",
+      body: JSON.stringify(llmConfig),
+    });
+  }
 
   store.dispatch(setLLMConfig(llmConfig));
 };

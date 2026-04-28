@@ -29,6 +29,35 @@ const startupStatus: Record<string, string> = {
   imagemagick: "checking",
 };
 
+function resolveExportConverterPath(appRoot: string): string | undefined {
+  const pyDir = path.join(appRoot, "resources", "export", "py");
+  const candidates = [
+    path.join(pyDir, `convert-${process.platform}-${process.arch}`),
+    path.join(pyDir, `convert-${process.platform}-${process.arch}.exe`),
+    path.join(pyDir, `convert-${process.platform}`),
+    path.join(pyDir, `convert-${process.platform}.exe`),
+    path.join(pyDir, "convert"),
+    path.join(pyDir, "convert.exe"),
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate));
+}
+
+function resolveElectronDisableAuth(): string {
+  const raw = (
+    process.env.ELECTRON_DISABLE_AUTH ?? process.env.DISABLE_AUTH
+  )?.trim().toLowerCase();
+  if (!raw) {
+    return "true";
+  }
+  if (["0", "false", "no", "off"].includes(raw)) {
+    return "false";
+  }
+  if (["1", "true", "yes", "on"].includes(raw)) {
+    return "true";
+  }
+  return "true";
+}
+
 // Allow renderer to query initial startup status as soon as it loads.
 ipcMain.handle("startup:get-status", () => startupStatus);
 
@@ -113,6 +142,7 @@ const createWindow = () => {
 
 async function startServers(fastApiPort: number, nextjsPort: number) {
   try {
+    const disableAuthForElectron = resolveElectronDisableAuth();
     const sofficePath = getSofficePath();
     const fastApi = await startFastApiServer(
       fastapiDir,
@@ -151,6 +181,7 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         TEMP_DIRECTORY: tempDir,
         USER_CONFIG_PATH: userConfigPath,
         MIGRATE_DATABASE_ON_STARTUP: "True",
+        DISABLE_AUTH: disableAuthForElectron,
         // Resolved by libreoffice-check.ts at startup when available; lets
         // Python invoke the exact binary path instead of relying on PATH.
         ...(sofficePath && {
@@ -169,16 +200,25 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
     await fastApi.ready;
 
     const puppeteerExecutablePath = await getPuppeteerExecutablePath();
+    const exportPackageRoot = path.join(baseDir, "resources", "export");
+    const exportConverterPath = resolveExportConverterPath(baseDir);
     const nextjs = await startNextJsServer(
       nextjsDir,
       nextjsPort,
       {
         NEXT_PUBLIC_FAST_API: process.env.NEXT_PUBLIC_FAST_API,
+        FAST_API_INTERNAL_URL: process.env.NEXT_PUBLIC_FAST_API,
         TEMP_DIRECTORY: process.env.TEMP_DIRECTORY,
         NEXT_PUBLIC_URL: process.env.NEXT_PUBLIC_URL,
         NEXT_PUBLIC_USER_CONFIG_PATH: process.env.NEXT_PUBLIC_USER_CONFIG_PATH,
         USER_CONFIG_PATH: process.env.NEXT_PUBLIC_USER_CONFIG_PATH,
         APP_DATA_DIRECTORY: appDataDir,
+        DISABLE_AUTH: disableAuthForElectron,
+        EXPORT_PACKAGE_ROOT: exportPackageRoot,
+        PRESENTON_APP_ROOT: baseDir,
+        ...(exportConverterPath && {
+          BUILT_PYTHON_MODULE_PATH: exportConverterPath,
+        }),
         ...(puppeteerExecutablePath && {
           PUPPETEER_EXECUTABLE_PATH: puppeteerExecutablePath,
         }),

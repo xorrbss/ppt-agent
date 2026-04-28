@@ -144,8 +144,7 @@ Run Presenton directly in your browser — no installation, no setup required. S
   <p>
     <strong>Prerequisites:</strong> Node.js (LTS), npm, Python 3.11, and
     <a href="https://docs.astral.sh/uv/">uv</a>
-    (for the Electron FastAPI backend in
-    <code>electron/servers/fastapi</code>).
+    (for the shared FastAPI backend in <code>servers/fastapi</code>).
   </p>
 
 - Setup (First Time)
@@ -231,9 +230,14 @@ Use when **LLM** is **ollama**:
 
 Mem0 uses local Qdrant + SQLite (OSS); memory is scoped per presentation.
 
+By default the Docker runtime now points Mem0 at a local Ollama-compatible LLM endpoint, so it no longer needs an OpenAI key just to initialize. If you want to use OpenAI instead, set `MEM0_LLM_BASE_URL`/`MEM0_LLM_API_KEY` to your OpenAI-compatible endpoint and key.
+
 | Variable | Purpose |
 |----------|---------|
 | **MEM0_ENABLED** | **true**/false (compose default **true**). |
+| **MEM0_LLM_MODEL** | Mem0 LLM model name (compose default **`llama3.1:latest`** or `OLLAMA_MODEL`). |
+| **MEM0_LLM_API_KEY** | Mem0 LLM API key placeholder for OpenAI-compatible clients (compose default **`ollama`**). |
+| **MEM0_LLM_BASE_URL** | Mem0 LLM base URL (compose default **`OLLAMA_URL`** or `http://host.docker.internal:11434`). |
 | **MEM0_DIR** | Root directory (compose default **`/app_data/mem0`**). |
 | **MEM0_EMBEDDER_PROVIDER** | Embedder backend (compose default **`fastembed`**). |
 | **MEM0_EMBEDDER_MODEL** | Model id (compose default **`BAAI/bge-small-en-v1.5`**). |

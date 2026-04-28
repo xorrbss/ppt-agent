@@ -32,6 +32,7 @@ interface FastApiEnv {
   TEMP_DIRECTORY?: string,
   USER_CONFIG_PATH?: string,
   MIGRATE_DATABASE_ON_STARTUP?: string,
+  DISABLE_AUTH?: string,
   /** Absolute path to the resolved LibreOffice executable discovered at startup. */
   SOFFICE_PATH?: string,
   /** Absolute path to the ImageMagick binary resolved at startup by imagemagick-check.ts. */
@@ -46,11 +47,17 @@ interface FastApiEnv {
 
 interface NextJsEnv {
   NEXT_PUBLIC_FAST_API?: string,
+  FAST_API_INTERNAL_URL?: string,
   TEMP_DIRECTORY?: string,
   NEXT_PUBLIC_URL?: string,
   NEXT_PUBLIC_USER_CONFIG_PATH?: string,
   USER_CONFIG_PATH?: string,
   APP_DATA_DIRECTORY?: string,
+  DISABLE_AUTH?: string,
+  EXPORT_PACKAGE_ROOT?: string,
+  PRESENTON_APP_ROOT?: string,
+  BUILT_PYTHON_MODULE_PATH?: string,
+  PUPPETEER_EXECUTABLE_PATH?: string,
 }
 
 interface UserConfig {
