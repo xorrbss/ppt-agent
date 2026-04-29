@@ -41,6 +41,7 @@ datas_fastembed_cache = (
 # PyInstaller does not trace those. Embedder/vector classes are loaded by string path at runtime.
 hiddenimports_mem0 = safe_collect_submodules("mem0.configs.vector_stores") + [
     "mem0.embeddings.fastembed",
+    "mem0.llms.openai",
     "mem0.vector_stores.qdrant",
 ]
 

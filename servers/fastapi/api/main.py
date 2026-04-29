@@ -3,6 +3,8 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.requests import Request
+from starlette.responses import FileResponse
 
 from api.lifespan import app_lifespan
 from api.middlewares import SessionAuthMiddleware, UserConfigEnvUpdateMiddleware
@@ -82,3 +84,18 @@ app.add_middleware(
 
 app.add_middleware(UserConfigEnvUpdateMiddleware)
 app.add_middleware(SessionAuthMiddleware)
+
+
+@app.middleware("http")
+async def static_icon_fallback_middleware(request: Request, call_next):
+    """Serve placeholder when icon paths are missing (e.g. renamed Phosphor icons)."""
+    response = await call_next(request)
+    if response.status_code != 404:
+        return response
+    path = request.url.path
+    if not path.startswith("/static/icons/"):
+        return response
+    placeholder = get_resource_path("static/icons/placeholder.svg")
+    if not os.path.isfile(placeholder):
+        return response
+    return FileResponse(placeholder, media_type="image/svg+xml")
