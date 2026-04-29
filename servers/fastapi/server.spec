@@ -1,6 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
-from PyInstaller.utils.hooks import collect_all
+from PyInstaller.utils.hooks import collect_all, collect_submodules
+
+
+def safe_collect_submodules(package_name):
+    try:
+        return collect_submodules(package_name)
+    except Exception:
+        return []
 
 
 def safe_collect_all(package_name):
@@ -29,6 +36,13 @@ datas_greenlet, binaries_greenlet, hiddenimports_greenlet = safe_collect_all(
 datas_fastembed_cache = (
     [("fastembed_cache", "fastembed_cache")] if os.path.isdir("fastembed_cache") else []
 )
+
+# mem0 validates vector store configs via dynamic __import__(mem0.configs.vector_stores.{provider});
+# PyInstaller does not trace those. Embedder/vector classes are loaded by string path at runtime.
+hiddenimports_mem0 = safe_collect_submodules("mem0.configs.vector_stores") + [
+    "mem0.embeddings.fastembed",
+    "mem0.vector_stores.qdrant",
+]
 
 a = Analysis(
     ["server.py"],
@@ -66,7 +80,8 @@ a = Analysis(
     + hiddenimports_onnx
     + hiddenimports_pptx
     + hiddenimports_docx2everything
-    + hiddenimports_greenlet,
+    + hiddenimports_greenlet
+    + hiddenimports_mem0,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

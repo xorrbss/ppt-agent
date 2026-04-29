@@ -18,6 +18,25 @@ import { getImageMagickBinaryPath, isImageMagickInstalled } from "./utils/imagem
 import { startUpdateChecker, stopUpdateChecker } from "./utils/update-checker";
 import { initMainSentry } from "./sentry/main";
 
+// Linux Chromium requires chrome-sandbox to be root-owned mode 4755; unpacked
+// dist/linux-unpacked builds usually lack that. Disable sandbox only when invalid.
+if (process.platform === "linux") {
+  try {
+    const sandboxPath = path.join(path.dirname(process.execPath), "chrome-sandbox");
+    if (fs.existsSync(sandboxPath)) {
+      const st = fs.statSync(sandboxPath);
+      const hasSetuid = (st.mode & 0o4777) === 0o4755;
+      const rootOwned = st.uid === 0;
+      if (!(hasSetuid && rootOwned)) {
+        app.commandLine.appendSwitch("no-sandbox");
+      }
+    } else {
+      app.commandLine.appendSwitch("no-sandbox");
+    }
+  } catch {
+    app.commandLine.appendSwitch("no-sandbox");
+  }
+}
 
 var win: BrowserWindow | undefined;
 var fastApiProcess: ChildProcessByStdio<any, any, any> | undefined;
