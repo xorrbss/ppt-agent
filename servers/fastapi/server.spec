@@ -33,6 +33,11 @@ datas_greenlet, binaries_greenlet, hiddenimports_greenlet = safe_collect_all(
     "greenlet"
 )
 
+datas_spacy, binaries_spacy, hiddenimports_spacy = safe_collect_all("spacy")
+datas_spacy_model, binaries_spacy_model, hiddenimports_spacy_model = (
+    safe_collect_all("en_core_web_sm")
+)
+
 datas_fastembed_cache = (
     [("fastembed_cache", "fastembed_cache")] if os.path.isdir("fastembed_cache") else []
 )
@@ -53,7 +58,9 @@ a = Analysis(
     + binaries_onnx
     + binaries_pptx
     + binaries_docx2everything
-    + binaries_greenlet,
+    + binaries_greenlet
+    + binaries_spacy
+    + binaries_spacy_model,
     datas=[
         ("assets", "assets"),
         ("static", "static"),
@@ -65,7 +72,9 @@ a = Analysis(
     + datas_onnx
     + datas_pptx
     + datas_docx2everything
-    + datas_greenlet,
+    + datas_greenlet
+    + datas_spacy
+    + datas_spacy_model,
     hiddenimports=[
         "aiosqlite",
         "alembic",
@@ -82,6 +91,8 @@ a = Analysis(
     + hiddenimports_pptx
     + hiddenimports_docx2everything
     + hiddenimports_greenlet
+    + hiddenimports_spacy
+    + hiddenimports_spacy_model
     + hiddenimports_mem0,
     hookspath=[],
     hooksconfig={},

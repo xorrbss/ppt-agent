@@ -39,6 +39,29 @@ def _to_int(value: Optional[str], default: int) -> int:
         return default
 
 
+def _spacy_model_name() -> str:
+    return (os.getenv("MEM0_SPACY_MODEL") or "en_core_web_sm").strip() or "en_core_web_sm"
+
+
+def _spacy_model_available() -> bool:
+    if not _to_bool(os.getenv("MEM0_REQUIRE_SPACY_MODEL"), default=True):
+        return True
+
+    model = _spacy_model_name()
+    try:
+        import spacy  # type: ignore[import-untyped]
+
+        spacy.load(model)
+        return True
+    except Exception:
+        LOGGER.warning(
+            "Mem0 disabled: spaCy model '%s' is unavailable. Install it via `python -m spacy download %s` or set MEM0_REQUIRE_SPACY_MODEL=false.",
+            model,
+            model,
+        )
+        return False
+
+
 def _normalize_openai_base_url(value: Optional[str]) -> Optional[str]:
     if not value:
         return None
@@ -139,6 +162,9 @@ def get_shared_mem0_client() -> Any | None:
         if _shared_client is not None:
             return _shared_client
         if _init_attempted:
+            return None
+        if not _spacy_model_available():
+            _init_attempted = True
             return None
         _init_attempted = True
         try:
