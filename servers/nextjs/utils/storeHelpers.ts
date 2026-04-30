@@ -36,6 +36,35 @@ export const getLLMConfigValidationError = (
     if (!isProvided(llmConfig.GOOGLE_MODEL)) {
       return 'No Google model selected. Use "Check models" after entering your API key, then choose a model.';
     }
+  } else if (llm === "vertex") {
+    const hasApiKey = isProvided(llmConfig.VERTEX_API_KEY);
+    const hasProject = isProvided(llmConfig.VERTEX_PROJECT);
+    const hasLocation = isProvided(llmConfig.VERTEX_LOCATION);
+    if (!hasApiKey && !hasProject) {
+      return "Vertex AI requires either a Vertex API key or a GCP project.";
+    }
+    if (hasApiKey && (hasProject || hasLocation)) {
+      return "Use either Vertex API key mode or project/location mode, not both.";
+    }
+    if (!isProvided(llmConfig.VERTEX_MODEL)) {
+      return "Vertex model is required.";
+    }
+  } else if (llm === "azure") {
+    if (!isProvided(llmConfig.AZURE_OPENAI_API_KEY)) {
+      return "Azure OpenAI API key is required.";
+    }
+    if (!isProvided(llmConfig.AZURE_OPENAI_API_VERSION)) {
+      return "Azure OpenAI API version is required.";
+    }
+    if (
+      !isProvided(llmConfig.AZURE_OPENAI_ENDPOINT) &&
+      !isProvided(llmConfig.AZURE_OPENAI_BASE_URL)
+    ) {
+      return "Azure OpenAI endpoint or base URL is required.";
+    }
+    if (!isProvided(llmConfig.AZURE_OPENAI_MODEL)) {
+      return "Azure OpenAI model/deployment name is required.";
+    }
   } else if (llm === "anthropic") {
     if (!isProvided(llmConfig.ANTHROPIC_API_KEY)) {
       return "Anthropic API key is required.";
