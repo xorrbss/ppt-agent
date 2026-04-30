@@ -12,7 +12,6 @@ function runUv(args, description) {
   const result = spawnSync(uvCmd, args, {
     cwd: fastapiDir,
     stdio: "inherit",
-    shell: process.platform === "win32",
     env: process.env,
   });
 
