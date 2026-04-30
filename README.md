@@ -25,7 +25,7 @@ What makes Presenton different?
 
 - Use Fully **self-hosted** in Web through [Docker Package](https://docs.presenton.ai/v3/get-started/quickstart)
 - Or Download [Desktop App](https://presenton.ai/download) (Mac, Windows & Linux)
-- Works with OpenAI, Gemini, Anthropic, Ollama, or custom models
+- Works with OpenAI, Gemini, Vertex AI, Azure OpenAI, Anthropic, Ollama, or custom models
 - Comes with AI Presentation Generation API
 - Fully open-source (Apache 2.0)
 - Works with your own design/templates
@@ -97,7 +97,7 @@ Presenton gives you complete control over your AI presentation workflow. Choose 
 - Flexible Generation — Build presentations from prompts or uploaded documents
 - Export Ready — Save as PowerPoint (PPTX) and PDF with professional formatting
 - Built-In MCP Server — Generate presentations over Model Context Protocol
-- Bring Your Own Key — Use your own API keys for OpenAI, Google Gemini, Anthropic Claude, or any compatible provider. Only pay for what you use, no hidden fees or subscriptions.
+- Bring Your Own Key — Use your own API keys for OpenAI, Google Gemini, Vertex AI, Azure OpenAI, Anthropic Claude, or any compatible provider. Only pay for what you use, no hidden fees or subscriptions.
 - Ollama Integration — Run open-source models locally with full privacy
 - OpenAI API Compatible — Connect to any OpenAI-compatible endpoint with your own models
 - Multi-Provider Support — Mix and match text and image generation providers
@@ -204,11 +204,20 @@ Other optional variables exist in code (for example advanced Mem0 paths, LitePar
 #### LLM and API keys
 
 - **CAN_CHANGE_KEYS**=[true/false]: Set to **false** if you want to keep API keys hidden and make them unmodifiable.
-- **LLM**=[openai/google/anthropic/ollama/custom/codex]: Select the text **LLM**.
+- **LLM**=[openai/google/vertex/azure/anthropic/ollama/custom/codex]: Select the text **LLM**.
 - **OPENAI_API_KEY**: Required if **LLM** is **openai**.
 - **OPENAI_MODEL**: Required if **LLM** is **openai** (default: `gpt-4.1`).
 - **GOOGLE_API_KEY**: Required if **LLM** is **google**.
 - **GOOGLE_MODEL**: Required if **LLM** is **google** (default: `models/gemini-2.0-flash`).
+- **VERTEX_MODEL**: Required if **LLM** is **vertex** (default: `gemini-2.5-flash`).
+- **VERTEX_API_KEY**: Optional auth path for **LLM=vertex** (Vertex Express).
+- **VERTEX_PROJECT** / **VERTEX_LOCATION**: Optional auth path for **LLM=vertex** when using GCP project credentials (do not combine with `VERTEX_API_KEY`).
+- **VERTEX_BASE_URL**: Optional Vertex gateway/base URL override.
+- **AZURE_OPENAI_MODEL**: Required if **LLM** is **azure** (deployment/model name).
+- **AZURE_OPENAI_API_KEY**: Required if **LLM** is **azure**.
+- **AZURE_OPENAI_API_VERSION**: Required if **LLM** is **azure** (for example `2024-10-21`).
+- **AZURE_OPENAI_ENDPOINT** / **AZURE_OPENAI_BASE_URL**: At least one is required if **LLM** is **azure**.
+- **AZURE_OPENAI_DEPLOYMENT**: Optional deployment override for **LLM** is **azure**.
 - **ANTHROPIC_API_KEY**: Required if **LLM** is **anthropic**.
 - **ANTHROPIC_MODEL**: Required if **LLM** is **anthropic** (default: `claude-3-5-sonnet-20241022`).
 - **CODEX_MODEL**: Required if **LLM** is **codex** (Codex OAuth flow; compose maps host port **1455** for the callback).
@@ -320,6 +329,12 @@ Same variables as compose; use `-e` instead of `.env` when running `docker run` 
 
 - Using Google
     <pre><code class="language-bash">docker run -it --name presenton -p 5000:80 -e LLM="google" -e GOOGLE_API_KEY="******" -e IMAGE_PROVIDER="gemini_flash" -e CAN_CHANGE_KEYS="false" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
+
+- Using Vertex AI (API key mode)
+    <pre><code class="language-bash">docker run -it --name presenton -p 5000:80 -e LLM="vertex" -e VERTEX_API_KEY="******" -e VERTEX_MODEL="gemini-2.5-flash" -e IMAGE_PROVIDER="gemini_flash" -e CAN_CHANGE_KEYS="false" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
+
+- Using Azure OpenAI
+    <pre><code class="language-bash">docker run -it --name presenton -p 5000:80 -e LLM="azure" -e AZURE_OPENAI_API_KEY="******" -e AZURE_OPENAI_MODEL="gpt-4.1" -e AZURE_OPENAI_API_VERSION="2024-10-21" -e AZURE_OPENAI_ENDPOINT="https://YOUR-RESOURCE.openai.azure.com" -e IMAGE_PROVIDER="pexels" -e PEXELS_API_KEY="******" -e CAN_CHANGE_KEYS="false" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
 
 - Using Ollama
     <pre><code class="language-bash">docker run -it --name presenton -p 5000:80 -e LLM="ollama" -e OLLAMA_MODEL="llama3.2:3b" -e IMAGE_PROVIDER="pexels" -e PEXELS_API_KEY="*******" -e CAN_CHANGE_KEYS="false" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
