@@ -4,15 +4,22 @@ from typing import Optional
 from fastapi import HTTPException
 from llmai.shared import (
     AnthropicClientConfig,
+    AzureOpenAIClientConfig,
     ChatGPTClientConfig,
     ClientConfig,
     GoogleClientConfig,
     OpenAIApiType,
     OpenAIClientConfig,
+    VertexAIClientConfig,
 )
 
 from enums.llm_provider import LLMProvider
 from utils.get_env import (
+    get_azure_openai_api_key_env,
+    get_azure_openai_api_version_env,
+    get_azure_openai_base_url_env,
+    get_azure_openai_deployment_env,
+    get_azure_openai_endpoint_env,
     get_anthropic_api_key_env,
     get_codex_access_token_env,
     get_codex_account_id_env,
@@ -24,6 +31,10 @@ from utils.get_env import (
     get_google_api_key_env,
     get_ollama_url_env,
     get_openai_api_key_env,
+    get_vertex_api_key_env,
+    get_vertex_base_url_env,
+    get_vertex_location_env,
+    get_vertex_project_env,
     get_web_grounding_env,
 )
 from utils.llm_provider import get_llm_provider
@@ -101,6 +112,74 @@ def get_llm_config() -> ClientConfig:
             if not api_key:
                 raise HTTPException(status_code=400, detail="Google API Key is not set")
             return GoogleClientConfig(api_key=api_key)
+        case LLMProvider.VERTEX:
+            api_key = get_vertex_api_key_env()
+            project = get_vertex_project_env()
+            location = get_vertex_location_env()
+            base_url = get_vertex_base_url_env()
+
+            if api_key and (project or location):
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Vertex configuration is ambiguous. Configure either "
+                        "VERTEX_API_KEY or VERTEX_PROJECT/VERTEX_LOCATION, not both."
+                    ),
+                )
+
+            if api_key:
+                return VertexAIClientConfig(
+                    api_key=api_key,
+                    base_url=base_url or None,
+                )
+
+            if not project:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Vertex configuration is incomplete. Set VERTEX_API_KEY "
+                        "or VERTEX_PROJECT (optionally with VERTEX_LOCATION)."
+                    ),
+                )
+
+            return VertexAIClientConfig(
+                project=project,
+                location=location or None,
+                base_url=base_url or None,
+            )
+        case LLMProvider.AZURE:
+            api_key = get_azure_openai_api_key_env()
+            api_version = get_azure_openai_api_version_env()
+            endpoint = get_azure_openai_endpoint_env()
+            base_url = get_azure_openai_base_url_env()
+            deployment = get_azure_openai_deployment_env()
+
+            if not api_key:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Azure OpenAI API Key is not set",
+                )
+            if not api_version:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Azure OpenAI API Version is not set",
+                )
+            if not endpoint and not base_url:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Azure OpenAI endpoint is not set. "
+                        "Configure AZURE_OPENAI_ENDPOINT or AZURE_OPENAI_BASE_URL."
+                    ),
+                )
+
+            return AzureOpenAIClientConfig(
+                api_key=api_key,
+                api_version=api_version,
+                endpoint=endpoint or None,
+                base_url=base_url or None,
+                deployment=deployment or None,
+            )
         case LLMProvider.ANTHROPIC:
             api_key = get_anthropic_api_key_env()
             if not api_key:
@@ -134,8 +213,8 @@ def get_llm_config() -> ClientConfig:
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "LLM Provider must be either openai, google, anthropic, "
-                    "ollama, custom, or codex"
+                    "LLM Provider must be either openai, google, vertex, azure, "
+                    "anthropic, ollama, custom, or codex"
                 ),
             )
 

@@ -34,6 +34,17 @@ export const updateLLMConfig = (
     openai_model: "OPENAI_MODEL",
     google_api_key: "GOOGLE_API_KEY",
     google_model: "GOOGLE_MODEL",
+    vertex_api_key: "VERTEX_API_KEY",
+    vertex_model: "VERTEX_MODEL",
+    vertex_project: "VERTEX_PROJECT",
+    vertex_location: "VERTEX_LOCATION",
+    vertex_base_url: "VERTEX_BASE_URL",
+    azure_openai_api_key: "AZURE_OPENAI_API_KEY",
+    azure_openai_model: "AZURE_OPENAI_MODEL",
+    azure_openai_endpoint: "AZURE_OPENAI_ENDPOINT",
+    azure_openai_base_url: "AZURE_OPENAI_BASE_URL",
+    azure_openai_api_version: "AZURE_OPENAI_API_VERSION",
+    azure_openai_deployment: "AZURE_OPENAI_DEPLOYMENT",
     anthropic_api_key: "ANTHROPIC_API_KEY",
     anthropic_model: "ANTHROPIC_MODEL",
     ollama_url: "OLLAMA_URL",
@@ -81,7 +92,7 @@ export const changeProvider = (
   } else if (provider === "google") {
     newConfig.IMAGE_PROVIDER = "gemini_flash";
   } else {
-    newConfig.IMAGE_PROVIDER = "pexels"; // default for ollama, custom, codex
+    newConfig.IMAGE_PROVIDER = "pexels"; // default for vertex, azure, ollama, custom, codex
   }
 
   return newConfig;

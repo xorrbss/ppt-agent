@@ -4,12 +4,15 @@ from openai import OpenAI
 
 from constants.llm import (
     DEFAULT_ANTHROPIC_MODEL,
+    DEFAULT_AZURE_MODEL,
     DEFAULT_CODEX_MODEL,
     DEFAULT_GOOGLE_MODEL,
     DEFAULT_OPENAI_MODEL,
+    DEFAULT_VERTEX_MODEL,
 )
 from enums.llm_provider import LLMProvider
 from utils.get_env import (
+    get_azure_openai_model_env,
     get_anthropic_model_env,
     get_codex_model_env,
     get_custom_model_env,
@@ -19,6 +22,7 @@ from utils.get_env import (
     get_ollama_model_env,
     get_openai_api_key_env,
     get_openai_model_env,
+    get_vertex_model_env,
 )
 
 
@@ -28,7 +32,10 @@ def get_llm_provider():
     except:
         raise HTTPException(
             status_code=500,
-            detail=f"Invalid LLM provider. Please select one of: openai, google, anthropic, ollama, custom, codex",
+            detail=(
+                "Invalid LLM provider. Please select one of: "
+                "openai, google, vertex, azure, anthropic, ollama, custom, codex"
+            ),
         )
 
 
@@ -42,6 +49,14 @@ def is_google_selected():
 
 def is_anthropic_selected():
     return get_llm_provider() == LLMProvider.ANTHROPIC
+
+
+def is_vertex_selected():
+    return get_llm_provider() == LLMProvider.VERTEX
+
+
+def is_azure_selected():
+    return get_llm_provider() == LLMProvider.AZURE
 
 
 def is_ollama_selected():
@@ -62,6 +77,10 @@ def get_model():
         return get_openai_model_env() or DEFAULT_OPENAI_MODEL
     elif selected_llm == LLMProvider.GOOGLE:
         return get_google_model_env() or DEFAULT_GOOGLE_MODEL
+    elif selected_llm == LLMProvider.VERTEX:
+        return get_vertex_model_env() or DEFAULT_VERTEX_MODEL
+    elif selected_llm == LLMProvider.AZURE:
+        return get_azure_openai_model_env() or DEFAULT_AZURE_MODEL
     elif selected_llm == LLMProvider.ANTHROPIC:
         return get_anthropic_model_env() or DEFAULT_ANTHROPIC_MODEL
     elif selected_llm == LLMProvider.OLLAMA:
@@ -73,7 +92,10 @@ def get_model():
     else:
         raise HTTPException(
             status_code=500,
-            detail=f"Invalid LLM provider. Please select one of: openai, google, anthropic, ollama, custom, codex",
+            detail=(
+                "Invalid LLM provider. Please select one of: "
+                "openai, google, vertex, azure, anthropic, ollama, custom, codex"
+            ),
         )
 
 

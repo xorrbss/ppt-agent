@@ -57,6 +57,50 @@ def get_google_model_env():
     return os.getenv("GOOGLE_MODEL")
 
 
+def get_vertex_api_key_env():
+    return os.getenv("VERTEX_API_KEY")
+
+
+def get_vertex_model_env():
+    return os.getenv("VERTEX_MODEL")
+
+
+def get_vertex_project_env():
+    return os.getenv("VERTEX_PROJECT")
+
+
+def get_vertex_location_env():
+    return os.getenv("VERTEX_LOCATION")
+
+
+def get_vertex_base_url_env():
+    return os.getenv("VERTEX_BASE_URL")
+
+
+def get_azure_openai_api_key_env():
+    return os.getenv("AZURE_OPENAI_API_KEY")
+
+
+def get_azure_openai_model_env():
+    return os.getenv("AZURE_OPENAI_MODEL")
+
+
+def get_azure_openai_endpoint_env():
+    return os.getenv("AZURE_OPENAI_ENDPOINT")
+
+
+def get_azure_openai_base_url_env():
+    return os.getenv("AZURE_OPENAI_BASE_URL")
+
+
+def get_azure_openai_api_version_env():
+    return os.getenv("AZURE_OPENAI_API_VERSION")
+
+
+def get_azure_openai_deployment_env():
+    return os.getenv("AZURE_OPENAI_DEPLOYMENT")
+
+
 def get_custom_llm_api_key_env():
     return os.getenv("CUSTOM_LLM_API_KEY")
 

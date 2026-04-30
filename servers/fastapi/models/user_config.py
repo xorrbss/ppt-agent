@@ -13,6 +13,21 @@ class UserConfig(BaseModel):
     GOOGLE_API_KEY: Optional[str] = None
     GOOGLE_MODEL: Optional[str] = None
 
+    # Vertex AI
+    VERTEX_API_KEY: Optional[str] = None
+    VERTEX_MODEL: Optional[str] = None
+    VERTEX_PROJECT: Optional[str] = None
+    VERTEX_LOCATION: Optional[str] = None
+    VERTEX_BASE_URL: Optional[str] = None
+
+    # Azure OpenAI
+    AZURE_OPENAI_API_KEY: Optional[str] = None
+    AZURE_OPENAI_MODEL: Optional[str] = None
+    AZURE_OPENAI_ENDPOINT: Optional[str] = None
+    AZURE_OPENAI_BASE_URL: Optional[str] = None
+    AZURE_OPENAI_API_VERSION: Optional[str] = None
+    AZURE_OPENAI_DEPLOYMENT: Optional[str] = None
+
     # Anthropic
     ANTHROPIC_API_KEY: Optional[str] = None
     ANTHROPIC_MODEL: Optional[str] = None

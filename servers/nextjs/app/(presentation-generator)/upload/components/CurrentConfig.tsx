@@ -14,6 +14,10 @@ const CurrentConfig = () => {
             ? llmConfig.OPENAI_MODEL
             : textProviderKey === "google"
                 ? llmConfig.GOOGLE_MODEL
+                : textProviderKey === "vertex"
+                    ? llmConfig.VERTEX_MODEL
+                    : textProviderKey === "azure"
+                        ? llmConfig.AZURE_OPENAI_MODEL
                 : textProviderKey === "anthropic"
                     ? llmConfig.ANTHROPIC_MODEL
                     : textProviderKey === "ollama"

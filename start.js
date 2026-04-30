@@ -151,7 +151,7 @@ const setupUserConfigFromEnv = () => {
     existingConfig = JSON.parse(readFileSync(userConfigPath, "utf8"));
   }
 
-  if (!["ollama", "openai", "google", "anthropic", "custom", "codex"].includes(existingConfig.LLM)) {
+  if (!["ollama", "openai", "google", "vertex", "azure", "anthropic", "custom", "codex"].includes(existingConfig.LLM)) {
     existingConfig.LLM = undefined;
   }
 
@@ -161,6 +161,23 @@ const setupUserConfigFromEnv = () => {
     OPENAI_MODEL: process.env.OPENAI_MODEL || existingConfig.OPENAI_MODEL,
     GOOGLE_API_KEY: process.env.GOOGLE_API_KEY || existingConfig.GOOGLE_API_KEY,
     GOOGLE_MODEL: process.env.GOOGLE_MODEL || existingConfig.GOOGLE_MODEL,
+    VERTEX_API_KEY: process.env.VERTEX_API_KEY || existingConfig.VERTEX_API_KEY,
+    VERTEX_MODEL: process.env.VERTEX_MODEL || existingConfig.VERTEX_MODEL,
+    VERTEX_PROJECT: process.env.VERTEX_PROJECT || existingConfig.VERTEX_PROJECT,
+    VERTEX_LOCATION: process.env.VERTEX_LOCATION || existingConfig.VERTEX_LOCATION,
+    VERTEX_BASE_URL: process.env.VERTEX_BASE_URL || existingConfig.VERTEX_BASE_URL,
+    AZURE_OPENAI_API_KEY:
+      process.env.AZURE_OPENAI_API_KEY || existingConfig.AZURE_OPENAI_API_KEY,
+    AZURE_OPENAI_MODEL:
+      process.env.AZURE_OPENAI_MODEL || existingConfig.AZURE_OPENAI_MODEL,
+    AZURE_OPENAI_ENDPOINT:
+      process.env.AZURE_OPENAI_ENDPOINT || existingConfig.AZURE_OPENAI_ENDPOINT,
+    AZURE_OPENAI_BASE_URL:
+      process.env.AZURE_OPENAI_BASE_URL || existingConfig.AZURE_OPENAI_BASE_URL,
+    AZURE_OPENAI_API_VERSION:
+      process.env.AZURE_OPENAI_API_VERSION || existingConfig.AZURE_OPENAI_API_VERSION,
+    AZURE_OPENAI_DEPLOYMENT:
+      process.env.AZURE_OPENAI_DEPLOYMENT || existingConfig.AZURE_OPENAI_DEPLOYMENT,
     OLLAMA_URL: process.env.OLLAMA_URL || existingConfig.OLLAMA_URL,
     OLLAMA_MODEL: process.env.OLLAMA_MODEL || existingConfig.OLLAMA_MODEL,
     ANTHROPIC_API_KEY:

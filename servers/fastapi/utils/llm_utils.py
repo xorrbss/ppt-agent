@@ -64,7 +64,7 @@ def get_generate_kwargs(
     if max_tokens is not None:
         kwargs["max_tokens"] = max_tokens
     if tools:
-        if get_llm_provider() == LLMProvider.GOOGLE:
+        if get_llm_provider() in (LLMProvider.GOOGLE, LLMProvider.VERTEX):
             kwargs["tools"] = _tools_for_google_gemini(tools)
         else:
             kwargs["tools"] = tools
