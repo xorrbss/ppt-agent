@@ -15,6 +15,7 @@ DEFAULT_MAX_STORED_TURNS = 20
 class ChatMemoryStore:
     def __init__(self):
         self._enabled = self._to_bool(os.getenv("MEM0_ENABLED"), default=True)
+        self._runtime_enabled = True
         self._top_k = self._to_int(os.getenv("MEM0_TOP_K"), default=8)
         self._max_context_chars = self._to_int(
             os.getenv("MEM0_MAX_CONTEXT_CHARS"), default=6000
@@ -62,9 +63,22 @@ class ChatMemoryStore:
         return f"{text[:limit]}\n\n[TRUNCATED]"
 
     async def _get_client(self):
-        if not self._enabled:
+        if not self._enabled or not self._runtime_enabled:
             return None
         return get_shared_mem0_client()
+
+    def _disable_runtime(self, reason: str, *, exc: BaseException | None = None) -> None:
+        if not self._runtime_enabled:
+            return
+        self._runtime_enabled = False
+        if exc is None:
+            LOGGER.warning("Mem0 chat memory disabled for this process: %s", reason)
+            return
+        LOGGER.exception(
+            "Mem0 chat memory disabled for this process: %s",
+            reason,
+            exc_info=exc,
+        )
 
     def _build_turn_payload(self, *, user_text: str, assistant_text: str) -> str:
         memory_lines = [
@@ -174,6 +188,9 @@ class ChatMemoryStore:
         except BaseException as exc:
             if not self._is_nonfatal_mem0_error(exc):
                 raise
+            if isinstance(exc, SystemExit):
+                self._disable_runtime("mem0 runtime failed while storing chat turns", exc=exc)
+                return
             LOGGER.exception(
                 (
                     "Failed to add chat mem0 memory "
@@ -219,6 +236,12 @@ class ChatMemoryStore:
         except BaseException as exc:
             if not self._is_nonfatal_mem0_error(exc):
                 raise
+            if isinstance(exc, SystemExit):
+                self._disable_runtime(
+                    "mem0 runtime failed while searching chat memory",
+                    exc=exc,
+                )
+                return ""
             LOGGER.exception(
                 (
                     "Failed to search chat mem0 memory "
@@ -277,6 +300,9 @@ class ChatMemoryStore:
         except BaseException as exc:
             if not self._is_nonfatal_mem0_error(exc):
                 raise
+            if isinstance(exc, SystemExit):
+                self._disable_runtime("mem0 runtime failed while loading chat history", exc=exc)
+                return []
             LOGGER.exception(
                 (
                     "Failed to load chat mem0 history "
