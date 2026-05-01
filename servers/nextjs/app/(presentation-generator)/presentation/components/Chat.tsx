@@ -270,6 +270,7 @@ const TOOL_LABELS: Record<string, string> = {
   getContentSchemaFromLayoutId: "Schema checker",
   generateAssets: "Asset generator",
   saveSlide: "Slide saver",
+  deleteSlide: "Slide remover",
 };
 
 const getToolLabel = (tool?: string) => {
@@ -309,6 +310,9 @@ const humanizeTraceMessage = (message: string, tool?: string) => {
   }
   if (lower === "saving the slide") {
     return "Saving slide updates.";
+  }
+  if (lower === "deleting the slide") {
+    return "Deleting the slide.";
   }
   if (lower.startsWith("using tools:")) {
     const toolNames = trimmed
@@ -554,7 +558,9 @@ const Chat = ({
   };
 
   const refreshPresentationIfNeeded = async (toolCalls: string[]) => {
-    if (!toolCalls.includes("saveSlide") || !onPresentationChanged) {
+    const hasSlideMutation =
+      toolCalls.includes("saveSlide") || toolCalls.includes("deleteSlide");
+    if (!hasSlideMutation || !onPresentationChanged) {
       return;
     }
 

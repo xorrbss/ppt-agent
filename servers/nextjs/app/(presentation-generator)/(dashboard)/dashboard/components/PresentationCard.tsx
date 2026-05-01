@@ -3,7 +3,7 @@ import React, { useEffect } from "react";
 
 import { Card } from "@/components/ui/card";
 import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
-import { EllipsisVertical, Star, Trash } from "lucide-react";
+import { AlertTriangle, EllipsisVertical, Loader2, Trash } from "lucide-react";
 import {
   Popover,
   PopoverTrigger,
@@ -30,6 +30,8 @@ export const PresentationCard = ({
 }) => {
   const router = useRouter();
   const pathname = usePathname();
+  const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
+  const [isDeleting, setIsDeleting] = React.useState(false);
 
   const handlePreview = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -83,14 +85,12 @@ export const PresentationCard = ({
 
   }
 
-  const handleDelete = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-
+  const handleDelete = async () => {
+    if (isDeleting) return;
+    setIsDeleting(true);
     const response = await DashboardApi.deletePresentation(id);
 
-    if (response) {
+    if (response?.success) {
       trackEvent(MixpanelEvent.Dashboard_Presentation_Deleted, {
         pathname,
         presentation_id: id,
@@ -99,12 +99,14 @@ export const PresentationCard = ({
       toast.success("Presentation deleted", {
         description: "The presentation has been deleted successfully",
       });
+      setShowDeleteDialog(false);
       if (onDeleted) {
         onDeleted(id);
       }
     } else {
-      toast.error("Error deleting presentation");
+      toast.error(response?.message || "Error deleting presentation");
     }
+    setIsDeleting(false);
   };
   const firstSlide = presentation?.slides?.[0];
   return (
@@ -145,7 +147,11 @@ export const PresentationCard = ({
               <PopoverContent align="end" className="bg-white w-[200px]">
                 <button
                   className="flex items-center justify-between w-full px-2 py-1 hover:bg-gray-100"
-                  onClick={handleDelete}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShowDeleteDialog(true);
+                  }}
                 >
                   <p>Delete</p>
                   <Trash className="w- h-4 text-red-500" />
@@ -156,6 +162,63 @@ export const PresentationCard = ({
 
         </div>
       </div>
+      {showDeleteDialog && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center animate-[fadeIn_150ms_ease-out]"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (isDeleting) return;
+            setShowDeleteDialog(false);
+          }}
+        >
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
+          <div
+            className="relative w-[360px] rounded-2xl bg-white shadow-2xl animate-[scaleIn_200ms_ease-out]"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+          >
+            <div className="flex flex-col items-center p-6 pb-4 text-center">
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50">
+                <AlertTriangle className="h-6 w-6 text-red-500" />
+              </div>
+              <h3 className="mb-2 text-lg font-semibold text-[#191919]">
+                Delete Presentation?
+              </h3>
+              <p className="text-sm leading-relaxed text-gray-500">
+                You are about to delete{" "}
+                <span className="font-medium text-gray-700">&quot;{title}&quot;</span>.
+                This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex border-t border-gray-100">
+              <button
+                onClick={() => setShowDeleteDialog(false)}
+                disabled={isDeleting}
+                className="flex-1 px-4 py-3.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleDelete()}
+                disabled={isDeleting}
+                className="flex flex-1 items-center justify-center gap-2 border-l border-gray-100 px-4 py-3.5 text-sm font-medium text-red-500 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  "Delete"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Card>
   );
 };

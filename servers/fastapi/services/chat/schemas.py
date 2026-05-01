@@ -79,3 +79,7 @@ class SaveSlideInput(StrictSchemaModel):
             raise ValueError("'content' must be a JSON object.")
 
         return value
+
+
+class DeleteSlideInput(StrictSchemaModel):
+    index: int = Field(ge=0, le=1000)

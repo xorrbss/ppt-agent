@@ -180,7 +180,7 @@ const SettingsPage = () => {
           }
         }
       }
-      notify.info(
+      notify.success(
         "Settings saved",
         "Your configuration was saved successfully."
       );
