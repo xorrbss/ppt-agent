@@ -49,6 +49,19 @@ class PlainLLMProvider:
     name: str
     call: Callable[[], Awaitable[str]]
 
+
+def _exception_message(exc: Exception) -> str:
+    if isinstance(exc, HTTPException):
+        detail = exc.detail
+        if isinstance(detail, str):
+            message = detail
+        else:
+            message = str(detail)
+    else:
+        message = str(exc) or exc.__class__.__name__
+    return " ".join(message.split())[:500]
+
+
 def get_template_provider_spec() -> TemplateProviderSpec:
     provider = get_llm_provider()
     if provider == LLMProvider.OPENAI:
@@ -68,6 +81,7 @@ def get_template_provider_spec() -> TemplateProviderSpec:
 
 async def run_plain_provider_buckets(*, providers: list[PlainLLMProvider]) -> str:
     last_exception: Optional[Exception] = None
+    last_provider_name: Optional[str] = None
 
     for provider in providers:
         for attempt in range(1, MAX_ATTEMPTS_PER_PROVIDER + 1):
@@ -76,11 +90,24 @@ async def run_plain_provider_buckets(*, providers: list[PlainLLMProvider]) -> st
                 if response_text:
                     return response_text
                 raise ValueError("No output from template generation provider")
+            except HTTPException as exc:
+                # Configuration/auth errors should fail fast instead of retrying.
+                if 400 <= exc.status_code < 500:
+                    raise exc
+                last_exception = exc
+                last_provider_name = provider.name
             except Exception as exc:
                 last_exception = exc
+                last_provider_name = provider.name
 
     if isinstance(last_exception, HTTPException):
         raise last_exception
+    if last_exception:
+        provider_name = last_provider_name or "Template provider"
+        raise HTTPException(
+            status_code=502,
+            detail=f"{provider_name} error: {_exception_message(last_exception)}",
+        )
     raise HTTPException(status_code=500, detail="Failed to generate template output")
 
 

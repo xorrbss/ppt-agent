@@ -43,6 +43,12 @@ interface FastApiEnv {
   LITEPARSE_NODE_BINARY?: string,
   /** Set to "1" when using the Electron binary as a Node runtime. */
   ELECTRON_RUN_AS_NODE?: string,
+  /** Root directory of the bundled presentation export runtime package. */
+  EXPORT_PACKAGE_ROOT?: string,
+  /** Directory used by FastAPI export task runtime resolution. */
+  EXPORT_RUNTIME_DIR?: string,
+  /** Absolute path to bundled PyInstaller converter binary for export runtime. */
+  BUILT_PYTHON_MODULE_PATH?: string,
 }
 
 interface NextJsEnv {

@@ -1,5 +1,5 @@
 require("dotenv").config();
-import { app, BrowserWindow, shell } from "electron";
+import { app, BrowserWindow, globalShortcut, shell } from "electron";
 import path from "path";
 import fs from "fs";
 import { findUnusedPorts, killProcess, setupEnv, setUserConfig } from "./utils";
@@ -36,6 +36,9 @@ if (process.platform === "linux") {
   } catch {
     app.commandLine.appendSwitch("no-sandbox");
   }
+  // Fall back to /tmp instead of shared memory to avoid Chromium crashes
+  // on systems where /dev/shm is unavailable/misconfigured.
+  app.commandLine.appendSwitch("disable-dev-shm-usage");
 }
 
 var win: BrowserWindow | undefined;
@@ -159,10 +162,27 @@ const createWindow = () => {
   });
 };
 
+function registerDevToolsShortcuts(): void {
+  const accelerators = ["CommandOrControl+Shift+I", "F12"];
+  for (const accelerator of accelerators) {
+    const registered = globalShortcut.register(accelerator, () => {
+      if (!win || win.isDestroyed()) {
+        return;
+      }
+      win.webContents.toggleDevTools();
+    });
+    if (!registered) {
+      console.warn(`[Presenton] Failed to register ${accelerator} for DevTools`);
+    }
+  }
+}
+
 async function startServers(fastApiPort: number, nextjsPort: number) {
   try {
     const disableAuthForElectron = resolveElectronDisableAuth();
     const sofficePath = getSofficePath();
+    const exportPackageRoot = path.join(baseDir, "resources", "export");
+    const exportConverterPath = resolveExportConverterPath(baseDir);
     const fastApi = await startFastApiServer(
       fastapiDir,
       fastApiPort,
@@ -212,6 +232,11 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         // depend on a system-wide Node installation.
         LITEPARSE_NODE_BINARY: process.execPath,
         ELECTRON_RUN_AS_NODE: "1",
+        EXPORT_PACKAGE_ROOT: exportPackageRoot,
+        EXPORT_RUNTIME_DIR: exportPackageRoot,
+        ...(exportConverterPath && {
+          BUILT_PYTHON_MODULE_PATH: exportConverterPath,
+        }),
       },
       isDev,
     );
@@ -219,8 +244,6 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
     await fastApi.ready;
 
     const puppeteerExecutablePath = await getPuppeteerExecutablePath();
-    const exportPackageRoot = path.join(baseDir, "resources", "export");
-    const exportConverterPath = resolveExportConverterPath(baseDir);
     const nextjs = await startNextJsServer(
       nextjsDir,
       nextjsPort,
@@ -280,6 +303,7 @@ async function stopServers() {
 async function forceQuitApp(exitCode = 0) {
   if (isStopping) return;
   isStopping = true;
+  globalShortcut.unregisterAll();
   stopUpdateChecker();
   try {
     await stopServers();
@@ -298,6 +322,7 @@ app.whenReady().then(async () => {
 
   // Create main window before setup so that when user skips, the main window stays open
   createWindow();
+  registerDevToolsShortcuts();
   win?.loadFile(path.join(baseDir, "resources/ui/homepage/index.html"));
 
   // Single installer: checks LibreOffice, Chrome, and ImageMagick; if any are missing, shows one
