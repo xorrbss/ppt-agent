@@ -9,6 +9,7 @@ api/v1/ppt/background_tasks.py
 api/v1/ppt/router.py
 api/v1/ppt/endpoints/__init__.py
 api/v1/ppt/endpoints/anthropic.py
+api/v1/ppt/endpoints/chat.py
 api/v1/ppt/endpoints/codex_auth.py
 api/v1/ppt/endpoints/files.py
 api/v1/ppt/endpoints/fonts.py
@@ -42,6 +43,7 @@ enums/verbosity.py
 enums/webhook_event.py
 models/__init__.py
 models/api_error_model.py
+models/chat.py
 models/decomposed_file_info.py
 models/document_chunk.py
 models/generate_presentation_request.py
@@ -60,6 +62,7 @@ models/sse_response.py
 models/theme_data.py
 models/user_config.py
 models/sql/async_presentation_generation_status.py
+models/sql/chat_history_message.py
 models/sql/image_asset.py
 models/sql/key_value.py
 models/sql/ollama_pull_status.py
@@ -83,11 +86,21 @@ services/export_task_service.py
 services/icon_finder_service.py
 services/image_generation_service.py
 services/liteparse_service.py
+services/mem0_oss_memory.py
 services/mem0_presentation_memory_service.py
-services/pptx_presentation_creator.py
 services/score_based_chunker.py
 services/temp_file_service.py
 services/webhook_service.py
+services/chat/__init__.py
+services/chat/chat_memory_store.py
+services/chat/conversation_store.py
+services/chat/memory_layer.py
+services/chat/presentation_context_store.py
+services/chat/prompts.py
+services/chat/schemas.py
+services/chat/service.py
+services/chat/sql_chat_history.py
+services/chat/tools.py
 templates/__init__.py
 templates/example.py
 templates/font_utils.py
@@ -98,6 +111,9 @@ templates/preview.py
 templates/prompts.py
 templates/providers.py
 templates/router.py
+tests/test_chat_conversation_store.py
+tests/test_chat_memory_store.py
+tests/test_documents_loader_unwrap.py
 tests/test_gemini_schema_support.py
 tests/test_image_generation.py
 tests/test_liteparse_service.py

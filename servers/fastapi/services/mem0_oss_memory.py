@@ -39,6 +39,39 @@ def _to_int(value: Optional[str], default: int) -> int:
         return default
 
 
+def _spacy_model_name() -> str:
+    return (os.getenv("MEM0_SPACY_MODEL") or "en_core_web_sm").strip() or "en_core_web_sm"
+
+
+def _spacy_model_available() -> bool:
+    if not _to_bool(os.getenv("MEM0_REQUIRE_SPACY_MODEL"), default=True):
+        return True
+
+    model = _spacy_model_name()
+    try:
+        import spacy  # type: ignore[import-untyped]
+
+        spacy.load(model)
+        return True
+    except Exception:
+        LOGGER.warning(
+            "Mem0 disabled: spaCy model '%s' is unavailable. Install it via `python -m spacy download %s` or set MEM0_REQUIRE_SPACY_MODEL=false.",
+            model,
+            model,
+        )
+        return False
+
+
+def _normalize_openai_base_url(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+
+    normalized = value.strip().rstrip("/")
+    if normalized.endswith("/v1"):
+        return normalized
+    return f"{normalized}/v1"
+
+
 def _oss_config_from_env() -> tuple[str, str, str, str, int, dict[str, Any]]:
     """Return (mem0_dir, qdrant_path, history_db, collection, dims, from_config_dict)."""
     app_data_dir = (os.getenv("APP_DATA_DIRECTORY") or "/tmp/presenton").strip()
@@ -57,7 +90,32 @@ def _oss_config_from_env() -> tuple[str, str, str, str, int, dict[str, Any]]:
         os.getenv("MEM0_EMBEDDER_MODEL") or "BAAI/bge-small-en-v1.5"
     ).strip() or "BAAI/bge-small-en-v1.5"
     dims = _to_int(os.getenv("MEM0_EMBEDDING_DIMS"), default=384)
+    llm_model = (
+        os.getenv("MEM0_LLM_MODEL")
+        or os.getenv("OLLAMA_MODEL")
+        or "llama3.1:latest"
+    ).strip() or "llama3.1:latest"
+    llm_api_key = (
+        os.getenv("MEM0_LLM_API_KEY")
+        or os.getenv("OPENAI_API_KEY")
+        or "ollama"
+    ).strip() or "ollama"
+    llm_base_url = _normalize_openai_base_url(
+        os.getenv("MEM0_LLM_BASE_URL")
+        or os.getenv("OLLAMA_URL")
+        or "http://host.docker.internal:11434"
+    )
     config: dict[str, Any] = {
+        "llm": {
+            "provider": "openai",
+            "config": {
+                "model": llm_model,
+                "temperature": 0.1,
+                "max_tokens": 2000,
+                "api_key": llm_api_key,
+                "openai_base_url": llm_base_url,
+            },
+        },
         "vector_store": {
             "provider": "qdrant",
             "config": {
@@ -104,6 +162,9 @@ def get_shared_mem0_client() -> Any | None:
         if _shared_client is not None:
             return _shared_client
         if _init_attempted:
+            return None
+        if not _spacy_model_available():
+            _init_attempted = True
             return None
         _init_attempted = True
         try:

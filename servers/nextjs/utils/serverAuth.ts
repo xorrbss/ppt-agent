@@ -7,6 +7,11 @@ type AuthStatus = {
   username: string | null;
 };
 
+function isAuthDisabled(): boolean {
+  const raw = process.env.DISABLE_AUTH?.trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
+}
+
 /**
  * Resolves the FastAPI base used from Next server components (same as start.js).
  */
@@ -31,6 +36,14 @@ function getServerFastApiBase(): string {
  * (the layout only runs for routes that exist and sit under the layout’s segment).
  */
 export async function getServerAuthStatus(): Promise<AuthStatus> {
+  if (isAuthDisabled()) {
+    return {
+      configured: true,
+      authenticated: true,
+      username: "electron",
+    };
+  }
+
   const h = await headers();
   const cookie = h.get("cookie") ?? "";
 
@@ -68,6 +81,9 @@ export async function getServerAuthStatus(): Promise<AuthStatus> {
  * If configured but not signed in, send to login with a query flag the client turns into a toast.
  */
 export async function requireAppSession() {
+  if (isAuthDisabled()) {
+    return;
+  }
   const s = await getServerAuthStatus();
   if (!s.configured) {
     redirect("/");

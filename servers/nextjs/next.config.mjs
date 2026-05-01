@@ -1,9 +1,17 @@
-
 const nextConfig = {
   reactStrictMode: false,
   distDir: ".next-build",
   output: "standalone",
-  
+  ...(process.env.NODE_ENV !== "production"
+    ? {
+        allowedDevOrigins: [
+          "http://127.0.0.1:40001",
+          "http://localhost:40001",
+          "127.0.0.1",
+          "localhost",
+        ],
+      }
+    : {}),
 
   // Rewrites for development - proxy font requests to FastAPI backend
   async rewrites() {

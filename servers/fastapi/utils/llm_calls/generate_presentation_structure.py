@@ -11,6 +11,7 @@ from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_utils import extract_structured_content, get_generate_kwargs
 from utils.llm_provider import get_model
 from utils.get_dynamic_models import get_presentation_structure_model_with_n_slides
+from utils.schema_utils import ensure_array_schemas_have_items
 from models.presentation_structure_model import PresentationStructureModel
 
 
@@ -161,9 +162,10 @@ async def generate_presentation_structure(
                 instructions,
             )
         )
+        structure_schema = ensure_array_schemas_have_items(response_model.model_json_schema())
         response_format = JSONSchemaResponse(
             name="response",
-            json_schema=response_model.model_json_schema(),
+            json_schema=structure_schema,
             strict=True,
         )
 

@@ -9,6 +9,11 @@ import { spawn } from "child_process";
 import { getPuppeteerExecutablePath } from "../utils/puppeteer-check";
 
 type BinaryFormat = "elf" | "mach-o" | "pe" | "unknown";
+type RuntimeCandidate = {
+  command: string;
+  label: string;
+  useElectronRunAsNode?: boolean;
+};
 
 export function setupExportHandlers() {
   ipcMain.handle("file-downloaded", async (_, filePath: string): Promise<IPCStatus> => {
@@ -58,61 +63,21 @@ export function setupExportHandlers() {
         NEXT_PUBLIC_URL: process.env.NEXT_PUBLIC_URL,
         NEXT_PUBLIC_FAST_API: process.env.NEXT_PUBLIC_FAST_API,
       });
-      // Use the current Electron binary in Node-compatible mode so export does
-      // not depend on a system-wide `node` being available in PATH.
-      const exportTaskProcess = spawn(process.execPath, [exportScriptPath, exportTaskPath], {
-        stdio: ["ignore", "pipe", "pipe"],
-        cwd: baseDir,
-        windowsHide: process.platform === "win32",
-        env: {
-          ...process.env,
-          ELECTRON_RUN_AS_NODE: "1",
-          TEMP_DIRECTORY: tempDir,
-          APP_DATA_DIRECTORY: appDataDir,
-          NODE_ENV: "development",
-          BUILT_PYTHON_MODULE_PATH: pythonModulePath,
-          ...(puppeteerExecutablePath && {
-            PUPPETEER_EXECUTABLE_PATH: puppeteerExecutablePath,
-          }),
-        },
-      });
-
-      const stdoutChunks: string[] = [];
-      const stderrChunks: string[] = [];
-
-      exportTaskProcess.stdout.on("data", (data: Buffer) => {
-        const text = data.toString();
-        stdoutChunks.push(text);
-        console.log(`[Export] ${text}`);
-      });
-      exportTaskProcess.stderr.on("data", (data: Buffer) => {
-        const text = data.toString();
-        stderrChunks.push(text);
-        console.error(`[Export] ${text}`);
-      });
-
-      await new Promise<void>((resolve, reject) => {
-        exportTaskProcess.on("error", reject);
-        exportTaskProcess.on("exit", (code) => {
-          if (code === 0) {
-            resolve();
-          } else {
-            const stderrText = stderrChunks.join("").trim() || "(no stderr)";
-            const stdoutText = stdoutChunks.join("").trim();
-            const detail =
-              stderrText !== "(no stderr)"
-                ? stderrText
-                : stdoutText
-                  ? `stdout: ${stdoutText}`
-                  : "";
-            reject(
-              new Error(
-                `Export process exited with code ${code}${detail ? `. ${detail}` : ""}`
-              )
-            );
-          }
-        });
-      });
+      const baseExportEnv = {
+        ...process.env,
+        TEMP_DIRECTORY: tempDir,
+        APP_DATA_DIRECTORY: appDataDir,
+        NODE_ENV: "development",
+        BUILT_PYTHON_MODULE_PATH: pythonModulePath,
+        ...(puppeteerExecutablePath && {
+          PUPPETEER_EXECUTABLE_PATH: puppeteerExecutablePath,
+        }),
+      };
+      await runExportTaskWithRuntimeFallback(
+        exportScriptPath,
+        exportTaskPath,
+        baseExportEnv
+      );
 
       const responsePath = exportTaskPath.replace(".json", ".response.json");
       const responseRaw = await fs.promises.readFile(responsePath, "utf8");
@@ -133,6 +98,146 @@ export function setupExportHandlers() {
     }
   })
 
+}
+
+function getExportRuntimeCandidates(): RuntimeCandidate[] {
+  const candidates: RuntimeCandidate[] = [];
+  const push = (command: string | undefined, label: string, useElectronRunAsNode?: boolean) => {
+    if (!command) return;
+    const trimmed = command.trim();
+    if (!trimmed) return;
+    candidates.push({ command: trimmed, label, useElectronRunAsNode });
+  };
+
+  // Explicit overrides first.
+  push(process.env.EXPORT_NODE_BINARY, "EXPORT_NODE_BINARY");
+  push(process.env.NODE_BINARY, "NODE_BINARY");
+
+  // Match the older stable export approach: `spawn("node", ...)` first.
+  push("node", "node");
+
+  // Additional system node entries.
+  if (process.platform === "win32") {
+    push("node.exe", "node.exe");
+    push("node.cmd", "node.cmd");
+  } else {
+    push("/usr/bin/node", "/usr/bin/node");
+    push("/usr/local/bin/node", "/usr/local/bin/node");
+  }
+
+  // Fallback: Electron runtime in Node mode.
+  push(process.execPath, "process.execPath (electron-as-node)", true);
+
+  const deduped: RuntimeCandidate[] = [];
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    const key = `${candidate.command}|${candidate.useElectronRunAsNode ? "electron-node" : "plain"}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(candidate);
+  }
+  return deduped;
+}
+
+function isRetryableRuntimeError(error: any): boolean {
+  const code = String(error?.code || "");
+  // Try another runtime when binary is missing or cannot be spawned.
+  return ["ENOENT", "EACCES", "EPERM", "EAGAIN"].includes(code);
+}
+
+async function runExportTaskWithRuntimeFallback(
+  exportScriptPath: string,
+  exportTaskPath: string,
+  baseEnv: NodeJS.ProcessEnv
+): Promise<void> {
+  const runtimeCandidates = getExportRuntimeCandidates();
+  const failures: string[] = [];
+
+  for (const runtime of runtimeCandidates) {
+    try {
+      console.log(`[Export] Trying runtime: ${runtime.label} -> ${runtime.command}`);
+      await runExportTaskOnce(
+        runtime,
+        exportScriptPath,
+        exportTaskPath,
+        baseEnv
+      );
+      return;
+    } catch (error: any) {
+      const details = [
+        `${runtime.label}: ${error?.message || "Unknown error"}`,
+        error?.code ? `code=${error.code}` : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      failures.push(details);
+      console.error(`[Export] Runtime failed (${runtime.label})`, error);
+
+      if (!isRetryableRuntimeError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  throw new Error(
+    `Export failed to start with all runtimes.\n${failures.map((f) => `- ${f}`).join("\n")}`
+  );
+}
+
+async function runExportTaskOnce(
+  runtime: RuntimeCandidate,
+  exportScriptPath: string,
+  exportTaskPath: string,
+  baseEnv: NodeJS.ProcessEnv
+): Promise<void> {
+  const runtimeEnv = {
+    ...baseEnv,
+    ...(runtime.useElectronRunAsNode ? { ELECTRON_RUN_AS_NODE: "1" } : {}),
+  };
+
+  const exportTaskProcess = spawn(runtime.command, [exportScriptPath, exportTaskPath], {
+    stdio: ["ignore", "pipe", "pipe"],
+    cwd: baseDir,
+    windowsHide: process.platform === "win32",
+    env: runtimeEnv,
+  });
+
+  const stdoutChunks: string[] = [];
+  const stderrChunks: string[] = [];
+
+  exportTaskProcess.stdout.on("data", (data: Buffer) => {
+    const text = data.toString();
+    stdoutChunks.push(text);
+    console.log(`[Export] ${text}`);
+  });
+  exportTaskProcess.stderr.on("data", (data: Buffer) => {
+    const text = data.toString();
+    stderrChunks.push(text);
+    console.error(`[Export] ${text}`);
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    exportTaskProcess.on("error", reject);
+    exportTaskProcess.on("exit", (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        const stderrText = stderrChunks.join("").trim() || "(no stderr)";
+        const stdoutText = stdoutChunks.join("").trim();
+        const detail =
+          stderrText !== "(no stderr)"
+            ? stderrText
+            : stdoutText
+              ? `stdout: ${stdoutText}`
+              : "";
+        const error: NodeJS.ErrnoException = new Error(
+          `Export process exited with code ${code}${detail ? `. ${detail}` : ""}`
+        );
+        error.code = `EXIT_${code ?? "UNKNOWN"}`;
+        reject(error);
+      }
+    });
+  });
 }
 
 async function resolveConverterPath(currentBaseDir: string): Promise<string> {
