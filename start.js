@@ -4,6 +4,7 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { spawn } from "child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { printPresentonStartupBanner } from "./scripts/presenton-terminal-banner.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -21,6 +22,8 @@ const canChangeKeys = process.env.CAN_CHANGE_KEYS !== "false";
 const fastapiPort = 8000;
 const nextjsPort = 3000;
 const appmcpPort = 8001;
+/** Must match `listen` in nginx.conf (public HTTP inside the container). */
+const nginxListenPort = 80;
 
 const userConfigPath = join(process.env.APP_DATA_DIRECTORY, "userConfig.json");
 const userDataDir = dirname(userConfigPath);
@@ -82,6 +85,54 @@ const runCommand = (command, commandArgs, options = {}) => {
 const runNodeScript = (scriptPath, scriptArgs) => {
   return runCommand(process.execPath, [scriptPath, ...scriptArgs], {
     cwd: __dirname,
+  });
+};
+
+const forwardProcessOutput = (stream, target, onChunk) => {
+  if (!stream) {
+    return;
+  }
+  stream.on("data", (chunk) => {
+    const text = chunk.toString();
+    target.write(text);
+    onChunk?.(text);
+  });
+};
+
+const waitForProcessReady = (processName, childProcess, readinessRegexes = []) => {
+  if (readinessRegexes.length === 0) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve, reject) => {
+    let isReady = false;
+
+    const markReady = (text) => {
+      if (isReady) {
+        return;
+      }
+      if (readinessRegexes.some((regex) => regex.test(text))) {
+        isReady = true;
+        resolve();
+      }
+    };
+
+    forwardProcessOutput(childProcess.stdout, process.stdout, markReady);
+    forwardProcessOutput(childProcess.stderr, process.stderr, markReady);
+
+    childProcess.on("exit", (code) => {
+      if (!isReady) {
+        reject(
+          new Error(`${processName} exited before reporting ready (exit code: ${code})`)
+        );
+      }
+    });
+
+    childProcess.on("error", (err) => {
+      if (!isReady) {
+        reject(err);
+      }
+    });
   });
 };
 
@@ -218,7 +269,7 @@ const setupUserConfigFromEnv = () => {
   writeFileSync(userConfigPath, JSON.stringify(userConfig));
 };
 
-const startServers = async () => {
+const startServers = async (nginxReadyPromise) => {
   const fastApiProcess = spawn(
     "python",
     [
@@ -230,7 +281,7 @@ const startServers = async () => {
     ],
     {
       cwd: fastapiDir,
-      stdio: "inherit",
+      stdio: ["ignore", "pipe", "pipe"],
       env: process.env,
     }
   );
@@ -270,7 +321,7 @@ const startServers = async () => {
         ],
     {
       cwd: nextjsDir,
-      stdio: "inherit",
+      stdio: ["ignore", "pipe", "pipe"],
       env:
         useStandaloneNextjs
           ? {
@@ -288,6 +339,14 @@ const startServers = async () => {
 
   const shouldStartOllamaRuntime = shouldStartOllama();
   const ollamaInstalled = isOllamaInstalled();
+
+  const fastApiReadyPromise = waitForProcessReady("FastAPI", fastApiProcess, [
+    /Application startup complete\./i,
+  ]);
+  const nextjsReadyPromise = waitForProcessReady("Next.js", nextjsProcess, [
+    /Ready in\s+\d+/i,
+    /started server on/i,
+  ]);
 
   const exitPromises = [
     new Promise((resolve) => fastApiProcess.on("exit", resolve)),
@@ -314,6 +373,17 @@ const startServers = async () => {
     );
   }
 
+  try {
+    await Promise.all([fastApiReadyPromise, nextjsReadyPromise, nginxReadyPromise]);
+    printPresentonStartupBanner({
+      nextPort: nextjsPort,
+      fastapiPort,
+      nginxInternalPort: nginxListenPort,
+    });
+  } catch (err) {
+    console.warn(`Skipping startup banner: ${err.message}`);
+  }
+
   // Keep the Node process alive until one of the servers exits
   const exitCode = await Promise.race(exitPromises);
 
@@ -321,23 +391,28 @@ const startServers = async () => {
   process.exit(exitCode);
 };
 
-// Start nginx service
+// Start nginx service (reverse proxy: see nginx.conf listen + upstream ports)
 const startNginx = () => {
-  const nginxProcess = spawn("service", ["nginx", "start"], {
-    stdio: "inherit",
-    env: process.env,
-  });
+  return new Promise((resolve) => {
+    const nginxProcess = spawn("service", ["nginx", "start"], {
+      stdio: "inherit",
+      env: process.env,
+    });
 
-  nginxProcess.on("error", (err) => {
-    console.error("Nginx process failed to start:", err);
-  });
+    nginxProcess.on("error", (err) => {
+      console.error("Nginx process failed to start:", err);
+      resolve(false);
+    });
 
-  nginxProcess.on("exit", (code) => {
-    if (code === 0) {
-      console.log("Nginx started successfully");
-    } else {
-      console.error(`Nginx failed to start with exit code: ${code}`);
-    }
+    nginxProcess.on("exit", (code) => {
+      if (code === 0) {
+        console.log("Nginx started successfully");
+        resolve(true);
+      } else {
+        console.error(`Nginx failed to start with exit code: ${code}`);
+        resolve(false);
+      }
+    });
   });
 };
 
@@ -353,8 +428,9 @@ const main = async () => {
     setupUserConfigFromEnv();
   }
 
-  startServers();
-  startNginx();
+  const nginxReadyPromise = startNginx();
+  startServers(nginxReadyPromise);
+  await nginxReadyPromise;
 };
 
 main();

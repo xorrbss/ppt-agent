@@ -36,6 +36,7 @@ RUN mkdir -p /app/document-extraction-liteparse \
 COPY electron/resources/document-extraction/liteparse_runner.mjs /app/document-extraction-liteparse/liteparse_runner.mjs
 
 COPY scripts/sync-presentation-export.cjs /app/scripts/sync-presentation-export.cjs
+COPY scripts/presenton-terminal-banner.mjs /app/scripts/presenton-terminal-banner.mjs
 RUN node /app/scripts/sync-presentation-export.cjs --force \
     && chmod +x /app/presentation-export/py/convert-linux-x64
 
