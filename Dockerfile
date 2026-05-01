@@ -110,6 +110,7 @@ COPY --from=nextjs-builder /app/servers/nextjs/public /app/servers/nextjs/public
 COPY --from=nextjs-builder /app/servers/nextjs/.next-build/static /app/servers/nextjs/.next-build/static
 
 COPY start.js LICENSE NOTICE ./
+COPY scripts/presenton-terminal-banner.mjs /app/scripts/presenton-terminal-banner.mjs
 COPY nginx.conf /etc/nginx/nginx.conf
 
 EXPOSE 80
