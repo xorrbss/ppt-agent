@@ -1,22 +1,23 @@
 import asyncio
-from datetime import datetime
 import json
+from datetime import datetime
 from typing import Optional
+
 from fastapi import HTTPException
 from llmai import get_client
 from llmai.shared import JSONSchemaResponse, Message, SystemMessage, UserMessage
+
 from models.presentation_layout import SlideLayoutModel
 from models.presentation_outline_model import SlideOutlineModel
-from utils.llm_config import get_llm_config
 from utils.llm_client_error_handler import handle_llm_client_exceptions
-from utils.llm_utils import extract_structured_content, get_generate_kwargs
+from utils.llm_config import get_llm_config
 from utils.llm_provider import get_model
+from utils.llm_utils import extract_structured_content, get_generate_kwargs
 from utils.schema_utils import (
     add_field_in_schema,
     ensure_array_schemas_have_items,
     remove_fields_from_schema,
 )
-
 
 SLIDE_CONTENT_SYSTEM_PROMPT = """
 You will be given slide content and response schema.
@@ -30,11 +31,15 @@ You need to generate structured content json based on the schema.
 5. Provide structured content json as output.
 
 # General Rules
-- Make sure to follow language guidelines.
-- Speaker note should be normal text, not markdown.
-- Never ever go over the max character limit.
-- Do not add emoji in the content.
-- Don't provide $schema field in content json.
+- Follow language guidelines.
+- Speaker notes must be plain text (no markdown).
+- Respect max character limits strictly.
+- Do not use emojis or $schema fields.
+- Follow user instructions literally; do not reinterpret, generalize, or expand them.
+- Apply slide-specific instructions only to the exact slide mentioned (first/second/last/named) and only once.
+- Do not apply patterns across multiple slides unless explicitly requested.
+- If instructions are ambiguous, use the most direct interpretation without extending scope.
+
 {markdown_emphasis_rules}
 
 {user_instructions}

@@ -13,8 +13,8 @@ from llmai.shared import (
 
 from models.presentation_outline_model import PresentationOutlineModel
 from utils.get_dynamic_models import get_presentation_outline_model_with_n_slides
-from utils.llm_config import enable_web_grounding, get_llm_config
 from utils.llm_client_error_handler import handle_llm_client_exceptions
+from utils.llm_config import enable_web_grounding, get_llm_config
 from utils.llm_provider import get_model
 from utils.llm_utils import (
     get_generate_kwargs,
@@ -25,9 +25,7 @@ from utils.schema_utils import ensure_array_schemas_have_items
 
 
 def get_system_prompt(
-    tone: Optional[str] = None,
     verbosity: Optional[str] = None,
-    instructions: Optional[str] = None,
     include_title_slide: bool = True,
     include_table_of_contents: bool = False,
 ):
@@ -69,7 +67,14 @@ def get_system_prompt(
         "Presentation title should be plain text, not markdown. It should be a concise title for the presentation.\n"
         "Each slide content should contain the content for that slide.\n"
         f"{verbosity_instruction}\n"
-        "Minimize repetitive content and make sure to use different words and phrases for different slides.\n"
+        "Follow user instructions strictly and literally without reinterpretation or generalization.\n"
+        "Apply slide-specific instructions only to the exact slide mentioned and only once. "
+        "Do not apply patterns across multiple slides unless explicitly requested. "
+        "Resolve ambiguous instructions using the most direct interpretation.\n"
+        "Follow the user's specified tone across all slides. "
+        "Maintain clarity, readability, and factual accuracy. "
+        "If no tone is provided, use a clear and professional style. "
+        "Ensure logical flow between slides and avoid repetition or generic filler content.\n"
         "Include numerical data, tables or code if required or asked by the user.\n"
         "If 'auto-detect' is used, figure it out from the content/context.\n"
         f"{title_slide_instruction}\n"
@@ -80,6 +85,8 @@ def get_system_prompt(
         "Only include URLs if they appear in the provided content/context.\n"
         "Make sure data used is strictly from the provided content/context.\n"
         "Make sure data is consistent across all slides."
+        "Use the web search tool when the user request requires current, factual, or external information.\n"
+        "If the answer may be outdated or uncertain, prefer using the web search tool.\n"
     )
 
     return system
@@ -124,7 +131,7 @@ def get_user_prompt(
         f"Include Title Slide: {include_title_slide}\n"
         f"{toc_text if include_table_of_contents else ''}"
         f"Instructions: {instructions or ''}\n"
-        f"Context: {additional_context or ''}"
+        f"Context: {additional_context or 'None'}\n"
     )
 
 
@@ -142,9 +149,7 @@ def get_messages(
     return [
         SystemMessage(
             content=get_system_prompt(
-                tone,
                 verbosity,
-                instructions,
                 include_title_slide,
                 include_table_of_contents,
             ),
@@ -184,10 +189,12 @@ async def generate_ppt_outline(
     )
 
     client = get_client(config=get_llm_config())
-    use_search_tool = web_search and enable_web_grounding()
+    use_search_tool = web_search
 
     try:
-        outline_schema = ensure_array_schemas_have_items(response_model.model_json_schema())
+        outline_schema = ensure_array_schemas_have_items(
+            response_model.model_json_schema()
+        )
         response_format = JSONSchemaResponse(
             name="response",
             json_schema=outline_schema,
@@ -220,8 +227,7 @@ async def generate_ppt_outline(
                     emitted_content = True
                     yield chunk
             elif (
-                isinstance(event, ResponseStreamCompletionChunk)
-                and not emitted_content
+                isinstance(event, ResponseStreamCompletionChunk) and not emitted_content
             ):
                 final_content = serialize_structured_content(event.content)
                 if final_content:
