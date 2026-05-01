@@ -47,6 +47,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv export --frozen --no-dev --no-emit-project -o /tmp/requirements.txt \
     && uv pip install --system -r /tmp/requirements.txt \
     && uv pip install --system --no-deps .
+# Mem0 BM25 lemmatization requires a spaCy language model at runtime.
+# Installing it in the image avoids per-run downloads and startup self-disable.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system \
+    "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl"
 
 WORKDIR /app
 COPY nginx.conf /etc/nginx/nginx.conf

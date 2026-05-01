@@ -240,6 +240,7 @@ Use when **LLM** is **ollama**:
 Mem0 uses local Qdrant + SQLite (OSS); memory is scoped per presentation.
 
 By default the Docker runtime now points Mem0 at a local Ollama-compatible LLM endpoint, so it no longer needs an OpenAI key just to initialize. If you want to use OpenAI instead, set `MEM0_LLM_BASE_URL`/`MEM0_LLM_API_KEY` to your OpenAI-compatible endpoint and key.
+Docker images install the default spaCy model (`en_core_web_sm`) during build so Mem0 can start without extra setup on each run.
 
 | Variable | Purpose |
 |----------|---------|
@@ -251,6 +252,8 @@ By default the Docker runtime now points Mem0 at a local Ollama-compatible LLM e
 | **MEM0_EMBEDDER_PROVIDER** | Embedder backend (compose default **`fastembed`**). |
 | **MEM0_EMBEDDER_MODEL** | Model id (compose default **`BAAI/bge-small-en-v1.5`**). |
 | **MEM0_EMBEDDING_DIMS** | Vector size (compose default **384**). |
+| **MEM0_SPACY_MODEL** | Optional spaCy model override (default **`en_core_web_sm`**). |
+| **MEM0_REQUIRE_SPACY_MODEL** | Keep as **true** (default). Set to false only if you intentionally want Mem0 to run without spaCy lemmatization. |
 
 #### Document parsing (LiteParse)
 
