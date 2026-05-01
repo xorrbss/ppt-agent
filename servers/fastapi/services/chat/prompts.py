@@ -41,6 +41,7 @@ def build_system_prompt(
         "- Start with compact reads: getPresentationOutline -> searchSlides -> getSlideAtIndex.\n"
         "- Set includeFullContent=true only when full JSON is required (typically right before saveSlide).\n"
         "- Before saveSlide, validate target layout/schema (getAvailableLayouts, getContentSchemaFromLayoutId).\n"
+        "- For removal requests, call deleteSlide with the zero-based target index.\n"
         "- Generate required assets in batch with generateAssets before saving.\n"
         "- saveSlide payload must match the schema exactly; do not invent fields.\n"
         "- If a tool fails, report it briefly and choose the best next step.\n"

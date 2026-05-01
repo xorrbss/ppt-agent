@@ -7,6 +7,7 @@ import dirtyjson  # type: ignore[import-untyped]
 from llmai.shared import AssistantToolCall, Tool  # type: ignore[import-not-found]
 
 from services.chat.schemas import (
+    DeleteSlideInput,
     GenerateAssetsInput,
     GenerateIconInput,
     GenerateImageInput,
@@ -36,6 +37,7 @@ class ChatTools:
             "generateImage": self._generate_image,
             "generateIcon": self._generate_icon,
             "saveSlide": self._save_slide,
+            "deleteSlide": self._delete_slide,
         }
 
     def get_tool_definitions(self) -> list[Tool]:
@@ -110,6 +112,15 @@ class ChatTools:
                     "will validate it against layout schema before save."
                 ),
                 schema=SaveSlideInput,
+                strict=True,
+            ),
+            Tool(
+                name="deleteSlide",
+                description=(
+                    "Delete an existing slide by zero-based index and reindex the "
+                    "remaining slides. Use when the user asks to remove a slide."
+                ),
+                schema=DeleteSlideInput,
                 strict=True,
             ),
         ]
@@ -320,6 +331,10 @@ class ChatTools:
             index=payload.index,
             replace_old_slide_at_index=payload.replace_old_slide_at_index,
         )
+
+    async def _delete_slide(self, args: dict[str, Any]) -> dict[str, Any]:
+        payload = DeleteSlideInput(**args)
+        return await self._memory.delete_slide(index=payload.index)
 
     @staticmethod
     def _parse_args(arguments: str | None) -> dict[str, Any]:

@@ -370,6 +370,45 @@ class PresentationChatMemoryLayer:
             "shifted_slide_count": len(slides_to_shift),
         }
 
+    async def delete_slide(self, *, index: int) -> dict[str, Any]:
+        target_index = max(0, index)
+        slide = await self._sql_session.scalar(
+            select(SlideModel).where(
+                SlideModel.presentation == self._presentation_id,
+                SlideModel.index == target_index,
+            )
+        )
+        if not slide:
+            return {
+                "deleted": False,
+                "message": f"No slide found at index {target_index}.",
+                "index": target_index,
+            }
+
+        await self._sql_session.delete(slide)
+
+        slides_result = await self._sql_session.scalars(
+            select(SlideModel).where(SlideModel.presentation == self._presentation_id)
+        )
+        slides = sorted(list(slides_result), key=lambda each: each.index)
+        shifted_count = 0
+        for each_slide in slides:
+            if each_slide.index <= target_index:
+                continue
+            each_slide.index -= 1
+            self._sql_session.add(each_slide)
+            shifted_count += 1
+
+        await self._sql_session.commit()
+
+        return {
+            "deleted": True,
+            "message": f"Slide at index {target_index} was deleted successfully.",
+            "deleted_slide_id": str(slide.id),
+            "index": target_index,
+            "shifted_slide_count": shifted_count,
+        }
+
     async def retrieve_context(self, query: str) -> str:
         context = await MEM0_PRESENTATION_MEMORY_SERVICE.retrieve_context(
             self._presentation_id,
