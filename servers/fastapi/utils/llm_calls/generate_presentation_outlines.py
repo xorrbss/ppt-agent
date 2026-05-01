@@ -85,6 +85,8 @@ def get_system_prompt(
         "Only include URLs if they appear in the provided content/context.\n"
         "Make sure data used is strictly from the provided content/context.\n"
         "Make sure data is consistent across all slides."
+        "Use the web search tool when the user request requires current, factual, or external information.\n"
+        "If the answer may be outdated or uncertain, prefer using the web search tool.\n"
     )
 
     return system
@@ -129,7 +131,7 @@ def get_user_prompt(
         f"Include Title Slide: {include_title_slide}\n"
         f"{toc_text if include_table_of_contents else ''}"
         f"Instructions: {instructions or ''}\n"
-        f"Context (may include web search results if provided): {additional_context or 'None'}"
+        f"Context: {additional_context or 'None'}\n"
     )
 
 
