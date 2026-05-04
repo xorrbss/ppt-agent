@@ -1,14 +1,12 @@
-import asyncio
 from typing import Optional
 
-from fastapi import HTTPException
 from llmai import get_client
 from llmai.shared import JSONSchemaResponse, Message, SystemMessage, UserMessage
 from models.presentation_layout import PresentationLayoutModel
 from models.presentation_outline_model import PresentationOutlineModel
 from utils.llm_config import get_llm_config
 from utils.llm_client_error_handler import handle_llm_client_exceptions
-from utils.llm_utils import extract_structured_content, get_generate_kwargs
+from utils.llm_utils import generate_structured_with_schema_retries
 from utils.llm_provider import get_model
 from utils.get_dynamic_models import get_presentation_structure_model_with_n_slides
 from utils.schema_utils import ensure_array_schemas_have_items
@@ -169,22 +167,15 @@ async def generate_presentation_structure(
             strict=True,
         )
 
-        for attempt in range(3):
-            response = await asyncio.to_thread(
-                client.generate,
-                **get_generate_kwargs(
-                    model=model,
-                    messages=messages,
-                    response_format=response_format,
-                ),
-            )
-            content = extract_structured_content(response.content)
-            if content is not None:
-                return PresentationStructureModel(**content)
-
-            if attempt < 2:
-                await asyncio.sleep(0.5 * (attempt + 1))
-
-        raise HTTPException(status_code=400, detail="LLM did not return any content")
+        content = await generate_structured_with_schema_retries(
+            client,
+            model,
+            messages=messages,
+            response_format=response_format,
+            json_schema=structure_schema,
+            strict=True,
+            validate_schema=True,
+        )
+        return PresentationStructureModel(**content)
     except Exception as e:
         raise handle_llm_client_exceptions(e)

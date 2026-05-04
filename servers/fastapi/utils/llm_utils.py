@@ -1,13 +1,16 @@
 import asyncio
 import json
+import logging
 from collections.abc import AsyncGenerator, Sequence
 from typing import Any, Optional
 
 import dirtyjson
+from fastapi import HTTPException
 from llmai.shared import (
     LLMTool,
     Message,
     ResponseFormat,
+    UserMessage,
     normalize_content_parts,
 )
 from llmai.shared.tools import Tool  # type: ignore[import-not-found]
@@ -16,7 +19,10 @@ from pydantic import BaseModel
 from enums.llm_provider import LLMProvider
 from utils.llm_config import get_extra_body
 from utils.llm_provider import get_llm_provider
-from utils.schema_utils import flatten_json_schema
+from utils.schema_utils import flatten_json_schema, get_schema_validation_errors
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _tools_for_google_gemini(tools: list[LLMTool]) -> list[LLMTool]:
@@ -76,6 +82,114 @@ def get_generate_kwargs(
         kwargs["extra_body"] = extra_body
 
     return kwargs
+
+
+def structured_validation_feedback_user_message(
+    content: dict,
+    validation_errors: list[str],
+) -> UserMessage:
+    max_error_count = 10
+    max_json_chars = 6000
+
+    formatted_errors = validation_errors[:max_error_count]
+    if len(validation_errors) > max_error_count:
+        formatted_errors.append(
+            f"...and {len(validation_errors) - max_error_count} more validation errors."
+        )
+
+    previous_response = json.dumps(
+        content,
+        ensure_ascii=False,
+        indent=2,
+        default=str,
+    )
+    if len(previous_response) > max_json_chars:
+        previous_response = previous_response[:max_json_chars] + "\n... (truncated)"
+
+    return UserMessage(
+        content=(
+            "The previous JSON response did not match the required response schema.\n\n"
+            "Validation errors:\n"
+            + "\n".join(f"- {error}" for error in formatted_errors)
+            + "\n\nPrevious invalid JSON:\n"
+            + f"```json\n{previous_response}\n```\n\n"
+            + "Return corrected JSON only. Make sure it fully matches the required schema."
+        )
+    )
+
+
+async def generate_structured_with_schema_retries(
+    client: Any,
+    model: str,
+    *,
+    messages: Sequence[Message],
+    response_format: ResponseFormat,
+    json_schema: dict,
+    strict: bool = False,
+    validate_schema: bool = False,
+    validate_schema_max_loop_count: int = 4,
+) -> dict:
+    """
+    Parse retries (inner loop) plus optional JSON Schema validation feedback loops (outer loop),
+    matching the overflow-mitigation behavior from structured generation with validate_schema.
+    """
+    max_validation_loops = max(1, validate_schema_max_loop_count)
+    working_messages: list[Message] = list(messages)
+
+    for validation_attempt in range(max_validation_loops):
+        content: Optional[dict] = None
+        for attempt in range(3):
+            response = await asyncio.to_thread(
+                client.generate,
+                **get_generate_kwargs(
+                    model=model,
+                    messages=working_messages,
+                    response_format=response_format,
+                ),
+            )
+            content = extract_structured_content(response.content)
+            if content is not None:
+                break
+            if attempt < 2:
+                await asyncio.sleep(0.5 * (attempt + 1))
+
+        if content is None:
+            raise HTTPException(
+                status_code=400,
+                detail="LLM did not return any content",
+            )
+
+        if not validate_schema:
+            return content
+
+        validation_errors = get_schema_validation_errors(
+            json_schema,
+            content,
+            strict=strict,
+        )
+
+        if not validation_errors:
+            return content
+
+        formatted_validation_errors = " | ".join(validation_errors)
+        if validation_attempt == max_validation_loops - 1:
+            LOGGER.warning(
+                "Validation error after max fixes, returning last response: %s",
+                formatted_validation_errors,
+            )
+            return content
+
+        LOGGER.warning(
+            "Validation error, attempting fix %s/%s: %s",
+            validation_attempt + 1,
+            max_validation_loops - 1,
+            formatted_validation_errors,
+        )
+        working_messages.append(
+            structured_validation_feedback_user_message(content, validation_errors)
+        )
+
+    raise HTTPException(status_code=400, detail="LLM did not return any content")
 
 
 def extract_text(content: Any) -> Optional[str]:

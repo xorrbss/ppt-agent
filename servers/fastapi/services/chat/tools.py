@@ -109,7 +109,9 @@ class ChatTools:
                     "Save slide content for a layout. If replaceOldSlideAtIndex is "
                     "true, replace that index; otherwise insert as a new slide. "
                     "Pass content as a JSON-serialized object string and the server "
-                    "will validate it against layout schema before save."
+                    "will validate it against layout schema before save. "
+                    "Returns saved:false with validation_errors when limits are exceeded—"
+                    "typically shorten strings to satisfy maxLength, then call saveSlide again."
                 ),
                 schema=SaveSlideInput,
                 strict=True,

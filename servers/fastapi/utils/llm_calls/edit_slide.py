@@ -1,14 +1,13 @@
-import asyncio
 from datetime import datetime
 from typing import Optional
-from fastapi import HTTPException
+
 from llmai import get_client
 from llmai.shared import JSONSchemaResponse, Message, SystemMessage, UserMessage
 from models.presentation_layout import SlideLayoutModel
 from models.sql.slide import SlideModel
 from utils.llm_config import get_llm_config
 from utils.llm_client_error_handler import handle_llm_client_exceptions
-from utils.llm_utils import extract_structured_content, get_generate_kwargs
+from utils.llm_utils import generate_structured_with_schema_retries
 from utils.llm_provider import get_model
 from utils.schema_utils import (
     add_field_in_schema,
@@ -129,7 +128,7 @@ async def get_edited_slide_content(
             "__speaker_note__": {
                 "type": "string",
                 "minLength": 100,
-                "maxLength": 250,
+                "maxLength": 500,
                 "description": "Speaker note for the slide",
             }
         },
@@ -154,23 +153,15 @@ async def get_edited_slide_content(
             memory_context,
         )
 
-        for attempt in range(3):
-            response = await asyncio.to_thread(
-                client.generate,
-                **get_generate_kwargs(
-                    model=model,
-                    messages=messages,
-                    response_format=response_format,
-                ),
-            )
-            content = extract_structured_content(response.content)
-            if content is not None:
-                return content
-
-            if attempt < 2:
-                await asyncio.sleep(0.5 * (attempt + 1))
-
-        raise HTTPException(status_code=400, detail="LLM did not return any content")
+        return await generate_structured_with_schema_retries(
+            client,
+            model,
+            messages=messages,
+            response_format=response_format,
+            json_schema=response_schema,
+            strict=False,
+            validate_schema=True,
+        )
 
     except Exception as e:
         raise handle_llm_client_exceptions(e)
