@@ -11,15 +11,36 @@ import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { AlertCircle } from "lucide-react";
 import { setPresentationData } from "@/store/slices/presentationGeneration";
 import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
-import { setupImageUrlConverter } from "@/utils/image-url-converter";
-
 import { useFontLoader } from "@/app/(presentation-generator)/hooks/useFontLoad";
 import { Theme } from "@/app/(presentation-generator)/services/api/types";
 import SlideScale from "@/app/(presentation-generator)/components/PresentationRender";
 
+const PDF_PRINT_STYLE = `
+  @media print {
+    #presentation-slides-wrapper {
+      height: auto !important;
+      min-height: 0 !important;
+      overflow: visible !important;
+    }
 
+    #presentation-slides-wrapper > div > div {
+      padding-top: 0 !important;
+    }
 
+    #presentation-slides-wrapper .main-slide {
+      margin: 0 !important;
+      break-after: page;
+      page-break-after: always;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
 
+    #presentation-slides-wrapper .main-slide:last-child {
+      break-after: auto;
+      page-break-after: auto;
+    }
+  }
+`;
 
 const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
   const pathname = usePathname();
@@ -44,20 +65,14 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
       }
     }
   }, [presentationData]);
-
-
-
-  // Function to fetch the slides
   useEffect(() => {
     fetchUserSlides();
   }, []);
 
-  // Function to fetch the user slides
   const fetchUserSlides = async () => {
     try {
       const data = await DashboardApi.getPresentation(presentation_id);
       dispatch(setPresentationData(data));
-      setContentLoading(false);
 
       if (data.fonts) {
         useFontLoader(data.fonts);
@@ -74,49 +89,51 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
       setError(true);
       toast.error("Failed to load presentation");
       console.error("Error fetching user slides:", error);
+    } finally {
       setContentLoading(false);
     }
   };
 
-  const applyTheme = async (theme: Theme) => {
-    const element = document.getElementById('presentation-slides-wrapper')
+  const applyTheme = (theme: Theme) => {
+    const element = document.getElementById("presentation-slides-wrapper");
     if (!element) return;
-    if (!theme || !theme.data) { return; }
-    if (!theme.data.colors['graph_0']) { return; }
-    if (!theme.data.fonts?.textFont?.name || !theme.data.fonts?.textFont?.url) { return; }
+    if (!theme?.data) return;
+    if (!theme.data.colors["graph_0"]) return;
+    if (!theme.data.fonts?.textFont?.name || !theme.data.fonts?.textFont?.url) return;
+
     const cssVariables = {
-      '--primary-color': theme.data.colors['primary'],
-      '--background-color': theme.data.colors['background'],
-      '--card-color': theme.data.colors['card'],
-      '--stroke': theme.data.colors['stroke'],
-      '--primary-text': theme.data.colors['primary_text'],
-      '--background-text': theme.data.colors['background_text'],
-      '--graph-0': theme.data.colors['graph_0'],
-      '--graph-1': theme.data.colors['graph_1'],
-      '--graph-2': theme.data.colors['graph_2'],
-      '--graph-3': theme.data.colors['graph_3'],
-      '--graph-4': theme.data.colors['graph_4'],
-      '--graph-5': theme.data.colors['graph_5'],
-      '--graph-6': theme.data.colors['graph_6'],
-      '--graph-7': theme.data.colors['graph_7'],
-      '--graph-8': theme.data.colors['graph_8'],
-      '--graph-9': theme.data.colors['graph_9'],
-    }
+      "--primary-color": theme.data.colors["primary"],
+      "--background-color": theme.data.colors["background"],
+      "--card-color": theme.data.colors["card"],
+      "--stroke": theme.data.colors["stroke"],
+      "--primary-text": theme.data.colors["primary_text"],
+      "--background-text": theme.data.colors["background_text"],
+      "--graph-0": theme.data.colors["graph_0"],
+      "--graph-1": theme.data.colors["graph_1"],
+      "--graph-2": theme.data.colors["graph_2"],
+      "--graph-3": theme.data.colors["graph_3"],
+      "--graph-4": theme.data.colors["graph_4"],
+      "--graph-5": theme.data.colors["graph_5"],
+      "--graph-6": theme.data.colors["graph_6"],
+      "--graph-7": theme.data.colors["graph_7"],
+      "--graph-8": theme.data.colors["graph_8"],
+      "--graph-9": theme.data.colors["graph_9"],
+    };
 
     Object.entries(cssVariables).forEach(([key, value]) => {
-      element.style.setProperty(key, value)
-    })
-    useFontLoader({ [theme.data.fonts.textFont.name]: theme.data.fonts.textFont.url })
+      element.style.setProperty(key, value);
+    });
+    const textFontName = theme.data.fonts.textFont.name;
+    const textFontUrl = theme.data.fonts.textFont.url;
+    useFontLoader({ [textFontName]: textFontUrl });
+    element.style.setProperty("font-family", `"${textFontName}"`);
+    element.style.setProperty("--heading-font-family", `"${textFontName}"`);
+    element.style.setProperty("--body-font-family", `"${textFontName}"`);
+  };
 
-    // Apply fonts to preview container
-    element.style.setProperty('font-family', `"${theme.data.fonts.textFont.name}"`)
-    element.style.setProperty('--heading-font-family', `"${theme.data.fonts.textFont.name}"`)
-    element.style.setProperty('--body-font-family', `"${theme.data.fonts.textFont.name}"`)
-    // Update the Presentation content with theme
-  }
+  const slides = presentationData?.slides ?? [];
+  const isLoading = contentLoading || slides.length === 0;
 
-
-  // Regular view
   return (
     <div className="flex overflow-hidden flex-col">
       {error ? (
@@ -145,18 +162,15 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
           </div>
         </div>
       ) : (
-        <div className="">
+        <>
+          <style jsx global>{PDF_PRINT_STYLE}</style>
           <div
             id="presentation-slides-wrapper"
             className="relative mx-auto flex h-full min-h-0 w-full flex-col overflow-hidden"
           >
-            {!presentationData ||
-
-              contentLoading ||
-              !presentationData?.slides ||
-              presentationData?.slides.length === 0 ? (
-              <div className="relative w-full h-[calc(100vh-120px)] mx-auto ">
-                <div className=" ">
+            {isLoading ? (
+              <div className="relative mx-auto h-[calc(100vh-120px)] w-full">
+                <div>
                   {Array.from({ length: 2 }).map((_, index) => (
                     <Skeleton
                       key={index}
@@ -166,17 +180,11 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
                 </div>
               </div>
             ) : (
-              /*
-               * presentation-export locates each slide with:
-               *   #presentation-slides-wrapper > div > div > div > div > div
-               * This mirrors the main editor stack under PresentationPage so PPTX export
-               * finds real slide roots (not zero slides / empty deck).
-               */
               <div className="flex w-full justify-center">
                 <div className="w-full pt-[18px]">
                   <div className="font-inter w-full">
                     <div className="mx-auto flex w-full max-w-[1280px] flex-col items-center">
-                      {presentationData.slides.map((slide: any, index: number) => (
+                      {slides.map((slide: any, index: number) => (
                         <div
                           key={`${slide.type}-${index}-${slide.index}`}
                           id={`slide-${slide.index}`}
@@ -201,7 +209,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
               </div>
             )}
           </div>
-        </div>
+        </>
       )}
     </div>
   );

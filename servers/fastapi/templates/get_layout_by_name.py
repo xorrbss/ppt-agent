@@ -1,6 +1,7 @@
 import logging
 import aiohttp
 from urllib.parse import urlencode
+from typing import Any
 
 from fastapi import HTTPException
 
@@ -29,8 +30,8 @@ async def get_layout_by_name(layout_name: str) -> PresentationLayoutModel:
         url,
     )
 
-    schema_payload = None
-    runtime_error = None
+    schema_payload: dict[str, Any] | None = None
+    runtime_error: str | None = None
 
     try:
         schema = await EXPORT_TASK_SERVICE.extract_schema(url)
@@ -49,11 +50,8 @@ async def get_layout_by_name(layout_name: str) -> PresentationLayoutModel:
         # Backward compatibility: older export runtimes do not implement
         # extract-schema and return "Invalid task type".
         runtime_error = str(exc.detail)
-        LOGGER.warning(
-            "[template_layout] extract-schema HTTP error template=%r detail=%s",
-            layout_name,
-            _preview_detail(runtime_error),
-        )
+    except Exception as exc:  # noqa: BLE001
+        runtime_error = str(exc)
 
     if schema_payload is None:
         fallback_error = None
@@ -68,6 +66,12 @@ async def get_layout_by_name(layout_name: str) -> PresentationLayoutModel:
                 async with session.get(fallback_url) as response:
                     if response.status == 200:
                         schema_payload = await response.json()
+                        if runtime_error:
+                            LOGGER.info(
+                                "[template_layout] primary extract-schema failed template=%r detail=%s",
+                                layout_name,
+                                _preview_detail(runtime_error),
+                            )
                         LOGGER.info(
                             "[template_layout] fallback OK template=%r slide_count=%d",
                             layout_name,
@@ -88,9 +92,22 @@ async def get_layout_by_name(layout_name: str) -> PresentationLayoutModel:
                 layout_name,
                 fallback_error,
             )
+        except Exception as exc:  # noqa: BLE001
+            fallback_error = str(exc)
+            LOGGER.warning(
+                "[template_layout] fallback unexpected error template=%r error=%s",
+                layout_name,
+                _preview_detail(fallback_error),
+            )
 
         if schema_payload is None:
             error_detail = runtime_error or fallback_error or "unknown error"
+            if runtime_error:
+                LOGGER.warning(
+                    "[template_layout] extract-schema HTTP error template=%r detail=%s",
+                    layout_name,
+                    _preview_detail(runtime_error),
+                )
             LOGGER.error(
                 "[template_layout] no schema payload template=%r combined_detail=%s",
                 layout_name,
