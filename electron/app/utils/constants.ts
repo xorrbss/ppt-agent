@@ -7,8 +7,12 @@ export const localhost = "http://127.0.0.1"
 
 export const isDev = !app.isPackaged;
 export const baseDir = app.getAppPath();
-export const fastapiDir = isDev ? path.join(baseDir, "servers/fastapi") : path.join(baseDir, "resources/fastapi");
-export const nextjsDir = isDev ? path.join(baseDir, "servers/nextjs") : path.join(baseDir, "resources/nextjs");
+export const fastapiDir = isDev
+  ? path.resolve(baseDir, "..", "servers", "fastapi")
+  : path.join(baseDir, "resources/fastapi");
+export const nextjsDir = isDev
+  ? path.resolve(baseDir, "..", "servers", "nextjs")
+  : path.join(baseDir, "resources/nextjs");
 
 export const tempDir = path.join(app.getPath("temp"), "presenton")
 export const userDataDir = app.getPath("userData")

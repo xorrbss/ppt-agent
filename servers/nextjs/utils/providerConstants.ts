@@ -132,6 +132,20 @@ export const LLM_PROVIDERS: Record<string, LLMProviderOption> = {
     icon: "/providers/gemini-color.svg",
     getApiKeyUrl: "https://www.google.com/search?q=how+to+get+google+AI+studio+api+key&sxsrf=ANbL-n5_hUGaEiG9v6k9VxZWyv0mqO0Jew%3A1776339625724",
   },
+  vertex: {
+    value: "vertex",
+    label: "Vertex AI",
+    description: "Google Vertex AI models",
+    icon: "/providers/gemini-color.svg",
+    getApiKeyUrl: "https://www.google.com/search?q=how+to+get+vertex+ai+api+key",
+  },
+  azure: {
+    value: "azure",
+    label: "Azure OpenAI",
+    description: "Azure-hosted OpenAI deployments",
+    icon: "/providers/openai.png",
+    getApiKeyUrl: "https://www.google.com/search?q=azure+openai+api+key",
+  },
   anthropic: {
     value: "anthropic",
     label: "Anthropic",

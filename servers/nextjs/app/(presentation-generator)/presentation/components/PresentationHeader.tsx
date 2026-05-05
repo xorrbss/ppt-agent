@@ -180,6 +180,23 @@ const PresentationHeader = ({
     titleBlurIntentRef.current = "cancel";
   };
 
+  const exportViaIpc = async (
+    format: "pptx" | "pdf",
+    title: string
+  ): Promise<void> => {
+    if (!window.electron?.exportPresentation) {
+      throw new Error("Electron export bridge is unavailable");
+    }
+    const result = await window.electron.exportPresentation(
+      presentation_id,
+      title,
+      format
+    );
+    if (!result?.success) {
+      throw new Error(result?.message || "Export failed");
+    }
+  };
+
   const handleExportPptx = async () => {
     if (isStreaming) return;
 
@@ -199,25 +216,29 @@ const PresentationHeader = ({
         "pptx"
       );
       const safePptxTitle = safePptxFileName.replace(/\.pptx$/i, "");
-      const response = await fetch("/api/export-presentation", {
-        method: "POST",
-        body: JSON.stringify({
-          format: "pptx",
-          id: presentation_id,
-          title: safePptxTitle,
-        }),
-      });
+      if (window.electron?.exportPresentation) {
+        await exportViaIpc("pptx", safePptxTitle);
+      } else {
+        const response = await fetch("/api/export-presentation", {
+          method: "POST",
+          body: JSON.stringify({
+            format: "pptx",
+            id: presentation_id,
+            title: safePptxTitle,
+          }),
+        });
 
-      if (!response.ok) {
-        throw new Error("Failed to export PPTX");
+        if (!response.ok) {
+          throw new Error("Failed to export PPTX");
+        }
+
+        const { path: pptxPath } = await response.json();
+        if (!pptxPath) {
+          throw new Error("No path returned from export");
+        }
+
+        downloadLink(pptxPath, safePptxFileName);
       }
-
-      const { path: pptxPath } = await response.json();
-      if (!pptxPath) {
-        throw new Error("No path returned from export");
-      }
-
-      downloadLink(pptxPath, safePptxFileName);
     } catch (error) {
       console.error("Export failed:", error);
       toast.error("Having trouble exporting!", {
@@ -248,22 +269,25 @@ const PresentationHeader = ({
         "pdf"
       );
       const safePdfTitle = safePdfFileName.replace(/\.pdf$/i, "");
-      const response = await fetch("/api/export-presentation", {
-        method: "POST",
-        body: JSON.stringify({
-          format: "pdf",
-          id: presentation_id,
-          title: safePdfTitle,
-        }),
-      });
-
-      if (response.ok) {
-        const { path: pdfPath } = await response.json();
-        downloadLink(pdfPath, safePdfFileName);
+      if (window.electron?.exportPresentation) {
+        await exportViaIpc("pdf", safePdfTitle);
       } else {
-        throw new Error("Failed to export PDF");
-      }
+        const response = await fetch("/api/export-presentation", {
+          method: "POST",
+          body: JSON.stringify({
+            format: "pdf",
+            id: presentation_id,
+            title: safePdfTitle,
+          }),
+        });
 
+        if (response.ok) {
+          const { path: pdfPath } = await response.json();
+          downloadLink(pdfPath, safePdfFileName);
+        } else {
+          throw new Error("Failed to export PDF");
+        }
+      }
     } catch (err) {
       console.error(err);
       toast.error("Having trouble exporting!", {

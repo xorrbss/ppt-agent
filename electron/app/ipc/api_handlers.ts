@@ -1,7 +1,8 @@
-import { app, ipcMain } from "electron";
+import { ipcMain } from "electron";
 import fs from "fs";
 import path from "path";
 import { getUserConfig } from "../utils";
+import { nextjsDir } from "../utils/constants";
 
 export function setupApiHandlers() {
   // Handler for can-change-keys API
@@ -101,13 +102,7 @@ export function setupApiHandlers() {
   // Handler for templates API (static list)
   ipcMain.handle("api:templates", async () => {
     try {
-      // In development, use servers/nextjs/presentation-templates
-      // In production, use resources/nextjs/presentation-templates
-      const baseDir = app.getAppPath();
-      const isDev = !app.isPackaged;
-      const templatesPath = isDev
-        ? path.join(baseDir, "servers", "nextjs", "presentation-templates")
-        : path.join(baseDir, "resources", "nextjs", "presentation-templates");
+      const templatesPath = path.join(nextjsDir, "presentation-templates");
 
       if (!fs.existsSync(templatesPath)) {
         return [];

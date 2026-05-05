@@ -1,5 +1,5 @@
 require("dotenv").config();
-import { app, BrowserWindow, shell } from "electron";
+import { app, BrowserWindow, globalShortcut, shell } from "electron";
 import path from "path";
 import fs from "fs";
 import { findUnusedPorts, killProcess, setupEnv, setUserConfig } from "./utils";
@@ -18,6 +18,28 @@ import { getImageMagickBinaryPath, isImageMagickInstalled } from "./utils/imagem
 import { startUpdateChecker, stopUpdateChecker } from "./utils/update-checker";
 import { initMainSentry } from "./sentry/main";
 
+// Linux Chromium requires chrome-sandbox to be root-owned mode 4755; unpacked
+// dist/linux-unpacked builds usually lack that. Disable sandbox only when invalid.
+if (process.platform === "linux") {
+  try {
+    const sandboxPath = path.join(path.dirname(process.execPath), "chrome-sandbox");
+    if (fs.existsSync(sandboxPath)) {
+      const st = fs.statSync(sandboxPath);
+      const hasSetuid = (st.mode & 0o4777) === 0o4755;
+      const rootOwned = st.uid === 0;
+      if (!(hasSetuid && rootOwned)) {
+        app.commandLine.appendSwitch("no-sandbox");
+      }
+    } else {
+      app.commandLine.appendSwitch("no-sandbox");
+    }
+  } catch {
+    app.commandLine.appendSwitch("no-sandbox");
+  }
+  // Fall back to /tmp instead of shared memory to avoid Chromium crashes
+  // on systems where /dev/shm is unavailable/misconfigured.
+  app.commandLine.appendSwitch("disable-dev-shm-usage");
+}
 
 var win: BrowserWindow | undefined;
 var fastApiProcess: ChildProcessByStdio<any, any, any> | undefined;
@@ -28,6 +50,35 @@ const startupStatus: Record<string, string> = {
   puppeteer: "checking",
   imagemagick: "checking",
 };
+
+function resolveExportConverterPath(appRoot: string): string | undefined {
+  const pyDir = path.join(appRoot, "resources", "export", "py");
+  const candidates = [
+    path.join(pyDir, `convert-${process.platform}-${process.arch}`),
+    path.join(pyDir, `convert-${process.platform}-${process.arch}.exe`),
+    path.join(pyDir, `convert-${process.platform}`),
+    path.join(pyDir, `convert-${process.platform}.exe`),
+    path.join(pyDir, "convert"),
+    path.join(pyDir, "convert.exe"),
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate));
+}
+
+function resolveElectronDisableAuth(): string {
+  const raw = (
+    process.env.ELECTRON_DISABLE_AUTH ?? process.env.DISABLE_AUTH
+  )?.trim().toLowerCase();
+  if (!raw) {
+    return "true";
+  }
+  if (["0", "false", "no", "off"].includes(raw)) {
+    return "false";
+  }
+  if (["1", "true", "yes", "on"].includes(raw)) {
+    return "true";
+  }
+  return "true";
+}
 
 // Allow renderer to query initial startup status as soon as it loads.
 ipcMain.handle("startup:get-status", () => startupStatus);
@@ -111,9 +162,27 @@ const createWindow = () => {
   });
 };
 
+function registerDevToolsShortcuts(): void {
+  const accelerators = ["CommandOrControl+Shift+I", "F12"];
+  for (const accelerator of accelerators) {
+    const registered = globalShortcut.register(accelerator, () => {
+      if (!win || win.isDestroyed()) {
+        return;
+      }
+      win.webContents.toggleDevTools();
+    });
+    if (!registered) {
+      console.warn(`[Presenton] Failed to register ${accelerator} for DevTools`);
+    }
+  }
+}
+
 async function startServers(fastApiPort: number, nextjsPort: number) {
   try {
+    const disableAuthForElectron = resolveElectronDisableAuth();
     const sofficePath = getSofficePath();
+    const exportPackageRoot = path.join(baseDir, "resources", "export");
+    const exportConverterPath = resolveExportConverterPath(baseDir);
     const fastApi = await startFastApiServer(
       fastapiDir,
       fastApiPort,
@@ -151,6 +220,7 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         TEMP_DIRECTORY: tempDir,
         USER_CONFIG_PATH: userConfigPath,
         MIGRATE_DATABASE_ON_STARTUP: "True",
+        DISABLE_AUTH: disableAuthForElectron,
         // Resolved by libreoffice-check.ts at startup when available; lets
         // Python invoke the exact binary path instead of relying on PATH.
         ...(sofficePath && {
@@ -162,6 +232,11 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         // depend on a system-wide Node installation.
         LITEPARSE_NODE_BINARY: process.execPath,
         ELECTRON_RUN_AS_NODE: "1",
+        EXPORT_PACKAGE_ROOT: exportPackageRoot,
+        EXPORT_RUNTIME_DIR: exportPackageRoot,
+        ...(exportConverterPath && {
+          BUILT_PYTHON_MODULE_PATH: exportConverterPath,
+        }),
       },
       isDev,
     );
@@ -174,11 +249,18 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
       nextjsPort,
       {
         NEXT_PUBLIC_FAST_API: process.env.NEXT_PUBLIC_FAST_API,
+        FAST_API_INTERNAL_URL: process.env.NEXT_PUBLIC_FAST_API,
         TEMP_DIRECTORY: process.env.TEMP_DIRECTORY,
         NEXT_PUBLIC_URL: process.env.NEXT_PUBLIC_URL,
         NEXT_PUBLIC_USER_CONFIG_PATH: process.env.NEXT_PUBLIC_USER_CONFIG_PATH,
         USER_CONFIG_PATH: process.env.NEXT_PUBLIC_USER_CONFIG_PATH,
         APP_DATA_DIRECTORY: appDataDir,
+        DISABLE_AUTH: disableAuthForElectron,
+        EXPORT_PACKAGE_ROOT: exportPackageRoot,
+        PRESENTON_APP_ROOT: baseDir,
+        ...(exportConverterPath && {
+          BUILT_PYTHON_MODULE_PATH: exportConverterPath,
+        }),
         ...(puppeteerExecutablePath && {
           PUPPETEER_EXECUTABLE_PATH: puppeteerExecutablePath,
         }),
@@ -221,6 +303,7 @@ async function stopServers() {
 async function forceQuitApp(exitCode = 0) {
   if (isStopping) return;
   isStopping = true;
+  globalShortcut.unregisterAll();
   stopUpdateChecker();
   try {
     await stopServers();
@@ -239,6 +322,7 @@ app.whenReady().then(async () => {
 
   // Create main window before setup so that when user skips, the main window stays open
   createWindow();
+  registerDevToolsShortcuts();
   win?.loadFile(path.join(baseDir, "resources/ui/homepage/index.html"));
 
   // Single installer: checks LibreOffice, Chrome, and ImageMagick; if any are missing, shows one

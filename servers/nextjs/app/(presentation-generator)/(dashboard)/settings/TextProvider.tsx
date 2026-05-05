@@ -23,6 +23,8 @@ interface ModelOption {
     size?: string;
 }
 
+const MANUAL_MODEL_PROVIDERS = new Set(['vertex', 'azure']);
+
 const TextProvider = ({
 
     onInputChange,
@@ -40,12 +42,17 @@ const TextProvider = ({
 
     const selectedProvider = (llmConfig.LLM || 'openai') as keyof typeof LLM_PROVIDERS;
     const selectedProviderMeta = LLM_PROVIDERS[selectedProvider];
+    const isManualModelProvider = MANUAL_MODEL_PROVIDERS.has(selectedProvider);
     const currentModelField = useMemo(() => {
         switch (selectedProvider) {
             case 'openai':
                 return 'OPENAI_MODEL';
             case 'google':
                 return 'GOOGLE_MODEL';
+            case 'vertex':
+                return 'VERTEX_MODEL';
+            case 'azure':
+                return 'AZURE_OPENAI_MODEL';
             case 'anthropic':
                 return 'ANTHROPIC_MODEL';
             case 'ollama':
@@ -65,6 +72,10 @@ const TextProvider = ({
                 return 'OPENAI_API_KEY';
             case 'google':
                 return 'GOOGLE_API_KEY';
+            case 'vertex':
+                return 'VERTEX_API_KEY';
+            case 'azure':
+                return 'AZURE_OPENAI_API_KEY';
             case 'anthropic':
                 return 'ANTHROPIC_API_KEY';
             case 'custom':
@@ -80,6 +91,14 @@ const TextProvider = ({
     const currentOllamaUrl = llmConfig.OLLAMA_URL || '';
     const useCustomOllamaUrl = !!llmConfig.USE_CUSTOM_URL;
     const modelLabel = selectedProviderMeta?.label || selectedProvider;
+    const providerApiKeyLabel =
+        selectedProvider === 'custom'
+            ? 'Custom LLM API Key'
+            : selectedProvider === 'vertex'
+                ? 'Vertex API Key'
+                : selectedProvider === 'azure'
+                    ? 'Azure OpenAI API Key'
+                    : `${selectedProvider} API Key`;
 
     useEffect(() => {
         if (isFirstRender.current) {
@@ -107,6 +126,10 @@ const TextProvider = ({
                 ? 'OPENAI_API_KEY'
                 : llm === 'google'
                     ? 'GOOGLE_API_KEY'
+                    : llm === 'vertex'
+                        ? 'VERTEX_API_KEY'
+                        : llm === 'azure'
+                            ? 'AZURE_OPENAI_API_KEY'
                     : llm === 'anthropic'
                         ? 'ANTHROPIC_API_KEY'
                         : llm === 'custom'
@@ -118,6 +141,7 @@ const TextProvider = ({
     };
 
     const fetchAvailableModels = async () => {
+        if (isManualModelProvider) return;
         if (selectedProvider === 'openai' && !currentApiKey) return;
         if (selectedProvider === 'google' && !currentApiKey) return;
         if (selectedProvider === 'anthropic' && !currentApiKey) return;
@@ -405,7 +429,7 @@ const TextProvider = ({
                                     : (
                                         <>
                                             <label className="block text-sm font-medium capitalize text-gray-700 mb-2">
-                                                {selectedProvider === 'custom' ? 'Custom LLM API Key' : `${llmConfig.LLM} API Key`}
+                                                {providerApiKeyLabel}
                                             </label>
                                             <div className="relative">
                                                 <input
@@ -413,7 +437,7 @@ const TextProvider = ({
                                                     value={currentApiKey}
                                                     onChange={(e) => onApiKeyChange(selectedProvider, e.target.value)}
                                                     className="w-full px-2 py-3 outline-none border  border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                                                    placeholder={`Enter your ${llmConfig.LLM} API key`}
+                                                    placeholder={`Enter your ${providerApiKeyLabel}`}
                                                 />
                                                 <button
                                                     type="button"
@@ -434,10 +458,67 @@ const TextProvider = ({
                                         placeholder="OpenAI-compatible URL"
                                     />
                                 )}
+                                {selectedProvider === 'vertex' && (
+                                    <div className="mt-2 space-y-2">
+                                        <input
+                                            type="text"
+                                            value={llmConfig.VERTEX_PROJECT || ''}
+                                            onChange={(e) => onInputChange(e.target.value, 'VERTEX_PROJECT')}
+                                            className="w-full px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            placeholder="GCP project (optional if API key used)"
+                                        />
+                                        <input
+                                            type="text"
+                                            value={llmConfig.VERTEX_LOCATION || ''}
+                                            onChange={(e) => onInputChange(e.target.value, 'VERTEX_LOCATION')}
+                                            className="w-full px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            placeholder="GCP location (optional)"
+                                        />
+                                        <input
+                                            type="text"
+                                            value={llmConfig.VERTEX_BASE_URL || ''}
+                                            onChange={(e) => onInputChange(e.target.value, 'VERTEX_BASE_URL')}
+                                            className="w-full px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            placeholder="Vertex base URL (optional)"
+                                        />
+                                    </div>
+                                )}
+                                {selectedProvider === 'azure' && (
+                                    <div className="mt-2 space-y-2">
+                                        <input
+                                            type="text"
+                                            value={llmConfig.AZURE_OPENAI_ENDPOINT || ''}
+                                            onChange={(e) => onInputChange(e.target.value, 'AZURE_OPENAI_ENDPOINT')}
+                                            className="w-full px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            placeholder="Azure endpoint (https://...openai.azure.com)"
+                                        />
+                                        <input
+                                            type="text"
+                                            value={llmConfig.AZURE_OPENAI_BASE_URL || ''}
+                                            onChange={(e) => onInputChange(e.target.value, 'AZURE_OPENAI_BASE_URL')}
+                                            className="w-full px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            placeholder="Azure base URL (optional alternative)"
+                                        />
+                                        <input
+                                            type="text"
+                                            value={llmConfig.AZURE_OPENAI_API_VERSION || ''}
+                                            onChange={(e) => onInputChange(e.target.value, 'AZURE_OPENAI_API_VERSION')}
+                                            className="w-full px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            placeholder="API version (e.g. 2024-10-21)"
+                                        />
+                                        <input
+                                            type="text"
+                                            value={llmConfig.AZURE_OPENAI_DEPLOYMENT || ''}
+                                            onChange={(e) => onInputChange(e.target.value, 'AZURE_OPENAI_DEPLOYMENT')}
+                                            className="w-full px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            placeholder="Deployment name (optional)"
+                                        />
+                                    </div>
+                                )}
 
 
                             </div>
-                            {selectedProvider !== 'ollama' && selectedProvider !== 'codex' && (!modelsChecked || (modelsChecked && availableModels.length === 0)) && (
+                            {!isManualModelProvider && selectedProvider !== 'ollama' && selectedProvider !== 'codex' && (!modelsChecked || (modelsChecked && availableModels.length === 0)) && (
 
                                 <button
                                     onClick={fetchAvailableModels}
@@ -466,7 +547,7 @@ const TextProvider = ({
                         </div>
                     </div>
                     {/* Model Selection - only show if models are available */}
-                    {selectedProvider !== 'codex' && modelsChecked && availableModels.length > 0 ? (
+                    {!isManualModelProvider && selectedProvider !== 'codex' && modelsChecked && availableModels.length > 0 ? (
                         <div className="w-[222px]">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-3">
@@ -551,6 +632,28 @@ const TextProvider = ({
                                     </Popover>
                                 </div>
                             </div>
+                        </div>
+                    ) : null}
+                    {isManualModelProvider ? (
+                        <div className="w-[222px]">
+                            <label className="block text-sm font-medium text-gray-700 mb-3">
+                                {`Enter ${modelLabel} Model`}
+                            </label>
+                            <input
+                                type="text"
+                                value={currentModel}
+                                onChange={(e) => {
+                                    if (currentModelField) {
+                                        onInputChange(e.target.value, currentModelField);
+                                    }
+                                }}
+                                className="w-full h-12 px-4 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                placeholder={
+                                    selectedProvider === 'vertex'
+                                        ? 'e.g. gemini-2.5-flash'
+                                        : 'e.g. gpt-4.1'
+                                }
+                            />
                         </div>
                     ) : null}
                 </div>

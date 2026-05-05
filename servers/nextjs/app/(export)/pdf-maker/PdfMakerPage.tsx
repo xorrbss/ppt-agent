@@ -11,6 +11,7 @@ import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { AlertCircle } from "lucide-react";
 import { setPresentationData } from "@/store/slices/presentationGeneration";
 import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
+import { ApiResponseHandler } from "@/app/(presentation-generator)/services/api/api-error-handler";
 import { useFontLoader } from "@/app/(presentation-generator)/hooks/useFontLoad";
 import { Theme } from "@/app/(presentation-generator)/services/api/types";
 import SlideScale from "@/app/(presentation-generator)/components/PresentationRender";
@@ -42,9 +43,21 @@ const PDF_PRINT_STYLE = `
   }
 `;
 
-const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
+type PresentationPageProps = {
+  presentation_id: string;
+  exportCookie?: string;
+};
+
+const PresentationPage = ({ presentation_id, exportCookie }: PresentationPageProps) => {
   const pathname = usePathname();
   const [contentLoading, setContentLoading] = useState(true);
+  const exportCookieFromHash =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.hash.replace(/^#/, "")).get(
+          "exportCookie"
+        ) ?? undefined
+      : undefined;
+  const effectiveExportCookie = exportCookie ?? exportCookieFromHash;
 
   const dispatch = useDispatch();
   const { presentationData } = useSelector(
@@ -71,7 +84,9 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
 
   const fetchUserSlides = async () => {
     try {
-      const data = await DashboardApi.getPresentation(presentation_id);
+      const data = effectiveExportCookie
+        ? await fetchPresentationForExport(presentation_id, effectiveExportCookie)
+        : await DashboardApi.getPresentation(presentation_id);
       dispatch(setPresentationData(data));
 
       if (data.fonts) {
@@ -92,6 +107,24 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
     } finally {
       setContentLoading(false);
     }
+  };
+
+  const fetchPresentationForExport = async (
+    id: string,
+    cookieHeader: string
+  ) => {
+    const response = await fetch(`/api/export-presentation-data/${id}`, {
+      method: "GET",
+      headers: {
+        "x-export-cookie": cookieHeader,
+      },
+      cache: "no-store",
+    });
+
+    return ApiResponseHandler.handleResponse(
+      response,
+      "Presentation not found"
+    );
   };
 
   const applyTheme = (theme: Theme) => {

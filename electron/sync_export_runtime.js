@@ -215,6 +215,10 @@ function requestJson(url, redirects = 5) {
   });
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function downloadFile(url, outputPath, redirects = 5) {
   return new Promise((resolve, reject) => {
     const client = request(url);
@@ -255,15 +259,53 @@ function downloadFile(url, outputPath, redirects = 5) {
   });
 }
 
+async function downloadFileWithRetries(url, outputPath, attempts = 4) {
+  let lastError;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      if (i > 0) {
+        const delay = 1500 * Math.pow(2, i - 1);
+        console.log(`[export-runtime] Retrying download (attempt ${i + 1}/${attempts}) after ${delay}ms…`);
+        await sleep(delay);
+      }
+      try {
+        fs.unlinkSync(outputPath);
+      } catch {
+        /* ignore */
+      }
+      await downloadFile(url, outputPath);
+      const st = fs.statSync(outputPath);
+      if (st.size < 512) {
+        throw new Error(`Downloaded file is too small (${st.size} bytes); likely corrupt or HTML error page`);
+      }
+      const magic = Buffer.alloc(4);
+      const fd = fs.openSync(outputPath, "r");
+      try {
+        fs.readSync(fd, magic, 0, 4, 0);
+      } finally {
+        fs.closeSync(fd);
+      }
+      if (magic[0] !== 0x50 || magic[1] !== 0x4b) {
+        throw new Error("Downloaded file is not a ZIP (missing PK header); delete cache and retry");
+      }
+      return;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError;
+}
+
 function unzipArchive(zipPath, destDir) {
   ensureDir(destDir);
   if (process.platform === "win32") {
+    const psQuote = (p) => p.replace(/'/g, "''");
     execFileSync(
-      "powershell",
+      "powershell.exe",
       [
         "-NoProfile",
         "-Command",
-        `Expand-Archive -Path '${zipPath}' -DestinationPath '${destDir}' -Force`,
+        `Expand-Archive -LiteralPath '${psQuote(zipPath)}' -DestinationPath '${psQuote(destDir)}' -Force`,
       ],
       { stdio: "inherit" }
     );
@@ -273,25 +315,126 @@ function unzipArchive(zipPath, destDir) {
   execFileSync("unzip", ["-o", zipPath, "-d", destDir], { stdio: "inherit" });
 }
 
-function resolveExtractedRoot(extractDir) {
-  const directIndex = path.join(extractDir, "index.js");
-  const directPy = path.join(extractDir, "py");
-  if (fs.existsSync(directIndex) && fs.existsSync(directPy)) {
-    return extractDir;
-  }
+function hasRuntimeLayout(dir) {
+  const indexPath = path.join(dir, "index.js");
+  if (!fs.existsSync(indexPath)) return false;
 
-  const children = fs.readdirSync(extractDir, { withFileTypes: true });
-  for (const entry of children) {
-    if (!entry.isDirectory()) continue;
-    const candidate = path.join(extractDir, entry.name);
-    const candidateIndex = path.join(candidate, "index.js");
-    const candidatePy = path.join(candidate, "py");
-    if (fs.existsSync(candidateIndex) && fs.existsSync(candidatePy)) {
-      return candidate;
+  const pyPath = path.join(dir, "py");
+  if (fs.existsSync(pyPath)) {
+    try {
+      return fs.statSync(pyPath).isDirectory();
+    } catch {
+      return false;
     }
   }
 
-  throw new Error(`Unable to locate export runtime root under ${extractDir}`);
+  // Windows release zips are often flat: index.js + convert-*.exe (no py/ yet).
+  try {
+    return fs.readdirSync(dir).some((name) => {
+      if (!/^convert/i.test(name)) return false;
+      const p = path.join(dir, name);
+      try {
+        return fs.statSync(p).isFile();
+      } catch {
+        return false;
+      }
+    });
+  } catch {
+    return false;
+  }
+}
+
+/** Flat Windows bundles ship convert-*.exe next to index.js; runtime expects py/. */
+function ensurePyConverterLayout(root) {
+  const pyDir = path.join(root, "py");
+  let needMoveFromRoot = false;
+
+  if (fs.existsSync(pyDir)) {
+    try {
+      if (fs.statSync(pyDir).isDirectory()) {
+        const inner = fs.readdirSync(pyDir);
+        const hasBin = inner.some(
+          (n) =>
+            n === "convert" ||
+            n === "convert.exe" ||
+            /^convert-/i.test(n)
+        );
+        if (hasBin) return;
+        needMoveFromRoot = true;
+      }
+    } catch {
+      needMoveFromRoot = true;
+    }
+  } else {
+    needMoveFromRoot = true;
+  }
+
+  if (!needMoveFromRoot) return;
+
+  fs.mkdirSync(pyDir, { recursive: true });
+  const names = fs.readdirSync(root, { withFileTypes: true });
+  for (const ent of names) {
+    if (!ent.isFile()) continue;
+    const base = ent.name;
+    if (!/^convert/i.test(base)) continue;
+    const from = path.join(root, base);
+    const to = path.join(pyDir, base);
+    fs.renameSync(from, to);
+  }
+}
+
+function describeExtractTree(extractDir, maxEntries = 30) {
+  const lines = [];
+  function walk(dir, prefix, depth) {
+    if (depth > 3 || lines.length >= maxEntries) return;
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (lines.length >= maxEntries) break;
+      const p = path.join(dir, e.name);
+      lines.push(`${prefix}${e.name}${e.isDirectory() ? "/" : ""}`);
+      if (e.isDirectory()) walk(p, `${prefix}  `, depth + 1);
+    }
+  }
+  walk(extractDir, "", 0);
+  return lines.length ? lines.join("\n") : "(empty)";
+}
+
+function resolveExtractedRoot(extractDir) {
+  if (hasRuntimeLayout(extractDir)) {
+    return extractDir;
+  }
+
+  const queue = [{ dir: extractDir, depth: 0 }];
+  const maxDepth = 8;
+  while (queue.length > 0) {
+    const { dir, depth } = queue.shift();
+    if (depth >= maxDepth) continue;
+    let children;
+    try {
+      children = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of children) {
+      if (!entry.isDirectory()) continue;
+      const candidate = path.join(dir, entry.name);
+      if (hasRuntimeLayout(candidate)) {
+        return candidate;
+      }
+      queue.push({ dir: candidate, depth: depth + 1 });
+    }
+  }
+
+  const hint = describeExtractTree(extractDir);
+  throw new Error(
+    `Unable to locate export runtime root under ${extractDir}\n` +
+      `Expected a folder containing index.js and a py/ directory. Extracted layout (partial):\n${hint}`
+  );
 }
 
 async function downloadAndInstallRuntime() {
@@ -304,17 +447,28 @@ async function downloadAndInstallRuntime() {
   const extractDir = path.join(cacheDir, `extract-${Date.now()}`);
 
   console.log(`[export-runtime] Downloading ${downloadUrl}`);
-  await downloadFile(downloadUrl, zipPath);
+  try {
+    await downloadFileWithRetries(downloadUrl, zipPath);
+  } catch (err) {
+    try {
+      fs.unlinkSync(zipPath);
+    } catch {
+      /* ignore */
+    }
+    throw err;
+  }
 
   console.log(`[export-runtime] Extracting ${zipPath}`);
-  unzipArchive(zipPath, extractDir);
-
-  const sourceRoot = resolveExtractedRoot(extractDir);
-  fs.rmSync(targetRoot, { recursive: true, force: true });
-  ensureDir(targetRoot);
-  fs.cpSync(sourceRoot, targetRoot, { recursive: true, force: true });
-
-  fs.rmSync(extractDir, { recursive: true, force: true });
+  try {
+    unzipArchive(zipPath, extractDir);
+    const sourceRoot = resolveExtractedRoot(extractDir);
+    ensurePyConverterLayout(sourceRoot);
+    fs.rmSync(targetRoot, { recursive: true, force: true });
+    ensureDir(targetRoot);
+    fs.cpSync(sourceRoot, targetRoot, { recursive: true, force: true });
+  } finally {
+    fs.rmSync(extractDir, { recursive: true, force: true });
+  }
 
   return { tag, downloadUrl };
 }

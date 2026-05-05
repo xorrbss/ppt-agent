@@ -56,6 +56,41 @@ class TestMem0PresentationMemoryService:
         FakeMemoryClient.instances = []
         _mem0_oss_fresh()
 
+    def test_shared_client_defaults_to_local_llm_without_openai_key(self):
+        captured = {}
+
+        def _fake_memory_from_config(config, telemetry_base):
+            captured["config"] = config
+            captured["telemetry_base"] = telemetry_base
+            return FakeMemoryClient.from_config(config)
+
+        with patch.dict(
+            "os.environ",
+            {
+                "MEM0_ENABLED": "true",
+                "APP_DATA_DIRECTORY": "/tmp/presenton-test",
+                "OLLAMA_URL": "http://ollama:11434",
+                "OLLAMA_MODEL": "llama3.1:8b",
+            },
+            clear=False,
+        ), patch(
+            "services.mem0_oss_memory.memory_from_config",
+            side_effect=_fake_memory_from_config,
+        ):
+            client = mem0_oss.get_shared_mem0_client()
+
+        assert client is not None
+        assert captured["telemetry_base"].endswith("/mem0/telemetry/oss")
+        assert captured["config"]["llm"]["provider"] == "openai"
+        assert captured["config"]["llm"]["config"]["model"] == "llama3.1:8b"
+        assert captured["config"]["llm"]["config"]["api_key"] == "ollama"
+        assert (
+            captured["config"]["llm"]["config"]["openai_base_url"]
+            == "http://ollama:11434/v1"
+        )
+        assert captured["config"]["vector_store"]["provider"] == "qdrant"
+        assert captured["config"]["embedder"]["provider"] == "fastembed"
+
     def test_store_generation_context_uses_presentation_scope(self):
         with patch.dict(
             "os.environ",

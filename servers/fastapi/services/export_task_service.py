@@ -86,8 +86,14 @@ class ExportTaskService:
 
         index_js = os.path.join(export_dir, "index.js")
         if os.path.isfile(index_js):
-            shutil.copyfile(index_js, index_cjs)
-            return index_cjs
+            # Packaged app resource directories can be read-only (e.g. /opt installs).
+            # Try to create index.cjs for compatibility, but fall back to index.js
+            # when writing is not permitted.
+            try:
+                shutil.copyfile(index_js, index_cjs)
+                return index_cjs
+            except OSError:
+                return index_js
 
         return index_cjs
 

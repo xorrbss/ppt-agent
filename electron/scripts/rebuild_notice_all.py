@@ -6,7 +6,8 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+ELECTRON_DIR = Path(__file__).resolve().parent.parent
+REPO_ROOT = ELECTRON_DIR.parent
 FASTAPI_DIR = REPO_ROOT / "servers" / "fastapi"
 NEXT_DIR = REPO_ROOT / "servers" / "nextjs"
 NOTICE_PATH = REPO_ROOT / "NOTICE"

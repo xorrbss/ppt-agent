@@ -380,6 +380,7 @@ class PresentationChatService:
             "getContentSchemaFromLayoutId": "Checking the layout schema",
             "generateAssets": "Generating slide assets",
             "saveSlide": "Saving the slide",
+            "deleteSlide": "Deleting the slide",
         }
         return labels.get(tool_name, f"Running {tool_name}")
 

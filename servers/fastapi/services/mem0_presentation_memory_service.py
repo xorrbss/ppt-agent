@@ -14,6 +14,7 @@ LOGGER = logging.getLogger(__name__)
 class Mem0PresentationMemoryService:
     def __init__(self):
         self._enabled = self._to_bool(os.getenv("MEM0_ENABLED"), default=True)
+        self._runtime_enabled = True
         self._top_k = self._to_int(os.getenv("MEM0_TOP_K"), default=8)
         self._max_context_chars = self._to_int(
             os.getenv("MEM0_MAX_CONTEXT_CHARS"), default=6000
@@ -49,9 +50,22 @@ class Mem0PresentationMemoryService:
         return isinstance(exc, (Exception, SystemExit))
 
     async def _get_client(self):
-        if not self._enabled:
+        if not self._enabled or not self._runtime_enabled:
             return None
         return get_shared_mem0_client()
+
+    def _disable_runtime(self, reason: str, *, exc: BaseException | None = None) -> None:
+        if not self._runtime_enabled:
+            return
+        self._runtime_enabled = False
+        if exc is None:
+            LOGGER.warning("Mem0 presentation memory disabled for this process: %s", reason)
+            return
+        LOGGER.exception(
+            "Mem0 presentation memory disabled for this process: %s",
+            reason,
+            exc_info=exc,
+        )
 
     async def _add_message(self, presentation_id: UUID, message: str):
         client = await self._get_client()
@@ -76,6 +90,9 @@ class Mem0PresentationMemoryService:
         except BaseException as exc:
             if not self._is_nonfatal_mem0_error(exc):
                 raise
+            if isinstance(exc, SystemExit):
+                self._disable_runtime("mem0 runtime failed while adding memory", exc=exc)
+                return
             LOGGER.exception(
                 "Failed to add mem0 memory for presentation_id=%s", presentation_id
             )
@@ -188,6 +205,9 @@ class Mem0PresentationMemoryService:
         except BaseException as exc:
             if not self._is_nonfatal_mem0_error(exc):
                 raise
+            if isinstance(exc, SystemExit):
+                self._disable_runtime("mem0 runtime failed while searching memory", exc=exc)
+                return ""
             LOGGER.exception(
                 "Failed to search mem0 context for presentation_id=%s", presentation_id
             )

@@ -1,6 +1,7 @@
 from copy import deepcopy
 from typing import Any, List
 
+from jsonschema.validators import validator_for
 from openai import NOT_GIVEN
 
 from utils.dict_utils import (
@@ -321,6 +322,53 @@ def ensure_array_schemas_have_items(schema: dict) -> dict[str, Any]:
         return node
 
     return _ensure(result)
+
+
+def prepare_schema_for_validation(
+    schema: dict,
+    strict: bool = False,
+) -> dict[str, Any]:
+    prepared_schema = deepcopy(schema)
+    if strict:
+        prepared_schema = ensure_strict_json_schema(
+            prepared_schema,
+            path=(),
+            root=prepared_schema,
+        )
+    return ensure_array_schemas_have_items(prepared_schema)
+
+
+def format_json_path(path: List[Any]) -> str:
+    if not path:
+        return "$"
+
+    formatted = "$"
+    for part in path:
+        if isinstance(part, int):
+            formatted += f"[{part}]"
+        else:
+            formatted += f".{part}"
+    return formatted
+
+
+def get_schema_validation_errors(
+    schema: dict,
+    instance: Any,
+    strict: bool = False,
+) -> List[str]:
+    prepared_schema = prepare_schema_for_validation(schema, strict=strict)
+    validator_cls = validator_for(prepared_schema)
+    validator_cls.check_schema(prepared_schema)
+    validator = validator_cls(prepared_schema)
+
+    errors = sorted(
+        validator.iter_errors(instance),
+        key=lambda error: (format_json_path(list(error.path)), error.message),
+    )
+
+    return [
+        f"{format_json_path(list(error.path))}: {error.message}" for error in errors
+    ]
 
 
 def remove_titles_from_schema(schema: dict) -> dict[str, Any]:

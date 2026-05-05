@@ -1,9 +1,0 @@
-import { NextResponse } from 'next/server';
-
-export async function GET() {
-  const isDisabled = process.env.DISABLE_ANONYMOUS_TRACKING === 'true' || process.env.DISABLE_ANONYMOUS_TRACKING === 'True';
-  const telemetryEnabled = !isDisabled;
-  return NextResponse.json({ telemetryEnabled });
-}
-
-

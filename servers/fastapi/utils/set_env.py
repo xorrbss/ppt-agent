@@ -37,6 +37,50 @@ def set_google_model_env(value):
     os.environ["GOOGLE_MODEL"] = value
 
 
+def set_vertex_api_key_env(value):
+    os.environ["VERTEX_API_KEY"] = value
+
+
+def set_vertex_model_env(value):
+    os.environ["VERTEX_MODEL"] = value
+
+
+def set_vertex_project_env(value):
+    os.environ["VERTEX_PROJECT"] = value
+
+
+def set_vertex_location_env(value):
+    os.environ["VERTEX_LOCATION"] = value
+
+
+def set_vertex_base_url_env(value):
+    os.environ["VERTEX_BASE_URL"] = value
+
+
+def set_azure_openai_api_key_env(value):
+    os.environ["AZURE_OPENAI_API_KEY"] = value
+
+
+def set_azure_openai_model_env(value):
+    os.environ["AZURE_OPENAI_MODEL"] = value
+
+
+def set_azure_openai_endpoint_env(value):
+    os.environ["AZURE_OPENAI_ENDPOINT"] = value
+
+
+def set_azure_openai_base_url_env(value):
+    os.environ["AZURE_OPENAI_BASE_URL"] = value
+
+
+def set_azure_openai_api_version_env(value):
+    os.environ["AZURE_OPENAI_API_VERSION"] = value
+
+
+def set_azure_openai_deployment_env(value):
+    os.environ["AZURE_OPENAI_DEPLOYMENT"] = value
+
+
 def set_anthropic_api_key_env(value):
     os.environ["ANTHROPIC_API_KEY"] = value
 
