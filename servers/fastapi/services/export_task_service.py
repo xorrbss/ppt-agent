@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -12,6 +13,8 @@ from pydantic import BaseModel, ValidationError
 from services.liteparse_service import _snippet, _subprocess_text_kwargs
 from utils.asset_directory_utils import resolve_app_path_to_filesystem
 from utils.get_env import get_app_data_directory_env, get_temp_directory_env
+
+LOGGER = logging.getLogger(__name__)
 
 
 class PptxToHtmlDocument(BaseModel):
@@ -234,7 +237,14 @@ class ExportTaskService:
         title: str,
         export_as: Literal["pdf", "pptx"],
         fastapi_url: str | None = None,
+        cookie_header: str | None = None,
     ) -> PresentationExportTaskResult:
+        LOGGER.info(
+            "[export_runtime] export_from_url url=%s format=%s cookie_header=%s",
+            url,
+            export_as,
+            "set" if cookie_header else "empty",
+        )
         response_data = await self._run_task(
             {
                 "type": "export",
@@ -242,6 +252,7 @@ class ExportTaskService:
                 "format": export_as,
                 "title": title,
                 "fastapiUrl": fastapi_url or None,
+                "cookieHeader": cookie_header or None,
             },
             "Export task did not produce a response file",
         )
@@ -278,6 +289,13 @@ class ExportTaskService:
             ) from exc
 
     async def extract_schema(self, url: str) -> ExtractSchemaDocument:
+        LOGGER.info(
+            "[export_runtime] extract_schema spawn "
+            "url=%s entrypoint=%s export_dir=%s",
+            url,
+            self.entrypoint_path,
+            self.export_dir,
+        )
         try:
             response_data = await self._run_task(
                 {
@@ -286,8 +304,22 @@ class ExportTaskService:
                 },
                 "Extract-schema task did not produce a response file",
             )
+            slides = response_data.get("slides") if isinstance(response_data, dict) else None
+            slide_n = len(slides) if isinstance(slides, list) else "?"
+            LOGGER.info(
+                "[export_runtime] extract_schema node finished url=%s "
+                "response_name=%r ordered=%s slides=%s",
+                url,
+                response_data.get("name") if isinstance(response_data, dict) else None,
+                response_data.get("ordered") if isinstance(response_data, dict) else None,
+                slide_n,
+            )
             return ExtractSchemaDocument(**response_data)
         except ValidationError as exc:
+            LOGGER.exception(
+                "[export_runtime] extract_schema pydantic validation failed url=%s",
+                url,
+            )
             raise HTTPException(
                 status_code=500,
                 detail="Extract-schema task produced invalid output",

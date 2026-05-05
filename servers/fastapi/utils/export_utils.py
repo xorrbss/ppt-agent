@@ -31,7 +31,10 @@ def _build_presentation_export_url(presentation_id: uuid.UUID) -> tuple[str, str
 
 
 async def export_presentation(
-    presentation_id: uuid.UUID, title: str, export_as: Literal["pptx", "pdf"]
+    presentation_id: uuid.UUID,
+    title: str,
+    export_as: Literal["pptx", "pdf"],
+    cookie_header: str | None = None,
 ) -> PresentationAndPath:
     export_url, fastapi_url = _build_presentation_export_url(presentation_id)
     export_result = await EXPORT_TASK_SERVICE.export_from_url(
@@ -39,6 +42,7 @@ async def export_presentation(
         title=sanitize_filename(title or str(uuid.uuid4())),
         export_as=export_as,
         fastapi_url=fastapi_url,
+        cookie_header=cookie_header,
     )
 
     return PresentationAndPath(

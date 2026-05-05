@@ -21,13 +21,18 @@ class ConcurrentService:
 
         task = asyncio.create_task(wrapper())
 
-        print(f"Running task: {task} - executing {callable.__name__}")
+        # Avoid printing asyncio.Task repr (<Task pending ...>) — it looks like a hung bug.
+        print(f"Background task started: {callable.__name__}")
 
         self._background_tasks.add(task)
         task.add_done_callback(self.on_task_done)
 
     def on_task_done(self, task: Task):
-        print(f"Task done: {task}")
+        exc = task.exception()
+        if exc:
+            print(f"Background task finished: failed ({exc})")
+        else:
+            print("Background task finished: ok")
 
         self._background_tasks.discard(task)
 

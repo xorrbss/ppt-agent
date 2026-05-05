@@ -13,9 +13,9 @@ import { setPresentationData } from "@/store/slices/presentationGeneration";
 import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
 import { setupImageUrlConverter } from "@/utils/image-url-converter";
 
-import { V1ContentRender } from "@/app/(presentation-generator)/components/V1ContentRender";
 import { useFontLoader } from "@/app/(presentation-generator)/hooks/useFontLoad";
 import { Theme } from "@/app/(presentation-generator)/services/api/types";
+import SlideScale from "@/app/(presentation-generator)/components/PresentationRender";
 
 
 
@@ -32,7 +32,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    if (presentationData?.slides[0].layout.includes("custom")) {
+    if (presentationData?.slides?.[0]?.layout?.includes("custom")) {
       const existingScript = document.querySelector(
         'script[src*="tailwindcss.com"]'
       );
@@ -148,7 +148,7 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
         <div className="">
           <div
             id="presentation-slides-wrapper"
-            className=" mx-auto flex flex-col items-center overflow-hidden justify-center  "
+            className="relative mx-auto flex h-full min-h-0 w-full flex-col overflow-hidden"
           >
             {!presentationData ||
 
@@ -166,22 +166,39 @@ const PresentationPage = ({ presentation_id }: { presentation_id: string }) => {
                 </div>
               </div>
             ) : (
-              <>
-                {presentationData &&
-                  presentationData.slides &&
-                  presentationData.slides.length > 0 &&
-                  presentationData.slides.map((slide: any, index: number) => (
-                    // [data-speaker-note] is used to extract the speaker note from the slide for export to pptx
-                    <div key={index} className="w-full " data-speaker-note={slide.speaker_note}>
-                      <V1ContentRender
-                        slide={slide}
-                        isEditMode={true}
-                        theme={presentationData?.theme}
-
-                      />
+              /*
+               * presentation-export locates each slide with:
+               *   #presentation-slides-wrapper > div > div > div > div > div
+               * This mirrors the main editor stack under PresentationPage so PPTX export
+               * finds real slide roots (not zero slides / empty deck).
+               */
+              <div className="flex w-full justify-center">
+                <div className="w-full pt-[18px]">
+                  <div className="font-inter w-full">
+                    <div className="mx-auto flex w-full max-w-[1280px] flex-col items-center">
+                      {presentationData.slides.map((slide: any, index: number) => (
+                        <div
+                          key={`${slide.type}-${index}-${slide.index}`}
+                          id={`slide-${slide.index}`}
+                          className="main-slide relative flex w-full items-center justify-center max-md:mb-4"
+                          data-speaker-note={slide.speaker_note ?? ""}
+                        >
+                          <div
+                            className="group w-full font-syne"
+                            data-layout={slide.layout}
+                            data-group={slide.layout_group}
+                          >
+                            <SlideScale
+                              slide={slide}
+                              theme={presentationData?.theme ?? null}
+                            />
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-              </>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </div>

@@ -635,13 +635,21 @@ export function getSettingsByTemplateId(templateId: string): TemplateGroupSettin
 export function getTemplateByLayoutId(layoutId: string): TemplateWithData | undefined {
     return allLayouts.find((t) => t.layoutId === layoutId);
 }
-export function getLayoutByLayoutId(layout: string): TemplateWithData | undefined {
+export function getLayoutByLayoutId(layout: string, layoutGroup?: string): TemplateWithData | undefined {
     const templateName = layout.split(':')[0]
-
     const template = templates.find((t) => t.id === templateName)
 
     if (template) {
         return template.layouts.find((t) => t.layoutId === layout);
     }
-    return undefined;
+
+    // Backward compatibility: persisted slides from fallback schema API may
+    // store raw IDs like "general-intro-slide" (without "<group>:").
+    if (layoutGroup) {
+        const groupTemplate = templates.find((t) => t.id === layoutGroup);
+        const qualifiedLayoutId = `${layoutGroup}:${layout}`;
+        return groupTemplate?.layouts.find((t) => t.layoutId === qualifiedLayoutId);
+    }
+
+    return allLayouts.find((t) => t.layoutId.endsWith(`:${layout}`));
 }
