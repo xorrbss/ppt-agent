@@ -2,6 +2,11 @@ import { parse } from "@babel/parser";
 import * as t from "@babel/types";
 import * as z from "zod";
 
+import {
+  IconSchema as BuiltinIconSchema,
+  ImageSchema as BuiltinImageSchema,
+} from "@/app/presentation-templates/defaultSchemes";
+
 export type CompiledTemplateSchema = {
   layoutDescription: string;
   layoutId: string;
@@ -15,6 +20,9 @@ type ExtractedDeclaration = {
   name: string;
   order: number;
 };
+
+/** Imported from `defaultSchemes`; not always present as `const` in layout source. */
+const BUILTIN_SHARED_SCHEMA_IDENTIFIERS = new Set(["ImageSchema", "IconSchema"]);
 
 const DANGEROUS_MEMBER_NAMES = new Set([
   "__defineGetter__",
@@ -134,7 +142,12 @@ function isAllowedIdentifier(
   declarations: Map<string, ExtractedDeclaration>,
   name: string
 ): boolean {
-  return name === "z" || name === "undefined" || declarations.has(name);
+  return (
+    name === "z" ||
+    name === "undefined" ||
+    BUILTIN_SHARED_SCHEMA_IDENTIFIERS.has(name) ||
+    declarations.has(name)
+  );
 }
 
 function assertSafeMemberName(property: t.Identifier): void {
@@ -151,7 +164,12 @@ function collectDependenciesForDeclaration(
   const dependencies = new Set<string>();
 
   const addDependency = (name: string) => {
-    if (name !== "z" && name !== "undefined" && name !== currentDeclaration) {
+    if (
+      name !== "z" &&
+      name !== "undefined" &&
+      !BUILTIN_SHARED_SCHEMA_IDENTIFIERS.has(name) &&
+      name !== currentDeclaration
+    ) {
       dependencies.add(name);
     }
   };
@@ -377,11 +395,23 @@ export function compileTemplateSchema(
     }
 
     const schemaRuntimeSource = buildSchemaRuntimeSource(declarations);
+    const injectImage = !declarations.has("ImageSchema");
+    const injectIcon = !declarations.has("IconSchema");
+    const prelude = [
+      `"use strict";`,
+      `const z = _z;`,
+      injectImage ? `const ImageSchema = _builtinImageSchema;` : "",
+      injectIcon ? `const IconSchema = _builtinIconSchema;` : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
     const factory = new Function(
       "_z",
-      `"use strict"; const z = _z; ${schemaRuntimeSource}\nreturn Schema;`
+      "_builtinImageSchema",
+      "_builtinIconSchema",
+      `${prelude} ${schemaRuntimeSource}\nreturn Schema;`
     );
-    const schema = factory(z);
+    const schema = factory(z, BuiltinImageSchema, BuiltinIconSchema);
 
     if (!isZodSchema(schema)) {
       return null;

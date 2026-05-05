@@ -185,8 +185,17 @@ def get_shared_mem0_client() -> Any | None:
                 collection,
                 dims,
             )
-        except BaseException:
-            LOGGER.exception("Failed to initialize shared Mem0 OSS Memory")
+        except BaseException as exc:
+            # fastembed / onnxruntime: incomplete cache under /tmp (common in fresh containers).
+            err = str(exc)
+            if "NoSuchFile" in type(exc).__name__ or "NO_SUCHFILE" in err:
+                LOGGER.warning(
+                    "Mem0 OSS disabled: embedding model file missing (%s). "
+                    "Pre-download fastembed models, point FASTEMBED_CACHE at them, or set MEM0_ENABLED=false.",
+                    err[:400],
+                )
+            else:
+                LOGGER.exception("Failed to initialize shared Mem0 OSS Memory")
             _shared_client = None
 
     return _shared_client
