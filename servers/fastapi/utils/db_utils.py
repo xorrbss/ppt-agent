@@ -98,3 +98,29 @@ def get_database_url_and_connect_args() -> tuple[str, dict]:
         pass
 
     return database_url, connect_args
+
+
+def to_sync_sqlalchemy_url(database_url: str) -> str:
+    """Strip async driver prefixes for Alembic and other sync SQLAlchemy engines.
+
+    PostgreSQL URLs use ``postgresql+psycopg://`` (psycopg3) so migrations do not
+    depend on psycopg2, which is not installed when using asyncpg at runtime.
+
+    MySQL URLs use ``mysql+pymysql://`` so Alembic does not require ``mysqlclient``
+    (the default for plain ``mysql://``); PyMySQL is already pulled in by aiomysql.
+    """
+    if database_url.startswith("sqlite+aiosqlite:///"):
+        return "sqlite:///" + database_url[len("sqlite+aiosqlite:///") :]
+    if database_url.startswith("postgresql+asyncpg://"):
+        rest = database_url[len("postgresql+asyncpg://") :]
+        return f"postgresql+psycopg://{rest}"
+    if database_url.startswith("mysql+aiomysql://"):
+        rest = database_url[len("mysql+aiomysql://") :]
+        return f"mysql+pymysql://{rest}"
+    if database_url.startswith("postgresql://"):
+        rest = database_url[len("postgresql://") :]
+        return f"postgresql+psycopg://{rest}"
+    if database_url.startswith("mysql://"):
+        rest = database_url[len("mysql://") :]
+        return f"mysql+pymysql://{rest}"
+    return database_url
