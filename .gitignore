@@ -30,3 +30,4 @@ presentation-export/py/
 servers/fastapi/build/
 servers/fastapi/dist/
 servers/fastapi/fastembed_cache/
+servers/fastapi/*.egg-info/
