@@ -16,6 +16,9 @@ from utils.get_env import get_app_data_directory_env, get_temp_directory_env
 
 LOGGER = logging.getLogger(__name__)
 
+EXPORT_DIRECTORY_MODE = 0o755
+EXPORT_FILE_MODE = 0o644
+
 
 class PptxToHtmlDocument(BaseModel):
     slides: list[str]
@@ -174,6 +177,17 @@ class ExportTaskService:
         )
 
     @staticmethod
+    def _ensure_output_readable(output_path: str) -> None:
+        try:
+            os.chmod(os.path.dirname(output_path), EXPORT_DIRECTORY_MODE)
+            os.chmod(output_path, EXPORT_FILE_MODE)
+        except OSError as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Export completed but output permissions could not be updated: {exc}",
+            ) from exc
+
+    @staticmethod
     def _create_task_paths() -> tuple[str, str, str]:
         temp_root = get_temp_directory_env() or os.path.join(
             tempfile.gettempdir(), "presenton"
@@ -263,8 +277,11 @@ class ExportTaskService:
             "Export task did not produce a response file",
         )
 
+        output_path = self._resolve_output_path(response_data)
+        self._ensure_output_readable(output_path)
+
         return PresentationExportTaskResult(
-            path=self._resolve_output_path(response_data),
+            path=output_path,
         )
 
     async def convert_pptx_to_html(
