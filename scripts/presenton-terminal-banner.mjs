@@ -94,16 +94,10 @@ export function printPresentonStartupBanner(opts = {}) {
 
   const title = [
     "",
-    BOLD +
-      fgRgb(
-        138,
-        99,
-        255,
-        "   O P E N  S O U R C E  A I  P R E S E N T A T I O N  G E N E R A T O R"
-      ),
+    BOLD + fgRgb(138, 99, 255, "   Open Source AI Presentation Generator"),
     "   " +
-      accent("LOVE THE PROJECT?  ") +
-      brand("STAR US ON GITHUB: ") +
+      accent("Love the Project?  ") +
+      brand("Star us on github: ") +
       BOLD +
       fgRgb(224, 218, 255, "https://github.com/presenton/presenton"),
     muted("   ─────────────────────────────────────────────────────────"),
@@ -114,15 +108,29 @@ export function printPresentonStartupBanner(opts = {}) {
   const pipe = (inner) => brand("  ║") + inner + brand("║");
 
   const summary = [
-    brand("  ╔════════════════════════════════════════════════════════════════════╗"),
+    brand(
+      "  ╔════════════════════════════════════════════════════════════════════╗",
+    ),
     pipe(padVis("  " + BOLD + "Routing summary" + RESET, W)),
-    brand("  ╠════════════════════════════════════════════════════════════════════╣"),
+    brand(
+      "  ╠════════════════════════════════════════════════════════════════════╣",
+    ),
     pipe(padVis("  " + accent("/         ") + muted("→ Next.js"), W)),
     pipe(padVis("  " + accent("/api/v1/  ") + muted("→ FastAPI"), W)),
     pipe(padVis("  " + muted("Next.js docker URL: ") + nextUrl, W)),
     pipe(padVis("  " + muted("FastAPI docker URL:     ") + apiUrl, W)),
-    pipe(padVis("  " + muted("Public URL (Ctrl+Click to open):     ") + BOLD + fgRgb(255, 255, 255, publicUrl), W)),
-    brand("  ╚════════════════════════════════════════════════════════════════════╝"),
+    pipe(
+      padVis(
+        "  " +
+          muted("Public URL (Ctrl+Click to open):     ") +
+          BOLD +
+          fgRgb(255, 255, 255, publicUrl),
+        W,
+      ),
+    ),
+    brand(
+      "  ╚════════════════════════════════════════════════════════════════════╝",
+    ),
     "",
     "   " + muted("Made with ❤️  by the Presenton team"),
   ].join("\n");
