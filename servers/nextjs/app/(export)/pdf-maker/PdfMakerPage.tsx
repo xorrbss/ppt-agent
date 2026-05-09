@@ -18,19 +18,63 @@ import SlideScale from "@/app/(presentation-generator)/components/PresentationRe
 import { normalizeBackendAssetUrls } from "@/utils/api";
 
 const PDF_PRINT_STYLE = `
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  #presentation-slides-wrapper {
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    gap: 0 !important;
+  }
+
+  #presentation-slides-wrapper .slides-export-stack {
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  #presentation-slides-wrapper .main-slide {
+    width: 1280px !important;
+    min-width: 1280px !important;
+    max-width: 1280px !important;
+    height: 720px !important;
+    min-height: 720px !important;
+    max-height: 720px !important;
+    flex: 0 0 720px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  #presentation-slides-wrapper .slide-export-inner {
+    width: 1280px !important;
+    height: 720px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
   @media print {
+    @page {
+      size: 1280px 720px;
+      margin: 0;
+    }
+
     #presentation-slides-wrapper {
-      height: auto !important;
-      min-height: 0 !important;
       overflow: visible !important;
     }
 
-    #presentation-slides-wrapper > div > div {
-      padding-top: 0 !important;
-    }
-
     #presentation-slides-wrapper .main-slide {
-      margin: 0 !important;
       break-after: page;
       page-break-after: always;
       break-inside: avoid;
@@ -170,7 +214,7 @@ const PresentationPage = ({ presentation_id, exportCookie }: PresentationPagePro
   const isLoading = contentLoading || slides.length === 0;
 
   return (
-    <div className="flex overflow-hidden flex-col">
+    <div className="m-0 flex flex-col overflow-visible p-0">
       {error ? (
         <div className="flex flex-col items-center justify-center h-screen bg-gray-100">
           <div
@@ -201,46 +245,41 @@ const PresentationPage = ({ presentation_id, exportCookie }: PresentationPagePro
           <style jsx global>{PDF_PRINT_STYLE}</style>
           <div
             id="presentation-slides-wrapper"
-            className="relative mx-auto flex h-full min-h-0 w-full flex-col overflow-hidden"
+            className="relative m-0 flex w-full flex-col items-center overflow-visible p-0"
           >
             {isLoading ? (
-              <div className="relative mx-auto h-[calc(100vh-120px)] w-full">
-                <div>
+              <div className="relative m-0 flex w-full justify-center p-0">
+                <div className="m-0 p-0">
                   {Array.from({ length: 2 }).map((_, index) => (
                     <Skeleton
                       key={index}
-                      className="aspect-video bg-gray-400 my-4 w-full mx-auto max-w-[1280px]"
+                      className="m-0 h-[720px] w-[1280px] bg-gray-400 p-0"
                     />
                   ))}
                 </div>
               </div>
             ) : (
-              <div className="flex w-full justify-center">
-                <div className="w-full pt-[18px]">
-                  <div className="font-inter w-full">
-                    <div className="mx-auto flex w-full max-w-[1280px] flex-col items-center">
-                      {slides.map((slide: any, index: number) => (
-                        <div
-                          key={`${slide.type}-${index}-${slide.index}`}
-                          id={`slide-${slide.index}`}
-                          className="main-slide relative flex w-full items-center justify-center max-md:mb-4"
-                          data-speaker-note={slide.speaker_note ?? ""}
-                        >
-                          <div
-                            className="group w-full font-syne"
-                            data-layout={slide.layout}
-                            data-group={slide.layout_group}
-                          >
-                            <SlideScale
-                              slide={slide}
-                              theme={presentationData?.theme ?? null}
-                            />
-                          </div>
-                        </div>
-                      ))}
+              <div className="slides-export-stack font-inter">
+                {slides.map((slide: any, index: number) => (
+                  <div
+                    key={`${slide.type}-${index}-${slide.index}`}
+                    id={`slide-${slide.index}`}
+                    className="main-slide relative flex items-center justify-center"
+                    data-speaker-note={slide.speaker_note ?? ""}
+                  >
+                    <div
+                      className="slide-export-inner group font-syne"
+                      data-layout={slide.layout}
+                      data-group={slide.layout_group}
+                    >
+                      <SlideScale
+                        slide={slide}
+                        theme={presentationData?.theme ?? null}
+                        fixedSize
+                      />
                     </div>
                   </div>
-                </div>
+                ))}
               </div>
             )}
           </div>
