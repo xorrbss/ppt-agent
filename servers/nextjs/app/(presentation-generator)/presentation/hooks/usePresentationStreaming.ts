@@ -8,30 +8,10 @@ import {
 import { jsonrepair } from "jsonrepair";
 import { toast } from "sonner";
 import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
-import { getFastAPIUrl, resolveBackendAssetUrl } from "@/utils/api";
+import { getFastAPIUrl, normalizeBackendAssetUrls } from "@/utils/api";
 
 const MAX_STREAM_RETRIES = 3;
 const STREAM_RETRY_DELAY_MS = 1_000;
-
-const normalizePresentationAssets = <T,>(input: T): T => {
-  if (Array.isArray(input)) {
-    return input.map((item) => normalizePresentationAssets(item)) as T;
-  }
-
-  if (input && typeof input === "object") {
-    const normalized: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
-      if (typeof value === "string") {
-        normalized[key] = resolveBackendAssetUrl(value);
-      } else {
-        normalized[key] = normalizePresentationAssets(value);
-      }
-    }
-    return normalized as T;
-  }
-
-  return input;
-};
 
 export const usePresentationStreaming = (
   presentationId: string,
@@ -126,7 +106,7 @@ export const usePresentationStreaming = (
             try {
               const repairedJson = jsonrepair(accumulatedChunks);
               const partialData = JSON.parse(repairedJson);
-              const normalizedPartialData = normalizePresentationAssets(partialData);
+              const normalizedPartialData = normalizeBackendAssetUrls(partialData);
 
               if (normalizedPartialData.slides) {
                 if (
@@ -150,7 +130,7 @@ export const usePresentationStreaming = (
 
           case "complete":
             try {
-              dispatch(setPresentationData(normalizePresentationAssets(data.presentation)));
+              dispatch(setPresentationData(normalizeBackendAssetUrls(data.presentation)));
               dispatch(setStreaming(false));
               setLoading(false);
               isClosed = true;
@@ -171,7 +151,7 @@ export const usePresentationStreaming = (
             break;
 
           case "closing":
-            dispatch(setPresentationData(normalizePresentationAssets(data.presentation)));
+            dispatch(setPresentationData(normalizeBackendAssetUrls(data.presentation)));
             setLoading(false);
             dispatch(setStreaming(false));
             isClosed = true;

@@ -15,6 +15,7 @@ import { ApiResponseHandler } from "@/app/(presentation-generator)/services/api/
 import { useFontLoader } from "@/app/(presentation-generator)/hooks/useFontLoad";
 import { Theme } from "@/app/(presentation-generator)/services/api/types";
 import SlideScale from "@/app/(presentation-generator)/components/PresentationRender";
+import { normalizeBackendAssetUrls } from "@/utils/api";
 
 const PDF_PRINT_STYLE = `
   @media print {
@@ -87,14 +88,15 @@ const PresentationPage = ({ presentation_id, exportCookie }: PresentationPagePro
       const data = effectiveExportCookie
         ? await fetchPresentationForExport(presentation_id, effectiveExportCookie)
         : await DashboardApi.getPresentation(presentation_id);
-      dispatch(setPresentationData(data));
+      const normalizedData = normalizeBackendAssetUrls(data);
+      dispatch(setPresentationData(normalizedData));
 
-      if (data.fonts) {
-        useFontLoader(data.fonts);
+      if (normalizedData.fonts) {
+        useFontLoader(normalizedData.fonts);
       }
-      if (data?.theme) {
+      if (normalizedData?.theme) {
         try {
-          applyTheme(data.theme);
+          applyTheme(normalizedData.theme);
         } catch (themeError) {
           // Theme issues should not block export rendering.
           console.warn("Theme application skipped for pdf-maker:", themeError);

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import path from "path";
 
 import {
   BundledPresentationExportFormat,
@@ -8,6 +9,25 @@ import {
 
 function isValidFormat(value: unknown): value is BundledPresentationExportFormat {
   return value === "pdf" || value === "pptx";
+}
+
+function buildExportDownloadUrl(outPath: string): string {
+  const appDataDirectory = process.env.APP_DATA_DIRECTORY?.trim();
+  if (!appDataDirectory) {
+    throw new Error("APP_DATA_DIRECTORY is required to download exported files.");
+  }
+
+  const exportsDirectory = path.join(appDataDirectory, "exports");
+  const relativePath = path.relative(exportsDirectory, outPath);
+  if (
+    !relativePath ||
+    relativePath.startsWith("..") ||
+    path.isAbsolute(relativePath)
+  ) {
+    throw new Error("Export finished outside the configured exports directory.");
+  }
+
+  return `/api/export-presentation/file?name=${encodeURIComponent(relativePath)}`;
 }
 
 export async function POST(req: NextRequest) {
@@ -44,7 +64,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      path: outPath,
+      path: buildExportDownloadUrl(outPath),
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
