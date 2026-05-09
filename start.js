@@ -3,8 +3,17 @@
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { spawn } from "child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "fs";
 import { printPresentonStartupBanner } from "./scripts/presenton-terminal-banner.mjs";
+
+process.umask(0o022);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -25,13 +34,49 @@ const appmcpPort = 8001;
 /** Must match `listen` in nginx.conf (public HTTP inside the container). */
 const nginxListenPort = 80;
 
-const userConfigPath = join(process.env.APP_DATA_DIRECTORY, "userConfig.json");
-const userDataDir = dirname(userConfigPath);
-
-// Create user_data directory if it doesn't exist
-if (!existsSync(userDataDir)) {
-  mkdirSync(userDataDir, { recursive: true });
+const appDataDirectory = process.env.APP_DATA_DIRECTORY;
+if (!appDataDirectory) {
+  throw new Error("APP_DATA_DIRECTORY is required");
 }
+
+const appDataDirectoryMode = 0o755;
+const userConfigPath = join(appDataDirectory, "userConfig.json");
+const userDataDir = dirname(userConfigPath);
+const appDataStaticDirectories = [
+  "exports",
+  "images",
+  "uploads",
+  "fonts",
+  "pptx-to-html",
+].map((name) => join(appDataDirectory, name));
+
+const ensureReadableDirectory = (dirPath) => {
+  mkdirSync(dirPath, { recursive: true, mode: appDataDirectoryMode });
+  chmodSync(dirPath, appDataDirectoryMode);
+};
+
+const ensureReadableExportFiles = (dirPath) => {
+  for (const entry of readdirSync(dirPath, { withFileTypes: true })) {
+    const entryPath = join(dirPath, entry.name);
+
+    if (entry.isDirectory()) {
+      chmodSync(entryPath, appDataDirectoryMode);
+      ensureReadableExportFiles(entryPath);
+    } else if (entry.isFile()) {
+      chmodSync(entryPath, 0o644);
+    }
+  }
+};
+
+const ensureAppDataDirectories = () => {
+  ensureReadableDirectory(userDataDir);
+  for (const dirPath of appDataStaticDirectories) {
+    ensureReadableDirectory(dirPath);
+  }
+  ensureReadableExportFiles(join(appDataDirectory, "exports"));
+};
+
+ensureAppDataDirectories();
 
 // Setup node_modules for development
 const setupNodeModules = () => {

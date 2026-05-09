@@ -109,6 +109,37 @@ function hasBackendAssetPrefix(path: string): boolean {
   return path.startsWith("/static/") || path.startsWith("/app_data/");
 }
 
+function toBackendServedPath(rawPath: string): string {
+  const normalized = rawPath.replace(/\\/g, "/");
+
+  const appDataIdx = normalized.indexOf("/app_data/");
+  if (appDataIdx !== -1) {
+    return normalized.slice(appDataIdx);
+  }
+
+  const staticIdx = normalized.indexOf("/static/");
+  if (staticIdx !== -1) {
+    return normalized.slice(staticIdx);
+  }
+
+  const imagesIdx = normalized.lastIndexOf("/images/");
+  if (imagesIdx !== -1) {
+    return `/app_data${normalized.slice(imagesIdx)}`;
+  }
+
+  const uploadsIdx = normalized.lastIndexOf("/uploads/");
+  if (uploadsIdx !== -1) {
+    return `/app_data${normalized.slice(uploadsIdx)}`;
+  }
+
+  const fontsIdx = normalized.lastIndexOf("/fonts/");
+  if (fontsIdx !== -1) {
+    return `/app_data${normalized.slice(fontsIdx)}`;
+  }
+
+  return normalized;
+}
+
 // Resolve backend-served asset paths to the FastAPI origin.
 export function resolveBackendAssetUrl(path?: string): string {
   if (!path) return "";
@@ -116,19 +147,29 @@ export function resolveBackendAssetUrl(path?: string): string {
   const trimmedPath = path.trim();
   if (!trimmedPath) return "";
 
-  if (
-    trimmedPath.startsWith("data:") ||
-    trimmedPath.startsWith("blob:") ||
-    trimmedPath.startsWith("file:")
-  ) {
+  if (trimmedPath.startsWith("data:") || trimmedPath.startsWith("blob:")) {
     return trimmedPath;
+  }
+
+  if (trimmedPath.startsWith("file:")) {
+    try {
+      const parsed = new URL(trimmedPath);
+      const servedPath = toBackendServedPath(decodeURIComponent(parsed.pathname));
+      if (hasBackendAssetPrefix(servedPath)) {
+        return `${getFastAPIUrl()}${servedPath}`;
+      }
+      return trimmedPath;
+    } catch {
+      return trimmedPath;
+    }
   }
 
   if (isAbsoluteHttpUrl(trimmedPath)) {
     try {
       const parsed = new URL(trimmedPath);
-      if (hasBackendAssetPrefix(parsed.pathname)) {
-        return `${getFastAPIUrl()}${parsed.pathname}${parsed.search}${parsed.hash}`;
+      const servedPath = toBackendServedPath(parsed.pathname);
+      if (hasBackendAssetPrefix(servedPath)) {
+        return `${getFastAPIUrl()}${servedPath}${parsed.search}${parsed.hash}`;
       }
       return trimmedPath;
     } catch {
@@ -137,9 +178,29 @@ export function resolveBackendAssetUrl(path?: string): string {
   }
 
   const normalizedPath = withLeadingSlash(trimmedPath);
-  if (hasBackendAssetPrefix(normalizedPath)) {
-    return `${getFastAPIUrl()}${normalizedPath}`;
+  const servedPath = toBackendServedPath(normalizedPath);
+  if (hasBackendAssetPrefix(servedPath)) {
+    return `${getFastAPIUrl()}${servedPath}`;
   }
 
   return trimmedPath;
 }
+
+export const normalizeBackendAssetUrls = <T,>(input: T): T => {
+  if (Array.isArray(input)) {
+    return input.map((item) => normalizeBackendAssetUrls(item)) as T;
+  }
+
+  if (input && typeof input === "object") {
+    const normalized: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+      normalized[key] =
+        typeof value === "string"
+          ? resolveBackendAssetUrl(value)
+          : normalizeBackendAssetUrls(value);
+    }
+    return normalized as T;
+  }
+
+  return input;
+};

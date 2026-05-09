@@ -74,6 +74,9 @@ export type BundledPresentationExportFormat = "pdf" | "pptx";
 
 export type BundledPresentationExportResult = { path: string };
 
+const EXPORT_DIRECTORY_MODE = 0o755;
+const EXPORT_FILE_MODE = 0o644;
+
 function normalizeExportOutputPath(params: {
   pathValue?: string;
   urlValue?: string;
@@ -119,6 +122,16 @@ function normalizeExportOutputPath(params: {
   }
 
   throw new Error("Export finished but response did not include a valid output path.");
+}
+
+async function ensureExportFileReadable(filePath: string): Promise<void> {
+  const stats = await fs.stat(filePath);
+  if (!stats.isFile()) {
+    throw new Error("Export finished but output path is not a file.");
+  }
+
+  await fs.chmod(path.dirname(filePath), EXPORT_DIRECTORY_MODE);
+  await fs.chmod(filePath, EXPORT_FILE_MODE);
 }
 
 /**
@@ -210,6 +223,8 @@ export async function runBundledPresentationExport(params: {
     pathValue: responseData?.path,
     urlValue: responseData?.url,
   });
+
+  await ensureExportFileReadable(outPath);
 
   return { path: outPath };
 }
