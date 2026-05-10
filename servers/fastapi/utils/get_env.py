@@ -19,6 +19,17 @@ def get_app_data_directory_env():
     return os.getenv("APP_DATA_DIRECTORY")
 
 
+def get_fastapi_public_base_url() -> str | None:
+    """
+    Public origin where FastAPI serves /app_data and /static (no trailing slash).
+
+    Uses NEXT_PUBLIC_FAST_API (same value Electron and the export runtime inject for the UI).
+    When unset, callers keep path-only URLs for same-origin / reverse-proxy setups (e.g. Docker).
+    """
+    v = (os.getenv("NEXT_PUBLIC_FAST_API") or "").strip().rstrip("/")
+    return v or None
+
+
 def get_temp_directory_env():
     return os.getenv("TEMP_DIRECTORY")
 

@@ -17,7 +17,11 @@ from services.icon_finder_service import ICON_FINDER_SERVICE
 from services.image_generation_service import ImageGenerationService
 from services.mem0_presentation_memory_service import MEM0_PRESENTATION_MEMORY_SERVICE
 from templates.presentation_layout import SlideLayoutModel
-from utils.asset_directory_utils import get_images_directory
+from utils.asset_directory_utils import (
+    filesystem_image_path_to_app_data_url,
+    get_images_directory,
+    normalize_slide_asset_url,
+)
 from utils.process_slides import (
     process_old_and_new_slides_and_fetch_assets,
     process_slide_and_fetch_assets,
@@ -220,15 +224,15 @@ class PresentationChatMemoryLayer:
         if isinstance(image, ImageAsset):
             self._sql_session.add(image)
             await self._sql_session.commit()
-            return image.path
+            return filesystem_image_path_to_app_data_url(image.path)
 
-        return str(image)
+        return normalize_slide_asset_url(str(image))
 
     async def generate_icon(self, query: str) -> str:
         icons = await ICON_FINDER_SERVICE.search_icons(query, k=1)
         if icons:
-            return icons[0]
-        return "/static/icons/placeholder.svg"
+            return normalize_slide_asset_url(icons[0])
+        return normalize_slide_asset_url("/static/icons/placeholder.svg")
 
     async def save_slide(
         self,

@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 from fastembed_vectorstore import FastembedEmbeddingModel, FastembedVectorstore
+from utils.asset_directory_utils import absolute_fastapi_asset_url
 from utils.path_helpers import get_resource_path, get_writable_path
 
 
@@ -125,7 +126,9 @@ class IconFinderService:
         try:
             result = await asyncio.to_thread(self.vectorstore.search, query, k)
             return [
-                f"/static/icons/bold/{each[0].split('||')[0]}.svg"
+                absolute_fastapi_asset_url(
+                    f"/static/icons/bold/{each[0].split('||')[0]}.svg"
+                )
                 for each in result
             ]
         except Exception as e:
