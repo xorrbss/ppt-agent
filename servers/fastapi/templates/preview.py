@@ -20,6 +20,7 @@ from templates.font_utils import (
     get_available_and_unavailable_fonts,
 )
 from utils.get_env import get_app_data_directory_env
+from utils.asset_directory_utils import absolute_fastapi_asset_url
 
 try:
     from fontTools.ttLib import TTFont
@@ -206,7 +207,7 @@ async def _persist_custom_fonts(
         stored_fonts.append(
             StoredFont(
                 display_name=display_name,
-                url=f"/app_data/fonts/{unique_name}",
+                url=absolute_fastapi_asset_url(f"/app_data/fonts/{unique_name}"),
                 temp_path=temp_font_path,
             )
         )
@@ -365,9 +366,15 @@ async def store_slide_images(
 
         if os.path.exists(screenshot_path) and os.path.getsize(screenshot_path) > 0:
             await asyncio.to_thread(_copy_file, screenshot_path, destination_path)
-            slide_image_urls.append(f"/app_data/images/{session_id}/{file_name}")
+            slide_image_urls.append(
+                absolute_fastapi_asset_url(f"/app_data/images/{session_id}/{file_name}")
+            )
         else:
-            slide_image_urls.append("/static/images/replaceable_template_image.png")
+            slide_image_urls.append(
+                absolute_fastapi_asset_url(
+                    "/static/images/replaceable_template_image.png"
+                )
+            )
 
     return slide_image_urls
 
@@ -382,7 +389,9 @@ async def store_uploaded_pptx(
 
     destination_path = os.path.join(target_dir, "presentation.pptx")
     await asyncio.to_thread(_copy_file, pptx_path, destination_path)
-    return f"/app_data/uploads/template-previews/{session_id}/presentation.pptx"
+    return absolute_fastapi_asset_url(
+        f"/app_data/uploads/template-previews/{session_id}/presentation.pptx"
+    )
 
 
 async def get_available_and_unavailable_fonts_for_pptx(

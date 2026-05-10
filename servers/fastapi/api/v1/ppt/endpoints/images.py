@@ -7,7 +7,11 @@ from models.image_prompt import ImagePrompt
 from models.sql.image_asset import ImageAsset
 from services.database import get_async_session
 from services.image_generation_service import ImageGenerationService
-from utils.asset_directory_utils import get_images_directory
+from utils.asset_directory_utils import (
+    filesystem_image_path_to_app_data_url,
+    get_images_directory,
+    normalize_slide_asset_url,
+)
 from utils.get_env import get_pexels_api_key_env, get_pixabay_api_key_env
 from utils.image_provider import get_selected_image_provider
 from enums.image_provider import ImageProvider
@@ -97,15 +101,26 @@ async def generate_image(
 
     image = await image_generation_service.generate_image(image_prompt)
     if not isinstance(image, ImageAsset):
-        return image
+        return normalize_slide_asset_url(image) if isinstance(image, str) else image
 
     sql_session.add(image)
     await sql_session.commit()
 
-    return image.path
+    return filesystem_image_path_to_app_data_url(image.path)
 
 
-@IMAGES_ROUTER.get("/generated", response_model=List[ImageAsset])
+def _image_asset_api_dict(asset: ImageAsset) -> dict:
+    return {
+        "id": asset.id,
+        "created_at": asset.created_at,
+        "is_uploaded": asset.is_uploaded,
+        "path": asset.path,
+        "extras": asset.extras,
+        "file_url": filesystem_image_path_to_app_data_url(asset.path),
+    }
+
+
+@IMAGES_ROUTER.get("/generated")
 async def get_generated_images(sql_session: AsyncSession = Depends(get_async_session)):
     try:
         images_result = await sql_session.scalars(
@@ -113,7 +128,7 @@ async def get_generated_images(sql_session: AsyncSession = Depends(get_async_ses
             .where(ImageAsset.is_uploaded == False)
             .order_by(ImageAsset.created_at.desc())
         )
-        return list(images_result)
+        return [_image_asset_api_dict(a) for a in images_result]
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to retrieve generated images: {str(e)}"
@@ -140,12 +155,12 @@ async def upload_image(
         # Refresh to ensure all defaults are loaded
         await sql_session.refresh(image_asset)
 
-        return image_asset
+        return _image_asset_api_dict(image_asset)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to upload image: {str(e)}")
 
 
-@IMAGES_ROUTER.get("/uploaded", response_model=List[ImageAsset])
+@IMAGES_ROUTER.get("/uploaded")
 async def get_uploaded_images(sql_session: AsyncSession = Depends(get_async_session)):
     try:
         images_result = await sql_session.scalars(
@@ -153,7 +168,7 @@ async def get_uploaded_images(sql_session: AsyncSession = Depends(get_async_sess
             .where(ImageAsset.is_uploaded == True)
             .order_by(ImageAsset.created_at.desc())
         )
-        return list(images_result)
+        return [_image_asset_api_dict(a) for a in images_result]
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to retrieve uploaded images: {str(e)}"

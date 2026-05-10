@@ -5,7 +5,7 @@ from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, File, UploadFile
 from pydantic import BaseModel
 from templates.preview import FontCheckResponse, check_fonts_in_pptx_handler
-from utils.asset_directory_utils import get_app_data_directory_env
+from utils.asset_directory_utils import absolute_fastapi_asset_url, get_app_data_directory_env
 
 try:
     from fontTools.ttLib import TTFont
@@ -171,7 +171,7 @@ async def upload_font(
             shutil.copyfileobj(font_file.file, buffer)
         
         # Generate accessible URL
-        font_url = f"/app_data/fonts/{unique_filename}"
+        font_url = absolute_fastapi_asset_url(f"/app_data/fonts/{unique_filename}")
         
         return FontUploadResponse(
             success=True,
@@ -228,7 +228,7 @@ async def list_fonts():
                             "filename": filename,
                             "font_name": font_name,  # Real font family name from metadata
                             "original_name": base_name,
-                            "font_url": f"/app_data/fonts/{filename}",
+                            "font_url": absolute_fastapi_asset_url(f"/app_data/fonts/{filename}"),
                             "font_type": SUPPORTED_FONT_EXTENSIONS.get(file_ext, 'unknown'),
                             "file_size": os.path.getsize(file_path)
                         })
@@ -272,7 +272,7 @@ async def get_uploaded_fonts():
                     {
                         "id": filename,
                         "name": font_name,
-                        "url": f"/app_data/fonts/{filename}",
+                        "url": absolute_fastapi_asset_url(f"/app_data/fonts/{filename}"),
                     }
                 )
 

@@ -28,7 +28,8 @@ interface FastApiEnv {
   DALL_E_3_QUALITY?: string,
   GPT_IMAGE_1_5_QUALITY?: string,
   APP_DATA_DIRECTORY?: string,
-  FASTAPI_PUBLIC_URL?: string,
+  /** Same origin the Next.js app uses for FastAPI (assets + API). Passed through to Python. */
+  NEXT_PUBLIC_FAST_API?: string,
   TEMP_DIRECTORY?: string,
   USER_CONFIG_PATH?: string,
   MIGRATE_DATABASE_ON_STARTUP?: string,
@@ -53,6 +54,7 @@ interface FastApiEnv {
 
 interface NextJsEnv {
   NEXT_PUBLIC_FAST_API?: string,
+  /** Optional Docker-only: SSR/middleware reach FastAPI on a different base than the browser. */
   FAST_API_INTERNAL_URL?: string,
   TEMP_DIRECTORY?: string,
   NEXT_PUBLIC_URL?: string,

@@ -10,6 +10,7 @@ from sqlmodel import select
 from models.sql.image_asset import ImageAsset
 from models.sql.key_value import KeyValueSqlModel
 from services.database import get_async_session
+from utils.asset_directory_utils import normalize_slide_asset_url
 
 THEMES_ROUTER = APIRouter(prefix="/themes", tags=["Themes"])
 THEMES_STORAGE_KEY = "presentation_custom_themes"
@@ -45,13 +46,21 @@ class ThemeResponse(BaseModel):
 
 
 def _normalize_theme(theme: dict[str, Any]) -> ThemeResponse:
+    raw_logo_url = theme.get("logo_url")
+    if raw_logo_url is None:
+        logo_url = None
+    elif isinstance(raw_logo_url, str):
+        s = raw_logo_url.strip()
+        logo_url = normalize_slide_asset_url(s) if s else None
+    else:
+        logo_url = raw_logo_url
     return ThemeResponse(
         id=str(theme["id"]),
         name=theme["name"],
         description=theme["description"],
         user=theme.get("user", "local"),
         logo=theme.get("logo"),
-        logo_url=theme.get("logo_url"),
+        logo_url=logo_url,
         company_name=theme.get("company_name"),
         data=theme.get("data", {}),
     )
@@ -86,7 +95,7 @@ async def _resolve_logo_url(
     image_asset = await sql_session.get(ImageAsset, logo_uuid)
     if not image_asset:
         raise HTTPException(status_code=404, detail="Logo not found")
-    return image_asset.path
+    return normalize_slide_asset_url(image_asset.path)
 
 
 @THEMES_ROUTER.get("/default", response_model=List[dict[str, Any]])

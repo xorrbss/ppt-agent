@@ -160,22 +160,8 @@ const createWindow = () => {
     win.show();
     win.focus();
   });
-};
 
-function registerDevToolsShortcuts(): void {
-  const accelerators = ["CommandOrControl+Shift+I", "F12"];
-  for (const accelerator of accelerators) {
-    const registered = globalShortcut.register(accelerator, () => {
-      if (!win || win.isDestroyed()) {
-        return;
-      }
-      win.webContents.toggleDevTools();
-    });
-    if (!registered) {
-      console.warn(`[Presenton] Failed to register ${accelerator} for DevTools`);
-    }
-  }
-}
+};
 
 async function startServers(fastApiPort: number, nextjsPort: number) {
   try {
@@ -216,7 +202,6 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         DALL_E_3_QUALITY: process.env.DALL_E_3_QUALITY,
         GPT_IMAGE_1_5_QUALITY: process.env.GPT_IMAGE_1_5_QUALITY,
         APP_DATA_DIRECTORY: appDataDir,
-        FASTAPI_PUBLIC_URL: process.env.NEXT_PUBLIC_FAST_API,
         TEMP_DIRECTORY: tempDir,
         USER_CONFIG_PATH: userConfigPath,
         MIGRATE_DATABASE_ON_STARTUP: "True",
@@ -249,7 +234,6 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
       nextjsPort,
       {
         NEXT_PUBLIC_FAST_API: process.env.NEXT_PUBLIC_FAST_API,
-        FAST_API_INTERNAL_URL: process.env.NEXT_PUBLIC_FAST_API,
         TEMP_DIRECTORY: process.env.TEMP_DIRECTORY,
         NEXT_PUBLIC_URL: process.env.NEXT_PUBLIC_URL,
         NEXT_PUBLIC_USER_CONFIG_PATH: process.env.NEXT_PUBLIC_USER_CONFIG_PATH,
@@ -322,7 +306,6 @@ app.whenReady().then(async () => {
 
   // Create main window before setup so that when user skips, the main window stays open
   createWindow();
-  registerDevToolsShortcuts();
   win?.loadFile(path.join(baseDir, "resources/ui/homepage/index.html"));
 
   // Single installer: checks LibreOffice, Chrome, and ImageMagick; if any are missing, shows one

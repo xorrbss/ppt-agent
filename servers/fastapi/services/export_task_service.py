@@ -134,13 +134,13 @@ class ExportTaskService:
         os.makedirs(temp_directory, exist_ok=True)
         env["TEMP_DIRECTORY"] = temp_directory
 
-        fastapi_public_url = (os.getenv("FASTAPI_PUBLIC_URL") or "").strip()
-        if not fastapi_public_url:
+        fastapi_base = (os.getenv("NEXT_PUBLIC_FAST_API") or "").strip()
+        if not fastapi_base:
             raise HTTPException(
                 status_code=500,
-                detail="FASTAPI_PUBLIC_URL must be set for PPTX-to-HTML export",
+                detail="NEXT_PUBLIC_FAST_API must be set for PPTX-to-HTML export",
             )
-        env["ASSETS_BASE_URL"] = f"{fastapi_public_url.rstrip('/')}/app_data"
+        env["ASSETS_BASE_URL"] = f"{fastapi_base.rstrip('/')}/app_data"
         env["BUILT_PYTHON_MODULE_PATH"] = self.converter_path
 
         return env

@@ -15,8 +15,8 @@ if __name__ == "__main__":
     reload = args.reload == "true"
     host = "127.0.0.1"
 
-    # Always bind absolute asset generation to the active runtime port.
-    os.environ["FASTAPI_PUBLIC_URL"] = f"http://{host}:{args.port}"
+    # Bind asset/base URL generation to the active runtime port (same env name as Next/Electron).
+    os.environ["NEXT_PUBLIC_FAST_API"] = f"http://{host}:{args.port}"
     
     uvicorn.run(
         "api.main:app",
