@@ -61,7 +61,8 @@ RUN mkdir -p /app/document-extraction-liteparse \
 COPY electron/resources/document-extraction/liteparse_runner.mjs /app/document-extraction-liteparse/liteparse_runner.mjs
 COPY scripts/sync-presentation-export.cjs /app/scripts/sync-presentation-export.cjs
 # Bundled export still loads @img/sharp-* native addons from node_modules (not inlined).
-RUN node /app/scripts/sync-presentation-export.cjs --force \
+RUN rm -rf /app/presentation-export \
+    && node /app/scripts/sync-presentation-export.cjs --force \
     && chmod +x /app/presentation-export/py/convert-linux-x64 \
     && cd /app/presentation-export \
     && npm init -y \
