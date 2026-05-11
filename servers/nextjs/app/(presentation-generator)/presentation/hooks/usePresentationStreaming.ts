@@ -10,7 +10,7 @@ import {
 import { jsonrepair } from "jsonrepair";
 import { toast } from "sonner";
 import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
-import { getFastAPIUrl, normalizeBackendAssetUrls } from "@/utils/api";
+import { getApiUrl, normalizeBackendAssetUrls } from "@/utils/api";
 import { store } from "@/store/store";
 
 const MAX_STREAM_RETRIES = 3;
@@ -180,7 +180,7 @@ export const usePresentationStreaming = (
     const openStream = () => {
       closeEventSource();
       eventSource = new EventSource(
-        `${getFastAPIUrl()}/api/v1/ppt/presentation/stream/${presentationId}`
+        getApiUrl(`/api/v1/ppt/presentation/stream/${presentationId}`)
       );
 
       eventSource.addEventListener("response", (event) => {
