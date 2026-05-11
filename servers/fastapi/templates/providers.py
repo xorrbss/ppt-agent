@@ -15,11 +15,15 @@ from llmai.shared import (
     TextResponse,
     UserMessage,
 )
-from openai import AsyncOpenAI
+from openai import AsyncAzureOpenAI, AsyncOpenAI
 
 from enums.llm_provider import LLMProvider
 from utils.get_env import (
     get_anthropic_api_key_env,
+    get_azure_openai_api_key_env,
+    get_azure_openai_api_version_env,
+    get_azure_openai_base_url_env,
+    get_azure_openai_endpoint_env,
     get_codex_access_token_env,
     get_codex_account_id_env,
     get_codex_refresh_token_env,
@@ -72,10 +76,14 @@ def get_template_provider_spec() -> TemplateProviderSpec:
         return TemplateProviderSpec(provider=provider, model=get_model())
     if provider == LLMProvider.ANTHROPIC:
         return TemplateProviderSpec(provider=provider, model=get_model())
+    if provider == LLMProvider.AZURE:
+        return TemplateProviderSpec(provider=provider, model=get_model())
 
     raise HTTPException(
         status_code=400,
-        detail="Template generation only supports OpenAI, Codex, Google, or Anthropic.",
+        detail=(
+            "Template generation only supports OpenAI, Codex, Google, Anthropic, or Azure OpenAI."
+        ),
     )
 
 
@@ -126,6 +134,98 @@ def _get_openai_client() -> AsyncOpenAI:
     if not api_key:
         raise HTTPException(status_code=400, detail="OPENAI_API_KEY is not set")
     return AsyncOpenAI(api_key=api_key, timeout=120.0)
+
+
+def _get_azure_openai_async_client() -> AsyncAzureOpenAI:
+    api_key = get_azure_openai_api_key_env()
+    if not api_key:
+        raise HTTPException(status_code=400, detail="AZURE_OPENAI_API_KEY is not set")
+    api_version = get_azure_openai_api_version_env()
+    if not api_version:
+        raise HTTPException(status_code=400, detail="AZURE_OPENAI_API_VERSION is not set")
+    endpoint = get_azure_openai_endpoint_env()
+    base_url = get_azure_openai_base_url_env()
+    if endpoint:
+        return AsyncAzureOpenAI(
+            azure_endpoint=endpoint.rstrip("/"),
+            api_key=api_key,
+            api_version=api_version,
+            timeout=120.0,
+        )
+    if base_url:
+        return AsyncAzureOpenAI(
+            base_url=base_url.rstrip("/"),
+            api_key=api_key,
+            api_version=api_version,
+            timeout=120.0,
+        )
+    raise HTTPException(
+        status_code=400,
+        detail=(
+            "Azure OpenAI endpoint is not set. "
+            "Configure AZURE_OPENAI_ENDPOINT or AZURE_OPENAI_BASE_URL."
+        ),
+    )
+
+
+def _read_azure_chat_message_text(message: Any) -> str:
+    if message is None:
+        return ""
+    content = getattr(message, "content", None)
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for part in content:
+            if isinstance(part, dict):
+                if part.get("type") == "text":
+                    text = part.get("text")
+                    if isinstance(text, str):
+                        parts.append(text)
+            else:
+                text = getattr(part, "text", None)
+                if isinstance(text, str):
+                    parts.append(text)
+        return "".join(parts)
+    return ""
+
+
+async def _call_azure_openai(
+    *,
+    model: str,
+    system_prompt: str,
+    user_text: str,
+    image_bytes: Optional[bytes] = None,
+    media_type: str = "image/png",
+) -> str:
+    client = _get_azure_openai_async_client()
+    if image_bytes:
+        data_url = f"data:{media_type};base64,{base64.b64encode(image_bytes).decode('utf-8')}"
+        user_message: dict[str, Any] = {
+            "role": "user",
+            "content": [
+                {"type": "image_url", "image_url": {"url": data_url}},
+                {"type": "text", "text": user_text},
+            ],
+        }
+    else:
+        user_message = {"role": "user", "content": user_text}
+
+    response = await client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            user_message,
+        ],
+        max_tokens=8192,
+    )
+    choice = response.choices[0] if getattr(response, "choices", None) else None
+    output_text = _read_azure_chat_message_text(
+        getattr(choice, "message", None) if choice else None
+    )
+    if not output_text:
+        raise HTTPException(status_code=500, detail="No output from template provider")
+    return output_text
 
 
 def _get_codex_headers() -> dict:
@@ -437,10 +537,23 @@ def _build_provider_call(
                 media_type=media_type,
             ),
         )
+    if spec.provider == LLMProvider.AZURE:
+        return PlainLLMProvider(
+            name="Azure OpenAI",
+            call=lambda: _call_azure_openai(
+                model=spec.model,
+                system_prompt=system_prompt,
+                user_text=user_text,
+                image_bytes=image_bytes,
+                media_type=media_type,
+            ),
+        )
 
     raise HTTPException(
         status_code=400,
-        detail="Template generation only supports OpenAI, Codex, Google, or Anthropic.",
+        detail=(
+            "Template generation only supports OpenAI, Codex, Google, Anthropic, or Azure OpenAI."
+        ),
     )
 
 
