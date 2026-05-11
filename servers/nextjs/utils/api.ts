@@ -1,5 +1,12 @@
-// Utility to get the FastAPI base URL
-export function getFastAPIUrl(): string {
+function isAbsoluteHttpUrl(path: string): boolean {
+  return /^https?:\/\//i.test(path);
+}
+
+function withLeadingSlash(path: string): string {
+  return path.startsWith("/") ? path : `/${path}`;
+}
+
+function getConfiguredFastApiUrl(): string | null {
   if (typeof window !== "undefined" && window.env?.NEXT_PUBLIC_FAST_API) {
     return window.env.NEXT_PUBLIC_FAST_API;
   }
@@ -8,18 +15,7 @@ export function getFastAPIUrl(): string {
     return process.env.NEXT_PUBLIC_FAST_API;
   }
 
-  const queryFastApiUrl = getFastApiUrlFromQuery();
-  if (queryFastApiUrl) {
-    return queryFastApiUrl;
-  }
-
-  // Docker/web runtime: route backend assets and APIs through current origin
-  // (nginx reverse-proxies /api/v1, /app_data, /static).
-  if (typeof window !== "undefined") {
-    return window.location.origin;
-  }
-
-  return "http://127.0.0.1:5000";
+  return null;
 }
 
 function getFastApiUrlFromQuery(): string | null {
@@ -39,16 +35,46 @@ function getFastApiUrlFromQuery(): string | null {
   }
 }
 
-function isAbsoluteHttpUrl(path: string): boolean {
-  return /^https?:\/\//i.test(path);
-}
-
-function withLeadingSlash(path: string): string {
-  return path.startsWith("/") ? path : `/${path}`;
-}
-
 function isElectronRuntime(): boolean {
   return typeof window !== "undefined" && !!window.electron;
+}
+
+function shouldUseDirectFastApiOriginInBrowser(): boolean {
+  return isElectronRuntime() || !!getFastApiUrlFromQuery();
+}
+
+function resolveBackendPathForRuntime(path: string): string {
+  const normalizedPath = withLeadingSlash(path);
+
+  // Docker/web runtime should stay same-origin and use nginx reverse proxy.
+  if (
+    typeof window !== "undefined" &&
+    !shouldUseDirectFastApiOriginInBrowser()
+  ) {
+    return normalizedPath;
+  }
+
+  return `${getFastAPIUrl()}${normalizedPath}`;
+}
+
+// Utility to get the backend base URL.
+// - Browser web/docker: same origin (nginx proxy).
+// - Browser electron or query override: direct FastAPI origin.
+// - Server-side: configured FastAPI origin fallback.
+export function getFastAPIUrl(): string {
+  const queryFastApiUrl = getFastApiUrlFromQuery();
+  if (queryFastApiUrl) {
+    return queryFastApiUrl;
+  }
+
+  if (typeof window !== "undefined") {
+    if (isElectronRuntime()) {
+      return getConfiguredFastApiUrl() || window.location.origin;
+    }
+    return window.location.origin;
+  }
+
+  return getConfiguredFastApiUrl() || "http://127.0.0.1:5000";
 }
 
 // Utility to construct API URL for Docker/web runtime.
@@ -59,31 +85,15 @@ export function getApiUrl(path: string): string {
 
   const normalizedPath = withLeadingSlash(path);
   const isFastApiEndpoint = normalizedPath.startsWith("/api/v1/");
-  const hasConfiguredFastApi = !!process.env.NEXT_PUBLIC_FAST_API;
-  const hasWindowFastApi =
-    typeof window !== "undefined" && !!window.env?.NEXT_PUBLIC_FAST_API;
-  const hasQueryFastApi = !!getFastApiUrlFromQuery();
-
-  // In web/docker, /api/v1 is typically reverse-proxied by the web server.
-  // Keep browser requests same-origin so session cookies stay attached by default.
-  // For Electron split-port runtime and query-overrides, target FastAPI directly.
-  // Server-side callers can still use configured FastAPI base URLs directly.
-  if (
-    isFastApiEndpoint &&
-    (isElectronRuntime() || hasWindowFastApi || hasQueryFastApi)
-  ) {
-    return `${getFastAPIUrl()}${normalizedPath}`;
+  if (!isFastApiEndpoint) {
+    return normalizedPath;
   }
 
-  if (
-    isFastApiEndpoint &&
-    typeof window === "undefined" &&
-    hasConfiguredFastApi
-  ) {
-    return `${getFastAPIUrl()}${normalizedPath}`;
+  if (typeof window === "undefined" && !getConfiguredFastApiUrl()) {
+    return normalizedPath;
   }
 
-  return normalizedPath;
+  return resolveBackendPathForRuntime(normalizedPath);
 }
 
 /**
@@ -111,6 +121,11 @@ function hasBackendAssetPrefix(path: string): boolean {
 
 function toBackendServedPath(rawPath: string): string {
   const normalized = rawPath.replace(/\\/g, "/");
+
+  // Never rewrite Next.js bundled/static assets.
+  if (normalized.startsWith("/_next/static/")) {
+    return normalized;
+  }
 
   const appDataIdx = normalized.indexOf("/app_data/");
   if (appDataIdx !== -1) {
@@ -140,7 +155,27 @@ function toBackendServedPath(rawPath: string): string {
   return normalized;
 }
 
-// Resolve backend-served asset paths to the FastAPI origin.
+function splitPathAndSuffix(value: string): { path: string; suffix: string } {
+  const hashIdx = value.indexOf("#");
+  const queryIdx = value.indexOf("?");
+  const firstSuffixIdx =
+    hashIdx === -1
+      ? queryIdx
+      : queryIdx === -1
+        ? hashIdx
+        : Math.min(queryIdx, hashIdx);
+
+  if (firstSuffixIdx === -1) {
+    return { path: value, suffix: "" };
+  }
+
+  return {
+    path: value.slice(0, firstSuffixIdx),
+    suffix: value.slice(firstSuffixIdx),
+  };
+}
+
+// Resolve backend-served asset paths to the runtime-appropriate backend path.
 export function resolveBackendAssetUrl(path?: string): string {
   if (!path) return "";
 
@@ -156,7 +191,7 @@ export function resolveBackendAssetUrl(path?: string): string {
       const parsed = new URL(trimmedPath);
       const servedPath = toBackendServedPath(decodeURIComponent(parsed.pathname));
       if (hasBackendAssetPrefix(servedPath)) {
-        return `${getFastAPIUrl()}${servedPath}`;
+        return resolveBackendPathForRuntime(servedPath);
       }
       return trimmedPath;
     } catch {
@@ -169,7 +204,9 @@ export function resolveBackendAssetUrl(path?: string): string {
       const parsed = new URL(trimmedPath);
       const servedPath = toBackendServedPath(parsed.pathname);
       if (hasBackendAssetPrefix(servedPath)) {
-        return `${getFastAPIUrl()}${servedPath}${parsed.search}${parsed.hash}`;
+        return resolveBackendPathForRuntime(
+          `${servedPath}${parsed.search}${parsed.hash}`
+        );
       }
       return trimmedPath;
     } catch {
@@ -177,13 +214,39 @@ export function resolveBackendAssetUrl(path?: string): string {
     }
   }
 
-  const normalizedPath = withLeadingSlash(trimmedPath);
-  const servedPath = toBackendServedPath(normalizedPath);
+  const { path: pathPart, suffix } = splitPathAndSuffix(trimmedPath);
+  const servedPath = toBackendServedPath(withLeadingSlash(pathPart));
   if (hasBackendAssetPrefix(servedPath)) {
-    return `${getFastAPIUrl()}${servedPath}`;
+    return resolveBackendPathForRuntime(`${servedPath}${suffix}`);
   }
 
   return trimmedPath;
+}
+
+export type BackendAssetLike = {
+  file_url?: string | null;
+  path?: string | null;
+  url?: string | null;
+};
+
+export function getBackendAssetSource(
+  asset: BackendAssetLike | string | null | undefined
+): string {
+  if (typeof asset === "string") {
+    return asset;
+  }
+
+  if (!asset) {
+    return "";
+  }
+
+  return (asset.file_url || asset.path || asset.url || "").trim();
+}
+
+export function resolveBackendAssetSource(
+  asset: BackendAssetLike | string | null | undefined
+): string {
+  return resolveBackendAssetUrl(getBackendAssetSource(asset));
 }
 
 export const normalizeBackendAssetUrls = <T,>(input: T): T => {
@@ -193,7 +256,9 @@ export const normalizeBackendAssetUrls = <T,>(input: T): T => {
 
   if (input && typeof input === "object") {
     const normalized: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    for (const [key, value] of Object.entries(
+      input as Record<string, unknown>
+    )) {
       normalized[key] =
         typeof value === "string"
           ? resolveBackendAssetUrl(value)

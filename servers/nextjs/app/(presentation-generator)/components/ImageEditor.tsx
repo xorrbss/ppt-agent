@@ -18,6 +18,8 @@ import { PreviousGeneratedImagesResponse } from "../services/api/params";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { ImagesApi } from "../services/api/images";
 import { ImageAssetResponse } from "../services/api/types";
+import { resolveBackendAssetSource } from "@/utils/api";
+
 interface ImageEditorProps {
   initialImage: string | null;
   imageIdx?: number;
@@ -30,6 +32,14 @@ interface ImageEditorProps {
   onFocusPointClick?: (propertiesData: any) => void;
 }
 
+const resolveEditorImageSource = (
+  image:
+    | string
+    | { file_url?: string | null; path?: string | null; url?: string | null }
+    | null
+    | undefined
+) => resolveBackendAssetSource(image);
+
 const ImageEditor = ({
   initialImage,
   imageIdx = 0,
@@ -40,7 +50,9 @@ const ImageEditor = ({
   onImageChange,
 }: ImageEditorProps) => {
   // State management
-  const [previewImages, setPreviewImages] = useState(initialImage);
+  const [previewImages, setPreviewImages] = useState(
+    resolveEditorImageSource(initialImage)
+  );
   const [previousGeneratedImages, setPreviousGeneratedImages] = useState<
     PreviousGeneratedImagesResponse[]
   >([]);
@@ -74,7 +86,7 @@ const ImageEditor = ({
   const imageRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
-    setPreviewImages(initialImage);
+    setPreviewImages(resolveEditorImageSource(initialImage));
   }, [initialImage]);
 
   useEffect(() => {
@@ -198,7 +210,7 @@ const ImageEditor = ({
         prompt: prompt,
       });
 
-      setPreviewImages(response);
+      setPreviewImages(resolveEditorImageSource(response));
     } catch (err: any) {
       console.error("Error in image generation", err);
       setError(err.message || "Failed to generate image. Please try again.");
@@ -232,7 +244,7 @@ const ImageEditor = ({
       setUploadError(null);
       trackEvent(MixpanelEvent.ImageEditor_UploadImage_API_Call);
       const result = await ImagesApi.uploadImage(file);
-      setUploadedImageUrl(result.file_url || result.path);
+      setUploadedImageUrl(resolveEditorImageSource(result));
     } catch (err:any) {
       setUploadError("Failed to upload image. Please try again.");
       toast.error(err.message || "Failed to upload image. Please try again.");
@@ -358,13 +370,13 @@ const ImageEditor = ({
                         {previousGeneratedImages.map((image) => (
                           <div
                             onClick={() =>
-                              handleImageChange(image.file_url || image.path)
+                              handleImageChange(resolveEditorImageSource(image))
                             }
                             key={image.id}
                             className="aspect-[4/3] w-full overflow-hidden rounded-lg border cursor-pointer hover:border-blue-500 transition-colors"
                           >
                             <img
-                              src={image.file_url || image.path}
+                              src={resolveEditorImageSource(image)}
                               alt={image.extras.prompt}
                               className="w-full h-full object-cover"
                             />
@@ -476,7 +488,7 @@ const ImageEditor = ({
                           <div key={image.id}>
                             <div
                               onClick={() =>
-                                handleImageChange(image.file_url || image.path)
+                                handleImageChange(resolveEditorImageSource(image))
                               }
                               className="cursor-pointer group aspect-[4/3] rounded-lg overflow-hidden relative border border-gray-200"
                             >
@@ -485,7 +497,7 @@ const ImageEditor = ({
                                 handleDeleteImage(image.id)
                               }}/>
                               <img
-                              src={image.file_url || image.path}
+                              src={resolveEditorImageSource(image)}
                                 alt="Uploaded preview"
                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                               />
