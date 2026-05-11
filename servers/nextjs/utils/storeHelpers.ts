@@ -53,20 +53,17 @@ export const getLLMConfigValidationError = (
     if (!isProvided(llmConfig.AZURE_OPENAI_API_KEY)) {
       return "Azure OpenAI API key is required.";
     }
+
+    if (!isProvided(llmConfig.AZURE_OPENAI_ENDPOINT)) {
+      return "Azure endpoint is required.";
+    }
+
     if (!isProvided(llmConfig.AZURE_OPENAI_API_VERSION)) {
       return "Azure OpenAI API version is required.";
     }
-    if (
-      !isProvided(llmConfig.AZURE_OPENAI_ENDPOINT) &&
-      !isProvided(llmConfig.AZURE_OPENAI_BASE_URL)
-    ) {
-      return "Azure OpenAI endpoint or base URL is required.";
-    }
-    if (
-      !isProvided(llmConfig.AZURE_OPENAI_MODEL) &&
-      !isProvided(llmConfig.AZURE_OPENAI_DEPLOYMENT)
-    ) {
-      return "Provide an Azure model name or a deployment name (at least one).";
+
+    if (!isProvided(llmConfig.AZURE_OPENAI_MODEL)) {
+      return "Azure model name is required.";
     }
   } else if (llm === "openrouter") {
     if (!isProvided(llmConfig.OPENROUTER_API_KEY)) {

@@ -325,9 +325,7 @@ const SettingsPage = () => {
       (llmConfig.LLM === "openai" && !llmConfig.OPENAI_MODEL) ||
       (llmConfig.LLM === "google" && !llmConfig.GOOGLE_MODEL) ||
       (llmConfig.LLM === "vertex" && !llmConfig.VERTEX_MODEL) ||
-      (llmConfig.LLM === "azure" &&
-        !llmConfig.AZURE_OPENAI_MODEL &&
-        !llmConfig.AZURE_OPENAI_DEPLOYMENT) ||
+      (llmConfig.LLM === "azure" && !llmConfig.AZURE_OPENAI_MODEL) ||
       (llmConfig.LLM === "openrouter" && !llmConfig.OPENROUTER_MODEL) ||
       (llmConfig.LLM === "cerebras" && !llmConfig.CEREBRAS_MODEL) ||
       (llmConfig.LLM === "anthropic" && !llmConfig.ANTHROPIC_MODEL) ||
