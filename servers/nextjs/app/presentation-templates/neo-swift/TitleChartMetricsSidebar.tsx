@@ -135,7 +135,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
         switch (chartType) {
             case 'line':
                 return (
-                    <ResponsiveContainer width="100%" height={350}>
+                    <ResponsiveContainer width="100%" height="100%">
 
                         <LineChart data={chart?.rows} margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
                             <CartesianGrid {...gridProps} />
@@ -152,7 +152,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
 
             case 'horizontalBar':
                 return (
-                    <ResponsiveContainer width="100%" height={350}>
+                    <ResponsiveContainer width="100%" height="100%">
 
                         <BarChart data={chart?.rows} layout="vertical" margin={{ top: 15, right: 30, left: 10, bottom: 0 }}>
                             <CartesianGrid {...gridProps} />
@@ -171,7 +171,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
 
             case 'bar-grouped-vertical':
                 return (
-                    <ResponsiveContainer width="100%" height={350}>
+                    <ResponsiveContainer width="100%" height="100%">
 
                         <BarChart data={chart?.rows} margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
                             <CartesianGrid {...gridProps} />
@@ -193,7 +193,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
 
             case 'bar-grouped-horizontal':
                 return (
-                    <ResponsiveContainer width="100%" height={350}>
+                    <ResponsiveContainer width="100%" height="100%">
 
                         <BarChart data={chart?.rows} layout="vertical" margin={{ top: 15, right: 30, left: 10, bottom: 0 }}>
                             <CartesianGrid {...gridProps} />
@@ -211,7 +211,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
 
             case 'bar-stacked-vertical':
                 return (
-                    <ResponsiveContainer width="100%" height={350}>
+                    <ResponsiveContainer width="100%" height="100%">
 
                         <BarChart data={chart?.rows} margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
                             <CartesianGrid {...gridProps} />
@@ -229,7 +229,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
 
             case 'bar-stacked-horizontal':
                 return (
-                    <ResponsiveContainer width="100%" height={350}>
+                    <ResponsiveContainer width="100%" height="100%">
 
                         <BarChart data={chart?.rows} layout="vertical" margin={{ top: 15, right: 30, left: 10, bottom: 0 }}>
                             <CartesianGrid {...gridProps} />
@@ -247,7 +247,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
 
             case 'bar-clustered':
                 return (
-                    <ResponsiveContainer width="100%" height={350}>
+                    <ResponsiveContainer width="100%" height="100%">
 
                         <BarChart data={chart?.rows} barGap={2} barCategoryGap="20%" margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
                             <CartesianGrid {...gridProps} />
@@ -274,7 +274,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                     negative: -(row.value2 ?? 0),
                 })) || [];
                 return (
-                    <ResponsiveContainer width="100%" height={350}>
+                    <ResponsiveContainer width="100%" height="100%">
 
                         <BarChart data={divergingData} layout="vertical" stackOffset="sign" margin={{ top: 15, right: 30, left: 10, bottom: 0 }}>
                             <CartesianGrid {...gridProps} />
@@ -292,7 +292,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
 
             case 'area':
                 return (
-                    <ResponsiveContainer width="100%" height={350}>
+                    <ResponsiveContainer width="100%" height="100%">
 
                         <AreaChart data={chart?.rows} margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
                             <CartesianGrid {...gridProps} />
@@ -319,7 +319,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
 
             case 'area-stacked':
                 return (
-                    <ResponsiveContainer width="100%" height={350}>
+                    <ResponsiveContainer width="100%" height="100%">
 
                         <AreaChart data={chart?.rows} margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
                             <CartesianGrid {...gridProps} />
@@ -351,7 +351,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                     value: row.value + (row.value2 ?? 0),
                 })) || [];
                 return (
-                    <ResponsiveContainer width="100%" height={350}>
+                    <ResponsiveContainer width="100%" height="100%">
 
                         <PieChart margin={{ top: 15, right: 15, left: 15, bottom: 15 }}>
                             <Tooltip content={<CustomTooltip />} cursor={{ fill: 'transparent' }} />
@@ -372,7 +372,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                     value: row.value + (row.value2 ?? 0),
                 })) || [];
                 return (
-                    <ResponsiveContainer width="100%" height={350}>
+                    <ResponsiveContainer width="100%" height="100%">
 
                         <PieChart>
                             <Tooltip content={<CustomTooltip />} cursor={{ fill: 'transparent' }} />
@@ -394,7 +394,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                     name: row.label,
                 })) || [];
                 return (
-                    <ResponsiveContainer width="100%" height={350}>
+                    <ResponsiveContainer width="100%" height="100%">
 
                         <ScatterChart margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
                             <CartesianGrid {...gridProps} />
@@ -414,7 +414,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
             case 'bar':
             default:
                 return (
-                    <ResponsiveContainer width="100%" height={350}>
+                    <ResponsiveContainer width="100%" height="100%">
 
                         <BarChart data={chart?.rows} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                             <CartesianGrid {...gridProps} />
@@ -486,7 +486,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                                 </div>
                             )}
 
-                            <div className="flex-1 w-full max-h-[400px]">
+                            <div className="flex-1 min-h-0 w-full max-h-[400px] overflow-hidden">
 
                                 {renderChart()}
 

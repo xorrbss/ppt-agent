@@ -184,7 +184,7 @@ const ChartRenderer: React.FC<{ chart: { categories: string[]; series: any[], ty
     switch (chart.type) {
         case 'line':
             return (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={data} margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
                         <CartesianGrid {...gridProps} />
                         <XAxis dataKey="name" {...axisProps} tickFormatter={formatComma} />
@@ -206,7 +206,7 @@ const ChartRenderer: React.FC<{ chart: { categories: string[]; series: any[], ty
 
         case 'bar':
             return (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <BarChart
 
                         data={data} margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
@@ -231,7 +231,7 @@ const ChartRenderer: React.FC<{ chart: { categories: string[]; series: any[], ty
 
         case 'horizontalBar':
             return (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={data} layout="vertical" margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
                         <CartesianGrid {...gridProps} />
                         <XAxis type="number" {...axisProps} tickFormatter={formatComma} />
@@ -253,7 +253,7 @@ const ChartRenderer: React.FC<{ chart: { categories: string[]; series: any[], ty
 
         case 'bar-grouped-vertical':
             return (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={data} margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
                         <CartesianGrid {...gridProps} />
                         <XAxis dataKey="name" {...axisProps} tickFormatter={formatComma} />
@@ -274,7 +274,7 @@ const ChartRenderer: React.FC<{ chart: { categories: string[]; series: any[], ty
 
         case 'bar-grouped-horizontal':
             return (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={data} layout="vertical" margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
                         <CartesianGrid {...gridProps} />
                         <XAxis type="number" {...axisProps} tickFormatter={formatComma} />
@@ -295,7 +295,7 @@ const ChartRenderer: React.FC<{ chart: { categories: string[]; series: any[], ty
 
         case 'bar-stacked-vertical':
             return (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={data} margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
                         <CartesianGrid {...gridProps} />
                         <XAxis dataKey="name" {...axisProps} tickFormatter={formatComma} />
@@ -317,7 +317,7 @@ const ChartRenderer: React.FC<{ chart: { categories: string[]; series: any[], ty
 
         case 'bar-stacked-horizontal':
             return (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={data} layout="vertical" margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
                         <CartesianGrid {...gridProps} />
                         <XAxis type="number" {...axisProps} tickFormatter={formatComma} />
@@ -339,7 +339,7 @@ const ChartRenderer: React.FC<{ chart: { categories: string[]; series: any[], ty
 
         case 'bar-clustered':
             return (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={data} barGap={2} barCategoryGap="20%" margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
                         <CartesianGrid {...gridProps} />
                         <XAxis dataKey="name" {...axisProps} tickFormatter={formatComma} />
@@ -369,7 +369,7 @@ const ChartRenderer: React.FC<{ chart: { categories: string[]; series: any[], ty
             const labels = chart.divergingLabels || [chart.series[0]?.name || 'Positive', chart.series[1]?.name || 'Negative'];
 
             return (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={divergingData} layout="vertical" stackOffset="sign" margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
                         <CartesianGrid {...gridProps} />
                         <XAxis type="number" {...axisProps} tickFormatter={formatComma} />
@@ -398,7 +398,7 @@ const ChartRenderer: React.FC<{ chart: { categories: string[]; series: any[], ty
 
         case 'area':
             return (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={data} margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
                         <CartesianGrid {...gridProps} />
                         <XAxis dataKey="name" {...axisProps} tickFormatter={formatComma} />
@@ -428,7 +428,7 @@ const ChartRenderer: React.FC<{ chart: { categories: string[]; series: any[], ty
 
         case 'area-stacked':
             return (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={data} margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
                         <CartesianGrid {...gridProps} />
                         <XAxis dataKey="name" {...axisProps} tickFormatter={formatComma} />
@@ -457,7 +457,7 @@ const ChartRenderer: React.FC<{ chart: { categories: string[]; series: any[], ty
                     value: chart.series.reduce((sum, s) => sum + (s.values[index] || 0), 0),
                 }));
             return (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <PieChart margin={{ top: 15, right: 15, left: 15, bottom: 15 }}>
                         <Tooltip content={<CustomTooltip />} cursor={{ fill: 'transparent' }} />
                         <Legend />
@@ -485,7 +485,7 @@ const ChartRenderer: React.FC<{ chart: { categories: string[]; series: any[], ty
                     value: chart.series.reduce((sum, s) => sum + (s.values[index] || 0), 0),
                 }));
             return (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <PieChart margin={{ top: 15, right: 15, left: 15, bottom: 15 }}>
                         <Tooltip content={<CustomTooltip />} cursor={{ fill: 'transparent' }} />
                         <Legend />
@@ -510,7 +510,7 @@ const ChartRenderer: React.FC<{ chart: { categories: string[]; series: any[], ty
 
         default:
             return (
-                <div className="flex items-center justify-center h-[400px] text-gray-500">
+                <div className="flex h-full items-center justify-center text-gray-500">
                     Unsupported chart type: {chart.type}
                 </div>
             );
@@ -566,9 +566,11 @@ const dynamicSlideLayout: React.FC<{ data: Partial<SlideData> }> = ({ data }) =>
 
                 {/* Graph Section */}
                 <div className=" flex justify-between items-center gap-6 w-full">
-                    <div className=" flex-1 border  rounded-xl p-4 shadow-sm" style={{ backgroundColor: 'var(--card-color,#F0F0F2)', borderColor: 'var(--stroke,#F0F0F2)' }}>
+                    <div className=" flex-1 overflow-hidden border  rounded-xl p-4 shadow-sm" style={{ backgroundColor: 'var(--card-color,#F0F0F2)', borderColor: 'var(--stroke,#F0F0F2)' }}>
                         <ChartLegend series={chart?.series ?? []} colors={DEFAULT_CHART_COLORS} />
-                        <ChartRenderer chart={chart ?? { categories: [], series: [], type: 'bar' }} />
+                        <div className="h-[400px] min-h-0 overflow-hidden">
+                            <ChartRenderer chart={chart ?? { categories: [], series: [], type: 'bar' }} />
+                        </div>
                     </div>
                     <div className="  flex-1 flex flex-wrap items-center  justify-start gap-x-8 gap-y-12 pl-4">
                         {metrics?.map((metric, index) => (

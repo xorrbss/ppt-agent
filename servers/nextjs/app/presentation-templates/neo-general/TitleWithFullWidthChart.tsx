@@ -197,7 +197,7 @@ const ChartRenderer: React.FC<{ chart: z.infer<typeof Schema>['chart'] }> = ({ c
     switch (chart.type) {
         case 'line':
             return (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={data} margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
                         <CartesianGrid {...gridProps} />
                         <XAxis dataKey="name" {...axisProps} tickFormatter={formatComma} />
@@ -220,7 +220,7 @@ const ChartRenderer: React.FC<{ chart: z.infer<typeof Schema>['chart'] }> = ({ c
 
         case 'bar':
             return (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                         <CartesianGrid {...gridProps} />
                         <XAxis dataKey="name" {...axisProps} tickFormatter={formatComma} />
@@ -243,7 +243,7 @@ const ChartRenderer: React.FC<{ chart: z.infer<typeof Schema>['chart'] }> = ({ c
 
         case 'horizontalBar':
             return (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={data} layout="vertical" margin={{ top: 15, right: 30, left: 10, bottom: 0 }}>
                         <CartesianGrid {...gridProps} />
                         <XAxis type="number" {...axisProps} tickFormatter={formatComma} />
@@ -266,7 +266,7 @@ const ChartRenderer: React.FC<{ chart: z.infer<typeof Schema>['chart'] }> = ({ c
 
         case 'bar-grouped-vertical':
             return (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={data} margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
                         <CartesianGrid {...gridProps} />
                         <XAxis dataKey="name" {...axisProps} tickFormatter={formatComma} />
@@ -289,7 +289,7 @@ const ChartRenderer: React.FC<{ chart: z.infer<typeof Schema>['chart'] }> = ({ c
 
         case 'bar-grouped-horizontal':
             return (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={data} layout="vertical" margin={{ top: 15, right: 30, left: 10, bottom: 0 }}>
                         <CartesianGrid {...gridProps} />
                         <XAxis type="number" {...axisProps} tickFormatter={formatComma} />
@@ -310,7 +310,7 @@ const ChartRenderer: React.FC<{ chart: z.infer<typeof Schema>['chart'] }> = ({ c
 
         case 'bar-stacked-vertical':
             return (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={data} margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
                         <CartesianGrid {...gridProps} />
                         <XAxis dataKey="name" {...axisProps} tickFormatter={formatComma} />
@@ -332,7 +332,7 @@ const ChartRenderer: React.FC<{ chart: z.infer<typeof Schema>['chart'] }> = ({ c
 
         case 'bar-stacked-horizontal':
             return (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={data} layout="vertical" margin={{ top: 15, right: 30, left: 10, bottom: 0 }}>
                         <CartesianGrid {...gridProps} />
                         <XAxis type="number" {...axisProps} tickFormatter={formatComma} />
@@ -354,7 +354,7 @@ const ChartRenderer: React.FC<{ chart: z.infer<typeof Schema>['chart'] }> = ({ c
 
         case 'bar-clustered':
             return (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={data} barGap={2} barCategoryGap="20%" margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
                         <CartesianGrid {...gridProps} />
                         <XAxis dataKey="name" {...axisProps} tickFormatter={formatComma} />
@@ -386,7 +386,7 @@ const ChartRenderer: React.FC<{ chart: z.infer<typeof Schema>['chart'] }> = ({ c
             const labels = chart.divergingLabels || [chart.series[0]?.name || 'Positive', chart.series[1]?.name || 'Negative'];
 
             return (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={divergingData} layout="vertical" stackOffset="sign" margin={{ top: 15, right: 30, left: 10, bottom: 0 }}>
                         <CartesianGrid {...gridProps} />
                         <XAxis type="number" {...axisProps} tickFormatter={formatComma} />
@@ -415,7 +415,7 @@ const ChartRenderer: React.FC<{ chart: z.infer<typeof Schema>['chart'] }> = ({ c
 
         case 'area':
             return (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={data} margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
                         <CartesianGrid {...gridProps} />
                         <XAxis dataKey="name" {...axisProps} tickFormatter={formatComma} />
@@ -445,7 +445,7 @@ const ChartRenderer: React.FC<{ chart: z.infer<typeof Schema>['chart'] }> = ({ c
 
         case 'area-stacked':
             return (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={data} margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
                         <CartesianGrid {...gridProps} />
                         <XAxis dataKey="name" {...axisProps} tickFormatter={formatComma} />
@@ -474,7 +474,7 @@ const ChartRenderer: React.FC<{ chart: z.infer<typeof Schema>['chart'] }> = ({ c
                     value: chart.series.reduce((sum, s) => sum + (s.values[index] || 0), 0),
                 }));
             return (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <PieChart margin={{ top: 15, right: 15, left: 15, bottom: 15 }}>
                         <Tooltip content={<CustomTooltip />} cursor={{ fill: 'transparent' }} />
                         <Legend />
@@ -502,7 +502,7 @@ const ChartRenderer: React.FC<{ chart: z.infer<typeof Schema>['chart'] }> = ({ c
                     value: chart.series.reduce((sum, s) => sum + (s.values[index] || 0), 0),
                 }));
             return (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                         <Tooltip content={<CustomTooltip />} cursor={{ fill: 'transparent' }} />
                         <Legend />
@@ -527,7 +527,7 @@ const ChartRenderer: React.FC<{ chart: z.infer<typeof Schema>['chart'] }> = ({ c
 
         default:
             return (
-                <div className="flex items-center justify-center h-[400px] text-gray-500">
+                <div className="flex h-full items-center justify-center text-gray-500">
                     Unsupported chart type: {chart.type}
                 </div>
             );
@@ -574,10 +574,12 @@ const dynamicSlideLayout: React.FC<{ data: Partial<FormData> }> = ({ data }) => 
                     <div className="w-[116.6px] h-[5.7px]" style={{ backgroundColor: 'var(--primary-color,#9234EB)' }} />
                 </div>
 
-                <div className="mt-10 w-full">
-                    <div className="rounded-[24px] px-6 py-6 border  w-full" style={{ backgroundColor: 'var(--card-color,#F0F0F2)', borderColor: 'var(--stroke,#F0F0F2)' }}>
+                <div className="mt-10 w-full min-h-0">
+                    <div className="rounded-[24px] px-6 py-6 border w-full overflow-hidden" style={{ backgroundColor: 'var(--card-color,#F0F0F2)', borderColor: 'var(--stroke,#F0F0F2)' }}>
                         <ChartLegend series={chartConfig?.series ?? []} colors={colors} />
-                        <ChartRenderer chart={chartConfig ?? { categories: [], series: [], type: 'bar' }} />
+                        <div className="h-[400px] min-h-0 overflow-hidden">
+                            <ChartRenderer chart={chartConfig ?? { categories: [], series: [], type: 'bar' }} />
+                        </div>
                     </div>
                 </div>
             </div>
