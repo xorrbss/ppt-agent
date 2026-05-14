@@ -21,7 +21,7 @@ from utils.llm_utils import (
     serialize_structured_content,
     stream_generate_events,
 )
-from utils.schema_utils import ensure_array_schemas_have_items
+from utils.schema_utils import prepare_schema_for_validation
 
 
 def get_system_prompt(
@@ -192,8 +192,9 @@ async def generate_ppt_outline(
     use_search_tool = web_search
 
     try:
-        outline_schema = ensure_array_schemas_have_items(
-            response_model.model_json_schema()
+        outline_schema = prepare_schema_for_validation(
+            response_model.model_json_schema(),
+            strict=True,
         )
         response_format = JSONSchemaResponse(
             name="response",
