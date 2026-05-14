@@ -1,3 +1,5 @@
+"use client";
+
 import React from 'react';
 import * as z from "zod";
 import {
@@ -18,9 +20,8 @@ import {
     Tooltip,
     Legend,
     Cell,
-    LabelList,
     ReferenceLine,
-} from "recharts";
+} from "./NeoChartPrimitives";
 
 export const layoutId = 'multi-chart-grid-slide';
 export const layoutName = 'Title Description With Multi-Chart Grid';

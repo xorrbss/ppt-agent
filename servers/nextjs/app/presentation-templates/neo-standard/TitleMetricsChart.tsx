@@ -3,7 +3,7 @@
  */
 import * as z from 'zod';
 import React from 'react';
-import { ResponsiveContainer, BarChart, CartesianGrid, XAxis, YAxis, Bar, LabelList, LineChart, Line, PieChart, Pie, Cell, Legend, AreaChart, Area, ScatterChart, Scatter, ReferenceLine, Tooltip } from 'recharts';
+import { ResponsiveContainer, BarChart, CartesianGrid, XAxis, YAxis, Bar, LabelList, LineChart, Line, PieChart, Pie, Cell, Legend, AreaChart, Area, ScatterChart, Scatter, ReferenceLine, Tooltip } from './NeoChartPrimitives';
 
 const chartTypeEnum = z.enum([
     'bar',

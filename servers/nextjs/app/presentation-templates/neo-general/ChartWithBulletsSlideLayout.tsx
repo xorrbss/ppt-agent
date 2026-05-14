@@ -10,7 +10,7 @@ import { RemoteSvgIcon } from '@/app/hooks/useRemoteSvgIcon';
 import {
     BarChart, Bar, LineChart, Line, PieChart, Pie, AreaChart, Area, ScatterChart, Scatter,
     XAxis, YAxis, CartesianGrid, Cell, ResponsiveContainer, Tooltip, Legend, LabelList, ReferenceLine
-} from "recharts";
+} from "./NeoChartPrimitives";
 
 export const layoutId = 'chart-with-bullets-slide'
 export const layoutName = 'Chart With Bullet Cards'

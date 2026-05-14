@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * Neo-standard layout: title, description, and 1–6 charts in a responsive grid.
  */
@@ -22,7 +24,9 @@ import {
     Legend,
     Cell,
     ReferenceLine,
-} from "recharts";
+} from "./NeoChartPrimitives";
+
+
 
 export const layoutId = 'title-description-multi-chart-grid';
 export const layoutName = 'Title Description With Multi-Chart Grid';

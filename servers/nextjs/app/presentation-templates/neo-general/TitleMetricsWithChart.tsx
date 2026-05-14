@@ -22,7 +22,7 @@ import {
     Pie,
     Cell,
     ReferenceLine,
-} from "recharts";
+} from "./NeoChartPrimitives";
 
 // Color palettes
 const DEFAULT_CHART_COLORS = ['#8B5CF6', '#06B6D4', '#10B981', '#F59E0B', '#EF4444', '#EC4899']

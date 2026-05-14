@@ -21,7 +21,7 @@ import {
     Scatter,
     ResponsiveContainer,
     ReferenceLine
-} from 'recharts';
+} from './NeoChartPrimitives';
 import React from 'react';
 
 const chartTypeEnum = z.enum([

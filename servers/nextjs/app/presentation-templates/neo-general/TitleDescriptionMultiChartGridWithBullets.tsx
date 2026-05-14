@@ -19,7 +19,7 @@ import {
     Legend,
     Cell,
     ReferenceLine,
-} from "recharts";
+} from "./NeoChartPrimitives";
 
 export const layoutId = 'title-description-multi-chart-grid-bullets';
 export const layoutName = 'Title Description With Multi-Chart Grid + Bullets';

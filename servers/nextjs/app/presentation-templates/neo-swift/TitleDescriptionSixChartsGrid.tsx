@@ -1,5 +1,7 @@
+"use client";
+
 import React from 'react';
-import * as z from 'zod';
+import * as z from "zod";
 import {
     ResponsiveContainer,
     BarChart,
@@ -19,7 +21,9 @@ import {
     Legend,
     Cell,
     ReferenceLine,
-} from 'recharts';
+} from "./NeoChartPrimitives";
+
+
 const DEFAULT_CHART_COLORS = ['#8B5CF6', '#06B6D4', '#10B981', '#F59E0B', '#EF4444', '#EC4899'];
 const defaultCharts = [
     { title: 'Revenue by Quarter', type: 'bar-vertical' as const, data: [{ name: 'Q1', value: 125000 }, { name: 'Q2', value: 158000 }, { name: 'Q3', value: 142000 }, { name: 'Q4', value: 189000 }], colorPalette: 'vibrant' as const },

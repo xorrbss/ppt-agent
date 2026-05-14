@@ -21,7 +21,7 @@ import {
     Cell,
     Legend,
     ReferenceLine,
-} from 'recharts';
+} from './NeoChartPrimitives';
 import * as z from 'zod';
 import React from 'react';
 

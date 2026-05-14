@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * Neo-modern layout: title, description, and 1–6 charts in a responsive grid.
  * Same schema and chart types as neo-general MultiChartGridSlideLayout.
@@ -23,7 +25,9 @@ import {
     Legend,
     Cell,
     ReferenceLine,
-} from "recharts";
+} from "./NeoChartPrimitives";
+
+
 
 export const layoutId = 'title-description-multi-chart-grid';
 export const layoutName = 'Title Description With Multi-Chart Grid';

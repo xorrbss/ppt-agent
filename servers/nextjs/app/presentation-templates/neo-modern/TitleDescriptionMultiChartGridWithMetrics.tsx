@@ -22,7 +22,7 @@ import {
     Legend,
     Cell,
     ReferenceLine,
-} from "recharts";
+} from "./NeoChartPrimitives";
 
 export const layoutId = 'title-description-multi-chart-grid-metrics';
 export const layoutName = 'Title Description With Multi-Chart Grid + Metrics';

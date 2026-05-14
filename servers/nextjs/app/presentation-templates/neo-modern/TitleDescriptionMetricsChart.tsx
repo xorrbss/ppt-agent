@@ -4,7 +4,7 @@
  */
 import * as z from 'zod'
 import React from 'react';
-import { ResponsiveContainer, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Bar, LabelList, LineChart, Line, PieChart, Pie, Cell, AreaChart, Area, ScatterChart, Scatter, ReferenceLine } from 'recharts';
+import { ResponsiveContainer, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Bar, LabelList, LineChart, Line, PieChart, Pie, Cell, AreaChart, Area, ScatterChart, Scatter, ReferenceLine } from './NeoChartPrimitives';
 
 const chartTypeEnum = z.enum([
     'bar',
@@ -445,7 +445,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                             </span>
                         </div>
 
-                        <div className="flex-grow min-h-0 overflow-hidden border rounded-[6px] p-[20px] relative"
+                        <div className="flex-grow min-h-0 overflow-hidden border rounded-[6px] p-[20px] pb-[36px] relative"
                             style={{
                                 backgroundColor: 'var(--card-color,#FFFFFF)',
                                 borderColor: 'var(--stroke,#F0F0F2)',
@@ -454,7 +454,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                             <div className="h-full min-h-0 w-full overflow-hidden">
                                 {renderChart()}
                             </div>
-                            <div className="absolute bottom-[-15px] right-[20px] text-[16px] font-normal italic opacity-80"
+                            <div className="absolute bottom-[8px] right-[20px] text-[16px] font-normal italic opacity-80"
                                 style={{ color: 'var(--background-text,#244CD9)' }}
                             >
                                 {chartFooterLabel}

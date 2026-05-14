@@ -2,7 +2,7 @@
  * Enhanced TitleBadgeChart with multiple chart type support
  */
 import * as z from 'zod';
-import { ResponsiveContainer, BarChart, CartesianGrid, XAxis, YAxis, Bar, LabelList, Legend, LineChart, Line, PieChart, Pie, Cell, AreaChart, Area, ScatterChart, Scatter, ReferenceLine, Tooltip } from 'recharts';
+import { ResponsiveContainer, BarChart, CartesianGrid, XAxis, YAxis, Bar, LabelList, Legend, LineChart, Line, PieChart, Pie, Cell, AreaChart, Area, ScatterChart, Scatter, ReferenceLine, Tooltip } from './NeoChartPrimitives';
 
 const chartTypeEnum = z.enum([
     'bar',
