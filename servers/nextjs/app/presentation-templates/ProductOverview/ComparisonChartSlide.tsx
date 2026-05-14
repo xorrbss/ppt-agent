@@ -1,6 +1,5 @@
 import * as z from "zod";
 
-
 export const slideLayoutId = "title-description-with-table-slide";
 export const slideLayoutName = "Title Description with Table Slide";
 export const slideLayoutDescription =
@@ -29,17 +28,19 @@ const LegacyRowSchema = z.object({
 
 const RowSchema = z.union([GeneralRowSchema, LegacyRowSchema]);
 
-
-
 export const Schema = z.object({
   title: z.string().max(24).default("Comparison Chart Comparison").meta({
     description: "Main heading shown above the table.",
   }),
-  subtitle: z.string().max(80).default(
-    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt."
-  ).meta({
-    description: "Short subtitle shown under the main heading.",
-  }),
+  subtitle: z
+    .string()
+    .max(80)
+    .default(
+      "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt."
+    )
+    .meta({
+      description: "Short subtitle shown under the main heading.",
+    }),
   columns: z
     .array(z.string().max(18))
     .min(1)
@@ -70,28 +71,35 @@ export const Schema = z.object({
       },
     ])
     .meta({
-      description: "Table rows with status indicators. Prefer the `cells` array format.",
+      description:
+        "Table rows with status indicators. Prefer the `cells` array format.",
     }),
-  checkIcon: z.object({
-    __icon_url__: z.string(),
-    __icon_query__: z.string(),
-  }).default({
-    __icon_url__:
-      "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
-    __icon_query__: "check icon",
-  }).meta({
-    description: "Icon used for positive comparison status.",
-  }),
-  crossIcon: z.object({
-    __icon_url__: z.string(),
-    __icon_query__: z.string(),
-  }).default({
-    __icon_url__:
-      "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
-    __icon_query__: "cross icon",
-  }).meta({
-    description: "Icon used for negative comparison status.",
-  }),
+  checkIcon: z
+    .object({
+      __icon_url__: z.string(),
+      __icon_query__: z.string(),
+    })
+    .default({
+      __icon_url__:
+        "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
+      __icon_query__: "check icon",
+    })
+    .meta({
+      description: "Icon used for positive comparison status.",
+    }),
+  crossIcon: z
+    .object({
+      __icon_url__: z.string(),
+      __icon_query__: z.string(),
+    })
+    .default({
+      __icon_url__:
+        "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
+      __icon_query__: "cross icon",
+    })
+    .meta({
+      description: "Icon used for negative comparison status.",
+    }),
 });
 
 export type SchemaType = z.infer<typeof Schema>;
@@ -115,14 +123,24 @@ function StatusIcon({
   }
 
   if (status === "cross") {
-    return <img src={crossIconUrl} alt={crossIconAlt} className="h-[26px] w-[26px] object-contain" />;
+    return (
+      <img
+        src={crossIconUrl}
+        alt={crossIconAlt}
+        className="h-[26px] w-[26px] object-contain"
+      />
+    );
   }
-  if (status === 'check') {
-
-
-    return <img src={checkIconUrl} alt={checkIconAlt} className="h-[26px] w-[26px] object-contain" />;
+  if (status === "check") {
+    return (
+      <img
+        src={checkIconUrl}
+        alt={checkIconAlt}
+        className="h-[26px] w-[26px] object-contain"
+      />
+    );
   }
-  return <p className="text-base ">{status}</p>
+  return <p className="text-base ">{status}</p>;
 }
 
 const ComparisonChartSlide = ({ data }: { data: Partial<SchemaType> }) => {
@@ -138,8 +156,8 @@ const ComparisonChartSlide = ({ data }: { data: Partial<SchemaType> }) => {
   const safeColumns = columns && columns.length > 0 ? columns : [];
   const resolvedHighlightedColumnIndex =
     highlightedColumnIndex &&
-      highlightedColumnIndex >= 1 &&
-      highlightedColumnIndex <= safeColumns.length
+    highlightedColumnIndex >= 1 &&
+    highlightedColumnIndex <= safeColumns.length
       ? highlightedColumnIndex
       : Math.min(4, safeColumns.length);
   const safeRows = rows && rows.length > 0 ? rows : [];
@@ -148,8 +166,8 @@ const ComparisonChartSlide = ({ data }: { data: Partial<SchemaType> }) => {
       "cells" in row
         ? row.cells
         : [row.cell1, row.cell2, row.cell3, row.cell4].filter(
-          (cell): cell is CellStatus => typeof cell !== "undefined"
-        );
+            (cell): cell is CellStatus => typeof cell !== "undefined"
+          );
 
     return {
       label: row.label,
@@ -159,11 +177,13 @@ const ComparisonChartSlide = ({ data }: { data: Partial<SchemaType> }) => {
       ),
     };
   });
-  const tableGridColumns = `220px repeat(${safeColumns.length}, minmax(0, 1fr))`;
 
   return (
     <>
-      <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap" rel="stylesheet" />
+      <link
+        href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap"
+        rel="stylesheet"
+      />
       <div
         className="relative h-[720px] w-[1280px] overflow-hidden "
         style={{
@@ -187,77 +207,92 @@ const ComparisonChartSlide = ({ data }: { data: Partial<SchemaType> }) => {
         </div>
 
         <div className="mx-[54px] mt-[20px] ">
-          <div
-            className="grid border-b"
-            style={{
-              borderColor: "var(--stroke,#c5cccb)",
-              gridTemplateColumns: tableGridColumns,
-            }}
-          >
-            <div className=" " />
-            {safeColumns.map((column: any, index: any) => (
-              <div
-                key={index}
-                className="flex  items-center p-[33px] justify-center border-r text-[20px] font-semibold  tracking-[0.2em]"
+          <table className="w-full table-fixed border-collapse">
+            <colgroup>
+              <col className="w-[220px]" />
+              {safeColumns.map((_, index) => (
+                <col key={index} />
+              ))}
+            </colgroup>
+            <thead style={{ width: "100%" }}>
+              <tr
+                className="border-b"
                 style={{
-                  backgroundColor:
-                    index + 1 === resolvedHighlightedColumnIndex
-                      ? "var(--primary-color,#15342D)"
-                      : "var(--card-color,#ffffff)",
-                  color:
-                    index + 1 === resolvedHighlightedColumnIndex
-                      ? "var(--primary-text,#edf2f1)"
-                      : "var(--primary-color,#15342D)",
                   borderColor: "var(--stroke,#c5cccb)",
                 }}
               >
-                {column}
-              </div>
-            ))}
-          </div>
-
-          {normalizedRows.map((row, index) => {
-            return (
-              <div
-                key={index}
-                className={`grid ${index < normalizedRows.length - 1 ? "border-b" : ""}`}
-                style={{
-                  borderColor: "var(--stroke,#c5cccb)",
-                  gridTemplateColumns: tableGridColumns,
-                }}
-              >
-                <div
-                  className="flex  items-center border-r pl-[34px] text-[20px] font-semibold  tracking-[0.2em]"
-                  style={{
-                    backgroundColor: "var(--card-color,#ffffff)",
-                    borderColor: "var(--stroke,#c5cccb)",
-                    color: "var(--primary-color,#15342D)",
-                  }}
-                >
-                  {row.label}
-                </div>
-
-                {row.cells.map((status, cellIndex) => (
-                  <div
-                    key={cellIndex}
-                    className="flex  p-[23px] items-center justify-center border-r"
+                <th scope="col" aria-hidden="true" className="w-[220px]" />
+                {safeColumns.map((column: any, index: any) => (
+                  <th
+                    key={index}
+                    scope="col"
+                    className="p-[33px] text-center align-middle border-r text-[20px] font-semibold tracking-[0.2em]"
                     style={{
-                      backgroundColor: "var(--card-color,#ffffff)",
+                      backgroundColor:
+                        index + 1 === resolvedHighlightedColumnIndex
+                          ? "var(--primary-color,#15342D)"
+                          : "var(--card-color,#ffffff)",
+                      color:
+                        index + 1 === resolvedHighlightedColumnIndex
+                          ? "var(--primary-text,#edf2f1)"
+                          : "var(--primary-color,#15342D)",
                       borderColor: "var(--stroke,#c5cccb)",
                     }}
                   >
-                    <StatusIcon
-                      status={status}
-                      checkIconUrl={checkIcon?.__icon_url__}
-                      checkIconAlt={checkIcon?.__icon_query__}
-                      crossIconUrl={crossIcon?.__icon_url__}
-                      crossIconAlt={crossIcon?.__icon_query__}
-                    />
-                  </div>
+                    {column}
+                  </th>
                 ))}
-              </div>
-            );
-          })}
+              </tr>
+            </thead>
+            <tbody>
+              {normalizedRows.map((row, index) => {
+                return (
+                  <tr
+                    key={index}
+                    className={
+                      index < normalizedRows.length - 1 ? "border-b" : ""
+                    }
+                    style={{
+                      borderColor: "var(--stroke,#c5cccb)",
+                    }}
+                  >
+                    <th
+                      scope="row"
+                      className="align-middle border-r pl-[34px] text-left text-[20px] font-semibold tracking-[0.2em]"
+                      style={{
+                        backgroundColor: "var(--card-color,#ffffff)",
+                        borderColor: "var(--stroke,#c5cccb)",
+                        color: "var(--primary-color,#15342D)",
+                      }}
+                    >
+                      {row.label}
+                    </th>
+
+                    {row.cells.map((status, cellIndex) => (
+                      <td
+                        key={cellIndex}
+                        className="p-[23px] text-center align-middle border-r"
+                        style={{
+                          backgroundColor: "var(--card-color,#ffffff)",
+                          borderColor: "var(--stroke,#c5cccb)",
+                        }}
+                      >
+                        <div className="flex items-center justify-center">
+                          <StatusIcon
+                            status={status}
+                            checkIconUrl={checkIcon?.__icon_url__}
+                            checkIconAlt={checkIcon?.__icon_query__}
+                            crossIconUrl={crossIcon?.__icon_url__}
+                            crossIconAlt={crossIcon?.__icon_query__}
+                          />
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
     </>
