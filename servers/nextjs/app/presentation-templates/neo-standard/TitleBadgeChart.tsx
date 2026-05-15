@@ -263,7 +263,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                         <PieChart margin={{ top: 20, right: 20, left: 20, bottom: 20 }}>
                             <Pie data={pieData} cx="50%" cy="50%" outerRadius={150} innerRadius={0} dataKey="value" label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`} labelLine={{ stroke: 'var(--background-text, #333333)', strokeWidth: 1 }}>
                                 {pieData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={`var(--graph-${index}, ${CHART_COLORS[index % CHART_COLORS.length]})`} />
+                                    <Cell key={`cell-${index}`} fill={`var(--graph-${index % 10}, ${CHART_COLORS[index % CHART_COLORS.length]})`} />
                                 ))}
                             </Pie>
                             <Tooltip cursor={{ fill: 'transparent' }} />
@@ -283,7 +283,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                         <PieChart margin={{ top: 20, right: 20, left: 20, bottom: 20 }}>
                             <Pie data={donutData} cx="50%" cy="50%" outerRadius={150} innerRadius={60} dataKey="value" paddingAngle={2} label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`} labelLine={{ stroke: 'var(--background-text, #333333)', strokeWidth: 1 }}>
                                 {donutData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={`var(--graph-${index}, ${CHART_COLORS[index % CHART_COLORS.length]})`} stroke="white" strokeWidth={2} />
+                                    <Cell key={`cell-${index}`} fill={`var(--graph-${index % 10}, ${CHART_COLORS[index % CHART_COLORS.length]})`} stroke="white" strokeWidth={2} />
                                 ))}
                             </Pie>
                             <Tooltip cursor={{ fill: 'transparent' }} />
@@ -308,7 +308,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                             <Tooltip cursor={{ strokeDasharray: '3 3', fill: 'transparent' }} />
                             <Scatter data={scatterData} fill="var(--graph-0, #1F8A2E)">
                                 {scatterData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={`var(--graph-${index}, ${CHART_COLORS[index % CHART_COLORS.length]})`} />
+                                    <Cell key={`cell-${index}`} fill={`var(--graph-${index % 10}, ${CHART_COLORS[index % CHART_COLORS.length]})`} />
                                 ))}
                             </Scatter>
                         </ScatterChart>

@@ -227,6 +227,13 @@ const DONUT_COLORS = [
   "var(--graph-0,#0B4B40)",
   "var(--graph-1,#4B6B61)",
   "var(--graph-2,#7B938C)",
+  "var(--graph-3,#A9BBB5)",
+  "var(--graph-4,#C7D5D1)",
+  "var(--graph-5,#6B8E84)",
+  "var(--graph-6,#2E6157)",
+  "var(--graph-7,#0F6656)",
+  "var(--graph-8,#5C7B72)",
+  "var(--graph-9,#93AAA2)",
 ];
 const KPI_ICON_BG = "var(--graph-3,#063C73)";
 const AXIS_TEXT = "var(--background-text,#566061)";

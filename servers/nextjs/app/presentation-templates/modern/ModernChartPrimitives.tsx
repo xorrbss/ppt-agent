@@ -41,8 +41,10 @@ const chartLabelColor = (element: HTMLElement) =>
 const chartFont = (element: HTMLElement) =>
   resolveCssValue(element, "var(--heading-font-family,Montserrat)", "Montserrat").replace(/^['"]|['"]$/g, "");
 
-const graphColor = (element: HTMLElement, index: number, fallback = DEFAULT_COLORS[index % DEFAULT_COLORS.length]) =>
-  resolveCssValue(element, `var(--graph-${index}, ${fallback})`, fallback);
+const graphColor = (element: HTMLElement, index: number, fallback = DEFAULT_COLORS[index % DEFAULT_COLORS.length]) => {
+  const slot = index % 10;
+  return resolveCssValue(element, `var(--graph-${slot}, ${fallback})`, fallback);
+};
 
 const valueLabelPlugin = (
   showLabels: boolean,

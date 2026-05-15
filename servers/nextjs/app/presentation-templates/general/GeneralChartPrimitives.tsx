@@ -33,8 +33,11 @@ const resolveCssValue = (element: HTMLElement, value: string, fallback: string) 
     return resolved || match[2]?.trim() || fallback;
 };
 
-const chartColor = (element: HTMLElement, index: number) =>
-    resolveCssValue(element, `var(--graph-${index}, ${CHART_COLORS[index % CHART_COLORS.length]})`, CHART_COLORS[index % CHART_COLORS.length]);
+const chartColor = (element: HTMLElement, index: number) => {
+    const slot = index % 10;
+    const fallback = CHART_COLORS[slot % CHART_COLORS.length];
+    return resolveCssValue(element, `var(--graph-${slot}, ${fallback})`, fallback);
+};
 
 const chartTextColor = (element: HTMLElement, fallback = "#7f8491") =>
     resolveCssValue(element, `var(--background-text, ${fallback})`, fallback);

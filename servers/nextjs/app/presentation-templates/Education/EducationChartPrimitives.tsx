@@ -60,6 +60,10 @@ const DEFAULT_COLORS = [
   "var(--graph-3,#9F94CD)",
   "var(--graph-4,#6A31B8)",
   "var(--graph-5,#4D2A97)",
+  "var(--graph-6,#8357C7)",
+  "var(--graph-7,#A178D8)",
+  "var(--graph-8,#C0A5E8)",
+  "var(--graph-9,#DDCFF5)",
 ];
 
 const AXIS = "var(--background-text,#7C7A83)";

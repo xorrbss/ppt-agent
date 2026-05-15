@@ -254,7 +254,7 @@ const MiniChartRenderer: React.FC<{
 
     const graphColors = (index: number, serieColor?: string) => {
         const fallback = serieColor || CHART_COLOR_PALETTES[index % CHART_COLOR_PALETTES.length];
-        return `var(--graph-${index}, ${fallback})`;
+        return `var(--graph-${index % 10}, ${fallback})`;
     };
 
     switch (chart.type) {

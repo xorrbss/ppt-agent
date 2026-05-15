@@ -134,6 +134,12 @@ const chartLabelColor = (element: HTMLElement) =>
 const chartFont = (element: HTMLElement) =>
   resolveCssValue(element, "var(--heading-font-family,Albert Sans)", "Albert Sans").replace(/^['"]|['"]$/g, "")
 
+const chartColor = (element: HTMLElement, index: number) => {
+  const slot = index % 10
+  const fallback = CHART_COLORS[slot % CHART_COLORS.length]
+  return resolveCssValue(element, `var(--graph-${slot}, ${fallback})`, fallback)
+}
+
 const valueLabelPlugin = (
   showLabels: boolean,
   chartType: SwiftChartType,
@@ -240,6 +246,8 @@ const SwiftChart: React.FC<{
     const fontFamily = chartFont(canvas)
     const labels = data.map((item) => item.label)
     const values = data.map((item) => item.value)
+    const colors = data.map((_, index) => chartColor(canvas, index))
+    const primaryColor = chartColor(canvas, 0)
     const isHorizontal = type === "horizontalBar"
 
     const commonOptions: ChartOptions = {
@@ -299,7 +307,7 @@ const SwiftChart: React.FC<{
                 {
                   label: "value",
                   data: values,
-                  backgroundColor: data.map((_, index) => CHART_COLORS[index % CHART_COLORS.length]),
+                  backgroundColor: colors,
                   borderWidth: 0,
                   hoverBorderWidth: 0,
                 },
@@ -324,9 +332,9 @@ const SwiftChart: React.FC<{
                   data: values,
                   backgroundColor:
                     type === "line"
-                      ? CHART_COLORS[0]
-                      : data.map((_, index) => CHART_COLORS[index % CHART_COLORS.length]),
-                  borderColor: CHART_COLORS[0],
+                      ? primaryColor
+                      : colors,
+                  borderColor: primaryColor,
                   borderRadius: type === "bar" ? 6 : type === "horizontalBar" ? 6 : undefined,
                   borderWidth: type === "line" ? 3 : 0,
                   fill: false,

@@ -191,7 +191,7 @@ const ChartRenderer: React.FC<{ chart: z.infer<typeof Schema>['chart'] }> = ({ c
 
     const graphColors = (index: number, serieColor?: string) => {
         const fallback = serieColor || colors[index % colors.length];
-        return `var(--graph-${index}, ${fallback})`;
+        return `var(--graph-${index % 10}, ${fallback})`;
     };
 
     switch (chart.type) {

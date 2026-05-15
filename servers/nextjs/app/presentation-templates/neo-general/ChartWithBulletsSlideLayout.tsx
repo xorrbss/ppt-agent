@@ -219,7 +219,7 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
     const graphColors = (index: number, serieColor?: string) => {
 
         const fallback = serieColor || DEFAULT_CHART_COLORS[index % DEFAULT_CHART_COLORS.length];
-        return `var(--graph-${index}, ${fallback})`;
+        return `var(--graph-${index % 10}, ${fallback})`;
     };
 
     const renderChart = () => {

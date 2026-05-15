@@ -85,8 +85,11 @@ const chartLabelColor = (element: HTMLElement) =>
 const chartFont = (element: HTMLElement) =>
   resolveCssValue(element, "var(--heading-font-family,Playfair Display)", "Playfair Display").replace(/^['"]|['"]$/g, "")
 
-const chartColor = (element: HTMLElement, index: number) =>
-  resolveCssValue(element, `var(--graph-${index}, ${CHART_COLORS[index % CHART_COLORS.length]})`, CHART_COLORS[index % CHART_COLORS.length])
+const chartColor = (element: HTMLElement, index: number) => {
+  const slot = index % 10
+  const fallback = CHART_COLORS[slot % CHART_COLORS.length]
+  return resolveCssValue(element, `var(--graph-${slot}, ${fallback})`, fallback)
+}
 
 const valueLabelPlugin = (
   showLabels: boolean,

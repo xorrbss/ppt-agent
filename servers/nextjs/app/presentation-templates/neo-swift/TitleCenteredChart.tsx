@@ -92,7 +92,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 // Helper function for graph colors
 const graphColors = (index: number, fallbackColor?: string) => {
     const fallback = fallbackColor || COLORS[index % COLORS.length];
-    return `var(--graph-${index}, ${fallback})`;
+    return `var(--graph-${index % 10}, ${fallback})`;
 };
 
 const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = ({ data }) => {
@@ -417,7 +417,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                                     <div key={`legend-${index}`} className="flex items-center gap-2">
                                         <div
                                             className="w-[18px] h-[18px] rounded-full"
-                                            style={{ backgroundColor: `var(--graph-${index}, ${COLORS[index % COLORS.length]})` }}
+                                            style={{ backgroundColor: `var(--graph-${index % 10}, ${COLORS[index % COLORS.length]})` }}
                                         />
                                         <span style={{ fontFamily: 'Albert Sans', fontWeight: 400, fontSize: '18px', color: 'var(--background-text, #7f8491)' }}>{entry.label}</span>
                                     </div>

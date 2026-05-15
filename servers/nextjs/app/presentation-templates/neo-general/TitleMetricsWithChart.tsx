@@ -178,7 +178,7 @@ const ChartRenderer: React.FC<{ chart: { categories: string[]; series: any[], ty
 
     const graphColors = (index: number, serieColor?: string) => {
         const fallback = serieColor || DEFAULT_CHART_COLORS[index % DEFAULT_CHART_COLORS.length];
-        return `var(--graph-${index}, ${fallback})`;
+        return `var(--graph-${index % 10}, ${fallback})`;
     };
 
     switch (chart.type) {

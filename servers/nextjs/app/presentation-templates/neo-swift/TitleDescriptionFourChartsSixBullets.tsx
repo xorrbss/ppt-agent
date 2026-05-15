@@ -185,7 +185,7 @@ const MiniChartRenderer: React.FC<{
 
     const graphColors = (index: number) => {
         const fallback = DEFAULT_CHART_COLORS[index % DEFAULT_CHART_COLORS.length];
-        return `var(--graph-${index}, ${fallback})`;
+        return `var(--graph-${index % 10}, ${fallback})`;
     };
 
     const gradId = (suffix: string) => `neo-swift-${chartKey}-${suffix}`;

@@ -6,7 +6,7 @@ import type { ChartConfiguration, ChartOptions, Plugin } from "chart.js";
 
 type AnyRecord = Record<string, any>;
 
-const DEFAULT_COLORS = ["#8B5CF6", "#06B6D4", "#10B981", "#F59E0B", "#EF4444", "#EC4899"];
+const DEFAULT_COLORS = ["#8B5CF6", "#06B6D4", "#10B981", "#F59E0B", "#EF4444", "#EC4899", "#3B82F6", "#84CC16", "#F97316", "#6366F1"];
 const AXIS_COLOR = "var(--background-text,#7f8491)";
 const GRID_COLOR = "var(--background-text,#7f8491)";
 const FONT_FAMILY = "var(--body-font-family,var(--heading-font-family,Poppins))";
@@ -48,8 +48,9 @@ function resolveColor(element: HTMLElement, value: unknown, fallback = "#7f8491"
 }
 
 function graphColor(element: HTMLElement, index: number, fallback?: string) {
-    const colorFallback = fallback || DEFAULT_COLORS[index % DEFAULT_COLORS.length];
-    return resolveColor(element, `var(--graph-${index}, ${colorFallback})`, colorFallback);
+    const slot = index % 10;
+    const colorFallback = fallback || DEFAULT_COLORS[slot % DEFAULT_COLORS.length];
+    return resolveColor(element, `var(--graph-${slot}, ${colorFallback})`, colorFallback);
 }
 
 function toNumber(value: unknown) {

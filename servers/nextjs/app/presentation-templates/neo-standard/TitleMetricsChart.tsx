@@ -91,7 +91,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 // Helper function for graph colors
 const graphColors = (index: number, fallbackColor?: string) => {
     const fallback = fallbackColor || CHART_COLORS[index % CHART_COLORS.length];
-    return `var(--graph-${index}, ${fallback})`;
+    return `var(--graph-${index % 10}, ${fallback})`;
 };
 
 const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = ({ data }) => {

@@ -45,6 +45,10 @@ const DEFAULT_CHART_COLORS = [
   "#F59E0B",
   "#EF4444",
   "#EC4899",
+  "#3B82F6",
+  "#84CC16",
+  "#F97316",
+  "#6366F1",
 ];
 const AXIS = "var(--background-text,#d8d4bf)";
 const GRID = "var(--background-text,#585a61)";
@@ -52,9 +56,10 @@ const PRIMARY_TEXT = "var(--primary-text,#ffffff)";
 const BODY_FONT = "var(--body-font-family,Inter)";
 
 const graphColors = (index: number, fallbackColor?: string) => {
+  const slot = index % 10;
   const fallback =
     fallbackColor || DEFAULT_CHART_COLORS[index % DEFAULT_CHART_COLORS.length];
-  return `var(--graph-${index}, ${fallback})`;
+  return `var(--graph-${slot}, ${fallback})`;
 };
 
 const DEFAULT_CHART_PAYLOAD: PitchChartPayload = {
