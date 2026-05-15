@@ -7,7 +7,7 @@ from utils.llm_config import get_llm_config
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_utils import generate_structured_with_schema_retries
 from utils.llm_provider import get_model
-from utils.schema_utils import ensure_array_schemas_have_items
+from utils.schema_utils import prepare_schema_for_validation
 
 
 def get_messages(
@@ -59,8 +59,9 @@ async def get_slide_layout_from_prompt(
     slide_layout_index = layout.get_slide_layout_index(slide.layout)
 
     try:
-        layout_index_schema = ensure_array_schemas_have_items(
-            SlideLayoutIndex.model_json_schema()
+        layout_index_schema = prepare_schema_for_validation(
+            SlideLayoutIndex.model_json_schema(),
+            strict=True,
         )
         response_format = JSONSchemaResponse(
             name="response",
