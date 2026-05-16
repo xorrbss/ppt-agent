@@ -13,7 +13,7 @@ const actionCardBase =
   "absolute aspect-[16/9] h-[46.238px] w-[82.201px] rounded-[4.474px] border border-white/50 bg-cover bg-center bg-no-repeat shadow-[0_8px_18px_rgba(16,24,40,0.18)] transition-all duration-500 ease-out translate-y-12 scale-95 opacity-0 group-hover/action:translate-y-0 group-hover/action:scale-100 group-hover/action:opacity-100 group-focus-visible/action:translate-y-0 group-focus-visible/action:scale-100 group-focus-visible/action:opacity-100";
 
 const FloatingActionCards = () => (
-  <div className="pointer-events-none absolute right-[14px] top-[-32px] z-0 block h-[60px] w-[158px]">
+  <div className="pointer-events-none absolute right-[14px] top-[-36px] z-0 block h-[64px] w-[158px]">
     <div
       className={`${actionCardBase} left-0 top-0  delay-75 border-none`}
       style={{
@@ -116,7 +116,7 @@ const DashboardPage: React.FC = () => {
               source: "dashboard_actions_card",
             })
           }
-          className="group/action bg-white z-50  relative  block w-[304px] max-w-full overflow-visible rounded-[10.8px] outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8] focus-visible:ring-offset-4"
+          className="group/action bg-white z-50 mt-2  relative  block w-[304px] max-w-full overflow-visible rounded-[10.8px] outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8] focus-visible:ring-offset-4 cursor-pointer"
           aria-label="Create presentation"
         >
           <FloatingActionCards />
@@ -126,7 +126,6 @@ const DashboardPage: React.FC = () => {
             alt="Background of the create presentation card"
             className="relative bg-white z-10 h-[89.983px] w-[304px] max-w-full rounded-[10.8px] object-cover"
           />
-
           <span className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 text-center font-syne text-sm font-medium text-[#191919]">
             Create Presentation
           </span>

@@ -17,11 +17,23 @@ export const PresentationGrid = ({
   onPresentationDeleted,
 }: PresentationGridProps) => {
   const ShimmerCard = () => (
-    <div className="flex flex-col gap-4 min-h-[216px] bg-white/70 rounded-lg p-4 animate-pulse">
-      <div className="w-full h-24 bg-gray-200 rounded-lg"></div>
-      <div className="space-y-3">
-        <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-        <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+    <div className="flex min-h-[216px] flex-col overflow-hidden rounded-[12px] border border-[#EDEEEF] bg-[#F8FBFB] shadow-none animate-pulse">
+      <div className="relative flex-1 overflow-hidden p-4">
+        <img
+          src="/card_bg.svg"
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover opacity-70"
+        />
+        <div className="relative mx-auto mt-2 aspect-video w-[88%] rounded-lg border border-gray-200 bg-gray-200" />
+      </div>
+      <div className="relative z-10 border-t border-[#EDEEEF] bg-white px-5 py-3">
+        <div className="flex items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="h-3.5 w-24 rounded bg-gray-200" />
+            <div className="h-3 w-16 rounded bg-gray-200" />
+          </div>
+          <div className="h-5 w-1 rounded-full bg-gray-200" />
+        </div>
       </div>
     </div>
   );
