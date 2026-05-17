@@ -20,6 +20,13 @@ from utils.simple_auth import (
 logger = logging.getLogger(__name__)
 
 
+def _configure_application_logging() -> None:
+    """Honor LOG_LEVEL (default INFO) so template/export diagnostics are visible."""
+    raw = (os.getenv("LOG_LEVEL") or "INFO").strip().upper()
+    level = getattr(logging, raw, logging.INFO)
+    logging.getLogger().setLevel(level)
+
+
 def _is_truthy(value: str | None) -> bool:
     if value is None:
         return False
@@ -82,6 +89,7 @@ async def app_lifespan(_: FastAPI):
     the single-user login from env vars (if provided), and checks LLM model
     availability.
     """
+    _configure_application_logging()
     os.makedirs(get_app_data_directory_env(), exist_ok=True)
     await migrate_database_on_startup()
     await create_db_and_tables()

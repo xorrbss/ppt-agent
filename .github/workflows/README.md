@@ -5,9 +5,7 @@
 This workflow runs comprehensive tests for all parts of the application:
 
 - **Main FastAPI** - Python tests for the main backend
-- **Electron FastAPI** - Python tests for the Electron-compatible backend  
 - **Main Next.js** - Lint, build, and Cypress component tests
-- **Electron Next.js** - Lint, build, and Cypress component tests
 - **Docker Build** - Verifies Docker image builds successfully
 
 ## Testing Locally
@@ -35,22 +33,12 @@ export DISABLE_ANONYMOUS_TRACKING=true
 export DISABLE_IMAGE_GENERATION=true
 export PYTHONPATH=$(pwd)
 pytest tests/ -v
-
-# Electron FastAPI
-cd electron/servers/fastapi
-# Same environment variables as above
-pytest tests/ -v
 ```
 
 ### Next.js Tests
 ```bash
 # Main Next.js
 cd servers/nextjs
-npm run lint
-npm run build
-
-# Electron Next.js
-cd electron/servers/nextjs
 npm run lint
 npm run build
 ```

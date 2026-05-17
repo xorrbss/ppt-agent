@@ -46,7 +46,7 @@ export const V1ContentRender = ({ slide, isEditMode, theme }: { slide: any, isEd
             }
             return null;
         } else {
-            const template = getLayoutByLayoutId(slide.layout);
+            const template = getLayoutByLayoutId(slide.layout, slide.layout_group);
             return template?.component ?? null;
         }
     }, [isCustomTemplate, customTemplate, slide.layout]);

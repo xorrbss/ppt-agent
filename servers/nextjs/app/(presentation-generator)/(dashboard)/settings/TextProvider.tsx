@@ -9,6 +9,7 @@ import { Check, Loader2, Eye, EyeOff, ChevronUp } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { notify } from '@/components/ui/sonner';
 import CodexConfig from './SettingCodex';
+import VertexAzureManualFields from '@/components/VertexAzureManualFields';
 
 
 interface OpenAIConfigProps {
@@ -22,6 +23,8 @@ interface ModelOption {
     label: string;
     size?: string;
 }
+
+const MANUAL_MODEL_PROVIDERS = new Set(['vertex', 'azure']);
 
 const TextProvider = ({
 
@@ -40,12 +43,23 @@ const TextProvider = ({
 
     const selectedProvider = (llmConfig.LLM || 'openai') as keyof typeof LLM_PROVIDERS;
     const selectedProviderMeta = LLM_PROVIDERS[selectedProvider];
+    const isManualModelProvider = MANUAL_MODEL_PROVIDERS.has(selectedProvider);
     const currentModelField = useMemo(() => {
         switch (selectedProvider) {
             case 'openai':
                 return 'OPENAI_MODEL';
             case 'google':
                 return 'GOOGLE_MODEL';
+            case 'vertex':
+                return 'VERTEX_MODEL';
+            case 'azure':
+                return 'AZURE_OPENAI_MODEL';
+            case 'openrouter':
+                return 'OPENROUTER_MODEL';
+            case 'cerebras':
+                return 'CEREBRAS_MODEL';
+            case 'litellm':
+                return 'LITELLM_MODEL';
             case 'anthropic':
                 return 'ANTHROPIC_MODEL';
             case 'ollama':
@@ -65,6 +79,16 @@ const TextProvider = ({
                 return 'OPENAI_API_KEY';
             case 'google':
                 return 'GOOGLE_API_KEY';
+            case 'vertex':
+                return 'VERTEX_API_KEY';
+            case 'azure':
+                return 'AZURE_OPENAI_API_KEY';
+            case 'openrouter':
+                return 'OPENROUTER_API_KEY';
+            case 'cerebras':
+                return 'CEREBRAS_API_KEY';
+            case 'litellm':
+                return 'LITELLM_API_KEY';
             case 'anthropic':
                 return 'ANTHROPIC_API_KEY';
             case 'custom':
@@ -77,9 +101,24 @@ const TextProvider = ({
     const currentModel = currentModelField ? ((llmConfig as Record<string, unknown>)[currentModelField] as string || '') : '';
     const currentApiKey = currentApiKeyField ? ((llmConfig as Record<string, unknown>)[currentApiKeyField] as string || '') : '';
     const currentCustomUrl = llmConfig.CUSTOM_LLM_URL || '';
+    const currentLitellmUrl = (llmConfig.LITELLM_BASE_URL || '').trim();
     const currentOllamaUrl = llmConfig.OLLAMA_URL || '';
     const useCustomOllamaUrl = !!llmConfig.USE_CUSTOM_URL;
     const modelLabel = selectedProviderMeta?.label || selectedProvider;
+    const providerApiKeyLabel =
+        selectedProvider === 'custom'
+            ? 'Custom LLM API Key'
+            : selectedProvider === 'vertex'
+                ? 'Vertex API Key'
+                : selectedProvider === 'azure'
+                    ? 'Azure OpenAI API Key'
+                    : selectedProvider === 'openrouter'
+                        ? 'OpenRouter API Key'
+                        : selectedProvider === 'cerebras'
+                            ? 'Cerebras API Key'
+                            : selectedProvider === 'litellm'
+                                ? 'LiteLLM API key (optional)'
+                                : `${selectedProvider} API Key`;
 
     useEffect(() => {
         if (isFirstRender.current) {
@@ -92,7 +131,7 @@ const TextProvider = ({
         if (currentModelField) {
             onInputChange('', currentModelField);
         }
-    }, [selectedProvider, currentApiKey, currentCustomUrl, currentModelField]);
+    }, [selectedProvider, currentApiKey, currentCustomUrl, currentLitellmUrl, currentModelField]);
 
 
 
@@ -107,21 +146,35 @@ const TextProvider = ({
                 ? 'OPENAI_API_KEY'
                 : llm === 'google'
                     ? 'GOOGLE_API_KEY'
-                    : llm === 'anthropic'
-                        ? 'ANTHROPIC_API_KEY'
-                        : llm === 'custom'
-                            ? 'CUSTOM_LLM_API_KEY'
-                            : '';
+                    : llm === 'vertex'
+                        ? 'VERTEX_API_KEY'
+                        : llm === 'azure'
+                            ? 'AZURE_OPENAI_API_KEY'
+                            : llm === 'openrouter'
+                                ? 'OPENROUTER_API_KEY'
+                                : llm === 'cerebras'
+                                    ? 'CEREBRAS_API_KEY'
+                                    : llm === 'litellm'
+                                        ? 'LITELLM_API_KEY'
+                                        : llm === 'anthropic'
+                                            ? 'ANTHROPIC_API_KEY'
+                                            : llm === 'custom'
+                                                ? 'CUSTOM_LLM_API_KEY'
+                                                : '';
         if (keyField) {
             onInputChange(value, keyField);
         }
     };
 
     const fetchAvailableModels = async () => {
+        if (isManualModelProvider) return;
         if (selectedProvider === 'openai' && !currentApiKey) return;
         if (selectedProvider === 'google' && !currentApiKey) return;
         if (selectedProvider === 'anthropic' && !currentApiKey) return;
+        if (selectedProvider === 'openrouter' && !currentApiKey) return;
+        if (selectedProvider === 'cerebras' && !currentApiKey) return;
         if (selectedProvider === 'custom' && !currentCustomUrl) return;
+        if (selectedProvider === 'litellm' && !currentLitellmUrl) return;
 
         setModelsLoading(true);
         try {
@@ -149,13 +202,19 @@ const TextProvider = ({
             } else if (selectedProvider === 'ollama') {
                 response = await fetch(getApiUrl('/api/v1/ppt/ollama/models/supported'));
             } else {
+                const openAiCompatibleUrl =
+                    selectedProvider === 'custom'
+                        ? currentCustomUrl
+                        : selectedProvider === 'litellm'
+                            ? currentLitellmUrl
+                            : selectedProviderMeta?.url || '';
                 response = await fetch(getApiUrl('/api/v1/ppt/openai/models/available'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        url: selectedProvider === 'custom' ? currentCustomUrl : selectedProviderMeta?.url || '',
+                        url: openAiCompatibleUrl,
                         api_key: currentApiKey
                     }),
                 });
@@ -216,7 +275,13 @@ const TextProvider = ({
                                 ? 'models/gemini-2.5-flash'
                                 : selectedProvider === 'anthropic'
                                     ? 'claude-sonnet-4-20250514'
-                                    : modelValues[0];
+                                    : selectedProvider === 'openrouter'
+                                        ? 'openai/gpt-4o'
+                                        : selectedProvider === 'cerebras'
+                                            ? 'llama-3.3-70b'
+                                            : selectedProvider === 'litellm'
+                                                ? 'gpt-4.1'
+                                                : modelValues[0];
 
                     const nextModel = modelValues.includes(preferredDefault) ? preferredDefault : modelValues[0];
                     onInputChange(nextModel, currentModelField);
@@ -252,8 +317,8 @@ const TextProvider = ({
     return (
         <div className="space-y-6 bg-[#F9F8F8] p-7 rounded-[12px] ">
             {/* API Key Input */}
-            <div className="mb-4 flex items-end justify-between rounded-[12px] bg-white pt-5 pb-10 px-10">
-                <div className=" max-w-[290px] ">
+            <div className="mb-4 flex flex-col gap-8 rounded-[12px] bg-white pt-5 pb-10 px-10 lg:flex-row lg:items-end lg:justify-between lg:gap-6">
+                <div className="max-w-[290px] shrink-0 ">
                     <div className='w-[60px] h-[60px] rounded-[4px] flex items-center justify-center'
                         style={{ backgroundColor: '#4C55541A' }}
                     >
@@ -268,9 +333,17 @@ const TextProvider = ({
                         Choosing where text content comes from
                     </p>
                 </div>
-                <div className='flex flex-col justify-end items-end gap-4'>
-                    <div className={`flex gap-4 justify-end ${selectedProvider === 'codex' ? 'items-end' : 'items-start'}`}>
-                        <div className={`relative ${selectedProvider === 'codex' ? 'w-[240px]' : 'w-[222px]'}`}>
+                <div className="flex min-w-0 flex-1 flex-col items-stretch justify-end gap-4 sm:items-end">
+                    <div
+                        className={`flex w-full min-w-0 flex-wrap gap-4 sm:justify-end ${
+                            selectedProvider === 'codex' ? 'items-end' : 'items-start'
+                        }`}
+                    >
+                        <div
+                            className={`relative shrink-0 ${
+                                selectedProvider === 'codex' ? 'w-[240px]' : 'w-[222px]'
+                            }`}
+                        >
                             <div className="flex flex-col justify-start ">
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Select Text Provider
@@ -347,7 +420,13 @@ const TextProvider = ({
                                 </Popover>
                             </div>
                         </div>
-                        <div className={`relative flex flex-col justify-end ${selectedProvider === 'codex' ? 'items-end w-[262px] max-w-full' : 'items-end w-[222px]'}`}>
+                        <div
+                            className={`relative flex min-w-0 flex-col justify-end ${
+                                selectedProvider === 'codex'
+                                    ? 'items-end w-[262px] max-w-full shrink-0'
+                                    : 'items-end w-[222px] shrink-0 max-w-full'
+                            }`}
+                        >
                             <div className="flex flex-col justify-start w-full ">
                                 {selectedProvider === 'ollama' ? (
                                     <>
@@ -391,7 +470,7 @@ const TextProvider = ({
                                             </>
                                         )}
                                     </>
-                                ) : selectedProvider === 'codex' ?
+                                ) : selectedProvider === 'codex' ? (
                                     <div className='w-full mt-0 rounded-[12px]  '>
 
                                         <CodexConfig
@@ -402,10 +481,10 @@ const TextProvider = ({
                                             }}
                                         />
                                     </div>
-                                    : (
+                                ) : (
                                         <>
                                             <label className="block text-sm font-medium capitalize text-gray-700 mb-2">
-                                                {selectedProvider === 'custom' ? 'Custom LLM API Key' : `${llmConfig.LLM} API Key`}
+                                                {providerApiKeyLabel}
                                             </label>
                                             <div className="relative">
                                                 <input
@@ -413,7 +492,11 @@ const TextProvider = ({
                                                     value={currentApiKey}
                                                     onChange={(e) => onApiKeyChange(selectedProvider, e.target.value)}
                                                     className="w-full px-2 py-3 outline-none border  border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                                                    placeholder={`Enter your ${llmConfig.LLM} API key`}
+                                                    placeholder={
+                                                        selectedProvider === 'litellm'
+                                                            ? 'Optional if your proxy does not require auth'
+                                                            : `Enter your ${providerApiKeyLabel}`
+                                                    }
                                                 />
                                                 <button
                                                     type="button"
@@ -434,10 +517,37 @@ const TextProvider = ({
                                         placeholder="OpenAI-compatible URL"
                                     />
                                 )}
-
-
+                                {selectedProvider === 'litellm' && (
+                                    <>
+                                        <label className="mt-3 block text-sm font-medium text-gray-700 mb-2">
+                                            LiteLLM base URL
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={llmConfig.LITELLM_BASE_URL || ''}
+                                            onChange={(e) => onInputChange(e.target.value, 'LITELLM_BASE_URL')}
+                                            className="w-full px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            placeholder="e.g. http://host.docker.internal:4000/v1"
+                                        />
+                                        <p className="mt-1.5 text-xs text-gray-500">
+                                            OpenAI-compatible root (usually ends with /v1); /v1 is added if omitted. API key above is optional for local proxies with no auth.
+                                        </p>
+                                    </>
+                                )}
+                                {(selectedProvider === 'vertex' || selectedProvider === 'azure') && (
+                                    <VertexAzureManualFields
+                                        key={selectedProvider}
+                                        provider={selectedProvider}
+                                        llmConfig={llmConfig}
+                                        onPatch={(patch) => {
+                                            for (const [field, value] of Object.entries(patch)) {
+                                                if (value !== undefined) onInputChange(value as string, field);
+                                            }
+                                        }}
+                                    />
+                                )}
                             </div>
-                            {selectedProvider !== 'ollama' && selectedProvider !== 'codex' && (!modelsChecked || (modelsChecked && availableModels.length === 0)) && (
+                            {!isManualModelProvider && selectedProvider !== 'ollama' && selectedProvider !== 'codex' && (!modelsChecked || (modelsChecked && availableModels.length === 0)) && (
 
                                 <button
                                     onClick={fetchAvailableModels}
@@ -446,7 +556,10 @@ const TextProvider = ({
                                         (selectedProvider === 'openai' && !currentApiKey) ||
                                         (selectedProvider === 'google' && !currentApiKey) ||
                                         (selectedProvider === 'anthropic' && !currentApiKey) ||
-                                        (selectedProvider === 'custom' && !currentCustomUrl)
+                                        (selectedProvider === 'openrouter' && !currentApiKey) ||
+                                        (selectedProvider === 'cerebras' && !currentApiKey) ||
+                                        (selectedProvider === 'custom' && !currentCustomUrl) ||
+                                        (selectedProvider === 'litellm' && !currentLitellmUrl)
                                     }
                                     className={`mt-4 py-2.5 bg-[#EDEEEF] px-3.5 w-fit  rounded-[48px] text-xs font-semibold text-[#101323] transition-all duration-200 border ${modelsLoading
                                         ? " border-gray-300 cursor-not-allowed text-gray-500"
@@ -466,7 +579,7 @@ const TextProvider = ({
                         </div>
                     </div>
                     {/* Model Selection - only show if models are available */}
-                    {selectedProvider !== 'codex' && modelsChecked && availableModels.length > 0 ? (
+                    {!isManualModelProvider && selectedProvider !== 'codex' && modelsChecked && availableModels.length > 0 ? (
                         <div className="w-[222px]">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-3">

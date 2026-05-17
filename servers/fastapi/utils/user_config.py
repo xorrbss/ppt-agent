@@ -15,6 +15,26 @@ from utils.get_env import (
     get_disable_thinking_env,
     get_google_api_key_env,
     get_google_model_env,
+    get_vertex_api_key_env,
+    get_vertex_model_env,
+    get_vertex_project_env,
+    get_vertex_location_env,
+    get_vertex_base_url_env,
+    get_azure_openai_api_key_env,
+    get_azure_openai_model_env,
+    get_azure_openai_endpoint_env,
+    get_azure_openai_base_url_env,
+    get_azure_openai_api_version_env,
+    get_azure_openai_deployment_env,
+    get_cerebras_api_key_env,
+    get_cerebras_base_url_env,
+    get_cerebras_model_env,
+    get_litellm_base_url_env,
+    get_litellm_api_key_env,
+    get_litellm_model_env,
+    get_openrouter_api_key_env,
+    get_openrouter_base_url_env,
+    get_openrouter_model_env,
     get_gpt_image_1_5_quality_env,
     get_llm_provider_env,
     get_ollama_model_env,
@@ -53,6 +73,26 @@ from utils.set_env import (
     set_extended_reasoning_env,
     set_google_api_key_env,
     set_google_model_env,
+    set_vertex_api_key_env,
+    set_vertex_model_env,
+    set_vertex_project_env,
+    set_vertex_location_env,
+    set_vertex_base_url_env,
+    set_azure_openai_api_key_env,
+    set_azure_openai_model_env,
+    set_azure_openai_endpoint_env,
+    set_azure_openai_base_url_env,
+    set_azure_openai_api_version_env,
+    set_azure_openai_deployment_env,
+    set_cerebras_api_key_env,
+    set_cerebras_base_url_env,
+    set_cerebras_model_env,
+    set_litellm_base_url_env,
+    set_litellm_api_key_env,
+    set_litellm_model_env,
+    set_openrouter_api_key_env,
+    set_openrouter_base_url_env,
+    set_openrouter_model_env,
     set_gpt_image_1_5_quality_env,
     set_llm_provider_env,
     set_ollama_model_env,
@@ -94,6 +134,32 @@ def get_user_config():
         OPENAI_MODEL=existing_config.OPENAI_MODEL or get_openai_model_env(),
         GOOGLE_API_KEY=existing_config.GOOGLE_API_KEY or get_google_api_key_env(),
         GOOGLE_MODEL=existing_config.GOOGLE_MODEL or get_google_model_env(),
+        VERTEX_API_KEY=existing_config.VERTEX_API_KEY or get_vertex_api_key_env(),
+        VERTEX_MODEL=existing_config.VERTEX_MODEL or get_vertex_model_env(),
+        VERTEX_PROJECT=existing_config.VERTEX_PROJECT or get_vertex_project_env(),
+        VERTEX_LOCATION=existing_config.VERTEX_LOCATION or get_vertex_location_env(),
+        VERTEX_BASE_URL=existing_config.VERTEX_BASE_URL or get_vertex_base_url_env(),
+        AZURE_OPENAI_API_KEY=existing_config.AZURE_OPENAI_API_KEY
+        or get_azure_openai_api_key_env(),
+        AZURE_OPENAI_MODEL=existing_config.AZURE_OPENAI_MODEL
+        or get_azure_openai_model_env(),
+        AZURE_OPENAI_ENDPOINT=existing_config.AZURE_OPENAI_ENDPOINT
+        or get_azure_openai_endpoint_env(),
+        AZURE_OPENAI_BASE_URL=existing_config.AZURE_OPENAI_BASE_URL
+        or get_azure_openai_base_url_env(),
+        AZURE_OPENAI_API_VERSION=existing_config.AZURE_OPENAI_API_VERSION
+        or get_azure_openai_api_version_env(),
+        AZURE_OPENAI_DEPLOYMENT=existing_config.AZURE_OPENAI_DEPLOYMENT
+        or get_azure_openai_deployment_env(),
+        OPENROUTER_API_KEY=existing_config.OPENROUTER_API_KEY or get_openrouter_api_key_env(),
+        OPENROUTER_MODEL=existing_config.OPENROUTER_MODEL or get_openrouter_model_env(),
+        OPENROUTER_BASE_URL=existing_config.OPENROUTER_BASE_URL or get_openrouter_base_url_env(),
+        CEREBRAS_API_KEY=existing_config.CEREBRAS_API_KEY or get_cerebras_api_key_env(),
+        CEREBRAS_MODEL=existing_config.CEREBRAS_MODEL or get_cerebras_model_env(),
+        CEREBRAS_BASE_URL=existing_config.CEREBRAS_BASE_URL or get_cerebras_base_url_env(),
+        LITELLM_BASE_URL=existing_config.LITELLM_BASE_URL or get_litellm_base_url_env(),
+        LITELLM_API_KEY=existing_config.LITELLM_API_KEY or get_litellm_api_key_env(),
+        LITELLM_MODEL=existing_config.LITELLM_MODEL or get_litellm_model_env(),
         ANTHROPIC_API_KEY=existing_config.ANTHROPIC_API_KEY
         or get_anthropic_api_key_env(),
         ANTHROPIC_MODEL=existing_config.ANTHROPIC_MODEL or get_anthropic_model_env(),
@@ -160,6 +226,46 @@ def update_env_with_user_config():
         set_google_api_key_env(user_config.GOOGLE_API_KEY)
     if user_config.GOOGLE_MODEL:
         set_google_model_env(user_config.GOOGLE_MODEL)
+    if user_config.VERTEX_API_KEY:
+        set_vertex_api_key_env(user_config.VERTEX_API_KEY)
+    if user_config.VERTEX_MODEL:
+        set_vertex_model_env(user_config.VERTEX_MODEL)
+    if user_config.VERTEX_PROJECT:
+        set_vertex_project_env(user_config.VERTEX_PROJECT)
+    if user_config.VERTEX_LOCATION:
+        set_vertex_location_env(user_config.VERTEX_LOCATION)
+    if user_config.VERTEX_BASE_URL:
+        set_vertex_base_url_env(user_config.VERTEX_BASE_URL)
+    if user_config.AZURE_OPENAI_API_KEY:
+        set_azure_openai_api_key_env(user_config.AZURE_OPENAI_API_KEY)
+    if user_config.AZURE_OPENAI_MODEL:
+        set_azure_openai_model_env(user_config.AZURE_OPENAI_MODEL)
+    if user_config.AZURE_OPENAI_ENDPOINT:
+        set_azure_openai_endpoint_env(user_config.AZURE_OPENAI_ENDPOINT)
+    if user_config.AZURE_OPENAI_BASE_URL:
+        set_azure_openai_base_url_env(user_config.AZURE_OPENAI_BASE_URL)
+    if user_config.AZURE_OPENAI_API_VERSION:
+        set_azure_openai_api_version_env(user_config.AZURE_OPENAI_API_VERSION)
+    if user_config.AZURE_OPENAI_DEPLOYMENT:
+        set_azure_openai_deployment_env(user_config.AZURE_OPENAI_DEPLOYMENT)
+    if user_config.OPENROUTER_API_KEY:
+        set_openrouter_api_key_env(user_config.OPENROUTER_API_KEY)
+    if user_config.OPENROUTER_MODEL:
+        set_openrouter_model_env(user_config.OPENROUTER_MODEL)
+    if user_config.OPENROUTER_BASE_URL:
+        set_openrouter_base_url_env(user_config.OPENROUTER_BASE_URL)
+    if user_config.CEREBRAS_API_KEY:
+        set_cerebras_api_key_env(user_config.CEREBRAS_API_KEY)
+    if user_config.CEREBRAS_MODEL:
+        set_cerebras_model_env(user_config.CEREBRAS_MODEL)
+    if user_config.CEREBRAS_BASE_URL:
+        set_cerebras_base_url_env(user_config.CEREBRAS_BASE_URL)
+    if user_config.LITELLM_BASE_URL:
+        set_litellm_base_url_env(user_config.LITELLM_BASE_URL)
+    if user_config.LITELLM_API_KEY:
+        set_litellm_api_key_env(user_config.LITELLM_API_KEY)
+    if user_config.LITELLM_MODEL:
+        set_litellm_model_env(user_config.LITELLM_MODEL)
     if user_config.ANTHROPIC_API_KEY:
         set_anthropic_api_key_env(user_config.ANTHROPIC_API_KEY)
     if user_config.ANTHROPIC_MODEL:

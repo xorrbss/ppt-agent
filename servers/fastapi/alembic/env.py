@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from models.sql.async_presentation_generation_status import (  # noqa: F401, E402
     AsyncPresentationGenerationTaskModel,
 )
+from models.sql.chat_history_message import ChatHistoryMessageModel  # noqa: F401, E402
 from models.sql.image_asset import ImageAsset  # noqa: F401, E402
 from models.sql.key_value import KeyValueSqlModel  # noqa: F401, E402
 from models.sql.ollama_pull_status import OllamaPullStatus  # noqa: F401, E402
@@ -38,17 +39,6 @@ target_metadata = SQLModel.metadata
 _CLI_PLACEHOLDER_DB_URL = "sqlite:///placeholder"
 
 
-def _to_sync_database_url(database_url: str) -> str:
-    # Preserve slash counts for sqlite URLs so Windows paths stay valid.
-    if database_url.startswith("sqlite+aiosqlite:///"):
-        return "sqlite:///" + database_url[len("sqlite+aiosqlite:///") :]
-    if database_url.startswith("postgresql+asyncpg://"):
-        return "postgresql://" + database_url[len("postgresql+asyncpg://") :]
-    if database_url.startswith("mysql+aiomysql://"):
-        return "mysql://" + database_url[len("mysql+aiomysql://") :]
-    return database_url
-
-
 def _get_url() -> str:
     """
     Prefer the URL injected by migrations.py via config.set_main_option,
@@ -58,10 +48,10 @@ def _get_url() -> str:
     if configured and configured != _CLI_PLACEHOLDER_DB_URL:
         return configured
 
-    from utils.db_utils import get_database_url_and_connect_args
+    from utils.db_utils import get_database_url_and_connect_args, to_sync_sqlalchemy_url
 
     url, _ = get_database_url_and_connect_args()
-    return _to_sync_database_url(url)
+    return to_sync_sqlalchemy_url(url)
 
 
 def run_migrations_offline() -> None:

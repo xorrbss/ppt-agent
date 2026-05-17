@@ -2,14 +2,26 @@ import asyncio
 import json
 import os
 from fastembed_vectorstore import FastembedEmbeddingModel, FastembedVectorstore
+from utils.asset_directory_utils import absolute_fastapi_asset_url
 from utils.path_helpers import get_resource_path, get_writable_path
+
+
+def _icon_fastembed_cache_directory() -> str:
+    """ONNX weights for icon search (MiniLM). Prefer a path outside ``APP_DATA_DIRECTORY``
+    in Docker: ``./app_data`` is often bind-mounted and would hide weights baked at image build.
+    """
+    override = (os.getenv("PRESENTON_FASTEMBED_ICON_CACHE_DIR") or "").strip()
+    if override:
+        path = os.path.abspath(override)
+        os.makedirs(path, exist_ok=True)
+        return path
+    return get_writable_path("fastembed_cache")
 
 
 class IconFinderService:
     def __init__(self):
         self.model = FastembedEmbeddingModel.AllMiniLML6V2
-        # Use writable path for cache since it needs to be modified
-        self.cache_directory = get_writable_path("fastembed_cache")
+        self.cache_directory = _icon_fastembed_cache_directory()
         self.vectorstore = None
         self._initialized = False
         self._initialization_failed = False
@@ -125,7 +137,9 @@ class IconFinderService:
         try:
             result = await asyncio.to_thread(self.vectorstore.search, query, k)
             return [
-                f"/static/icons/bold/{each[0].split('||')[0]}.svg"
+                absolute_fastapi_asset_url(
+                    f"/static/icons/bold/{each[0].split('||')[0]}.svg"
+                )
                 for each in result
             ]
         except Exception as e:

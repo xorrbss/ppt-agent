@@ -14,6 +14,9 @@ import {
 import { getApiUrl } from "@/utils/api";
 import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
 
+/** Must match `VISION_LAYOUT_ERROR_MARKER` in FastAPI `utils/template_vision_errors.py`. */
+const TEMPLATE_VISION_MODEL_MARKER = "TEMPLATE_VISION_MODEL_REQUIRED";
+
 const initialState: TemplateCreationState = {
     step: 'file-upload',
     isLoading: false,
@@ -275,19 +278,63 @@ export const useTemplateCreation = () => {
         updateState({ currentSlideIndex: slideIndex });
 
         try {
-            const response = await fetch(getApiUrl(`/api/v1/ppt/template/slide-layout/create?is_reconstruct=${retry}`), {
-                method: "POST",
-                headers: getHeader(),
-                body: JSON.stringify({
-                    id: templateId,
-                    index: slideIndex,
-                }),
-            });
-
-            const data = await ApiResponseHandler.handleResponse(
-                response,
-                `Failed to create layout for slide ${slideIndex + 1}`
+            const startResponse = await fetch(
+                getApiUrl(`/api/v1/ppt/template/slide-layout/create/start`),
+                {
+                    method: "POST",
+                    headers: getHeader(),
+                    body: JSON.stringify({
+                        id: templateId,
+                        index: slideIndex,
+                    }),
+                }
             );
+
+            const startData = await ApiResponseHandler.handleResponse(
+                startResponse,
+                `Failed to start layout job for slide ${slideIndex + 1}`
+            );
+            const jobId = startData.job_id as string;
+
+            const pollMs = 2000;
+            const maxWaitMs = 45 * 60 * 1000;
+            const deadline = Date.now() + maxWaitMs;
+            let data: { react_component: string } | undefined;
+
+            while (Date.now() < deadline) {
+                const statusResponse = await fetch(
+                    getApiUrl(`/api/v1/ppt/template/slide-layout/create/job/${encodeURIComponent(jobId)}`),
+                    { headers: getHeader() }
+                );
+                const statusData = await ApiResponseHandler.handleResponse(
+                    statusResponse,
+                    `Failed to check layout job for slide ${slideIndex + 1}`
+                );
+                if (statusData.status === "complete" && statusData.react_component) {
+                    data = { react_component: statusData.react_component };
+                    break;
+                }
+                if (statusData.status === "failed") {
+                    throw new Error(
+                        statusData.error ||
+                            `Layout generation failed for slide ${slideIndex + 1}`
+                    );
+                }
+                await new Promise((r) => setTimeout(r, pollMs));
+            }
+
+            if (!data) {
+                throw new Error(
+                    "Timed out waiting for slide layout generation (exceeded 45 minutes)"
+                );
+            }
+
+            const layoutResult: SlideLayoutResponse = {
+                slide_index: slideIndex,
+                react_component: data.react_component,
+                layout_id: "",
+                layout_name: "",
+            };
 
             // Update slide with the react component
             setSlides(prev => {
@@ -296,10 +343,9 @@ export const useTemplateCreation = () => {
                         ...s,
                         processing: false,
                         processed: true,
-                        react: data.react_component,
-                        layout_id: data.layout_id,
-                        layout_name: data.layout_name,
-                        layout_description: data.layout_description,
+                        react: layoutResult.react_component,
+                        layout_id: layoutResult.layout_id || undefined,
+                        layout_name: layoutResult.layout_name || undefined,
                     } : s
                 );
 
@@ -332,15 +378,17 @@ export const useTemplateCreation = () => {
                 return newSlides;
             });
 
-            return data;
+            return layoutResult;
         } catch (error) {
-            // Auto-retry once on failure before showing error
-            if (!_isAutoRetry) {
+            const errorMessage =
+                error instanceof Error ? error.message : "Layout creation failed";
+            const isVisionModelError = errorMessage.includes(TEMPLATE_VISION_MODEL_MARKER);
+
+            // Auto-retry once on transient failures; vision/model capability errors won't recover.
+            if (!_isAutoRetry && !isVisionModelError) {
                 console.log(`Auto-retrying slide ${slideIndex + 1} after API failure...`);
                 return createSlideLayout(templateId, slideIndex, autoAdvance, true, true);
             }
-
-            const errorMessage = error instanceof Error ? error.message : "Layout creation failed";
 
             // Mark slide with error
             setSlides(prev => {
@@ -366,7 +414,20 @@ export const useTemplateCreation = () => {
                 return newSlides;
             });
 
-            toast.error(`Slide ${slideIndex + 1} Failed`, { description: errorMessage });
+            if (isVisionModelError) {
+                const description = errorMessage
+                    .replace(TEMPLATE_VISION_MODEL_MARKER, "")
+                    .trim()
+                    .replace(/^\n+/, "");
+                toast.error("Vision-capable text model required", {
+                    description:
+                        description ||
+                        "Choose a text model that accepts images in Settings, save, and try again.",
+                    duration: 12_000,
+                });
+            } else {
+                toast.error(`Slide ${slideIndex + 1} failed`, { description: errorMessage });
+            }
             return null;
         }
     }, [updateState]);

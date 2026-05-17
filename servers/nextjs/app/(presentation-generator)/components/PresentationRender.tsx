@@ -13,12 +13,14 @@ const SlideScale = ({
     /** Fill viewport; scale may exceed 1 so slides appear larger in present mode */
     presentMode = false,
     isClickable = true,
-}: { slide: any; theme?: any; isEditMode?: boolean; presentMode?: boolean; isClickable?: boolean }) => {
+    fixedSize = false,
+}: { slide: any; theme?: any; isEditMode?: boolean; presentMode?: boolean; isClickable?: boolean; fixedSize?: boolean }) => {
 
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [box, setBox] = useState({ w: 0, h: 0 });
 
     const scale = useMemo(() => {
+        if (fixedSize) return 1;
         if (presentMode) {
             const { w, h } = box;
             if (w < 1 || h < 1) return 1;
@@ -29,7 +31,7 @@ const SlideScale = ({
         const safeWidth = Math.max(0, box.w + 20);
         if (!safeWidth) return 1;
         return Math.min((safeWidth / BASE_WIDTH) * 0.98, 1);
-    }, [presentMode, box.w, box.h]);
+    }, [fixedSize, presentMode, box.w, box.h]);
 
     useEffect(() => {
         if (!containerRef.current) return;
@@ -46,12 +48,16 @@ const SlideScale = ({
     }, []);
     return (<div
         ref={containerRef}
-        className={`relative w-full ${presentMode ? "flex h-full min-h-0 items-center justify-center shadow-none" : "shadow-md"}`}
+        className={
+            fixedSize
+                ? "relative h-[720px] w-[1280px] overflow-hidden shadow-none"
+                : `relative w-full ${presentMode ? "flex h-full min-h-0 items-center justify-center shadow-none" : "shadow-md"}`
+        }
     >
         <div
-            className={presentMode ? "relative mx-auto shrink-0" : "relative mx-auto max-w-[1280px]"}
+            className={presentMode || fixedSize ? "relative mx-auto shrink-0" : "relative mx-auto max-w-[1280px]"}
             style={{
-                width: presentMode ? `${BASE_WIDTH * scale}px` : undefined,
+                width: presentMode || fixedSize ? `${BASE_WIDTH * scale}px` : undefined,
                 height: `${BASE_HEIGHT * scale}px`,
                 overflow: "hidden",
             }}

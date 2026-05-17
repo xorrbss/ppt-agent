@@ -36,6 +36,49 @@ export const getLLMConfigValidationError = (
     if (!isProvided(llmConfig.GOOGLE_MODEL)) {
       return 'No Google model selected. Use "Check models" after entering your API key, then choose a model.';
     }
+  } else if (llm === "vertex") {
+    const hasApiKey = isProvided(llmConfig.VERTEX_API_KEY);
+    const hasProject = isProvided(llmConfig.VERTEX_PROJECT);
+    const hasLocation = isProvided(llmConfig.VERTEX_LOCATION);
+    if (!hasApiKey && !hasProject) {
+      return "Vertex AI requires either a Vertex API key or a GCP project.";
+    }
+    if (hasApiKey && (hasProject || hasLocation)) {
+      return "Use either Vertex API key mode or project/location mode, not both.";
+    }
+    if (!isProvided(llmConfig.VERTEX_MODEL)) {
+      return "Vertex model is required.";
+    }
+  } else if (llm === "azure") {
+    if (!isProvided(llmConfig.AZURE_OPENAI_API_KEY)) {
+      return "Azure OpenAI API key is required.";
+    }
+
+    if (!isProvided(llmConfig.AZURE_OPENAI_ENDPOINT)) {
+      return "Azure endpoint is required.";
+    }
+
+    if (!isProvided(llmConfig.AZURE_OPENAI_API_VERSION)) {
+      return "Azure OpenAI API version is required.";
+    }
+
+    if (!isProvided(llmConfig.AZURE_OPENAI_MODEL)) {
+      return "Azure model name is required.";
+    }
+  } else if (llm === "openrouter") {
+    if (!isProvided(llmConfig.OPENROUTER_API_KEY)) {
+      return "OpenRouter API key is required.";
+    }
+    if (!isProvided(llmConfig.OPENROUTER_MODEL)) {
+      return "Select or enter an OpenRouter model id.";
+    }
+  } else if (llm === "cerebras") {
+    if (!isProvided(llmConfig.CEREBRAS_API_KEY)) {
+      return "Cerebras API key is required.";
+    }
+    if (!isProvided(llmConfig.CEREBRAS_MODEL)) {
+      return "Select or enter a Cerebras model id.";
+    }
   } else if (llm === "anthropic") {
     if (!isProvided(llmConfig.ANTHROPIC_API_KEY)) {
       return "Anthropic API key is required.";
@@ -56,6 +99,13 @@ export const getLLMConfigValidationError = (
     }
     if (!isProvided(llmConfig.CUSTOM_MODEL)) {
       return 'No model selected for your custom endpoint. Use "Check models" after entering the URL, then choose a model.';
+    }
+  } else if (llm === "litellm") {
+    if (!isProvided(llmConfig.LITELLM_BASE_URL)) {
+      return "LiteLLM base URL is required.";
+    }
+    if (!isProvided(llmConfig.LITELLM_MODEL)) {
+      return 'Use "Check models" after entering the base URL, then choose a model.';
     }
   } else if (llm === "codex" || llm === "chatgpt") {
     if (!isProvided(llmConfig.CODEX_MODEL)) {
@@ -115,23 +165,60 @@ export const getLLMConfigValidationError = (
   return null;
 };
 
+/** Codex is selected but no model chosen - block navigation away from Settings. */
+export function isCodexMissingSelectedModel(llmConfig: LLMConfig): boolean {
+  return llmConfig.LLM === "codex" && !isProvided(llmConfig.CODEX_MODEL);
+}
+
+/**
+ * While on Settings with Codex selected and no model (e.g. after sign-out),
+ * block leaving for non-Settings destinations.
+ */
+export function shouldBlockCodexOutboundNav(
+  llmConfig: LLMConfig,
+  destinationPath: string,
+  currentPathname: string | null
+): boolean {
+  if (!isCodexMissingSelectedModel(llmConfig)) return false;
+  const onSettings =
+    currentPathname === "/settings" ||
+    (currentPathname?.startsWith("/settings/") ?? false);
+  if (!onSettings) return false;
+  const path = destinationPath.split("?")[0] || "";
+  if (path === "/settings" || path.startsWith("/settings/")) return false;
+  return true;
+}
+
+/** Keep Redux in sync when Codex signs out so guards observe cleared CODEX_MODEL. */
+export function syncStoreAfterCodexSignOut(): void {
+  const prev = store.getState().userConfig.llm_config;
+  store.dispatch(
+    setLLMConfig({
+      ...prev,
+      LLM: "codex",
+      CODEX_MODEL: "",
+    })
+  );
+}
+
 export const handleSaveLLMConfig = async (llmConfig: LLMConfig) => {
   const validationError = getLLMConfigValidationError(llmConfig);
   if (validationError) {
     throw new Error(validationError);
   }
-  await fetch("/api/user-config", {
-    method: "POST",
-    body: JSON.stringify(llmConfig),
-  });
+
+  // Prefer shared API routes; fallback to Electron IPC for packaged compatibility.
+  if (typeof window !== "undefined" && window.electron?.setUserConfig) {
+    await window.electron.setUserConfig(llmConfig);
+  } else {
+    await fetch("/api/user-config", {
+      method: "POST",
+      body: JSON.stringify(llmConfig),
+    });
+  }
 
   store.dispatch(setLLMConfig(llmConfig));
 };
 
-export const hasValidLLMConfig = (llmConfig: LLMConfig) => {
-  console.log('llmConfig', llmConfig);
-
-  const validationError = getLLMConfigValidationError(llmConfig);
-  console.log('validationError', validationError);
-  return validationError === null;
-}
+export const hasValidLLMConfig = (llmConfig: LLMConfig) =>
+  getLLMConfigValidationError(llmConfig) === null;

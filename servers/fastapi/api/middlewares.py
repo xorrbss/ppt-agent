@@ -2,8 +2,13 @@ from fastapi import Request
 from starlette.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from utils.get_env import get_can_change_keys_env
-from utils.simple_auth import get_auth_status, get_session_token_from_request
+from utils.get_env import get_can_change_keys_env, is_disable_auth_enabled
+from utils.simple_auth import (
+    get_auth_status,
+    get_basic_auth_credentials_from_request,
+    get_session_token_from_request,
+    verify_credentials,
+)
 from utils.user_config import update_env_with_user_config
 
 
@@ -30,11 +35,17 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
     def _requires_auth(self, path: str) -> bool:
         if path.startswith("/api/"):
             return True
+        # PPTX export may re-fetch slide images without session/basic headers.
+        if path.startswith("/app_data/images/"):
+            return False
         if path.startswith("/app_data/"):
             return True
         return path in self._PROTECTED_NON_API_PATHS
 
     async def dispatch(self, request: Request, call_next):
+        if is_disable_auth_enabled():
+            return await call_next(request)
+
         path = request.url.path
 
         if (
@@ -55,6 +66,13 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
             )
 
         if not auth_status["authenticated"]:
+            basic_credentials = get_basic_auth_credentials_from_request(request)
+            if basic_credentials and verify_credentials(
+                basic_credentials[0], basic_credentials[1]
+            ):
+                request.state.auth_username = basic_credentials[0].strip()
+                return await call_next(request)
+
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Unauthorized"},

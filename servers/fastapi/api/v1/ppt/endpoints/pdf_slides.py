@@ -7,7 +7,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 from pydantic import BaseModel
 
 from services.documents_loader import DocumentsLoader
-from utils.asset_directory_utils import get_images_directory
+from utils.asset_directory_utils import absolute_fastapi_asset_url, get_images_directory
 import uuid
 from constants.documents import PDF_MIME_TYPES
 
@@ -94,12 +94,14 @@ async def process_pdf_slides(
                 ):
                     # Use shutil.copy2 instead of os.rename to handle cross-device moves
                     shutil.copy2(screenshot_path, permanent_screenshot_path)
-                    screenshot_url = (
+                    screenshot_url = absolute_fastapi_asset_url(
                         f"/app_data/images/{presentation_id}/{screenshot_filename}"
                     )
                 else:
                     # Fallback if screenshot generation failed or file is empty placeholder
-                    screenshot_url = "/static/images/replaceable_template_image.png"
+                    screenshot_url = absolute_fastapi_asset_url(
+                        "/static/images/replaceable_template_image.png"
+                    )
 
                 slides_data.append(
                     PdfSlideData(slide_number=i, screenshot_url=screenshot_url)

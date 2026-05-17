@@ -1,6 +1,12 @@
 import os
 
 
+def _is_truthy(value: str | None) -> bool:
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def get_can_change_keys_env():
     return os.getenv("CAN_CHANGE_KEYS")
 
@@ -13,12 +19,31 @@ def get_app_data_directory_env():
     return os.getenv("APP_DATA_DIRECTORY")
 
 
+def get_fastapi_public_base_url() -> str | None:
+    """
+    Public origin where FastAPI serves /app_data and /static (no trailing slash).
+
+    Uses NEXT_PUBLIC_FAST_API (same value Electron and the export runtime inject for the UI).
+    When unset, callers keep path-only URLs for same-origin / reverse-proxy setups (e.g. Docker).
+    """
+    v = (os.getenv("NEXT_PUBLIC_FAST_API") or "").strip().rstrip("/")
+    return v or None
+
+
 def get_temp_directory_env():
     return os.getenv("TEMP_DIRECTORY")
 
 
 def get_user_config_path_env():
     return os.getenv("USER_CONFIG_PATH")
+
+
+def get_disable_auth_env():
+    return os.getenv("DISABLE_AUTH")
+
+
+def is_disable_auth_enabled():
+    return _is_truthy(get_disable_auth_env())
 
 
 def get_llm_provider_env():
@@ -67,6 +92,86 @@ def get_google_api_key_env():
 
 def get_google_model_env():
     return os.getenv("GOOGLE_MODEL")
+
+
+def get_vertex_api_key_env():
+    return os.getenv("VERTEX_API_KEY")
+
+
+def get_vertex_model_env():
+    return os.getenv("VERTEX_MODEL")
+
+
+def get_vertex_project_env():
+    return os.getenv("VERTEX_PROJECT")
+
+
+def get_vertex_location_env():
+    return os.getenv("VERTEX_LOCATION")
+
+
+def get_vertex_base_url_env():
+    return os.getenv("VERTEX_BASE_URL")
+
+
+def get_azure_openai_api_key_env():
+    return os.getenv("AZURE_OPENAI_API_KEY")
+
+
+def get_azure_openai_model_env():
+    return os.getenv("AZURE_OPENAI_MODEL")
+
+
+def get_azure_openai_endpoint_env():
+    return os.getenv("AZURE_OPENAI_ENDPOINT")
+
+
+def get_azure_openai_base_url_env():
+    return os.getenv("AZURE_OPENAI_BASE_URL")
+
+
+def get_azure_openai_api_version_env():
+    return os.getenv("AZURE_OPENAI_API_VERSION")
+
+
+def get_azure_openai_deployment_env():
+    return os.getenv("AZURE_OPENAI_DEPLOYMENT")
+
+
+def get_openrouter_api_key_env():
+    return os.getenv("OPENROUTER_API_KEY")
+
+
+def get_openrouter_model_env():
+    return os.getenv("OPENROUTER_MODEL")
+
+
+def get_openrouter_base_url_env():
+    return os.getenv("OPENROUTER_BASE_URL")
+
+
+def get_cerebras_api_key_env():
+    return os.getenv("CEREBRAS_API_KEY")
+
+
+def get_cerebras_model_env():
+    return os.getenv("CEREBRAS_MODEL")
+
+
+def get_cerebras_base_url_env():
+    return os.getenv("CEREBRAS_BASE_URL")
+
+
+def get_litellm_base_url_env():
+    return os.getenv("LITELLM_BASE_URL")
+
+
+def get_litellm_api_key_env():
+    return os.getenv("LITELLM_API_KEY")
+
+
+def get_litellm_model_env():
+    return os.getenv("LITELLM_MODEL")
 
 
 def get_custom_llm_api_key_env():

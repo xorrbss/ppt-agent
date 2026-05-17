@@ -8,14 +8,25 @@ from utils.available_models import (
     list_available_openai_compatible_models,
 )
 from utils.get_env import (
+    get_azure_openai_api_key_env,
+    get_azure_openai_api_version_env,
+    get_azure_openai_base_url_env,
+    get_azure_openai_endpoint_env,
     get_anthropic_api_key_env,
     get_anthropic_model_env,
     get_can_change_keys_env,
+    get_cerebras_api_key_env,
     get_google_model_env,
+    get_litellm_base_url_env,
+    get_litellm_model_env,
     get_openai_api_key_env,
     get_openai_model_env,
+    get_openrouter_api_key_env,
     get_pixabay_api_key_env,
     get_pexels_api_key_env,
+    get_vertex_api_key_env,
+    get_vertex_location_env,
+    get_vertex_project_env,
     get_comfyui_url_env,
     get_comfyui_workflow_env,
 )
@@ -64,6 +75,48 @@ async def check_llm_and_image_provider_api_or_model_availability():
                     print("-" * 50)
                     print("Available models: ", available_models)
                     raise Exception(f"Model {google_model} is not available")
+
+        elif get_llm_provider() == LLMProvider.VERTEX:
+            vertex_api_key = get_vertex_api_key_env()
+            vertex_project = get_vertex_project_env()
+            vertex_location = get_vertex_location_env()
+            if not vertex_api_key and not vertex_project:
+                raise Exception(
+                    "Configure VERTEX_API_KEY or VERTEX_PROJECT for Vertex AI"
+                )
+            if vertex_api_key and (vertex_project or vertex_location):
+                raise Exception(
+                    "Vertex config is ambiguous. Use either VERTEX_API_KEY or "
+                    "VERTEX_PROJECT/VERTEX_LOCATION, not both."
+                )
+
+        elif get_llm_provider() == LLMProvider.AZURE:
+            azure_api_key = get_azure_openai_api_key_env()
+            azure_endpoint = get_azure_openai_endpoint_env()
+            azure_base_url = get_azure_openai_base_url_env()
+            azure_api_version = get_azure_openai_api_version_env()
+            if not azure_api_key:
+                raise Exception("AZURE_OPENAI_API_KEY must be provided")
+            if not azure_api_version:
+                raise Exception("AZURE_OPENAI_API_VERSION must be provided")
+            if not azure_endpoint and not azure_base_url:
+                raise Exception(
+                    "AZURE_OPENAI_ENDPOINT or AZURE_OPENAI_BASE_URL must be provided"
+                )
+
+        elif get_llm_provider() == LLMProvider.OPENROUTER:
+            if not get_openrouter_api_key_env():
+                raise Exception("OPENROUTER_API_KEY must be provided")
+
+        elif get_llm_provider() == LLMProvider.CEREBRAS:
+            if not get_cerebras_api_key_env():
+                raise Exception("CEREBRAS_API_KEY must be provided")
+
+        elif get_llm_provider() == LLMProvider.LITELLM:
+            if not (get_litellm_base_url_env() or "").strip():
+                raise Exception("LITELLM_BASE_URL must be provided")
+            if not (get_litellm_model_env() or "").strip():
+                raise Exception("LITELLM_MODEL must be provided")
 
         elif get_llm_provider() == LLMProvider.ANTHROPIC:
             anthropic_api_key = get_anthropic_api_key_env()

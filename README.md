@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://github.com/presenton/presenton/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue?style=flat" alt="Apache2.0" /></a>
   <a href="https://github.com/presenton/presenton"><img src="https://img.shields.io/github/stars/presenton/presenton?style=flat" alt="Stars" /></a>
-  <a href="https://presenton.ai/"><img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=flat" alt="Platform" /></a>
+  <a href="https://presenton.ai/"><img src="https://img.shields.io/badge/Platform-Docker%20%7C%20Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=flat" alt="Platform" /></a>
 </p>
 
 # Open-Source AI Presentation Generator and API (Gamma, Beautiful AI, Decktopus Alternative)
@@ -23,11 +23,12 @@ No SaaS lock-in · No forced subscriptions · Full control over models and data
 
 What makes Presenton different?
 
-- Fully **self-hosted**; Web (Docker) & Desktop (Mac, Windows & Linux)
-- Works with OpenAI, Gemini, Anthropic, Ollama, or custom models
-- API deployable
+- Use Fully **self-hosted** in Web through [Docker Package](https://docs.presenton.ai/v3/get-started/quickstart)
+- Or Download [Desktop App](https://presenton.ai/download) (Mac, Windows & Linux)
+- Works with OpenAI, Gemini, Vertex AI, Azure OpenAI, Anthropic, Ollama, or custom models
+- Comes with AI Presentation Generation API
 - Fully open-source (Apache 2.0)
-- Use your **existing PPTX files as templates** for AI presentation generation
+- Works with your own design/templates
 
 > [!TIP]
 > **Star us!** A ⭐ shows your support and encourages us to keep building! 😇
@@ -96,7 +97,7 @@ Presenton gives you complete control over your AI presentation workflow. Choose 
 - Flexible Generation — Build presentations from prompts or uploaded documents
 - Export Ready — Save as PowerPoint (PPTX) and PDF with professional formatting
 - Built-In MCP Server — Generate presentations over Model Context Protocol
-- Bring Your Own Key — Use your own API keys for OpenAI, Google Gemini, Anthropic Claude, or any compatible provider. Only pay for what you use, no hidden fees or subscriptions.
+- Bring Your Own Key — Use your own API keys for OpenAI, Google Gemini, Vertex AI, Azure OpenAI, Anthropic Claude, or any compatible provider. Only pay for what you use, no hidden fees or subscriptions.
 - Ollama Integration — Run open-source models locally with full privacy
 - OpenAI API Compatible — Connect to any OpenAI-compatible endpoint with your own models
 - Multi-Provider Support — Mix and match text and image generation providers
@@ -143,8 +144,7 @@ Run Presenton directly in your browser — no installation, no setup required. S
   <p>
     <strong>Prerequisites:</strong> Node.js (LTS), npm, Python 3.11, and
     <a href="https://docs.astral.sh/uv/">uv</a>
-    (for the Electron FastAPI backend in
-    <code>electron/servers/fastapi</code>).
+    (for the shared FastAPI backend in <code>servers/fastapi</code>).
   </p>
 
 - Setup (First Time)
@@ -203,11 +203,20 @@ Other optional variables exist in code (for example advanced Mem0 paths, LitePar
 #### LLM and API keys
 
 - **CAN_CHANGE_KEYS**=[true/false]: Set to **false** if you want to keep API keys hidden and make them unmodifiable.
-- **LLM**=[openai/google/anthropic/ollama/custom/codex]: Select the text **LLM**.
+- **LLM**=[openai/google/vertex/azure/anthropic/ollama/custom/codex]: Select the text **LLM**.
 - **OPENAI_API_KEY**: Required if **LLM** is **openai**.
 - **OPENAI_MODEL**: Required if **LLM** is **openai** (default: `gpt-4.1`).
 - **GOOGLE_API_KEY**: Required if **LLM** is **google**.
 - **GOOGLE_MODEL**: Required if **LLM** is **google** (default: `models/gemini-2.0-flash`).
+- **VERTEX_MODEL**: Required if **LLM** is **vertex** (default: `gemini-2.5-flash`).
+- **VERTEX_API_KEY**: Optional auth path for **LLM=vertex** (Vertex Express).
+- **VERTEX_PROJECT** / **VERTEX_LOCATION**: Optional auth path for **LLM=vertex** when using GCP project credentials (do not combine with `VERTEX_API_KEY`).
+- **VERTEX_BASE_URL**: Optional Vertex gateway/base URL override.
+- **AZURE_OPENAI_MODEL**: Required if **LLM** is **azure** (deployment/model name).
+- **AZURE_OPENAI_API_KEY**: Required if **LLM** is **azure**.
+- **AZURE_OPENAI_API_VERSION**: Required if **LLM** is **azure** (for example `2024-10-21`).
+- **AZURE_OPENAI_ENDPOINT** / **AZURE_OPENAI_BASE_URL**: At least one is required if **LLM** is **azure**.
+- **AZURE_OPENAI_DEPLOYMENT**: Optional deployment override for **LLM** is **azure**.
 - **ANTHROPIC_API_KEY**: Required if **LLM** is **anthropic**.
 - **ANTHROPIC_MODEL**: Required if **LLM** is **anthropic** (default: `claude-3-5-sonnet-20241022`).
 - **CODEX_MODEL**: Required if **LLM** is **codex** (Codex OAuth flow; compose maps host port **1455** for the callback).
@@ -230,13 +239,21 @@ Use when **LLM** is **ollama**:
 
 Mem0 uses local Qdrant + SQLite (OSS); memory is scoped per presentation.
 
+By default the Docker runtime now points Mem0 at a local Ollama-compatible LLM endpoint, so it no longer needs an OpenAI key just to initialize. If you want to use OpenAI instead, set `MEM0_LLM_BASE_URL`/`MEM0_LLM_API_KEY` to your OpenAI-compatible endpoint and key.
+Docker images install the default spaCy model (`en_core_web_sm`) during build so Mem0 can start without extra setup on each run.
+
 | Variable | Purpose |
 |----------|---------|
 | **MEM0_ENABLED** | **true**/false (compose default **true**). |
+| **MEM0_LLM_MODEL** | Mem0 LLM model name (compose default **`llama3.1:latest`** or `OLLAMA_MODEL`). |
+| **MEM0_LLM_API_KEY** | Mem0 LLM API key placeholder for OpenAI-compatible clients (compose default **`ollama`**). |
+| **MEM0_LLM_BASE_URL** | Mem0 LLM base URL (compose default **`OLLAMA_URL`** or `http://host.docker.internal:11434`). |
 | **MEM0_DIR** | Root directory (compose default **`/app_data/mem0`**). |
 | **MEM0_EMBEDDER_PROVIDER** | Embedder backend (compose default **`fastembed`**). |
 | **MEM0_EMBEDDER_MODEL** | Model id (compose default **`BAAI/bge-small-en-v1.5`**). |
 | **MEM0_EMBEDDING_DIMS** | Vector size (compose default **384**). |
+| **MEM0_SPACY_MODEL** | Optional spaCy model override (default **`en_core_web_sm`**). |
+| **MEM0_REQUIRE_SPACY_MODEL** | Keep as **true** (default). Set to false only if you intentionally want Mem0 to run without spaCy lemmatization. |
 
 #### Document parsing (LiteParse)
 
@@ -321,6 +338,12 @@ Same variables as compose; use `-e` instead of `.env` when running `docker run` 
 - Using Google
     <pre><code class="language-bash">docker run -it --name presenton -p 5000:80 -e LLM="google" -e GOOGLE_API_KEY="******" -e IMAGE_PROVIDER="gemini_flash" -e CAN_CHANGE_KEYS="false" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
 
+- Using Vertex AI (API key mode)
+    <pre><code class="language-bash">docker run -it --name presenton -p 5000:80 -e LLM="vertex" -e VERTEX_API_KEY="******" -e VERTEX_MODEL="gemini-2.5-flash" -e IMAGE_PROVIDER="gemini_flash" -e CAN_CHANGE_KEYS="false" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
+
+- Using Azure OpenAI
+    <pre><code class="language-bash">docker run -it --name presenton -p 5000:80 -e LLM="azure" -e AZURE_OPENAI_API_KEY="******" -e AZURE_OPENAI_MODEL="gpt-4.1" -e AZURE_OPENAI_API_VERSION="2024-10-21" -e AZURE_OPENAI_ENDPOINT="https://YOUR-RESOURCE.openai.azure.com" -e IMAGE_PROVIDER="pexels" -e PEXELS_API_KEY="******" -e CAN_CHANGE_KEYS="false" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
+
 - Using Ollama
     <pre><code class="language-bash">docker run -it --name presenton -p 5000:80 -e LLM="ollama" -e OLLAMA_MODEL="llama3.2:3b" -e IMAGE_PROVIDER="pexels" -e PEXELS_API_KEY="*******" -e CAN_CHANGE_KEYS="false" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
 
@@ -350,6 +373,11 @@ Same variables as compose; use `-e` instead of `.env` when running `docker run` 
 <strong>Endpoint:</strong> <code>/api/v1/ppt/presentation/generate</code><br>
 <strong>Method:</strong> <code>POST</code><br>
 <strong>Content-Type:</strong> <code>application/json</code>
+</p>
+
+<p>
+<strong>Authentication (HTTP Basic):</strong><br>
+All <code>/api/v1/</code> routes except <code>/api/v1/auth/*</code> require authentication. Send your Presenton admin username and password (same as the web UI, or <strong>AUTH_USERNAME</strong> / <strong>AUTH_PASSWORD</strong> when preseeding Docker). With <code>curl</code>, put them right after <code>-u</code> as <code>-u USERNAME:PASSWORD</code> — that is HTTP Basic auth and sets <code>Authorization: Basic …</code> for you. Replace the sample <code>username:password</code> below with your real credentials.
 </p>
 
 **Request Body**
@@ -480,17 +508,19 @@ Options: <code>pptx</code>, <code>pdf</code>
   "edit_path": "string"
 }</code></pre>
 
-**Example Request**
+**Example (curl + HTTP Basic auth with <code>-u</code>)**
 
-<pre><code class="language-bash">curl -X POST http://localhost:5000/api/v1/ppt/presentation/generate \
+<pre><code class="language-bash">curl -u username:password \
+  -X POST http://localhost:5000/api/v1/ppt/presentation/generate \
   -H "Content-Type: application/json" \
   -d '{
-    "content": "Introduction to Machine Learning",
+   "content": "Introduction to Machine Learning",
     "n_slides": 5,
     "language": "English",
     "template": "general",
     "export_as": "pptx"
   }'</code></pre>
+
 
 **Example Response**
 
@@ -536,11 +566,3 @@ Prepend your server’s root URL to <code>path</code> and
 ### 🚀 Roadmap
 
 Track the public roadmap on GitHub Projects: [https://github.com/orgs/presenton/projects/2](https://github.com/orgs/presenton/projects/2)
-
-#
-
-<p align="left">
-  <a href="https://www.youtube.com/@presentonai?sub_confirmation=1">
-    <img src="https://img.shields.io/badge/Subscribe-6C47FF?style=for-the-badge&logo=cloud&logoColor=white" />
-  </a>
-</p>

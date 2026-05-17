@@ -2,11 +2,12 @@ import asyncio
 import uuid
 from unittest.mock import patch
 
+import services.mem0_oss_memory as mem0_oss
 from services.mem0_presentation_memory_service import Mem0PresentationMemoryService
 
 
 class FakeMemoryClient:
-    instances = []
+    instances: list["FakeMemoryClient"] = []
 
     def __init__(self, config=None):
         self.config = config
@@ -45,13 +46,50 @@ class FakeMemoryClient:
         return self.next_search_response
 
 
-class FakeMem0Module:
-    Memory = FakeMemoryClient
+def _mem0_oss_fresh() -> None:
+    mem0_oss._shared_client = None  # type: ignore[attr-defined]
+    mem0_oss._init_attempted = False  # type: ignore[attr-defined]
 
 
 class TestMem0PresentationMemoryService:
     def setup_method(self):
         FakeMemoryClient.instances = []
+        _mem0_oss_fresh()
+
+    def test_shared_client_defaults_to_local_llm_without_openai_key(self):
+        captured = {}
+
+        def _fake_memory_from_config(config, telemetry_base):
+            captured["config"] = config
+            captured["telemetry_base"] = telemetry_base
+            return FakeMemoryClient.from_config(config)
+
+        with patch.dict(
+            "os.environ",
+            {
+                "MEM0_ENABLED": "true",
+                "APP_DATA_DIRECTORY": "/tmp/presenton-test",
+                "OLLAMA_URL": "http://ollama:11434",
+                "OLLAMA_MODEL": "llama3.1:8b",
+            },
+            clear=False,
+        ), patch(
+            "services.mem0_oss_memory.memory_from_config",
+            side_effect=_fake_memory_from_config,
+        ):
+            client = mem0_oss.get_shared_mem0_client()
+
+        assert client is not None
+        assert captured["telemetry_base"].endswith("/mem0/telemetry/oss")
+        assert captured["config"]["llm"]["provider"] == "openai"
+        assert captured["config"]["llm"]["config"]["model"] == "llama3.1:8b"
+        assert captured["config"]["llm"]["config"]["api_key"] == "ollama"
+        assert (
+            captured["config"]["llm"]["config"]["openai_base_url"]
+            == "http://ollama:11434/v1"
+        )
+        assert captured["config"]["vector_store"]["provider"] == "qdrant"
+        assert captured["config"]["embedder"]["provider"] == "fastembed"
 
     def test_store_generation_context_uses_presentation_scope(self):
         with patch.dict(
@@ -62,8 +100,25 @@ class TestMem0PresentationMemoryService:
             },
             clear=False,
         ), patch(
-            "services.mem0_presentation_memory_service.import_module",
-            return_value=FakeMem0Module,
+            "services.mem0_presentation_memory_service.get_shared_mem0_client",
+            return_value=FakeMemoryClient.from_config(
+                {
+                    "vector_store": {
+                        "provider": "qdrant",
+                        "config": {
+                            "on_disk": True,
+                            "embedding_model_dims": 384,
+                        },
+                    },
+                    "embedder": {
+                        "provider": "fastembed",
+                        "config": {
+                            "model": "BAAI/bge-small-en-v1.5",
+                            "embedding_dims": 384,
+                        },
+                    },
+                }
+            ),
         ):
             service = Mem0PresentationMemoryService()
             presentation_id = uuid.uuid4()
@@ -115,8 +170,19 @@ class TestMem0PresentationMemoryService:
             },
             clear=False,
         ), patch(
-            "services.mem0_presentation_memory_service.import_module",
-            return_value=FakeMem0Module,
+            "services.mem0_presentation_memory_service.get_shared_mem0_client",
+            return_value=FakeMemoryClient.from_config(
+                {
+                    "vector_store": {"provider": "qdrant", "config": {}},
+                    "embedder": {
+                        "provider": "fastembed",
+                        "config": {
+                            "model": "BAAI/bge-small-en-v1.5",
+                            "embedding_dims": 384,
+                        },
+                    },
+                }
+            ),
         ):
             service = Mem0PresentationMemoryService()
             presentation_id = uuid.uuid4()
@@ -154,3 +220,4 @@ class TestMem0PresentationMemoryService:
             "user_id": f"presentation:{presentation_id}"
         }
         assert client.search_calls[0]["top_k"] == 5
+

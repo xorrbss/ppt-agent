@@ -14,15 +14,23 @@ const CurrentConfig = () => {
             ? llmConfig.OPENAI_MODEL
             : textProviderKey === "google"
                 ? llmConfig.GOOGLE_MODEL
-                : textProviderKey === "anthropic"
-                    ? llmConfig.ANTHROPIC_MODEL
-                    : textProviderKey === "ollama"
-                        ? llmConfig.OLLAMA_MODEL
-                        : textProviderKey === "custom"
-                            ? llmConfig.CUSTOM_MODEL
-                            : textProviderKey === "codex"
-                                ? llmConfig.CODEX_MODEL
-                                : "";
+                : textProviderKey === "vertex"
+                    ? llmConfig.VERTEX_MODEL
+                    : textProviderKey === "azure"
+                        ? llmConfig.AZURE_OPENAI_MODEL
+                        : textProviderKey === "openrouter"
+                            ? llmConfig.OPENROUTER_MODEL
+                            : textProviderKey === "cerebras"
+                                ? llmConfig.CEREBRAS_MODEL
+                                : textProviderKey === "anthropic"
+                                    ? llmConfig.ANTHROPIC_MODEL
+                                    : textProviderKey === "ollama"
+                                        ? llmConfig.OLLAMA_MODEL
+                                        : textProviderKey === "custom"
+                                            ? llmConfig.CUSTOM_MODEL
+                                            : textProviderKey === "codex"
+                                                ? llmConfig.CODEX_MODEL
+                                                : "";
     const textSummary = selectedTextModel
         ? `${textProviderLabel} (${selectedTextModel})`
         : textProviderLabel;

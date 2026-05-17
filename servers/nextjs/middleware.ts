@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 /**
- * API-only: session required for all /api/* except auth and telemetry.
+ * API-only: session required for all /api/* except auth, telemetry, and
+ * /api/template (server-to-server template layout for FastAPI fallback).
  * Page routes are protected in server layouts (unknown URLs still 404; login uses relative redirects).
  */
 function getFastApiBaseUrl(request: NextRequest): string {
@@ -23,6 +24,14 @@ type AuthStatus = {
   configured: boolean;
   authenticated: boolean;
 };
+
+function isAuthDisabled(): boolean {
+  const raw = process.env.DISABLE_AUTH?.trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
+}
+
+const SESSION_COOKIE_NAME = "presenton_session";
+const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
 
 async function getAuthStatus(request: NextRequest): Promise<AuthStatus> {
   const cookieHeader = request.headers.get("cookie");
@@ -48,12 +57,44 @@ async function getAuthStatus(request: NextRequest): Promise<AuthStatus> {
 
 function isApiAuthExempt(pathname: string): boolean {
   return (
-    pathname.startsWith("/api/v1/auth/") || pathname === "/api/telemetry-status"
+    pathname.startsWith("/api/v1/auth/") ||
+    pathname === "/api/telemetry-status" ||
+    /** FastAPI `get_layout_by_name` fallback (no browser cookie in Docker). */
+    pathname === "/api/template" ||
+    pathname.startsWith("/api/export-presentation-data/")
   );
 }
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (pathname === "/pdf-maker") {
+    const exportSession = request.nextUrl.searchParams.get("exportSession");
+    if (exportSession) {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.searchParams.delete("exportSession");
+
+      const response = NextResponse.redirect(redirectUrl);
+      response.cookies.set({
+        name: SESSION_COOKIE_NAME,
+        value: exportSession,
+        maxAge: SESSION_TTL_SECONDS,
+        httpOnly: true,
+        secure:
+          request.headers.get("x-forwarded-proto")?.toLowerCase() === "https" ||
+          request.nextUrl.protocol === "https:",
+        sameSite: "lax",
+        path: "/",
+      });
+      return response;
+    }
+
+    return NextResponse.next();
+  }
+
+  if (isAuthDisabled()) {
+    return NextResponse.next();
+  }
 
   if (request.method === "OPTIONS" || isApiAuthExempt(pathname)) {
     return NextResponse.next();
@@ -76,5 +117,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/:path*"],
+  matcher: ["/api/:path*", "/pdf-maker"],
 };

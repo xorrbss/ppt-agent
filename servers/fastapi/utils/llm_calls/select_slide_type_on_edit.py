@@ -1,5 +1,3 @@
-import asyncio
-from fastapi import HTTPException
 from llmai import get_client
 from llmai.shared import JSONSchemaResponse, Message, SystemMessage, UserMessage
 from models.presentation_layout import PresentationLayoutModel, SlideLayoutModel
@@ -7,8 +5,9 @@ from models.slide_layout_index import SlideLayoutIndex
 from models.sql.slide import SlideModel
 from utils.llm_config import get_llm_config
 from utils.llm_client_error_handler import handle_llm_client_exceptions
-from utils.llm_utils import extract_structured_content, get_generate_kwargs
+from utils.llm_utils import generate_structured_with_schema_retries
 from utils.llm_provider import get_model
+from utils.schema_utils import ensure_array_schemas_have_items
 
 
 def get_messages(
@@ -60,9 +59,12 @@ async def get_slide_layout_from_prompt(
     slide_layout_index = layout.get_slide_layout_index(slide.layout)
 
     try:
+        layout_index_schema = ensure_array_schemas_have_items(
+            SlideLayoutIndex.model_json_schema()
+        )
         response_format = JSONSchemaResponse(
             name="response",
-            json_schema=SlideLayoutIndex.model_json_schema(),
+            json_schema=layout_index_schema,
             strict=True,
         )
         messages = get_messages(
@@ -73,24 +75,17 @@ async def get_slide_layout_from_prompt(
             memory_context,
         )
 
-        for attempt in range(3):
-            response = await asyncio.to_thread(
-                client.generate,
-                **get_generate_kwargs(
-                    model=model,
-                    messages=messages,
-                    response_format=response_format,
-                ),
-            )
-            content = extract_structured_content(response.content)
-            if content is not None:
-                index = SlideLayoutIndex(**content).index
-                return layout.slides[index]
-
-            if attempt < 2:
-                await asyncio.sleep(0.5 * (attempt + 1))
-
-        raise HTTPException(status_code=400, detail="LLM did not return any content")
+        content = await generate_structured_with_schema_retries(
+            client,
+            model,
+            messages=messages,
+            response_format=response_format,
+            json_schema=layout_index_schema,
+            strict=True,
+            validate_schema=True,
+        )
+        index = SlideLayoutIndex(**content).index
+        return layout.slides[index]
 
     except Exception as e:
         raise handle_llm_client_exceptions(e)

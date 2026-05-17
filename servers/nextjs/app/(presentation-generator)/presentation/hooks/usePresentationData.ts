@@ -5,9 +5,8 @@ import { setPresentationData } from "@/store/slices/presentationGeneration";
 import { DashboardApi } from '../../services/api/dashboard';
 import { clearHistory } from "@/store/slices/undoRedoSlice";
 import { applyPresentationThemeToElement } from "../utils/applyPresentationThemeDom";
-import { resolveBackendAssetUrl } from "@/utils/api";
+import { normalizeBackendAssetUrls } from "@/utils/api";
 import { useFontLoader } from "../../hooks/useFontLoad";
-
 
 
 export const usePresentationData = (
@@ -17,22 +16,25 @@ export const usePresentationData = (
 ) => {
   const dispatch = useDispatch();
 
-  const fetchUserSlides = useCallback(async () => {
+  const fetchUserSlides = useCallback(async (options?: { clearHistory?: boolean }) => {
     try {
       const data = await DashboardApi.getPresentation(presentationId);
+      const normalizedData = normalizeBackendAssetUrls(data);
 
 
-      if (data) {
-        dispatch(setPresentationData(data));
-        dispatch(clearHistory());
+      if (normalizedData) {
+        dispatch(setPresentationData(normalizedData));
+        if (options?.clearHistory ?? true) {
+          dispatch(clearHistory());
+        }
         setLoading(false);
       }
-      if (data.fonts) {
-        useFontLoader(data.fonts);
+      if (normalizedData.fonts) {
+        useFontLoader(normalizedData.fonts);
       }
-      if (data?.theme) {
+      if (normalizedData?.theme) {
         const el = document.getElementById("presentation-slides-wrapper");
-        applyPresentationThemeToElement(el, data.theme);
+        applyPresentationThemeToElement(el, normalizedData.theme);
       }
     } catch (error) {
       setError(true);

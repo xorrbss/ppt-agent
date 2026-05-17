@@ -91,32 +91,7 @@ else
     echo ""
 fi
 
-# Test 2: Electron FastAPI
-if [ -d "electron/servers/fastapi" ]; then
-    run_test "Electron FastAPI" "
-    cd electron/servers/fastapi && \
-    if [ \"$PYTHON_MANAGER\" = \"uv\" ] && [ -f \"pyproject.toml\" ]; then
-        echo 'Installing dependencies with uv...' && \
-        uv sync --dev 2>&1 | tail -5 || true
-    elif [ -f \"pyproject.toml\" ]; then
-        echo 'Installing dependencies with pip...' && \
-        $PYTHON_CMD -m pip install -e . 2>&1 | tail -5 || true && \
-        $PYTHON_CMD -m pip install pytest pytest-asyncio pytest-cov 2>&1 | tail -5 || true
-    fi && \
-    export APP_DATA_DIRECTORY=/tmp/app_data && \
-    export TEMP_DIRECTORY=/tmp/presenton && \
-    export DATABASE_URL=sqlite+aiosqlite:///./test.db && \
-    export DISABLE_ANONYMOUS_TRACKING=true && \
-    export DISABLE_IMAGE_GENERATION=true && \
-    export PYTHONPATH=\$(pwd) && \
-    $PYTHON_CMD -m pytest tests/ -v --tb=short
-    "
-else
-    echo -e "${YELLOW}⚠ electron/servers/fastapi not found, skipping${NC}"
-    echo ""
-fi
-
-# Test 3: Main Next.js
+# Test 2: Main Next.js
 if [ -d "servers/nextjs" ]; then
     run_test "Main Next.js (lint & build)" "
     cd servers/nextjs && \
@@ -134,25 +109,7 @@ else
     echo ""
 fi
 
-# Test 4: Electron Next.js
-if [ -d "electron/servers/nextjs" ]; then
-    run_test "Electron Next.js (lint & build)" "
-    cd electron/servers/nextjs && \
-    if [ ! -d \"node_modules\" ]; then
-        echo 'Installing npm dependencies...' && \
-        npm ci --legacy-peer-deps 2>&1 | tail -10 || npm install --legacy-peer-deps 2>&1 | tail -10
-    fi && \
-    export NEXT_PUBLIC_FAST_API=http://localhost:8000 && \
-    export NEXT_PUBLIC_URL=http://localhost:3000 && \
-    npm run lint -- --legacy-peer-deps 2>&1 || npm run lint 2>&1 && \
-    npm run build
-    "
-else
-    echo -e "${YELLOW}⚠ electron/servers/nextjs not found, skipping${NC}"
-    echo ""
-fi
-
-# Test 5: Docker Build (optional, skip if Docker not available)
+# Test 3: Docker Build (optional, skip if Docker not available)
 if command -v docker &> /dev/null && [ -f "Dockerfile" ]; then
     run_test "Docker Build" "
     docker build -t presenton:test -f Dockerfile . && \

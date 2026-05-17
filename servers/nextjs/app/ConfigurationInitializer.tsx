@@ -12,9 +12,11 @@ import { getApiUrl } from '@/utils/api';
 export function ConfigurationInitializer({ children }: { children: React.ReactNode }) {
   const dispatch = useDispatch();
 
-  const [isLoading, setIsLoading] = useState(true);
-  const router = useRouter();
   const route = usePathname();
+  const [isLoading, setIsLoading] = useState(
+    () => !route?.startsWith("/pdf-maker")
+  );
+  const router = useRouter();
 
   // Fetch user config state
   useEffect(() => {
@@ -31,18 +33,22 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
   }
 
   const fetchUserConfigState = async () => {
-    setIsLoading(true);
-
-    if (route.startsWith('/pdf-maker')) {
+    if (route.startsWith("/pdf-maker")) {
       setIsLoading(false);
       return;
     }
 
+    setIsLoading(true);
+
     let canChangeKeys = false;
     try {
-      const res = await fetch('/api/can-change-keys');
-      const data = await res.json();
-      canChangeKeys = data.canChange ?? false;
+      if (window.electron?.getCanChangeKeys) {
+        canChangeKeys = await window.electron.getCanChangeKeys();
+      } else {
+        const res = await fetch('/api/can-change-keys');
+        const data = await res.json();
+        canChangeKeys = data.canChange ?? false;
+      }
     } catch (e) {
       console.error('Failed to fetch can-change-keys:', e);
       canChangeKeys = false;
@@ -52,8 +58,12 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
     if (canChangeKeys) {
       let llmConfig: LLMConfig = {};
       try {
-        const res = await fetch('/api/user-config');
-        llmConfig = await res.json();
+        if (window.electron?.getUserConfig) {
+          llmConfig = await window.electron.getUserConfig();
+        } else {
+          const res = await fetch('/api/user-config');
+          llmConfig = await res.json();
+        }
       } catch (e) {
         console.error('Failed to fetch user config:', e);
         llmConfig = {};
@@ -64,7 +74,6 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
 
       dispatch(setLLMConfig(llmConfig));
       const isValid = hasValidLLMConfig(llmConfig);
-      console.log('isValid', isValid);
       if (route.startsWith('/pdf-maker')) {
         setIsLoading(false);
         return;

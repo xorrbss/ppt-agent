@@ -28,7 +28,6 @@ const INJECT_DELAY_MS = isDev ? 500 : 1_000;
 function log(msg: string): void {
   const line = `[UpdateChecker] ${msg}\n`;
   process.stderr.write(line);
-  console.log(`[UpdateChecker] ${msg}`);
 }
 
 interface VersionResponse {

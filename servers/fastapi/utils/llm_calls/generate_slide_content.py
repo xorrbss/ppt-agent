@@ -1,18 +1,21 @@
-import asyncio
-from datetime import datetime
 import json
+from datetime import datetime
 from typing import Optional
-from fastapi import HTTPException
+
 from llmai import get_client
 from llmai.shared import JSONSchemaResponse, Message, SystemMessage, UserMessage
+
 from models.presentation_layout import SlideLayoutModel
 from models.presentation_outline_model import SlideOutlineModel
-from utils.llm_config import get_llm_config
 from utils.llm_client_error_handler import handle_llm_client_exceptions
-from utils.llm_utils import extract_structured_content, get_generate_kwargs
+from utils.llm_config import get_llm_config
 from utils.llm_provider import get_model
-from utils.schema_utils import add_field_in_schema, remove_fields_from_schema
-
+from utils.llm_utils import generate_structured_with_schema_retries
+from utils.schema_utils import (
+    add_field_in_schema,
+    ensure_array_schemas_have_items,
+    remove_fields_from_schema,
+)
 
 SLIDE_CONTENT_SYSTEM_PROMPT = """
 You will be given slide content and response schema.
@@ -26,11 +29,15 @@ You need to generate structured content json based on the schema.
 5. Provide structured content json as output.
 
 # General Rules
-- Make sure to follow language guidelines.
-- Speaker note should be normal text, not markdown.
-- Never ever go over the max character limit.
-- Do not add emoji in the content.
-- Don't provide $schema field in content json.
+- Follow language guidelines.
+- Speaker notes must be plain text (no markdown).
+- Never exceed max character limits; do not clip mid-sentence to fit—rephrase instead.
+- Do not use emojis or $schema fields.
+- Follow user instructions literally; do not reinterpret, generalize, or expand them.
+- Apply slide-specific instructions only to the exact slide mentioned (first/second/last/named) and only once.
+- Do not apply patterns across multiple slides unless explicitly requested.
+- If instructions are ambiguous, use the most direct interpretation without extending scope.
+
 {markdown_emphasis_rules}
 
 {user_instructions}
@@ -171,12 +178,13 @@ async def get_slide_content_from_type_and_outline(
             "__speaker_note__": {
                 "type": "string",
                 "minLength": 100,
-                "maxLength": 250,
+                "maxLength": 500,
                 "description": "Speaker note for the slide",
             }
         },
         True,
     )
+    response_schema = ensure_array_schemas_have_items(response_schema)
 
     try:
         response_format = JSONSchemaResponse(
@@ -193,23 +201,15 @@ async def get_slide_content_from_type_and_outline(
             response_schema,
         )
 
-        for attempt in range(3):
-            response = await asyncio.to_thread(
-                client.generate,
-                **get_generate_kwargs(
-                    model=model,
-                    messages=messages,
-                    response_format=response_format,
-                ),
-            )
-            content = extract_structured_content(response.content)
-            if content is not None:
-                return content
-
-            if attempt < 2:
-                await asyncio.sleep(0.5 * (attempt + 1))
-
-        raise HTTPException(status_code=400, detail="LLM did not return any content")
+        return await generate_structured_with_schema_retries(
+            client,
+            model,
+            messages=messages,
+            response_format=response_format,
+            json_schema=response_schema,
+            strict=False,
+            validate_schema=True,
+        )
 
     except Exception as e:
         raise handle_llm_client_exceptions(e)

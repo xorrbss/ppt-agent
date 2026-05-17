@@ -9,6 +9,36 @@ export interface LLMConfig {
   GOOGLE_API_KEY?: string;
   GOOGLE_MODEL?: string;
 
+  // Vertex AI
+  VERTEX_API_KEY?: string;
+  VERTEX_MODEL?: string;
+  VERTEX_PROJECT?: string;
+  VERTEX_LOCATION?: string;
+  VERTEX_BASE_URL?: string;
+
+  // Azure OpenAI
+  AZURE_OPENAI_API_KEY?: string;
+  AZURE_OPENAI_MODEL?: string;
+  AZURE_OPENAI_ENDPOINT?: string;
+  AZURE_OPENAI_BASE_URL?: string;
+  AZURE_OPENAI_API_VERSION?: string;
+  AZURE_OPENAI_DEPLOYMENT?: string;
+
+  // OpenRouter
+  OPENROUTER_API_KEY?: string;
+  OPENROUTER_MODEL?: string;
+  OPENROUTER_BASE_URL?: string;
+
+  // Cerebras
+  CEREBRAS_API_KEY?: string;
+  CEREBRAS_MODEL?: string;
+  CEREBRAS_BASE_URL?: string;
+
+  // LiteLLM
+  LITELLM_BASE_URL?: string;
+  LITELLM_API_KEY?: string;
+  LITELLM_MODEL?: string;
+
   // Anthropic
   ANTHROPIC_API_KEY?: string;
   ANTHROPIC_MODEL?: string;

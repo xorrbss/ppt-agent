@@ -18,6 +18,9 @@ import { handleSaveLLMConfig } from '@/utils/storeHelpers';
 import { checkIfSelectedOllamaModelIsPulled, pullOllamaModel } from '@/utils/providerUtils';
 import { getApiUrl } from '@/utils/api';
 import CodexConfig, { CHATGPT_MODELS } from '../CodexConfig';
+import VertexAzureManualFields from '@/components/VertexAzureManualFields';
+
+const MANUAL_MODEL_PROVIDERS = new Set(["vertex", "azure"]);
 
 const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep: (step: number) => void }) => {
     const pathname = usePathname();
@@ -42,6 +45,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
         status: string;
         done: boolean;
     } | null>(null);
+    const isManualModelProvider = MANUAL_MODEL_PROVIDERS.has(llmConfig.LLM || "");
 
     const handleProviderChange = (provider: string) => {
         setLlmConfig(prev => ({
@@ -65,12 +69,22 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 return 'OPENAI_MODEL';
             case 'google':
                 return 'GOOGLE_MODEL';
+            case 'vertex':
+                return 'VERTEX_MODEL';
+            case 'azure':
+                return 'AZURE_OPENAI_MODEL';
+            case 'openrouter':
+                return 'OPENROUTER_MODEL';
+            case 'cerebras':
+                return 'CEREBRAS_MODEL';
             case 'anthropic':
                 return 'ANTHROPIC_MODEL';
             case 'ollama':
                 return 'OLLAMA_MODEL';
             case 'custom':
                 return 'CUSTOM_MODEL';
+            case 'litellm':
+                return 'LITELLM_MODEL';
             default:
                 return '';
         }
@@ -81,10 +95,20 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 return 'OPENAI_API_KEY';
             case 'google':
                 return 'GOOGLE_API_KEY';
+            case 'vertex':
+                return 'VERTEX_API_KEY';
+            case 'azure':
+                return 'AZURE_OPENAI_API_KEY';
+            case 'openrouter':
+                return 'OPENROUTER_API_KEY';
+            case 'cerebras':
+                return 'CEREBRAS_API_KEY';
             case 'anthropic':
                 return 'ANTHROPIC_API_KEY';
             case 'custom':
                 return 'CUSTOM_LLM_API_KEY';
+            case 'litellm':
+                return 'LITELLM_API_KEY';
             default:
                 return '';
         }
@@ -99,8 +123,23 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
 
     const currentApiKey = currentApiKeyField ? ((llmConfig as Record<string, unknown>)[currentApiKeyField] as string || '') : '';
     const currentModel = currentModelField ? ((llmConfig as Record<string, unknown>)[currentModelField] as string || '') : '';
+    const currentLitellmUrl = (llmConfig.LITELLM_BASE_URL || '').trim();
     const currentOllamaUrl = llmConfig.OLLAMA_URL || '';
     const useCustomOllamaUrl = !!llmConfig.USE_CUSTOM_URL;
+    const providerApiKeyLabel =
+        llmConfig.LLM === 'custom'
+            ? 'Custom LLM API Key'
+            : llmConfig.LLM === 'vertex'
+                ? 'Vertex API Key'
+                : llmConfig.LLM === 'azure'
+                    ? 'Azure OpenAI API Key'
+                    : llmConfig.LLM === 'openrouter'
+                        ? 'OpenRouter API Key'
+                        : llmConfig.LLM === 'cerebras'
+                            ? 'Cerebras API Key'
+                            : llmConfig.LLM === 'litellm'
+                                ? 'LiteLLM API key (optional)'
+                                : `${llmConfig.LLM} API Key`;
 
     const getSelectedTextModel = (config: LLMConfig): string => {
         switch (config.LLM) {
@@ -108,13 +147,24 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 return config.OPENAI_MODEL || '';
             case 'google':
                 return config.GOOGLE_MODEL || '';
+            case 'vertex':
+                return config.VERTEX_MODEL || '';
+            case 'azure':
+                return config.AZURE_OPENAI_MODEL || '';
+            case 'openrouter':
+                return config.OPENROUTER_MODEL || '';
+            case 'cerebras':
+                return config.CEREBRAS_MODEL || '';
             case 'anthropic':
                 return config.ANTHROPIC_MODEL || '';
             case 'ollama':
                 return config.OLLAMA_MODEL || '';
             case 'custom':
                 return config.CUSTOM_MODEL || '';
+            case 'litellm':
+                return config.LITELLM_MODEL || '';
             case 'chatgpt':
+            case 'codex':
                 return config.CODEX_MODEL || '';
             default:
                 return '';
@@ -128,10 +178,14 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
     };
 
     const fetchAvailableModels = async () => {
+        if (isManualModelProvider) return;
         if (llmConfig.LLM === 'openai' && !currentApiKey) return;
         if (llmConfig.LLM === 'google' && !currentApiKey) return;
         if (llmConfig.LLM === 'anthropic' && !currentApiKey) return;
+        if (llmConfig.LLM === 'openrouter' && !currentApiKey) return;
+        if (llmConfig.LLM === 'cerebras' && !currentApiKey) return;
         if (llmConfig.LLM === 'custom' && !llmConfig.CUSTOM_LLM_URL) return;
+        if (llmConfig.LLM === 'litellm' && !currentLitellmUrl) return;
         setModelsLoading(true);
         try {
             let response: Response;
@@ -158,13 +212,19 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
             } else if (llmConfig.LLM === 'ollama') {
                 response = await fetch(getApiUrl('/api/v1/ppt/ollama/models/supported'));
             } else {
+                const openAiCompatibleUrl =
+                    llmConfig.LLM === 'custom'
+                        ? llmConfig.CUSTOM_LLM_URL
+                        : llmConfig.LLM === 'litellm'
+                            ? currentLitellmUrl
+                            : LLM_PROVIDERS[llmConfig.LLM!]?.url || '';
                 response = await fetch(getApiUrl('/api/v1/ppt/openai/models/available'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        url: llmConfig.LLM === 'custom' ? llmConfig.CUSTOM_LLM_URL : LLM_PROVIDERS[llmConfig.LLM!]?.url || '',
+                        url: openAiCompatibleUrl,
                         api_key: currentApiKey
                     }),
                 });
@@ -199,7 +259,13 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                 ? 'models/gemini-2.5-flash'
                                 : llmConfig.LLM === 'anthropic'
                                     ? 'claude-sonnet-4-20250514'
-                                    : normalizedModels[0];
+                                    : llmConfig.LLM === 'openrouter'
+                                        ? 'openai/gpt-4o'
+                                        : llmConfig.LLM === 'cerebras'
+                                            ? 'llama-3.3-70b'
+                                            : llmConfig.LLM === 'litellm'
+                                                ? 'gpt-4.1'
+                                                : normalizedModels[0];
 
                     const nextModel = normalizedModels.includes(preferredDefault) ? preferredDefault : normalizedModels[0];
                     setLlmConfig(prev => ({
@@ -421,8 +487,8 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                     <p className='text-xs font-normal text-[#999999]'>OR</p>
                     <div className='w-full h-[1px] bg-[#E1E1E5]' />
                 </div>
-                <div className='flex flex-col items-start gap-4 '>
-                    <div className="flex flex-col justify-start w-full ">
+                <div className="flex w-full max-w-[222px] flex-col items-start gap-4">
+                    <div className="flex w-full flex-col justify-start">
 
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                             Select Text Provider
@@ -436,7 +502,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                     variant="outline"
                                     role="combobox"
                                     aria-expanded={openProviderSelect}
-                                    className=" h-12 px-4 py-4 outline-none border border-[#E8E8E9] rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
+                                    className="flex h-12 w-full px-4 py-4 outline-none border border-[#E8E8E9] rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
                                 >
                                     <div className="flex gap-3 items-center">
                                         <span className="text-sm font-medium text-gray-900">
@@ -495,7 +561,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                             </PopoverContent>
                         </Popover>
                     </div>
-                    <div className="relative flex flex-col justify-end  items-end  w-full ">
+                    <div className="relative flex w-full flex-col justify-end items-start">
                         <div className="flex flex-col justify-start w-full ">
                             {llmConfig.LLM === 'ollama' ? (
                                 <>
@@ -607,7 +673,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                     <div className='flex items-center justify-between mb-2'>
 
                                         <label className="block text-sm font-medium capitalize text-gray-700 ">
-                                            {llmConfig.LLM === 'custom' ? 'Custom LLM API Key' : `${llmConfig.LLM} API Key`}
+                                            {providerApiKeyLabel}
                                         </label>
                                         {llmConfig.LLM && LLM_PROVIDERS[llmConfig.LLM!]?.getApiKeyUrl && <a href={LLM_PROVIDERS[llmConfig.LLM!]?.getApiKeyUrl || ""} target='_blank' className='text-[#666666] text-xs font-normal flex items-center gap-1'>Get API Key <ArrowUpRight className='w-3.5 h-3.5' /></a>}
                                     </div>
@@ -621,7 +687,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                                 [currentApiKeyField]: e.target.value
                                             }))}
                                             className="w-full px-2 py-3 outline-none border  border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                                            placeholder={`Enter your ${llmConfig.LLM} API key`}
+                                            placeholder={`Enter your ${providerApiKeyLabel}`}
                                         />
                                         <button
                                             type="button"
@@ -645,12 +711,40 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                     placeholder="OpenAI-compatible URL"
                                 />
                             )}
-
-
+                            {llmConfig.LLM === 'litellm' && (
+                                <>
+                                    <label className="mt-3 block text-sm font-medium text-gray-700 mb-2">
+                                        LiteLLM base URL
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={llmConfig.LITELLM_BASE_URL || ''}
+                                        onChange={(e) => setLlmConfig(prev => ({
+                                            ...prev,
+                                            LITELLM_BASE_URL: e.target.value
+                                        }))}
+                                        className="w-full px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                        placeholder="e.g. http://host.docker.internal:4000/v1"
+                                    />
+                                    <p className="mt-1.5 text-xs text-gray-500">
+                                        OpenAI-compatible root (usually ends with /v1); /v1 is added if omitted. API key above is optional for local proxies with no auth.
+                                    </p>
+                                </>
+                            )}
+                            {(llmConfig.LLM === 'vertex' || llmConfig.LLM === 'azure') && (
+                                <VertexAzureManualFields
+                                    key={llmConfig.LLM}
+                                    provider={llmConfig.LLM === 'vertex' ? 'vertex' : 'azure'}
+                                    llmConfig={llmConfig}
+                                    onPatch={(patch) => {
+                                        setLlmConfig((prev) => ({ ...prev, ...patch }));
+                                    }}
+                                />
+                            )}
                         </div>
 
 
-                        {llmConfig.LLM !== 'ollama' && llmConfig.LLM !== 'chatgpt' && llmConfig.LLM !== 'codex' && (!modelsChecked || (modelsChecked && availableModels.length === 0)) && (
+                        {!isManualModelProvider && llmConfig.LLM !== 'ollama' && llmConfig.LLM !== 'chatgpt' && llmConfig.LLM !== 'codex' && (!modelsChecked || (modelsChecked && availableModels.length === 0)) && (
 
                             <button
                                 onClick={fetchAvailableModels}
@@ -659,7 +753,10 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                     (llmConfig.LLM === 'openai' && !currentApiKey) ||
                                     (llmConfig.LLM === 'google' && !currentApiKey) ||
                                     (llmConfig.LLM === 'anthropic' && !currentApiKey) ||
-                                    (llmConfig.LLM === 'custom' && !llmConfig.CUSTOM_LLM_URL)
+                                    (llmConfig.LLM === 'openrouter' && !currentApiKey) ||
+                                    (llmConfig.LLM === 'cerebras' && !currentApiKey) ||
+                                    (llmConfig.LLM === 'custom' && !llmConfig.CUSTOM_LLM_URL) ||
+                                    (llmConfig.LLM === 'litellm' && !currentLitellmUrl)
                                 }
                                 className={`mt-4 py-2.5 bg-[#EDEEEF] disabled:opacity-50 disabled:cursor-not-allowed px-3.5 w-full  rounded-[48px] text-xs font-semibold text-[#101323] transition-all duration-200 border ${modelsLoading
                                     ? " border-gray-300 cursor-not-allowed text-gray-500"
@@ -679,11 +776,11 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                     </div>
 
                 </div>
-                <div className='flex items-start gap-4 mt-4'>
+                <div className="mt-4 flex w-full max-w-[222px] items-start gap-4">
 
 
                     {/* Model Selection - only show if models are available */}
-                    {llmConfig.LLM !== 'chatgpt' && llmConfig.LLM !== 'codex' && modelsChecked && availableModels.length > 0 && (
+                    {!isManualModelProvider && llmConfig.LLM !== 'chatgpt' && llmConfig.LLM !== 'codex' && modelsChecked && availableModels.length > 0 && (
                         <div className="w-full">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">

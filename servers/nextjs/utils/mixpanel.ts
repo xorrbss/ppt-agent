@@ -47,7 +47,6 @@ export enum MixpanelEvent {
   Header_Export_PPTX_Button_Clicked = 'Header Export PPTX Button Clicked',
   Header_UpdatePresentationContent_API_Call = 'Header Update Presentation Content API Call',
   Header_ExportAsPDF_API_Call = 'Header Export As PDF API Call',
-  Header_GetPptxModel_API_Call = 'Header Get PPTX Model API Call',
   Header_ExportAsPPTX_API_Call = 'Header Export As PPTX API Call',
   Slide_Add_New_Slide_Button_Clicked = 'Slide Add New Slide Button Clicked',
   Slide_Delete_Slide_Button_Clicked = 'Slide Delete Slide Button Clicked',
@@ -138,8 +137,13 @@ async function ensureTelemetryStatus(): Promise<boolean> {
   if (!trackingCheckPromise) {
     trackingCheckPromise = (async () => {
       try {
-        const res = await fetch('/api/telemetry-status');
-        const data = await res.json();
+        let data;
+        if (typeof window !== "undefined" && window.electron?.telemetryStatus) {
+          data = await window.electron.telemetryStatus();
+        } else {
+          const res = await fetch('/api/telemetry-status');
+          data = await res.json();
+        }
         const enabled = Boolean(data?.telemetryEnabled);
         window.__mixpanel_telemetry_enabled = enabled;
         return enabled;

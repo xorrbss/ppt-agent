@@ -1,9 +1,15 @@
 from typing import Any
 
 from templates.presentation_layout import PresentationLayoutModel
+from utils.asset_directory_utils import absolute_fastapi_asset_url
 
-PLACEHOLDER_IMAGE_URL = "/static/images/replaceable_template_image.png"
-PLACEHOLDER_ICON_URL = "/static/icons/placeholder.svg"
+
+def placeholder_image_url() -> str:
+    return absolute_fastapi_asset_url("/static/images/replaceable_template_image.png")
+
+
+def placeholder_icon_url() -> str:
+    return absolute_fastapi_asset_url("/static/icons/placeholder.svg")
 
 
 def build_schema_example(schema: dict) -> Any:
@@ -43,9 +49,9 @@ def build_schema_example(schema: dict) -> Any:
     if schema_type == "string":
         schema_description = (schema.get("description") or "").lower()
         if "icon" in schema_description:
-            return PLACEHOLDER_ICON_URL
+            return placeholder_icon_url()
         if "image" in schema_description or "url" in schema_description:
-            return PLACEHOLDER_IMAGE_URL
+            return placeholder_image_url()
         return "Sample text"
 
     if schema_type == "integer":
@@ -65,9 +71,9 @@ def replace_special_placeholders(value: Any) -> Any:
         result = {}
         for key, child in value.items():
             if key == "__image_url__":
-                result[key] = PLACEHOLDER_IMAGE_URL
+                result[key] = placeholder_image_url()
             elif key == "__icon_url__":
-                result[key] = PLACEHOLDER_ICON_URL
+                result[key] = placeholder_icon_url()
             else:
                 result[key] = replace_special_placeholders(child)
         return result
@@ -76,9 +82,9 @@ def replace_special_placeholders(value: Any) -> Any:
         return [replace_special_placeholders(item) for item in value]
 
     if value == "__image_url__":
-        return PLACEHOLDER_IMAGE_URL
+        return placeholder_image_url()
     if value == "__icon_url__":
-        return PLACEHOLDER_ICON_URL
+        return placeholder_icon_url()
     return value
 
 

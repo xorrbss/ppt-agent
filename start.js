@@ -3,7 +3,17 @@
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { spawn } from "child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "fs";
+import { printPresentonStartupBanner } from "./scripts/presenton-terminal-banner.mjs";
+
+process.umask(0o022);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -21,14 +31,52 @@ const canChangeKeys = process.env.CAN_CHANGE_KEYS !== "false";
 const fastapiPort = 8000;
 const nextjsPort = 3000;
 const appmcpPort = 8001;
+/** Must match `listen` in nginx.conf (public HTTP inside the container). */
+const nginxListenPort = 80;
 
-const userConfigPath = join(process.env.APP_DATA_DIRECTORY, "userConfig.json");
-const userDataDir = dirname(userConfigPath);
-
-// Create user_data directory if it doesn't exist
-if (!existsSync(userDataDir)) {
-  mkdirSync(userDataDir, { recursive: true });
+const appDataDirectory = process.env.APP_DATA_DIRECTORY;
+if (!appDataDirectory) {
+  throw new Error("APP_DATA_DIRECTORY is required");
 }
+
+const appDataDirectoryMode = 0o755;
+const userConfigPath = join(appDataDirectory, "userConfig.json");
+const userDataDir = dirname(userConfigPath);
+const appDataStaticDirectories = [
+  "exports",
+  "images",
+  "uploads",
+  "fonts",
+  "pptx-to-html",
+].map((name) => join(appDataDirectory, name));
+
+const ensureReadableDirectory = (dirPath) => {
+  mkdirSync(dirPath, { recursive: true, mode: appDataDirectoryMode });
+  chmodSync(dirPath, appDataDirectoryMode);
+};
+
+const ensureReadableExportFiles = (dirPath) => {
+  for (const entry of readdirSync(dirPath, { withFileTypes: true })) {
+    const entryPath = join(dirPath, entry.name);
+
+    if (entry.isDirectory()) {
+      chmodSync(entryPath, appDataDirectoryMode);
+      ensureReadableExportFiles(entryPath);
+    } else if (entry.isFile()) {
+      chmodSync(entryPath, 0o644);
+    }
+  }
+};
+
+const ensureAppDataDirectories = () => {
+  ensureReadableDirectory(userDataDir);
+  for (const dirPath of appDataStaticDirectories) {
+    ensureReadableDirectory(dirPath);
+  }
+  ensureReadableExportFiles(join(appDataDirectory, "exports"));
+};
+
+ensureAppDataDirectories();
 
 // Setup node_modules for development
 const setupNodeModules = () => {
@@ -82,6 +130,54 @@ const runCommand = (command, commandArgs, options = {}) => {
 const runNodeScript = (scriptPath, scriptArgs) => {
   return runCommand(process.execPath, [scriptPath, ...scriptArgs], {
     cwd: __dirname,
+  });
+};
+
+const forwardProcessOutput = (stream, target, onChunk) => {
+  if (!stream) {
+    return;
+  }
+  stream.on("data", (chunk) => {
+    const text = chunk.toString();
+    target.write(text);
+    onChunk?.(text);
+  });
+};
+
+const waitForProcessReady = (processName, childProcess, readinessRegexes = []) => {
+  if (readinessRegexes.length === 0) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve, reject) => {
+    let isReady = false;
+
+    const markReady = (text) => {
+      if (isReady) {
+        return;
+      }
+      if (readinessRegexes.some((regex) => regex.test(text))) {
+        isReady = true;
+        resolve();
+      }
+    };
+
+    forwardProcessOutput(childProcess.stdout, process.stdout, markReady);
+    forwardProcessOutput(childProcess.stderr, process.stderr, markReady);
+
+    childProcess.on("exit", (code) => {
+      if (!isReady) {
+        reject(
+          new Error(`${processName} exited before reporting ready (exit code: ${code})`)
+        );
+      }
+    });
+
+    childProcess.on("error", (err) => {
+      if (!isReady) {
+        reject(err);
+      }
+    });
   });
 };
 
@@ -151,7 +247,7 @@ const setupUserConfigFromEnv = () => {
     existingConfig = JSON.parse(readFileSync(userConfigPath, "utf8"));
   }
 
-  if (!["ollama", "openai", "google", "anthropic", "custom", "codex"].includes(existingConfig.LLM)) {
+  if (!["ollama", "openai", "google", "vertex", "azure", "openrouter", "cerebras", "anthropic", "litellm", "custom", "codex"].includes(existingConfig.LLM)) {
     existingConfig.LLM = undefined;
   }
 
@@ -161,6 +257,23 @@ const setupUserConfigFromEnv = () => {
     OPENAI_MODEL: process.env.OPENAI_MODEL || existingConfig.OPENAI_MODEL,
     GOOGLE_API_KEY: process.env.GOOGLE_API_KEY || existingConfig.GOOGLE_API_KEY,
     GOOGLE_MODEL: process.env.GOOGLE_MODEL || existingConfig.GOOGLE_MODEL,
+    VERTEX_API_KEY: process.env.VERTEX_API_KEY || existingConfig.VERTEX_API_KEY,
+    VERTEX_MODEL: process.env.VERTEX_MODEL || existingConfig.VERTEX_MODEL,
+    VERTEX_PROJECT: process.env.VERTEX_PROJECT || existingConfig.VERTEX_PROJECT,
+    VERTEX_LOCATION: process.env.VERTEX_LOCATION || existingConfig.VERTEX_LOCATION,
+    VERTEX_BASE_URL: process.env.VERTEX_BASE_URL || existingConfig.VERTEX_BASE_URL,
+    AZURE_OPENAI_API_KEY:
+      process.env.AZURE_OPENAI_API_KEY || existingConfig.AZURE_OPENAI_API_KEY,
+    AZURE_OPENAI_MODEL:
+      process.env.AZURE_OPENAI_MODEL || existingConfig.AZURE_OPENAI_MODEL,
+    AZURE_OPENAI_ENDPOINT:
+      process.env.AZURE_OPENAI_ENDPOINT || existingConfig.AZURE_OPENAI_ENDPOINT,
+    AZURE_OPENAI_BASE_URL:
+      process.env.AZURE_OPENAI_BASE_URL || existingConfig.AZURE_OPENAI_BASE_URL,
+    AZURE_OPENAI_API_VERSION:
+      process.env.AZURE_OPENAI_API_VERSION || existingConfig.AZURE_OPENAI_API_VERSION,
+    AZURE_OPENAI_DEPLOYMENT:
+      process.env.AZURE_OPENAI_DEPLOYMENT || existingConfig.AZURE_OPENAI_DEPLOYMENT,
     OLLAMA_URL: process.env.OLLAMA_URL || existingConfig.OLLAMA_URL,
     OLLAMA_MODEL: process.env.OLLAMA_MODEL || existingConfig.OLLAMA_MODEL,
     ANTHROPIC_API_KEY:
@@ -171,6 +284,9 @@ const setupUserConfigFromEnv = () => {
     CUSTOM_LLM_API_KEY:
       process.env.CUSTOM_LLM_API_KEY || existingConfig.CUSTOM_LLM_API_KEY,
     CUSTOM_MODEL: process.env.CUSTOM_MODEL || existingConfig.CUSTOM_MODEL,
+    LITELLM_BASE_URL: process.env.LITELLM_BASE_URL || existingConfig.LITELLM_BASE_URL,
+    LITELLM_API_KEY: process.env.LITELLM_API_KEY || existingConfig.LITELLM_API_KEY,
+    LITELLM_MODEL: process.env.LITELLM_MODEL || existingConfig.LITELLM_MODEL,
     PEXELS_API_KEY: process.env.PEXELS_API_KEY || existingConfig.PEXELS_API_KEY,
     PIXABAY_API_KEY:
       process.env.PIXABAY_API_KEY || existingConfig.PIXABAY_API_KEY,
@@ -201,7 +317,7 @@ const setupUserConfigFromEnv = () => {
   writeFileSync(userConfigPath, JSON.stringify(userConfig));
 };
 
-const startServers = async () => {
+const startServers = async (nginxReadyPromise) => {
   const fastApiProcess = spawn(
     "python",
     [
@@ -213,7 +329,7 @@ const startServers = async () => {
     ],
     {
       cwd: fastapiDir,
-      stdio: "inherit",
+      stdio: ["ignore", "pipe", "pipe"],
       env: process.env,
     }
   );
@@ -253,7 +369,7 @@ const startServers = async () => {
         ],
     {
       cwd: nextjsDir,
-      stdio: "inherit",
+      stdio: ["ignore", "pipe", "pipe"],
       env:
         useStandaloneNextjs
           ? {
@@ -271,6 +387,14 @@ const startServers = async () => {
 
   const shouldStartOllamaRuntime = shouldStartOllama();
   const ollamaInstalled = isOllamaInstalled();
+
+  const fastApiReadyPromise = waitForProcessReady("FastAPI", fastApiProcess, [
+    /Application startup complete\./i,
+  ]);
+  const nextjsReadyPromise = waitForProcessReady("Next.js", nextjsProcess, [
+    /Ready in\s+\d+/i,
+    /started server on/i,
+  ]);
 
   const exitPromises = [
     new Promise((resolve) => fastApiProcess.on("exit", resolve)),
@@ -297,6 +421,17 @@ const startServers = async () => {
     );
   }
 
+  try {
+    await Promise.all([fastApiReadyPromise, nextjsReadyPromise, nginxReadyPromise]);
+    printPresentonStartupBanner({
+      nextPort: nextjsPort,
+      fastapiPort,
+      nginxInternalPort: nginxListenPort,
+    });
+  } catch (err) {
+    console.warn(`Skipping startup banner: ${err.message}`);
+  }
+
   // Keep the Node process alive until one of the servers exits
   const exitCode = await Promise.race(exitPromises);
 
@@ -304,23 +439,28 @@ const startServers = async () => {
   process.exit(exitCode);
 };
 
-// Start nginx service
+// Start nginx service (reverse proxy: see nginx.conf listen + upstream ports)
 const startNginx = () => {
-  const nginxProcess = spawn("service", ["nginx", "start"], {
-    stdio: "inherit",
-    env: process.env,
-  });
+  return new Promise((resolve) => {
+    const nginxProcess = spawn("service", ["nginx", "start"], {
+      stdio: "inherit",
+      env: process.env,
+    });
 
-  nginxProcess.on("error", (err) => {
-    console.error("Nginx process failed to start:", err);
-  });
+    nginxProcess.on("error", (err) => {
+      console.error("Nginx process failed to start:", err);
+      resolve(false);
+    });
 
-  nginxProcess.on("exit", (code) => {
-    if (code === 0) {
-      console.log("Nginx started successfully");
-    } else {
-      console.error(`Nginx failed to start with exit code: ${code}`);
-    }
+    nginxProcess.on("exit", (code) => {
+      if (code === 0) {
+        console.log("Nginx started successfully");
+        resolve(true);
+      } else {
+        console.error(`Nginx failed to start with exit code: ${code}`);
+        resolve(false);
+      }
+    });
   });
 };
 
@@ -336,8 +476,9 @@ const main = async () => {
     setupUserConfigFromEnv();
   }
 
-  startServers();
-  startNginx();
+  const nginxReadyPromise = startNginx();
+  startServers(nginxReadyPromise);
+  await nginxReadyPromise;
 };
 
 main();
