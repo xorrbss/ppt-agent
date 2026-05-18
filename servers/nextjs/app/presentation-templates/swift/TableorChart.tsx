@@ -1,20 +1,9 @@
-import React from "react"
+"use client"
+
+import React, { useEffect, useRef } from "react"
 import * as z from "zod"
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  Cell,
-} from "recharts"
+import Chart from "chart.js/auto"
+import type { ChartConfiguration, ChartOptions, Plugin } from "chart.js"
 
 const layoutId = "tableorChart"
 const layoutName = "Table Or Chart"
@@ -121,9 +110,276 @@ const CHART_COLORS = [
 ];
 
 type SlideData = z.infer<typeof Schema>
+type ChartDatum = z.infer<typeof ChartDatumSchema>
+type SwiftChartType = z.infer<typeof Schema>["chart"]["type"]
 
 interface SlideLayoutProps {
   data?: Partial<SlideData>
+}
+
+const resolveCssValue = (element: HTMLElement, value: string, fallback: string) => {
+  const match = value.match(/^var\((--[^,\s)]+)\s*,?\s*([^)]+)?\)$/)
+  if (!match) return value
+
+  const resolved = getComputedStyle(element).getPropertyValue(match[1]).trim()
+  return resolved || match[2]?.trim() || fallback
+}
+
+const chartTextColor = (element: HTMLElement) =>
+  resolveCssValue(element, "var(--background-text, #6B7280)", "#6B7280")
+
+const chartLabelColor = (element: HTMLElement) =>
+  resolveCssValue(element, "var(--background-text, #111827)", "#111827")
+
+const chartFont = (element: HTMLElement) =>
+  resolveCssValue(element, "var(--heading-font-family,Albert Sans)", "Albert Sans").replace(/^['"]|['"]$/g, "")
+
+const chartColor = (element: HTMLElement, index: number) => {
+  const slot = index % 10
+  const fallback = CHART_COLORS[slot % CHART_COLORS.length]
+  return resolveCssValue(element, `var(--graph-${slot}, ${fallback})`, fallback)
+}
+
+const valueLabelPlugin = (
+  showLabels: boolean,
+  chartType: SwiftChartType,
+  labelColor: string,
+  fontFamily: string
+): Plugin => ({
+  id: `swiftValueLabels-${chartType}-${showLabels ? "on" : "off"}`,
+  afterDatasetsDraw(chart) {
+    if (!showLabels) return
+
+    const ctx = chart.ctx
+    const area = chart.chartArea
+    ctx.save()
+    ctx.fillStyle = labelColor
+    ctx.font = `600 12px ${fontFamily}`
+    ctx.textBaseline = "middle"
+
+    chart.data.datasets.forEach((dataset: any, datasetIndex) => {
+      const meta = chart.getDatasetMeta(datasetIndex)
+
+      meta.data.forEach((element: any, index) => {
+        const raw = Array.isArray(dataset.data) ? dataset.data[index] : 0
+        const value = Number(raw)
+        if (!Number.isFinite(value)) return
+
+        if (chartType === "horizontalBar") {
+          const point = element.tooltipPosition()
+          ctx.textAlign = "left"
+          ctx.fillText(String(value), Math.min(point.x + 8, area.right - 4), point.y)
+          return
+        }
+
+        if (chartType === "pie") {
+          const label = chart.data.labels?.[index] ?? ""
+          const arc = element.getProps(["x", "y", "startAngle", "endAngle", "innerRadius", "outerRadius"], true)
+          const angle = (arc.startAngle + arc.endAngle) / 2
+          const radius = arc.innerRadius + (arc.outerRadius - arc.innerRadius) * 0.62
+          ctx.textAlign = "center"
+          ctx.fillText(String(label), arc.x + Math.cos(angle) * radius, arc.y + Math.sin(angle) * radius)
+          return
+        }
+
+        const point = element.tooltipPosition()
+        ctx.textAlign = "center"
+        const labelY = chartType === "line" && point.y - 14 < area.top + 8
+          ? point.y + 16
+          : Math.max(area.top + 8, point.y - 14)
+        ctx.fillText(String(value), point.x, Math.min(area.bottom - 8, labelY))
+      })
+    })
+
+    ctx.restore()
+  },
+})
+
+const SwiftChart: React.FC<{
+  type: SwiftChartType
+  data: ChartDatum[]
+  showLabels: boolean
+}> = ({ type, data, showLabels }) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const [themeVersion, setThemeVersion] = React.useState(0)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    let frame: number | null = null
+    const scheduleThemeRefresh = () => {
+      if (frame !== null) {
+        cancelAnimationFrame(frame)
+      }
+
+      frame = requestAnimationFrame(() => {
+        frame = null
+        setThemeVersion((version) => version + 1)
+      })
+    }
+
+    const observer = new MutationObserver(scheduleThemeRefresh)
+    let node: HTMLElement | null = canvas.parentElement
+    while (node) {
+      observer.observe(node, {
+        attributeFilter: ["class", "data-theme", "style"],
+        attributes: true,
+      })
+      node = node.parentElement
+    }
+
+    return () => {
+      if (frame !== null) {
+        cancelAnimationFrame(frame)
+      }
+      observer.disconnect()
+    }
+  }, [])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const textColor = chartTextColor(canvas)
+    const labelColor = chartLabelColor(canvas)
+    const fontFamily = chartFont(canvas)
+    const labels = data.map((item) => item.label)
+    const values = data.map((item) => item.value)
+    const colors = data.map((_, index) => chartColor(canvas, index))
+    const primaryColor = chartColor(canvas, 0)
+    const isHorizontal = type === "horizontalBar"
+
+    const commonOptions: ChartOptions = {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      color: textColor,
+      font: {
+        family: fontFamily,
+      },
+      layout: {
+        padding: {
+          top: 10,
+          right: 20,
+          bottom: 10,
+          left: isHorizontal ? 20 : 0,
+        },
+      },
+      plugins: {
+        legend: {
+          display: true,
+          labels: {
+            color: textColor,
+            font: {
+              family: fontFamily,
+              weight: 600,
+            },
+          },
+        },
+        tooltip: {
+          enabled: true,
+        },
+      },
+    }
+
+    const axisOptions = {
+      grid: {
+        color: "#E5E7EB",
+        borderDash: [3, 3],
+      },
+      ticks: {
+        color: textColor,
+        font: {
+          family: fontFamily,
+          weight: 600,
+        },
+      },
+    }
+
+    const config: ChartConfiguration =
+      type === "pie"
+        ? {
+            type: "pie",
+            data: {
+              labels,
+              datasets: [
+                {
+                  label: "value",
+                  data: values,
+                  backgroundColor: colors,
+                  borderWidth: 0,
+                  hoverBorderWidth: 0,
+                },
+              ],
+            },
+            options: {
+              ...commonOptions,
+              layout: {
+                padding: 10,
+              },
+              radius: 120,
+            } as ChartOptions,
+            plugins: [valueLabelPlugin(showLabels, type, textColor, fontFamily)],
+          }
+        : {
+            type: type === "line" ? "line" : "bar",
+            data: {
+              labels,
+              datasets: [
+                {
+                  label: "value",
+                  data: values,
+                  backgroundColor:
+                    type === "line"
+                      ? primaryColor
+                      : colors,
+                  borderColor: primaryColor,
+                  borderRadius: type === "bar" ? 6 : type === "horizontalBar" ? 6 : undefined,
+                  borderWidth: type === "line" ? 3 : 0,
+                  fill: false,
+                  pointRadius: type === "line" ? 3 : 0,
+                  tension: type === "line" ? 0.35 : 0,
+                },
+              ],
+            },
+            options: {
+              ...commonOptions,
+              indexAxis: isHorizontal ? "y" : "x",
+              scales: {
+                x: isHorizontal
+                  ? {
+                      ...axisOptions,
+                      type: "linear",
+                      beginAtZero: true,
+                    }
+                  : {
+                      ...axisOptions,
+                      type: "category",
+                    },
+                y: isHorizontal
+                  ? {
+                      ...axisOptions,
+                      type: "category",
+                    }
+                  : {
+                      ...axisOptions,
+                      type: "linear",
+                      beginAtZero: true,
+                    },
+              },
+            } as ChartOptions,
+            plugins: [valueLabelPlugin(showLabels, type, labelColor, fontFamily)],
+          }
+
+    const chart = new Chart(canvas, config)
+
+    return () => {
+      chart.destroy()
+    }
+  }, [data, showLabels, themeVersion, type])
+
+  return <canvas ref={canvasRef} className="h-full w-full" />
 }
 
 const TableOrChart: React.FC<SlideLayoutProps> = ({ data: slideData }) => {
@@ -215,52 +471,7 @@ const TableOrChart: React.FC<SlideLayoutProps> = ({ data: slideData }) => {
             </div>
           ) : (
             <div className="w-full h-[360px] rounded-xl p-4" >
-              <ResponsiveContainer width="100%" height="100%">
-                {type === 'bar' ? (
-                  <BarChart data={cData} margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
-                    <CartesianGrid stroke="#E5E7EB" strokeDasharray="3 3" />
-                    <XAxis dataKey="label" tick={{ fill: 'var(--background-text, #6B7280)', fontWeight: 600 }} />
-                    <YAxis tick={{ fill: 'var(--background-text, #6B7280)', fontWeight: 600 }} />
-                    <Tooltip labelStyle={{ color: 'var(--background-text, #6B7280)' }} itemStyle={{ color: 'var(--background-text, #6B7280)' }} />
-                    <Legend wrapperStyle={{ color: 'var(--background-text, #6B7280)' }} />
-                    <Bar dataKey="value" fill={CHART_COLORS[0]} radius={[6, 6, 0, 0]} label={showLabels ? { position: 'top', fill: 'var(--background-text, #111827)', fontSize: 12 } : false} >{cData.map((_, i) => (
-                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                    ))}</Bar>
-                  </BarChart>
-                ) : type === 'horizontalBar' ? (
-                  <BarChart data={cData} layout="vertical" margin={{ top: 10, right: 20, bottom: 10, left: 20 }}>
-                    <CartesianGrid stroke="#E5E7EB" strokeDasharray="3 3" />
-                    <XAxis type="number" tick={{ fill: 'var(--background-text, #6B7280)', fontWeight: 600 }} />
-                    <YAxis type="category" dataKey="label" tick={{ fill: 'var(--background-text, #6B7280)', fontWeight: 600 }} />
-                    <Tooltip labelStyle={{ color: 'var(--background-text, #6B7280)' }} itemStyle={{ color: 'var(--background-text, #6B7280)' }} />
-                    <Legend wrapperStyle={{ color: 'var(--background-text, #6B7280)' }} />
-                    <Bar dataKey="value" fill={CHART_COLORS[0]} radius={[0, 6, 6, 0]} label={showLabels ? { position: 'right', fill: 'var(--background-text, #111827)', fontSize: 12 } : false} >{cData.map((_, i) => (
-                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                    ))}</Bar>
-                  </BarChart>
-                ) : type === 'line' ? (
-                  <LineChart data={cData} margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
-                    <CartesianGrid stroke="#E5E7EB" strokeDasharray="3 3" />
-                    <XAxis dataKey="label" tick={{ fill: 'var(--background-text, #6B7280)', fontWeight: 600 }} />
-                    <YAxis tick={{ fill: 'var(--background-text, #6B7280)', fontWeight: 600 }} />
-                    <Tooltip labelStyle={{ color: 'var(--background-text, #6B7280)' }} itemStyle={{ color: 'var(--background-text, #6B7280)' }} />
-                    <Legend wrapperStyle={{ color: 'var(--background-text, #6B7280)' }} />
-                    <Line type="monotone" dataKey="value" strokeWidth={3} dot={{ r: 3 }} label={showLabels ? { position: 'top', fill: 'var(--background-text, #111827)', fontSize: 12 } : false} >{cData.map((_, i) => (
-                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                    ))}</Line>
-                  </LineChart>
-                ) : (
-                  <PieChart>
-                    <Tooltip labelStyle={{ color: 'var(--background-text, #6B7280)' }} itemStyle={{ color: 'var(--background-text, #6B7280)' }} />
-                    <Legend wrapperStyle={{ color: 'var(--background-text, #6B7280)' }} />
-                    <Pie data={cData} dataKey="value" nameKey="label" cx="50%" cy="50%" outerRadius={120} label={showLabels ? { fill: 'var(--background-text, #6B7280)' } : false}>
-                      {cData.map((_, i) => (
-                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                )}
-              </ResponsiveContainer>
+              <SwiftChart type={type} data={cData} showLabels={showLabels} />
             </div>
           )}
         </div>
@@ -278,5 +489,3 @@ const TableOrChart: React.FC<SlideLayoutProps> = ({ data: slideData }) => {
 
 export { Schema, layoutId, layoutName, layoutDescription }
 export default TableOrChart
-
-

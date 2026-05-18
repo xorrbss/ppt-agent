@@ -1,15 +1,8 @@
+"use client";
+
 import React from "react";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from "recharts";
 import * as z from "zod";
+import { ModernMultiLineChart } from "./ModernChartPrimitives";
 
 export const layoutId = "chart-with-metrics";
 export const layoutName = "Chart With Metrics Slide";
@@ -212,52 +205,7 @@ const CompanyTractionSlideLayout: React.FC<Props> = ({ data }) => {
               style={{ backgroundColor: 'var(--card-color, #ffffff)' }}
             >
               <div className="w-full h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={growthStats} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={`var(--background-text, #E5E7EB)`} />
-                    <XAxis
-                      dataKey="year"
-                      stroke="var(--background-text, #234CD9)"
-                      tick={{ fill: "var(--background-text, #234CD9)", fontSize: 12, fontWeight: 600 }}
-                    />
-                    <YAxis
-                      stroke="var(--background-text, #234CD9)"
-                      tick={{ fill: "var(--background-text, #234CD9)", fontSize: 12, fontWeight: 600 }}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "var(--card-color, #234CD9)",
-                        border: "none",
-                        color: "var(--background-text, #ffffff)",
-                      }}
-
-                    />
-                    <Legend
-                      wrapperStyle={{ color: "var(--background-text, #234CD9)", fontSize: 12, fontWeight: 600 }}
-                      iconType="circle"
-                    />
-                    {seriesKeys.map((key, idx) => (
-                      <Line
-                        key={key}
-                        type="monotone"
-                        dataKey={key}
-                        stroke={`var(--graph-${idx}, ${defaultColors[idx % defaultColors.length]})`}
-                        strokeWidth={3}
-                        name={key
-                          .replace(/([A-Z])/g, " $1")
-                          .replace(/^./, (str) => str.toUpperCase())}
-                        dot={{
-                          r: 4,
-                          fill: `var(--graph-${idx}, ${defaultColors[idx % defaultColors.length]})`,
-                        }}
-                        activeDot={{
-                          r: 6,
-                          fill: `var(--graph-${idx}, ${defaultColors[idx % defaultColors.length]})`,
-                        }}
-                      />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
+                <ModernMultiLineChart data={growthStats} seriesKeys={seriesKeys} colors={defaultColors} />
               </div>
             </div>
           </div>

@@ -10,7 +10,7 @@ import { RemoteSvgIcon } from '@/app/hooks/useRemoteSvgIcon';
 import {
     BarChart, Bar, LineChart, Line, PieChart, Pie, AreaChart, Area, ScatterChart, Scatter,
     XAxis, YAxis, CartesianGrid, Cell, ResponsiveContainer, Tooltip, Legend, LabelList, ReferenceLine
-} from "recharts";
+} from "./NeoChartPrimitives";
 
 export const layoutId = 'chart-with-bullets-slide'
 export const layoutName = 'Chart With Bullet Cards'
@@ -219,7 +219,7 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
     const graphColors = (index: number, serieColor?: string) => {
 
         const fallback = serieColor || DEFAULT_CHART_COLORS[index % DEFAULT_CHART_COLORS.length];
-        return `var(--graph-${index}, ${fallback})`;
+        return `var(--graph-${index % 10}, ${fallback})`;
     };
 
     const renderChart = () => {
@@ -240,7 +240,7 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
         switch (chartType) {
             case 'bar':
                 return (
-                    <BarChart data={chartData as any[]} {...commonProps} height={460}>
+                    <BarChart data={chartData as any[]} {...commonProps}>
                         <CartesianGrid {...gridProps} />
                         <XAxis dataKey="name" {...axisProps} tickFormatter={formatComma} />
                         <YAxis {...axisProps} tickFormatter={formatComma} />
@@ -256,7 +256,7 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
 
             case 'bar-horizontal':
                 return (
-                    <BarChart data={chartData as any[]} layout="vertical" {...commonProps} height={400}>
+                    <BarChart data={chartData as any[]} layout="vertical" {...commonProps}>
                         <CartesianGrid {...gridProps} />
                         <XAxis type="number" {...axisProps} tickFormatter={formatComma} />
                         <YAxis type="category" dataKey="name" {...axisProps} width={60} tickFormatter={formatComma} />
@@ -273,7 +273,7 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
             case 'bar-grouped-vertical': {
                 const transformedData = transformMultiSeriesData(chartData as any[], series);
                 return (
-                    <BarChart data={transformedData} {...commonProps} height={460}>
+                    <BarChart data={transformedData} {...commonProps}>
                         <CartesianGrid {...gridProps} />
                         <XAxis dataKey="name" {...axisProps} tickFormatter={formatComma} />
                         <YAxis {...axisProps} tickFormatter={formatComma} />
@@ -289,7 +289,7 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
             case 'bar-grouped-horizontal': {
                 const transformedData = transformMultiSeriesData(chartData as any[], series);
                 return (
-                    <BarChart data={transformedData} layout="vertical" {...commonProps} height={460}>
+                    <BarChart data={transformedData} layout="vertical" {...commonProps}>
                         <CartesianGrid {...gridProps} />
                         <XAxis type="number" {...axisProps} tickFormatter={formatComma} />
                         <YAxis type="category" dataKey="name" {...axisProps} width={60} tickFormatter={formatComma} />
@@ -305,7 +305,7 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
             case 'bar-stacked-vertical': {
                 const transformedData = transformMultiSeriesData(chartData as any[], series);
                 return (
-                    <BarChart data={transformedData} {...commonProps} height={460}>
+                    <BarChart data={transformedData} {...commonProps}>
                         <CartesianGrid {...gridProps} />
                         <XAxis dataKey="name" {...axisProps} tickFormatter={formatComma} />
                         <YAxis {...axisProps} tickFormatter={formatComma} />
@@ -321,7 +321,7 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
             case 'bar-stacked-horizontal': {
                 const transformedData = transformMultiSeriesData(chartData as any[], series);
                 return (
-                    <BarChart data={transformedData} layout="vertical" {...commonProps} height={460}>
+                    <BarChart data={transformedData} layout="vertical" {...commonProps}>
                         <CartesianGrid {...gridProps} />
                         <XAxis type="number" {...axisProps} tickFormatter={formatComma} />
                         <YAxis type="category" dataKey="name" {...axisProps} width={60} tickFormatter={formatComma} />
@@ -337,7 +337,7 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
             case 'bar-clustered': {
                 const transformedData = transformMultiSeriesData(chartData as any[], series);
                 return (
-                    <BarChart data={transformedData} barGap={1} barCategoryGap="15%" {...commonProps} height={460}>
+                    <BarChart data={transformedData} barGap={1} barCategoryGap="15%" {...commonProps}>
                         <CartesianGrid {...gridProps} />
                         <XAxis dataKey="name" {...axisProps} tickFormatter={formatComma} />
                         <YAxis {...axisProps} tickFormatter={formatComma} />
@@ -353,7 +353,7 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
             case 'bar-diverging': {
                 const transformedData = transformDivergingData(chartData as any[]);
                 return (
-                    <BarChart data={transformedData} layout="vertical" stackOffset="sign" {...commonProps} height={460}>
+                    <BarChart data={transformedData} layout="vertical" stackOffset="sign" {...commonProps}>
                         <CartesianGrid {...gridProps} />
                         <XAxis type="number" {...axisProps} tickFormatter={formatComma} />
                         <YAxis type="category" dataKey="name" {...axisProps} width={60} tickFormatter={formatComma} />
@@ -368,7 +368,7 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
 
             case 'line':
                 return (
-                    <LineChart data={chartData as any[]} {...commonProps} height={460}>
+                    <LineChart data={chartData as any[]} {...commonProps}>
                         <CartesianGrid {...gridProps} />
                         <XAxis dataKey="name" {...axisProps} tickFormatter={formatComma} />
                         <YAxis {...axisProps} tickFormatter={formatComma} />
@@ -386,7 +386,7 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
 
             case 'area':
                 return (
-                    <AreaChart data={chartData as any[]} {...commonProps} height={460}>
+                    <AreaChart data={chartData as any[]} {...commonProps}>
                         <CartesianGrid {...gridProps} />
                         <XAxis dataKey="name" {...axisProps} tickFormatter={formatComma} />
                         <YAxis {...axisProps} tickFormatter={formatComma} />
@@ -411,7 +411,7 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
             case 'area-stacked': {
                 const transformedData = transformMultiSeriesData(chartData as any[], series);
                 return (
-                    <AreaChart data={transformedData} {...commonProps} height={460}>
+                    <AreaChart data={transformedData} {...commonProps}>
                         <CartesianGrid {...gridProps} />
                         <XAxis dataKey="name" {...axisProps} tickFormatter={formatComma} />
                         <YAxis {...axisProps} tickFormatter={formatComma} />
@@ -426,7 +426,7 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
 
             case 'pie':
                 return (
-                    <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 0 }} height={460}>
+                    <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
                         {showTooltip && <Tooltip content={<CustomTooltip />} cursor={{ fill: 'transparent' }} />}
                         {showLegend && <Legend wrapperStyle={{ fontSize: '10px' }} />}
                         <Pie
@@ -444,7 +444,7 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
 
             case 'donut':
                 return (
-                    <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 0 }} height={460}>
+                    <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
                         {showTooltip && <Tooltip content={<CustomTooltip />} cursor={{ fill: 'transparent' }} />}
                         {showLegend && <Legend wrapperStyle={{ fontSize: '10px' }} />}
                         <Pie
@@ -464,7 +464,7 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
 
             case 'scatter':
                 return (
-                    <ScatterChart {...commonProps} height={460}>
+                    <ScatterChart {...commonProps}>
                         <CartesianGrid {...gridProps} />
                         <XAxis dataKey="x" type="number" {...axisProps} tickFormatter={formatComma} />
                         <YAxis dataKey="y" type="number" {...axisProps} tickFormatter={formatComma} />
@@ -527,14 +527,14 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
                         </p>
 
                         {/* Chart Container */}
-                        <div className="flex-1 rounded-lg shadow-sm border  p-2 max-h-[460px]"
+                        <div className="flex-1 min-h-0 overflow-hidden rounded-lg shadow-sm border  p-2 max-h-[460px]"
 
                             style={{
                                 borderColor: 'var(--stroke,#F8F9FA)',
                                 backgroundColor: 'var(--card-color,#FFFFFF)'
                             }}
                         >
-                            <ResponsiveContainer maxHeight={460} height='100%' className="">
+                            <ResponsiveContainer width="100%" maxHeight={460} height="100%" className="">
                                 {renderChart()}
                             </ResponsiveContainer>
                         </div>

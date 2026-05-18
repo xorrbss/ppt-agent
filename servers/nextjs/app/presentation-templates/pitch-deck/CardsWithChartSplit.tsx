@@ -12,7 +12,7 @@ export const slideLayoutDescription =
   "A split layout with cards on the left and a chart panel on the right.";
 
 const DEFAULT_CHART = {
-  chartType: "pie" as const,
+  chartType: "line" as const,
   legendLabel: "Series Label",
   yAxisLabel: "Y axis name",
   barData: [

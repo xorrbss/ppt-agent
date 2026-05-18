@@ -1,26 +1,9 @@
 "use client";
 
-import { useId } from "react";
+import { useEffect, useRef } from "react";
+import Chart from "chart.js/auto";
+import type { ChartConfiguration, ChartOptions, Plugin } from "chart.js";
 import * as z from "zod";
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ReferenceLine,
-  Scatter,
-  ScatterChart,
-  XAxis,
-  YAxis,
-  LabelList,
-  ResponsiveContainer,
-} from "recharts";
 
 export const simpleDataSchema = z.object({
   name: z.string().meta({ description: "Data point name" }),
@@ -108,7 +91,10 @@ export const flexibleChartDataSchema = z.object({
 
 export type FlexibleChartData = z.infer<typeof flexibleChartDataSchema>;
 
-const formatComma = (value: number) => value.toLocaleString("en-US");
+const formatComma = (value: string | number) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric.toLocaleString("en-US") : String(value);
+};
 
 export function deriveSeriesNames(data: any[], explicit: string[]): string[] {
   if (explicit.length > 0) return explicit;
@@ -250,6 +236,690 @@ export function normalizeFlexibleChartData(
 }
 
 const graphVar = (index: number, fallback: string) => `var(--graph-${index % 10}, ${fallback})`;
+const AXIS_TEXT = "var(--background-text,#232223)";
+const BODY_FONT = "var(--body-font-family,'Source Sans 3')";
+const ZERO_LINE = "var(--stroke,#9CA3AF)";
+
+function cssVarParts(value: string) {
+  const match = value.match(/^var\((--[^,\s)]+)\s*,?\s*([^)]+)?\)$/);
+  if (!match) return null;
+
+  return {
+    name: match[1],
+    fallback: match[2]?.trim(),
+  };
+}
+
+function resolveToken(element: HTMLElement, value: string, fallback: string) {
+  const parts = cssVarParts(value);
+  if (!parts) return value;
+
+  const resolved = getComputedStyle(element)
+    .getPropertyValue(parts.name)
+    .trim();
+  return resolved || parts.fallback || fallback;
+}
+
+function resolveColor(element: HTMLElement, value: string, fallback = "#232223") {
+  return resolveToken(element, value, fallback);
+}
+
+function resolveFont(element: HTMLElement) {
+  return resolveToken(element, BODY_FONT, "Source Sans 3").replace(/^['"]|['"]$/g, "");
+}
+
+function toNumber(value: unknown) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function withAlpha(color: string, alpha: number) {
+  const hex = color.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (hex) {
+    const raw = hex[1].length === 3
+      ? hex[1].split("").map((char) => char + char).join("")
+      : hex[1];
+    const int = Number.parseInt(raw, 16);
+    const rgb = [(int >> 16) & 255, (int >> 8) & 255, int & 255];
+    return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
+  }
+
+  const rgb = color.trim().match(/^rgba?\(([^)]+)\)$/i);
+  if (rgb) {
+    const channels = rgb[1].split(",").slice(0, 3).map((part) => part.trim());
+    return `rgba(${channels.join(", ")}, ${alpha})`;
+  }
+
+  return color;
+}
+
+function colorLuminance(color: string) {
+  const weights = [0.2126, 0.7152, 0.0722];
+  const hex = color.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (hex) {
+    const raw = hex[1].length === 3
+      ? hex[1].split("").map((char) => char + char).join("")
+      : hex[1];
+    const int = Number.parseInt(raw, 16);
+    const rgb = [(int >> 16) & 255, (int >> 8) & 255, int & 255];
+    return rgb
+      .map((value) => {
+        const channel = value / 255;
+        return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+      })
+      .reduce((sum, channel, index) => sum + channel * (weights[index] ?? 0), 0);
+  }
+
+  const rgb = color.trim().match(/^rgba?\(([^)]+)\)$/i);
+  if (rgb) {
+    const channels = rgb[1].split(",").slice(0, 3).map((part) => Number(part.trim()));
+    if (channels.every(Number.isFinite)) {
+      return channels
+        .map((value) => {
+          const channel = value / 255;
+          return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+        })
+        .reduce((sum, channel, index) => sum + channel * (weights[index] ?? 0), 0);
+    }
+  }
+
+  return 0;
+}
+
+function readableTextColor(color: unknown) {
+  const resolved = Array.isArray(color) ? color[0] : color;
+  if (typeof resolved !== "string") return "#ffffff";
+  return colorLuminance(resolved) > 0.52 ? "#232223" : "#ffffff";
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function labelsFrom(data: any[], key = "name") {
+  return data.map((item, index) => String(item?.[key] ?? item?.label ?? `P${index + 1}`));
+}
+
+function valuesFrom(data: any[], key: string) {
+  return data.map((item) => toNumber(item?.[key]));
+}
+
+function resolvedGraphColors(canvas: HTMLCanvasElement, count: number, fallback: string) {
+  return Array.from({ length: Math.max(1, count) }, (_, index) =>
+    resolveColor(canvas, graphVar(index, fallback), fallback)
+  );
+}
+
+type ReportChartUi = {
+  compact: boolean;
+  tickFs: number;
+  tickPad: number;
+  labelFs: number;
+  labelOffTop: number;
+  labelOffSide: number;
+  layoutPadding: { top: number; right: number; left: number; bottom: number };
+  lineStroke: number;
+  dotR: number;
+  dotStroke: number;
+  maxBarThickness: number;
+  borderRadius: number;
+  piePadding: number;
+  pieLabelMinPct: number;
+  pieLabelFs: number;
+};
+
+function reportChartUi(compact: boolean): ReportChartUi {
+  return {
+    compact,
+    tickFs: compact ? 6 : 10,
+    tickPad: compact ? 5 : 9,
+    labelFs: compact ? 8 : 14,
+    labelOffTop: compact ? 4 : 10,
+    labelOffSide: compact ? 4 : 8,
+    layoutPadding: compact
+      ? { top: 11, right: 14, left: 2, bottom: 4 }
+      : { top: 24, right: 24, left: 4, bottom: 10 },
+    lineStroke: compact ? 2 : 3,
+    dotR: compact ? 2.5 : 4,
+    dotStroke: compact ? 1 : 2,
+    maxBarThickness: compact ? 20 : 35,
+    borderRadius: compact ? 4 : 8,
+    piePadding: compact ? 4 : 10,
+    pieLabelMinPct: compact ? 0.12 : 0.06,
+    pieLabelFs: compact ? 8 : 12,
+  };
+}
+
+function reportBaseOptions(axisColor: string, fontFamily: string, ui: ReportChartUi): ChartOptions {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    resizeDelay: 0,
+    color: axisColor,
+    font: {
+      family: fontFamily,
+    },
+    layout: {
+      padding: ui.layoutPadding,
+    },
+    interaction: {
+      intersect: false,
+      mode: "nearest",
+    },
+    plugins: {
+      legend: {
+        display: false,
+      },
+      tooltip: {
+        enabled: false,
+      },
+    },
+  } as ChartOptions;
+}
+
+function reportCategoryScale(axisColor: string, fontFamily: string, ui: ReportChartUi, stacked = false) {
+  return {
+    type: "category",
+    offset: true,
+    stacked,
+    grid: {
+      color: withAlpha(axisColor, 0.16),
+      display: false,
+      drawTicks: false,
+    },
+    border: {
+      display: false,
+    },
+    ticks: {
+      autoSkip: true,
+      color: axisColor,
+      font: {
+        family: fontFamily,
+        size: ui.tickFs,
+        weight: 500,
+      },
+      maxRotation: 0,
+      padding: ui.tickPad,
+    },
+  };
+}
+
+function reportLinearScale(axisColor: string, fontFamily: string, ui: ReportChartUi, stacked = false, beginAtZero = true) {
+  return {
+    type: "linear",
+    beginAtZero,
+    grace: "8%",
+    stacked,
+    grid: {
+      color: withAlpha(axisColor, 0.22),
+      drawTicks: false,
+      lineWidth: 1,
+    },
+    border: {
+      display: false,
+    },
+    ticks: {
+      color: axisColor,
+      font: {
+        family: fontFamily,
+        size: ui.tickFs,
+        weight: 500,
+      },
+      padding: ui.tickPad,
+      callback(value: string | number) {
+        return formatComma(value);
+      },
+    },
+  };
+}
+
+function reportBarDataset(data: number[], color: string, ui: ReportChartUi, extra: Record<string, unknown> = {}) {
+  return {
+    data,
+    backgroundColor: color,
+    borderColor: color,
+    borderWidth: 0,
+    borderRadius: ui.borderRadius,
+    borderSkipped: false,
+    categoryPercentage: 0.72,
+    barPercentage: 0.78,
+    maxBarThickness: ui.maxBarThickness,
+    ...extra,
+  };
+}
+
+function reportValueLabelPlugin(mode: "vertical" | "horizontal" | "none", axisColor: string, fontFamily: string, ui: ReportChartUi): Plugin {
+  return {
+    id: `reportValueLabels-${mode}-${ui.compact ? "compact" : "default"}`,
+    afterDatasetsDraw(chart) {
+      if (mode === "none") return;
+
+      const ctx = chart.ctx;
+      const area = chart.chartArea;
+      ctx.save();
+      ctx.font = `600 ${ui.labelFs}px ${fontFamily}`;
+      ctx.textBaseline = "middle";
+
+      chart.data.datasets.forEach((dataset: any, datasetIndex: number) => {
+        const meta = chart.getDatasetMeta(datasetIndex);
+        if (meta.hidden) return;
+
+        const rawColor = Array.isArray(dataset.backgroundColor)
+          ? dataset.backgroundColor[0]
+          : dataset.backgroundColor;
+        ctx.fillStyle = mode === "horizontal"
+          ? readableTextColor(rawColor)
+          : typeof rawColor === "string" ? rawColor : axisColor;
+
+        meta.data.forEach((element: any, index: number) => {
+          const raw = Array.isArray(dataset.data) ? dataset.data[index] : 0;
+          const value = typeof raw === "object" ? toNumber(raw?.y ?? raw?.x) : toNumber(raw);
+          if (!value) return;
+
+          const position = element.tooltipPosition();
+          if (mode === "horizontal") {
+            const negative = value < 0;
+            ctx.textAlign = negative ? "left" : "right";
+            const x = clamp(
+              position.x + (negative ? ui.labelOffSide : -ui.labelOffSide),
+              area.left + 3,
+              area.right - 3,
+            );
+            const y = clamp(position.y, area.top + ui.labelFs / 2, area.bottom - ui.labelFs / 2);
+            ctx.fillText(formatComma(value), x, y);
+            return;
+          }
+
+          ctx.textAlign = "center";
+          const y = clamp(
+            position.y + (value < 0 ? ui.labelOffTop : -ui.labelOffTop),
+            area.top + ui.labelFs / 2,
+            area.bottom - ui.labelFs / 2,
+          );
+          const x = clamp(position.x, area.left + 3, area.right - 3);
+          ctx.fillText(formatComma(value), x, y);
+        });
+      });
+
+      ctx.restore();
+    },
+  };
+}
+
+function reportPieLabelPlugin(axisColor: string, fontFamily: string, ui: ReportChartUi): Plugin {
+  return {
+    id: `reportPieLabels-${ui.compact ? "compact" : "default"}`,
+    afterDatasetsDraw(chart) {
+      const dataset: any = chart.data.datasets[0];
+      const values = dataset?.data ?? [];
+      const total = values.reduce((sum: number, value: unknown) => sum + Math.abs(toNumber(value)), 0);
+      if (!total) return;
+
+      const meta = chart.getDatasetMeta(0);
+      const ctx = chart.ctx;
+      ctx.save();
+      ctx.font = `700 ${ui.pieLabelFs}px ${fontFamily}`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      meta.data.forEach((element: any, index: number) => {
+        const value = Math.abs(toNumber(values[index]));
+        const percent = value / total;
+        if (percent < ui.pieLabelMinPct) return;
+
+        const arc = element.getProps(["x", "y", "startAngle", "endAngle", "innerRadius", "outerRadius"], true);
+        const angle = (arc.startAngle + arc.endAngle) / 2;
+        const radius = arc.innerRadius + (arc.outerRadius - arc.innerRadius) * 0.58;
+        const x = arc.x + Math.cos(angle) * radius;
+        const y = arc.y + Math.sin(angle) * radius;
+        const fill = Array.isArray(dataset.backgroundColor)
+          ? dataset.backgroundColor[index]
+          : dataset.backgroundColor;
+
+        ctx.fillStyle = readableTextColor(fill) || axisColor;
+        ctx.fillText(`${Math.round(percent * 100)}%`, x, y);
+      });
+
+      ctx.restore();
+    },
+  };
+}
+
+function reportZeroLinePlugin(color: string): Plugin {
+  return {
+    id: "reportZeroLine",
+    afterDraw(chart) {
+      const scale = chart.scales.x;
+      if (!scale) return;
+
+      const x = scale.getPixelForValue(0);
+      const area = chart.chartArea;
+      if (x < area.left || x > area.right) return;
+
+      const ctx = chart.ctx;
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, area.top);
+      ctx.lineTo(x, area.bottom);
+      ctx.stroke();
+      ctx.restore();
+    },
+  };
+}
+
+function reportCartesianOptions({
+  axisColor,
+  fontFamily,
+  horizontal = false,
+  stacked = false,
+  ui,
+}: {
+  axisColor: string;
+  fontFamily: string;
+  horizontal?: boolean;
+  stacked?: boolean;
+  ui: ReportChartUi;
+}): ChartOptions {
+  const base = reportBaseOptions(axisColor, fontFamily, ui);
+
+  return {
+    ...base,
+    indexAxis: horizontal ? "y" : "x",
+    scales: horizontal
+      ? {
+        x: reportLinearScale(axisColor, fontFamily, ui, stacked),
+        y: reportCategoryScale(axisColor, fontFamily, ui, stacked),
+      }
+      : {
+        x: reportCategoryScale(axisColor, fontFamily, ui, stacked),
+        y: reportLinearScale(axisColor, fontFamily, ui, stacked),
+      },
+  } as ChartOptions;
+}
+
+function makeReportChartConfig({
+  canvas,
+  chartType,
+  chartData,
+  colorFallback,
+  density,
+  dualLineColors,
+  series,
+}: Omit<FlexibleReportChartProps, "data"> & {
+  canvas: HTMLCanvasElement;
+  chartData: any[];
+}): ChartConfiguration | null {
+  const compact = density === "compact";
+  const ui = reportChartUi(compact);
+  const axisColor = resolveColor(canvas, AXIS_TEXT, "#232223");
+  const fontFamily = resolveFont(canvas);
+  const zeroLineColor = resolveColor(canvas, ZERO_LINE, "#9CA3AF");
+  const { data: normalizedData, series: normalizedSeries } = normalizeFlexibleChartData(
+    chartType,
+    chartData,
+    series ?? [],
+  );
+  const effectiveSeries = deriveSeriesNames(normalizedData as any[], normalizedSeries);
+  const colorCount = Math.max(10, effectiveSeries.length, normalizedData.length);
+  const colors = resolvedGraphColors(canvas, colorCount, colorFallback ?? "#157CFF");
+  const resolvedDualLineColors: [string, string] = [
+    resolveColor(canvas, dualLineColors?.[0] ?? "var(--graph-0,#9fb6ff)", "#9fb6ff"),
+    resolveColor(canvas, dualLineColors?.[1] ?? "var(--graph-1,#4d4ef3)", "#4d4ef3"),
+  ];
+
+  if (chartType === "pie" || chartType === "donut") {
+    return {
+      type: chartType === "pie" ? "pie" : "doughnut",
+      data: {
+        labels: labelsFrom(normalizedData as any[]),
+        datasets: [
+          {
+            data: valuesFrom(normalizedData as any[], "value"),
+            backgroundColor: (normalizedData as any[]).map((_, index) => colors[index % colors.length]),
+            borderColor: "transparent",
+            borderWidth: 0,
+            hoverBorderWidth: 0,
+            spacing: 0,
+          },
+        ],
+      },
+      options: {
+        ...reportBaseOptions(axisColor, fontFamily, ui),
+        cutout: chartType === "donut" ? (compact ? "58%" : "68%") : 0,
+        layout: {
+          padding: ui.piePadding,
+        },
+      },
+      plugins: [reportPieLabelPlugin(axisColor, fontFamily, ui)],
+    } as ChartConfiguration;
+  }
+
+  if (chartType === "scatter") {
+    const scatterPoints = normalizeScatterPoints(normalizedData as any[]);
+    return {
+      type: "scatter",
+      data: {
+        datasets: [
+          {
+            data: scatterPoints.map((point) => ({ x: point.x, y: point.y })),
+            backgroundColor: scatterPoints.map((_, index) => colors[index % colors.length]),
+            borderColor: scatterPoints.map((_, index) => colors[index % colors.length]),
+            borderWidth: 0,
+            clip: false,
+            pointRadius: ui.dotR + (compact ? 0.5 : 1),
+            pointHoverRadius: ui.dotR + (compact ? 0.5 : 1),
+          },
+        ],
+      },
+      options: {
+        ...reportBaseOptions(axisColor, fontFamily, ui),
+        scales: {
+          x: reportLinearScale(axisColor, fontFamily, ui, false, false),
+          y: reportLinearScale(axisColor, fontFamily, ui, false, false),
+        },
+      },
+    } as ChartConfiguration;
+  }
+
+  if (chartType === "line" || chartType === "line-dual") {
+    const dual = chartType === "line-dual";
+    return {
+      type: "line",
+      data: {
+        labels: dual ? labelsFrom(normalizedData as any[], "label") : labelsFrom(normalizedData as any[]),
+        datasets: dual
+          ? [
+            {
+              data: valuesFrom(normalizedData as any[], "valueA"),
+              borderColor: resolvedDualLineColors[0],
+              backgroundColor: resolvedDualLineColors[0],
+              borderWidth: ui.lineStroke,
+              clip: false,
+              cubicInterpolationMode: "monotone",
+              pointBackgroundColor: resolvedDualLineColors[0],
+              pointBorderColor: resolvedDualLineColors[0],
+              pointBorderWidth: ui.dotStroke,
+              pointRadius: ui.dotR,
+              tension: 0.35,
+            },
+            {
+              data: valuesFrom(normalizedData as any[], "valueB"),
+              borderColor: resolvedDualLineColors[1],
+              backgroundColor: resolvedDualLineColors[1],
+              borderWidth: ui.lineStroke,
+              clip: false,
+              cubicInterpolationMode: "monotone",
+              pointBackgroundColor: resolvedDualLineColors[1],
+              pointBorderColor: resolvedDualLineColors[1],
+              pointBorderWidth: ui.dotStroke,
+              pointRadius: ui.dotR,
+              tension: 0.35,
+            },
+          ]
+          : [
+            {
+              data: valuesFrom(normalizedData as any[], "value"),
+              borderColor: colors[0],
+              backgroundColor: colors[0],
+              borderWidth: ui.lineStroke,
+              clip: false,
+              cubicInterpolationMode: "monotone",
+              pointBackgroundColor: colors[0],
+              pointBorderColor: colors[0],
+              pointBorderWidth: ui.dotStroke,
+              pointRadius: ui.dotR,
+              tension: 0.35,
+            },
+          ],
+      },
+      options: reportCartesianOptions({ axisColor, fontFamily, ui }),
+    } as ChartConfiguration;
+  }
+
+  if (chartType === "area") {
+    return {
+      type: "line",
+      data: {
+        labels: labelsFrom(normalizedData as any[]),
+        datasets: [
+          {
+            data: valuesFrom(normalizedData as any[], "value"),
+            borderColor: colors[0],
+            backgroundColor: withAlpha(colors[0], 0.22),
+            borderWidth: compact ? 1.5 : 2,
+            clip: false,
+            cubicInterpolationMode: "monotone",
+            fill: true,
+            pointRadius: 0,
+            tension: 0.35,
+          },
+        ],
+      },
+      options: reportCartesianOptions({ axisColor, fontFamily, ui }),
+    } as ChartConfiguration;
+  }
+
+  if (chartType === "area-stacked") {
+    const transformedData = transformMultiSeriesData(normalizedData as any[], effectiveSeries);
+    return {
+      type: "line",
+      data: {
+        labels: labelsFrom(transformedData),
+        datasets: effectiveSeries.map((name, index) => ({
+          data: valuesFrom(transformedData, name),
+          borderColor: colors[index % colors.length],
+          backgroundColor: withAlpha(colors[index % colors.length], 0.4),
+          borderWidth: compact ? 1.5 : 2,
+          clip: false,
+          cubicInterpolationMode: "monotone",
+          fill: true,
+          pointRadius: 0,
+          stack: "area",
+          tension: 0.35,
+        })),
+      },
+      options: reportCartesianOptions({ axisColor, fontFamily, stacked: true, ui }),
+    } as ChartConfiguration;
+  }
+
+  if (chartType === "bar-diverging") {
+    const transformedData = transformDivergingData(normalizedData as any[]);
+    return {
+      type: "bar",
+      data: {
+        labels: labelsFrom(transformedData),
+        datasets: [
+          reportBarDataset(valuesFrom(transformedData, "positive"), colors[0], ui, {
+            stack: "stack",
+          }),
+          reportBarDataset(valuesFrom(transformedData, "negative"), colors[3], ui, {
+            stack: "stack",
+          }),
+        ],
+      },
+      options: reportCartesianOptions({ axisColor, fontFamily, horizontal: true, stacked: true, ui }),
+      plugins: [reportZeroLinePlugin(zeroLineColor), reportValueLabelPlugin("horizontal", axisColor, fontFamily, ui)],
+    } as ChartConfiguration;
+  }
+
+  if (chartType === "bar-grouped-vertical" || chartType === "bar-grouped-horizontal" || chartType === "bar-clustered") {
+    const transformedData = transformMultiSeriesData(normalizedData as any[], effectiveSeries);
+    const horizontal = chartType === "bar-grouped-horizontal";
+    const clustered = chartType === "bar-clustered";
+    return {
+      type: "bar",
+      data: {
+        labels: labelsFrom(transformedData),
+        datasets: effectiveSeries.map((name, index) => reportBarDataset(
+          valuesFrom(transformedData, name),
+          colors[index % colors.length],
+          ui,
+          clustered
+            ? {
+              barPercentage: 0.62,
+              categoryPercentage: 0.82,
+              maxBarThickness: Math.max(compact ? 6 : 15, (compact ? 22 : 50) / Math.max(1, effectiveSeries.length)),
+            }
+            : {},
+        )),
+      },
+      options: reportCartesianOptions({ axisColor, fontFamily, horizontal, ui }),
+      plugins: [reportValueLabelPlugin(horizontal ? "horizontal" : "vertical", axisColor, fontFamily, ui)],
+    } as ChartConfiguration;
+  }
+
+  if (chartType === "bar-stacked-vertical" || chartType === "bar-stacked-horizontal") {
+    const transformedData = transformMultiSeriesData(normalizedData as any[], effectiveSeries);
+    const horizontal = chartType === "bar-stacked-horizontal";
+    return {
+      type: "bar",
+      data: {
+        labels: labelsFrom(transformedData),
+        datasets: effectiveSeries.map((name, index) => reportBarDataset(
+          valuesFrom(transformedData, name),
+          colors[index % colors.length],
+          ui,
+          { stack: "stack" },
+        )),
+      },
+      options: reportCartesianOptions({ axisColor, fontFamily, horizontal, stacked: true, ui }),
+      plugins: [reportValueLabelPlugin(horizontal ? "horizontal" : "vertical", axisColor, fontFamily, ui)],
+    } as ChartConfiguration;
+  }
+
+  if (chartType === "bar-horizontal") {
+    return {
+      type: "bar",
+      data: {
+        labels: labelsFrom(normalizedData as any[]),
+        datasets: [
+          reportBarDataset(valuesFrom(normalizedData as any[], "value"), colors[0], ui),
+        ],
+      },
+      options: reportCartesianOptions({ axisColor, fontFamily, horizontal: true, ui }),
+      plugins: [reportValueLabelPlugin("horizontal", axisColor, fontFamily, ui)],
+    } as ChartConfiguration;
+  }
+
+  if (chartType === "bar") {
+    return {
+      type: "bar",
+      data: {
+        labels: labelsFrom(normalizedData as any[]),
+        datasets: [
+          reportBarDataset(valuesFrom(normalizedData as any[], "value"), colors[0], ui),
+        ],
+      },
+      options: reportCartesianOptions({ axisColor, fontFamily, ui }),
+      plugins: [reportValueLabelPlugin("vertical", axisColor, fontFamily, ui)],
+    } as ChartConfiguration;
+  }
+
+  return null;
+}
 
 export type ChartDensity = "default" | "compact";
 
@@ -272,566 +942,65 @@ export function FlexibleReportChart({
   dualLineColors = ["var(--graph-0,#9fb6ff)", "var(--graph-1,#4d4ef3)"],
   density = "default",
 }: FlexibleReportChartProps) {
-  const areaGradientId = `flex-area-${useId().replace(/:/g, "")}`;
-  const compact = density === "compact";
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  const { data: normalizedData, series: normalizedSeries } = normalizeFlexibleChartData(
-    chartType,
-    chartData,
-    series,
-  );
-  const effectiveSeries = deriveSeriesNames(normalizedData as any[], normalizedSeries);
-  const scatterPoints = normalizeScatterPoints(normalizedData as any[]);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-  const ui = {
-    tickFs: compact ? 6 : 10,
-    catAxisW: compact ? 36 : 60,
-    barSize: compact ? 20 : 35,
-    labelFs: compact ? 8 : 14,
-    labelOffTop: compact ? 2 : 10,
-    labelOffSide: compact ? 2 : 8,
-    margin: compact
-      ? { top: 10, right: 15, left: -2, bottom: 0 }
-      : { top: 20, right: 20, left: 0, bottom: 5 },
-    lineStroke: compact ? 2 : 3,
-    dotR: compact ? 2.5 : 4,
-    dotStroke: compact ? 1 : 2,
-    barRadiusLg: compact ? ([4, 4, 0, 0] as const) : ([8, 8, 0, 0] as const),
-    barRadiusMd: compact ? ([2, 2, 0, 0] as const) : ([4, 4, 0, 0] as const),
-    barRadiusH: compact ? ([0, 4, 4, 0] as const) : ([0, 6, 6, 0] as const),
-    pieOuter: compact ? "100%" : "100%",
-    donutOuter: compact ? "90%" : "100%",
-    donutInner: compact ? "60%" : "70%",
-    pieMargin: compact
-      ? { top: 0, right: 0, left: 0, bottom: 0 }
-      : { top: 8, right: 8, left: 8, bottom: 8 },
-    pieLabelMinPct: compact ? 0.12 : 0.06,
-    pieMaxNameLen: compact ? 6 : 10,
-  };
+    let frame: number | null = null;
+    let chart: Chart | null = null;
 
-  const axisProps = {
-    tick: { fill: "var(--background-text, #232223)", fontSize: ui.tickFs, fontWeight: 500 },
-    axisLine: { stroke: "var(--background-text, #232223)" },
-    tickLine: { stroke: "var(--background-text, #232223)" },
-  };
+    const renderChart = () => {
+      const config = makeReportChartConfig({
+        canvas,
+        chartType,
+        chartData,
+        colorFallback,
+        density,
+        dualLineColors,
+        series,
+      });
 
-  const gridProps = {
-    strokeDasharray: "3 3",
-    stroke: "var(--background-text, #232223)",
-    opacity: 0.7,
-  };
-
-  const renderPieInsideLabel = (props: any) => {
-    const {
-      cx = 0,
-      cy = 0,
-      midAngle = 0,
-      innerRadius: ir = 0,
-      outerRadius: or = 0,
-      percent = 0,
-      name,
-    } = props;
-    if (percent < ui.pieLabelMinPct) return null;
-    const toNum = (v: unknown) => {
-      if (typeof v === "number" && Number.isFinite(v)) return v;
-      if (typeof v === "string" && v.trim().endsWith("%")) return NaN;
-      const n = Number(v);
-      return Number.isFinite(n) ? n : NaN;
+      chart?.destroy();
+      chart = config ? new Chart(canvas, config) : null;
     };
-    let inner = toNum(ir);
-    let outer = toNum(or);
-    if (!Number.isFinite(outer)) {
-      outer = compact ? 56 : 140;
-      inner = Number.isFinite(inner) ? inner : 0;
-    }
-    if (!Number.isFinite(inner)) inner = 0;
-    const midR = inner + (outer - inner) * 0.5;
-    const rad = (-midAngle * Math.PI) / 180;
-    const x = cx + midR * Math.cos(rad);
-    const y = cy + midR * Math.sin(rad);
-    const nm = String(name ?? "");
-    const short = nm.length <= ui.pieMaxNameLen;
-    const pct = `${(percent * 100).toFixed(0)}%`;
-    const fontSize = compact ? (short ? 6 : 5) : short ? 12 : 12;
-    const labelText = compact ? pct : short ? `${name} ${pct}` : pct;
-    return (
 
-      <g>
-        {/* <circle cx={x} cy={y} fill="var(--card-color,#ECEAF8)" /> */}
-        <text
-          x={x}
-          y={y}
-          style={{ padding: "4px" }}
-          textAnchor="middle"
-          fill="var(--background-text,#2C2B39)"
-          fontSize={fontSize}
-          fontWeight={600}
-        >
-          {labelText}
-        </text>
-      </g>
-    );
-  };
+    const scheduleRender = () => {
+      if (frame !== null) {
+        cancelAnimationFrame(frame);
+      }
 
-  const commonProps = {
-    margin: ui.margin,
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        renderChart();
+      });
+    };
 
-  };
+    renderChart();
 
-  switch (chartType) {
-    case "bar":
-      return (
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={normalizedData as any[]} {...commonProps}>
-            <CartesianGrid vertical={false} {...gridProps} />
-            <XAxis
-              dataKey="name"
-              {...axisProps}
-              tickFormatter={formatComma}
-              tickLine={false}
-              axisLine={false}
-            />
-            <YAxis {...axisProps} tickFormatter={formatComma} tickLine={false} axisLine={false} />
-            <Bar dataKey="value" fill={graphVar(0, colorFallback)} barSize={ui.barSize} radius={[...ui.barRadiusLg]}>
-              <LabelList
-                dataKey="value"
-                position="top"
-                fill={graphVar(0, colorFallback)}
-                fontSize={ui.labelFs}
-                offset={ui.labelOffTop}
-              />
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      );
-
-    case "bar-horizontal":
-      return (
-        <ResponsiveContainer width="100%" height="100%">
-
-          <BarChart data={normalizedData as any[]} layout="vertical" {...commonProps}>
-            <CartesianGrid vertical={false} {...gridProps} />
-            <XAxis type="number" {...axisProps} tickFormatter={formatComma} tickLine={false} axisLine={false} />
-            <YAxis
-              type="category"
-              dataKey="name"
-              {...axisProps}
-              width={ui.catAxisW}
-              tickFormatter={formatComma}
-              tickLine={false}
-              axisLine={false}
-            />
-            <Bar dataKey="value" barSize={ui.barSize} fill={graphVar(0, colorFallback)} radius={[...ui.barRadiusH]}>
-              <LabelList
-                dataKey="value"
-                position="right"
-                fill={graphVar(0, colorFallback)}
-                fontSize={ui.labelFs}
-                offset={ui.labelOffSide}
-              />
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      );
-
-    case "bar-grouped-vertical": {
-      const transformedData = transformMultiSeriesData(normalizedData as any[], effectiveSeries);
-      return (
-        <ResponsiveContainer width="100%" height="100%">
-
-          <BarChart data={transformedData} {...commonProps}>
-            <CartesianGrid vertical={false} {...gridProps} />
-            <XAxis
-              dataKey="name"
-              {...axisProps}
-              tickFormatter={formatComma}
-              tickLine={false}
-              axisLine={false}
-            />
-            <YAxis {...axisProps} tickFormatter={formatComma} tickLine={false} axisLine={false} />
-            {effectiveSeries.map((s: string, index: number) => (
-              <Bar key={s} dataKey={s} barSize={ui.barSize} fill={graphVar(index, colorFallback)} radius={[...ui.barRadiusMd]}>
-                <LabelList
-                  dataKey={s}
-                  position="top"
-                  fill={graphVar(index, colorFallback)}
-                  fontSize={ui.labelFs}
-                  offset={ui.labelOffTop}
-                />
-              </Bar>
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      );
+    const observer = new MutationObserver(scheduleRender);
+    let node: HTMLElement | null = canvas.parentElement;
+    while (node) {
+      observer.observe(node, {
+        attributeFilter: ["class", "data-theme", "style"],
+        attributes: true,
+      });
+      node = node.parentElement;
     }
 
-    case "bar-grouped-horizontal": {
-      const transformedData = transformMultiSeriesData(normalizedData as any[], effectiveSeries);
-      return (
-        <ResponsiveContainer width="100%" height="100%">
+    return () => {
+      if (frame !== null) {
+        cancelAnimationFrame(frame);
+      }
+      observer.disconnect();
+      chart?.destroy();
+    };
+  }, [chartData, chartType, colorFallback, density, dualLineColors, series]);
 
-          <BarChart data={transformedData} layout="vertical" {...commonProps}>
-            <CartesianGrid vertical={false} {...gridProps} />
-            <XAxis type="number" {...axisProps} tickFormatter={formatComma} tickLine={false} axisLine={false} />
-            <YAxis
-              type="category"
-              dataKey="name"
-              {...axisProps}
-              width={ui.catAxisW}
-              tickFormatter={formatComma}
-              tickLine={false}
-              axisLine={false}
-            />
-            {effectiveSeries.map((s: string, index: number) => (
-              <Bar key={s} dataKey={s} barSize={ui.barSize} fill={graphVar(index, colorFallback)} radius={[...ui.barRadiusH]}>
-                <LabelList
-                  dataKey={s}
-                  position="right"
-                  fill={graphVar(index, colorFallback)}
-                  fontSize={ui.labelFs}
-                  offset={ui.labelOffSide}
-                />
-              </Bar>
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      );
-    }
-
-    case "bar-stacked-vertical": {
-      const transformedData = transformMultiSeriesData(normalizedData as any[], effectiveSeries);
-      return (
-        <ResponsiveContainer width="100%" height="100%">
-
-          <BarChart data={transformedData} {...commonProps}>
-            <CartesianGrid vertical={false} {...gridProps} />
-            <XAxis
-              dataKey="name"
-              {...axisProps}
-              tickFormatter={formatComma}
-              tickLine={false}
-              axisLine={false}
-            />
-            <YAxis {...axisProps} tickFormatter={formatComma} tickLine={false} axisLine={false} />
-            {effectiveSeries.map((s: string, index: number) => (
-              <Bar
-                key={s}
-                dataKey={s}
-                stackId="stack"
-                barSize={ui.barSize}
-                fill={graphVar(index, colorFallback)}
-                radius={index === effectiveSeries.length - 1 ? [...ui.barRadiusMd] : [0, 0, 0, 0]}
-              >
-                <LabelList
-                  dataKey={s}
-                  position="top"
-                  fill={graphVar(index, colorFallback)}
-                  fontSize={ui.labelFs}
-                  offset={ui.labelOffTop}
-                />
-              </Bar>
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      );
-    }
-
-    case "bar-stacked-horizontal": {
-      const transformedData = transformMultiSeriesData(normalizedData as any[], effectiveSeries);
-      return (
-        <ResponsiveContainer width="100%" height="100%">
-
-          <BarChart data={transformedData} layout="vertical" {...commonProps}>
-            <CartesianGrid vertical={false} {...gridProps} />
-            <XAxis type="number" {...axisProps} tickFormatter={formatComma} tickLine={false} axisLine={false} />
-            <YAxis
-              type="category"
-              dataKey="name"
-              {...axisProps}
-              width={ui.catAxisW}
-              tickFormatter={formatComma}
-              tickLine={false}
-              axisLine={false}
-            />
-            {effectiveSeries.map((s: string, index: number) => (
-              <Bar
-                key={s}
-                dataKey={s}
-                stackId="stack"
-                barSize={ui.barSize}
-                fill={graphVar(index, colorFallback)}
-                radius={index === effectiveSeries.length - 1 ? [...ui.barRadiusH] : [0, 0, 0, 0]}
-              >
-                <LabelList
-                  dataKey={s}
-                  position="right"
-                  fill={graphVar(index, colorFallback)}
-                  fontSize={ui.labelFs}
-                  offset={ui.labelOffSide}
-                />
-              </Bar>
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      );
-    }
-
-    case "bar-clustered": {
-      const transformedData = transformMultiSeriesData(normalizedData as any[], effectiveSeries);
-      return (
-        <ResponsiveContainer width="100%" height="100%">
-
-          <BarChart data={transformedData} barGap={1} barCategoryGap="15%" {...commonProps}>
-            <CartesianGrid vertical={false} {...gridProps} />
-            <XAxis
-              dataKey="name"
-              {...axisProps}
-              tickFormatter={formatComma}
-              tickLine={false}
-              axisLine={false}
-            />
-            <YAxis {...axisProps} tickFormatter={formatComma} tickLine={false} axisLine={false} />
-            {effectiveSeries.map((s: string, index: number) => (
-              <Bar
-                key={s}
-                dataKey={s}
-                barSize={Math.max(
-                  compact ? 6 : 15,
-                  (compact ? 22 : 50) / Math.max(1, effectiveSeries.length),
-                )}
-                fill={graphVar(index, colorFallback)}
-                radius={compact ? [2, 2, 0, 0] : [3, 3, 0, 0]}
-              >
-                <LabelList
-                  dataKey={s}
-                  position="top"
-                  fill={graphVar(index, colorFallback)}
-                  fontSize={ui.labelFs}
-                  offset={ui.labelOffTop}
-                />
-              </Bar>
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      );
-    }
-
-    case "bar-diverging": {
-      const transformedData = transformDivergingData(normalizedData as any[]);
-      return (
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={transformedData} layout="vertical" stackOffset="sign" {...commonProps}>
-            <CartesianGrid vertical={false} {...gridProps} />
-            <XAxis type="number" {...axisProps} tickFormatter={formatComma} tickLine={false} axisLine={false} />
-            <YAxis
-              type="category"
-              dataKey="name"
-              {...axisProps}
-              width={ui.catAxisW}
-              tickFormatter={formatComma}
-              tickLine={false}
-              axisLine={false}
-            />
-            <ReferenceLine x={0} stroke="var(--stroke,#9CA3AF)" strokeWidth={1} />
-            <Bar dataKey="positive" barSize={ui.barSize} fill={graphVar(0, colorFallback)} stackId="stack" radius={[...ui.barRadiusH]}>
-              <LabelList dataKey="positive" position="right" fill={graphVar(0, colorFallback)} fontSize={ui.labelFs} offset={ui.labelOffSide} />
-            </Bar>
-            <Bar dataKey="negative" fill={graphVar(3, colorFallback)} stackId="stack" radius={compact ? [2, 0, 0, 2] : [4, 0, 0, 4]}>
-              <LabelList dataKey="negative" position="left" fill={graphVar(3, colorFallback)} fontSize={ui.labelFs} offset={ui.labelOffSide} />
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      );
-    }
-
-    case "line":
-      return (
-        <ResponsiveContainer width="100%" height="100%">
-
-          <LineChart data={normalizedData as any[]} {...commonProps}>
-            <CartesianGrid vertical={false} {...gridProps} />
-            <XAxis
-              dataKey="name"
-              {...axisProps}
-              tickFormatter={formatComma}
-              tickLine={false}
-              axisLine={false}
-            />
-            <YAxis {...axisProps} tickFormatter={formatComma} tickLine={false} axisLine={false} />
-            <Line
-              type="monotone"
-              dataKey="value"
-              stroke={graphVar(0, colorFallback)}
-              strokeWidth={ui.lineStroke}
-              dot={{ fill: graphVar(0, colorFallback), strokeWidth: ui.dotStroke, r: ui.dotR }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      );
-
-    case "line-dual":
-      return (
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={normalizedData as any[]} {...commonProps}>
-            <CartesianGrid vertical={false} {...gridProps} />
-            <XAxis
-              dataKey="label"
-              {...axisProps}
-              tickFormatter={formatComma}
-              tickLine={false}
-              axisLine={false}
-            />
-            <YAxis {...axisProps} tickFormatter={formatComma} tickLine={false} axisLine={false} />
-            <Line
-              type="monotone"
-              dataKey="valueA"
-              stroke={dualLineColors[0]}
-              strokeWidth={ui.lineStroke}
-              dot={{ fill: dualLineColors[0], strokeWidth: ui.dotStroke, r: ui.dotR }}
-            />
-            <Line
-              type="monotone"
-              dataKey="valueB"
-              stroke={dualLineColors[1]}
-              strokeWidth={ui.lineStroke}
-              dot={{ fill: dualLineColors[1], strokeWidth: ui.dotStroke, r: ui.dotR }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      );
-
-    case "area":
-      return (
-        <ResponsiveContainer width="100%" height="100%">
-
-
-          <AreaChart data={normalizedData as any[]} {...commonProps}>
-            <CartesianGrid vertical={false} {...gridProps} />
-            <XAxis
-              dataKey="name"
-              {...axisProps}
-              tickFormatter={formatComma}
-              tickLine={false}
-              axisLine={false}
-            />
-            <YAxis {...axisProps} tickFormatter={formatComma} tickLine={false} axisLine={false} />
-            <defs>
-              <linearGradient id={areaGradientId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={graphVar(0, colorFallback)} stopOpacity={0.4} />
-                <stop offset="95%" stopColor={graphVar(0, colorFallback)} stopOpacity={0.05} />
-              </linearGradient>
-            </defs>
-            <Area
-              type="monotone"
-              dataKey="value"
-              stroke={graphVar(0, colorFallback)}
-              strokeWidth={compact ? 1.5 : 2}
-              fill={`url(#${areaGradientId})`}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      );
-
-    case "area-stacked": {
-      const transformedData = transformMultiSeriesData(normalizedData as any[], effectiveSeries);
-      return (
-        <ResponsiveContainer width="100%" height="100%">
-
-          <AreaChart data={transformedData} {...commonProps}>
-            <CartesianGrid vertical={false} {...gridProps} />
-            <XAxis
-              dataKey="name"
-              {...axisProps}
-              tickFormatter={formatComma}
-              tickLine={false}
-              axisLine={false}
-            />
-            <YAxis {...axisProps} tickFormatter={formatComma} tickLine={false} axisLine={false} />
-            {effectiveSeries.map((s: string, index: number) => (
-              <Area
-                key={s}
-                type="monotone"
-                dataKey={s}
-                stackId="1"
-                stroke={graphVar(index, colorFallback)}
-                fill={graphVar(index, colorFallback)}
-                fillOpacity={0.4}
-              />
-            ))}
-          </AreaChart>
-        </ResponsiveContainer>
-      );
-    }
-
-    case "pie":
-      return (
-        <ResponsiveContainer width="100%" height="100%">
-
-          <PieChart {...commonProps} margin={ui.pieMargin}>
-            <Pie
-              data={normalizedData as any[]}
-              dataKey="value"
-              nameKey="name"
-              cx="50%"
-              cy="50%"
-              outerRadius={ui.pieOuter}
-              innerRadius={0}
-              label={renderPieInsideLabel}
-              labelLine={false}
-            >
-              {(normalizedData as any[]).map((_, index) => (
-                <Cell key={`pie-cell-${index}`} fill={graphVar(index, colorFallback)} />
-              ))}
-            </Pie>
-          </PieChart>
-        </ResponsiveContainer>
-      );
-
-    case "donut":
-      return (
-        <ResponsiveContainer width="100%" height="100%">
-
-          <PieChart {...commonProps} margin={ui.pieMargin}>
-            <Pie
-              data={normalizedData as any[]}
-              dataKey="value"
-              nameKey="name"
-              cx="50%"
-              cy="50%"
-              outerRadius={ui.donutOuter}
-              innerRadius={ui.donutInner}
-              label={renderPieInsideLabel}
-              paddingAngle={compact ? 1 : 2}
-              labelLine={false}
-            >
-              {(normalizedData as any[]).map((_, index) => (
-                <Cell key={`donut-cell-${index}`} fill={graphVar(index, colorFallback)} />
-              ))}
-            </Pie>
-          </PieChart>
-        </ResponsiveContainer>
-      );
-
-    case "scatter":
-      return (
-        <ResponsiveContainer width="100%" height="100%">
-
-          <ScatterChart {...commonProps}>
-            <CartesianGrid vertical={false} {...gridProps} />
-            <XAxis dataKey="x" type="number" {...axisProps} tickFormatter={formatComma} tickLine={false} axisLine={false} />
-            <YAxis dataKey="y" type="number" {...axisProps} tickFormatter={formatComma} tickLine={false} axisLine={false} />
-            <Scatter data={scatterPoints} name="Series">
-              {scatterPoints.map((_, index) => (
-                <Cell key={`scatter-cell-${index}`} fill={graphVar(index, colorFallback)} />
-              ))}
-            </Scatter>
-          </ScatterChart>
-        </ResponsiveContainer>
-      );
-
-    default:
-      return (
-        <div className="flex h-full items-center justify-center text-gray-500">Unsupported chart type</div>
-      );
+  if (!flexibleChartTypeSchema.safeParse(chartType).success) {
+    return <div className="flex h-full items-center justify-center text-gray-500">Unsupported chart type</div>;
   }
+
+  return <canvas ref={canvasRef} className="block h-full w-full" />;
 }

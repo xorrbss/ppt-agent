@@ -2,8 +2,6 @@
 
 import * as z from "zod";
 
-import { ResponsiveContainer } from "recharts";
-
 import { FlexibleReportChart, flexibleChartDataSchema } from "./flexibleReportChart";
 
 const MetricSchema = z.object({
@@ -168,17 +166,15 @@ const DataAnalysisLineStatsSlide = ({ data }: { data: Partial<SchemaType> }) => 
               </span>
             </div>}
 
-            <div className="mt-[12px] h-[356px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <FlexibleReportChart
-                  chartType={chartType}
-                  data={rows}
-                  series={series}
-                  colorFallback="#157CFF"
-                  density="default"
-                  dualLineColors={["var(--graph-0,#9fb6ff)", "var(--graph-1,#4d4ef3)"]}
-                />
-              </ResponsiveContainer>
+            <div className="mt-[12px] h-[356px] min-h-0 w-full overflow-hidden">
+              <FlexibleReportChart
+                chartType={chartType}
+                data={rows}
+                series={series}
+                colorFallback="#157CFF"
+                density="default"
+                dualLineColors={["var(--graph-0,#9fb6ff)", "var(--graph-1,#4d4ef3)"]}
+              />
             </div>
 
             <div

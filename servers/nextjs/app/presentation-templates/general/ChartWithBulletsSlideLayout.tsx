@@ -1,8 +1,10 @@
+"use client";
+
 import React from 'react'
 import * as z from "zod";
 import { IconSchema } from '../defaultSchemes';
 import { RemoteSvgIcon } from '@/app/hooks/useRemoteSvgIcon';
-import { BarChart, Bar, LineChart, Line, PieChart, Pie, AreaChart, Area, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
+import { GeneralChart } from "./GeneralChartPrimitives";
 
 export const layoutId = 'chart-with-bullets-slide'
 export const layoutName = 'Chart with Bullet Boxes'
@@ -95,161 +97,12 @@ interface ChartWithBulletsSlideLayoutProps {
 }
 
 
-const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-        return (
-            <div className="bg-white/95 backdrop-blur-sm border border-gray-200 rounded-lg shadow-lg px-3 py-2"
-                style={{
-                    backgroundColor: 'var(--card-color, #ffffff)',
-                    borderColor: 'var(--stroke, #e5e7eb)',
-                }}
-            >
-                <p className="text-xs font-semibold text-gray-800 mb-1" style={{ color: 'var(--background-text, #111827)' }}  >{label}</p>
-                {payload.map((entry: any, index: number) => (
-                    <p key={index} className="text-[10px]" style={{ color: 'var(--background-text, #111827)' }}>
-                        {entry.name}: <span className="font-medium">{entry.value?.toLocaleString()}</span>
-                    </p>
-                ))}
-            </div>
-        );
-    }
-    return null;
-};
-
-const CHART_COLORS = [
-    '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
-    '#06b6d4', '#84cc16', '#f97316', '#ec4899', '#6366f1'
-];
-
-
-
 const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = ({ data: slideData }) => {
     const chartData = slideData?.chartData?.data || [];
     const chartType = slideData?.chartData?.type;
-    const color = 'var(--background-text, #9333ea)';
-    const xAxis = chartType === 'scatter' ? 'x' : 'name';
-    const yAxis = chartType === 'scatter' ? 'y' : 'value';
     const showLegend = slideData?.showLegend || false;
-    const showTooltip = slideData?.showTooltip || true;
+    const showTooltip = slideData?.showTooltip !== false;
     const bulletPoints = slideData?.bulletPoints || []
-
-    const renderChart = () => {
-        const renderPieLabel = (props: any) => {
-            const { name, percent, x, y, textAnchor } = props;
-            return (
-                <text x={x} y={y} textAnchor={textAnchor} fill="var(--background-text, #4b5563)" fontSize={12}>
-                    {`${name} ${(percent * 100).toFixed(0)}%`}
-                </text>
-            );
-        };
-        const commonProps = {
-            data: chartData,
-            margin: { top: 20, right: 30, left: 0, bottom: 0 },
-        };
-        const axisProps = {
-            tick: { fill: 'var(--background-text, #7f8491)', fontSize: 12, fontWeight: 600 },
-            axisLine: { stroke: 'var(--background-text, #7f8491)' },
-            tickLine: { stroke: 'var(--background-text, #7f8491)' },
-        };
-
-
-        switch (chartType) {
-            case 'bar':
-                return (
-                    <BarChart {...commonProps} >
-                        <CartesianGrid strokeDasharray="3 3" stroke={`var(--background-text, ${color})`} />
-                        <XAxis dataKey={xAxis} {...axisProps} />
-                        <YAxis {...axisProps} />
-                        {showTooltip && <Tooltip content={<CustomTooltip />} />}
-                        {showLegend && <Legend wrapperStyle={{ fontSize: '10px' }} />}
-                        <Bar dataKey={yAxis} barSize={70} radius={[8, 8, 0, 0]} >
-                            {chartData.map((_, index) => (
-                                <Cell key={`cell-${index}`} fill={`var(--graph-${index}, ${CHART_COLORS[index % CHART_COLORS.length]})`} />
-                            ))}
-                        </Bar>
-                    </BarChart>
-                );
-
-            case 'line':
-                return (
-                    <LineChart {...commonProps}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={`var(--background-text, ${color})`} />
-                        <XAxis dataKey={xAxis} {...axisProps} />
-                        <YAxis {...axisProps} />
-                        {showTooltip && <Tooltip content={<CustomTooltip />} />}
-                        {showLegend && <Legend wrapperStyle={{ fontSize: '10px' }} />}
-                        <Line
-                            type="monotone"
-                            dataKey={yAxis}
-                            strokeWidth={3}
-                            dot={{ fill: `var(--graph-0, ${CHART_COLORS[0]})`, strokeWidth: 2, r: 4 }}
-                        >
-                            {chartData.map((_, index) => (
-                                <Cell key={`cell-${index}`} fill={`var(--graph-${index}, ${CHART_COLORS[index % CHART_COLORS.length]})`} />
-                            ))}
-                        </Line>
-                    </LineChart>
-                );
-
-            case 'area':
-                return (
-                    <AreaChart {...commonProps}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={`var(--background-text, ${color})`} />
-                        <XAxis dataKey={xAxis} {...axisProps} />
-                        <YAxis {...axisProps} />
-                        {showTooltip && <Tooltip content={<CustomTooltip />} />}
-                        {showLegend && <Legend wrapperStyle={{ fontSize: '10px' }} />}
-                        <Area
-                            type="monotone"
-                            dataKey={yAxis}
-                            fillOpacity={0.6}
-                        >
-                            {chartData.map((_, index) => (
-                                <Cell key={`cell-${index}`} fill={`var(--graph-${index}, ${CHART_COLORS[index % CHART_COLORS.length]})`} />
-                            ))}
-                        </Area>
-                    </AreaChart>
-                );
-
-            case 'pie':
-                return (
-                    <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                        {showTooltip && <Tooltip content={<CustomTooltip />} />}
-                        {showLegend && <Legend wrapperStyle={{ fontSize: '10px' }} />}
-                        <Pie
-                            data={chartData}
-                            outerRadius={70}
-                            fill={`var(--background-text, ${color})`}
-                            dataKey={yAxis}
-                            label={renderPieLabel}
-                        >
-                            {chartData.map((_, index) => (
-                                <Cell key={`cell-${index}`} fill={`var(--graph-${index}, ${CHART_COLORS[index % CHART_COLORS.length]})`} />
-                            ))}
-                        </Pie>
-                    </PieChart>
-                );
-
-            case 'scatter':
-                return (
-                    <ScatterChart {...commonProps}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={`var(--background-text, ${color})`} />
-                        <XAxis dataKey={xAxis} type="number" {...axisProps} />
-                        <YAxis dataKey={yAxis} type="number" {...axisProps} />
-                        {showTooltip && <Tooltip content={<CustomTooltip />} />}
-                        {showLegend && <Legend wrapperStyle={{ fontSize: '10px' }} />}
-                        <Scatter dataKey="value" >
-                            {chartData.map((_, index) => (
-                                <Cell key={`cell-${index}`} fill={`var(--graph-${index}, ${CHART_COLORS[index % CHART_COLORS.length]})`} />
-                            ))}
-                        </Scatter>
-                    </ScatterChart>
-                );
-
-            default:
-                return <div>Unsupported chart type</div>;
-        }
-    };
 
     return (
         <>
@@ -294,17 +147,19 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
                         </p>
 
                         {/* Chart Container */}
-                        <div className="flex-1 rounded-lg shadow-sm border border-gray-100 p-4"
+                        <div className="flex-1 min-h-0 overflow-hidden rounded-lg shadow-sm border border-gray-100 p-4"
                             style={{
                                 borderColor: 'var(--stroke, #F8F9FA)',
                             }}
                         >
-                            {/* <ChartContainer config={chartConfig} className="h-full w-full"> */}
-                            <ResponsiveContainer maxHeight={460} height='100%' className="">
-
-                                {renderChart()}
-                            </ResponsiveContainer>
-                            {/* </ChartContainer> */}
+                            <div className="h-full max-h-[460px] min-h-0 w-full overflow-hidden">
+                                <GeneralChart
+                                    type={chartType}
+                                    data={chartData}
+                                    showLegend={showLegend}
+                                    showTooltip={showTooltip}
+                                />
+                            </div>
                         </div>
                     </div>
 
@@ -347,4 +202,4 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
     )
 }
 
-export default ChartWithBulletsSlideLayout 
+export default ChartWithBulletsSlideLayout
