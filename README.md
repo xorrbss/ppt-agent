@@ -29,6 +29,7 @@ What makes Presenton different?
 - Comes with AI Presentation Generation API
 - Fully open-source (Apache 2.0)
 - Works with your own design/templates
+- **Fully editable PPTX export**
 
 > [!TIP]
 > **Star us!** A ⭐ shows your support and encourages us to keep building! 😇
