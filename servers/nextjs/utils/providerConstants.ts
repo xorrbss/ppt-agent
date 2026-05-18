@@ -107,6 +107,16 @@ export const IMAGE_PROVIDERS: Record<string, ImageProviderOption> = {
     apiKeyField: "OPEN_WEBUI_IMAGE_URL",
     apiKeyFieldLabel: "Open WebUI URL",
   },
+  openai_compatible: {
+    value: "openai_compatible",
+    label: "Custom",
+    description:
+      "OpenAI-compatible /v1/images endpoint (LiteLLM, Azure, vLLM, etc.)",
+    icon: "/providers/custom.svg",
+    requiresApiKey: false,
+    apiKeyField: "OPENAI_COMPAT_IMAGE_BASE_URL",
+    apiKeyFieldLabel: "OpenAI-compatible base URL",
+  },
 };
 
 export const LLM_PROVIDERS: Record<string, LLMProviderOption> = {

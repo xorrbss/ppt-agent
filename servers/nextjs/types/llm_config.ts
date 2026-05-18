@@ -66,6 +66,11 @@ export interface LLMConfig {
   OPEN_WEBUI_IMAGE_URL?: string;
   OPEN_WEBUI_IMAGE_API_KEY?: string;
 
+  // OpenAI-compatible image API (LiteLLM, Azure, vLLM gateways, etc.)
+  OPENAI_COMPAT_IMAGE_BASE_URL?: string;
+  OPENAI_COMPAT_IMAGE_API_KEY?: string;
+  OPENAI_COMPAT_IMAGE_MODEL?: string;
+
   // Dalle 3 Quality
   DALL_E_3_QUALITY?: string;
   // GPT Image 1.5 Quality

@@ -27,7 +27,7 @@ export const getLLMConfigValidationError = (
       return "OpenAI API key is required.";
     }
     if (!isProvided(llmConfig.OPENAI_MODEL)) {
-      return 'No OpenAI model selected. Use "Check models" after entering your API key, then choose a model.';
+      return 'Text provider (OpenAI): choose a chat model on the Text Provider tab—use "Check models" after your API key, then pick a model. The model under Image Provider → Custom is only for image generation.';
     }
   } else if (llm === "google") {
     if (!isProvided(llmConfig.GOOGLE_API_KEY)) {
@@ -155,6 +155,15 @@ export const getLLMConfigValidationError = (
       case "open_webui":
         if (!isProvided(llmConfig.OPEN_WEBUI_IMAGE_URL)) {
           return "Open WebUI URL is required.";
+        }
+        break;
+      case "openai_compatible":
+        if (
+          !isProvided(llmConfig.OPENAI_COMPAT_IMAGE_BASE_URL?.trim()) ||
+          !isProvided(llmConfig.OPENAI_COMPAT_IMAGE_API_KEY?.trim()) ||
+          !isProvided(llmConfig.OPENAI_COMPAT_IMAGE_MODEL?.trim())
+        ) {
+          return "OpenAI-compatible image API requires base URL, API key, and model.";
         }
         break;
       default:

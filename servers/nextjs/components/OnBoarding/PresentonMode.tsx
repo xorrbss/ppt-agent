@@ -14,11 +14,12 @@ import { Switch } from '../ui/switch';
 import { Select, SelectItem, SelectContent, SelectValue, SelectTrigger } from '../ui/select';
 import { MixpanelEvent, trackEvent } from '@/utils/mixpanel';
 import { usePathname } from 'next/navigation';
-import { handleSaveLLMConfig } from '@/utils/storeHelpers';
+import { getLLMConfigValidationError, handleSaveLLMConfig } from '@/utils/storeHelpers';
 import { checkIfSelectedOllamaModelIsPulled, pullOllamaModel } from '@/utils/providerUtils';
 import { getApiUrl } from '@/utils/api';
 import CodexConfig, { CHATGPT_MODELS } from '../CodexConfig';
 import VertexAzureManualFields from '@/components/VertexAzureManualFields';
+import OpenAICompatibleImageFields from '@/components/OpenAICompatibleImageFields';
 
 const MANUAL_MODEL_PROVIDERS = new Set(["vertex", "azure"]);
 
@@ -382,6 +383,11 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                     toast.error("Please sign in to ChatGPT to continue");
                     return;
                 }
+            }
+            const validationError = getLLMConfigValidationError(llmConfig);
+            if (validationError) {
+                toast.error("Cannot save configuration", { description: validationError });
+                return;
             }
             setSavingConfig(true);
 
@@ -986,7 +992,34 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                             (() => {
                                 const provider = IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER];
 
-
+                                if (provider.value === "openai_compatible") {
+                                    return (
+                                        <OpenAICompatibleImageFields
+                                            layout="stacked"
+                                            baseUrl={llmConfig.OPENAI_COMPAT_IMAGE_BASE_URL || ""}
+                                            apiKey={llmConfig.OPENAI_COMPAT_IMAGE_API_KEY || ""}
+                                            model={llmConfig.OPENAI_COMPAT_IMAGE_MODEL || ""}
+                                            onBaseUrlChange={(v) =>
+                                                setLlmConfig((prev) => ({
+                                                    ...prev,
+                                                    OPENAI_COMPAT_IMAGE_BASE_URL: v,
+                                                }))
+                                            }
+                                            onApiKeyChange={(v) =>
+                                                setLlmConfig((prev) => ({
+                                                    ...prev,
+                                                    OPENAI_COMPAT_IMAGE_API_KEY: v,
+                                                }))
+                                            }
+                                            onModelChange={(v) =>
+                                                setLlmConfig((prev) => ({
+                                                    ...prev,
+                                                    OPENAI_COMPAT_IMAGE_MODEL: v,
+                                                }))
+                                            }
+                                        />
+                                    );
+                                }
 
                                 // Show ComfyUI configuration
                                 if (provider.value === "comfyui") {

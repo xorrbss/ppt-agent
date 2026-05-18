@@ -4,6 +4,7 @@ import { Button } from './ui/button';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from './ui/command';
 import { LLMConfig } from '@/types/llm_config';
+import OpenAICompatibleImageFields from '@/components/OpenAICompatibleImageFields';
 import { IMAGE_PROVIDERS } from '@/utils/providerConstants';
 import { cn } from '@/lib/utils';
 import { Select, SelectItem, SelectContent, SelectTrigger, SelectValue } from './ui/select';
@@ -264,6 +265,26 @@ const ImageSelectionConfig = ({ isImageGenerationDisabled, openImageProviderSele
                                         llmConfig.LLM === "google"
                                     ) {
                                         return <></>;
+                                    }
+
+                                    if (provider.value === "openai_compatible") {
+                                        return (
+                                            <OpenAICompatibleImageFields
+                                                layout="stacked"
+                                                baseUrl={llmConfig.OPENAI_COMPAT_IMAGE_BASE_URL || ""}
+                                                apiKey={llmConfig.OPENAI_COMPAT_IMAGE_API_KEY || ""}
+                                                model={llmConfig.OPENAI_COMPAT_IMAGE_MODEL || ""}
+                                                onBaseUrlChange={(v) =>
+                                                    input_field_changed(v, "openai_compat_image_base_url")
+                                                }
+                                                onApiKeyChange={(v) =>
+                                                    input_field_changed(v, "openai_compat_image_api_key")
+                                                }
+                                                onModelChange={(v) =>
+                                                    input_field_changed(v, "openai_compat_image_model")
+                                                }
+                                            />
+                                        );
                                     }
 
                                     // Show Open WebUI configuration

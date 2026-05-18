@@ -142,6 +142,13 @@ const SettingsPage = () => {
     const validationError = getLLMConfigValidationError(llmConfig);
     if (validationError) {
       notify.error("Cannot save settings", validationError);
+      if (
+        selectedProvider === "image-provider" &&
+        llmConfig.LLM === "openai" &&
+        !String(llmConfig.OPENAI_MODEL || "").trim()
+      ) {
+        setSelectedProvider("text-provider");
+      }
       return;
     }
 
