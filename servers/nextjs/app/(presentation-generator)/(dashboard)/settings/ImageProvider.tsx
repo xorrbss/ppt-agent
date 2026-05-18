@@ -6,13 +6,24 @@ import { Select, SelectItem, SelectContent, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { LLMConfig } from '@/types/llm_config'
+import OpenAICompatibleImageFields from '@/components/OpenAICompatibleImageFields'
 import { DALLE_3_QUALITY_OPTIONS, GPT_IMAGE_1_5_QUALITY_OPTIONS, IMAGE_PROVIDERS } from '@/utils/providerConstants'
 import { Check, ChevronUp, Eye, EyeOff } from 'lucide-react'
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 
 const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setLlmConfig: (config: any) => void }) => {
     const [openImageProviderSelect, setOpenImageProviderSelect] = useState(false);
     const [showApiKey, setShowApiKey] = useState(false);
+    const [openaiCompatListMeta, setOpenaiCompatListMeta] = useState<{
+        modelsChecked: boolean
+        modelCount: number
+    }>({ modelsChecked: false, modelCount: 0 })
+
+    useEffect(() => {
+        if (llmConfig.IMAGE_PROVIDER !== 'openai_compatible') {
+            setOpenaiCompatListMeta({ modelsChecked: false, modelCount: 0 })
+        }
+    }, [llmConfig.IMAGE_PROVIDER])
     const isImageGenerationDisabled = llmConfig.DISABLE_IMAGE_GENERATION ?? false;
     const handleChangeImageGenerationDisabled = (value: boolean) => {
         setLlmConfig((prev: any) => ({
@@ -25,7 +36,9 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
             ...prev,
             [field]: value
         }));
-        setOpenImageProviderSelect(false);
+        if (field === 'IMAGE_PROVIDER') {
+            setOpenImageProviderSelect(false);
+        }
     }
 
     const getFieldValue = (field?: string) => {
@@ -40,17 +53,6 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
             [field]: value,
         }));
     };
-
-    const getTextProviderApiField = () => {
-        if (llmConfig.LLM === "openai") return "OPENAI_API_KEY";
-        if (llmConfig.LLM === "google") return "GOOGLE_API_KEY";
-        if (llmConfig.LLM === "anthropic") return "ANTHROPIC_API_KEY";
-        return "";
-    };
-
-
-
-
 
     const renderQualitySelector = (llmConfig: LLMConfig, input_field_changed: (value: string, field: string) => void) => {
         if (llmConfig.IMAGE_PROVIDER === "dall-e-3") {
@@ -233,6 +235,27 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
 
 
 
+                                            if (provider.value === "openai_compatible") {
+                                                return (
+                                                    <OpenAICompatibleImageFields
+                                                        layout="textProviderSettings"
+                                                        baseUrl={llmConfig.OPENAI_COMPAT_IMAGE_BASE_URL || ""}
+                                                        apiKey={llmConfig.OPENAI_COMPAT_IMAGE_API_KEY || ""}
+                                                        model={llmConfig.OPENAI_COMPAT_IMAGE_MODEL || ""}
+                                                        onBaseUrlChange={(v) => {
+                                                            setLlmConfig((prev: any) => ({ ...prev, OPENAI_COMPAT_IMAGE_BASE_URL: v }));
+                                                        }}
+                                                        onApiKeyChange={(v) => {
+                                                            setLlmConfig((prev: any) => ({ ...prev, OPENAI_COMPAT_IMAGE_API_KEY: v }));
+                                                        }}
+                                                        onModelChange={(v) => {
+                                                            setLlmConfig((prev: any) => ({ ...prev, OPENAI_COMPAT_IMAGE_MODEL: v }));
+                                                        }}
+                                                        onModelListMetaChange={setOpenaiCompatListMeta}
+                                                    />
+                                                );
+                                            }
+
                                             // Show ComfyUI configuration
                                             if (provider.value === "comfyui") {
                                                 return (
@@ -376,6 +399,36 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                     </div>
                 </div>
             </div>
+
+            {!isImageGenerationDisabled &&
+                llmConfig.IMAGE_PROVIDER === "openai_compatible" &&
+                openaiCompatListMeta.modelsChecked &&
+                openaiCompatListMeta.modelCount === 0 && (
+                    <>
+                        <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 p-3">
+                            <p className="text-sm text-yellow-800">
+                                No models found. Please make sure your provider credentials are valid and the selected provider is reachable.
+                            </p>
+                        </div>
+                        <div className="flex w-full justify-end">
+                            <div className="w-[205px]">
+                                <label className="mb-2 block text-sm font-medium text-gray-700">Image model id</label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. dall-e-3, gpt-image-1"
+                                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                                    value={llmConfig.OPENAI_COMPAT_IMAGE_MODEL || ""}
+                                    onChange={(e) => {
+                                        setLlmConfig((prev: any) => ({
+                                            ...prev,
+                                            OPENAI_COMPAT_IMAGE_MODEL: e.target.value,
+                                        }));
+                                    }}
+                                />
+                            </div>
+                        </div>
+                    </>
+                )}
 
 
             {/* Web Grounding Toggle - show at the end, below models dropdown */}

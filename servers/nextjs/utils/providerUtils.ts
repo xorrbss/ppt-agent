@@ -75,6 +75,9 @@ export const updateLLMConfig = (
     gpt_image_1_5_quality: "GPT_IMAGE_1_5_QUALITY",
     open_webui_image_url: "OPEN_WEBUI_IMAGE_URL",
     open_webui_image_api_key: "OPEN_WEBUI_IMAGE_API_KEY",
+    openai_compat_image_base_url: "OPENAI_COMPAT_IMAGE_BASE_URL",
+    openai_compat_image_api_key: "OPENAI_COMPAT_IMAGE_API_KEY",
+    openai_compat_image_model: "OPENAI_COMPAT_IMAGE_MODEL",
     codex_model: "CODEX_MODEL",
   };
 
