@@ -29,6 +29,9 @@ from utils.get_env import (
     get_cerebras_api_key_env,
     get_cerebras_base_url_env,
     get_cerebras_model_env,
+    get_litellm_base_url_env,
+    get_litellm_api_key_env,
+    get_litellm_model_env,
     get_openrouter_api_key_env,
     get_openrouter_base_url_env,
     get_openrouter_model_env,
@@ -54,6 +57,9 @@ from utils.get_env import (
     get_codex_model_env,
     get_open_webui_image_url_env,
     get_open_webui_image_api_key_env,
+    get_openai_compat_image_base_url_env,
+    get_openai_compat_image_api_key_env,
+    get_openai_compat_image_model_env,
 )
 from utils.parsers import parse_bool_or_none
 from utils.set_env import (
@@ -84,6 +90,9 @@ from utils.set_env import (
     set_cerebras_api_key_env,
     set_cerebras_base_url_env,
     set_cerebras_model_env,
+    set_litellm_base_url_env,
+    set_litellm_api_key_env,
+    set_litellm_model_env,
     set_openrouter_api_key_env,
     set_openrouter_base_url_env,
     set_openrouter_model_env,
@@ -107,6 +116,9 @@ from utils.set_env import (
     set_codex_model_env,
     set_open_webui_image_url_env,
     set_open_webui_image_api_key_env,
+    set_openai_compat_image_base_url_env,
+    set_openai_compat_image_api_key_env,
+    set_openai_compat_image_model_env,
 )
 
 
@@ -151,6 +163,9 @@ def get_user_config():
         CEREBRAS_API_KEY=existing_config.CEREBRAS_API_KEY or get_cerebras_api_key_env(),
         CEREBRAS_MODEL=existing_config.CEREBRAS_MODEL or get_cerebras_model_env(),
         CEREBRAS_BASE_URL=existing_config.CEREBRAS_BASE_URL or get_cerebras_base_url_env(),
+        LITELLM_BASE_URL=existing_config.LITELLM_BASE_URL or get_litellm_base_url_env(),
+        LITELLM_API_KEY=existing_config.LITELLM_API_KEY or get_litellm_api_key_env(),
+        LITELLM_MODEL=existing_config.LITELLM_MODEL or get_litellm_model_env(),
         ANTHROPIC_API_KEY=existing_config.ANTHROPIC_API_KEY
         or get_anthropic_api_key_env(),
         ANTHROPIC_MODEL=existing_config.ANTHROPIC_MODEL or get_anthropic_model_env(),
@@ -202,6 +217,12 @@ def get_user_config():
         ),
         OPEN_WEBUI_IMAGE_URL=existing_config.OPEN_WEBUI_IMAGE_URL or get_open_webui_image_url_env(),
         OPEN_WEBUI_IMAGE_API_KEY=existing_config.OPEN_WEBUI_IMAGE_API_KEY or get_open_webui_image_api_key_env(),
+        OPENAI_COMPAT_IMAGE_BASE_URL=existing_config.OPENAI_COMPAT_IMAGE_BASE_URL
+        or get_openai_compat_image_base_url_env(),
+        OPENAI_COMPAT_IMAGE_API_KEY=existing_config.OPENAI_COMPAT_IMAGE_API_KEY
+        or get_openai_compat_image_api_key_env(),
+        OPENAI_COMPAT_IMAGE_MODEL=existing_config.OPENAI_COMPAT_IMAGE_MODEL
+        or get_openai_compat_image_model_env(),
     )
 
 
@@ -251,6 +272,12 @@ def update_env_with_user_config():
         set_cerebras_model_env(user_config.CEREBRAS_MODEL)
     if user_config.CEREBRAS_BASE_URL:
         set_cerebras_base_url_env(user_config.CEREBRAS_BASE_URL)
+    if user_config.LITELLM_BASE_URL:
+        set_litellm_base_url_env(user_config.LITELLM_BASE_URL)
+    if user_config.LITELLM_API_KEY:
+        set_litellm_api_key_env(user_config.LITELLM_API_KEY)
+    if user_config.LITELLM_MODEL:
+        set_litellm_model_env(user_config.LITELLM_MODEL)
     if user_config.ANTHROPIC_API_KEY:
         set_anthropic_api_key_env(user_config.ANTHROPIC_API_KEY)
     if user_config.ANTHROPIC_MODEL:
@@ -307,6 +334,12 @@ def update_env_with_user_config():
         set_open_webui_image_url_env(user_config.OPEN_WEBUI_IMAGE_URL)
     if user_config.OPEN_WEBUI_IMAGE_API_KEY:
         set_open_webui_image_api_key_env(user_config.OPEN_WEBUI_IMAGE_API_KEY)
+    if user_config.OPENAI_COMPAT_IMAGE_BASE_URL:
+        set_openai_compat_image_base_url_env(user_config.OPENAI_COMPAT_IMAGE_BASE_URL)
+    if user_config.OPENAI_COMPAT_IMAGE_API_KEY:
+        set_openai_compat_image_api_key_env(user_config.OPENAI_COMPAT_IMAGE_API_KEY)
+    if user_config.OPENAI_COMPAT_IMAGE_MODEL:
+        set_openai_compat_image_model_env(user_config.OPENAI_COMPAT_IMAGE_MODEL)
 
 
 def save_codex_tokens_to_user_config() -> None:

@@ -47,7 +47,7 @@ export const IMAGE_PROVIDERS: Record<string, ImageProviderOption> = {
     requiresApiKey: true,
     apiKeyField: "PIXABAY_API_KEY",
     apiKeyFieldLabel: "Pixabay API Key",
-    getApiKeyUrl: "https://docs.presenton.ai/help/get-api-keys/get-pixabay-api-keyhttps://www.google.com/search?q=how+to+get+openai+api+key&ie=UTF-8",
+    getApiKeyUrl: "https://docs.presenton.ai/help/get-api-keys/get-pixabay-api-key",
   },
   "dall-e-3": {
     value: "dall-e-3",
@@ -107,6 +107,16 @@ export const IMAGE_PROVIDERS: Record<string, ImageProviderOption> = {
     apiKeyField: "OPEN_WEBUI_IMAGE_URL",
     apiKeyFieldLabel: "Open WebUI URL",
   },
+  openai_compatible: {
+    value: "openai_compatible",
+    label: "Custom",
+    description:
+      "OpenAI-compatible /v1/images endpoint (LiteLLM, Azure, vLLM, etc.)",
+    icon: "/providers/custom.svg",
+    requiresApiKey: false,
+    apiKeyField: "OPENAI_COMPAT_IMAGE_BASE_URL",
+    apiKeyFieldLabel: "OpenAI-compatible base URL",
+  },
 };
 
 export const LLM_PROVIDERS: Record<string, LLMProviderOption> = {
@@ -161,6 +171,12 @@ export const LLM_PROVIDERS: Record<string, LLMProviderOption> = {
     url: "https://api.cerebras.ai/v1",
     icon: "/providers/openai.png",
     getApiKeyUrl: "https://inference-docs.cerebras.ai",
+  },
+  litellm: {
+    value: "litellm",
+    label: "LiteLLM",
+    description: "OpenAI-compatible LiteLLM proxy or gateway",
+    icon: "/providers/openai.png",
   },
   anthropic: {
     value: "anthropic",

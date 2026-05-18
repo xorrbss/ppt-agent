@@ -382,10 +382,10 @@ const formatTraceActivity = (
         trace.status === "error"
           ? "error"
           : trace.status === "success"
-            ? "success"
-            : trace.status === "ready" || trace.status === "info"
-              ? "info"
-            : "running",
+          ? "success"
+          : trace.status === "ready" || trace.status === "info"
+          ? "info"
+          : "running",
     };
   }
 
@@ -419,9 +419,15 @@ const formatTraceActivity = (
     };
   }
 
-  if (trace.kind === "tool_plan" && Array.isArray(trace.tools) && trace.tools.length) {
+  if (
+    trace.kind === "tool_plan" &&
+    Array.isArray(trace.tools) &&
+    trace.tools.length
+  ) {
     return {
-      label: `Planning tools: ${trace.tools.map((tool) => getToolLabel(tool)).join(", ")}.`,
+      label: `Planning tools: ${trace.tools
+        .map((tool) => getToolLabel(tool))
+        .join(", ")}.`,
       kind: trace.kind,
       round: trace.round,
       state: "info",
@@ -505,8 +511,8 @@ const Chat = ({
               m.role === "assistant"
                 ? "assistant"
                 : m.role === "user"
-                  ? "user"
-                  : "user",
+                ? "user"
+                : "user",
             content: m.content,
           }))
         );
@@ -539,7 +545,9 @@ const Chat = ({
     }
 
     return [
-      `UI context: the currently selected slide is slide ${currentSlide + 1} (zero-based index ${currentSlide}).`,
+      `UI context: the currently selected slide is slide ${
+        currentSlide + 1
+      } (zero-based index ${currentSlide}).`,
       `User message: ${message}`,
     ].join("\n");
   };
@@ -740,11 +748,11 @@ const Chat = ({
         previous.map((message) =>
           message.id === assistantMessageId
             ? {
-              ...message,
-              content: response.response,
+                ...message,
+                content: response.response,
                 toolCalls: [],
                 activity: [],
-            }
+              }
             : message
         )
       );
@@ -758,15 +766,8 @@ const Chat = ({
           typeof response.conversation_id === "string"
             ? response.conversation_id
             : previous;
-        if (
-          next &&
-          presentationId &&
-          typeof sessionStorage !== "undefined"
-        ) {
-          sessionStorage.setItem(
-            conversationStorageKey(presentationId),
-            next
-          );
+        if (next && presentationId && typeof sessionStorage !== "undefined") {
+          sessionStorage.setItem(conversationStorageKey(presentationId), next);
         }
         return next;
       });
@@ -925,7 +926,7 @@ const Chat = ({
               </div>
             </div>
 
-            <div className="mt-10">
+            {/* <div className="mt-10">
               <h4 className="mb-2 text-[10px] font-normal leading-[15px] tracking-[0.367px] text-[#99A1AF]">
                 QUICK PROMPTS
               </h4>
@@ -943,7 +944,7 @@ const Chat = ({
                   </button>
                 ))}
               </div>
-            </div>
+            </div> */}
           </>
         ) : (
           <div className="flex flex-col gap-9">
@@ -974,19 +975,20 @@ const Chat = ({
                           content={message.content}
                           className="chat-markdown mb-0 text-sm font-normal leading-5 text-[#535862]"
                         />
-                        {isSending && message.id === activeAssistantMessageId && (
-                          <span
-                            aria-hidden="true"
-                            className="ml-1 inline-block h-4 w-0.5 animate-pulse rounded-full bg-[#98A2B3] align-middle"
-                          />
-                        )}
+                        {isSending &&
+                          message.id === activeAssistantMessageId && (
+                            <span
+                              aria-hidden="true"
+                              className="ml-1 inline-block h-4 w-0.5 animate-pulse rounded-full bg-[#98A2B3] align-middle"
+                            />
+                          )}
                       </div>
                     )
                   ) : (
                     <div className="text-sm font-normal leading-5 text-[#535862]">
                       {isSending && message.role === "assistant"
-                        ? message.activity?.[message.activity.length - 1]?.label ||
-                          "Working on it..."
+                        ? message.activity?.[message.activity.length - 1]
+                            ?.label || "Working on it..."
                         : ""}
                     </div>
                   )}
@@ -1003,7 +1005,9 @@ const Chat = ({
                           <ChevronRight className="h-3 w-3" />
                         )}
                         <span>Thinking</span>
-                        {message.activity.some((item) => item.state === "running") && (
+                        {message.activity.some(
+                          (item) => item.state === "running"
+                        ) && (
                           <Loader2 className="h-3 w-3 animate-spin text-[#98A2B3]" />
                         )}
                       </button>
@@ -1023,11 +1027,12 @@ const Chat = ({
                               <span>{activityItem.label}</span>
                             </div>
                           ))}
-                          {message.toolCalls && message.toolCalls.length > 0 && (
-                            <div className="pt-0.5 text-[11px] text-[#98A2B3]">
-                              Tools called: {message.toolCalls.join(", ")}
-                            </div>
-                          )}
+                          {message.toolCalls &&
+                            message.toolCalls.length > 0 && (
+                              <div className="pt-0.5 text-[11px] text-[#98A2B3]">
+                                Tools called: {message.toolCalls.join(", ")}
+                              </div>
+                            )}
                         </div>
                       )}
                     </div>

@@ -14,11 +14,12 @@ import { Switch } from '../ui/switch';
 import { Select, SelectItem, SelectContent, SelectValue, SelectTrigger } from '../ui/select';
 import { MixpanelEvent, trackEvent } from '@/utils/mixpanel';
 import { usePathname } from 'next/navigation';
-import { handleSaveLLMConfig } from '@/utils/storeHelpers';
+import { getLLMConfigValidationError, handleSaveLLMConfig } from '@/utils/storeHelpers';
 import { checkIfSelectedOllamaModelIsPulled, pullOllamaModel } from '@/utils/providerUtils';
 import { getApiUrl } from '@/utils/api';
 import CodexConfig, { CHATGPT_MODELS } from '../CodexConfig';
 import VertexAzureManualFields from '@/components/VertexAzureManualFields';
+import OpenAICompatibleImageFields from '@/components/OpenAICompatibleImageFields';
 
 const MANUAL_MODEL_PROVIDERS = new Set(["vertex", "azure"]);
 
@@ -83,6 +84,8 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 return 'OLLAMA_MODEL';
             case 'custom':
                 return 'CUSTOM_MODEL';
+            case 'litellm':
+                return 'LITELLM_MODEL';
             default:
                 return '';
         }
@@ -105,6 +108,8 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 return 'ANTHROPIC_API_KEY';
             case 'custom':
                 return 'CUSTOM_LLM_API_KEY';
+            case 'litellm':
+                return 'LITELLM_API_KEY';
             default:
                 return '';
         }
@@ -119,6 +124,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
 
     const currentApiKey = currentApiKeyField ? ((llmConfig as Record<string, unknown>)[currentApiKeyField] as string || '') : '';
     const currentModel = currentModelField ? ((llmConfig as Record<string, unknown>)[currentModelField] as string || '') : '';
+    const currentLitellmUrl = (llmConfig.LITELLM_BASE_URL || '').trim();
     const currentOllamaUrl = llmConfig.OLLAMA_URL || '';
     const useCustomOllamaUrl = !!llmConfig.USE_CUSTOM_URL;
     const providerApiKeyLabel =
@@ -132,7 +138,9 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                         ? 'OpenRouter API Key'
                         : llmConfig.LLM === 'cerebras'
                             ? 'Cerebras API Key'
-                            : `${llmConfig.LLM} API Key`;
+                            : llmConfig.LLM === 'litellm'
+                                ? 'LiteLLM API key (optional)'
+                                : `${llmConfig.LLM} API Key`;
 
     const getSelectedTextModel = (config: LLMConfig): string => {
         switch (config.LLM) {
@@ -154,6 +162,8 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 return config.OLLAMA_MODEL || '';
             case 'custom':
                 return config.CUSTOM_MODEL || '';
+            case 'litellm':
+                return config.LITELLM_MODEL || '';
             case 'chatgpt':
             case 'codex':
                 return config.CODEX_MODEL || '';
@@ -176,6 +186,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
         if (llmConfig.LLM === 'openrouter' && !currentApiKey) return;
         if (llmConfig.LLM === 'cerebras' && !currentApiKey) return;
         if (llmConfig.LLM === 'custom' && !llmConfig.CUSTOM_LLM_URL) return;
+        if (llmConfig.LLM === 'litellm' && !currentLitellmUrl) return;
         setModelsLoading(true);
         try {
             let response: Response;
@@ -202,13 +213,19 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
             } else if (llmConfig.LLM === 'ollama') {
                 response = await fetch(getApiUrl('/api/v1/ppt/ollama/models/supported'));
             } else {
+                const openAiCompatibleUrl =
+                    llmConfig.LLM === 'custom'
+                        ? llmConfig.CUSTOM_LLM_URL
+                        : llmConfig.LLM === 'litellm'
+                            ? currentLitellmUrl
+                            : LLM_PROVIDERS[llmConfig.LLM!]?.url || '';
                 response = await fetch(getApiUrl('/api/v1/ppt/openai/models/available'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        url: llmConfig.LLM === 'custom' ? llmConfig.CUSTOM_LLM_URL : LLM_PROVIDERS[llmConfig.LLM!]?.url || '',
+                        url: openAiCompatibleUrl,
                         api_key: currentApiKey
                     }),
                 });
@@ -247,7 +264,9 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                         ? 'openai/gpt-4o'
                                         : llmConfig.LLM === 'cerebras'
                                             ? 'llama-3.3-70b'
-                                            : normalizedModels[0];
+                                            : llmConfig.LLM === 'litellm'
+                                                ? 'gpt-4.1'
+                                                : normalizedModels[0];
 
                     const nextModel = normalizedModels.includes(preferredDefault) ? preferredDefault : normalizedModels[0];
                     setLlmConfig(prev => ({
@@ -364,6 +383,11 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                     toast.error("Please sign in to ChatGPT to continue");
                     return;
                 }
+            }
+            const validationError = getLLMConfigValidationError(llmConfig);
+            if (validationError) {
+                toast.error("Cannot save configuration", { description: validationError });
+                return;
             }
             setSavingConfig(true);
 
@@ -693,6 +717,26 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                     placeholder="OpenAI-compatible URL"
                                 />
                             )}
+                            {llmConfig.LLM === 'litellm' && (
+                                <>
+                                    <label className="mt-3 block text-sm font-medium text-gray-700 mb-2">
+                                        LiteLLM base URL
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={llmConfig.LITELLM_BASE_URL || ''}
+                                        onChange={(e) => setLlmConfig(prev => ({
+                                            ...prev,
+                                            LITELLM_BASE_URL: e.target.value
+                                        }))}
+                                        className="w-full px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                        placeholder="e.g. http://host.docker.internal:4000/v1"
+                                    />
+                                    <p className="mt-1.5 text-xs text-gray-500">
+                                        OpenAI-compatible root (usually ends with /v1); /v1 is added if omitted. API key above is optional for local proxies with no auth.
+                                    </p>
+                                </>
+                            )}
                             {(llmConfig.LLM === 'vertex' || llmConfig.LLM === 'azure') && (
                                 <VertexAzureManualFields
                                     key={llmConfig.LLM}
@@ -717,7 +761,8 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                     (llmConfig.LLM === 'anthropic' && !currentApiKey) ||
                                     (llmConfig.LLM === 'openrouter' && !currentApiKey) ||
                                     (llmConfig.LLM === 'cerebras' && !currentApiKey) ||
-                                    (llmConfig.LLM === 'custom' && !llmConfig.CUSTOM_LLM_URL)
+                                    (llmConfig.LLM === 'custom' && !llmConfig.CUSTOM_LLM_URL) ||
+                                    (llmConfig.LLM === 'litellm' && !currentLitellmUrl)
                                 }
                                 className={`mt-4 py-2.5 bg-[#EDEEEF] disabled:opacity-50 disabled:cursor-not-allowed px-3.5 w-full  rounded-[48px] text-xs font-semibold text-[#101323] transition-all duration-200 border ${modelsLoading
                                     ? " border-gray-300 cursor-not-allowed text-gray-500"
@@ -947,7 +992,34 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                             (() => {
                                 const provider = IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER];
 
-
+                                if (provider.value === "openai_compatible") {
+                                    return (
+                                        <OpenAICompatibleImageFields
+                                            layout="stacked"
+                                            baseUrl={llmConfig.OPENAI_COMPAT_IMAGE_BASE_URL || ""}
+                                            apiKey={llmConfig.OPENAI_COMPAT_IMAGE_API_KEY || ""}
+                                            model={llmConfig.OPENAI_COMPAT_IMAGE_MODEL || ""}
+                                            onBaseUrlChange={(v) =>
+                                                setLlmConfig((prev) => ({
+                                                    ...prev,
+                                                    OPENAI_COMPAT_IMAGE_BASE_URL: v,
+                                                }))
+                                            }
+                                            onApiKeyChange={(v) =>
+                                                setLlmConfig((prev) => ({
+                                                    ...prev,
+                                                    OPENAI_COMPAT_IMAGE_API_KEY: v,
+                                                }))
+                                            }
+                                            onModelChange={(v) =>
+                                                setLlmConfig((prev) => ({
+                                                    ...prev,
+                                                    OPENAI_COMPAT_IMAGE_MODEL: v,
+                                                }))
+                                            }
+                                        />
+                                    );
+                                }
 
                                 // Show ComfyUI configuration
                                 if (provider.value === "comfyui") {

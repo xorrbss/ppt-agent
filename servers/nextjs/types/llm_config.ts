@@ -34,6 +34,11 @@ export interface LLMConfig {
   CEREBRAS_MODEL?: string;
   CEREBRAS_BASE_URL?: string;
 
+  // LiteLLM
+  LITELLM_BASE_URL?: string;
+  LITELLM_API_KEY?: string;
+  LITELLM_MODEL?: string;
+
   // Anthropic
   ANTHROPIC_API_KEY?: string;
   ANTHROPIC_MODEL?: string;
@@ -60,6 +65,11 @@ export interface LLMConfig {
   // Open WebUI Image Provider
   OPEN_WEBUI_IMAGE_URL?: string;
   OPEN_WEBUI_IMAGE_API_KEY?: string;
+
+  // OpenAI-compatible image API (LiteLLM, Azure, vLLM gateways, etc.)
+  OPENAI_COMPAT_IMAGE_BASE_URL?: string;
+  OPENAI_COMPAT_IMAGE_API_KEY?: string;
+  OPENAI_COMPAT_IMAGE_MODEL?: string;
 
   // Dalle 3 Quality
   DALL_E_3_QUALITY?: string;

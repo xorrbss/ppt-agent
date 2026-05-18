@@ -51,6 +51,9 @@ export const updateLLMConfig = (
     cerebras_api_key: "CEREBRAS_API_KEY",
     cerebras_model: "CEREBRAS_MODEL",
     cerebras_base_url: "CEREBRAS_BASE_URL",
+    litellm_base_url: "LITELLM_BASE_URL",
+    litellm_api_key: "LITELLM_API_KEY",
+    litellm_model: "LITELLM_MODEL",
     anthropic_api_key: "ANTHROPIC_API_KEY",
     anthropic_model: "ANTHROPIC_MODEL",
     ollama_url: "OLLAMA_URL",
@@ -72,6 +75,9 @@ export const updateLLMConfig = (
     gpt_image_1_5_quality: "GPT_IMAGE_1_5_QUALITY",
     open_webui_image_url: "OPEN_WEBUI_IMAGE_URL",
     open_webui_image_api_key: "OPEN_WEBUI_IMAGE_API_KEY",
+    openai_compat_image_base_url: "OPENAI_COMPAT_IMAGE_BASE_URL",
+    openai_compat_image_api_key: "OPENAI_COMPAT_IMAGE_API_KEY",
+    openai_compat_image_model: "OPENAI_COMPAT_IMAGE_MODEL",
     codex_model: "CODEX_MODEL",
   };
 

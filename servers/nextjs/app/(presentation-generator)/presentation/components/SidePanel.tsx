@@ -1,5 +1,6 @@
 "use client";
 import React, { useState } from "react";
+import { createPortal } from "react-dom";
 import { Plus } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store/store";
@@ -61,10 +62,6 @@ const SidePanel = ({
     setShowNewSlideSelection(true);
   };
 
-
-
-
-
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -75,8 +72,6 @@ const SidePanel = ({
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
-
-
 
   const handleDragEnd = (event: any) => {
     const { active, over } = event;
@@ -129,21 +124,44 @@ const SidePanel = ({
     return null;
   }
 
+  const shouldShowNewSlideModal =
+    showNewSlideSelection &&
+    lastSlideTemplateId &&
+    typeof document !== "undefined";
+
+  const newSlideModal = shouldShowNewSlideModal
+    ? createPortal(
+        <div
+          className="fixed inset-0 z-[1000] overflow-y-auto bg-black/50 px-4 py-16"
+          onClick={() => setShowNewSlideSelection(false)}
+        >
+          <div className="relative z-[1001] flex min-h-full items-start justify-center pt-10">
+            <div
+              className="w-full max-w-[675px]"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <NewSlide
+                index={lastSlideIndex}
+                templateID={lastSlideTemplateId}
+                setShowNewSlideSelection={setShowNewSlideSelection}
+                presentationId={presentationId}
+              />
+            </div>
+          </div>
+        </div>,
+        document.body
+      )
+    : null;
+
   return (
     <div className="px-4 w-[120px] h-full">
-
-
       <div
         className={`
           relative  h-full z-50 xl:z-auto 
           transition-all duration-300 ease-in-out
         `}
       >
-        <div
-          className="w-full h-full hide-scrollbar overflow-hidden slide-theme flex flex-col"
-        >
-
-
+        <div className="w-full h-full hide-scrollbar overflow-hidden slide-theme flex flex-col">
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -164,25 +182,27 @@ const SidePanel = ({
               ) : (
                 <SortableContext
                   items={
-                    presentationData?.slides.map((slide: any) => slide.id || `${slide.index}`) || []
+                    presentationData?.slides.map(
+                      (slide: any) => slide.id || `${slide.index}`
+                    ) || []
                   }
                   strategy={verticalListSortingStrategy}
                 >
                   {presentationData &&
-                    presentationData?.slides.map((slide: any, index: number) => (
-                      <SortableSlide
-                        key={`${slide.id}-${index}`}
-                        slide={slide}
-                        index={index}
-                        selectedSlide={selectedSlide}
-                        onSlideClick={onSlideClick}
-
-                      />
-                    ))}
+                    presentationData?.slides.map(
+                      (slide: any, index: number) => (
+                        <SortableSlide
+                          key={`${slide.id}-${index}`}
+                          slide={slide}
+                          index={index}
+                          selectedSlide={selectedSlide}
+                          onSlideClick={onSlideClick}
+                        />
+                      )
+                    )}
                 </SortableContext>
               )}
             </div>
-
           </DndContext>
           <Separator orientation="horizontal" className=" " />
 
@@ -192,22 +212,13 @@ const SidePanel = ({
             className="py-4 gap-2 flex flex-col duration-300 items-center justify-center rounded-lg cursor-pointer mx-auto"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span className="text-[11px] font-normal text-[#000000]">Add Slide</span>
+            <span className="text-[11px] font-normal text-[#000000]">
+              Add Slide
+            </span>
           </button>
         </div>
       </div>
-      {showNewSlideSelection && lastSlideTemplateId && (
-        <div className="fixed inset-0 z-[60] bg-black/50 overflow-y-auto p-4">
-          <div className="min-h-full flex items-start justify-center py-8">
-            <NewSlide
-              index={lastSlideIndex}
-              templateID={lastSlideTemplateId}
-              setShowNewSlideSelection={setShowNewSlideSelection}
-              presentationId={presentationId}
-            />
-          </div>
-        </div>
-      )}
+      {newSlideModal}
     </div>
   );
 };
