@@ -70,6 +70,11 @@ class UserConfig(BaseModel):
     OPEN_WEBUI_IMAGE_URL: Optional[str] = None
     OPEN_WEBUI_IMAGE_API_KEY: Optional[str] = None
 
+    # OpenAI Compatible Image Provider
+    OPENAI_COMPAT_IMAGE_BASE_URL: Optional[str] = None
+    OPENAI_COMPAT_IMAGE_API_KEY: Optional[str] = None
+    OPENAI_COMPAT_IMAGE_MODEL: Optional[str] = None
+
     # Dalle 3 Quality
     DALL_E_3_QUALITY: Optional[str] = None
     # Gpt Image 1.5 Quality
