@@ -153,10 +153,10 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
           )}
           {showNewSlideSelection && (
             <div
-              className="fixed inset-0 z-[60]  overflow-y-auto bg-black/50 px-4 py-16"
+              className="fixed inset-0 z-[1000] overflow-y-auto bg-black/50 px-4 py-16"
               onClick={() => setShowNewSlideSelection(false)}
             >
-              <div className="flex  items-baseline mt-10 justify-center">
+              <div className="relative z-[1001] flex min-h-full items-start justify-center pt-10">
                 <div
                   className="w-full max-w-[675px]"
                   onClick={(event) => event.stopPropagation()}
