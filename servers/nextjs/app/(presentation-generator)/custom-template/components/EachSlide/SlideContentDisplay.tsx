@@ -13,7 +13,7 @@ export interface SlideContentDisplayProps {
   previewData?: Record<string, any> | null;
   retrySlide: (slideNumber: number) => void;
   onClearPreview?: () => void;
-  slideDisplayRef?: React.RefObject<HTMLDivElement>;
+  slideDisplayRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 export const SlideContentDisplay: React.FC<SlideContentDisplayProps> = ({

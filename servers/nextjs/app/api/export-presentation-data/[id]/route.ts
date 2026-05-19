@@ -16,9 +16,9 @@ function getFastApiBaseUrl(): string {
 
 export async function GET(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const { id } = context.params;
+  const { id } = await context.params;
   if (!id) {
     return NextResponse.json(
       { detail: "Missing presentation id" },
