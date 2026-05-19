@@ -7,6 +7,7 @@ import { showFileDownloadedDialog } from "../utils/dialog";
 import { v4 as uuidv4 } from 'uuid';
 import { spawn } from "child_process";
 import { getPuppeteerExecutablePath } from "../utils/puppeteer-check";
+import { safeError, safeLog } from "../utils/safe-console";
 
 type BinaryFormat = "elf" | "mach-o" | "pe" | "unknown";
 type RuntimeCandidate = {
@@ -51,7 +52,7 @@ export function setupExportHandlers() {
       const exportScriptPath = path.join(baseDir, "resources", "export", "index.js");
       const pythonModulePath = await resolveConverterPath(baseDir);
       const puppeteerExecutablePath = await getPuppeteerExecutablePath();
-      console.log("[Export] Spawning export task with config:", {
+      safeLog("[Export] Spawning export task with config:", {
         exportAs,
         id,
         title,
@@ -93,7 +94,7 @@ export function setupExportHandlers() {
       const success = await showFileDownloadedDialog(destinationPath);
       return { success, message: success ? "Export completed." : "Export completed but dialog failed." };
     } catch (error: any) {
-      console.error("[Export] Error exporting presentation:", error);
+      safeError("[Export] Error exporting presentation:", error);
       return { success: false, message: error?.message ?? "Export failed." };
     }
   })
@@ -155,7 +156,7 @@ async function runExportTaskWithRuntimeFallback(
 
   for (const runtime of runtimeCandidates) {
     try {
-      console.log(`[Export] Trying runtime: ${runtime.label} -> ${runtime.command}`);
+      safeLog(`[Export] Trying runtime: ${runtime.label} -> ${runtime.command}`);
       await runExportTaskOnce(
         runtime,
         exportScriptPath,
@@ -171,7 +172,7 @@ async function runExportTaskWithRuntimeFallback(
         .filter(Boolean)
         .join(" ");
       failures.push(details);
-      console.error(`[Export] Runtime failed (${runtime.label})`, error);
+      safeError(`[Export] Runtime failed (${runtime.label})`, error);
 
       if (!isRetryableRuntimeError(error)) {
         throw error;
@@ -208,12 +209,12 @@ async function runExportTaskOnce(
   exportTaskProcess.stdout.on("data", (data: Buffer) => {
     const text = data.toString();
     stdoutChunks.push(text);
-    console.log(`[Export] ${text}`);
+    safeLog(`[Export] ${text}`);
   });
   exportTaskProcess.stderr.on("data", (data: Buffer) => {
     const text = data.toString();
     stderrChunks.push(text);
-    console.error(`[Export] ${text}`);
+    safeError(`[Export] ${text}`);
   });
 
   await new Promise<void>((resolve, reject) => {

@@ -3,6 +3,7 @@ import { localhost, logsDir, userDataDir } from "./constants";
 import http from "http";
 import fs from "fs";
 import path from "path";
+import { safeError, safeLog as safeConsoleLog } from "./safe-console";
 
 export async function startFastApiServer(
   directory: string,
@@ -23,7 +24,7 @@ export async function startFastApiServer(
     args = ["--port", port.toString()];
   }
 
-  const safeLog = (data: Buffer | string, logPath: string) => {
+  const safeFileLog = (data: Buffer | string, logPath: string) => {
     try {
       fs.appendFileSync(logPath, data);
     } catch {
@@ -43,15 +44,15 @@ export async function startFastApiServer(
     }
   );
   fastApiProcess.stdout.on("data", (data: any) => {
-    safeLog(data, fastapiLogPath);
-    console.log(`FastAPI: ${data}`);
+    safeFileLog(data, fastapiLogPath);
+    safeConsoleLog(`FastAPI: ${data}`);
   });
   fastApiProcess.stderr.on("data", (data: any) => {
-    safeLog(data, fastapiLogPath);
-    console.error(`FastAPI: ${data}`);
+    safeFileLog(data, fastapiLogPath);
+    safeError(`FastAPI: ${data}`);
   });
   fastApiProcess.on("error", (err) => {
-    safeLog(`Spawn error: ${err.message}\n`, fastapiLogPath);
+    safeFileLog(`Spawn error: ${err.message}\n`, fastapiLogPath);
   });
   return {
     process: fastApiProcess,
@@ -89,18 +90,18 @@ export async function startNextJsServer(
     };
     nextjsProcess.stdout.on("data", (data: any) => {
       safeNextLog(data);
-      console.log(`NextJS: ${data}`);
+      safeConsoleLog(`NextJS: ${data}`);
     });
     nextjsProcess.stderr.on("data", (data: any) => {
       safeNextLog(data);
-      console.error(`NextJS: ${data}`);
+      safeError(`NextJS: ${data}`);
     });
     nextjsProcess.on("error", (err: Error) => {
       safeNextLog(`Spawn error: ${err.message}\n`);
-      console.error(`NextJS spawn error: ${err.message}`);
+      safeError(`NextJS spawn error: ${err.message}`);
     });
     nextjsProcess.on("exit", (code: number | null, signal: string | null) => {
-      console.error(`NextJS process exited unexpectedly: code=${code}, signal=${signal}`);
+      safeError(`NextJS process exited unexpectedly: code=${code}, signal=${signal}`);
     });
   } else {
     const serverScript = path.join(directory, "server.js");
@@ -134,18 +135,18 @@ export async function startNextJsServer(
     };
     nextjsProcess.stdout.on("data", (data: any) => {
       safeNextLog(data);
-      console.log(`NextJS: ${data}`);
+      safeConsoleLog(`NextJS: ${data}`);
     });
     nextjsProcess.stderr.on("data", (data: any) => {
       safeNextLog(data);
-      console.error(`NextJS: ${data}`);
+      safeError(`NextJS: ${data}`);
     });
     nextjsProcess.on("error", (err: Error) => {
       safeNextLog(`Spawn error: ${err.message}\n`);
-      console.error(`NextJS spawn error: ${err.message}`);
+      safeError(`NextJS spawn error: ${err.message}`);
     });
     nextjsProcess.on("exit", (code: number | null, signal: string | null) => {
-      console.error(`NextJS process exited unexpectedly: code=${code}, signal=${signal}`);
+      safeError(`NextJS process exited unexpectedly: code=${code}, signal=${signal}`);
     });
   }
 

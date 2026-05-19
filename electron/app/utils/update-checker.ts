@@ -1,6 +1,7 @@
 import { net } from "electron";
 import { app, BrowserWindow } from "electron";
 import { isDev } from "./constants";
+import { safeStderrWrite } from "./safe-console";
 
 /**
  * Version check URL — GitHub raw version.json (no API required).
@@ -27,7 +28,7 @@ const INJECT_DELAY_MS = isDev ? 500 : 1_000;
 
 function log(msg: string): void {
   const line = `[UpdateChecker] ${msg}\n`;
-  process.stderr.write(line);
+  safeStderrWrite(line);
 }
 
 interface VersionResponse {

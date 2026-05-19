@@ -17,6 +17,9 @@ import { getLiteParseRunnerPath } from "./utils/liteparse-check";
 import { getImageMagickBinaryPath, isImageMagickInstalled } from "./utils/imagemagick-check";
 import { startUpdateChecker, stopUpdateChecker } from "./utils/update-checker";
 import { initMainSentry } from "./sentry/main";
+import { installSafeConsole, safeError, safeLog, safeStderrWrite, safeWarn } from "./utils/safe-console";
+
+installSafeConsole();
 
 // Linux Chromium requires chrome-sandbox to be root-owned mode 4755; unpacked
 // dist/linux-unpacked builds usually lack that. Disable sandbox only when invalid.
@@ -133,10 +136,10 @@ const createWindow = () => {
           const p = path.join(__dirname, 'preloads/index.js');
           try {
             if (!fs.existsSync(p)) {
-              console.warn(`[Presenton] Preload not found at ${p}`);
+              safeWarn(`[Presenton] Preload not found at ${p}`);
             }
           } catch (e) {
-            console.warn('[Presenton] Failed to stat preload path', e);
+            safeWarn('[Presenton] Failed to stat preload path', e);
           }
           return p;
         })(),
@@ -254,30 +257,30 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
     nextjsProcess = nextjs.process;
     await nextjs.ready;
   } catch (error) {
-    console.error("Server startup error:", error);
+    safeError("Server startup error:", error);
   }
 }
 
 async function stopServers() {
   if (fastApiProcess?.pid) {
-    console.log("Force killing FastAPI...");
+    safeLog("Force killing FastAPI...");
     try {
       await killProcess(fastApiProcess.pid, "SIGKILL");
     } catch (error) {
-      console.error("Failed to force kill FastAPI:", error);
+      safeError("Failed to force kill FastAPI:", error);
     }
     fastApiProcess = undefined;
   }
   if (nextjsProcess) {
     if ("pid" in nextjsProcess && nextjsProcess.pid) {
-      console.log("Force killing NextJS...");
+      safeLog("Force killing NextJS...");
       try {
         await killProcess(nextjsProcess.pid, "SIGKILL");
       } catch (error) {
-        console.error("Failed to force kill NextJS:", error);
+        safeError("Failed to force kill NextJS:", error);
       }
     } else if (typeof nextjsProcess.close === "function") {
-      console.log("Closing NextJS...");
+      safeLog("Closing NextJS...");
       nextjsProcess.close();
     }
     nextjsProcess = undefined;
@@ -374,7 +377,7 @@ app.whenReady().then(async () => {
   })
 
   const [fastApiPort, nextjsPort] = await findUnusedPorts();
-  console.log(`FastAPI port: ${fastApiPort}, NextJS port: ${nextjsPort}`);
+  safeLog(`FastAPI port: ${fastApiPort}, NextJS port: ${nextjsPort}`);
 
   //? Setup environment variables to be used in the preloads
   setupEnv(fastApiPort, nextjsPort);
@@ -385,7 +388,7 @@ app.whenReady().then(async () => {
 
   // Begin polling the version server for available updates
   if (win) {
-    process.stderr.write("[Presenton] Starting update checker...\n");
+    safeStderrWrite("[Presenton] Starting update checker...\n");
     startUpdateChecker(win);
   }
 });
