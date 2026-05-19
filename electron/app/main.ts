@@ -2,6 +2,7 @@ require("dotenv").config();
 import { app, BrowserWindow, globalShortcut, shell } from "electron";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 import { findUnusedPorts, killProcess, setupEnv, setUserConfig } from "./utils";
 import { startFastApiServer, startNextJsServer } from "./utils/servers";
 import { ChildProcessByStdio } from "child_process";
@@ -27,9 +28,19 @@ import { getPuppeteerExecutablePath, isChromeInstalled } from "./utils/puppeteer
 import { getLiteParseRunnerPath } from "./utils/liteparse-check";
 import { getImageMagickBinaryPath, isImageMagickInstalled } from "./utils/imagemagick-check";
 import { startUpdateChecker, stopUpdateChecker } from "./utils/update-checker";
-import { addMainBreadcrumb, initMainSentry } from "./sentry/main";
+import {
+  addMainBreadcrumb,
+  captureMainException,
+  initMainSentry,
+  setMainSentryRuntimeContext,
+} from "./sentry/main";
 import { installSafeConsole, safeError, safeLog, safeStderrWrite, safeWarn } from "./utils/safe-console";
 import { memorySnapshotMb } from "./utils/memory";
+import {
+  finishChromiumCacheRecovery,
+  prepareChromiumCacheRecovery,
+  type ChromiumCacheRecoveryStatus,
+} from "./utils/chromium-cache-recovery";
 
 installSafeConsole();
 
@@ -66,26 +77,43 @@ const startupStatus: Record<string, string> = {
   imagemagick: "checking",
 };
 
-function cleanupStaleCacheState(cacheDir: string, userDataDir: string): void {
-  if (process.platform !== "win32") {
+type ProcessGoneDetails = {
+  reason?: string;
+  type?: string;
+  exitCode?: number;
+  serviceName?: string;
+  name?: string;
+};
+
+function profileHash(userDataDir: string): string {
+  return crypto.createHash("sha256").update(userDataDir).digest("hex").slice(0, 16);
+}
+
+function updateSentryRuntimeContext(cacheRecovery: ChromiumCacheRecoveryStatus): void {
+  setMainSentryRuntimeContext({
+    profileHash: profileHash(electronAppPaths.userDataDir),
+    cacheRecoveryStatus: cacheRecovery.status,
+    cacheRecoveryMode: cacheRecovery.mode,
+  });
+}
+
+function recordProcessGone(kind: "child" | "renderer", details: ProcessGoneDetails): void {
+  const reason = details.reason ?? "unknown";
+  const data = {
+    kind,
+    reason,
+    type: details.type,
+    exitCode: details.exitCode,
+    serviceName: details.serviceName,
+    name: details.name,
+  };
+
+  addMainBreadcrumb("process", `electron.${kind}_process_gone`, data);
+  if (isStopping || reason === "clean-exit") {
     return;
   }
 
-  try {
-    const gpuCacheBase = path.join(userDataDir, "GPUCache");
-    [cacheDir, gpuCacheBase].forEach((dir) => {
-      if (fs.existsSync(dir)) {
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-        for (const e of entries) {
-          if (e.isDirectory() && e.name.startsWith("old_")) {
-            fs.rmSync(path.join(dir, e.name), { recursive: true, force: true });
-          }
-        }
-      }
-    });
-  } catch {
-    /* ignore cleanup errors */
-  }
+  captureMainException(new Error(`Electron ${kind} process gone: ${reason}`), data);
 }
 
 function resolveExportConverterPath(appRoot: string): string | undefined {
@@ -124,13 +152,21 @@ app.commandLine.appendSwitch('gtk-version', '3');
 app.disableHardwareAcceleration();
 
 const electronAppPaths = initializeAppPaths();
-cleanupStaleCacheState(electronAppPaths.cacheDir, electronAppPaths.userDataDir);
+const chromiumCacheRecovery = prepareChromiumCacheRecovery(
+  electronAppPaths.cacheDir,
+  electronAppPaths.userDataDir,
+);
 safeLog("[Presenton] Electron paths initialized:", electronAppPaths);
 
 // Allow renderer to query initial startup status as soon as it loads.
 ipcMain.handle("startup:get-status", () => startupStatus);
 
 initMainSentry();
+updateSentryRuntimeContext(chromiumCacheRecovery);
+
+app.on("child-process-gone", (_event, details) => {
+  recordProcessGone("child", details);
+});
 
 function setDefaultEnv(name: string, value: string): void {
   if (!process.env[name] || !process.env[name]?.trim()) {
@@ -184,6 +220,10 @@ const createWindow = () => {
           return p;
         })(),
     },
+  });
+
+  win.webContents.on("render-process-gone", (_event, details) => {
+    recordProcessGone("renderer", details);
   });
 
   // Open external links (e.g. "Download update") in the system browser so the user
@@ -354,6 +394,12 @@ async function forceQuitApp(exitCode = 0) {
 app.whenReady().then(async () => {
   // Ensure all required directories exist before starting
   ensureDirectoriesExist();
+
+  await finishChromiumCacheRecovery(
+    electronAppPaths.userDataDir,
+    chromiumCacheRecovery,
+  );
+  updateSentryRuntimeContext(chromiumCacheRecovery);
 
   // Register install handlers early so the unified setup window can use them
   setupLibreOfficeInstallHandlers();
