@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
  * /api/template (server-to-server template layout for FastAPI fallback).
  * Page routes are protected in server layouts (unknown URLs still 404; login uses relative redirects).
  */
-function getFastApiBaseUrl(request: NextRequest): string {
+function getFastApiBaseUrl(): string {
   const internal = process.env.FAST_API_INTERNAL_URL?.trim();
   if (internal) {
     return internal.replace(/\/+$/, "");
@@ -35,7 +35,7 @@ const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
 
 async function getAuthStatus(request: NextRequest): Promise<AuthStatus> {
   const cookieHeader = request.headers.get("cookie");
-  const authStatusUrl = `${getFastApiBaseUrl(request)}/api/v1/auth/status`;
+  const authStatusUrl = `${getFastApiBaseUrl()}/api/v1/auth/status`;
   try {
     const response = await fetch(authStatusUrl, {
       method: "GET",
@@ -65,7 +65,7 @@ function isApiAuthExempt(pathname: string): boolean {
   );
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (pathname === "/pdf-maker") {
