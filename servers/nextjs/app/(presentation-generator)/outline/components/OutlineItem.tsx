@@ -1,6 +1,6 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripHorizontal, Trash, Trash2 } from "lucide-react";
+import { Trash } from "lucide-react";
 import { RootState } from "@/store/store";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -8,8 +8,15 @@ import {
   setOutlines,
 } from "@/store/slices/presentationGeneration";
 import ToolTip from "@/components/ToolTip";
-import MarkdownEditor from "../../components/MarkdownEditor";
-import { useEffect, useMemo, useRef, useState, type FocusEvent } from "react";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from "react";
 import { marked } from "marked";
 
 interface OutlineItemProps {
@@ -87,6 +94,33 @@ export function OutlineItem({
   const [renderedHtml, setRenderedHtml] = useState<string>("");
   const [isEditing, setIsEditing] = useState(false);
   const throttleRef = useRef<number | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const resizeTextarea = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = "0px";
+    textarea.style.height = `${Math.max(textarea.scrollHeight, 140)}px`;
+  }, []);
+
+  useEffect(() => {
+    if (!isEditing) return;
+
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    textarea.focus();
+    const cursorPosition = textarea.value.length;
+    textarea.setSelectionRange(cursorPosition, cursorPosition);
+    resizeTextarea();
+  }, [isEditing, resizeTextarea]);
+
+  useEffect(() => {
+    if (!isEditing) return;
+    resizeTextarea();
+  }, [isEditing, resizeTextarea, slideOutline.content]);
+
   useEffect(() => {
     if (!isStreaming || !isActiveStreaming) return;
     const content = slideOutline.content || "";
@@ -119,10 +153,18 @@ export function OutlineItem({
     }
   }, [isStreaming, isActiveStreaming, isStableStreaming, slideOutline.content]);
 
-  const handleEditorBlur = (event: FocusEvent<HTMLDivElement>) => {
-    if (event.currentTarget.contains(event.relatedTarget as Node | null))
-      return;
-    setIsEditing(false);
+  const previewHtml = useMemo(() => {
+    if (isStreaming) return "";
+    try {
+      return marked.parse(slideOutline.content || "") as string;
+    } catch {
+      return "";
+    }
+  }, [isStreaming, slideOutline.content]);
+
+  const handleTextareaChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    handleSlideChange(event.target.value);
+    resizeTextarea();
   };
 
   return (
@@ -224,16 +266,44 @@ export function OutlineItem({
               </p>
             )
           ) : (
-            <div
-              onFocusCapture={() => setIsEditing(true)}
-              onBlurCapture={handleEditorBlur}
-            >
-              <MarkdownEditor
-                key={index}
-                content={slideOutline.content || ""}
-                onChange={(content) => handleSlideChange(content)}
-              />
-            </div>
+            <>
+              {isEditing ? (
+                <Textarea
+                  ref={textareaRef}
+                  value={slideOutline.content || ""}
+                  onChange={handleTextareaChange}
+                  onBlur={() => setIsEditing(false)}
+                  placeholder="Enter markdown content here..."
+                  className="min-h-[140px] resize-none overflow-hidden rounded-[8px] border-[#D8D8DF] bg-[#FBFBFC] px-3 py-3 font-mono text-[13px] leading-6 text-[#191919] shadow-none focus-visible:border-[#7A5AF8] focus-visible:ring-2 focus-visible:ring-[#7A5AF8]/20"
+                />
+              ) : (
+                <div
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Edit slide ${index} markdown`}
+                  onClick={() => setIsEditing(true)}
+                  onFocus={() => setIsEditing(true)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setIsEditing(true);
+                    }
+                  }}
+                  className="block min-h-[60px] w-full rounded-[8px] px-0 py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8]/25"
+                >
+                  {previewHtml ? (
+                    <div
+                      className="text-sm sm:text-base flex-1 font-normal prose prose-sm max-w-none"
+                      dangerouslySetInnerHTML={{ __html: previewHtml }}
+                    />
+                  ) : (
+                    <p className="text-sm text-[#6B6B73]">
+                      Empty outline
+                    </p>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
 
