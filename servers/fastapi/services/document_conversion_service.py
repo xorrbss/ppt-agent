@@ -4,6 +4,8 @@ import logging
 from pathlib import Path
 from typing import Dict, List
 
+from utils.runtime_limits import log_memory
+
 
 class DocumentConversionError(Exception):
     pass
@@ -105,6 +107,7 @@ class DocumentConversionService:
                 file_path,
                 output_dir,
             )
+            log_memory(LOGGER, "document_conversion.office.start", input=file_path)
             subprocess.run(
                 command,
                 check=True,
@@ -119,6 +122,7 @@ class DocumentConversionService:
                 "[DocumentConversion] LibreOffice conversion complete input=%s",
                 file_path,
             )
+            log_memory(LOGGER, "document_conversion.office.finish", input=file_path)
         except subprocess.TimeoutExpired as exc:
             LOGGER.error(
                 "[DocumentConversion] LibreOffice timed out command=%s",
@@ -184,6 +188,7 @@ class DocumentConversionService:
                 output_path,
                 _command_str(command),
             )
+            log_memory(LOGGER, "document_conversion.image.start", input=file_path)
             subprocess.run(
                 command,
                 check=True,
@@ -198,6 +203,7 @@ class DocumentConversionService:
                 "[DocumentConversion] ImageMagick conversion complete output=%s",
                 output_path,
             )
+            log_memory(LOGGER, "document_conversion.image.finish", input=file_path)
         except subprocess.TimeoutExpired as exc:
             LOGGER.error(
                 "[DocumentConversion] ImageMagick timed out command=%s",

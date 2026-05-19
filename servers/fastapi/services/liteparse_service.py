@@ -2,7 +2,17 @@ import json
 import logging
 import os
 import subprocess
+import tempfile
+import threading
 from typing import Any, Dict, Mapping, Tuple
+
+from utils.runtime_limits import (
+    BoundedTextBuffer,
+    cap_text_by_env,
+    env_int,
+    log_memory,
+    with_node_heap_limit,
+)
 
 
 class LiteParseError(Exception):
@@ -71,6 +81,13 @@ class LiteParseService:
         self.runner_path = os.getenv("LITEPARSE_RUNNER_PATH", self._resolve_runner_path())
         self.runner_dir = os.path.dirname(self.runner_path)
         self._npm_project_root = self._resolve_npm_project_root()
+        self.concurrency = env_int(
+            "PRESENTON_LITEPARSE_CONCURRENCY",
+            default=1,
+            minimum=1,
+            maximum=8,
+        )
+        self._semaphore = threading.BoundedSemaphore(self.concurrency)
 
     def _build_node_env(self) -> Dict[str, str]:
         """Build environment for Node subprocesses."""
@@ -115,7 +132,11 @@ class LiteParseService:
         if deduped_additional_entries:
             env["PATH"] = os.pathsep.join(deduped_additional_entries + path_entries)
 
-        return env
+        return with_node_heap_limit(
+            env,
+            "PRESENTON_LITEPARSE_NODE_MAX_OLD_SPACE_MB",
+            default_mb=1024,
+        )
 
     def _resolve_npm_project_root(self) -> str:
         """Directory whose node_modules contains @llamaindex/liteparse."""
@@ -288,14 +309,32 @@ class LiteParseService:
             self.num_workers,
         )
 
-        process = subprocess.run(
-            command,
-            cwd=self._npm_project_root,
-            capture_output=True,
-            timeout=self.timeout_seconds,
-            env=self._build_node_env(),
-            **_subprocess_text_kwargs(),
-        )
+        with self._semaphore:
+            log_memory(
+                LOGGER,
+                "liteparse.spawn",
+                file=file_path,
+                concurrency=self.concurrency,
+                use_json=use_json,
+            )
+            if not use_json:
+                process = self._run_plain_bridge_to_text(command)
+            else:
+                process = subprocess.run(
+                    command,
+                    cwd=self._npm_project_root,
+                    capture_output=True,
+                    timeout=self.timeout_seconds,
+                    env=self._build_node_env(),
+                    **_subprocess_text_kwargs(),
+                )
+            log_memory(
+                LOGGER,
+                "liteparse.exit",
+                file=file_path,
+                returncode=process.returncode,
+                use_json=use_json,
+            )
         LOGGER.info(
             "[LiteParse] Command finished returncode=%s command=%s",
             process.returncode,
@@ -311,7 +350,11 @@ class LiteParseService:
                 )
             return {
                 "ok": True,
-                "text": (process.stdout or "").lstrip("\ufeff"),
+                "text": cap_text_by_env(
+                    (process.stdout or "").lstrip("\ufeff"),
+                    logger=LOGGER,
+                    label=os.path.basename(file_path),
+                ),
                 "filePath": file_path,
                 "pageCount": 0,
             }
@@ -342,6 +385,13 @@ class LiteParseService:
             )
             raise LiteParseError(payload.get("error") or "LiteParse parse failed")
 
+        if isinstance(payload.get("text"), str):
+            payload["text"] = cap_text_by_env(
+                payload["text"],
+                logger=LOGGER,
+                label=os.path.basename(file_path),
+            )
+
         return payload
 
     @staticmethod
@@ -369,3 +419,70 @@ class LiteParseService:
             pass
 
         raise LiteParseError("LiteParse runner returned invalid JSON output")
+
+    def _run_plain_bridge_to_text(self, command: list[str]) -> subprocess.CompletedProcess[str]:
+        stdout_path = ""
+        stderr_tail = BoundedTextBuffer()
+        try:
+            with tempfile.NamedTemporaryFile(prefix="liteparse-stdout-", delete=False) as stdout_file:
+                stdout_path = stdout_file.name
+                process = subprocess.Popen(
+                    command,
+                    cwd=self._npm_project_root,
+                    stdout=stdout_file,
+                    stderr=subprocess.PIPE,
+                    env=self._build_node_env(),
+                    **_windows_hidden_subprocess_kwargs(),
+                )
+
+                def drain_stderr() -> None:
+                    if process.stderr is None:
+                        return
+                    for chunk in iter(lambda: process.stderr.read(65536), b""):
+                        if not chunk:
+                            break
+                        stderr_tail.append(chunk)
+
+                stderr_thread = threading.Thread(target=drain_stderr, daemon=True)
+                stderr_thread.start()
+                try:
+                    returncode = process.wait(timeout=self.timeout_seconds)
+                except subprocess.TimeoutExpired as exc:
+                    process.kill()
+                    process.wait()
+                    stderr_thread.join(timeout=5)
+                    raise LiteParseError(
+                        f"LiteParse timed out after {self.timeout_seconds} seconds"
+                    ) from exc
+                stderr_thread.join(timeout=5)
+
+            with open(stdout_path, "r", encoding="utf-8", errors="replace") as output_file:
+                stdout = output_file.read(
+                    env_int(
+                        "PRESENTON_MAX_EXTRACTED_TEXT_CHARS",
+                        default=500_000,
+                        minimum=1_000,
+                        maximum=10_000_000,
+                    )
+                    + 1
+                )
+
+            stdout = cap_text_by_env(stdout, logger=LOGGER, label="LiteParse stdout")
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=returncode,
+                stdout=stdout,
+                stderr=stderr_tail.get(),
+            )
+        finally:
+            if stdout_path:
+                try:
+                    os.unlink(stdout_path)
+                except OSError:
+                    pass
+
+
+def _windows_hidden_subprocess_kwargs() -> dict[str, object]:
+    if os.name != "nt":
+        return {}
+    return {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)}

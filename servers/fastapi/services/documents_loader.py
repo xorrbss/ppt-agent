@@ -22,6 +22,7 @@ from services.document_conversion_service import (
 )
 from services.liteparse_service import LiteParseError, LiteParseService
 from utils.ocr_language import presentation_language_to_ocr_code
+from utils.runtime_limits import cap_text_by_env
 
 # Optional fallback converter (primarily useful on Windows)
 try:
@@ -233,6 +234,11 @@ class DocumentsLoader:
                 document = await asyncio.to_thread(self._parse_with_liteparse, file_path)
 
             document = clean_extracted_document_text(document)
+            document = cap_text_by_env(
+                document,
+                logger=LOGGER,
+                label=os.path.basename(file_path),
+            )
             documents.append(document)
             images.append(imgs)
 

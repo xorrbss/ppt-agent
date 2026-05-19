@@ -27,8 +27,9 @@ import { getPuppeteerExecutablePath, isChromeInstalled } from "./utils/puppeteer
 import { getLiteParseRunnerPath } from "./utils/liteparse-check";
 import { getImageMagickBinaryPath, isImageMagickInstalled } from "./utils/imagemagick-check";
 import { startUpdateChecker, stopUpdateChecker } from "./utils/update-checker";
-import { initMainSentry } from "./sentry/main";
+import { addMainBreadcrumb, initMainSentry } from "./sentry/main";
 import { installSafeConsole, safeError, safeLog, safeStderrWrite, safeWarn } from "./utils/safe-console";
+import { memorySnapshotMb } from "./utils/memory";
 
 installSafeConsole();
 
@@ -130,6 +131,32 @@ safeLog("[Presenton] Electron paths initialized:", electronAppPaths);
 ipcMain.handle("startup:get-status", () => startupStatus);
 
 initMainSentry();
+
+function setDefaultEnv(name: string, value: string): void {
+  if (!process.env[name] || !process.env[name]?.trim()) {
+    process.env[name] = value;
+  }
+}
+
+[
+  ["PRESENTON_EXPORT_CONCURRENCY", "1"],
+  ["PRESENTON_LITEPARSE_CONCURRENCY", "1"],
+  ["PRESENTON_EXPORT_NODE_MAX_OLD_SPACE_MB", "1536"],
+  ["PRESENTON_LITEPARSE_NODE_MAX_OLD_SPACE_MB", "1024"],
+  ["PRESENTON_NEXT_NODE_MAX_OLD_SPACE_MB", "1024"],
+  ["PRESENTON_MAX_EXTRACTED_TEXT_CHARS", "500000"],
+].forEach(([name, value]) => setDefaultEnv(name, value));
+
+addMainBreadcrumb("memory", "electron.main.startup", memorySnapshotMb());
+safeLog("[Presenton] Memory limits initialized:", {
+  PRESENTON_EXPORT_CONCURRENCY: process.env.PRESENTON_EXPORT_CONCURRENCY,
+  PRESENTON_LITEPARSE_CONCURRENCY: process.env.PRESENTON_LITEPARSE_CONCURRENCY,
+  PRESENTON_EXPORT_NODE_MAX_OLD_SPACE_MB: process.env.PRESENTON_EXPORT_NODE_MAX_OLD_SPACE_MB,
+  PRESENTON_LITEPARSE_NODE_MAX_OLD_SPACE_MB: process.env.PRESENTON_LITEPARSE_NODE_MAX_OLD_SPACE_MB,
+  PRESENTON_NEXT_NODE_MAX_OLD_SPACE_MB: process.env.PRESENTON_NEXT_NODE_MAX_OLD_SPACE_MB,
+  PRESENTON_MAX_EXTRACTED_TEXT_CHARS: process.env.PRESENTON_MAX_EXTRACTED_TEXT_CHARS,
+  memory: memorySnapshotMb(),
+});
 
 const createWindow = () => {
   win = new BrowserWindow({
@@ -238,6 +265,11 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         ELECTRON_RUN_AS_NODE: "1",
         EXPORT_PACKAGE_ROOT: exportPackageRoot,
         EXPORT_RUNTIME_DIR: exportPackageRoot,
+        PRESENTON_EXPORT_CONCURRENCY: process.env.PRESENTON_EXPORT_CONCURRENCY,
+        PRESENTON_LITEPARSE_CONCURRENCY: process.env.PRESENTON_LITEPARSE_CONCURRENCY,
+        PRESENTON_EXPORT_NODE_MAX_OLD_SPACE_MB: process.env.PRESENTON_EXPORT_NODE_MAX_OLD_SPACE_MB,
+        PRESENTON_LITEPARSE_NODE_MAX_OLD_SPACE_MB: process.env.PRESENTON_LITEPARSE_NODE_MAX_OLD_SPACE_MB,
+        PRESENTON_MAX_EXTRACTED_TEXT_CHARS: process.env.PRESENTON_MAX_EXTRACTED_TEXT_CHARS,
         ...(exportConverterPath && {
           BUILT_PYTHON_MODULE_PATH: exportConverterPath,
         }),
@@ -261,6 +293,9 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         DISABLE_AUTH: disableAuthForElectron,
         EXPORT_PACKAGE_ROOT: exportPackageRoot,
         PRESENTON_APP_ROOT: baseDir,
+        PRESENTON_EXPORT_CONCURRENCY: process.env.PRESENTON_EXPORT_CONCURRENCY,
+        PRESENTON_EXPORT_NODE_MAX_OLD_SPACE_MB: process.env.PRESENTON_EXPORT_NODE_MAX_OLD_SPACE_MB,
+        PRESENTON_NEXT_NODE_MAX_OLD_SPACE_MB: process.env.PRESENTON_NEXT_NODE_MAX_OLD_SPACE_MB,
         ...(exportConverterPath && {
           BUILT_PYTHON_MODULE_PATH: exportConverterPath,
         }),

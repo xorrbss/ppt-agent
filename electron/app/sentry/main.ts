@@ -81,3 +81,24 @@ export function initMainSentry(): void {
     console.error("[Sentry] Failed to initialize in Electron main process:", error);
   }
 }
+
+export function addMainBreadcrumb(
+  category: string,
+  message: string,
+  data?: Record<string, unknown>,
+): void {
+  if (!isSentryInitialized) {
+    return;
+  }
+
+  try {
+    Sentry.addBreadcrumb({
+      category,
+      message,
+      level: "info",
+      data,
+    });
+  } catch {
+    /* ignore breadcrumb failures */
+  }
+}

@@ -4,6 +4,7 @@ import http from "http";
 import fs from "fs";
 import path from "path";
 import { safeError, safeLog as safeConsoleLog } from "./safe-console";
+import { memorySnapshotMb, withNodeHeapLimit } from "./memory";
 
 export async function startFastApiServer(
   directory: string,
@@ -55,6 +56,10 @@ export async function startFastApiServer(
   fastApiProcess.on("error", (err) => {
     safeFileLog(`Spawn error: ${err.message}\n`, fastapiLogPath);
   });
+  safeConsoleLog("[Presenton] FastAPI process spawned:", {
+    pid: fastApiProcess.pid,
+    memory: memorySnapshotMb(),
+  });
   return {
     process: fastApiProcess,
     ready: waitForServer(`${localhost}:${port}/docs`),
@@ -77,7 +82,11 @@ export async function startNextJsServer(
       {
         cwd: directory,
         stdio: ["ignore", "pipe", "pipe"],
-        env: { ...process.env, ...env },
+        env: withNodeHeapLimit(
+          { ...process.env, ...env },
+          "PRESENTON_NEXT_NODE_MAX_OLD_SPACE_MB",
+          1024,
+        ),
         shell: process.platform === "win32",
       }
     );
@@ -116,13 +125,13 @@ export async function startNextJsServer(
       {
         cwd: directory,
         stdio: ["ignore", "pipe", "pipe"],
-        env: {
+        env: withNodeHeapLimit({
           ...process.env,
           ...env,
           ELECTRON_RUN_AS_NODE: "1",
           HOSTNAME: "127.0.0.1",
           PORT: port.toString(),
-        },
+        }, "PRESENTON_NEXT_NODE_MAX_OLD_SPACE_MB", 1024),
         windowsHide: process.platform === "win32",
       }
     );

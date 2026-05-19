@@ -50,6 +50,11 @@ interface FastApiEnv {
   EXPORT_RUNTIME_DIR?: string,
   /** Absolute path to bundled PyInstaller converter binary for export runtime. */
   BUILT_PYTHON_MODULE_PATH?: string,
+  PRESENTON_EXPORT_CONCURRENCY?: string,
+  PRESENTON_LITEPARSE_CONCURRENCY?: string,
+  PRESENTON_EXPORT_NODE_MAX_OLD_SPACE_MB?: string,
+  PRESENTON_LITEPARSE_NODE_MAX_OLD_SPACE_MB?: string,
+  PRESENTON_MAX_EXTRACTED_TEXT_CHARS?: string,
 }
 
 interface NextJsEnv {
@@ -66,6 +71,9 @@ interface NextJsEnv {
   PRESENTON_APP_ROOT?: string,
   BUILT_PYTHON_MODULE_PATH?: string,
   PUPPETEER_EXECUTABLE_PATH?: string,
+  PRESENTON_EXPORT_CONCURRENCY?: string,
+  PRESENTON_EXPORT_NODE_MAX_OLD_SPACE_MB?: string,
+  PRESENTON_NEXT_NODE_MAX_OLD_SPACE_MB?: string,
 }
 
 interface UserConfig {

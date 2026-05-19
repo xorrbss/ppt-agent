@@ -10,15 +10,27 @@ from typing import Literal, Mapping
 from fastapi import HTTPException
 from pydantic import BaseModel, ValidationError, model_validator
 
-from services.liteparse_service import _snippet, _subprocess_text_kwargs
+from services.liteparse_service import _command_str, _snippet
 from utils.asset_directory_utils import resolve_app_path_to_filesystem
 from utils.get_env import get_app_data_directory_env, get_temp_directory_env
 from utils.icon_weights import DEFAULT_ICON_WEIGHT, extract_icon_weight_from_settings
+from utils.runtime_limits import (
+    BoundedTextBuffer,
+    env_int,
+    log_memory,
+    with_node_heap_limit,
+)
 
 LOGGER = logging.getLogger(__name__)
 
 EXPORT_DIRECTORY_MODE = 0o755
 EXPORT_FILE_MODE = 0o644
+
+
+def _windows_hidden_subprocess_kwargs() -> dict[str, object]:
+    if os.name != "nt":
+        return {}
+    return {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)}
 
 
 class PptxToHtmlDocument(BaseModel):
@@ -64,6 +76,13 @@ class ExportTaskService:
         self.export_dir = self._resolve_export_dir()
         self.entrypoint_path = self._resolve_entrypoint_path(self.export_dir)
         self.converter_path = self._resolve_converter_path(self.export_dir)
+        self.concurrency = env_int(
+            "PRESENTON_EXPORT_CONCURRENCY",
+            default=1,
+            minimum=1,
+            maximum=8,
+        )
+        self._semaphore = asyncio.Semaphore(self.concurrency)
 
     @staticmethod
     def _resolve_export_dir() -> str:
@@ -154,7 +173,11 @@ class ExportTaskService:
         env["ASSETS_BASE_URL"] = f"{fastapi_base.rstrip('/')}/app_data"
         env["BUILT_PYTHON_MODULE_PATH"] = self.converter_path
 
-        return env
+        return with_node_heap_limit(
+            env,
+            "PRESENTON_EXPORT_NODE_MAX_OLD_SPACE_MB",
+            default_mb=1536,
+        )
 
     def _ensure_runtime_ready(self) -> None:
         if not os.path.isfile(self.entrypoint_path):
@@ -210,6 +233,10 @@ class ExportTaskService:
         return temp_dir, task_path, response_path
 
     async def _run_task(self, task_payload: dict, response_error_detail: str) -> dict:
+        async with self._semaphore:
+            return await self._run_task_locked(task_payload, response_error_detail)
+
+    async def _run_task_locked(self, task_payload: dict, response_error_detail: str) -> dict:
         self._ensure_runtime_ready()
         temp_dir, task_path, response_path = self._create_task_paths()
 
@@ -217,22 +244,31 @@ class ExportTaskService:
             with open(task_path, "w", encoding="utf-8") as task_file:
                 json.dump(task_payload, task_file)
 
-            result = await asyncio.to_thread(
-                subprocess.run,
+            log_memory(
+                LOGGER,
+                "export_task.spawn",
+                task_type=task_payload.get("type"),
+                concurrency=self.concurrency,
+            )
+            result = await self._run_bounded_child(
                 [self.node_binary, self.entrypoint_path, task_path],
                 cwd=self.export_dir,
-                capture_output=True,
                 timeout=self.timeout_seconds,
                 env=dict(self._build_node_env()),
-                **_subprocess_text_kwargs(),
+            )
+            log_memory(
+                LOGGER,
+                "export_task.exit",
+                task_type=task_payload.get("type"),
+                returncode=result["returncode"],
             )
 
-            if result.returncode != 0:
+            if result["returncode"] != 0:
                 raise HTTPException(
                     status_code=500,
                     detail=(
                         "Export task failed. "
-                        f"stderr={_snippet(result.stderr)} stdout={_snippet(result.stdout)}"
+                        f"stderr={_snippet(result['stderr'])} stdout={_snippet(result['stdout'])}"
                     ),
                 )
 
@@ -244,11 +280,6 @@ class ExportTaskService:
 
             with open(response_path, "r", encoding="utf-8") as response_file:
                 return json.load(response_file)
-        except subprocess.TimeoutExpired as exc:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Export task timed out after {self.timeout_seconds} seconds",
-            ) from exc
         except json.JSONDecodeError as exc:
             raise HTTPException(
                 status_code=500,
@@ -261,6 +292,72 @@ class ExportTaskService:
             ) from exc
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
+
+    async def _run_bounded_child(
+        self,
+        command: list[str],
+        *,
+        cwd: str,
+        env: dict[str, str],
+        timeout: int,
+    ) -> dict[str, str | int]:
+        stdout_tail = BoundedTextBuffer()
+        stderr_tail = BoundedTextBuffer()
+        process = await asyncio.create_subprocess_exec(
+            *command,
+            cwd=cwd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env,
+            **_windows_hidden_subprocess_kwargs(),
+        )
+
+        LOGGER.info(
+            "[export_runtime] child started pid=%s command=%s",
+            process.pid,
+            _command_str(command),
+        )
+
+        async def drain(
+            stream: asyncio.StreamReader | None,
+            tail: BoundedTextBuffer,
+            label: str,
+        ) -> None:
+            if stream is None:
+                return
+            while True:
+                chunk = await stream.read(65536)
+                if not chunk:
+                    break
+                tail.append(chunk)
+                LOGGER.debug("[export_runtime] %s chunk=%s bytes", label, len(chunk))
+
+        stdout_task = asyncio.create_task(drain(process.stdout, stdout_tail, "stdout"))
+        stderr_task = asyncio.create_task(drain(process.stderr, stderr_tail, "stderr"))
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(process.wait(), stdout_task, stderr_task),
+                timeout=timeout,
+            )
+        except asyncio.TimeoutError as exc:
+            process.kill()
+            await process.wait()
+            await asyncio.gather(stdout_task, stderr_task, return_exceptions=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Export task timed out after {timeout} seconds",
+            ) from exc
+
+        LOGGER.info(
+            "[export_runtime] child exited pid=%s returncode=%s",
+            process.pid,
+            process.returncode,
+        )
+        return {
+            "returncode": process.returncode if process.returncode is not None else -1,
+            "stdout": stdout_tail.get(),
+            "stderr": stderr_tail.get(),
+        }
 
     async def export_from_url(
         self,

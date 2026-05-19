@@ -3,6 +3,12 @@ import os from "os";
 import fs from "fs/promises";
 import { spawn } from "child_process";
 import { sanitizeFilename } from "@/app/(presentation-generator)/utils/others";
+import {
+  BoundedTextBuffer,
+  envInt,
+  memorySnapshotMb,
+  withNodeHeapLimit,
+} from "@/lib/runtime-limits";
 
 /** Repo `presentation-export/` at app root (`/app/presentation-export` in Docker). */
 export function getExportPackageRoot(): string {
@@ -77,6 +83,30 @@ export type BundledPresentationExportResult = { path: string };
 const EXPORT_DIRECTORY_MODE = 0o755;
 const EXPORT_FILE_MODE = 0o644;
 
+let activeExports = 0;
+const pendingExports: Array<() => void> = [];
+
+async function acquireExportSlot(): Promise<() => void> {
+  const limit = envInt("PRESENTON_EXPORT_CONCURRENCY", 1, 1, 8);
+  if (activeExports >= limit) {
+    await new Promise<void>((resolve) => pendingExports.push(resolve));
+  }
+  activeExports += 1;
+  return () => {
+    activeExports = Math.max(0, activeExports - 1);
+    pendingExports.shift()?.();
+  };
+}
+
+async function enqueueExport<T>(work: () => Promise<T>): Promise<T> {
+  const release = await acquireExportSlot();
+  try {
+    return await work();
+  } finally {
+    release();
+  }
+}
+
 function normalizeExportOutputPath(params: {
   pathValue?: string;
   urlValue?: string;
@@ -144,6 +174,15 @@ export async function runBundledPresentationExport(params: {
   format: BundledPresentationExportFormat;
   cookieHeader?: string;
 }): Promise<BundledPresentationExportResult> {
+  return enqueueExport(() => runBundledPresentationExportLocked(params));
+}
+
+async function runBundledPresentationExportLocked(params: {
+  presentationId: string;
+  title: string | undefined;
+  format: BundledPresentationExportFormat;
+  cookieHeader?: string;
+}): Promise<BundledPresentationExportResult> {
   const { presentationId, title, format, cookieHeader } = params;
   const exportRoot = getExportPackageRoot();
   const entrypoint = await resolveExportEntrypoint(exportRoot);
@@ -183,48 +222,73 @@ export async function runBundledPresentationExport(params: {
     cookieHeader: cookieHeader || undefined,
   };
 
-  await fs.writeFile(exportTaskPath, JSON.stringify(exportTask), "utf8");
+  try {
+    await fs.writeFile(exportTaskPath, JSON.stringify(exportTask), "utf8");
 
-  const responsePath = exportTaskPath.replace(/\.json$/i, ".response.json");
+    const responsePath = exportTaskPath.replace(/\.json$/i, ".response.json");
 
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(process.execPath, [entrypoint, exportTaskPath], {
-      cwd: appRoot,
-      stdio: ["ignore", "pipe", "pipe"],
-      env: {
-        ...process.env,
-        BUILT_PYTHON_MODULE_PATH: converter,
-      },
+    console.info("[bundled-export] start", {
+      presentationId,
+      format,
+      memory: memorySnapshotMb(),
     });
-    const stderr: Buffer[] = [];
-    const stdout: Buffer[] = [];
-    child.stderr?.on("data", (d) => stderr.push(d));
-    child.stdout?.on("data", (d) => stdout.push(d));
-    child.on("error", reject);
-    child.on("exit", (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        const errText = Buffer.concat(stderr).toString("utf8").trim();
-        const outText = Buffer.concat(stdout).toString("utf8").trim();
-        reject(
-          new Error(
-            `Export process exited with code ${code}${errText ? `. ${errText}` : ""}${outText ? ` stdout: ${outText}` : ""}`
-          )
-        );
-      }
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(process.execPath, [entrypoint, exportTaskPath], {
+        cwd: appRoot,
+        stdio: ["ignore", "pipe", "pipe"],
+        env: withNodeHeapLimit(
+          {
+            ...process.env,
+            BUILT_PYTHON_MODULE_PATH: converter,
+          },
+          "PRESENTON_EXPORT_NODE_MAX_OLD_SPACE_MB",
+          1536,
+        ),
+      });
+      const stderr = new BoundedTextBuffer();
+      const stdout = new BoundedTextBuffer();
+      child.stderr?.on("data", (d) => stderr.append(d));
+      child.stdout?.on("data", (d) => stdout.append(d));
+      child.on("error", reject);
+      child.on("exit", (code) => {
+        console.info("[bundled-export] child exit", {
+          presentationId,
+          format,
+          pid: child.pid,
+          code,
+          memory: memorySnapshotMb(),
+        });
+        if (code === 0) {
+          resolve();
+        } else {
+          const errText = stderr.toString();
+          const outText = stdout.toString();
+          reject(
+            new Error(
+              `Export process exited with code ${code}${errText ? `. ${errText}` : ""}${outText ? ` stdout: ${outText}` : ""}`
+            )
+          );
+        }
+      });
     });
-  });
 
-  const responseRaw = await fs.readFile(responsePath, "utf8");
-  const responseData = JSON.parse(responseRaw) as { path?: string; url?: string };
+    const responseRaw = await fs.readFile(responsePath, "utf8");
+    const responseData = JSON.parse(responseRaw) as { path?: string; url?: string };
 
-  const outPath = normalizeExportOutputPath({
-    pathValue: responseData?.path,
-    urlValue: responseData?.url,
-  });
+    const outPath = normalizeExportOutputPath({
+      pathValue: responseData?.path,
+      urlValue: responseData?.url,
+    });
 
-  await ensureExportFileReadable(outPath);
+    await ensureExportFileReadable(outPath);
+    console.info("[bundled-export] finish", {
+      presentationId,
+      format,
+      memory: memorySnapshotMb(),
+    });
 
-  return { path: outPath };
+    return { path: outPath };
+  } finally {
+    await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
+  }
 }
