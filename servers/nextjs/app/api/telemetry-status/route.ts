@@ -1,15 +1,16 @@
-import fs from "fs";
 import { NextResponse } from "next/server";
+import { readUserConfigFile } from "@/lib/user-config-store";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   const userConfigPath = process.env.USER_CONFIG_PATH;
   let fileDisabled: string | undefined;
-  if (userConfigPath && fs.existsSync(userConfigPath)) {
+  if (userConfigPath) {
     try {
-      const raw = fs.readFileSync(userConfigPath, "utf-8");
-      const parsed = JSON.parse(raw) as { DISABLE_ANONYMOUS_TRACKING?: string };
+      const parsed = readUserConfigFile<{ DISABLE_ANONYMOUS_TRACKING?: string }>(
+        userConfigPath
+      );
       fileDisabled = parsed?.DISABLE_ANONYMOUS_TRACKING;
     } catch {
       fileDisabled = undefined;
@@ -25,5 +26,4 @@ export async function GET() {
   const telemetryEnabled = !isDisabled;
   return NextResponse.json({ telemetryEnabled });
 }
-
 

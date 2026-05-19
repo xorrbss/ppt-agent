@@ -78,6 +78,15 @@ function getHomeDir(): string | undefined {
   }
 }
 
+function electronPathCandidate(name: "temp" | "downloads" | "userData"): string | undefined {
+  try {
+    const candidate = app.getPath(name);
+    return candidate && path.isAbsolute(candidate) ? candidate : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function canUseDirectory(dir: string): boolean {
   try {
     fs.mkdirSync(dir, { recursive: true });
@@ -107,6 +116,7 @@ function getTempRoot(): string {
       absoluteEnvPath("TMPDIR"),
       absoluteEnvPath("TEMP"),
       absoluteEnvPath("TMP"),
+      electronPathCandidate("temp"),
       (() => {
         try {
           const tmp = os.tmpdir();
@@ -185,13 +195,22 @@ function getDownloadsDirCandidate(userDataDir: string): string {
 
   if (process.platform === "linux") {
     return firstWritableDirectory(
-      unique([resolveLinuxDownloadsDir(home), home ? path.join(home, "Downloads") : undefined, fallback]),
+      unique([
+        electronPathCandidate("downloads"),
+        resolveLinuxDownloadsDir(home),
+        home ? path.join(home, "Downloads") : undefined,
+        fallback,
+      ]),
       "downloads"
     );
   }
 
   return firstWritableDirectory(
-    unique([home ? path.join(home, "Downloads") : undefined, fallback]),
+    unique([
+      electronPathCandidate("downloads"),
+      home ? path.join(home, "Downloads") : undefined,
+      fallback,
+    ]),
     "downloads"
   );
 }
@@ -221,6 +240,7 @@ export function initializeAppPaths(): ElectronAppPaths {
   const appDataBaseDir = getAppDataBaseDir(tempRoot);
   const userDataDir = firstWritableDirectory(
     unique([
+      electronPathCandidate("userData"),
       path.join(appDataBaseDir, appDirectoryName),
       path.join(tempRoot, "presenton-user-data"),
     ]),
