@@ -16,6 +16,7 @@ from services.chat.schemas import (
     NoArgsInput,
     SaveSlideInput,
     SearchSlidesInput,
+    SetPresentationThemeInput,
 )
 from services.chat.presentation_context_store import PresentationContextStore
 
@@ -38,6 +39,7 @@ class ChatTools:
             "generateIcon": self._generate_icon,
             "saveSlide": self._save_slide,
             "deleteSlide": self._delete_slide,
+            "setPresentationTheme": self._set_presentation_theme,
         }
 
     def get_tool_definitions(self) -> list[Tool]:
@@ -123,6 +125,17 @@ class ChatTools:
                     "remaining slides. Use when the user asks to remove a slide."
                 ),
                 schema=DeleteSlideInput,
+                strict=True,
+            ),
+            Tool(
+                name="setPresentationTheme",
+                description=(
+                    "Change the deck theme using user-friendly requests like "
+                    "'dark', 'light', theme name/id, or 'another'. "
+                    "Can also apply customTheme payloads with colors/fonts and "
+                    "optionally save them for reuse. Applies theme at presentation level."
+                ),
+                schema=SetPresentationThemeInput,
                 strict=True,
             ),
         ]
@@ -337,6 +350,18 @@ class ChatTools:
     async def _delete_slide(self, args: dict[str, Any]) -> dict[str, Any]:
         payload = DeleteSlideInput(**args)
         return await self._memory.delete_slide(index=payload.index)
+
+    async def _set_presentation_theme(self, args: dict[str, Any]) -> dict[str, Any]:
+        payload = SetPresentationThemeInput(**args)
+        return await self._memory.set_presentation_theme(
+            theme_query=payload.theme,
+            custom_theme=(
+                payload.custom_theme.model_dump(exclude_none=True)
+                if payload.custom_theme is not None
+                else None
+            ),
+            save_custom_theme=payload.save_custom_theme,
+        )
 
     @staticmethod
     def _parse_args(arguments: str | None) -> dict[str, Any]:

@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronRight,
   Loader2,
+  LocateFixed,
   MessageCircleMore,
   Plus,
   RefreshCw,
@@ -233,6 +234,10 @@ type ChatProps = {
   presentationId: string;
   currentSlide?: number;
   onPresentationChanged?: () => Promise<void> | void;
+  onChatMutationStateChange?: (isMutating: boolean) => void;
+  onFollowAgentToSlide?: (slideIndex: number) => void;
+  onChatSendingStateChange?: (isSending: boolean) => void;
+  onFollowModeChange?: (isEnabled: boolean) => void;
 };
 
 type AssistantActivity = {
@@ -271,7 +276,10 @@ const TOOL_LABELS: Record<string, string> = {
   generateAssets: "Asset generator",
   saveSlide: "Slide saver",
   deleteSlide: "Slide remover",
+  setPresentationTheme: "Theme applier",
 };
+
+const MUTATING_TOOLS = new Set(["saveSlide", "deleteSlide", "setPresentationTheme"]);
 
 const getToolLabel = (tool?: string) => {
   if (!tool) {
@@ -313,6 +321,9 @@ const humanizeTraceMessage = (message: string, tool?: string) => {
   }
   if (lower === "deleting the slide") {
     return "Deleting the slide.";
+  }
+  if (lower === "applying presentation theme") {
+    return "Applying the selected theme.";
   }
   if (lower.startsWith("using tools:")) {
     const toolNames = trimmed
@@ -368,6 +379,21 @@ const isAbortError = (error: unknown) =>
   (error instanceof Error &&
     error.message.toLowerCase().includes("aborted") &&
     error.message.toLowerCase().includes("request"));
+
+const stripBackendContextFromUserMessage = (rawMessage: string) => {
+  const message = rawMessage ?? "";
+  if (!message.startsWith("UI context:")) {
+    return message;
+  }
+
+  const marker = "\nUser message:";
+  const markerIndex = message.indexOf(marker);
+  if (markerIndex === -1) {
+    return message;
+  }
+
+  return message.slice(markerIndex + marker.length).trimStart();
+};
 
 const formatTraceActivity = (
   trace: ChatStreamTrace
@@ -441,12 +467,18 @@ const Chat = ({
   presentationId,
   currentSlide,
   onPresentationChanged,
+  onChatMutationStateChange,
+  onFollowAgentToSlide,
+  onChatSendingStateChange,
+  onFollowModeChange,
 }: ChatProps) => {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isFollowAgentEnabled, setIsFollowAgentEnabled] = useState(true);
+  const [activeMutationToolCount, setActiveMutationToolCount] = useState(0);
   const [activeAssistantMessageId, setActiveAssistantMessageId] = useState<
     string | null
   >(null);
@@ -458,6 +490,7 @@ const Chat = ({
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const lastFollowedSlideRef = useRef<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -467,6 +500,7 @@ const Chat = ({
     setInput("");
     setConversationId(null);
     setIsSending(false);
+    setActiveMutationToolCount(0);
     setActiveAssistantMessageId(null);
     setErrorMessage(null);
     setExpandedActivityByMessage({});
@@ -513,7 +547,10 @@ const Chat = ({
                 : m.role === "user"
                 ? "user"
                 : "user",
-            content: m.content,
+            content:
+              m.role === "user"
+                ? stripBackendContextFromUserMessage(m.content)
+                : m.content,
           }))
         );
       } catch (error) {
@@ -539,6 +576,54 @@ const Chat = ({
     messagesEndRef.current?.scrollIntoView({ block: "end" });
   }, [messages, isSending]);
 
+  useEffect(() => {
+    onChatMutationStateChange?.(activeMutationToolCount > 0);
+  }, [activeMutationToolCount, onChatMutationStateChange]);
+
+  useEffect(() => {
+    onFollowModeChange?.(isFollowAgentEnabled);
+  }, [isFollowAgentEnabled, onFollowModeChange]);
+
+  useEffect(() => {
+    onChatSendingStateChange?.(isSending);
+    if (!isSending) {
+      lastFollowedSlideRef.current = null;
+    }
+  }, [isSending, onChatSendingStateChange]);
+
+  const updateMutationToolActivity = (tool: string | undefined, isActive: boolean) => {
+    if (!tool || !MUTATING_TOOLS.has(tool)) {
+      return;
+    }
+    setActiveMutationToolCount((previous) =>
+      Math.max(0, previous + (isActive ? 1 : -1))
+    );
+  };
+
+  const maybeFollowAgentSlide = (trace: ChatStreamTrace) => {
+    if (!isFollowAgentEnabled || !onFollowAgentToSlide) {
+      return;
+    }
+
+    const targetSlideIndex =
+      typeof trace.slideIndex === "number" && trace.slideIndex >= 0
+        ? trace.slideIndex
+        : typeof trace.slideNumber === "number" && trace.slideNumber > 0
+        ? trace.slideNumber - 1
+        : null;
+
+    if (targetSlideIndex === null) {
+      return;
+    }
+
+    if (lastFollowedSlideRef.current === targetSlideIndex) {
+      return;
+    }
+
+    lastFollowedSlideRef.current = targetSlideIndex;
+    onFollowAgentToSlide(targetSlideIndex);
+  };
+
   const buildBackendMessage = (message: string) => {
     if (typeof currentSlide !== "number") {
       return message;
@@ -556,6 +641,7 @@ const Chat = ({
     setMessages([]);
     setInput("");
     setConversationId(null);
+    setActiveMutationToolCount(0);
     setErrorMessage(null);
     setExpandedActivityByMessage({});
     if (presentationId && typeof sessionStorage !== "undefined") {
@@ -567,7 +653,9 @@ const Chat = ({
 
   const refreshPresentationIfNeeded = async (toolCalls: string[]) => {
     const hasSlideMutation =
-      toolCalls.includes("saveSlide") || toolCalls.includes("deleteSlide");
+      toolCalls.includes("saveSlide") ||
+      toolCalls.includes("deleteSlide") ||
+      toolCalls.includes("setPresentationTheme");
     if (!hasSlideMutation || !onPresentationChanged) {
       return;
     }
@@ -734,6 +822,12 @@ const Chat = ({
             });
           },
           onTrace: (trace) => {
+            maybeFollowAgentSlide(trace);
+            if (trace.status === "start") {
+              updateMutationToolActivity(trace.tool, true);
+            } else if (trace.status === "success" || trace.status === "error") {
+              updateMutationToolActivity(trace.tool, false);
+            }
             const traceActivity = formatTraceActivity(trace);
             if (!traceActivity) {
               return;
@@ -826,6 +920,7 @@ const Chat = ({
       ]);
       toast.error(message);
     } finally {
+      setActiveMutationToolCount(0);
       if (abortControllerRef.current === streamAbortController) {
         abortControllerRef.current = null;
       }
@@ -955,7 +1050,9 @@ const Chat = ({
                   className="flex items-start justify-end gap-2"
                 >
                   <div className="max-w-[78%] rounded-[20px] bg-[#A100FF] px-4 py-3 text-sm font-medium leading-5 text-white">
-                    <p className="whitespace-pre-wrap">{message.content}</p>
+                    <p className="whitespace-pre-wrap">
+                      {stripBackendContextFromUserMessage(message.content)}
+                    </p>
                   </div>
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FF8617] text-sm font-semibold text-white">
                     U
@@ -1048,7 +1145,7 @@ const Chat = ({
 
       <form
         onSubmit={handleSubmit}
-        className="relative mx-4 mb-4 rounded-[8px] border border-[#F4F4F4] bg-white px-2.5 py-3"
+        className="mx-4 mb-4 rounded-[8px] border border-[#F4F4F4] bg-white px-2.5 py-3"
         style={{
           boxShadow: "0 4px 14px 0 rgba(0, 0, 0, 0.04)",
         }}
@@ -1057,8 +1154,8 @@ const Chat = ({
           ref={inputRef}
           name="chat-input"
           id="chat-input"
-          className="min-h-[92px] w-full resize-none bg-transparent pb-10 text-sm text-[#101828] placeholder:text-[#99A1AF] focus:outline-none focus:ring-0"
-          rows={4}
+          className="min-h-[92px] w-full resize-none bg-transparent text-sm text-[#101828] placeholder:text-[#99A1AF] focus:outline-none focus:ring-0"
+          rows={3}
           value={input}
           disabled={isSending || isHistoryLoading}
           onChange={(event) => setInput(event.target.value)}
@@ -1066,51 +1163,78 @@ const Chat = ({
           placeholder="Improve your slides..."
           aria-invalid={Boolean(errorMessage)}
         />
-        <button
-          type="button"
-          disabled
-          className="absolute bottom-3 left-3 h-[28px] rounded-[64px] border border-[#EDEEEF] bg-white px-3 py-1 opacity-50"
-          aria-label="Attach files"
-          title="Attachments are not supported yet"
-        >
-          <Plus className="h-3 w-3 text-black" />
-        </button>
-        {isSending ? (
-          <div className="absolute bottom-3 right-3 flex items-center gap-2">
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               disabled
-              className="flex cursor-wait items-center gap-1.5 rounded-[34px] border border-[#EAECF0] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#667085]"
-              aria-label="Chat is processing"
+              className="inline-flex h-[28px] items-center rounded-[64px] border border-[#EDEEEF] bg-white px-3 py-1 opacity-50"
+              aria-label="Attach files"
+              title="Attachments are not supported yet"
             >
-              <Loader2 className="h-3 w-3 animate-spin text-[#667085]" />
-              Processing
+              <Plus className="h-3 w-3 text-black" />
             </button>
             <button
               type="button"
-              onClick={stopStreaming}
-              className="flex items-center gap-1.5 rounded-[34px] border border-[#E4E7EC] bg-white px-3 py-2 text-sm font-medium text-[#344054] transition-colors hover:bg-[#F9FAFB]"
-              aria-label="Stop chat response"
+              onClick={() => setIsFollowAgentEnabled((previous) => !previous)}
+              disabled={isHistoryLoading || isSending}
+              className={`inline-flex h-[28px] items-center gap-1 rounded-[64px] border px-2.5 text-[11px] font-medium transition-colors ${
+                isFollowAgentEnabled
+                  ? "border-[#D9D6FE] bg-[#F4F3FF] text-[#5A3ECC]"
+                  : "border-[#E5E7EB] bg-white text-[#667085]"
+              } disabled:cursor-not-allowed disabled:opacity-50`}
+              aria-label={
+                isFollowAgentEnabled ? "Disable follow AI mode" : "Enable follow AI mode"
+              }
+              title={
+                isFollowAgentEnabled
+                  ? "Follow AI is on: auto-jump to active slide"
+                  : "Follow AI is off"
+              }
             >
-              <Square className="h-3 w-3 fill-current" />
-              Stop
+              <LocateFixed className="h-3 w-3" />
+              <span>{isFollowAgentEnabled ? "Following" : "Follow AI"}</span>
             </button>
           </div>
-        ) : (
-          <button
-            type="submit"
-            disabled={!input.trim() || isHistoryLoading}
-            className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-[#191919] disabled:cursor-not-allowed disabled:opacity-60"
-            style={{
-              background:
-                "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
-              borderRadius: "34px",
-            }}
-          >
-            <Send className="h-3 w-3 text-[#191919]" />
-            Send
-          </button>
-        )}
+          <div className="ml-auto flex items-center gap-2">
+            {isSending ? (
+              <>
+                <button
+                  type="button"
+                  disabled
+                  className="flex cursor-wait items-center gap-1.5 whitespace-nowrap rounded-[34px] border border-[#EAECF0] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#667085]"
+                  aria-label="Chat is processing"
+                >
+                  <Loader2 className="h-3 w-3 animate-spin text-[#667085]" />
+                  Processing
+                </button>
+                <button
+                  type="button"
+                  onClick={stopStreaming}
+                  className="flex items-center gap-1.5 whitespace-nowrap rounded-[34px] border border-[#E4E7EC] bg-white px-3 py-2 text-sm font-medium text-[#344054] transition-colors hover:bg-[#F9FAFB]"
+                  aria-label="Stop chat response"
+                >
+                  <Square className="h-3 w-3 fill-current" />
+                  Stop
+                </button>
+              </>
+            ) : (
+              <button
+                type="submit"
+                disabled={!input.trim() || isHistoryLoading}
+                className="flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-sm font-medium text-[#191919] disabled:cursor-not-allowed disabled:opacity-60"
+                style={{
+                  background:
+                    "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
+                  borderRadius: "34px",
+                }}
+              >
+                <Send className="h-3 w-3 text-[#191919]" />
+                Send
+              </button>
+            )}
+          </div>
+        </div>
       </form>
     </div>
   );

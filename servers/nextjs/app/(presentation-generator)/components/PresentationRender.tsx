@@ -10,11 +10,20 @@ const SlideScale = ({
     slide,
     theme,
     isEditMode = true,
+    showEditScan = false,
     /** Fill viewport; scale may exceed 1 so slides appear larger in present mode */
     presentMode = false,
     isClickable = true,
     fixedSize = false,
-}: { slide: any; theme?: any; isEditMode?: boolean; presentMode?: boolean; isClickable?: boolean; fixedSize?: boolean }) => {
+}: {
+    slide: any;
+    theme?: any;
+    isEditMode?: boolean;
+    showEditScan?: boolean;
+    presentMode?: boolean;
+    isClickable?: boolean;
+    fixedSize?: boolean;
+}) => {
 
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [box, setBox] = useState({ w: 0, h: 0 });
@@ -57,7 +66,7 @@ const SlideScale = ({
         <div
             className={presentMode || fixedSize ? "relative mx-auto shrink-0" : "relative mx-auto max-w-[1280px]"}
             style={{
-                width: presentMode || fixedSize ? `${BASE_WIDTH * scale}px` : undefined,
+                width: `${BASE_WIDTH * scale}px`,
                 height: `${BASE_HEIGHT * scale}px`,
                 overflow: "hidden",
             }}
@@ -88,6 +97,12 @@ const SlideScale = ({
                         aria-hidden="true"
 
                     />}
+                    {showEditScan && (
+                        <div
+                            className="slide-edit-overlay pointer-events-none absolute inset-0 z-20 overflow-hidden border border-[#9A84FF]/70 bg-[#8B5CF626]"
+                            aria-hidden="true"
+                        />
+                    )}
                     <V1ContentRender slide={slide} isEditMode={isEditMode} theme={theme} />
                 </div>
 

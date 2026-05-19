@@ -32,6 +32,10 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   const [loading, setLoading] = useState(true);
   const [selectedSlide, setSelectedSlide] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isChatSending, setIsChatSending] = useState(false);
+  const [isFollowModeEnabled, setIsFollowModeEnabled] = useState(true);
+  const [agentFocusedSlide, setAgentFocusedSlide] = useState<number | null>(null);
+  const [glowingSlideIndex, setGlowingSlideIndex] = useState<number | null>(null);
   const [error, setError] = useState(false);
   const slidesScrollContainerRef = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
@@ -139,6 +143,75 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     handleSlideChange(newSlide, presentationData);
   };
 
+  const totalSlides = presentationData?.slides?.length ?? 0;
+  const highlightedSlideIndex = glowingSlideIndex;
+
+  useEffect(() => {
+    if (!isFollowModeEnabled || !isChatSending || totalSlides <= 0) {
+      return;
+    }
+    if (agentFocusedSlide === null) {
+      return;
+    }
+
+    const clampedIndex = Math.min(Math.max(agentFocusedSlide, 0), totalSlides - 1);
+    if (clampedIndex !== selectedSlide) {
+      handleSlideClick(clampedIndex);
+    }
+  }, [
+    isFollowModeEnabled,
+    isChatSending,
+    totalSlides,
+    agentFocusedSlide,
+    selectedSlide,
+    handleSlideClick,
+  ]);
+
+  useEffect(() => {
+    if (totalSlides <= 0) {
+      setGlowingSlideIndex(null);
+      return;
+    }
+
+    if (!isChatSending) {
+      if (glowingSlideIndex === null) {
+        return;
+      }
+      const clearTimer = window.setTimeout(() => {
+        setGlowingSlideIndex(null);
+      }, 900);
+      return () => window.clearTimeout(clearTimer);
+    }
+
+    if (isFollowModeEnabled && agentFocusedSlide === null) {
+      setGlowingSlideIndex(null);
+      return;
+    }
+
+    const fallbackIndex = Math.min(Math.max(selectedSlide, 0), totalSlides - 1);
+    const targetIndex = isFollowModeEnabled
+      ? Math.min(Math.max(agentFocusedSlide ?? 0, 0), totalSlides - 1)
+      : fallbackIndex;
+
+    if (selectedSlide !== targetIndex) {
+      setGlowingSlideIndex(null);
+      return;
+    }
+
+    const glowDelay = window.setTimeout(() => {
+      setGlowingSlideIndex(targetIndex);
+    }, 120);
+
+    return () => window.clearTimeout(glowDelay);
+  }, [
+    isChatSending,
+    totalSlides,
+    selectedSlide,
+    glowingSlideIndex,
+    isFollowModeEnabled,
+    agentFocusedSlide,
+  ]);
+
 
   // Presentation Mode View
   if (isPresentMode) {
@@ -228,6 +301,11 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                           slide={slide}
                           index={index}
                           presentationId={presentation_id}
+                          isChatEditing={
+                            isChatSending &&
+                            highlightedSlideIndex !== null &&
+                            index === highlightedSlideIndex
+                          }
                         />
                       ))}
                   </>
@@ -240,6 +318,19 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
               presentationId={presentation_id}
               currentSlide={selectedSlide}
               onPresentationChanged={() => fetchUserSlides({ clearHistory: false })}
+              onChatSendingStateChange={(sending) => {
+                setIsChatSending(sending);
+                if (!sending) {
+                  setAgentFocusedSlide(null);
+                }
+              }}
+              onFollowModeChange={setIsFollowModeEnabled}
+              onFollowAgentToSlide={(slideIndex) => {
+                if (slideIndex < 0) {
+                  return;
+                }
+                setAgentFocusedSlide(slideIndex);
+              }}
             />
           </div>
         </div>

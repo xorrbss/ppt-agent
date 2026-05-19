@@ -39,6 +39,8 @@ export interface ChatStreamTrace {
   status?: string;
   message?: string;
   tools?: string[];
+  slideIndex?: number;
+  slideNumber?: number;
 }
 
 export interface ChatStreamHandlers {
@@ -266,6 +268,18 @@ export class PresentationChatApi {
                   (value): value is string => typeof value === "string"
                 )
               : undefined,
+            slideIndex:
+              typeof typedTrace.slide_index === "number"
+                ? typedTrace.slide_index
+                : typeof typedTrace.slideIndex === "number"
+                ? typedTrace.slideIndex
+                : undefined,
+            slideNumber:
+              typeof typedTrace.slide_number === "number"
+                ? typedTrace.slide_number
+                : typeof typedTrace.slideNumber === "number"
+                ? typedTrace.slideNumber
+                : undefined,
           });
         }
       }

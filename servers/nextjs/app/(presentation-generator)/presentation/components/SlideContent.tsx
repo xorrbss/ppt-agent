@@ -26,9 +26,15 @@ interface SlideContentProps {
   slide: any;
   index: number;
   presentationId: string;
+  isChatEditing?: boolean;
 }
 
-const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
+const SlideContent = ({
+  slide,
+  index,
+  presentationId,
+  isChatEditing = false,
+}: SlideContentProps) => {
   const dispatch = useDispatch();
   const [isUpdating, setIsUpdating] = useState(false);
   const [showNewSlideSelection, setShowNewSlideSelection] = useState(false);
@@ -134,7 +140,13 @@ const SlideContent = ({ slide, index, presentationId }: SlideContentProps) => {
           className={` w-full  group font-syne  `}
         >
           {/* <V1ContentRender slide={slide} isEditMode={true} theme={null} /> */}
-          <SlideScale slide={slide} theme={presentationData?.theme || null} />
+          <div className={isChatEditing ? "chat-slide-glow relative rounded-[12px]" : "relative"}>
+            <SlideScale
+              slide={slide}
+              theme={presentationData?.theme || null}
+              showEditScan={isChatEditing}
+            />
+          </div>
           {!showNewSlideSelection && (
             <div className="group-hover:opacity-100 hidden md:block opacity-0 transition-opacity my-4 duration-300">
               <ToolTip content="Add new slide below">

@@ -271,6 +271,55 @@ thead {
   }
 }
 
+.slide-edit-overlay {
+  box-shadow:
+    inset 0 0 0 1px rgba(139, 92, 246, 0.34),
+    inset 0 0 64px rgba(124, 58, 237, 0.22),
+    0 0 24px rgba(124, 58, 237, 0.22);
+  animation: slideEditOverlayPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes slideEditOverlayPulse {
+  0% {
+    opacity: 0.66;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0.66;
+  }
+}
+
+.chat-slide-glow {
+  animation: chatSlideOuterGlow 1.5s ease-in-out infinite;
+}
+
+@keyframes chatSlideOuterGlow {
+  0% {
+    box-shadow:
+      0 0 0 1px rgba(167, 139, 250, 0.24),
+      0 0 0 4px rgba(139, 92, 246, 0.12),
+      0 0 20px rgba(124, 58, 237, 0.2);
+  }
+
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(167, 139, 250, 0.42),
+      0 0 0 6px rgba(139, 92, 246, 0.18),
+      0 0 28px rgba(124, 58, 237, 0.34);
+  }
+
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(167, 139, 250, 0.24),
+      0 0 0 4px rgba(139, 92, 246, 0.12),
+      0 0 20px rgba(124, 58, 237, 0.2);
+  }
+}
+
 /* Markdown Styles */
 .markdown-content {
   @apply prose prose-slate max-w-none;
