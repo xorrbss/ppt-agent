@@ -1,10 +1,11 @@
 import net from 'net'
 import treeKill from 'tree-kill'
 import fs from 'fs'
-import { localhost, tempDir, userConfigPath } from './constants'
+import { getTempDir, getUserConfigPath, localhost } from './constants'
 
 export function setUserConfig(userConfig: UserConfig) {
   let existingConfig: UserConfig = {}
+  const userConfigPath = getUserConfigPath()
 
   if (fs.existsSync(userConfigPath)) {
     const configData = fs.readFileSync(userConfigPath, 'utf-8')
@@ -23,6 +24,7 @@ export function setUserConfig(userConfig: UserConfig) {
 }
 
 export function getUserConfig(): UserConfig {
+  const userConfigPath = getUserConfigPath()
   if (!fs.existsSync(userConfigPath)) {
     return {}
   }
@@ -35,6 +37,8 @@ export function setupEnv(fastApiPort: number, nextjsPort: number) {
   process.env.APP_VERSION = app.getVersion();
   process.env.SENTRY_RELEASE = process.env.SENTRY_RELEASE || `presenton-electron@${process.env.APP_VERSION}`;
   process.env.SENTRY_ENVIRONMENT = process.env.SENTRY_ENVIRONMENT || (app.isPackaged ? 'production' : 'development');
+  const tempDir = getTempDir();
+  const userConfigPath = getUserConfigPath();
   process.env.NEXT_PUBLIC_FAST_API = `${localhost}:${fastApiPort}`;
   process.env.TEMP_DIRECTORY = tempDir;
   process.env.NEXT_PUBLIC_USER_CONFIG_PATH = userConfigPath;

@@ -2,13 +2,13 @@ import { ipcMain } from "electron";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { userDataDir } from "../utils/constants";
+import { getUserDataDir } from "../utils/constants";
 
 export function setupUploadImage() {
   ipcMain.handle("upload-image", async (_, file: Buffer) => {
     try {
       // Create uploads directory if it doesn't exist
-      const uploadsDir = path.join(userDataDir, "uploads");
+      const uploadsDir = path.join(getUserDataDir(), "uploads");
       fs.mkdirSync(uploadsDir, { recursive: true });
 
       // Generate unique filename

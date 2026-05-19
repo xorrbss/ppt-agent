@@ -5,9 +5,9 @@ import * as https from "https";
 import * as http from "http";
 import { IncomingMessage } from "http";
 import * as path from "path";
-import { app } from "electron";
 import { LIBREOFFICE_DOWNLOAD_URLS, LIBREOFFICE_VERSION } from "../utils/libreoffice-urls";
 import { getLinuxInstallCommand } from "../utils/libreoffice-check";
+import { getTempDir } from "../utils/constants";
 
 // ---------------------------------------------------------------------------
 // IPC helpers
@@ -196,7 +196,7 @@ function downloadWithProgress(
 async function installWindows(wc: WebContents): Promise<void> {
   const url = LIBREOFFICE_DOWNLOAD_URLS.win64;
   const filename = `LibreOffice_${LIBREOFFICE_VERSION}_Win_x86-64.msi`;
-  const dest = path.join(app.getPath("temp"), filename);
+  const dest = path.join(getTempDir(), filename);
 
   sendProgress(wc, "downloading", 0, `${filename}|`);
   await downloadWithProgress(url, dest, filename, wc, MIN_INSTALLER_SIZE_BYTES, KNOWN_INSTALLER_SIZES.win64);
@@ -274,8 +274,9 @@ async function installMac(wc: WebContents): Promise<void> {
     ? LIBREOFFICE_DOWNLOAD_URLS.macArm64
     : LIBREOFFICE_DOWNLOAD_URLS.macX64;
   const filename = `LibreOffice_${LIBREOFFICE_VERSION}_MacOS_${isArm64 ? "aarch64" : "x86-64"}.dmg`;
-  const dmgPath = path.join(app.getPath("temp"), filename);
-  const mountPoint = path.join(app.getPath("temp"), "LibreOfficeMount");
+  const tempDir = getTempDir();
+  const dmgPath = path.join(tempDir, filename);
+  const mountPoint = path.join(tempDir, "LibreOfficeMount");
 
   sendProgress(wc, "downloading", 0, `${filename}|`);
   await downloadWithProgress(

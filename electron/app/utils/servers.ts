@@ -1,5 +1,5 @@
 import { spawn } from "child_process";
-import { localhost, logsDir, userDataDir } from "./constants";
+import { getLogsDir, localhost } from "./constants";
 import http from "http";
 import fs from "fs";
 import path from "path";
@@ -31,6 +31,7 @@ export async function startFastApiServer(
       /* ignore if logs dir not writable */
     }
   };
+  const logsDir = getLogsDir();
   const fastapiLogPath = path.join(logsDir, "fastapi-server.log");
 
   const fastApiProcess = spawn(
@@ -80,7 +81,7 @@ export async function startNextJsServer(
         shell: process.platform === "win32",
       }
     );
-    const nextjsLogPath = path.join(logsDir, "nextjs-server.log");
+    const nextjsLogPath = path.join(getLogsDir(), "nextjs-server.log");
     const safeNextLog = (d: Buffer | string) => {
       try {
         fs.appendFileSync(nextjsLogPath, d);
@@ -125,7 +126,7 @@ export async function startNextJsServer(
         windowsHide: process.platform === "win32",
       }
     );
-    const nextjsLogPath = path.join(logsDir, "nextjs-server.log");
+    const nextjsLogPath = path.join(getLogsDir(), "nextjs-server.log");
     const safeNextLog = (d: Buffer | string) => {
       try {
         fs.appendFileSync(nextjsLogPath, d);

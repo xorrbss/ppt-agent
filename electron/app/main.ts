@@ -5,7 +5,18 @@ import fs from "fs";
 import { findUnusedPorts, killProcess, setupEnv, setUserConfig } from "./utils";
 import { startFastApiServer, startNextJsServer } from "./utils/servers";
 import { ChildProcessByStdio } from "child_process";
-import { appDataDir, baseDir, ensureDirectoriesExist, fastapiDir, isDev, localhost, nextjsDir, tempDir, userConfigPath, userDataDir } from "./utils/constants";
+import {
+  baseDir,
+  ensureDirectoriesExist,
+  fastapiDir,
+  getAppDataDir,
+  getTempDir,
+  getUserConfigPath,
+  initializeAppPaths,
+  isDev,
+  localhost,
+  nextjsDir,
+} from "./utils/constants";
 import { setupIpcHandlers } from "./ipc";
 import { ipcMain } from "electron";
 import { setupLibreOfficeInstallHandlers } from "./ipc/libreoffice_install_handlers";
@@ -54,6 +65,28 @@ const startupStatus: Record<string, string> = {
   imagemagick: "checking",
 };
 
+function cleanupStaleCacheState(cacheDir: string, userDataDir: string): void {
+  if (process.platform !== "win32") {
+    return;
+  }
+
+  try {
+    const gpuCacheBase = path.join(userDataDir, "GPUCache");
+    [cacheDir, gpuCacheBase].forEach((dir) => {
+      if (fs.existsSync(dir)) {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const e of entries) {
+          if (e.isDirectory() && e.name.startsWith("old_")) {
+            fs.rmSync(path.join(dir, e.name), { recursive: true, force: true });
+          }
+        }
+      }
+    });
+  } catch {
+    /* ignore cleanup errors */
+  }
+}
+
 function resolveExportConverterPath(appRoot: string): string | undefined {
   const pyDir = path.join(appRoot, "resources", "export", "py");
   const candidates = [
@@ -83,40 +116,20 @@ function resolveElectronDisableAuth(): string {
   return "true";
 }
 
-// Allow renderer to query initial startup status as soon as it loads.
-ipcMain.handle("startup:get-status", () => startupStatus);
-
-initMainSentry();
-
 app.commandLine.appendSwitch('gtk-version', '3');
 
 // Work around Chromium/Electron GPU compositor issues that can cause
 // startup white screens on some Linux/driver combinations.
 app.disableHardwareAcceleration();
 
-// Mitigate "Unable to move the cache: Access is denied" on Windows (Chromium disk cache).
-// Use explicit cache paths and remove stale old_* dirs that cause move failures.
-if (process.platform === "win32") {
-  const ud = app.getPath("userData");
-  const cacheBase = path.join(ud, "Cache");
-  const gpuCacheBase = path.join(ud, "GPUCache");
-  app.setPath("cache", cacheBase);
-  app.commandLine.appendSwitch("disk-cache-dir", cacheBase);
-  try {
-    [cacheBase, gpuCacheBase].forEach((dir) => {
-      if (fs.existsSync(dir)) {
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-        for (const e of entries) {
-          if (e.isDirectory() && e.name.startsWith("old_")) {
-            fs.rmSync(path.join(dir, e.name), { recursive: true, force: true });
-          }
-        }
-      }
-    });
-  } catch {
-    /* ignore cleanup errors */
-  }
-}
+const electronAppPaths = initializeAppPaths();
+cleanupStaleCacheState(electronAppPaths.cacheDir, electronAppPaths.userDataDir);
+safeLog("[Presenton] Electron paths initialized:", electronAppPaths);
+
+// Allow renderer to query initial startup status as soon as it loads.
+ipcMain.handle("startup:get-status", () => startupStatus);
+
+initMainSentry();
 
 const createWindow = () => {
   win = new BrowserWindow({
@@ -168,6 +181,9 @@ const createWindow = () => {
 
 async function startServers(fastApiPort: number, nextjsPort: number) {
   try {
+    const appDataDir = getAppDataDir();
+    const tempDir = getTempDir();
+    const userConfigPath = getUserConfigPath();
     const disableAuthForElectron = resolveElectronDisableAuth();
     const sofficePath = getSofficePath();
     const exportPackageRoot = path.join(baseDir, "resources", "export");

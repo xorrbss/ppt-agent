@@ -1,5 +1,5 @@
 import { ipcMain } from "electron";
-import { appDataDir, baseDir, downloadsDir, tempDir } from "../utils/constants";
+import { baseDir, getAppDataDir, getDownloadsDir, getTempDir } from "../utils/constants";
 import fs from "fs";
 import path from "path";
 
@@ -19,7 +19,7 @@ type RuntimeCandidate = {
 export function setupExportHandlers() {
   ipcMain.handle("file-downloaded", async (_, filePath: string): Promise<IPCStatus> => {
     const fileName = path.basename(filePath);
-    const destinationPath = path.join(downloadsDir, fileName);
+    const destinationPath = path.join(getDownloadsDir(), fileName);
 
     await fs.promises.rename(filePath, destinationPath);
     const success = await showFileDownloadedDialog(destinationPath);
@@ -43,6 +43,8 @@ export function setupExportHandlers() {
       }
 
       const randomUuid = uuidv4();
+      const tempDir = getTempDir();
+      const appDataDir = getAppDataDir();
       const exportTempDir = path.join(tempDir, randomUuid);
       await fs.promises.mkdir(exportTempDir, { recursive: true });
 
@@ -89,7 +91,7 @@ export function setupExportHandlers() {
         return { success: false, message: "Export finished but output file was not found." };
       }
 
-      const destinationPath = path.join(downloadsDir, path.basename(exportFilePath));
+      const destinationPath = path.join(getDownloadsDir(), path.basename(exportFilePath));
       await moveFile(exportFilePath, destinationPath);
       const success = await showFileDownloadedDialog(destinationPath);
       return { success, message: success ? "Export completed." : "Export completed but dialog failed." };
@@ -333,7 +335,7 @@ function resolveExportedFilePath(responseData: any): string | null {
   if (responseData?.path && typeof responseData.path === "string") {
     return path.isAbsolute(responseData.path)
       ? responseData.path
-      : path.join(appDataDir, responseData.path);
+      : path.join(getAppDataDir(), responseData.path);
   }
 
   if (responseData?.url && typeof responseData.url === "string") {

@@ -1,7 +1,7 @@
 import { BrowserWindow, ipcMain } from "electron";
 import fs from 'fs';
 import path from 'path';
-import { tempDir } from "../utils/constants";
+import { getTempDir } from "../utils/constants";
 
 
 interface Position {
@@ -324,7 +324,7 @@ export function setupSlideMetadataHandlers() {
             continue;
           }
 
-          const filePath = path.join(tempDir, `chart-${id}-${Date.now()}.jpeg`);
+          const filePath = path.join(getTempDir(), `chart-${id}-${Date.now()}.jpeg`);
           fs.writeFileSync(filePath, buffer);
 
           // Update metadata
