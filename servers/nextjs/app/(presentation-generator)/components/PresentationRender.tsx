@@ -82,7 +82,7 @@ const SlideScale = ({
             >
 
                 <div
-                    className="relative w-full h-full  select-none"
+                    className="slide-edit-stage relative w-full h-full select-none"
                     data-testid="slide-content"
                     style={{
                         userSelect: "none",
@@ -97,13 +97,13 @@ const SlideScale = ({
                         aria-hidden="true"
 
                     />}
+                    <V1ContentRender slide={slide} isEditMode={isEditMode} theme={theme} />
                     {showEditScan && (
                         <div
-                            className="slide-edit-overlay pointer-events-none absolute inset-0 z-20 overflow-hidden border border-[#9A84FF]/70 bg-[#8B5CF626]"
+                            className="slide-edit-overlay pointer-events-none absolute inset-0 overflow-hidden"
                             aria-hidden="true"
                         />
                     )}
-                    <V1ContentRender slide={slide} isEditMode={isEditMode} theme={theme} />
                 </div>
 
 

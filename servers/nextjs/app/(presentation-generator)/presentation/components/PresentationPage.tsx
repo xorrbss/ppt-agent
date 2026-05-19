@@ -155,6 +155,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     }
 
     const clampedIndex = Math.min(Math.max(agentFocusedSlide, 0), totalSlides - 1);
+    setGlowingSlideIndex(clampedIndex);
     if (clampedIndex !== selectedSlide) {
       handleSlideClick(clampedIndex);
     }
@@ -192,22 +193,11 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     const targetIndex = isFollowModeEnabled
       ? Math.min(Math.max(agentFocusedSlide ?? 0, 0), totalSlides - 1)
       : fallbackIndex;
-
-    if (selectedSlide !== targetIndex) {
-      setGlowingSlideIndex(null);
-      return;
-    }
-
-    const glowDelay = window.setTimeout(() => {
-      setGlowingSlideIndex(targetIndex);
-    }, 120);
-
-    return () => window.clearTimeout(glowDelay);
+    setGlowingSlideIndex(targetIndex);
   }, [
     isChatSending,
     totalSlides,
     selectedSlide,
-    glowingSlideIndex,
     isFollowModeEnabled,
     agentFocusedSlide,
   ]);
