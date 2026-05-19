@@ -12,7 +12,6 @@ import { spawn, spawnSync } from "child_process";
 import * as https from "https";
 import * as http from "http";
 import { IncomingMessage } from "http";
-import puppeteer from "puppeteer";
 import {
   Browser,
   detectBrowserPlatform,
@@ -21,6 +20,7 @@ import {
   resolveBuildId,
 } from "@puppeteer/browsers";
 import { getSetupStatus } from "../utils/setup-dependencies";
+import { getPuppeteerCacheDir } from "../utils/puppeteer-config";
 import {
   getImageMagickBinaryPath,
   getImageMagickDownloadUrl,
@@ -28,13 +28,6 @@ import {
   getWindowsImageMagickInstallDir,
   isImageMagickInstalled,
 } from "../utils/imagemagick-check";
-
-function getPuppeteerCacheDir(): string {
-  const configCache =
-    (puppeteer as any).configuration?.cacheDirectory ??
-    (puppeteer as any).defaultDownloadPath;
-  return configCache ?? path.join(os.homedir(), ".cache", "puppeteer");
-}
 
 function sendChromeProgress(
   wc: WebContents,

@@ -5,16 +5,25 @@
  * browser-snapshots; the setup installer installs Chromium into the cache.
  */
 import fs from "fs";
-import os from "os";
-import path from "path";
 import puppeteer from "puppeteer";
 import { Browser, getInstalledBrowsers } from "@puppeteer/browsers";
+import {
+  getPuppeteerCacheDir,
+  getPuppeteerRuntime,
+} from "./puppeteer-config";
+import { safeWarn } from "./safe-console";
 
-function getPuppeteerCacheDir(): string {
-  const configCache =
-    (puppeteer as any).configuration?.cacheDirectory ??
-    (puppeteer as any).defaultDownloadPath;
-  return configCache ?? path.join(os.homedir(), ".cache", "puppeteer");
+function normalizePathCandidate(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed || undefined;
+}
+
+function getConfiguredExecutablePath(): string | undefined {
+  const runtime = getPuppeteerRuntime();
+  return normalizePathCandidate(
+    process.env.PUPPETEER_EXECUTABLE_PATH ?? runtime.configuration?.executablePath
+  );
 }
 
 function shouldSkipDownload(): boolean {
@@ -37,11 +46,31 @@ export interface SetupStatus {
  * Chrome (Puppeteer default) if present, or Chromium from the cache.
  */
 export async function getPuppeteerExecutablePath(): Promise<string | undefined> {
-  if (shouldSkipDownload()) return undefined;
-  const chromePath = puppeteer.executablePath();
-  if (chromePath && fs.existsSync(chromePath)) return chromePath;
   const cacheDir = getPuppeteerCacheDir();
-  const browsers = await getInstalledBrowsers({ cacheDir });
+  const configuredExecutablePath = getConfiguredExecutablePath();
+  if (configuredExecutablePath && fs.existsSync(configuredExecutablePath)) {
+    return configuredExecutablePath;
+  }
+  if (configuredExecutablePath) {
+    safeWarn(
+      `[Puppeteer] Configured executable path does not exist: ${configuredExecutablePath}`
+    );
+  }
+  let chromePath: string | undefined;
+  if (!shouldSkipDownload()) {
+    try {
+      chromePath = puppeteer.executablePath();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      safeWarn(`[Puppeteer] Failed to resolve default executable path: ${message}`);
+    }
+  }
+  if (chromePath && fs.existsSync(chromePath)) return chromePath;
+  const browsers = await getInstalledBrowsers({ cacheDir }).catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    safeWarn(`[Puppeteer] Failed to inspect installed browsers: ${message}`);
+    return [];
+  });
   const chromium = browsers.find((b) => b.browser === Browser.CHROMIUM);
   if (chromium?.executablePath && fs.existsSync(chromium.executablePath)) {
     return chromium.executablePath;
@@ -53,9 +82,14 @@ export async function getPuppeteerExecutablePath(): Promise<string | undefined> 
  * Returns true if a supported browser (Chrome or Chromium) is already installed.
  */
 export async function isChromeInstalled(): Promise<boolean> {
-  if (shouldSkipDownload()) return false;
-  const execPath = await getPuppeteerExecutablePath();
-  return Boolean(execPath);
+  try {
+    const execPath = await getPuppeteerExecutablePath();
+    return Boolean(execPath);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    safeWarn(`[Puppeteer] Browser availability check failed: ${message}`);
+    return false;
+  }
 }
 
 /**
@@ -79,15 +113,23 @@ export async function checkPuppeteerChromiumBeforeWindow(
   onStatus?: (status: PuppeteerStatus) => void
 ): Promise<boolean> {
   onStatus?.("checking");
-  if (shouldSkipDownload()) {
-    console.log("[Puppeteer] Skip download enabled.");
-    onStatus?.("skipped");
-    return true;
+  let executablePath: string | undefined;
+  try {
+    executablePath = await getPuppeteerExecutablePath();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    safeWarn(`[Puppeteer] Browser check failed: ${message}`);
+    onStatus?.("failed");
+    return false;
   }
-  const executablePath = await getPuppeteerExecutablePath();
   if (executablePath) {
     console.log(`[Puppeteer] Browser found at ${executablePath}`);
     onStatus?.("installed");
+    return true;
+  }
+  if (shouldSkipDownload()) {
+    console.log("[Puppeteer] Skip download enabled.");
+    onStatus?.("skipped");
     return true;
   }
   onStatus?.("missing");

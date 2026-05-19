@@ -293,6 +293,7 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         DISABLE_AUTH: disableAuthForElectron,
         EXPORT_PACKAGE_ROOT: exportPackageRoot,
         PRESENTON_APP_ROOT: baseDir,
+        PUPPETEER_CACHE_DIR: process.env.PUPPETEER_CACHE_DIR,
         PRESENTON_EXPORT_CONCURRENCY: process.env.PRESENTON_EXPORT_CONCURRENCY,
         PRESENTON_EXPORT_NODE_MAX_OLD_SPACE_MB: process.env.PRESENTON_EXPORT_NODE_MAX_OLD_SPACE_MB,
         PRESENTON_NEXT_NODE_MAX_OLD_SPACE_MB: process.env.PRESENTON_NEXT_NODE_MAX_OLD_SPACE_MB,
