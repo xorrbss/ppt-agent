@@ -5,11 +5,13 @@ import path from "path";
 
 import { showFileDownloadedDialog } from "../utils/dialog";
 import { v4 as uuidv4 } from 'uuid';
-import { spawn } from "child_process";
+import { ChildProcess, spawn } from "child_process";
 import { getPuppeteerExecutablePath } from "../utils/puppeteer-check";
 import { safeError, safeLog } from "../utils/safe-console";
 import { addMainBreadcrumb } from "../sentry/main";
 import { BoundedTextBuffer, envInt, memorySnapshotMb, withNodeHeapLimit } from "../utils/memory";
+import { destroyChildProcessStdio, terminateChildProcess } from "../utils/lifecycle";
+import { killProcess } from "../utils";
 
 type BinaryFormat = "elf" | "mach-o" | "pe" | "unknown";
 type RuntimeCandidate = {
@@ -20,6 +22,19 @@ type RuntimeCandidate = {
 
 let activeExports = 0;
 const pendingExports: Array<() => void> = [];
+const activeExportProcesses = new Set<ChildProcess>();
+
+export async function stopActiveExportProcesses(): Promise<void> {
+  const processes = Array.from(activeExportProcesses);
+  activeExportProcesses.clear();
+  await Promise.all(
+    processes.map((process) =>
+      terminateChildProcess(process, "Export", killProcess).catch((error) => {
+        safeError("[Export] Failed to stop active export process:", error);
+      }),
+    ),
+  );
+}
 
 async function acquireExportSlot(): Promise<() => void> {
   const limit = envInt("PRESENTON_EXPORT_CONCURRENCY", 1, 1, 8);
@@ -254,6 +269,7 @@ async function runExportTaskOnce(
     windowsHide: process.platform === "win32",
     env: runtimeEnv,
   });
+  activeExportProcesses.add(exportTaskProcess);
 
   safeLog("[Export] Child process started:", {
     runtime: runtime.label,
@@ -269,34 +285,62 @@ async function runExportTaskOnce(
   const stdoutTail = new BoundedTextBuffer();
   const stderrTail = new BoundedTextBuffer();
 
-  exportTaskProcess.stdout.on("data", (data: Buffer) => {
+  const onStdoutData = (data: Buffer) => {
     const text = data.toString();
     stdoutTail.append(text);
     safeLog(`[Export] ${text}`);
-  });
-  exportTaskProcess.stderr.on("data", (data: Buffer) => {
+  };
+  const onStderrData = (data: Buffer) => {
     const text = data.toString();
     stderrTail.append(text);
     safeError(`[Export] ${text}`);
-  });
+  };
+  exportTaskProcess.stdout?.on("data", onStdoutData);
+  exportTaskProcess.stderr?.on("data", onStderrData);
 
-  await new Promise<void>((resolve, reject) => {
-    exportTaskProcess.on("error", reject);
-    exportTaskProcess.on("exit", (code) => {
+  let settled = false;
+  let resolvePromise: (() => void) | null = null;
+  let rejectPromise: ((error: Error) => void) | null = null;
+
+  const cleanup = () => {
+    exportTaskProcess.stdout?.removeListener("data", onStdoutData);
+    exportTaskProcess.stderr?.removeListener("data", onStderrData);
+    exportTaskProcess.removeListener("error", onError);
+    exportTaskProcess.removeListener("close", onClose);
+    activeExportProcesses.delete(exportTaskProcess);
+  };
+
+  const finish = (callback: () => void) => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    cleanup();
+    callback();
+  };
+
+  const onError = (error: Error) => {
+    finish(() => rejectPromise?.(error));
+  };
+
+  const onClose = (code: number | null, signal: NodeJS.Signals | null) => {
+    finish(() => {
       safeLog("[Export] Child process exited:", {
         runtime: runtime.label,
         pid: exportTaskProcess.pid,
         code,
+        signal,
         memory: memorySnapshotMb(),
       });
       addMainBreadcrumb("export", "electron.export_child.exit", {
         runtime: runtime.label,
         pid: exportTaskProcess.pid,
         code,
+        signal,
         memory: memorySnapshotMb(),
       });
       if (code === 0) {
-        resolve();
+        resolvePromise?.();
       } else {
         const stderrText = stderrTail.toString() || "(no stderr)";
         const stdoutText = stdoutTail.toString();
@@ -307,13 +351,25 @@ async function runExportTaskOnce(
               ? `stdout: ${stdoutText}`
               : "";
         const error: NodeJS.ErrnoException = new Error(
-          `Export process exited with code ${code}${detail ? `. ${detail}` : ""}`
+          `Export process exited with code ${code ?? "unknown"}${signal ? ` signal ${signal}` : ""}${detail ? `. ${detail}` : ""}`
         );
         error.code = `EXIT_${code ?? "UNKNOWN"}`;
-        reject(error);
+        rejectPromise?.(error);
       }
     });
-  });
+  };
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      resolvePromise = resolve;
+      rejectPromise = reject;
+      exportTaskProcess.once("error", onError);
+      exportTaskProcess.once("close", onClose);
+    });
+  } finally {
+    cleanup();
+    destroyChildProcessStdio(exportTaskProcess);
+  }
 }
 
 async function resolveConverterPath(currentBaseDir: string): Promise<string> {

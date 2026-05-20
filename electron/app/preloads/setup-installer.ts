@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { IpcRendererEvent } from "electron";
 import "./sentry";
 
 contextBridge.exposeInMainWorld("setupInstaller", {
@@ -14,27 +15,42 @@ contextBridge.exposeInMainWorld("setupInstaller", {
   onLibreOfficeProgress: (
     cb: (data: { phase: string; percent?: number; message?: string }) => void
   ) => {
-    ipcRenderer.on("lo:progress", (_event, data) => cb(data));
+    const listener = (_event: IpcRendererEvent, data: { phase: string; percent?: number; message?: string }) =>
+      cb(data);
+    ipcRenderer.on("lo:progress", listener);
+    return () => ipcRenderer.removeListener("lo:progress", listener);
   },
   onLibreOfficeLog: (cb: (data: { level: string; text: string }) => void) => {
-    ipcRenderer.on("lo:log", (_event, data) => cb(data));
+    const listener = (_event: IpcRendererEvent, data: { level: string; text: string }) => cb(data);
+    ipcRenderer.on("lo:log", listener);
+    return () => ipcRenderer.removeListener("lo:log", listener);
   },
 
   onChromeProgress: (
     cb: (data: { phase: string; percent?: number; message?: string }) => void
   ) => {
-    ipcRenderer.on("setup:chrome-progress", (_event, data) => cb(data));
+    const listener = (_event: IpcRendererEvent, data: { phase: string; percent?: number; message?: string }) =>
+      cb(data);
+    ipcRenderer.on("setup:chrome-progress", listener);
+    return () => ipcRenderer.removeListener("setup:chrome-progress", listener);
   },
   onChromeLog: (cb: (data: { level: string; text: string }) => void) => {
-    ipcRenderer.on("setup:chrome-log", (_event, data) => cb(data));
+    const listener = (_event: IpcRendererEvent, data: { level: string; text: string }) => cb(data);
+    ipcRenderer.on("setup:chrome-log", listener);
+    return () => ipcRenderer.removeListener("setup:chrome-log", listener);
   },
 
   onImageMagickProgress: (
     cb: (data: { phase: string; percent?: number; message?: string }) => void
   ) => {
-    ipcRenderer.on("setup:imagemagick-progress", (_event, data) => cb(data));
+    const listener = (_event: IpcRendererEvent, data: { phase: string; percent?: number; message?: string }) =>
+      cb(data);
+    ipcRenderer.on("setup:imagemagick-progress", listener);
+    return () => ipcRenderer.removeListener("setup:imagemagick-progress", listener);
   },
   onImageMagickLog: (cb: (data: { level: string; text: string }) => void) => {
-    ipcRenderer.on("setup:imagemagick-log", (_event, data) => cb(data));
+    const listener = (_event: IpcRendererEvent, data: { level: string; text: string }) => cb(data);
+    ipcRenderer.on("setup:imagemagick-log", listener);
+    return () => ipcRenderer.removeListener("setup:imagemagick-log", listener);
   },
 });

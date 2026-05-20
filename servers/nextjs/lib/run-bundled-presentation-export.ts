@@ -247,29 +247,49 @@ async function runBundledPresentationExportLocked(params: {
       });
       const stderr = new BoundedTextBuffer();
       const stdout = new BoundedTextBuffer();
-      child.stderr?.on("data", (d) => stderr.append(d));
-      child.stdout?.on("data", (d) => stdout.append(d));
-      child.on("error", reject);
-      child.on("exit", (code) => {
+      const onStderrData = (d: Buffer) => stderr.append(d);
+      const onStdoutData = (d: Buffer) => stdout.append(d);
+      let settled = false;
+      const cleanup = () => {
+        child.stderr?.removeListener("data", onStderrData);
+        child.stdout?.removeListener("data", onStdoutData);
+        child.removeListener("error", onError);
+        child.removeListener("close", onClose);
+      };
+      const finish = (callback: () => void) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        callback();
+      };
+      const onError = (error: Error) => finish(() => reject(error));
+      const onClose = (code: number | null, signal: NodeJS.Signals | null) => {
         console.info("[bundled-export] child exit", {
           presentationId,
           format,
           pid: child.pid,
           code,
+          signal,
           memory: memorySnapshotMb(),
         });
         if (code === 0) {
-          resolve();
+          finish(resolve);
         } else {
           const errText = stderr.toString();
           const outText = stdout.toString();
-          reject(
-            new Error(
-              `Export process exited with code ${code}${errText ? `. ${errText}` : ""}${outText ? ` stdout: ${outText}` : ""}`
-            )
-          );
+          finish(() => {
+            reject(
+              new Error(
+                `Export process exited with code ${code ?? "unknown"}${signal ? ` signal ${signal}` : ""}${errText ? `. ${errText}` : ""}${outText ? ` stdout: ${outText}` : ""}`
+              )
+            );
+          });
         }
-      });
+      };
+      child.stderr?.on("data", onStderrData);
+      child.stdout?.on("data", onStdoutData);
+      child.once("error", onError);
+      child.once("close", onClose);
     });
 
     const responseRaw = await fs.readFile(responsePath, "utf8");

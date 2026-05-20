@@ -3,9 +3,8 @@ import { app, BrowserWindow, globalShortcut, shell } from "electron";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { findUnusedPorts, killProcess, setupEnv, setUserConfig } from "./utils";
+import { findUnusedPorts, setupEnv, setUserConfig } from "./utils";
 import { startFastApiServer, startNextJsServer } from "./utils/servers";
-import { ChildProcessByStdio } from "child_process";
 import {
   baseDir,
   ensureDirectoriesExist,
@@ -20,8 +19,9 @@ import {
 } from "./utils/constants";
 import { setupIpcHandlers } from "./ipc";
 import { ipcMain } from "electron";
-import { setupLibreOfficeInstallHandlers } from "./ipc/libreoffice_install_handlers";
-import { setupSetupInstallHandlers } from "./ipc/setup_install_handlers";
+import { stopActiveExportProcesses } from "./ipc/export_handlers";
+import { setupLibreOfficeInstallHandlers, stopActiveLibreOfficeInstallProcesses } from "./ipc/libreoffice_install_handlers";
+import { setupSetupInstallHandlers, stopActiveSetupInstallProcesses } from "./ipc/setup_install_handlers";
 import { checkDependenciesBeforeWindow } from "./utils/setup-dependencies";
 import { getSofficePath, isLibreOfficeInstalled } from "./utils/libreoffice-check";
 import { getPuppeteerExecutablePath, isChromeInstalled } from "./utils/puppeteer-check";
@@ -68,8 +68,9 @@ if (process.platform === "linux") {
 }
 
 var win: BrowserWindow | undefined;
-var fastApiProcess: ChildProcessByStdio<any, any, any> | undefined;
-var nextjsProcess: any;
+type ManagedServerProcess = Awaited<ReturnType<typeof startFastApiServer>>;
+var fastApiServer: ManagedServerProcess | undefined;
+var nextjsServer: ManagedServerProcess | undefined;
 let isStopping = false;
 const startupStatus: Record<string, string> = {
   libreoffice: "checking",
@@ -330,7 +331,7 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
       },
       isDev,
     );
-    fastApiProcess = fastApi.process;
+    fastApiServer = fastApi;
     await fastApi.ready;
 
     const puppeteerExecutablePath = await getPuppeteerExecutablePath();
@@ -359,8 +360,8 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         }),
       },
       isDev,
-    )
-    nextjsProcess = nextjs.process;
+    );
+    nextjsServer = nextjs;
     await nextjs.ready;
   } catch (error) {
     safeError("Server startup error:", error);
@@ -368,29 +369,19 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
 }
 
 async function stopServers() {
-  if (fastApiProcess?.pid) {
-    safeLog("Force killing FastAPI...");
-    try {
-      await killProcess(fastApiProcess.pid, "SIGKILL");
-    } catch (error) {
-      safeError("Failed to force kill FastAPI:", error);
-    }
-    fastApiProcess = undefined;
-  }
-  if (nextjsProcess) {
-    if ("pid" in nextjsProcess && nextjsProcess.pid) {
-      safeLog("Force killing NextJS...");
-      try {
-        await killProcess(nextjsProcess.pid, "SIGKILL");
-      } catch (error) {
-        safeError("Failed to force kill NextJS:", error);
-      }
-    } else if (typeof nextjsProcess.close === "function") {
-      safeLog("Closing NextJS...");
-      nextjsProcess.close();
-    }
-    nextjsProcess = undefined;
-  }
+  const fastApi = fastApiServer;
+  const nextjs = nextjsServer;
+  fastApiServer = undefined;
+  nextjsServer = undefined;
+
+  await Promise.all([
+    fastApi
+      ? fastApi.stop().catch((error) => safeError("Failed to stop FastAPI:", error))
+      : Promise.resolve(),
+    nextjs
+      ? nextjs.stop().catch((error) => safeError("Failed to stop NextJS:", error))
+      : Promise.resolve(),
+  ]);
 }
 
 async function forceQuitApp(exitCode = 0) {
@@ -399,6 +390,9 @@ async function forceQuitApp(exitCode = 0) {
   globalShortcut.unregisterAll();
   stopUpdateChecker();
   try {
+    await stopActiveExportProcesses();
+    await stopActiveSetupInstallProcesses();
+    await stopActiveLibreOfficeInstallProcesses();
     await stopServers();
   } finally {
     app.exit(exitCode);
@@ -517,6 +511,9 @@ app.whenReady().then(async () => {
   setupIpcHandlers();
 
   await startServers(fastApiPort, nextjsPort);
+  if (isStopping) {
+    return;
+  }
   const mainWindow = getLiveMainWindow();
   if (!mainWindow || mainWindow.webContents.isDestroyed()) {
     return;

@@ -8,7 +8,7 @@ import { ipcMain, WebContents } from "electron";
 import fs from "fs";
 import path from "path";
 import os from "os";
-import { spawn, spawnSync } from "child_process";
+import { ChildProcess, spawn, spawnSync } from "child_process";
 import * as https from "https";
 import * as http from "http";
 import { IncomingMessage } from "http";
@@ -28,6 +28,31 @@ import {
   getWindowsImageMagickInstallDir,
   isImageMagickInstalled,
 } from "../utils/imagemagick-check";
+import { destroyChildProcessStdio, safeSendToWebContents, terminateChildProcess } from "../utils/lifecycle";
+import { killProcess } from "../utils";
+
+const activeSetupInstallProcesses = new Set<ChildProcess>();
+const activeSetupDownloadAborters = new Set<() => void>();
+
+export async function stopActiveSetupInstallProcesses(): Promise<void> {
+  const aborters = Array.from(activeSetupDownloadAborters);
+  activeSetupDownloadAborters.clear();
+  for (const abort of aborters) {
+    try {
+      abort();
+    } catch {
+      /* Best-effort cancellation. */
+    }
+  }
+
+  const processes = Array.from(activeSetupInstallProcesses);
+  activeSetupInstallProcesses.clear();
+  await Promise.all(
+    processes.map((process) =>
+      terminateChildProcess(process, "Setup install", killProcess).catch(() => {}),
+    ),
+  );
+}
 
 function sendChromeProgress(
   wc: WebContents,
@@ -35,15 +60,11 @@ function sendChromeProgress(
   percent?: number,
   message?: string
 ) {
-  if (!wc.isDestroyed()) {
-    wc.send("setup:chrome-progress", { phase, percent, message });
-  }
+  safeSendToWebContents(wc, "setup:chrome-progress", { phase, percent, message });
 }
 
 function sendChromeLog(wc: WebContents, level: string, text: string) {
-  if (!wc.isDestroyed()) {
-    wc.send("setup:chrome-log", { level, text });
-  }
+  safeSendToWebContents(wc, "setup:chrome-log", { level, text });
 }
 
 function sendImageMagickProgress(
@@ -52,15 +73,11 @@ function sendImageMagickProgress(
   percent?: number,
   message?: string
 ) {
-  if (!wc.isDestroyed()) {
-    wc.send("setup:imagemagick-progress", { phase, percent, message });
-  }
+  safeSendToWebContents(wc, "setup:imagemagick-progress", { phase, percent, message });
 }
 
 function sendImageMagickLog(wc: WebContents, level: string, text: string) {
-  if (!wc.isDestroyed()) {
-    wc.send("setup:imagemagick-log", { level, text });
-  }
+  safeSendToWebContents(wc, "setup:imagemagick-log", { level, text });
 }
 
 function commandExists(command: string, versionArgs: string[] = ["--version"]): boolean {
@@ -130,18 +147,73 @@ function downloadFileWithProgress(
   destinationPath: string
 ): Promise<void> {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    let currentRequest: http.ClientRequest | null = null;
+    let currentResponse: IncomingMessage | null = null;
+    let currentFile: fs.WriteStream | null = null;
+
+    const cleanup = () => {
+      currentResponse?.removeAllListeners("data");
+      currentFile?.removeAllListeners("finish");
+      currentFile?.removeAllListeners("error");
+      currentRequest?.removeAllListeners("error");
+      activeSetupDownloadAborters.delete(abortDownload);
+    };
+
+    const finish = (callback: () => void) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      callback();
+    };
+
+    const fail = (error: Error) => {
+      finish(() => {
+        try {
+          currentRequest?.on("error", () => {});
+          currentRequest?.destroy();
+        } catch {
+          /* ignore */
+        }
+        try {
+          currentResponse?.destroy();
+        } catch {
+          /* ignore */
+        }
+        try {
+          currentFile?.destroy();
+        } catch {
+          /* ignore */
+        }
+        fs.unlink(destinationPath, () => {});
+        reject(error);
+      });
+    };
+
+    const abortDownload = () => {
+      fail(new Error("ImageMagick download was cancelled."));
+    };
+    activeSetupDownloadAborters.add(abortDownload);
+
     const requestDownload = (requestUrl: string, redirects: number) => {
+      if (settled) {
+        return;
+      }
       const requester = requestUrl.startsWith("https") ? https.get : http.get;
       sendImageMagickLog(wc, "cmd", `GET ${requestUrl}`);
 
-      requester(requestUrl, (res: IncomingMessage) => {
+      currentRequest = requester(requestUrl, (res: IncomingMessage) => {
+        currentResponse = res;
         const statusCode = res.statusCode ?? 0;
         if (
           [301, 302, 303, 307, 308].includes(statusCode) &&
           res.headers.location
         ) {
+          res.resume();
           if (redirects >= MAX_DOWNLOAD_REDIRECTS) {
-            reject(new Error("Too many redirects while downloading installer."));
+            fail(new Error("Too many redirects while downloading installer."));
             return;
           }
           const redirectUrl = new URL(res.headers.location, requestUrl).toString();
@@ -151,7 +223,8 @@ function downloadFileWithProgress(
         }
 
         if (statusCode !== 200) {
-          reject(new Error(`Download failed with HTTP ${statusCode}.`));
+          res.resume();
+          fail(new Error(`Download failed with HTTP ${statusCode}.`));
           return;
         }
 
@@ -162,8 +235,12 @@ function downloadFileWithProgress(
         let downloadedBytes = 0;
 
         const file = fs.createWriteStream(destinationPath);
+        currentFile = file;
 
         res.on("data", (chunk: Buffer) => {
+          if (settled) {
+            return;
+          }
           downloadedBytes += chunk.length;
           const percent =
             totalBytes > 0
@@ -180,9 +257,11 @@ function downloadFileWithProgress(
 
         file.on("finish", () => {
           file.close(() => {
+            if (settled) {
+              return;
+            }
             if (downloadedBytes < MIN_IMAGEMAGICK_INSTALLER_SIZE_BYTES) {
-              fs.unlink(destinationPath, () => {});
-              reject(
+              fail(
                 new Error(
                   `Downloaded file is too small (${formatBytes(downloadedBytes)}).`
                 )
@@ -195,17 +274,15 @@ function downloadFileWithProgress(
               "ok",
               `Download complete (${formatBytes(downloadedBytes)}).`
             );
-            resolve();
+            finish(resolve);
           });
         });
 
         file.on("error", (err) => {
-          fs.unlink(destinationPath, () => {});
-          reject(err);
+          fail(err);
         });
       }).on("error", (err) => {
-        fs.unlink(destinationPath, () => {});
-        reject(err);
+        fail(err);
       });
     };
 
@@ -259,12 +336,13 @@ function runInstallCommand(
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: process.platform === "win32",
     });
+    activeSetupInstallProcesses.add(child);
 
-    child.stdout.on("data", (data) => {
+    const onStdoutData = (data: Buffer) => {
       const text = String(data).trim();
       if (text) sendImageMagickLog(wc, "info", text);
-    });
-    child.stderr.on("data", (data) => {
+    };
+    const onStderrData = (data: Buffer) => {
       const text = String(data).trim();
       if (text) {
         sendImageMagickLog(
@@ -273,16 +351,44 @@ function runInstallCommand(
           text
         );
       }
-    });
+    };
 
-    child.on("error", reject);
-    child.on("close", (code) => {
-      if (code === 0) {
-        resolve();
+    let settled = false;
+    const cleanup = () => {
+      child.stdout?.removeListener("data", onStdoutData);
+      child.stderr?.removeListener("data", onStderrData);
+      child.removeListener("error", onError);
+      child.removeListener("close", onClose);
+      activeSetupInstallProcesses.delete(child);
+    };
+    const finish = (callback: () => void) => {
+      if (settled) {
         return;
       }
-      reject(new Error(`${command} exited with code ${code}`));
-    });
+      settled = true;
+      cleanup();
+      destroyChildProcessStdio(child);
+      callback();
+    };
+    const onError = (error: Error) => finish(() => reject(error));
+    const onClose = (code: number | null, signal: NodeJS.Signals | null) => {
+      if (code === 0) {
+        finish(resolve);
+        return;
+      }
+      finish(() =>
+        reject(
+          new Error(
+            `${command} exited with code ${code ?? "unknown"}${signal ? ` signal ${signal}` : ""}`,
+          ),
+        ),
+      );
+    };
+
+    child.stdout?.on("data", onStdoutData);
+    child.stderr?.on("data", onStderrData);
+    child.once("error", onError);
+    child.once("close", onClose);
   });
 }
 
@@ -376,6 +482,10 @@ export function setupSetupInstallHandlers() {
     "setup:install-imagemagick",
     async (event): Promise<{ ok: boolean; error?: string }> => {
       const wc = event.sender;
+      const onDestroyed = () => {
+        void stopActiveSetupInstallProcesses();
+      };
+      wc.once("destroyed", onDestroyed);
       try {
         sendImageMagickProgress(
           wc,
@@ -505,6 +615,8 @@ export function setupSetupInstallHandlers() {
           "Finish manual installation, then click Retry."
         );
         return { ok: false, error: message };
+      } finally {
+        wc.removeListener("destroyed", onDestroyed);
       }
     }
   );
