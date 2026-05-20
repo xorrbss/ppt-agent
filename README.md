@@ -17,15 +17,7 @@
 
 # Open-Source AI Presentation Generator and API (Gamma, Beautiful AI, Decktopus Alternative)
 
-<div style="display:flex; gap:12px; align-items:center;">
-  <a href="https://railway.com/deploy/presenton-ai-presentations">
-    <img
-      src="https://railway.com/button.svg"
-      alt="Deploy on Railway"
-      style="height:48px;"
-    />
-  </a>
-</div>
+
 
 ### ✨ Why Presenton
 
@@ -100,6 +92,21 @@ Create AI-powered presentations using your own model provider (BYOK) or run ever
 </tr>
 
 </table>
+
+
+**Deploy to Cloud Providers**
+
+<div style="display:flex; gap:12px; align-items:center;">
+  <a href="https://railway.com/deploy/presenton-ai-presentations">
+    <img
+      src="https://railway.com/button.svg"
+      alt="Deploy on Railway"
+      style="height:38px;"
+    />
+  </a>
+</div>
+
+#
 
 Presenton gives you complete control over your AI presentation workflow. Choose your models, customize your experience, and keep your data private.
 
