@@ -373,6 +373,25 @@ thead {
   pointer-events: none;
 }
 
+@media print {
+  #presentation-slides-wrapper,
+  #presentation-slides-wrapper * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  #presentation-slides-wrapper .backdrop-blur,
+  #presentation-slides-wrapper .backdrop-blur-sm,
+  #presentation-slides-wrapper .backdrop-blur-md,
+  #presentation-slides-wrapper .backdrop-blur-lg,
+  #presentation-slides-wrapper .backdrop-blur-xl,
+  #presentation-slides-wrapper .backdrop-blur-2xl,
+  #presentation-slides-wrapper .backdrop-blur-3xl {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+
 /* code editor */
 .container_editor_area {
   tab-size: 4ch;
