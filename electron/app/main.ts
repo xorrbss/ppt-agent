@@ -77,6 +77,13 @@ const startupStatus: Record<string, string> = {
   imagemagick: "checking",
 };
 
+function getLiveMainWindow(): BrowserWindow | undefined {
+  if (!win || win.isDestroyed()) {
+    return undefined;
+  }
+  return win;
+}
+
 type ProcessGoneDetails = {
   reason?: string;
   type?: string;
@@ -195,7 +202,7 @@ safeLog("[Presenton] Memory limits initialized:", {
 });
 
 const createWindow = () => {
-  win = new BrowserWindow({
+  const mainWindow = new BrowserWindow({
     width: 1280,
     height: 720,
     show: false, // Reveal once the launch screen has painted to avoid a blank flash.
@@ -221,14 +228,21 @@ const createWindow = () => {
         })(),
     },
   });
+  win = mainWindow;
 
-  win.webContents.on("render-process-gone", (_event, details) => {
+  mainWindow.on("closed", () => {
+    if (win === mainWindow) {
+      win = undefined;
+    }
+  });
+
+  mainWindow.webContents.on("render-process-gone", (_event, details) => {
     recordProcessGone("renderer", details);
   });
 
   // Open external links (e.g. "Download update") in the system browser so the user
   // sees download progress and can manage downloads normally.
-  win.webContents.setWindowOpenHandler(({ url }) => {
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith("http://") || url.startsWith("https://")) {
       shell.openExternal(url);
       return { action: "deny" };
@@ -236,12 +250,12 @@ const createWindow = () => {
     return { action: "allow" };
   });
 
-  win.once("ready-to-show", () => {
-    if (!win || win.isDestroyed()) {
+  mainWindow.once("ready-to-show", () => {
+    if (mainWindow.isDestroyed()) {
       return;
     }
-    win.show();
-    win.focus();
+    mainWindow.show();
+    mainWindow.focus();
   });
 
 };
@@ -407,14 +421,23 @@ app.whenReady().then(async () => {
 
   // Create main window before setup so that when user skips, the main window stays open
   createWindow();
-  win?.loadFile(path.join(baseDir, "resources/ui/homepage/index.html"));
+  const initialWindow = getLiveMainWindow();
+  if (initialWindow && !initialWindow.webContents.isDestroyed()) {
+    void initialWindow
+      .loadFile(path.join(baseDir, "resources/ui/homepage/index.html"))
+      .catch((error) => {
+        if (!initialWindow.isDestroyed()) {
+          safeWarn("[Presenton] Failed to load startup page", error);
+        }
+      });
+  }
 
   // Single installer: checks LibreOffice, Chrome, and ImageMagick; if any are missing, shows one
   // window that installs them one after another. Resolves when the window closes.
   const setupCompleted = await checkDependenciesBeforeWindow();
   if (!setupCompleted) {
     // Block app usage when required setup is not completed.
-    win?.destroy();
+    getLiveMainWindow()?.destroy();
     app.quit();
     return;
   }
@@ -430,19 +453,27 @@ app.whenReady().then(async () => {
   startupStatus.imagemagick = imageMagickOk ? "installed" : "missing";
 
   // Ensure the launch screen stays visible and focused during the server boot.
-  win?.show();
-  win?.focus();
+  const launchWindow = getLiveMainWindow();
+  launchWindow?.show();
+  launchWindow?.focus();
 
   const sendStartupStatus = (name: string, status: string) => {
     startupStatus[name] = status;
-    win?.webContents.send("startup:status", { name, status });
+    const mainWindow = getLiveMainWindow();
+    if (!mainWindow || mainWindow.webContents.isDestroyed()) {
+      return;
+    }
+    mainWindow.webContents.send("startup:status", { name, status });
   };
 
-  win?.webContents.once("did-finish-load", () => {
-    sendStartupStatus("libreoffice", startupStatus.libreoffice);
-    sendStartupStatus("puppeteer", startupStatus.puppeteer);
-    sendStartupStatus("imagemagick", startupStatus.imagemagick);
-  });
+  const statusWindow = getLiveMainWindow();
+  if (statusWindow && !statusWindow.webContents.isDestroyed()) {
+    statusWindow.webContents.once("did-finish-load", () => {
+      sendStartupStatus("libreoffice", startupStatus.libreoffice);
+      sendStartupStatus("puppeteer", startupStatus.puppeteer);
+      sendStartupStatus("imagemagick", startupStatus.imagemagick);
+    });
+  }
 
   try {
     setUserConfig({
@@ -486,12 +517,26 @@ app.whenReady().then(async () => {
   setupIpcHandlers();
 
   await startServers(fastApiPort, nextjsPort);
-  win?.loadURL(`${localhost}:${nextjsPort}`);
+  const mainWindow = getLiveMainWindow();
+  if (!mainWindow || mainWindow.webContents.isDestroyed()) {
+    return;
+  }
+
+  try {
+    await mainWindow.loadURL(`${localhost}:${nextjsPort}`);
+  } catch (error) {
+    if (mainWindow.isDestroyed()) {
+      return;
+    }
+    safeWarn("[Presenton] Failed to load application URL", error);
+    return;
+  }
 
   // Begin polling the version server for available updates
-  if (win) {
+  const updateWindow = getLiveMainWindow();
+  if (updateWindow && !updateWindow.webContents.isDestroyed()) {
     safeStderrWrite("[Presenton] Starting update checker...\n");
-    startUpdateChecker(win);
+    startUpdateChecker(updateWindow);
   }
 });
 
