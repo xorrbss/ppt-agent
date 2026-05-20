@@ -6,7 +6,6 @@ contextBridge.exposeInMainWorld("setupInstaller", {
   getStatus: () => ipcRenderer.invoke("setup:get-status"),
 
   installLibreOffice: () => ipcRenderer.invoke("lo:start-install"),
-  installChrome: () => ipcRenderer.invoke("setup:install-chrome"),
   installImageMagick: () => ipcRenderer.invoke("setup:install-imagemagick"),
   checkImageMagick: () => ipcRenderer.invoke("setup:check-imagemagick"),
 
@@ -24,20 +23,6 @@ contextBridge.exposeInMainWorld("setupInstaller", {
     const listener = (_event: IpcRendererEvent, data: { level: string; text: string }) => cb(data);
     ipcRenderer.on("lo:log", listener);
     return () => ipcRenderer.removeListener("lo:log", listener);
-  },
-
-  onChromeProgress: (
-    cb: (data: { phase: string; percent?: number; message?: string }) => void
-  ) => {
-    const listener = (_event: IpcRendererEvent, data: { phase: string; percent?: number; message?: string }) =>
-      cb(data);
-    ipcRenderer.on("setup:chrome-progress", listener);
-    return () => ipcRenderer.removeListener("setup:chrome-progress", listener);
-  },
-  onChromeLog: (cb: (data: { level: string; text: string }) => void) => {
-    const listener = (_event: IpcRendererEvent, data: { level: string; text: string }) => cb(data);
-    ipcRenderer.on("setup:chrome-log", listener);
-    return () => ipcRenderer.removeListener("setup:chrome-log", listener);
   },
 
   onImageMagickProgress: (

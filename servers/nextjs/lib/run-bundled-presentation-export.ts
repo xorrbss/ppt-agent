@@ -5,9 +5,7 @@ import { spawn } from "child_process";
 import { sanitizeFilename } from "@/app/(presentation-generator)/utils/others";
 import {
   BoundedTextBuffer,
-  envInt,
   memorySnapshotMb,
-  withNodeHeapLimit,
 } from "@/lib/runtime-limits";
 
 /** Repo `presentation-export/` at app root (`/app/presentation-export` in Docker). */
@@ -83,30 +81,6 @@ export type BundledPresentationExportResult = { path: string };
 const EXPORT_DIRECTORY_MODE = 0o755;
 const EXPORT_FILE_MODE = 0o644;
 
-let activeExports = 0;
-const pendingExports: Array<() => void> = [];
-
-async function acquireExportSlot(): Promise<() => void> {
-  const limit = envInt("PRESENTON_EXPORT_CONCURRENCY", 1, 1, 8);
-  if (activeExports >= limit) {
-    await new Promise<void>((resolve) => pendingExports.push(resolve));
-  }
-  activeExports += 1;
-  return () => {
-    activeExports = Math.max(0, activeExports - 1);
-    pendingExports.shift()?.();
-  };
-}
-
-async function enqueueExport<T>(work: () => Promise<T>): Promise<T> {
-  const release = await acquireExportSlot();
-  try {
-    return await work();
-  } finally {
-    release();
-  }
-}
-
 function normalizeExportOutputPath(params: {
   pathValue?: string;
   urlValue?: string;
@@ -174,7 +148,7 @@ export async function runBundledPresentationExport(params: {
   format: BundledPresentationExportFormat;
   cookieHeader?: string;
 }): Promise<BundledPresentationExportResult> {
-  return enqueueExport(() => runBundledPresentationExportLocked(params));
+  return runBundledPresentationExportLocked(params);
 }
 
 async function runBundledPresentationExportLocked(params: {
@@ -236,14 +210,10 @@ async function runBundledPresentationExportLocked(params: {
       const child = spawn(process.execPath, [entrypoint, exportTaskPath], {
         cwd: appRoot,
         stdio: ["ignore", "pipe", "pipe"],
-        env: withNodeHeapLimit(
-          {
-            ...process.env,
-            BUILT_PYTHON_MODULE_PATH: converter,
-          },
-          "PRESENTON_EXPORT_NODE_MAX_OLD_SPACE_MB",
-          1536,
-        ),
+        env: {
+          ...process.env,
+          BUILT_PYTHON_MODULE_PATH: converter,
+        },
       });
       const stderr = new BoundedTextBuffer();
       const stdout = new BoundedTextBuffer();

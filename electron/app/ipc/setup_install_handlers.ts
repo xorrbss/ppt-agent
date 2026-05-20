@@ -1,7 +1,6 @@
 /**
- * IPC handlers for the unified setup installer (LibreOffice + Chromium + ImageMagick).
+ * IPC handlers for the unified setup installer (LibreOffice + ImageMagick).
  * - setup:get-status — which dependencies are missing
- * - setup:install-chrome — download Chromium (browser-snapshots) with progress
  */
 
 import { ipcMain, WebContents } from "electron";
@@ -12,15 +11,7 @@ import { ChildProcess, spawn, spawnSync } from "child_process";
 import * as https from "https";
 import * as http from "http";
 import { IncomingMessage } from "http";
-import {
-  Browser,
-  detectBrowserPlatform,
-  getInstalledBrowsers,
-  install,
-  resolveBuildId,
-} from "@puppeteer/browsers";
 import { getSetupStatus } from "../utils/setup-dependencies";
-import { getPuppeteerCacheDir } from "../utils/puppeteer-config";
 import {
   getImageMagickBinaryPath,
   getImageMagickDownloadUrl,
@@ -52,19 +43,6 @@ export async function stopActiveSetupInstallProcesses(): Promise<void> {
       terminateChildProcess(process, "Setup install", killProcess).catch(() => {}),
     ),
   );
-}
-
-function sendChromeProgress(
-  wc: WebContents,
-  phase: "downloading" | "extracting" | "done" | "error",
-  percent?: number,
-  message?: string
-) {
-  safeSendToWebContents(wc, "setup:chrome-progress", { phase, percent, message });
-}
-
-function sendChromeLog(wc: WebContents, level: string, text: string) {
-  safeSendToWebContents(wc, "setup:chrome-log", { level, text });
 }
 
 function sendImageMagickProgress(
@@ -397,86 +375,10 @@ export function setupSetupInstallHandlers() {
     return (
       getSetupStatus() ?? {
         needsLibreOffice: false,
-        needsChrome: false,
         needsImageMagick: false,
       }
     );
   });
-
-  ipcMain.handle(
-    "setup:install-chrome",
-    async (event): Promise<{ ok: boolean; error?: string }> => {
-      const wc = event.sender;
-
-      const cacheDir = getPuppeteerCacheDir();
-      const platform = detectBrowserPlatform();
-      if (!platform) {
-        const msg = "Unable to detect platform.";
-        sendChromeLog(wc, "error", msg);
-        sendChromeProgress(wc, "error", undefined, msg);
-        return { ok: false, error: msg };
-      }
-
-      let buildId: string;
-      try {
-        buildId = await resolveBuildId(
-          Browser.CHROMIUM,
-          platform,
-          "latest" as "latest"
-        );
-      } catch (err) {
-        const msg =
-          err instanceof Error
-            ? err.message
-            : "Unable to resolve Chromium revision.";
-        sendChromeLog(wc, "error", msg);
-        sendChromeProgress(wc, "error", undefined, msg);
-        return { ok: false, error: msg };
-      }
-
-      sendChromeLog(wc, "info", `Downloading Chromium r${buildId}…`);
-      sendChromeProgress(wc, "downloading", 0, "Connecting…");
-
-      try {
-        await install({
-          cacheDir,
-          platform,
-          browser: Browser.CHROMIUM,
-          buildId,
-          downloadProgressCallback: (downloadedBytes, totalBytes) => {
-            if (totalBytes > 0 && !wc.isDestroyed()) {
-              const percent = Math.min(
-                99,
-                Math.round((downloadedBytes / totalBytes) * 100)
-              );
-              const mb = (n: number) => (n / 1024 / 1024).toFixed(1);
-              sendChromeProgress(
-                wc,
-                "downloading",
-                percent,
-                `${mb(downloadedBytes)} / ${mb(totalBytes)} MB`
-              );
-            }
-          },
-        });
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Chromium download failed.";
-        sendChromeLog(wc, "error", message);
-        sendChromeProgress(wc, "error", undefined, message);
-        return { ok: false, error: message };
-      }
-
-      sendChromeProgress(wc, "extracting", 100, "Extracting…");
-      const browsers = await getInstalledBrowsers({ cacheDir });
-      const chromium = browsers.find((b) => b.browser === Browser.CHROMIUM);
-      if (chromium?.executablePath && fs.existsSync(chromium.executablePath)) {
-        sendChromeLog(wc, "ok", `Chromium ready at ${chromium.executablePath}`);
-      }
-      sendChromeProgress(wc, "done", 100);
-      return { ok: true };
-    }
-  );
 
   ipcMain.handle(
     "setup:install-imagemagick",

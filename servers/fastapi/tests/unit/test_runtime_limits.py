@@ -4,7 +4,7 @@ import sys
 
 from services.export_task_service import ExportTaskService
 from services.liteparse_service import LiteParseService
-from utils.runtime_limits import BoundedTextBuffer, cap_text_by_env, merge_node_options
+from utils.runtime_limits import BoundedTextBuffer
 
 
 def test_bounded_text_buffer_keeps_only_tail():
@@ -18,37 +18,7 @@ def test_bounded_text_buffer_keeps_only_tail():
     assert "truncated 3 chars" in value
 
 
-def test_merge_node_options_preserves_existing_limit():
-    assert (
-        merge_node_options("--trace-warnings --max-old-space-size=2048", 1024)
-        == "--trace-warnings --max-old-space-size=2048"
-    )
-
-
-def test_cap_text_by_env(monkeypatch):
-    monkeypatch.setenv("PRESENTON_MAX_EXTRACTED_TEXT_CHARS", "1000")
-
-    assert cap_text_by_env("x" * 2000) == "x" * 1000
-
-
-def test_export_service_reads_concurrency_from_env(monkeypatch):
-    monkeypatch.setenv("PRESENTON_EXPORT_CONCURRENCY", "2")
-
-    service = ExportTaskService()
-
-    assert service.concurrency == 2
-
-
-def test_liteparse_service_reads_concurrency_from_env(monkeypatch):
-    monkeypatch.setenv("PRESENTON_LITEPARSE_CONCURRENCY", "2")
-
-    service = LiteParseService()
-
-    assert service.concurrency == 2
-
-
-def test_liteparse_plain_bridge_caps_stdout_and_bounds_stderr(monkeypatch, tmp_path):
-    monkeypatch.setenv("PRESENTON_MAX_EXTRACTED_TEXT_CHARS", "1024")
+def test_liteparse_plain_bridge_keeps_stdout_and_bounds_stderr(tmp_path):
     service = LiteParseService(timeout_seconds=10)
     service._npm_project_root = str(tmp_path)
 
@@ -61,7 +31,7 @@ def test_liteparse_plain_bridge_caps_stdout_and_bounds_stderr(monkeypatch, tmp_p
     )
 
     assert process.returncode == 0
-    assert len(process.stdout) == 1024
+    assert len(process.stdout) == 5000
     assert "truncated" in process.stderr
 
 

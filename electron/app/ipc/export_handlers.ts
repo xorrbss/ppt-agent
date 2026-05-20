@@ -6,10 +6,9 @@ import path from "path";
 import { showFileDownloadedDialog } from "../utils/dialog";
 import { v4 as uuidv4 } from 'uuid';
 import { ChildProcess, spawn } from "child_process";
-import { getPuppeteerExecutablePath } from "../utils/puppeteer-check";
 import { safeError, safeLog } from "../utils/safe-console";
 import { addMainBreadcrumb } from "../sentry/main";
-import { BoundedTextBuffer, envInt, memorySnapshotMb, withNodeHeapLimit } from "../utils/memory";
+import { BoundedTextBuffer, memorySnapshotMb } from "../utils/memory";
 import { destroyChildProcessStdio, terminateChildProcess } from "../utils/lifecycle";
 import { killProcess } from "../utils";
 
@@ -20,8 +19,6 @@ type RuntimeCandidate = {
   useElectronRunAsNode?: boolean;
 };
 
-let activeExports = 0;
-const pendingExports: Array<() => void> = [];
 const activeExportProcesses = new Set<ChildProcess>();
 
 export async function stopActiveExportProcesses(): Promise<void> {
@@ -36,27 +33,6 @@ export async function stopActiveExportProcesses(): Promise<void> {
   );
 }
 
-async function acquireExportSlot(): Promise<() => void> {
-  const limit = envInt("PRESENTON_EXPORT_CONCURRENCY", 1, 1, 8);
-  if (activeExports >= limit) {
-    await new Promise<void>((resolve) => pendingExports.push(resolve));
-  }
-  activeExports += 1;
-  return () => {
-    activeExports = Math.max(0, activeExports - 1);
-    pendingExports.shift()?.();
-  };
-}
-
-async function enqueueExport<T>(work: () => Promise<T>): Promise<T> {
-  const release = await acquireExportSlot();
-  try {
-    return await work();
-  } finally {
-    release();
-  }
-}
-
 export function setupExportHandlers() {
   ipcMain.handle("file-downloaded", async (_, filePath: string): Promise<IPCStatus> => {
     const fileName = path.basename(filePath);
@@ -68,103 +44,96 @@ export function setupExportHandlers() {
   });
 
   ipcMain.handle("export-presentation", async (_, id: string, title: string, exportAs: "pptx" | "pdf") => {
-    return enqueueExport(async () => {
-      let exportTempDir: string | undefined;
-      try {
-        addMainBreadcrumb("export", "electron.ipc_export.start", {
-          id,
-          title,
-          exportAs,
-          memory: memorySnapshotMb(),
-        });
-        const params = new URLSearchParams({ id });
-        if (process.env.NEXT_PUBLIC_FAST_API) {
-          params.set("fastapiUrl", process.env.NEXT_PUBLIC_FAST_API);
-        }
-        const pptUrl = `${process.env.NEXT_PUBLIC_URL}/pdf-maker?${params.toString()}`;
-
-        const exportTask = {
-          type: "export",
-          url: pptUrl,
-          format: exportAs,
-          title: title,
-          fastapiUrl: process.env.NEXT_PUBLIC_FAST_API,
-        };
-
-        const randomUuid = uuidv4();
-        const tempDir = getTempDir();
-        const appDataDir = getAppDataDir();
-        exportTempDir = path.join(tempDir, randomUuid);
-        await fs.promises.mkdir(exportTempDir, { recursive: true });
-
-        const exportTaskPath = path.join(exportTempDir, "export_task.json");
-        await fs.promises.writeFile(exportTaskPath, JSON.stringify(exportTask));
-
-        const exportScriptPath = path.join(baseDir, "resources", "export", "index.js");
-        const pythonModulePath = await resolveConverterPath(baseDir);
-        const puppeteerExecutablePath = await getPuppeteerExecutablePath();
-        safeLog("[Export] Spawning export task with config:", {
-          exportAs,
-          id,
-          title,
-          pptUrl,
-          exportTaskPath,
-          exportScriptPath,
-          pythonModulePath,
-          puppeteerExecutablePath,
-          NEXT_PUBLIC_URL: process.env.NEXT_PUBLIC_URL,
-          NEXT_PUBLIC_FAST_API: process.env.NEXT_PUBLIC_FAST_API,
-        });
-        const baseExportEnv = withNodeHeapLimit({
-          ...process.env,
-          TEMP_DIRECTORY: tempDir,
-          APP_DATA_DIRECTORY: appDataDir,
-          NODE_ENV: "development",
-          BUILT_PYTHON_MODULE_PATH: pythonModulePath,
-          ...(puppeteerExecutablePath && {
-            PUPPETEER_EXECUTABLE_PATH: puppeteerExecutablePath,
-          }),
-        }, "PRESENTON_EXPORT_NODE_MAX_OLD_SPACE_MB", 1536);
-        await runExportTaskWithRuntimeFallback(
-          exportScriptPath,
-          exportTaskPath,
-          baseExportEnv
-        );
-
-        const responsePath = exportTaskPath.replace(".json", ".response.json");
-        const responseRaw = await fs.promises.readFile(responsePath, "utf8");
-        const responseData = JSON.parse(responseRaw);
-        const exportFilePath = resolveExportedFilePath(responseData);
-
-        if (!exportFilePath) {
-          return { success: false, message: "Export finished but output file was not found." };
-        }
-
-        const destinationPath = path.join(getDownloadsDir(), path.basename(exportFilePath));
-        await moveFile(exportFilePath, destinationPath);
-        const success = await showFileDownloadedDialog(destinationPath);
-        addMainBreadcrumb("export", "electron.ipc_export.finish", {
-          id,
-          exportAs,
-          success,
-          memory: memorySnapshotMb(),
-        });
-        return { success, message: success ? "Export completed." : "Export completed but dialog failed." };
-      } catch (error: any) {
-        safeError("[Export] Error exporting presentation:", error);
-        addMainBreadcrumb("export", "electron.ipc_export.error", {
-          id,
-          exportAs,
-          message: error?.message,
-          memory: memorySnapshotMb(),
-        });
-        return { success: false, message: error?.message ?? "Export failed." };
-      } finally {
-        if (exportTempDir) {
-          await fs.promises.rm(exportTempDir, { recursive: true, force: true }).catch(() => {});
-        }
+    let exportTempDir: string | undefined;
+    try {
+      addMainBreadcrumb("export", "electron.ipc_export.start", {
+        id,
+        title,
+        exportAs,
+        memory: memorySnapshotMb(),
+      });
+      const params = new URLSearchParams({ id });
+      if (process.env.NEXT_PUBLIC_FAST_API) {
+        params.set("fastapiUrl", process.env.NEXT_PUBLIC_FAST_API);
       }
-    });
+      const pptUrl = `${process.env.NEXT_PUBLIC_URL}/pdf-maker?${params.toString()}`;
+
+      const exportTask = {
+        type: "export",
+        url: pptUrl,
+        format: exportAs,
+        title: title,
+        fastapiUrl: process.env.NEXT_PUBLIC_FAST_API,
+      };
+
+      const randomUuid = uuidv4();
+      const tempDir = getTempDir();
+      const appDataDir = getAppDataDir();
+      exportTempDir = path.join(tempDir, randomUuid);
+      await fs.promises.mkdir(exportTempDir, { recursive: true });
+
+      const exportTaskPath = path.join(exportTempDir, "export_task.json");
+      await fs.promises.writeFile(exportTaskPath, JSON.stringify(exportTask));
+
+      const exportScriptPath = path.join(baseDir, "resources", "export", "index.js");
+      const pythonModulePath = await resolveConverterPath(baseDir);
+      safeLog("[Export] Spawning export task with config:", {
+        exportAs,
+        id,
+        title,
+        pptUrl,
+        exportTaskPath,
+        exportScriptPath,
+        pythonModulePath,
+        NEXT_PUBLIC_URL: process.env.NEXT_PUBLIC_URL,
+        NEXT_PUBLIC_FAST_API: process.env.NEXT_PUBLIC_FAST_API,
+      });
+      const baseExportEnv = {
+        ...process.env,
+        TEMP_DIRECTORY: tempDir,
+        APP_DATA_DIRECTORY: appDataDir,
+        NODE_ENV: "development",
+        BUILT_PYTHON_MODULE_PATH: pythonModulePath,
+      };
+      await runExportTaskWithRuntimeFallback(
+        exportScriptPath,
+        exportTaskPath,
+        baseExportEnv
+      );
+
+      const responsePath = exportTaskPath.replace(".json", ".response.json");
+      const responseRaw = await fs.promises.readFile(responsePath, "utf8");
+      const responseData = JSON.parse(responseRaw);
+      const exportFilePath = resolveExportedFilePath(responseData);
+
+      if (!exportFilePath) {
+        return { success: false, message: "Export finished but output file was not found." };
+      }
+
+      const destinationPath = path.join(getDownloadsDir(), path.basename(exportFilePath));
+      await moveFile(exportFilePath, destinationPath);
+      const success = await showFileDownloadedDialog(destinationPath);
+      addMainBreadcrumb("export", "electron.ipc_export.finish", {
+        id,
+        exportAs,
+        success,
+        memory: memorySnapshotMb(),
+      });
+      return { success, message: success ? "Export completed." : "Export completed but dialog failed." };
+    } catch (error: any) {
+      safeError("[Export] Error exporting presentation:", error);
+      addMainBreadcrumb("export", "electron.ipc_export.error", {
+        id,
+        exportAs,
+        message: error?.message,
+        memory: memorySnapshotMb(),
+      });
+      return { success: false, message: error?.message ?? "Export failed." };
+    } finally {
+      if (exportTempDir) {
+        await fs.promises.rm(exportTempDir, { recursive: true, force: true }).catch(() => {});
+      }
+    }
   });
 }
 

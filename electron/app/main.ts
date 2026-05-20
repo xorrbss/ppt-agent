@@ -24,7 +24,6 @@ import { setupLibreOfficeInstallHandlers, stopActiveLibreOfficeInstallProcesses 
 import { setupSetupInstallHandlers, stopActiveSetupInstallProcesses } from "./ipc/setup_install_handlers";
 import { checkDependenciesBeforeWindow } from "./utils/setup-dependencies";
 import { getSofficePath, isLibreOfficeInstalled } from "./utils/libreoffice-check";
-import { getPuppeteerExecutablePath, isChromeInstalled } from "./utils/puppeteer-check";
 import { getLiteParseRunnerPath } from "./utils/liteparse-check";
 import { getImageMagickBinaryPath, isImageMagickInstalled } from "./utils/imagemagick-check";
 import { startUpdateChecker, stopUpdateChecker } from "./utils/update-checker";
@@ -79,7 +78,6 @@ var nextjsServer: ManagedServerProcess | undefined;
 let isStopping = false;
 const startupStatus: Record<string, string> = {
   libreoffice: "checking",
-  puppeteer: "checking",
   imagemagick: "checking",
 };
 
@@ -181,29 +179,8 @@ app.on("child-process-gone", (_event, details) => {
   recordProcessGone("child", details);
 });
 
-function setDefaultEnv(name: string, value: string): void {
-  if (!process.env[name] || !process.env[name]?.trim()) {
-    process.env[name] = value;
-  }
-}
-
-[
-  ["PRESENTON_EXPORT_CONCURRENCY", "1"],
-  ["PRESENTON_LITEPARSE_CONCURRENCY", "1"],
-  ["PRESENTON_EXPORT_NODE_MAX_OLD_SPACE_MB", "1536"],
-  ["PRESENTON_LITEPARSE_NODE_MAX_OLD_SPACE_MB", "1024"],
-  ["PRESENTON_NEXT_NODE_MAX_OLD_SPACE_MB", "1024"],
-  ["PRESENTON_MAX_EXTRACTED_TEXT_CHARS", "500000"],
-].forEach(([name, value]) => setDefaultEnv(name, value));
-
 addMainBreadcrumb("memory", "electron.main.startup", memorySnapshotMb());
-safeLog("[Presenton] Memory limits initialized:", {
-  PRESENTON_EXPORT_CONCURRENCY: process.env.PRESENTON_EXPORT_CONCURRENCY,
-  PRESENTON_LITEPARSE_CONCURRENCY: process.env.PRESENTON_LITEPARSE_CONCURRENCY,
-  PRESENTON_EXPORT_NODE_MAX_OLD_SPACE_MB: process.env.PRESENTON_EXPORT_NODE_MAX_OLD_SPACE_MB,
-  PRESENTON_LITEPARSE_NODE_MAX_OLD_SPACE_MB: process.env.PRESENTON_LITEPARSE_NODE_MAX_OLD_SPACE_MB,
-  PRESENTON_NEXT_NODE_MAX_OLD_SPACE_MB: process.env.PRESENTON_NEXT_NODE_MAX_OLD_SPACE_MB,
-  PRESENTON_MAX_EXTRACTED_TEXT_CHARS: process.env.PRESENTON_MAX_EXTRACTED_TEXT_CHARS,
+safeLog("[Presenton] Startup memory:", {
   memory: memorySnapshotMb(),
 });
 
@@ -344,11 +321,6 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         ELECTRON_RUN_AS_NODE: "1",
         EXPORT_PACKAGE_ROOT: exportPackageRoot,
         EXPORT_RUNTIME_DIR: exportPackageRoot,
-        PRESENTON_EXPORT_CONCURRENCY: process.env.PRESENTON_EXPORT_CONCURRENCY,
-        PRESENTON_LITEPARSE_CONCURRENCY: process.env.PRESENTON_LITEPARSE_CONCURRENCY,
-        PRESENTON_EXPORT_NODE_MAX_OLD_SPACE_MB: process.env.PRESENTON_EXPORT_NODE_MAX_OLD_SPACE_MB,
-        PRESENTON_LITEPARSE_NODE_MAX_OLD_SPACE_MB: process.env.PRESENTON_LITEPARSE_NODE_MAX_OLD_SPACE_MB,
-        PRESENTON_MAX_EXTRACTED_TEXT_CHARS: process.env.PRESENTON_MAX_EXTRACTED_TEXT_CHARS,
         ...(exportConverterPath && {
           BUILT_PYTHON_MODULE_PATH: exportConverterPath,
         }),
@@ -358,7 +330,6 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
     fastApiServer = fastApi;
     await fastApi.ready;
 
-    const puppeteerExecutablePath = await getPuppeteerExecutablePath();
     const nextjs = await startNextJsServer(
       nextjsDir,
       nextjsPort,
@@ -372,15 +343,8 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         DISABLE_AUTH: disableAuthForElectron,
         EXPORT_PACKAGE_ROOT: exportPackageRoot,
         PRESENTON_APP_ROOT: baseDir,
-        PUPPETEER_CACHE_DIR: process.env.PUPPETEER_CACHE_DIR,
-        PRESENTON_EXPORT_CONCURRENCY: process.env.PRESENTON_EXPORT_CONCURRENCY,
-        PRESENTON_EXPORT_NODE_MAX_OLD_SPACE_MB: process.env.PRESENTON_EXPORT_NODE_MAX_OLD_SPACE_MB,
-        PRESENTON_NEXT_NODE_MAX_OLD_SPACE_MB: process.env.PRESENTON_NEXT_NODE_MAX_OLD_SPACE_MB,
         ...(exportConverterPath && {
           BUILT_PYTHON_MODULE_PATH: exportConverterPath,
-        }),
-        ...(puppeteerExecutablePath && {
-          PUPPETEER_EXECUTABLE_PATH: puppeteerExecutablePath,
         }),
       },
       isDev,
@@ -450,7 +414,7 @@ app.whenReady().then(async () => {
       });
   }
 
-  // Single installer: checks LibreOffice, Chrome, and ImageMagick; if any are missing, shows one
+  // Single installer: checks LibreOffice and ImageMagick; if either is missing, shows one
   // window that installs them one after another. Resolves when the window closes.
   const setupCompleted = await checkDependenciesBeforeWindow();
   if (!setupCompleted) {
@@ -461,13 +425,11 @@ app.whenReady().then(async () => {
   }
 
   // Update startup status after setup (user may have installed one or both)
-  const [loResult, chromeOk, imageMagickOk] = await Promise.all([
+  const [loResult, imageMagickOk] = await Promise.all([
     isLibreOfficeInstalled(),
-    isChromeInstalled(),
     Promise.resolve(isImageMagickInstalled()),
   ]);
   startupStatus.libreoffice = loResult.installed ? "installed" : "missing";
-  startupStatus.puppeteer = chromeOk ? "installed" : "missing";
   startupStatus.imagemagick = imageMagickOk ? "installed" : "missing";
 
   // Ensure the launch screen stays visible and focused during the server boot.
@@ -488,7 +450,6 @@ app.whenReady().then(async () => {
   if (statusWindow && !statusWindow.webContents.isDestroyed()) {
     statusWindow.webContents.once("did-finish-load", () => {
       sendStartupStatus("libreoffice", startupStatus.libreoffice);
-      sendStartupStatus("puppeteer", startupStatus.puppeteer);
       sendStartupStatus("imagemagick", startupStatus.imagemagick);
     });
   }

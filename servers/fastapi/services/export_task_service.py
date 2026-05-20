@@ -16,9 +16,7 @@ from utils.get_env import get_app_data_directory_env, get_temp_directory_env
 from utils.icon_weights import DEFAULT_ICON_WEIGHT, extract_icon_weight_from_settings
 from utils.runtime_limits import (
     BoundedTextBuffer,
-    env_int,
     log_memory,
-    with_node_heap_limit,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -76,13 +74,6 @@ class ExportTaskService:
         self.export_dir = self._resolve_export_dir()
         self.entrypoint_path = self._resolve_entrypoint_path(self.export_dir)
         self.converter_path = self._resolve_converter_path(self.export_dir)
-        self.concurrency = env_int(
-            "PRESENTON_EXPORT_CONCURRENCY",
-            default=1,
-            minimum=1,
-            maximum=8,
-        )
-        self._semaphore = asyncio.Semaphore(self.concurrency)
 
     @staticmethod
     def _resolve_export_dir() -> str:
@@ -173,11 +164,7 @@ class ExportTaskService:
         env["ASSETS_BASE_URL"] = f"{fastapi_base.rstrip('/')}/app_data"
         env["BUILT_PYTHON_MODULE_PATH"] = self.converter_path
 
-        return with_node_heap_limit(
-            env,
-            "PRESENTON_EXPORT_NODE_MAX_OLD_SPACE_MB",
-            default_mb=1536,
-        )
+        return env
 
     def _ensure_runtime_ready(self) -> None:
         if not os.path.isfile(self.entrypoint_path):
@@ -233,8 +220,7 @@ class ExportTaskService:
         return temp_dir, task_path, response_path
 
     async def _run_task(self, task_payload: dict, response_error_detail: str) -> dict:
-        async with self._semaphore:
-            return await self._run_task_locked(task_payload, response_error_detail)
+        return await self._run_task_locked(task_payload, response_error_detail)
 
     async def _run_task_locked(self, task_payload: dict, response_error_detail: str) -> dict:
         self._ensure_runtime_ready()
@@ -248,7 +234,6 @@ class ExportTaskService:
                 LOGGER,
                 "export_task.spawn",
                 task_type=task_payload.get("type"),
-                concurrency=self.concurrency,
             )
             result = await self._run_bounded_child(
                 [self.node_binary, self.entrypoint_path, task_path],

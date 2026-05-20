@@ -8,10 +8,7 @@ from typing import Any, Dict, Mapping, Tuple
 
 from utils.runtime_limits import (
     BoundedTextBuffer,
-    cap_text_by_env,
-    env_int,
     log_memory,
-    with_node_heap_limit,
 )
 
 
@@ -81,13 +78,6 @@ class LiteParseService:
         self.runner_path = os.getenv("LITEPARSE_RUNNER_PATH", self._resolve_runner_path())
         self.runner_dir = os.path.dirname(self.runner_path)
         self._npm_project_root = self._resolve_npm_project_root()
-        self.concurrency = env_int(
-            "PRESENTON_LITEPARSE_CONCURRENCY",
-            default=1,
-            minimum=1,
-            maximum=8,
-        )
-        self._semaphore = threading.BoundedSemaphore(self.concurrency)
 
     def _build_node_env(self) -> Dict[str, str]:
         """Build environment for Node subprocesses."""
@@ -132,11 +122,7 @@ class LiteParseService:
         if deduped_additional_entries:
             env["PATH"] = os.pathsep.join(deduped_additional_entries + path_entries)
 
-        return with_node_heap_limit(
-            env,
-            "PRESENTON_LITEPARSE_NODE_MAX_OLD_SPACE_MB",
-            default_mb=1024,
-        )
+        return env
 
     def _resolve_npm_project_root(self) -> str:
         """Directory whose node_modules contains @llamaindex/liteparse."""
@@ -309,12 +295,11 @@ class LiteParseService:
             self.num_workers,
         )
 
-        with self._semaphore:
+        def run_process() -> subprocess.CompletedProcess[str]:
             log_memory(
                 LOGGER,
                 "liteparse.spawn",
                 file=file_path,
-                concurrency=self.concurrency,
                 use_json=use_json,
             )
             if not use_json:
@@ -335,6 +320,10 @@ class LiteParseService:
                 returncode=process.returncode,
                 use_json=use_json,
             )
+            return process
+
+        process = run_process()
+
         LOGGER.info(
             "[LiteParse] Command finished returncode=%s command=%s",
             process.returncode,
@@ -350,11 +339,7 @@ class LiteParseService:
                 )
             return {
                 "ok": True,
-                "text": cap_text_by_env(
-                    (process.stdout or "").lstrip("\ufeff"),
-                    logger=LOGGER,
-                    label=os.path.basename(file_path),
-                ),
+                "text": (process.stdout or "").lstrip("\ufeff"),
                 "filePath": file_path,
                 "pageCount": 0,
             }
@@ -384,13 +369,6 @@ class LiteParseService:
                 _snippet(json.dumps(payload)),
             )
             raise LiteParseError(payload.get("error") or "LiteParse parse failed")
-
-        if isinstance(payload.get("text"), str):
-            payload["text"] = cap_text_by_env(
-                payload["text"],
-                logger=LOGGER,
-                label=os.path.basename(file_path),
-            )
 
         return payload
 
@@ -457,17 +435,8 @@ class LiteParseService:
                 stderr_thread.join(timeout=5)
 
             with open(stdout_path, "r", encoding="utf-8", errors="replace") as output_file:
-                stdout = output_file.read(
-                    env_int(
-                        "PRESENTON_MAX_EXTRACTED_TEXT_CHARS",
-                        default=500_000,
-                        minimum=1_000,
-                        maximum=10_000_000,
-                    )
-                    + 1
-                )
+                stdout = output_file.read()
 
-            stdout = cap_text_by_env(stdout, logger=LOGGER, label="LiteParse stdout")
             return subprocess.CompletedProcess(
                 args=command,
                 returncode=returncode,
