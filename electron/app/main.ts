@@ -1,5 +1,5 @@
 require("dotenv").config();
-import { app, BrowserWindow, globalShortcut, shell } from "electron";
+import { app, BrowserWindow, globalShortcut } from "electron";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
@@ -36,6 +36,11 @@ import {
 } from "./sentry/main";
 import { installSafeConsole, safeError, safeLog, safeStderrWrite, safeWarn } from "./utils/safe-console";
 import { memorySnapshotMb } from "./utils/memory";
+import {
+  isSupportedExternalUrl,
+  openExternalUrl,
+  showOpenTargetErrorDialog,
+} from "./utils/open-target";
 import {
   finishChromiumCacheRecovery,
   prepareChromiumCacheRecovery,
@@ -244,11 +249,30 @@ const createWindow = () => {
   // Open external links (e.g. "Download update") in the system browser so the user
   // sees download progress and can manage downloads normally.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith("http://") || url.startsWith("https://")) {
-      shell.openExternal(url);
+    if (!isSupportedExternalUrl(url)) {
+      safeWarn("[Presenton] Blocked unsupported window open URL.");
       return { action: "deny" };
     }
-    return { action: "allow" };
+
+    void openExternalUrl(url)
+      .then(async (result) => {
+        if (result.success) {
+          return;
+        }
+
+        safeWarn(`[Presenton] Failed to open external URL: ${result.message || "Unknown error"}`);
+        await showOpenTargetErrorDialog({
+          parent: mainWindow,
+          title: "Could Not Open Link",
+          message: "Presenton could not open this link in your browser.",
+          detail: `${result.message || "No application is registered to open this link."}\n\n${url}`,
+        });
+      })
+      .catch((error) => {
+        safeWarn("[Presenton] Failed to handle external URL open:", error);
+      });
+
+    return { action: "deny" };
   });
 
   mainWindow.once("ready-to-show", () => {
