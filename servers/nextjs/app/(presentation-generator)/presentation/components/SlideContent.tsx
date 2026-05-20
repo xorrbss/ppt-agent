@@ -27,6 +27,7 @@ interface SlideContentProps {
   index: number;
   presentationId: string;
   isChatEditing?: boolean;
+  isChatTargeted?: boolean;
 }
 
 const SlideContent = ({
@@ -34,6 +35,7 @@ const SlideContent = ({
   index,
   presentationId,
   isChatEditing = false,
+  isChatTargeted = false,
 }: SlideContentProps) => {
   const dispatch = useDispatch();
   const [isUpdating, setIsUpdating] = useState(false);
@@ -140,7 +142,15 @@ const SlideContent = ({
           className={` w-full  group font-syne  `}
         >
           {/* <V1ContentRender slide={slide} isEditMode={true} theme={null} /> */}
-          <div className={isChatEditing ? "chat-slide-glow relative rounded-[12px]" : "relative"}>
+          <div
+            className={
+              isChatEditing
+                ? "chat-slide-glow relative rounded-[12px]"
+                : isChatTargeted
+                ? "chat-slide-target relative rounded-[12px]"
+                : "relative"
+            }
+          >
             <SlideScale
               slide={slide}
               theme={presentationData?.theme || null}

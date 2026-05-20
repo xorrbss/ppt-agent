@@ -402,6 +402,12 @@ thead {
   will-change: box-shadow;
 }
 
+.chat-slide-target {
+  border-radius: 14px;
+  animation: chatSlideTargetPulse 2.2s ease-in-out infinite;
+  will-change: box-shadow;
+}
+
 @keyframes chatSlideOuterGlow {
   0% {
     box-shadow:
@@ -425,6 +431,29 @@ thead {
       0 0 0 8px rgba(139, 92, 246, 0.14),
       0 0 28px rgba(124, 58, 237, 0.24),
       0 0 72px rgba(99, 102, 241, 0.16);
+  }
+}
+
+@keyframes chatSlideTargetPulse {
+  0% {
+    box-shadow:
+      0 0 0 1px rgba(216, 180, 254, 0.26),
+      0 0 0 4px rgba(139, 92, 246, 0.08),
+      0 0 16px rgba(124, 58, 237, 0.16);
+  }
+
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.42),
+      0 0 0 6px rgba(139, 92, 246, 0.12),
+      0 0 22px rgba(124, 58, 237, 0.22);
+  }
+
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(216, 180, 254, 0.26),
+      0 0 0 4px rgba(139, 92, 246, 0.08),
+      0 0 16px rgba(124, 58, 237, 0.16);
   }
 }
 

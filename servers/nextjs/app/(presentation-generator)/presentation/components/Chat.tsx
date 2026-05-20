@@ -15,6 +15,7 @@ import React, {
   FormEvent,
   KeyboardEvent,
   ReactNode,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -235,7 +236,13 @@ type ChatProps = {
   currentSlide?: number;
   onPresentationChanged?: () => Promise<void> | void;
   onChatMutationStateChange?: (isMutating: boolean) => void;
-  onFollowAgentToSlide?: (slideIndex: number) => void;
+  onAgentSlideFocus?: (focus: {
+    slideIndex: number;
+    eventId: string;
+    tool?: string;
+    status?: string;
+    isMutatingTool: boolean;
+  }) => void;
   onChatSendingStateChange?: (isSending: boolean) => void;
   onFollowModeChange?: (isEnabled: boolean) => void;
 };
@@ -280,6 +287,11 @@ const TOOL_LABELS: Record<string, string> = {
 };
 
 const MUTATING_TOOLS = new Set(["saveSlide", "deleteSlide", "setPresentationTheme"]);
+// Only focus slides when the agent is actively mutating them.
+// Read/open traces (e.g. getSlideAtIndex) can happen ahead of edits and feel jumpy.
+const SLIDE_FOCUS_TOOLS = new Set(["saveSlide", "deleteSlide"]);
+const SLIDE_FOCUS_STATUSES = new Set(["start"]);
+const MIN_SLIDE_FOCUS_DWELL_MS = 700;
 
 const getToolLabel = (tool?: string) => {
   if (!tool) {
@@ -463,12 +475,22 @@ const formatTraceActivity = (
   return null;
 };
 
+const readTraceSlideIndex = (trace: ChatStreamTrace) => {
+  if (typeof trace.slideIndex === "number" && trace.slideIndex >= 0) {
+    return trace.slideIndex;
+  }
+  if (typeof trace.slideNumber === "number" && trace.slideNumber > 0) {
+    return trace.slideNumber - 1;
+  }
+  return null;
+};
+
 const Chat = ({
   presentationId,
   currentSlide,
   onPresentationChanged,
   onChatMutationStateChange,
-  onFollowAgentToSlide,
+  onAgentSlideFocus,
   onChatSendingStateChange,
   onFollowModeChange,
 }: ChatProps) => {
@@ -490,7 +512,15 @@ const Chat = ({
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const lastFollowedSlideRef = useRef<number | null>(null);
+  const lastFollowedTraceRef = useRef<string | null>(null);
+  const focusEventSequenceRef = useRef(0);
+  const activeFocusedSlideRef = useRef<number | null>(null);
+  const pendingFocusTraceRef = useRef<ChatStreamTrace | null>(null);
+  const lastFocusDispatchAtRef = useRef<number>(0);
+  const focusDispatchTimerRef = useRef<number | null>(null);
+  const refreshInFlightRef = useRef(false);
+  const refreshQueuedRef = useRef(false);
+  const didIncrementalRefreshRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -587,9 +617,25 @@ const Chat = ({
   useEffect(() => {
     onChatSendingStateChange?.(isSending);
     if (!isSending) {
-      lastFollowedSlideRef.current = null;
+      lastFollowedTraceRef.current = null;
+      activeFocusedSlideRef.current = null;
+      pendingFocusTraceRef.current = null;
+      lastFocusDispatchAtRef.current = 0;
+      if (focusDispatchTimerRef.current !== null) {
+        window.clearTimeout(focusDispatchTimerRef.current);
+        focusDispatchTimerRef.current = null;
+      }
     }
   }, [isSending, onChatSendingStateChange]);
+
+  useEffect(
+    () => () => {
+      if (focusDispatchTimerRef.current !== null) {
+        window.clearTimeout(focusDispatchTimerRef.current);
+      }
+    },
+    []
+  );
 
   const updateMutationToolActivity = (tool: string | undefined, isActive: boolean) => {
     if (!tool || !MUTATING_TOOLS.has(tool)) {
@@ -600,29 +646,93 @@ const Chat = ({
     );
   };
 
-  const maybeFollowAgentSlide = (trace: ChatStreamTrace) => {
-    if (!isFollowAgentEnabled || !onFollowAgentToSlide) {
+  const emitAgentSlideFocus = useCallback(
+    (trace: ChatStreamTrace, targetSlideIndex: number) => {
+      if (!onAgentSlideFocus) {
+        return;
+      }
+      focusEventSequenceRef.current += 1;
+      onAgentSlideFocus({
+        slideIndex: targetSlideIndex,
+        eventId: `${Date.now()}-${focusEventSequenceRef.current}`,
+        tool: trace.tool,
+        status: trace.status,
+        isMutatingTool: Boolean(trace.tool && MUTATING_TOOLS.has(trace.tool)),
+      });
+      activeFocusedSlideRef.current = targetSlideIndex;
+      lastFocusDispatchAtRef.current = Date.now();
+    },
+    [onAgentSlideFocus]
+  );
+
+  const flushPendingSlideFocus = useCallback(() => {
+    focusDispatchTimerRef.current = null;
+    const pendingTrace = pendingFocusTraceRef.current;
+    pendingFocusTraceRef.current = null;
+    if (!pendingTrace) {
       return;
     }
-
-    const targetSlideIndex =
-      typeof trace.slideIndex === "number" && trace.slideIndex >= 0
-        ? trace.slideIndex
-        : typeof trace.slideNumber === "number" && trace.slideNumber > 0
-        ? trace.slideNumber - 1
-        : null;
-
+    const targetSlideIndex = readTraceSlideIndex(pendingTrace);
     if (targetSlideIndex === null) {
       return;
     }
+    emitAgentSlideFocus(pendingTrace, targetSlideIndex);
+  }, [emitAgentSlideFocus]);
 
-    if (lastFollowedSlideRef.current === targetSlideIndex) {
+  const schedulePendingSlideFocus = useCallback(() => {
+    if (focusDispatchTimerRef.current !== null) {
       return;
     }
+    const elapsed = Date.now() - lastFocusDispatchAtRef.current;
+    const waitMs = Math.max(MIN_SLIDE_FOCUS_DWELL_MS - elapsed, 0);
+    focusDispatchTimerRef.current = window.setTimeout(
+      flushPendingSlideFocus,
+      waitMs
+    );
+  }, [flushPendingSlideFocus]);
 
-    lastFollowedSlideRef.current = targetSlideIndex;
-    onFollowAgentToSlide(targetSlideIndex);
-  };
+  const maybeFollowAgentSlide = useCallback(
+    (trace: ChatStreamTrace) => {
+      if (!trace.tool || !SLIDE_FOCUS_TOOLS.has(trace.tool)) {
+        return;
+      }
+      if (!trace.status || !SLIDE_FOCUS_STATUSES.has(trace.status)) {
+        return;
+      }
+
+      const targetSlideIndex = readTraceSlideIndex(trace);
+      if (targetSlideIndex === null) {
+        return;
+      }
+
+      const traceSignature = `${trace.round ?? "?"}:${trace.tool}:${trace.status}:${targetSlideIndex}`;
+      if (lastFollowedTraceRef.current === traceSignature) {
+        return;
+      }
+      lastFollowedTraceRef.current = traceSignature;
+
+      const activeFocusedSlide = activeFocusedSlideRef.current;
+      const elapsed = Date.now() - lastFocusDispatchAtRef.current;
+      const shouldDispatchImmediately =
+        activeFocusedSlide === null ||
+        activeFocusedSlide === targetSlideIndex ||
+        elapsed >= MIN_SLIDE_FOCUS_DWELL_MS;
+
+      if (shouldDispatchImmediately) {
+        pendingFocusTraceRef.current = null;
+        if (focusDispatchTimerRef.current !== null) {
+          window.clearTimeout(focusDispatchTimerRef.current);
+          focusDispatchTimerRef.current = null;
+        }
+        emitAgentSlideFocus(trace, targetSlideIndex);
+        return;
+      }
+
+      pendingFocusTraceRef.current = trace;
+      schedulePendingSlideFocus();
+    },
+    [emitAgentSlideFocus, schedulePendingSlideFocus]
+  );
 
   const buildBackendMessage = (message: string) => {
     if (typeof currentSlide !== "number") {
@@ -651,12 +761,41 @@ const Chat = ({
     inputRef.current?.focus();
   };
 
+  const refreshPresentationIncrementally = useCallback(async () => {
+    if (!onPresentationChanged) {
+      return;
+    }
+    if (refreshInFlightRef.current) {
+      refreshQueuedRef.current = true;
+      return;
+    }
+
+    refreshInFlightRef.current = true;
+    didIncrementalRefreshRef.current = true;
+    try {
+      await onPresentationChanged();
+    } catch (error) {
+      console.error("Failed to refresh presentation after tool mutation:", error);
+      toast.error("Slides were saved, but refresh failed");
+    } finally {
+      refreshInFlightRef.current = false;
+      if (refreshQueuedRef.current) {
+        refreshQueuedRef.current = false;
+        void refreshPresentationIncrementally();
+      }
+    }
+  }, [onPresentationChanged]);
+
   const refreshPresentationIfNeeded = async (toolCalls: string[]) => {
     const hasSlideMutation =
       toolCalls.includes("saveSlide") ||
       toolCalls.includes("deleteSlide") ||
       toolCalls.includes("setPresentationTheme");
-    if (!hasSlideMutation || !onPresentationChanged) {
+    if (
+      !hasSlideMutation ||
+      !onPresentationChanged ||
+      didIncrementalRefreshRef.current
+    ) {
       return;
     }
 
@@ -792,6 +931,9 @@ const Chat = ({
     setErrorMessage(null);
     setIsSending(true);
     setActiveAssistantMessageId(assistantMessageId);
+    didIncrementalRefreshRef.current = false;
+    refreshQueuedRef.current = false;
+    refreshInFlightRef.current = false;
     const streamAbortController = new AbortController();
     abortControllerRef.current = streamAbortController;
 
@@ -823,6 +965,13 @@ const Chat = ({
           },
           onTrace: (trace) => {
             maybeFollowAgentSlide(trace);
+            if (
+              trace.status === "success" &&
+              trace.tool &&
+              MUTATING_TOOLS.has(trace.tool)
+            ) {
+              void refreshPresentationIncrementally();
+            }
             if (trace.status === "start") {
               updateMutationToolActivity(trace.tool, true);
             } else if (trace.status === "success" || trace.status === "error") {

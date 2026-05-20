@@ -402,7 +402,7 @@ class PresentationChatService:
         *,
         tool_name: str,
         arguments: str | None,
-    ) -> dict[str, int] | None:
+    ) -> dict[str, Any] | None:
         if tool_name not in {"getSlideAtIndex", "saveSlide", "deleteSlide"}:
             return None
 
@@ -417,22 +417,30 @@ class PresentationChatService:
         if not isinstance(parsed_args, dict):
             return None
 
+        focus_payload: dict[str, Any] = {}
         index = parsed_args.get("index")
-        if not isinstance(index, int):
-            return None
+        if isinstance(index, int):
+            normalized_index = max(0, index)
+            focus_payload["slide_index"] = normalized_index
+            focus_payload["slide_number"] = normalized_index + 1
 
-        normalized_index = max(0, index)
-        return {
-            "slide_index": normalized_index,
-            "slide_number": normalized_index + 1,
-        }
+        target_slide_indices = PresentationChatService._extract_target_slide_indices(
+            parsed_args
+        )
+        if target_slide_indices:
+            focus_payload["target_slide_indices"] = target_slide_indices
+            focus_payload["target_slide_numbers"] = [
+                index + 1 for index in target_slide_indices
+            ]
+
+        return focus_payload or None
 
     @staticmethod
     def _tool_focus_from_result(
         *,
         tool_name: str,
         tool_result: dict[str, Any],
-    ) -> dict[str, int] | None:
+    ) -> dict[str, Any] | None:
         if tool_name not in {"getSlideAtIndex", "saveSlide", "deleteSlide"}:
             return None
         if not tool_result.get("ok"):
@@ -442,6 +450,7 @@ class PresentationChatService:
         if not isinstance(result, dict):
             return None
 
+        focus_payload: dict[str, Any] = {}
         index: int | None = None
         resolved_index = result.get("resolved_index")
         if isinstance(resolved_index, int):
@@ -455,14 +464,49 @@ class PresentationChatService:
                 if isinstance(slide, dict) and isinstance(slide.get("index"), int):
                     index = slide["index"]
 
-        if index is None:
-            return None
+        if index is not None:
+            normalized_index = max(0, index)
+            focus_payload["slide_index"] = normalized_index
+            focus_payload["slide_number"] = normalized_index + 1
 
-        normalized_index = max(0, index)
-        return {
-            "slide_index": normalized_index,
-            "slide_number": normalized_index + 1,
-        }
+        target_slide_indices = PresentationChatService._extract_target_slide_indices(
+            result
+        )
+        if target_slide_indices:
+            focus_payload["target_slide_indices"] = target_slide_indices
+            focus_payload["target_slide_numbers"] = [
+                index + 1 for index in target_slide_indices
+            ]
+
+        return focus_payload or None
+
+    @staticmethod
+    def _extract_target_slide_indices(payload: dict[str, Any]) -> list[int]:
+        raw_candidates = []
+        for key in (
+            "target_slide_indices",
+            "targetSlideIndices",
+            "target_indices",
+            "targetIndices",
+            "slide_indices",
+            "slideIndices",
+            "indices",
+        ):
+            value = payload.get(key)
+            if isinstance(value, list):
+                raw_candidates.extend(value)
+
+        normalized_indices: list[int] = []
+        seen_indices: set[int] = set()
+        for candidate in raw_candidates:
+            if not isinstance(candidate, int):
+                continue
+            normalized_index = max(0, candidate)
+            if normalized_index in seen_indices:
+                continue
+            seen_indices.add(normalized_index)
+            normalized_indices.append(normalized_index)
+        return normalized_indices
 
     @staticmethod
     def _tool_start_message(tool_name: str) -> str:

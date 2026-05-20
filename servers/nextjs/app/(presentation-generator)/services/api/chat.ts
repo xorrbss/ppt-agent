@@ -41,6 +41,8 @@ export interface ChatStreamTrace {
   tools?: string[];
   slideIndex?: number;
   slideNumber?: number;
+  targetSlideIndices?: number[];
+  targetSlideNumbers?: number[];
 }
 
 export interface ChatStreamHandlers {
@@ -280,6 +282,24 @@ export class PresentationChatApi {
                 : typeof typedTrace.slideNumber === "number"
                 ? typedTrace.slideNumber
                 : undefined,
+            targetSlideIndices: Array.isArray(typedTrace.target_slide_indices)
+              ? typedTrace.target_slide_indices.filter(
+                  (value): value is number => typeof value === "number"
+                )
+              : Array.isArray(typedTrace.targetSlideIndices)
+              ? typedTrace.targetSlideIndices.filter(
+                  (value): value is number => typeof value === "number"
+                )
+              : undefined,
+            targetSlideNumbers: Array.isArray(typedTrace.target_slide_numbers)
+              ? typedTrace.target_slide_numbers.filter(
+                  (value): value is number => typeof value === "number"
+                )
+              : Array.isArray(typedTrace.targetSlideNumbers)
+              ? typedTrace.targetSlideNumbers.filter(
+                  (value): value is number => typeof value === "number"
+                )
+              : undefined,
           });
         }
       }

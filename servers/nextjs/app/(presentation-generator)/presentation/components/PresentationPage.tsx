@@ -1,5 +1,12 @@
 "use client";
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import "../../utils/prism-languages";
@@ -35,7 +42,9 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   const [isChatSending, setIsChatSending] = useState(false);
   const [isFollowModeEnabled, setIsFollowModeEnabled] = useState(true);
   const [agentFocusedSlide, setAgentFocusedSlide] = useState<number | null>(null);
+  const [agentFocusEventId, setAgentFocusEventId] = useState<string | null>(null);
   const [glowingSlideIndex, setGlowingSlideIndex] = useState<number | null>(null);
+  const [chatTargetedSlides, setChatTargetedSlides] = useState<number[]>([]);
   const [error, setError] = useState(false);
   const slidesScrollContainerRef = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
@@ -143,8 +152,40 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     handleSlideChange(newSlide, presentationData);
   };
 
+  const handlePresentationChanged = useCallback(() => {
+    return fetchUserSlides({ clearHistory: false });
+  }, [fetchUserSlides]);
+
+  const handleChatSendingStateChange = useCallback((sending: boolean) => {
+    setIsChatSending(sending);
+    if (sending) {
+      setChatTargetedSlides((previous) => (previous.length === 0 ? previous : []));
+      return;
+    }
+    setAgentFocusedSlide(null);
+    setAgentFocusEventId(null);
+  }, []);
+
+  const handleAgentSlideFocus = useCallback(
+    ({ slideIndex, eventId }: { slideIndex: number; eventId: string }) => {
+      if (slideIndex < 0) {
+        return;
+      }
+      setAgentFocusedSlide(slideIndex);
+      setAgentFocusEventId(eventId);
+      setChatTargetedSlides((previous) =>
+        previous.includes(slideIndex) ? previous : [...previous, slideIndex]
+      );
+    },
+    []
+  );
+
   const totalSlides = presentationData?.slides?.length ?? 0;
   const highlightedSlideIndex = glowingSlideIndex;
+  const targetedSlidesSet = useMemo(
+    () => new Set(chatTargetedSlides),
+    [chatTargetedSlides]
+  );
 
   useEffect(() => {
     if (!isFollowModeEnabled || !isChatSending || totalSlides <= 0) {
@@ -155,7 +196,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     }
 
     const clampedIndex = Math.min(Math.max(agentFocusedSlide, 0), totalSlides - 1);
-    setGlowingSlideIndex(clampedIndex);
     if (clampedIndex !== selectedSlide) {
       handleSlideClick(clampedIndex);
     }
@@ -164,6 +204,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     isChatSending,
     totalSlides,
     agentFocusedSlide,
+    agentFocusEventId,
     selectedSlide,
     handleSlideClick,
   ]);
@@ -171,28 +212,31 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   useEffect(() => {
     if (totalSlides <= 0) {
       setGlowingSlideIndex(null);
+      setChatTargetedSlides([]);
       return;
     }
 
     if (!isChatSending) {
-      if (glowingSlideIndex === null) {
+      if (glowingSlideIndex === null && chatTargetedSlides.length === 0) {
         return;
       }
       const clearTimer = window.setTimeout(() => {
         setGlowingSlideIndex(null);
+        setChatTargetedSlides([]);
       }, 900);
       return () => window.clearTimeout(clearTimer);
     }
 
-    if (isFollowModeEnabled && agentFocusedSlide === null) {
-      setGlowingSlideIndex(null);
+    // Do not show glow/scanner until chat traces identify an actual target slide.
+    // This avoids the "instant scanner on send" effect before tools start editing.
+    if (agentFocusedSlide === null) {
+      if (glowingSlideIndex !== null) {
+        setGlowingSlideIndex(null);
+      }
       return;
     }
 
-    const fallbackIndex = Math.min(Math.max(selectedSlide, 0), totalSlides - 1);
-    const targetIndex = isFollowModeEnabled
-      ? Math.min(Math.max(agentFocusedSlide ?? 0, 0), totalSlides - 1)
-      : fallbackIndex;
+    const targetIndex = Math.min(Math.max(agentFocusedSlide, 0), totalSlides - 1);
     setGlowingSlideIndex(targetIndex);
   }, [
     isChatSending,
@@ -200,6 +244,8 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     selectedSlide,
     isFollowModeEnabled,
     agentFocusedSlide,
+    chatTargetedSlides.length,
+    glowingSlideIndex,
   ]);
 
 
@@ -292,9 +338,13 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                           index={index}
                           presentationId={presentation_id}
                           isChatEditing={
-                            isChatSending &&
                             highlightedSlideIndex !== null &&
                             index === highlightedSlideIndex
+                          }
+                          isChatTargeted={
+                            isChatSending &&
+                            highlightedSlideIndex !== index &&
+                            targetedSlidesSet.has(index)
                           }
                         />
                       ))}
@@ -307,20 +357,10 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
             <Chat
               presentationId={presentation_id}
               currentSlide={selectedSlide}
-              onPresentationChanged={() => fetchUserSlides({ clearHistory: false })}
-              onChatSendingStateChange={(sending) => {
-                setIsChatSending(sending);
-                if (!sending) {
-                  setAgentFocusedSlide(null);
-                }
-              }}
+              onPresentationChanged={handlePresentationChanged}
+              onChatSendingStateChange={handleChatSendingStateChange}
               onFollowModeChange={setIsFollowModeEnabled}
-              onFollowAgentToSlide={(slideIndex) => {
-                if (slideIndex < 0) {
-                  return;
-                }
-                setAgentFocusedSlide(slideIndex);
-              }}
+              onAgentSlideFocus={handleAgentSlideFocus}
             />
           </div>
         </div>
