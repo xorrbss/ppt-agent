@@ -21,6 +21,14 @@ type RuntimeCandidate = {
 
 const activeExportProcesses = new Set<ChildProcess>();
 
+function showFileDownloadedDialogInBackground(filePath: string): void {
+  setImmediate(() => {
+    void showFileDownloadedDialog(filePath).catch((error) => {
+      safeError("[Export] Failed to show downloaded-file dialog:", error);
+    });
+  });
+}
+
 export async function stopActiveExportProcesses(): Promise<void> {
   const processes = Array.from(activeExportProcesses);
   activeExportProcesses.clear();
@@ -39,8 +47,8 @@ export function setupExportHandlers() {
     const destinationPath = path.join(getDownloadsDir(), fileName);
 
     await fs.promises.rename(filePath, destinationPath);
-    const success = await showFileDownloadedDialog(destinationPath);
-    return { success };
+    showFileDownloadedDialogInBackground(destinationPath);
+    return { success: true };
   });
 
   ipcMain.handle("export-presentation", async (_, id: string, title: string, exportAs: "pptx" | "pdf") => {
@@ -112,14 +120,14 @@ export function setupExportHandlers() {
 
       const destinationPath = path.join(getDownloadsDir(), path.basename(exportFilePath));
       await moveFile(exportFilePath, destinationPath);
-      const success = await showFileDownloadedDialog(destinationPath);
+      showFileDownloadedDialogInBackground(destinationPath);
       addMainBreadcrumb("export", "electron.ipc_export.finish", {
         id,
         exportAs,
-        success,
+        success: true,
         memory: memorySnapshotMb(),
       });
-      return { success, message: success ? "Export completed." : "Export completed but dialog failed." };
+      return { success: true, message: "Export completed." };
     } catch (error: any) {
       safeError("[Export] Error exporting presentation:", error);
       addMainBreadcrumb("export", "electron.ipc_export.error", {
