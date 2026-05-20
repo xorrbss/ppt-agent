@@ -1,12 +1,16 @@
 import { ipcMain } from "electron";
-import { appDataDir, baseDir, downloadsDir, tempDir } from "../utils/constants";
+import { baseDir, getAppDataDir, getDownloadsDir, getTempDir } from "../utils/constants";
 import fs from "fs";
 import path from "path";
 
 import { showFileDownloadedDialog } from "../utils/dialog";
 import { v4 as uuidv4 } from 'uuid';
-import { spawn } from "child_process";
-import { getPuppeteerExecutablePath } from "../utils/puppeteer-check";
+import { ChildProcess, spawn } from "child_process";
+import { safeError, safeLog } from "../utils/safe-console";
+import { addMainBreadcrumb } from "../sentry/main";
+import { BoundedTextBuffer, memorySnapshotMb } from "../utils/memory";
+import { destroyChildProcessStdio, terminateChildProcess } from "../utils/lifecycle";
+import { killProcess } from "../utils";
 
 type BinaryFormat = "elf" | "mach-o" | "pe" | "unknown";
 type RuntimeCandidate = {
@@ -15,34 +19,65 @@ type RuntimeCandidate = {
   useElectronRunAsNode?: boolean;
 };
 
+const activeExportProcesses = new Set<ChildProcess>();
+
+function showFileDownloadedDialogInBackground(filePath: string): void {
+  setImmediate(() => {
+    void showFileDownloadedDialog(filePath).catch((error) => {
+      safeError("[Export] Failed to show downloaded-file dialog:", error);
+    });
+  });
+}
+
+export async function stopActiveExportProcesses(): Promise<void> {
+  const processes = Array.from(activeExportProcesses);
+  activeExportProcesses.clear();
+  await Promise.all(
+    processes.map((process) =>
+      terminateChildProcess(process, "Export", killProcess).catch((error) => {
+        safeError("[Export] Failed to stop active export process:", error);
+      }),
+    ),
+  );
+}
+
 export function setupExportHandlers() {
   ipcMain.handle("file-downloaded", async (_, filePath: string): Promise<IPCStatus> => {
     const fileName = path.basename(filePath);
-    const destinationPath = path.join(downloadsDir, fileName);
+    const destinationPath = path.join(getDownloadsDir(), fileName);
 
     await fs.promises.rename(filePath, destinationPath);
-    const success = await showFileDownloadedDialog(destinationPath);
-    return { success };
+    showFileDownloadedDialogInBackground(destinationPath);
+    return { success: true };
   });
 
   ipcMain.handle("export-presentation", async (_, id: string, title: string, exportAs: "pptx" | "pdf") => {
+    let exportTempDir: string | undefined;
     try {
+      addMainBreadcrumb("export", "electron.ipc_export.start", {
+        id,
+        title,
+        exportAs,
+        memory: memorySnapshotMb(),
+      });
       const params = new URLSearchParams({ id });
       if (process.env.NEXT_PUBLIC_FAST_API) {
         params.set("fastapiUrl", process.env.NEXT_PUBLIC_FAST_API);
       }
       const pptUrl = `${process.env.NEXT_PUBLIC_URL}/pdf-maker?${params.toString()}`;
 
-      let exportTask = {
+      const exportTask = {
         type: "export",
         url: pptUrl,
         format: exportAs,
         title: title,
         fastapiUrl: process.env.NEXT_PUBLIC_FAST_API,
-      }
+      };
 
       const randomUuid = uuidv4();
-      const exportTempDir = path.join(tempDir, randomUuid);
+      const tempDir = getTempDir();
+      const appDataDir = getAppDataDir();
+      exportTempDir = path.join(tempDir, randomUuid);
       await fs.promises.mkdir(exportTempDir, { recursive: true });
 
       const exportTaskPath = path.join(exportTempDir, "export_task.json");
@@ -50,8 +85,7 @@ export function setupExportHandlers() {
 
       const exportScriptPath = path.join(baseDir, "resources", "export", "index.js");
       const pythonModulePath = await resolveConverterPath(baseDir);
-      const puppeteerExecutablePath = await getPuppeteerExecutablePath();
-      console.log("[Export] Spawning export task with config:", {
+      safeLog("[Export] Spawning export task with config:", {
         exportAs,
         id,
         title,
@@ -59,7 +93,6 @@ export function setupExportHandlers() {
         exportTaskPath,
         exportScriptPath,
         pythonModulePath,
-        puppeteerExecutablePath,
         NEXT_PUBLIC_URL: process.env.NEXT_PUBLIC_URL,
         NEXT_PUBLIC_FAST_API: process.env.NEXT_PUBLIC_FAST_API,
       });
@@ -69,9 +102,6 @@ export function setupExportHandlers() {
         APP_DATA_DIRECTORY: appDataDir,
         NODE_ENV: "development",
         BUILT_PYTHON_MODULE_PATH: pythonModulePath,
-        ...(puppeteerExecutablePath && {
-          PUPPETEER_EXECUTABLE_PATH: puppeteerExecutablePath,
-        }),
       };
       await runExportTaskWithRuntimeFallback(
         exportScriptPath,
@@ -88,16 +118,31 @@ export function setupExportHandlers() {
         return { success: false, message: "Export finished but output file was not found." };
       }
 
-      const destinationPath = path.join(downloadsDir, path.basename(exportFilePath));
+      const destinationPath = path.join(getDownloadsDir(), path.basename(exportFilePath));
       await moveFile(exportFilePath, destinationPath);
-      const success = await showFileDownloadedDialog(destinationPath);
-      return { success, message: success ? "Export completed." : "Export completed but dialog failed." };
+      showFileDownloadedDialogInBackground(destinationPath);
+      addMainBreadcrumb("export", "electron.ipc_export.finish", {
+        id,
+        exportAs,
+        success: true,
+        memory: memorySnapshotMb(),
+      });
+      return { success: true, message: "Export completed." };
     } catch (error: any) {
-      console.error("[Export] Error exporting presentation:", error);
+      safeError("[Export] Error exporting presentation:", error);
+      addMainBreadcrumb("export", "electron.ipc_export.error", {
+        id,
+        exportAs,
+        message: error?.message,
+        memory: memorySnapshotMb(),
+      });
       return { success: false, message: error?.message ?? "Export failed." };
+    } finally {
+      if (exportTempDir) {
+        await fs.promises.rm(exportTempDir, { recursive: true, force: true }).catch(() => {});
+      }
     }
-  })
-
+  });
 }
 
 function getExportRuntimeCandidates(): RuntimeCandidate[] {
@@ -155,7 +200,7 @@ async function runExportTaskWithRuntimeFallback(
 
   for (const runtime of runtimeCandidates) {
     try {
-      console.log(`[Export] Trying runtime: ${runtime.label} -> ${runtime.command}`);
+      safeLog(`[Export] Trying runtime: ${runtime.label} -> ${runtime.command}`);
       await runExportTaskOnce(
         runtime,
         exportScriptPath,
@@ -171,7 +216,7 @@ async function runExportTaskWithRuntimeFallback(
         .filter(Boolean)
         .join(" ");
       failures.push(details);
-      console.error(`[Export] Runtime failed (${runtime.label})`, error);
+      safeError(`[Export] Runtime failed (${runtime.label})`, error);
 
       if (!isRetryableRuntimeError(error)) {
         throw error;
@@ -201,29 +246,81 @@ async function runExportTaskOnce(
     windowsHide: process.platform === "win32",
     env: runtimeEnv,
   });
+  activeExportProcesses.add(exportTaskProcess);
 
-  const stdoutChunks: string[] = [];
-  const stderrChunks: string[] = [];
-
-  exportTaskProcess.stdout.on("data", (data: Buffer) => {
-    const text = data.toString();
-    stdoutChunks.push(text);
-    console.log(`[Export] ${text}`);
+  safeLog("[Export] Child process started:", {
+    runtime: runtime.label,
+    pid: exportTaskProcess.pid,
+    memory: memorySnapshotMb(),
   });
-  exportTaskProcess.stderr.on("data", (data: Buffer) => {
-    const text = data.toString();
-    stderrChunks.push(text);
-    console.error(`[Export] ${text}`);
+  addMainBreadcrumb("export", "electron.export_child.start", {
+    runtime: runtime.label,
+    pid: exportTaskProcess.pid,
+    memory: memorySnapshotMb(),
   });
 
-  await new Promise<void>((resolve, reject) => {
-    exportTaskProcess.on("error", reject);
-    exportTaskProcess.on("exit", (code) => {
+  const stdoutTail = new BoundedTextBuffer();
+  const stderrTail = new BoundedTextBuffer();
+
+  const onStdoutData = (data: Buffer) => {
+    const text = data.toString();
+    stdoutTail.append(text);
+    safeLog(`[Export] ${text}`);
+  };
+  const onStderrData = (data: Buffer) => {
+    const text = data.toString();
+    stderrTail.append(text);
+    safeError(`[Export] ${text}`);
+  };
+  exportTaskProcess.stdout?.on("data", onStdoutData);
+  exportTaskProcess.stderr?.on("data", onStderrData);
+
+  let settled = false;
+  let resolvePromise: (() => void) | null = null;
+  let rejectPromise: ((error: Error) => void) | null = null;
+
+  const cleanup = () => {
+    exportTaskProcess.stdout?.removeListener("data", onStdoutData);
+    exportTaskProcess.stderr?.removeListener("data", onStderrData);
+    exportTaskProcess.removeListener("error", onError);
+    exportTaskProcess.removeListener("close", onClose);
+    activeExportProcesses.delete(exportTaskProcess);
+  };
+
+  const finish = (callback: () => void) => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    cleanup();
+    callback();
+  };
+
+  const onError = (error: Error) => {
+    finish(() => rejectPromise?.(error));
+  };
+
+  const onClose = (code: number | null, signal: NodeJS.Signals | null) => {
+    finish(() => {
+      safeLog("[Export] Child process exited:", {
+        runtime: runtime.label,
+        pid: exportTaskProcess.pid,
+        code,
+        signal,
+        memory: memorySnapshotMb(),
+      });
+      addMainBreadcrumb("export", "electron.export_child.exit", {
+        runtime: runtime.label,
+        pid: exportTaskProcess.pid,
+        code,
+        signal,
+        memory: memorySnapshotMb(),
+      });
       if (code === 0) {
-        resolve();
+        resolvePromise?.();
       } else {
-        const stderrText = stderrChunks.join("").trim() || "(no stderr)";
-        const stdoutText = stdoutChunks.join("").trim();
+        const stderrText = stderrTail.toString() || "(no stderr)";
+        const stdoutText = stdoutTail.toString();
         const detail =
           stderrText !== "(no stderr)"
             ? stderrText
@@ -231,13 +328,25 @@ async function runExportTaskOnce(
               ? `stdout: ${stdoutText}`
               : "";
         const error: NodeJS.ErrnoException = new Error(
-          `Export process exited with code ${code}${detail ? `. ${detail}` : ""}`
+          `Export process exited with code ${code ?? "unknown"}${signal ? ` signal ${signal}` : ""}${detail ? `. ${detail}` : ""}`
         );
         error.code = `EXIT_${code ?? "UNKNOWN"}`;
-        reject(error);
+        rejectPromise?.(error);
       }
     });
-  });
+  };
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      resolvePromise = resolve;
+      rejectPromise = reject;
+      exportTaskProcess.once("error", onError);
+      exportTaskProcess.once("close", onClose);
+    });
+  } finally {
+    cleanup();
+    destroyChildProcessStdio(exportTaskProcess);
+  }
 }
 
 async function resolveConverterPath(currentBaseDir: string): Promise<string> {
@@ -332,7 +441,7 @@ function resolveExportedFilePath(responseData: any): string | null {
   if (responseData?.path && typeof responseData.path === "string") {
     return path.isAbsolute(responseData.path)
       ? responseData.path
-      : path.join(appDataDir, responseData.path);
+      : path.join(getAppDataDir(), responseData.path);
   }
 
   if (responseData?.url && typeof responseData.url === "string") {

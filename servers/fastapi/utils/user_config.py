@@ -1,6 +1,3 @@
-import os
-import json
-
 from models.user_config import UserConfig
 from utils.get_env import (
     get_anthropic_api_key_env,
@@ -62,6 +59,7 @@ from utils.get_env import (
     get_openai_compat_image_model_env,
 )
 from utils.parsers import parse_bool_or_none
+from utils.user_config_store import read_user_config_file, update_user_config_file
 from utils.set_env import (
     set_anthropic_api_key_env,
     set_anthropic_model_env,
@@ -127,9 +125,8 @@ def get_user_config():
 
     existing_config = UserConfig()
     try:
-        if os.path.exists(user_config_path):
-            with open(user_config_path, "r") as f:
-                existing_config = UserConfig(**json.load(f))
+        if user_config_path:
+            existing_config = UserConfig(**read_user_config_file(user_config_path))
     except Exception:
         print("Error while loading user config")
         pass
@@ -352,24 +349,17 @@ def save_codex_tokens_to_user_config() -> None:
     if not user_config_path:
         return
 
-    existing: dict = {}
-    try:
-        if os.path.exists(user_config_path):
-            with open(user_config_path, "r") as f:
-                existing = json.load(f)
-    except Exception:
-        pass
-
-    existing["CODEX_ACCESS_TOKEN"] = get_codex_access_token_env()
-    existing["CODEX_REFRESH_TOKEN"] = get_codex_refresh_token_env()
-    existing["CODEX_TOKEN_EXPIRES"] = get_codex_token_expires_env()
-    existing["CODEX_ACCOUNT_ID"] = get_codex_account_id_env()
-    existing["CODEX_USERNAME"] = get_codex_username_env()
-    existing["CODEX_EMAIL"] = get_codex_email_env()
-    existing["CODEX_IS_PRO"] = parse_bool_or_none(get_codex_is_pro_env())
+    def merge_codex_tokens(existing: dict) -> dict:
+        existing["CODEX_ACCESS_TOKEN"] = get_codex_access_token_env()
+        existing["CODEX_REFRESH_TOKEN"] = get_codex_refresh_token_env()
+        existing["CODEX_TOKEN_EXPIRES"] = get_codex_token_expires_env()
+        existing["CODEX_ACCOUNT_ID"] = get_codex_account_id_env()
+        existing["CODEX_USERNAME"] = get_codex_username_env()
+        existing["CODEX_EMAIL"] = get_codex_email_env()
+        existing["CODEX_IS_PRO"] = parse_bool_or_none(get_codex_is_pro_env())
+        return existing
 
     try:
-        with open(user_config_path, "w") as f:
-            json.dump(existing, f)
-    except Exception:
-        pass
+        update_user_config_file(user_config_path, merge_codex_tokens)
+    except Exception as error:
+        print(f"Error while saving Codex tokens to user config: {error}")

@@ -1,7 +1,8 @@
 import { BrowserWindow, ipcMain } from "electron";
 import fs from 'fs';
 import path from 'path';
-import { tempDir } from "../utils/constants";
+import { getTempDir } from "../utils/constants";
+import { hasLiveWebContents, safeCloseWindow } from "../utils/lifecycle";
 
 
 interface Position {
@@ -88,6 +89,24 @@ export function setupSlideMetadataHandlers() {
   ipcMain.handle("get-slide-metadata", async (_, url: string, theme: string, customColors?: any) => {
     let win: BrowserWindow | null = null;
 
+    const getLiveWebContents = () => {
+      if (!hasLiveWebContents(win)) {
+        throw new Error("Slide metadata window was closed before capture completed.");
+      }
+      return win.webContents;
+    };
+
+    const executeInMetadataWindow = async <T>(script: string): Promise<T> => {
+      try {
+        return (await getLiveWebContents().executeJavaScript(script)) as T;
+      } catch (error) {
+        if (!hasLiveWebContents(win)) {
+          throw new Error("Slide metadata window was closed before capture completed.");
+        }
+        throw error;
+      }
+    };
+
     try {
       win = new BrowserWindow({
         width: 1920,
@@ -98,11 +117,14 @@ export function setupSlideMetadataHandlers() {
         },
         show: false,
       });
+      win.once("closed", () => {
+        win = null;
+      });
 
       await win.loadURL(url, { userAgent: 'electron' });
 
 
-      await win.webContents.executeJavaScript(`
+      await executeInMetadataWindow(`
         new Promise((resolve) => {
           const check = () => {
             const el = document.querySelector('[data-element-type="slide-container"]');
@@ -112,9 +134,9 @@ export function setupSlideMetadataHandlers() {
           check();
         });
       `);
-      const metadata = await win.webContents.executeJavaScript(
+      const metadata = await executeInMetadataWindow<any[]>(
         `
- (() => {
+	 (() => {
           const rgbToHex = (color) => {
             if (!color || color === "transparent" || color === "none") return "000000";
             if (color.startsWith("#")) return color.replace("#", "");
@@ -283,25 +305,27 @@ export function setupSlideMetadataHandlers() {
           return slidesMetadata;
         })();
 `
-      )
+      );
       // ✅ Handle Graphs: capture each graph element as an image
-      const graphIds: { id: string; bounds: Electron.Rectangle }[] = await win.webContents.executeJavaScript(`
+      const graphIds: string[] = await executeInMetadataWindow(`
         (() => {
-          return Array.from(document.querySelectorAll('[data-element-type="graph"]')).map(el =>  el.getAttribute("data-element-id"));
+          return Array.from(document.querySelectorAll('[data-element-type="graph"]'))
+            .map(el => el.getAttribute("data-element-id"))
+            .filter(Boolean);
         })();
       `);
 
       for (const id of graphIds) {
         try {
           // Scroll into view first
-          await win.webContents.executeJavaScript(`
+          await executeInMetadataWindow(`
     document.querySelector('[data-element-id="${id}"]').scrollIntoView({ behavior: 'instant', block: 'center' });
- 
+
     `);
           // Wait a bit for any animations/rendering to complete
           await new Promise((r) => setTimeout(r, 2000));
 
-          const bounds: Electron.Rectangle = await win.webContents.executeJavaScript(`
+          const bounds: Electron.Rectangle | null = await executeInMetadataWindow(`
       (() => {
         const el = document.querySelector('[data-element-id="${id}"]');
         if (!el) return null;
@@ -314,8 +338,11 @@ export function setupSlideMetadataHandlers() {
         };
       })();
     `);
+          if (!bounds || bounds.width <= 0 || bounds.height <= 0) {
+            continue;
+          }
 
-          const image = await win.webContents.capturePage(bounds);
+          const image = await getLiveWebContents().capturePage(bounds);
           const buffer = image.toJPEG(100);
 
 
@@ -324,7 +351,7 @@ export function setupSlideMetadataHandlers() {
             continue;
           }
 
-          const filePath = path.join(tempDir, `chart-${id}-${Date.now()}.jpeg`);
+          const filePath = path.join(getTempDir(), `chart-${id}-${Date.now()}.jpeg`);
           fs.writeFileSync(filePath, buffer);
 
           // Update metadata
@@ -345,7 +372,7 @@ export function setupSlideMetadataHandlers() {
       throw error;
     } finally {
       // if (browser) await browser.close();
-      if (win) win.close();
+      safeCloseWindow(win);
     }
   });
 }
