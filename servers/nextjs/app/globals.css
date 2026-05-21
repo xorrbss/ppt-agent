@@ -280,181 +280,76 @@ thead {
   inset: 0;
   z-index: 80;
   border-radius: 14px;
-  background:
-    linear-gradient(
-      180deg,
-      rgba(139, 92, 246, 0.14) 0%,
-      rgba(99, 102, 241, 0.08) 48%,
-      rgba(139, 92, 246, 0.16) 100%
-    );
-  border: 1px solid rgba(196, 181, 253, 0.78);
+  background: linear-gradient(
+    180deg,
+    rgba(139, 92, 246, 0.08) 0%,
+    rgba(99, 102, 241, 0.04) 100%
+  );
+  border: 1px solid rgba(196, 181, 253, 0.56);
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.18),
-    inset 0 0 42px rgba(124, 58, 237, 0.22),
-    0 0 28px rgba(124, 58, 237, 0.2),
-    0 0 58px rgba(99, 102, 241, 0.14);
-  mix-blend-mode: screen;
-  animation: slideEditOverlayPulse 1.7s ease-in-out infinite;
-  will-change: opacity, box-shadow;
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16),
+    0 8px 26px rgba(99, 102, 241, 0.08);
+  overflow: hidden;
+  will-change: transform;
 }
 
 .slide-edit-overlay::before {
   content: "";
   position: absolute;
-  left: -10%;
-  right: -10%;
-  top: -16%;
-  height: 42%;
+  inset: -45%;
   background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0.16) 16%,
-    rgba(196, 181, 253, 0.32) 34%,
-    rgba(147, 51, 234, 0.68) 50%,
-    rgba(196, 181, 253, 0.32) 66%,
-    rgba(255, 255, 255, 0.16) 84%,
-    rgba(255, 255, 255, 0) 100%
+    135deg,
+    rgba(255, 255, 255, 0) 42%,
+    rgba(255, 255, 255, 0.2) 48%,
+    rgba(255, 255, 255, 0.42) 50%,
+    rgba(255, 255, 255, 0.2) 52%,
+    rgba(255, 255, 255, 0) 58%
   );
-  filter: blur(16px);
-  opacity: 1;
-  transform: translateY(-18%);
-  mix-blend-mode: screen;
-  animation: slideEditScannerSweep 1.7s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  transform: translate3d(-60%, -60%, 0);
+  animation: slideEditDiagonalGlare 2.1s ease-in-out infinite;
   will-change: transform, opacity;
 }
 
 .slide-edit-overlay::after {
-  content: "";
-  position: absolute;
-  left: 2%;
-  width: 96%;
-  height: 3px;
-  top: 0;
-  border-radius: 999px;
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 1) 18%,
-    rgba(192, 132, 252, 1) 50%,
-    rgba(255, 255, 255, 1) 82%,
-    rgba(255, 255, 255, 0) 100%
-  );
-  box-shadow:
-    0 0 14px rgba(255, 255, 255, 0.95),
-    0 0 30px rgba(147, 51, 234, 0.85),
-    0 0 44px rgba(99, 102, 241, 0.55);
-  opacity: 1;
-  transform: translateY(0);
-  mix-blend-mode: screen;
-  animation: slideEditScannerLine 1.7s cubic-bezier(0.22, 1, 0.36, 1) infinite;
-  will-change: transform, opacity;
+  content: none;
 }
 
-@keyframes slideEditOverlayPulse {
+@keyframes slideEditDiagonalGlare {
   0% {
-    opacity: 0.88;
+    transform: translate3d(-60%, -60%, 0);
+    opacity: 0;
   }
 
-  50% {
-    opacity: 1;
+  15% {
+    opacity: 0.9;
+  }
+
+  65% {
+    opacity: 0.9;
   }
 
   100% {
-    opacity: 0.88;
-  }
-}
-
-@keyframes slideEditScannerSweep {
-  0% {
-    transform: translateY(-18%);
-    opacity: 1;
-  }
-
-  88% {
-    opacity: 1;
-  }
-
-  100% {
-    transform: translateY(250%);
-    opacity: 0.18;
-  }
-}
-
-@keyframes slideEditScannerLine {
-  0% {
-    transform: translateY(0);
-    opacity: 1;
-  }
-
-  88% {
-    opacity: 1;
-  }
-
-  100% {
-    transform: translateY(36000%);
-    opacity: 0.18;
+    transform: translate3d(60%, 60%, 0);
+    opacity: 0;
   }
 }
 
 .chat-slide-glow {
   border-radius: 14px;
-  animation: chatSlideOuterGlow 1.7s ease-in-out infinite;
+  box-shadow:
+    0 0 0 1px rgba(216, 180, 254, 0.32),
+    0 0 0 5px rgba(139, 92, 246, 0.08),
+    0 10px 24px rgba(99, 102, 241, 0.08);
   will-change: box-shadow;
 }
 
 .chat-slide-target {
   border-radius: 14px;
-  animation: chatSlideTargetPulse 2.2s ease-in-out infinite;
+  box-shadow:
+    0 0 0 1px rgba(216, 180, 254, 0.24),
+    0 0 0 3px rgba(139, 92, 246, 0.06),
+    0 6px 16px rgba(99, 102, 241, 0.06);
   will-change: box-shadow;
-}
-
-@keyframes chatSlideOuterGlow {
-  0% {
-    box-shadow:
-      0 0 0 1px rgba(216, 180, 254, 0.38),
-      0 0 0 8px rgba(139, 92, 246, 0.14),
-      0 0 28px rgba(124, 58, 237, 0.24),
-      0 0 72px rgba(99, 102, 241, 0.16);
-  }
-
-  50% {
-    box-shadow:
-      0 0 0 1px rgba(255, 255, 255, 0.65),
-      0 0 0 10px rgba(139, 92, 246, 0.2),
-      0 0 42px rgba(124, 58, 237, 0.34),
-      0 0 96px rgba(99, 102, 241, 0.24);
-  }
-
-  100% {
-    box-shadow:
-      0 0 0 1px rgba(216, 180, 254, 0.38),
-      0 0 0 8px rgba(139, 92, 246, 0.14),
-      0 0 28px rgba(124, 58, 237, 0.24),
-      0 0 72px rgba(99, 102, 241, 0.16);
-  }
-}
-
-@keyframes chatSlideTargetPulse {
-  0% {
-    box-shadow:
-      0 0 0 1px rgba(216, 180, 254, 0.26),
-      0 0 0 4px rgba(139, 92, 246, 0.08),
-      0 0 16px rgba(124, 58, 237, 0.16);
-  }
-
-  50% {
-    box-shadow:
-      0 0 0 1px rgba(255, 255, 255, 0.42),
-      0 0 0 6px rgba(139, 92, 246, 0.12),
-      0 0 22px rgba(124, 58, 237, 0.22);
-  }
-
-  100% {
-    box-shadow:
-      0 0 0 1px rgba(216, 180, 254, 0.26),
-      0 0 0 4px rgba(139, 92, 246, 0.08),
-      0 0 16px rgba(124, 58, 237, 0.16);
-  }
 }
 
 /* Markdown Styles */

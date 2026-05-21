@@ -278,6 +278,7 @@ const TOOL_LABELS: Record<string, string> = {
   getPresentationOutline: "Outline reader",
   searchSlides: "Slide search",
   getSlideAtIndex: "Slide reader",
+  getPresentationThemeCatalog: "Theme catalog",
   getAvailableLayouts: "Layout finder",
   getContentSchemaFromLayoutId: "Schema checker",
   generateAssets: "Asset generator",
@@ -318,6 +319,9 @@ const humanizeTraceMessage = (message: string, tool?: string) => {
   }
   if (lower === "opening the requested slide") {
     return "Opening the selected slide.";
+  }
+  if (lower === "checking available themes") {
+    return "Checking available color themes.";
   }
   if (lower === "checking available layouts") {
     return "Checking available layouts.";

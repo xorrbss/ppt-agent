@@ -645,8 +645,9 @@ class PresentationChatMemoryLayer:
         selected_source = "query"
 
         if has_custom_theme:
+            custom_theme_payload = custom_theme if isinstance(custom_theme, dict) else {}
             selected_theme = self._build_custom_theme_from_payload(
-                custom_theme=custom_theme,
+                custom_theme=custom_theme_payload,
                 requested_theme=requested_theme,
                 current_theme=current_theme,
                 available_themes=available_themes,
@@ -705,6 +706,74 @@ class PresentationChatMemoryLayer:
             "theme_source": selected_source,
             "custom_theme_saved": custom_theme_saved,
             "previous_theme_name": previous_name,
+        }
+
+    async def get_presentation_theme_catalog(self) -> dict[str, Any]:
+        presentation = await self._sql_session.get(PresentationModel, self._presentation_id)
+        if not presentation:
+            return {
+                "found": False,
+                "message": "Presentation not found.",
+                "current_theme": None,
+                "available_themes": [],
+                "count": 0,
+            }
+
+        current_theme = (
+            copy.deepcopy(presentation.theme)
+            if isinstance(presentation.theme, dict)
+            else None
+        )
+        current_theme_id = (
+            str((current_theme or {}).get("id") or "").strip().lower()
+            if current_theme
+            else ""
+        )
+        builtin_theme_ids = {
+            str(theme.get("id") or "").strip().lower() for theme in CHAT_BUILTIN_THEMES
+        }
+
+        available_themes = await self._get_chat_available_themes()
+        catalog: list[dict[str, Any]] = []
+        for theme in available_themes:
+            theme_id = str(theme.get("id") or "").strip()
+            theme_name = str(theme.get("name") or "").strip()
+            if not theme_id and not theme_name:
+                continue
+            normalized_theme_id = theme_id.lower()
+            catalog.append(
+                {
+                    "id": theme_id,
+                    "name": theme_name or theme_id,
+                    "description": str(theme.get("description") or "").strip(),
+                    "source": (
+                        "built_in"
+                        if normalized_theme_id in builtin_theme_ids
+                        else "custom"
+                    ),
+                    "is_current": bool(
+                        current_theme_id
+                        and normalized_theme_id
+                        and normalized_theme_id == current_theme_id
+                    ),
+                }
+            )
+
+        current_theme_summary: dict[str, Any] | None = None
+        if current_theme:
+            current_theme_summary = {
+                "id": str(current_theme.get("id") or "").strip(),
+                "name": str(current_theme.get("name") or "").strip(),
+                "description": str(current_theme.get("description") or "").strip(),
+            }
+
+        return {
+            "found": True,
+            "count": len(catalog),
+            "current_theme": current_theme_summary,
+            "available_themes": catalog,
+            "available_theme_ids": [theme["id"] for theme in catalog if theme.get("id")],
+            "message": "Theme catalog fetched successfully.",
         }
 
     async def retrieve_context(self, query: str) -> str:

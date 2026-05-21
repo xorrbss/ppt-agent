@@ -514,6 +514,7 @@ class PresentationChatService:
             "getPresentationOutline": "Reading the presentation outline",
             "searchSlides": "Searching relevant slides",
             "getSlideAtIndex": "Opening the requested slide",
+            "getPresentationThemeCatalog": "Checking available themes",
             "getAvailableLayouts": "Checking available layouts",
             "getContentSchemaFromLayoutId": "Checking the layout schema",
             "generateAssets": "Generating slide assets",
