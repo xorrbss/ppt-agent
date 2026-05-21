@@ -251,60 +251,115 @@ const setupUserConfigFromEnv = () => {
     existingConfig.LLM = undefined;
   }
 
+  const envValue = (key) => {
+    const value = process.env[key];
+    return value === undefined || value === "" ? undefined : value;
+  };
+
+  const configValue = (key) => envValue(key) ?? existingConfig[key];
+
+  const parseBooleanLike = (value) => {
+    if (typeof value === "boolean") {
+      return value;
+    }
+    if (typeof value !== "string") {
+      return undefined;
+    }
+
+    const normalized = value.trim().toLowerCase();
+    if (["1", "true", "yes", "on"].includes(normalized)) {
+      return true;
+    }
+    if (["0", "false", "no", "off"].includes(normalized)) {
+      return false;
+    }
+    return undefined;
+  };
+
+  const normalizeImageConfig = (config) => {
+    const parsedDisableImageGeneration = parseBooleanLike(
+      config.DISABLE_IMAGE_GENERATION
+    );
+    if (parsedDisableImageGeneration !== undefined) {
+      config.DISABLE_IMAGE_GENERATION = parsedDisableImageGeneration;
+    }
+
+    if (config.DISABLE_IMAGE_GENERATION || config.IMAGE_PROVIDER) {
+      return config;
+    }
+
+    if (
+      config.OPENAI_COMPAT_IMAGE_BASE_URL &&
+      config.OPENAI_COMPAT_IMAGE_API_KEY &&
+      config.OPENAI_COMPAT_IMAGE_MODEL
+    ) {
+      config.IMAGE_PROVIDER = "openai_compatible";
+    } else if (config.OPEN_WEBUI_IMAGE_URL) {
+      config.IMAGE_PROVIDER = "open_webui";
+    } else if (config.COMFYUI_URL) {
+      config.IMAGE_PROVIDER = "comfyui";
+    } else if (config.PEXELS_API_KEY) {
+      config.IMAGE_PROVIDER = "pexels";
+    } else if (config.PIXABAY_API_KEY) {
+      config.IMAGE_PROVIDER = "pixabay";
+    } else if (config.LLM === "openai" && config.OPENAI_API_KEY) {
+      config.IMAGE_PROVIDER = "gpt-image-1.5";
+      config.GPT_IMAGE_1_5_QUALITY = config.GPT_IMAGE_1_5_QUALITY || "medium";
+    } else if (config.LLM === "google" && config.GOOGLE_API_KEY) {
+      config.IMAGE_PROVIDER = "gemini_flash";
+    } else {
+      config.DISABLE_IMAGE_GENERATION = true;
+    }
+
+    return config;
+  };
+
   const userConfig = {
-    LLM: process.env.LLM || existingConfig.LLM,
-    OPENAI_API_KEY: process.env.OPENAI_API_KEY || existingConfig.OPENAI_API_KEY,
-    OPENAI_MODEL: process.env.OPENAI_MODEL || existingConfig.OPENAI_MODEL,
-    GOOGLE_API_KEY: process.env.GOOGLE_API_KEY || existingConfig.GOOGLE_API_KEY,
-    GOOGLE_MODEL: process.env.GOOGLE_MODEL || existingConfig.GOOGLE_MODEL,
-    VERTEX_API_KEY: process.env.VERTEX_API_KEY || existingConfig.VERTEX_API_KEY,
-    VERTEX_MODEL: process.env.VERTEX_MODEL || existingConfig.VERTEX_MODEL,
-    VERTEX_PROJECT: process.env.VERTEX_PROJECT || existingConfig.VERTEX_PROJECT,
-    VERTEX_LOCATION: process.env.VERTEX_LOCATION || existingConfig.VERTEX_LOCATION,
-    VERTEX_BASE_URL: process.env.VERTEX_BASE_URL || existingConfig.VERTEX_BASE_URL,
-    AZURE_OPENAI_API_KEY:
-      process.env.AZURE_OPENAI_API_KEY || existingConfig.AZURE_OPENAI_API_KEY,
-    AZURE_OPENAI_MODEL:
-      process.env.AZURE_OPENAI_MODEL || existingConfig.AZURE_OPENAI_MODEL,
-    AZURE_OPENAI_ENDPOINT:
-      process.env.AZURE_OPENAI_ENDPOINT || existingConfig.AZURE_OPENAI_ENDPOINT,
-    AZURE_OPENAI_BASE_URL:
-      process.env.AZURE_OPENAI_BASE_URL || existingConfig.AZURE_OPENAI_BASE_URL,
-    AZURE_OPENAI_API_VERSION:
-      process.env.AZURE_OPENAI_API_VERSION || existingConfig.AZURE_OPENAI_API_VERSION,
-    AZURE_OPENAI_DEPLOYMENT:
-      process.env.AZURE_OPENAI_DEPLOYMENT || existingConfig.AZURE_OPENAI_DEPLOYMENT,
-    OLLAMA_URL: process.env.OLLAMA_URL || existingConfig.OLLAMA_URL,
-    OLLAMA_MODEL: process.env.OLLAMA_MODEL || existingConfig.OLLAMA_MODEL,
-    ANTHROPIC_API_KEY:
-      process.env.ANTHROPIC_API_KEY || existingConfig.ANTHROPIC_API_KEY,
-    ANTHROPIC_MODEL:
-      process.env.ANTHROPIC_MODEL || existingConfig.ANTHROPIC_MODEL,
-    CUSTOM_LLM_URL: process.env.CUSTOM_LLM_URL || existingConfig.CUSTOM_LLM_URL,
-    CUSTOM_LLM_API_KEY:
-      process.env.CUSTOM_LLM_API_KEY || existingConfig.CUSTOM_LLM_API_KEY,
-    CUSTOM_MODEL: process.env.CUSTOM_MODEL || existingConfig.CUSTOM_MODEL,
-    LITELLM_BASE_URL: process.env.LITELLM_BASE_URL || existingConfig.LITELLM_BASE_URL,
-    LITELLM_API_KEY: process.env.LITELLM_API_KEY || existingConfig.LITELLM_API_KEY,
-    LITELLM_MODEL: process.env.LITELLM_MODEL || existingConfig.LITELLM_MODEL,
-    PEXELS_API_KEY: process.env.PEXELS_API_KEY || existingConfig.PEXELS_API_KEY,
-    PIXABAY_API_KEY:
-      process.env.PIXABAY_API_KEY || existingConfig.PIXABAY_API_KEY,
-    IMAGE_PROVIDER: process.env.IMAGE_PROVIDER || existingConfig.IMAGE_PROVIDER,
-    DISABLE_THINKING:
-      process.env.DISABLE_THINKING || existingConfig.DISABLE_THINKING,
-    EXTENDED_REASONING:
-      process.env.EXTENDED_REASONING || existingConfig.EXTENDED_REASONING,
-    WEB_GROUNDING: process.env.WEB_GROUNDING || existingConfig.WEB_GROUNDING,
-    USE_CUSTOM_URL: process.env.USE_CUSTOM_URL || existingConfig.USE_CUSTOM_URL,
-    COMFYUI_URL: process.env.COMFYUI_URL || existingConfig.COMFYUI_URL,
-    COMFYUI_WORKFLOW:
-      process.env.COMFYUI_WORKFLOW || existingConfig.COMFYUI_WORKFLOW,
-    DALL_E_3_QUALITY:
-      process.env.DALL_E_3_QUALITY || existingConfig.DALL_E_3_QUALITY,
-    GPT_IMAGE_1_5_QUALITY:
-      process.env.GPT_IMAGE_1_5_QUALITY || existingConfig.GPT_IMAGE_1_5_QUALITY,
-    CODEX_MODEL: process.env.CODEX_MODEL || existingConfig.CODEX_MODEL,
+    ...existingConfig,
+    LLM: configValue("LLM"),
+    OPENAI_API_KEY: configValue("OPENAI_API_KEY"),
+    OPENAI_MODEL: configValue("OPENAI_MODEL"),
+    GOOGLE_API_KEY: configValue("GOOGLE_API_KEY"),
+    GOOGLE_MODEL: configValue("GOOGLE_MODEL"),
+    VERTEX_API_KEY: configValue("VERTEX_API_KEY"),
+    VERTEX_MODEL: configValue("VERTEX_MODEL"),
+    VERTEX_PROJECT: configValue("VERTEX_PROJECT"),
+    VERTEX_LOCATION: configValue("VERTEX_LOCATION"),
+    VERTEX_BASE_URL: configValue("VERTEX_BASE_URL"),
+    AZURE_OPENAI_API_KEY: configValue("AZURE_OPENAI_API_KEY"),
+    AZURE_OPENAI_MODEL: configValue("AZURE_OPENAI_MODEL"),
+    AZURE_OPENAI_ENDPOINT: configValue("AZURE_OPENAI_ENDPOINT"),
+    AZURE_OPENAI_BASE_URL: configValue("AZURE_OPENAI_BASE_URL"),
+    AZURE_OPENAI_API_VERSION: configValue("AZURE_OPENAI_API_VERSION"),
+    AZURE_OPENAI_DEPLOYMENT: configValue("AZURE_OPENAI_DEPLOYMENT"),
+    OLLAMA_URL: configValue("OLLAMA_URL"),
+    OLLAMA_MODEL: configValue("OLLAMA_MODEL"),
+    ANTHROPIC_API_KEY: configValue("ANTHROPIC_API_KEY"),
+    ANTHROPIC_MODEL: configValue("ANTHROPIC_MODEL"),
+    CUSTOM_LLM_URL: configValue("CUSTOM_LLM_URL"),
+    CUSTOM_LLM_API_KEY: configValue("CUSTOM_LLM_API_KEY"),
+    CUSTOM_MODEL: configValue("CUSTOM_MODEL"),
+    LITELLM_BASE_URL: configValue("LITELLM_BASE_URL"),
+    LITELLM_API_KEY: configValue("LITELLM_API_KEY"),
+    LITELLM_MODEL: configValue("LITELLM_MODEL"),
+    PEXELS_API_KEY: configValue("PEXELS_API_KEY"),
+    PIXABAY_API_KEY: configValue("PIXABAY_API_KEY"),
+    IMAGE_PROVIDER: configValue("IMAGE_PROVIDER"),
+    DISABLE_IMAGE_GENERATION: configValue("DISABLE_IMAGE_GENERATION"),
+    DISABLE_THINKING: configValue("DISABLE_THINKING"),
+    EXTENDED_REASONING: configValue("EXTENDED_REASONING"),
+    WEB_GROUNDING: configValue("WEB_GROUNDING"),
+    USE_CUSTOM_URL: configValue("USE_CUSTOM_URL"),
+    COMFYUI_URL: configValue("COMFYUI_URL"),
+    COMFYUI_WORKFLOW: configValue("COMFYUI_WORKFLOW"),
+    DALL_E_3_QUALITY: configValue("DALL_E_3_QUALITY"),
+    GPT_IMAGE_1_5_QUALITY: configValue("GPT_IMAGE_1_5_QUALITY"),
+    OPEN_WEBUI_IMAGE_URL: configValue("OPEN_WEBUI_IMAGE_URL"),
+    OPEN_WEBUI_IMAGE_API_KEY: configValue("OPEN_WEBUI_IMAGE_API_KEY"),
+    OPENAI_COMPAT_IMAGE_BASE_URL: configValue("OPENAI_COMPAT_IMAGE_BASE_URL"),
+    OPENAI_COMPAT_IMAGE_API_KEY: configValue("OPENAI_COMPAT_IMAGE_API_KEY"),
+    OPENAI_COMPAT_IMAGE_MODEL: configValue("OPENAI_COMPAT_IMAGE_MODEL"),
+    CODEX_MODEL: configValue("CODEX_MODEL"),
     CODEX_ACCESS_TOKEN: existingConfig.CODEX_ACCESS_TOKEN,
     CODEX_REFRESH_TOKEN: existingConfig.CODEX_REFRESH_TOKEN,
     CODEX_TOKEN_EXPIRES: existingConfig.CODEX_TOKEN_EXPIRES,
@@ -314,7 +369,7 @@ const setupUserConfigFromEnv = () => {
     AUTH_SECRET_KEY: existingConfig.AUTH_SECRET_KEY,
   };
 
-  writeFileSync(userConfigPath, JSON.stringify(userConfig));
+  writeFileSync(userConfigPath, JSON.stringify(normalizeImageConfig(userConfig)));
 };
 
 const startServers = async (nginxReadyPromise) => {
