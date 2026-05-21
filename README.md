@@ -108,7 +108,7 @@ Create AI-powered presentations using your own model provider (BYOK) or run ever
     <img
       src="https://www.deploytodo.com/do-btn-blue.svg"
       alt="Deploy to DigitalOcean"
-      style="height:38px;"
+      style="height:36px;"
     />
   </a>
 </div>
