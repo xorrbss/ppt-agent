@@ -39,6 +39,10 @@ export interface ChatStreamTrace {
   status?: string;
   message?: string;
   tools?: string[];
+  slideIndex?: number;
+  slideNumber?: number;
+  targetSlideIndices?: number[];
+  targetSlideNumbers?: number[];
 }
 
 export interface ChatStreamHandlers {
@@ -264,6 +268,36 @@ export class PresentationChatApi {
             tools: Array.isArray(typedTrace.tools)
               ? typedTrace.tools.filter(
                   (value): value is string => typeof value === "string"
+                )
+              : undefined,
+            slideIndex:
+              typeof typedTrace.slide_index === "number"
+                ? typedTrace.slide_index
+                : typeof typedTrace.slideIndex === "number"
+                ? typedTrace.slideIndex
+                : undefined,
+            slideNumber:
+              typeof typedTrace.slide_number === "number"
+                ? typedTrace.slide_number
+                : typeof typedTrace.slideNumber === "number"
+                ? typedTrace.slideNumber
+                : undefined,
+            targetSlideIndices: Array.isArray(typedTrace.target_slide_indices)
+              ? typedTrace.target_slide_indices.filter(
+                  (value): value is number => typeof value === "number"
+                )
+              : Array.isArray(typedTrace.targetSlideIndices)
+              ? typedTrace.targetSlideIndices.filter(
+                  (value): value is number => typeof value === "number"
+                )
+              : undefined,
+            targetSlideNumbers: Array.isArray(typedTrace.target_slide_numbers)
+              ? typedTrace.target_slide_numbers.filter(
+                  (value): value is number => typeof value === "number"
+                )
+              : Array.isArray(typedTrace.targetSlideNumbers)
+              ? typedTrace.targetSlideNumbers.filter(
+                  (value): value is number => typeof value === "number"
                 )
               : undefined,
           });

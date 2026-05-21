@@ -17,13 +17,13 @@ export const usePresentationNavigation = (
   );
 
   const handleSlideClick = useCallback((index: number) => {
+    setSelectedSlide(index);
     const slideElement = document.getElementById(`slide-${index}`);
     if (slideElement) {
       slideElement.scrollIntoView({
         behavior: "smooth",
         block: "center",
       });
-      setSelectedSlide(index);
     }
   }, [setSelectedSlide]);
 
