@@ -104,6 +104,13 @@ Create AI-powered presentations using your own model provider (BYOK) or run ever
       style="height:38px;"
     />
   </a>
+  <a href="https://cloud.digitalocean.com/apps/new?repo=https://github.com/presenton/presenton/tree/main">
+    <img
+      src="https://www.deploytodo.com/do-btn-blue.svg"
+      alt="Deploy to DigitalOcean"
+      style="height:38px;"
+    />
+  </a>
 </div>
 
 #
