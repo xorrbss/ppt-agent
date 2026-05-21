@@ -28,10 +28,29 @@ class UserConfig(BaseModel):
     AZURE_OPENAI_API_VERSION: Optional[str] = None
     AZURE_OPENAI_DEPLOYMENT: Optional[str] = None
 
+    # Amazon Bedrock
+    BEDROCK_REGION: Optional[str] = None
+    BEDROCK_API_KEY: Optional[str] = None
+    BEDROCK_AWS_ACCESS_KEY_ID: Optional[str] = None
+    BEDROCK_AWS_SECRET_ACCESS_KEY: Optional[str] = None
+    BEDROCK_AWS_SESSION_TOKEN: Optional[str] = None
+    BEDROCK_PROFILE_NAME: Optional[str] = None
+    BEDROCK_MODEL: Optional[str] = None
+
     # OpenRouter
     OPENROUTER_API_KEY: Optional[str] = None
     OPENROUTER_MODEL: Optional[str] = None
     OPENROUTER_BASE_URL: Optional[str] = None
+
+    # Fireworks
+    FIREWORKS_API_KEY: Optional[str] = None
+    FIREWORKS_MODEL: Optional[str] = None
+    FIREWORKS_BASE_URL: Optional[str] = None
+
+    # Together AI
+    TOGETHER_API_KEY: Optional[str] = None
+    TOGETHER_MODEL: Optional[str] = None
+    TOGETHER_BASE_URL: Optional[str] = None
 
     # Cerebras
     CEREBRAS_API_KEY: Optional[str] = None
@@ -42,6 +61,11 @@ class UserConfig(BaseModel):
     LITELLM_BASE_URL: Optional[str] = None
     LITELLM_API_KEY: Optional[str] = None
     LITELLM_MODEL: Optional[str] = None
+
+    # LM Studio (local OpenAI-compatible server)
+    LMSTUDIO_BASE_URL: Optional[str] = None
+    LMSTUDIO_API_KEY: Optional[str] = None
+    LMSTUDIO_MODEL: Optional[str] = None
 
     # Anthropic
     ANTHROPIC_API_KEY: Optional[str] = None

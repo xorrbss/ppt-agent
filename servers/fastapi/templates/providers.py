@@ -47,16 +47,24 @@ def _provider_label(provider: LLMProvider) -> str:
         return "Anthropic"
     if provider == LLMProvider.AZURE:
         return "Azure OpenAI"
+    if provider == LLMProvider.BEDROCK:
+        return "Amazon Bedrock"
     if provider == LLMProvider.OLLAMA:
         return "Ollama"
     if provider == LLMProvider.OPENROUTER:
         return "OpenRouter"
+    if provider == LLMProvider.FIREWORKS:
+        return "Fireworks"
+    if provider == LLMProvider.TOGETHER:
+        return "Together AI"
     if provider == LLMProvider.CEREBRAS:
         return "Cerebras"
     if provider == LLMProvider.CUSTOM:
         return "Custom"
     if provider == LLMProvider.LITELLM:
         return "LiteLLM"
+    if provider == LLMProvider.LMSTUDIO:
+        return "LM Studio"
     return "Template provider"
 
 

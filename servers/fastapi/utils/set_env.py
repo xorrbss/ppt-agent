@@ -81,6 +81,34 @@ def set_azure_openai_deployment_env(value):
     os.environ["AZURE_OPENAI_DEPLOYMENT"] = value
 
 
+def set_bedrock_region_env(value):
+    os.environ["BEDROCK_REGION"] = value
+
+
+def set_bedrock_api_key_env(value):
+    os.environ["BEDROCK_API_KEY"] = value
+
+
+def set_bedrock_aws_access_key_id_env(value):
+    os.environ["BEDROCK_AWS_ACCESS_KEY_ID"] = value
+
+
+def set_bedrock_aws_secret_access_key_env(value):
+    os.environ["BEDROCK_AWS_SECRET_ACCESS_KEY"] = value
+
+
+def set_bedrock_aws_session_token_env(value):
+    os.environ["BEDROCK_AWS_SESSION_TOKEN"] = value
+
+
+def set_bedrock_profile_name_env(value):
+    os.environ["BEDROCK_PROFILE_NAME"] = value
+
+
+def set_bedrock_model_env(value):
+    os.environ["BEDROCK_MODEL"] = value
+
+
 def set_openrouter_api_key_env(value):
     os.environ["OPENROUTER_API_KEY"] = value
 
@@ -91,6 +119,30 @@ def set_openrouter_model_env(value):
 
 def set_openrouter_base_url_env(value):
     os.environ["OPENROUTER_BASE_URL"] = value
+
+
+def set_fireworks_api_key_env(value):
+    os.environ["FIREWORKS_API_KEY"] = value
+
+
+def set_fireworks_model_env(value):
+    os.environ["FIREWORKS_MODEL"] = value
+
+
+def set_fireworks_base_url_env(value):
+    os.environ["FIREWORKS_BASE_URL"] = value
+
+
+def set_together_api_key_env(value):
+    os.environ["TOGETHER_API_KEY"] = value
+
+
+def set_together_model_env(value):
+    os.environ["TOGETHER_MODEL"] = value
+
+
+def set_together_base_url_env(value):
+    os.environ["TOGETHER_BASE_URL"] = value
 
 
 def set_cerebras_api_key_env(value):
@@ -115,6 +167,18 @@ def set_litellm_api_key_env(value):
 
 def set_litellm_model_env(value):
     os.environ["LITELLM_MODEL"] = value
+
+
+def set_lmstudio_base_url_env(value):
+    os.environ["LMSTUDIO_BASE_URL"] = value
+
+
+def set_lmstudio_api_key_env(value):
+    os.environ["LMSTUDIO_API_KEY"] = value
+
+
+def set_lmstudio_model_env(value):
+    os.environ["LMSTUDIO_MODEL"] = value
 
 
 def set_anthropic_api_key_env(value):
