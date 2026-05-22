@@ -1,5 +1,7 @@
-import fs from "fs/promises";
+import fs from "fs";
+import fsPromises from "fs/promises";
 import path from "path";
+import { Readable } from "stream";
 import { NextRequest, NextResponse } from "next/server";
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -44,9 +46,9 @@ export async function GET(request: NextRequest) {
 
   try {
     const exportsDirectory = getExportsDirectory();
-    const resolvedExportsDirectory = await fs.realpath(exportsDirectory);
+    const resolvedExportsDirectory = await fsPromises.realpath(exportsDirectory);
     const filePath = path.join(exportsDirectory, filename);
-    const resolvedFilePath = await fs.realpath(filePath);
+    const resolvedFilePath = await fsPromises.realpath(filePath);
 
     if (
       resolvedFilePath !== resolvedExportsDirectory &&
@@ -55,12 +57,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
-    const fileBuffer = await fs.readFile(resolvedFilePath);
     const ext = path.extname(filename).toLowerCase();
-    return new NextResponse(new Uint8Array(fileBuffer), {
+    const stats = await fsPromises.stat(resolvedFilePath);
+    const stream = Readable.toWeb(fs.createReadStream(resolvedFilePath));
+    return new NextResponse(stream as unknown as BodyInit, {
       headers: {
         "Content-Type": CONTENT_TYPES[ext] ?? "application/octet-stream",
         "Content-Disposition": contentDisposition(filename),
+        "Content-Length": String(stats.size),
         "Cache-Control": "no-store",
       },
     });

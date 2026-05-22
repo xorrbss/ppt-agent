@@ -13,17 +13,12 @@ export function setupApiHandlers() {
 
   // Handler for has-required-key API
   ipcMain.handle("api:has-required-key", async () => {
-    const userConfigPath = process.env.USER_CONFIG_PATH;
-
     let keyFromFile = "";
-    if (userConfigPath && fs.existsSync(userConfigPath)) {
-      try {
-        const raw = fs.readFileSync(userConfigPath, "utf-8");
-        const cfg = JSON.parse(raw || "{}");
-        keyFromFile = cfg?.OPENAI_API_KEY || "";
-      } catch {
-        // Silent error handling
-      }
+    try {
+      const cfg = getUserConfig();
+      keyFromFile = cfg?.OPENAI_API_KEY || "";
+    } catch {
+      // Silent error handling
     }
 
     const keyFromEnv = process.env.OPENAI_API_KEY || "";

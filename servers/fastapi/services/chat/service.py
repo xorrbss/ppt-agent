@@ -6,6 +6,7 @@ from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from typing import Any, Literal
 
+import dirtyjson  # type: ignore[import-untyped]
 from fastapi import HTTPException
 from llmai import get_client  # type: ignore[import-not-found]
 from llmai.shared import (  # type: ignore[import-not-found]
@@ -34,7 +35,7 @@ from utils.llm_utils import (
 )
 
 LOGGER = logging.getLogger(__name__)
-MAX_TOOL_ROUNDS = 16
+MAX_TOOL_ROUNDS = 40
 
 
 @dataclass(frozen=True)
@@ -147,16 +148,27 @@ class PresentationChatService:
 
                 last_tool_results = []
                 for tool_call in completion_tool_calls:
-                    yield "trace", {
+                    tool_focus = self._tool_focus_from_arguments(
+                        tool_name=tool_call.name,
+                        arguments=tool_call.arguments,
+                    )
+                    start_trace: dict[str, Any] = {
                         "kind": "tool_call",
                         "round": round_index + 1,
                         "tool": tool_call.name,
                         "status": "start",
                         "message": self._tool_start_message(tool_call.name),
                     }
+                    if tool_focus:
+                        start_trace.update(tool_focus)
+                    yield "trace", start_trace
                     tool_result = await self._tools.execute_tool_call(tool_call)
                     last_tool_results.append(tool_result)
-                    yield "trace", {
+                    resolved_tool_focus = self._tool_focus_from_result(
+                        tool_name=tool_call.name,
+                        tool_result=tool_result,
+                    )
+                    complete_trace: dict[str, Any] = {
                         "kind": "tool_call",
                         "round": round_index + 1,
                         "tool": tool_call.name,
@@ -165,6 +177,9 @@ class PresentationChatService:
                             tool_call.name, tool_result
                         ),
                     }
+                    if resolved_tool_focus:
+                        complete_trace.update(resolved_tool_focus)
+                    yield "trace", complete_trace
                     tool_response_content = json.dumps(tool_result, ensure_ascii=False)
                     messages.append(
                         ToolResponseMessage(
@@ -234,11 +249,13 @@ class PresentationChatService:
         )
         history_messages = self._convert_history_to_messages(history)
 
-        presentation_memory = await self._memory.retrieve_context(user_message)
+        normalized_user_message = self._strip_ui_context_prefix(user_message)
+        memory_query = normalized_user_message or user_message
+        presentation_memory = await self._memory.retrieve_context(memory_query)
         chat_memory = await self._conversation_store.retrieve_semantic_context(
             presentation_id=self._presentation_id,
             conversation_id=conversation_id,
-            query=user_message,
+            query=memory_query,
         )
         messages: list[Message] = [
             SystemMessage(
@@ -263,7 +280,7 @@ class PresentationChatService:
         await self._conversation_store.append_turn(
             presentation_id=self._presentation_id,
             conversation_id=conversation_id,
-            user_message=user_message,
+            user_message=self._strip_ui_context_prefix(user_message) or user_message,
             assistant_message=response_text,
             tool_calls=tool_calls,
         )
@@ -371,16 +388,139 @@ class PresentationChatService:
         return ""
 
     @staticmethod
+    def _strip_ui_context_prefix(user_message: str) -> str:
+        marker = "\nUser message:"
+        if not user_message.startswith("UI context:"):
+            return user_message
+        marker_index = user_message.find(marker)
+        if marker_index == -1:
+            return user_message
+        return user_message[marker_index + len(marker) :].lstrip()
+
+    @staticmethod
+    def _tool_focus_from_arguments(
+        *,
+        tool_name: str,
+        arguments: str | None,
+    ) -> dict[str, Any] | None:
+        if tool_name not in {"getSlideAtIndex", "saveSlide", "deleteSlide"}:
+            return None
+
+        parsed_args: dict[str, Any]
+        try:
+            parsed_args = dirtyjson.loads(arguments or "{}")
+        except Exception:
+            try:
+                parsed_args = json.loads(arguments or "{}")
+            except Exception:
+                return None
+        if not isinstance(parsed_args, dict):
+            return None
+
+        focus_payload: dict[str, Any] = {}
+        index = parsed_args.get("index")
+        if isinstance(index, int):
+            normalized_index = max(0, index)
+            focus_payload["slide_index"] = normalized_index
+            focus_payload["slide_number"] = normalized_index + 1
+
+        target_slide_indices = PresentationChatService._extract_target_slide_indices(
+            parsed_args
+        )
+        if target_slide_indices:
+            focus_payload["target_slide_indices"] = target_slide_indices
+            focus_payload["target_slide_numbers"] = [
+                index + 1 for index in target_slide_indices
+            ]
+
+        return focus_payload or None
+
+    @staticmethod
+    def _tool_focus_from_result(
+        *,
+        tool_name: str,
+        tool_result: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        if tool_name not in {"getSlideAtIndex", "saveSlide", "deleteSlide"}:
+            return None
+        if not tool_result.get("ok"):
+            return None
+
+        result = tool_result.get("result")
+        if not isinstance(result, dict):
+            return None
+
+        focus_payload: dict[str, Any] = {}
+        index: int | None = None
+        resolved_index = result.get("resolved_index")
+        if isinstance(resolved_index, int):
+            index = resolved_index
+        else:
+            direct_index = result.get("index")
+            if isinstance(direct_index, int):
+                index = direct_index
+            else:
+                slide = result.get("slide")
+                if isinstance(slide, dict) and isinstance(slide.get("index"), int):
+                    index = slide["index"]
+
+        if index is not None:
+            normalized_index = max(0, index)
+            focus_payload["slide_index"] = normalized_index
+            focus_payload["slide_number"] = normalized_index + 1
+
+        target_slide_indices = PresentationChatService._extract_target_slide_indices(
+            result
+        )
+        if target_slide_indices:
+            focus_payload["target_slide_indices"] = target_slide_indices
+            focus_payload["target_slide_numbers"] = [
+                index + 1 for index in target_slide_indices
+            ]
+
+        return focus_payload or None
+
+    @staticmethod
+    def _extract_target_slide_indices(payload: dict[str, Any]) -> list[int]:
+        raw_candidates = []
+        for key in (
+            "target_slide_indices",
+            "targetSlideIndices",
+            "target_indices",
+            "targetIndices",
+            "slide_indices",
+            "slideIndices",
+            "indices",
+        ):
+            value = payload.get(key)
+            if isinstance(value, list):
+                raw_candidates.extend(value)
+
+        normalized_indices: list[int] = []
+        seen_indices: set[int] = set()
+        for candidate in raw_candidates:
+            if not isinstance(candidate, int):
+                continue
+            normalized_index = max(0, candidate)
+            if normalized_index in seen_indices:
+                continue
+            seen_indices.add(normalized_index)
+            normalized_indices.append(normalized_index)
+        return normalized_indices
+
+    @staticmethod
     def _tool_start_message(tool_name: str) -> str:
         labels = {
             "getPresentationOutline": "Reading the presentation outline",
             "searchSlides": "Searching relevant slides",
             "getSlideAtIndex": "Opening the requested slide",
+            "getPresentationThemeCatalog": "Checking available themes",
             "getAvailableLayouts": "Checking available layouts",
             "getContentSchemaFromLayoutId": "Checking the layout schema",
             "generateAssets": "Generating slide assets",
             "saveSlide": "Saving the slide",
             "deleteSlide": "Deleting the slide",
+            "setPresentationTheme": "Applying presentation theme",
         }
         return labels.get(tool_name, f"Running {tool_name}")
 
@@ -444,6 +584,7 @@ class PresentationChatService:
             if not content:
                 continue
             if role == "user":
+                content = PresentationChatService._strip_ui_context_prefix(content)
                 messages.append(UserMessage(content=content))
             elif role == "assistant":
                 messages.append(AssistantMessage(content=[content]))

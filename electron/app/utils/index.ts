@@ -1,33 +1,26 @@
 import net from 'net'
 import treeKill from 'tree-kill'
-import fs from 'fs'
-import { localhost, tempDir, userConfigPath } from './constants'
+import { getTempDir, getUserConfigPath, localhost } from './constants'
+import { readUserConfigFile, updateUserConfigFile } from './user-config-store'
 
 export function setUserConfig(userConfig: UserConfig) {
-  let existingConfig: UserConfig = {}
-
-  if (fs.existsSync(userConfigPath)) {
-    const configData = fs.readFileSync(userConfigPath, 'utf-8')
-    existingConfig = JSON.parse(configData)
-  }
-  const definedIncomingEntries = Object.entries(userConfig).filter(([, value]) => value !== undefined)
-  const mergedConfig: UserConfig = {
-    ...existingConfig,
-    ...Object.fromEntries(definedIncomingEntries),
-    CODEX_ACCESS_TOKEN: existingConfig.CODEX_ACCESS_TOKEN,
-    CODEX_REFRESH_TOKEN: existingConfig.CODEX_REFRESH_TOKEN,
-    CODEX_TOKEN_EXPIRES: existingConfig.CODEX_TOKEN_EXPIRES,
-    CODEX_ACCOUNT_ID: existingConfig.CODEX_ACCOUNT_ID,
-  }
-  fs.writeFileSync(userConfigPath, JSON.stringify(mergedConfig))
+  const userConfigPath = getUserConfigPath()
+  updateUserConfigFile<UserConfig>(userConfigPath, (existingConfig) => {
+    const definedIncomingEntries = Object.entries(userConfig).filter(([, value]) => value !== undefined)
+    return {
+      ...existingConfig,
+      ...Object.fromEntries(definedIncomingEntries),
+      CODEX_ACCESS_TOKEN: existingConfig.CODEX_ACCESS_TOKEN,
+      CODEX_REFRESH_TOKEN: existingConfig.CODEX_REFRESH_TOKEN,
+      CODEX_TOKEN_EXPIRES: existingConfig.CODEX_TOKEN_EXPIRES,
+      CODEX_ACCOUNT_ID: existingConfig.CODEX_ACCOUNT_ID,
+    }
+  })
 }
 
 export function getUserConfig(): UserConfig {
-  if (!fs.existsSync(userConfigPath)) {
-    return {}
-  }
-  const configData = fs.readFileSync(userConfigPath, 'utf-8')
-  return JSON.parse(configData)
+  const userConfigPath = getUserConfigPath()
+  return readUserConfigFile<UserConfig>(userConfigPath)
 }
 
 export function setupEnv(fastApiPort: number, nextjsPort: number) {
@@ -35,6 +28,8 @@ export function setupEnv(fastApiPort: number, nextjsPort: number) {
   process.env.APP_VERSION = app.getVersion();
   process.env.SENTRY_RELEASE = process.env.SENTRY_RELEASE || `presenton-electron@${process.env.APP_VERSION}`;
   process.env.SENTRY_ENVIRONMENT = process.env.SENTRY_ENVIRONMENT || (app.isPackaged ? 'production' : 'development');
+  const tempDir = getTempDir();
+  const userConfigPath = getUserConfigPath();
   process.env.NEXT_PUBLIC_FAST_API = `${localhost}:${fastApiPort}`;
   process.env.TEMP_DIRECTORY = tempDir;
   process.env.NEXT_PUBLIC_USER_CONFIG_PATH = userConfigPath;

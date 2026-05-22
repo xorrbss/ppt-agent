@@ -79,7 +79,6 @@ ARG INSTALL_LIBREOFFICE=true
 # LiteParse uses Node + @llamaindex/liteparse (same runner as Electron); OCR uses Tesseract.
 ENV APP_DATA_DIRECTORY=/app_data \
     TEMP_DIRECTORY=/tmp/presenton \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
     EXPORT_PACKAGE_ROOT=/app/presentation-export \
     EXPORT_RUNTIME_DIR=/app/presentation-export \
     BUILT_PYTHON_MODULE_PATH=/app/presentation-export/py/convert-linux-x64 \
@@ -91,7 +90,13 @@ ENV APP_DATA_DIRECTORY=/app_data \
     START_OLLAMA=false
 
 RUN set -eux; \
-    packages="ca-certificates curl nginx fontconfig chromium imagemagick zstd"; \
+    packages="ca-certificates curl nginx fontconfig imagemagick zstd \
+      fonts-liberation xdg-utils \
+      libasound2t64 libatk-bridge2.0-0t64 libatk1.0-0t64 libatspi2.0-0t64 \
+      libcairo2 libcups2t64 libdbus-1-3 libdrm2 libexpat1 libgbm1 \
+      libglib2.0-0t64 libgtk-3-0t64 libnspr4 libnss3 libpango-1.0-0 \
+      libx11-6 libxcb1 libxcomposite1 libxdamage1 libxext6 libxfixes3 \
+      libxkbcommon0 libxrandr2 libxshmfence1 libxss1 libxtst6"; \
     if [ "$INSTALL_LIBREOFFICE" = "true" ]; then packages="$packages libreoffice"; fi; \
     if [ "$INSTALL_TESSERACT" = "true" ]; then packages="$packages tesseract-ocr tesseract-ocr-eng"; fi; \
     apt-get update; \

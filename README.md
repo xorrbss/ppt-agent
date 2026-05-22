@@ -17,6 +17,8 @@
 
 # Open-Source AI Presentation Generator and API (Gamma, Beautiful AI, Decktopus Alternative)
 
+
+
 ### ✨ Why Presenton
 
 No SaaS lock-in · No forced subscriptions · Full control over models and data
@@ -90,6 +92,28 @@ Create AI-powered presentations using your own model provider (BYOK) or run ever
 </tr>
 
 </table>
+
+
+**Deploy to Cloud Providers**
+
+<div style="display:flex; gap:12px; align-items:center;">
+  <a href="https://railway.com/deploy/presenton-ai-presentations">
+    <img
+      src="https://railway.com/button.svg"
+      alt="Deploy on Railway"
+      style="height:38px;"
+    />
+  </a>
+  <a href="https://cloud.digitalocean.com/apps/new?repo=https://github.com/presenton/presenton/tree/main">
+    <img
+      src="https://www.deploytodo.com/do-btn-blue.svg"
+      alt="Deploy to DigitalOcean"
+      style="height:36px;"
+    />
+  </a>
+</div>
+
+#
 
 Presenton gives you complete control over your AI presentation workflow. Choose your models, customize your experience, and keep your data private.
 
@@ -243,25 +267,25 @@ Mem0 uses local Qdrant + SQLite (OSS); memory is scoped per presentation.
 By default the Docker runtime now points Mem0 at a local Ollama-compatible LLM endpoint, so it no longer needs an OpenAI key just to initialize. If you want to use OpenAI instead, set `MEM0_LLM_BASE_URL`/`MEM0_LLM_API_KEY` to your OpenAI-compatible endpoint and key.
 Docker images install the default spaCy model (`en_core_web_sm`) during build so Mem0 can start without extra setup on each run.
 
-| Variable | Purpose |
-|----------|---------|
-| **MEM0_ENABLED** | **true**/false (compose default **true**). |
-| **MEM0_LLM_MODEL** | Mem0 LLM model name (compose default **`llama3.1:latest`** or `OLLAMA_MODEL`). |
-| **MEM0_LLM_API_KEY** | Mem0 LLM API key placeholder for OpenAI-compatible clients (compose default **`ollama`**). |
-| **MEM0_LLM_BASE_URL** | Mem0 LLM base URL (compose default **`OLLAMA_URL`** or `http://host.docker.internal:11434`). |
-| **MEM0_DIR** | Root directory (compose default **`/app_data/mem0`**). |
-| **MEM0_EMBEDDER_PROVIDER** | Embedder backend (compose default **`fastembed`**). |
-| **MEM0_EMBEDDER_MODEL** | Model id (compose default **`BAAI/bge-small-en-v1.5`**). |
-| **MEM0_EMBEDDING_DIMS** | Vector size (compose default **384**). |
-| **MEM0_SPACY_MODEL** | Optional spaCy model override (default **`en_core_web_sm`**). |
+| Variable                     | Purpose                                                                                                          |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| **MEM0_ENABLED**             | **true**/false (compose default **true**).                                                                       |
+| **MEM0_LLM_MODEL**           | Mem0 LLM model name (compose default **`llama3.1:latest`** or `OLLAMA_MODEL`).                                   |
+| **MEM0_LLM_API_KEY**         | Mem0 LLM API key placeholder for OpenAI-compatible clients (compose default **`ollama`**).                       |
+| **MEM0_LLM_BASE_URL**        | Mem0 LLM base URL (compose default **`OLLAMA_URL`** or `http://host.docker.internal:11434`).                     |
+| **MEM0_DIR**                 | Root directory (compose default **`/app_data/mem0`**).                                                           |
+| **MEM0_EMBEDDER_PROVIDER**   | Embedder backend (compose default **`fastembed`**).                                                              |
+| **MEM0_EMBEDDER_MODEL**      | Model id (compose default **`BAAI/bge-small-en-v1.5`**).                                                         |
+| **MEM0_EMBEDDING_DIMS**      | Vector size (compose default **384**).                                                                           |
+| **MEM0_SPACY_MODEL**         | Optional spaCy model override (default **`en_core_web_sm`**).                                                    |
 | **MEM0_REQUIRE_SPACY_MODEL** | Keep as **true** (default). Set to false only if you intentionally want Mem0 to run without spaCy lemmatization. |
 
 #### Document parsing (LiteParse)
 
-| Variable | Purpose |
-|----------|---------|
-| **LITEPARSE_DPI** | OCR render DPI (compose default **120**). |
-| **LITEPARSE_NUM_WORKERS** | Worker count (compose default **1**). |
+| Variable                  | Purpose                                   |
+| ------------------------- | ----------------------------------------- |
+| **LITEPARSE_DPI**         | OCR render DPI (compose default **120**). |
+| **LITEPARSE_NUM_WORKERS** | Worker count (compose default **1**).     |
 
 #### Database
 
@@ -521,7 +545,6 @@ Options: <code>pptx</code>, <code>pdf</code>
     "template": "general",
     "export_as": "pptx"
   }'</code></pre>
-
 
 **Example Response**
 

@@ -45,8 +45,8 @@ const ThemeSelector = ({ current_theme, themes: allThemes }: { current_theme: an
 
     return (
         <Popover open={isOpen} onOpenChange={setIsOpen}>
-            <PopoverTrigger>
-                <button className={`text-sm px-[18px] py-2.5 gap-1.5 flex items-center  border border-[#EDEEEF] bg-[#F6F6F9]   duration-300 rounded-[88px] font-medium font-syne ${isOpen ? 'text-[#007AFF]' : 'text-black'}`}>
+            <PopoverTrigger asChild>
+                <button type="button" className={`text-sm px-[18px] py-2.5 gap-1.5 flex items-center  border border-[#EDEEEF] bg-[#F6F6F9]   duration-300 rounded-[88px] font-medium font-syne ${isOpen ? 'text-[#007AFF]' : 'text-black'}`}>
                     <Palette className={`h-4 w-4 ${isOpen ? 'text-[#007AFF]' : 'text-black'}`} /> Theme
                 </button>
             </PopoverTrigger>

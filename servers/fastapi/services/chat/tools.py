@@ -16,6 +16,7 @@ from services.chat.schemas import (
     NoArgsInput,
     SaveSlideInput,
     SearchSlidesInput,
+    SetPresentationThemeInput,
 )
 from services.chat.presentation_context_store import PresentationContextStore
 
@@ -31,6 +32,7 @@ class ChatTools:
             "getPresentationOutline": self._get_presentation_outline,
             "searchSlides": self._search_slides,
             "getSlideAtIndex": self._get_slide_at_index,
+            "getPresentationThemeCatalog": self._get_presentation_theme_catalog,
             "getAvailableLayouts": self._get_available_layouts,
             "getContentSchemaFromLayoutId": self._get_content_schema_from_layout_id,
             "generateAssets": self._generate_assets,
@@ -38,6 +40,7 @@ class ChatTools:
             "generateIcon": self._generate_icon,
             "saveSlide": self._save_slide,
             "deleteSlide": self._delete_slide,
+            "setPresentationTheme": self._set_presentation_theme,
         }
 
     def get_tool_definitions(self) -> list[Tool]:
@@ -75,10 +78,23 @@ class ChatTools:
                 strict=True,
             ),
             Tool(
+                name="getPresentationThemeCatalog",
+                description=(
+                    "Read-only theme catalog for the current presentation. "
+                    "Returns currently applied color theme and all available color themes "
+                    "(built-in + saved custom themes). "
+                    "Use this for questions like 'which theme is applied' or "
+                    "'what themes are available'. "
+                    "Do NOT use getAvailableLayouts for theme questions."
+                ),
+                schema=NoArgsInput,
+                strict=True,
+            ),
+            Tool(
                 name="getAvailableLayouts",
                 description=(
-                    "List all available layout ids and descriptions for the current "
-                    "presentation template."
+                    "List slide layout ids/descriptions for the presentation template. "
+                    "This is for content structure/layout selection only, not color themes."
                 ),
                 schema=NoArgsInput,
                 strict=True,
@@ -123,6 +139,18 @@ class ChatTools:
                     "remaining slides. Use when the user asks to remove a slide."
                 ),
                 schema=DeleteSlideInput,
+                strict=True,
+            ),
+            Tool(
+                name="setPresentationTheme",
+                description=(
+                    "Change the deck theme using user-friendly requests like "
+                    "'dark', 'light', theme name/id, or 'another'. "
+                    "Can also apply customTheme payloads with colors/fonts and "
+                    "optionally save them for reuse. Applies theme at presentation level. "
+                    "Only use this when the user explicitly asks to change/apply/switch theme."
+                ),
+                schema=SetPresentationThemeInput,
                 strict=True,
             ),
         ]
@@ -253,6 +281,11 @@ class ChatTools:
             "layouts": layouts,
         }
 
+    async def _get_presentation_theme_catalog(
+        self, _: dict[str, Any]
+    ) -> dict[str, Any]:
+        return await self._memory.get_presentation_theme_catalog()
+
     async def _get_content_schema_from_layout_id(
         self, args: dict[str, Any]
     ) -> dict[str, Any]:
@@ -337,6 +370,18 @@ class ChatTools:
     async def _delete_slide(self, args: dict[str, Any]) -> dict[str, Any]:
         payload = DeleteSlideInput(**args)
         return await self._memory.delete_slide(index=payload.index)
+
+    async def _set_presentation_theme(self, args: dict[str, Any]) -> dict[str, Any]:
+        payload = SetPresentationThemeInput(**args)
+        return await self._memory.set_presentation_theme(
+            theme_query=payload.theme,
+            custom_theme=(
+                payload.custom_theme.model_dump(exclude_none=True)
+                if payload.custom_theme is not None
+                else None
+            ),
+            save_custom_theme=bool(payload.save_custom_theme),
+        )
 
     @staticmethod
     def _parse_args(arguments: str | None) -> dict[str, Any]:

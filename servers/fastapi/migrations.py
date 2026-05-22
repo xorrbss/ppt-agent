@@ -13,6 +13,7 @@ from utils.get_env import get_migrate_database_on_startup_env
 LEGACY_BASELINE_REVISION = "00b3c27a13bc"
 # Revision before 95b5127e93cd (template_create_infos); used when DB has theme but not that table.
 REVISION_BEFORE_TEMPLATE_CREATE_INFO = "82abdbc476a7"
+REVISION_TEMPLATE_CREATE_INFO = "95b5127e93cd"
 
 
 async def migrate_database_on_startup() -> None:
@@ -91,8 +92,10 @@ def _repair_orphan_alembic_revision(config: Config, database_url: str) -> None:
 
 def _infer_revision_from_schema(inspector, tables: set[str], head_revision: str) -> str:
     """Best-effort: map existing SQLite/Postgres schema to our linear migration chain."""
-    if "template_create_infos" in tables:
+    if "chat_history_messages" in tables:
         return head_revision
+    if "template_create_infos" in tables:
+        return REVISION_TEMPLATE_CREATE_INFO
     if "presentations" in tables:
         cols = {c["name"] for c in inspector.get_columns("presentations")}
         if "theme" in cols:
@@ -103,24 +106,31 @@ def _infer_revision_from_schema(inspector, tables: set[str], head_revision: str)
 def _stamp_legacy_database_if_needed(config: Config, database_url: str) -> None:
     """
     If the DB has app tables but no migration reference in alembic_version,
-    treat it as a legacy DB and stamp baseline before upgrading.
+    treat it as a legacy DB and stamp the latest revision already reflected by
+    the live schema before upgrading.
     """
     if not _is_unversioned_populated_database(database_url):
         return
 
     script = ScriptDirectory.from_config(config)
-    known_revisions = {rev.revision for rev in script.walk_revisions()}
-    baseline_revision = (
-        LEGACY_BASELINE_REVISION
-        if LEGACY_BASELINE_REVISION in known_revisions
-        else script.get_base()
-    )
+    heads = script.get_heads()
+    head = heads[0] if len(heads) == 1 else script.get_base()
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            inspector = inspect(connection)
+            target_revision = _infer_revision_from_schema(
+                inspector, set(inspector.get_table_names()), head
+            )
+    finally:
+        engine.dispose()
+
     print(
         "Detected legacy database without migration reference. "
-        f"Stamping revision to {baseline_revision} before upgrading.",
+        f"Stamping revision to {target_revision} before upgrading.",
         flush=True,
     )
-    command.stamp(config, baseline_revision)
+    command.stamp(config, target_revision)
 
 
 def _is_unversioned_populated_database(database_url: str) -> bool:
@@ -133,6 +143,8 @@ def _is_unversioned_populated_database(database_url: str) -> bool:
         "presentation_layout_codes",
         "async_presentation_generation_tasks",
         "webhook_subscriptions",
+        "template_create_infos",
+        "chat_history_messages",
     }
     engine = create_engine(database_url)
     try:

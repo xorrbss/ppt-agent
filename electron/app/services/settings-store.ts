@@ -1,22 +1,34 @@
 import path from 'path';
 import fs from 'fs';
-import { userDataDir } from '../utils/constants';
+import { getUserDataDir } from '../utils/constants';
 
 
 class SettingsStore {
-  private settingsPath: string;
+  private settingsPath: string | undefined;
   private settings: { [key: string]: any };
+  private loaded = false;
 
   constructor() {
-    this.settingsPath = path.join(userDataDir, 'settings.json');
     this.settings = {};
-    this.loadSettings();
+  }
+
+  private getSettingsPath(): string {
+    if (!this.settingsPath) {
+      this.settingsPath = path.join(getUserDataDir(), 'settings.json');
+    }
+    return this.settingsPath;
   }
 
   private loadSettings() {
+    if (this.loaded) {
+      return;
+    }
+    this.loaded = true;
+
     try {
-      if (fs.existsSync(this.settingsPath)) {
-        const data = fs.readFileSync(this.settingsPath, 'utf-8');
+      const settingsPath = this.getSettingsPath();
+      if (fs.existsSync(settingsPath)) {
+        const data = fs.readFileSync(settingsPath, 'utf-8');
         this.settings = JSON.parse(data);
 
       } else {
@@ -32,7 +44,7 @@ class SettingsStore {
 
   private saveSettings() {
     try {
-      fs.writeFileSync(this.settingsPath, JSON.stringify(this.settings, null, 2));
+      fs.writeFileSync(this.getSettingsPath(), JSON.stringify(this.settings, null, 2));
 
     } catch (error) {
       console.error('Error saving settings:', error);
@@ -41,12 +53,14 @@ class SettingsStore {
   }
 
   get(key: string, defaultValue: any = null): any {
+    this.loadSettings();
     const value = this.settings[key];
 
     return value || defaultValue;
   }
 
   set(key: string, value: any): void {
+    this.loadSettings();
 
     this.settings[key] = value;
     this.saveSettings();
@@ -54,11 +68,13 @@ class SettingsStore {
 
   // Helper method to check if settings exist
   has(key: string): boolean {
+    this.loadSettings();
     return key in this.settings;
   }
 
   // Helper method to delete a setting
   delete(key: string): void {
+    this.loadSettings();
     delete this.settings[key];
     this.saveSettings();
   }

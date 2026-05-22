@@ -1,24 +1,22 @@
 /**
  * setup-dependencies.ts
  *
- * Single installer window that ensures LibreOffice, Chrome (Puppeteer), and
- * ImageMagick are
- * available before the user starts creating presentations. Runs checks, then
- * if any are missing shows one installer that runs dependency setup steps
- * in sequence (each with Install / Skip).
+ * Single installer window that ensures LibreOffice and ImageMagick are available
+ * before the user starts creating presentations. Runs checks, then if either is
+ * missing shows one installer that runs dependency setup steps in sequence
+ * (each with Install / Skip).
  */
 
 import { BrowserWindow, ipcMain } from "electron";
 import * as path from "path";
 import { baseDir } from "./constants";
 import { isLibreOfficeInstalled } from "./libreoffice-check";
-import {
-  isChromeInstalled,
-  type SetupStatus,
-} from "./puppeteer-check";
 import { isImageMagickInstalled } from "./imagemagick-check";
 
-export type { SetupStatus };
+export interface SetupStatus {
+  needsLibreOffice: boolean;
+  needsImageMagick: boolean;
+}
 
 /** Set by checkDependenciesBeforeWindow; read by setup installer IPC. */
 let currentSetupStatus: SetupStatus | null = null;
@@ -28,29 +26,26 @@ export function getSetupStatus(): SetupStatus | null {
 }
 
 /**
- * Checks LibreOffice, Chrome and ImageMagick. If all are present, returns
+ * Checks LibreOffice and ImageMagick. If both are present, returns
  * immediately. If any are missing, opens one installer window that runs each
  * missing setup step in sequence. Returns true only when all required dependencies
  * are installed; false when the installer is closed/skipped before completion.
  */
 export async function checkDependenciesBeforeWindow(): Promise<boolean> {
-  const [loResult, chromeInstalled, imageMagickInstalled] = await Promise.all([
+  const [loResult, imageMagickInstalled] = await Promise.all([
     isLibreOfficeInstalled(),
-    isChromeInstalled(),
     Promise.resolve(isImageMagickInstalled()),
   ]);
 
   const needsLibreOffice = !loResult.installed;
-  const needsChrome = !chromeInstalled;
   const needsImageMagick = !imageMagickInstalled;
 
-  if (!needsLibreOffice && !needsChrome && !needsImageMagick) {
+  if (!needsLibreOffice && !needsImageMagick) {
     return true;
   }
 
   currentSetupStatus = {
     needsLibreOffice,
-    needsChrome,
     needsImageMagick,
   };
 
@@ -58,18 +53,17 @@ export async function checkDependenciesBeforeWindow(): Promise<boolean> {
 
   // Re-check after installer closes; setup can only proceed when all
   // required dependencies are actually installed.
-  const [postLoResult, postChromeInstalled, postImageMagickInstalled] = await Promise.all([
+  const [postLoResult, postImageMagickInstalled] = await Promise.all([
     isLibreOfficeInstalled(),
-    isChromeInstalled(),
     Promise.resolve(isImageMagickInstalled()),
   ]);
 
   currentSetupStatus = null;
-  return postLoResult.installed && postChromeInstalled && postImageMagickInstalled;
+  return postLoResult.installed && postImageMagickInstalled;
 }
 
 /**
- * Opens the unified setup installer window (LibreOffice then Chrome).
+ * Opens the unified setup installer window.
  * Resolves when the window is closed.
  */
 function showSetupInstallerWindow(): Promise<void> {

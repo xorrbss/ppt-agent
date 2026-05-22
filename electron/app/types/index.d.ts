@@ -65,7 +65,6 @@ interface NextJsEnv {
   EXPORT_PACKAGE_ROOT?: string,
   PRESENTON_APP_ROOT?: string,
   BUILT_PYTHON_MODULE_PATH?: string,
-  PUPPETEER_EXECUTABLE_PATH?: string,
 }
 
 interface UserConfig {

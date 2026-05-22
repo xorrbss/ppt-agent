@@ -6,7 +6,6 @@ window.addEventListener("DOMContentLoaded", () => {
 
   const currentStatus = {
     libreoffice: "checking",
-    puppeteer: "checking",
     imagemagick: "checking",
   };
 
@@ -107,7 +106,6 @@ window.addEventListener("DOMContentLoaded", () => {
     window.electron.getStartupStatus().then((statusMap) => {
       if (!statusMap) return;
       if (statusMap.libreoffice) setStatus("libreoffice", statusMap.libreoffice);
-      if (statusMap.puppeteer) setStatus("puppeteer", statusMap.puppeteer);
       if (statusMap.imagemagick) {
         setStatus("imagemagick", statusMap.imagemagick);
       }

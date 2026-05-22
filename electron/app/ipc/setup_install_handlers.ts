@@ -1,25 +1,16 @@
 /**
- * IPC handlers for the unified setup installer (LibreOffice + Chromium + ImageMagick).
+ * IPC handlers for the unified setup installer (LibreOffice + ImageMagick).
  * - setup:get-status — which dependencies are missing
- * - setup:install-chrome — download Chromium (browser-snapshots) with progress
  */
 
 import { ipcMain, WebContents } from "electron";
 import fs from "fs";
 import path from "path";
 import os from "os";
-import { spawn, spawnSync } from "child_process";
+import { ChildProcess, spawn, spawnSync } from "child_process";
 import * as https from "https";
 import * as http from "http";
 import { IncomingMessage } from "http";
-import puppeteer from "puppeteer";
-import {
-  Browser,
-  detectBrowserPlatform,
-  getInstalledBrowsers,
-  install,
-  resolveBuildId,
-} from "@puppeteer/browsers";
 import { getSetupStatus } from "../utils/setup-dependencies";
 import {
   getImageMagickBinaryPath,
@@ -28,29 +19,30 @@ import {
   getWindowsImageMagickInstallDir,
   isImageMagickInstalled,
 } from "../utils/imagemagick-check";
+import { destroyChildProcessStdio, safeSendToWebContents, terminateChildProcess } from "../utils/lifecycle";
+import { killProcess } from "../utils";
 
-function getPuppeteerCacheDir(): string {
-  const configCache =
-    (puppeteer as any).configuration?.cacheDirectory ??
-    (puppeteer as any).defaultDownloadPath;
-  return configCache ?? path.join(os.homedir(), ".cache", "puppeteer");
-}
+const activeSetupInstallProcesses = new Set<ChildProcess>();
+const activeSetupDownloadAborters = new Set<() => void>();
 
-function sendChromeProgress(
-  wc: WebContents,
-  phase: "downloading" | "extracting" | "done" | "error",
-  percent?: number,
-  message?: string
-) {
-  if (!wc.isDestroyed()) {
-    wc.send("setup:chrome-progress", { phase, percent, message });
+export async function stopActiveSetupInstallProcesses(): Promise<void> {
+  const aborters = Array.from(activeSetupDownloadAborters);
+  activeSetupDownloadAborters.clear();
+  for (const abort of aborters) {
+    try {
+      abort();
+    } catch {
+      /* Best-effort cancellation. */
+    }
   }
-}
 
-function sendChromeLog(wc: WebContents, level: string, text: string) {
-  if (!wc.isDestroyed()) {
-    wc.send("setup:chrome-log", { level, text });
-  }
+  const processes = Array.from(activeSetupInstallProcesses);
+  activeSetupInstallProcesses.clear();
+  await Promise.all(
+    processes.map((process) =>
+      terminateChildProcess(process, "Setup install", killProcess).catch(() => {}),
+    ),
+  );
 }
 
 function sendImageMagickProgress(
@@ -59,15 +51,11 @@ function sendImageMagickProgress(
   percent?: number,
   message?: string
 ) {
-  if (!wc.isDestroyed()) {
-    wc.send("setup:imagemagick-progress", { phase, percent, message });
-  }
+  safeSendToWebContents(wc, "setup:imagemagick-progress", { phase, percent, message });
 }
 
 function sendImageMagickLog(wc: WebContents, level: string, text: string) {
-  if (!wc.isDestroyed()) {
-    wc.send("setup:imagemagick-log", { level, text });
-  }
+  safeSendToWebContents(wc, "setup:imagemagick-log", { level, text });
 }
 
 function commandExists(command: string, versionArgs: string[] = ["--version"]): boolean {
@@ -137,18 +125,73 @@ function downloadFileWithProgress(
   destinationPath: string
 ): Promise<void> {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    let currentRequest: http.ClientRequest | null = null;
+    let currentResponse: IncomingMessage | null = null;
+    let currentFile: fs.WriteStream | null = null;
+
+    const cleanup = () => {
+      currentResponse?.removeAllListeners("data");
+      currentFile?.removeAllListeners("finish");
+      currentFile?.removeAllListeners("error");
+      currentRequest?.removeAllListeners("error");
+      activeSetupDownloadAborters.delete(abortDownload);
+    };
+
+    const finish = (callback: () => void) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      callback();
+    };
+
+    const fail = (error: Error) => {
+      finish(() => {
+        try {
+          currentRequest?.on("error", () => {});
+          currentRequest?.destroy();
+        } catch {
+          /* ignore */
+        }
+        try {
+          currentResponse?.destroy();
+        } catch {
+          /* ignore */
+        }
+        try {
+          currentFile?.destroy();
+        } catch {
+          /* ignore */
+        }
+        fs.unlink(destinationPath, () => {});
+        reject(error);
+      });
+    };
+
+    const abortDownload = () => {
+      fail(new Error("ImageMagick download was cancelled."));
+    };
+    activeSetupDownloadAborters.add(abortDownload);
+
     const requestDownload = (requestUrl: string, redirects: number) => {
+      if (settled) {
+        return;
+      }
       const requester = requestUrl.startsWith("https") ? https.get : http.get;
       sendImageMagickLog(wc, "cmd", `GET ${requestUrl}`);
 
-      requester(requestUrl, (res: IncomingMessage) => {
+      currentRequest = requester(requestUrl, (res: IncomingMessage) => {
+        currentResponse = res;
         const statusCode = res.statusCode ?? 0;
         if (
           [301, 302, 303, 307, 308].includes(statusCode) &&
           res.headers.location
         ) {
+          res.resume();
           if (redirects >= MAX_DOWNLOAD_REDIRECTS) {
-            reject(new Error("Too many redirects while downloading installer."));
+            fail(new Error("Too many redirects while downloading installer."));
             return;
           }
           const redirectUrl = new URL(res.headers.location, requestUrl).toString();
@@ -158,7 +201,8 @@ function downloadFileWithProgress(
         }
 
         if (statusCode !== 200) {
-          reject(new Error(`Download failed with HTTP ${statusCode}.`));
+          res.resume();
+          fail(new Error(`Download failed with HTTP ${statusCode}.`));
           return;
         }
 
@@ -169,8 +213,12 @@ function downloadFileWithProgress(
         let downloadedBytes = 0;
 
         const file = fs.createWriteStream(destinationPath);
+        currentFile = file;
 
         res.on("data", (chunk: Buffer) => {
+          if (settled) {
+            return;
+          }
           downloadedBytes += chunk.length;
           const percent =
             totalBytes > 0
@@ -187,9 +235,11 @@ function downloadFileWithProgress(
 
         file.on("finish", () => {
           file.close(() => {
+            if (settled) {
+              return;
+            }
             if (downloadedBytes < MIN_IMAGEMAGICK_INSTALLER_SIZE_BYTES) {
-              fs.unlink(destinationPath, () => {});
-              reject(
+              fail(
                 new Error(
                   `Downloaded file is too small (${formatBytes(downloadedBytes)}).`
                 )
@@ -202,17 +252,15 @@ function downloadFileWithProgress(
               "ok",
               `Download complete (${formatBytes(downloadedBytes)}).`
             );
-            resolve();
+            finish(resolve);
           });
         });
 
         file.on("error", (err) => {
-          fs.unlink(destinationPath, () => {});
-          reject(err);
+          fail(err);
         });
       }).on("error", (err) => {
-        fs.unlink(destinationPath, () => {});
-        reject(err);
+        fail(err);
       });
     };
 
@@ -266,12 +314,13 @@ function runInstallCommand(
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: process.platform === "win32",
     });
+    activeSetupInstallProcesses.add(child);
 
-    child.stdout.on("data", (data) => {
+    const onStdoutData = (data: Buffer) => {
       const text = String(data).trim();
       if (text) sendImageMagickLog(wc, "info", text);
-    });
-    child.stderr.on("data", (data) => {
+    };
+    const onStderrData = (data: Buffer) => {
       const text = String(data).trim();
       if (text) {
         sendImageMagickLog(
@@ -280,16 +329,44 @@ function runInstallCommand(
           text
         );
       }
-    });
+    };
 
-    child.on("error", reject);
-    child.on("close", (code) => {
-      if (code === 0) {
-        resolve();
+    let settled = false;
+    const cleanup = () => {
+      child.stdout?.removeListener("data", onStdoutData);
+      child.stderr?.removeListener("data", onStderrData);
+      child.removeListener("error", onError);
+      child.removeListener("close", onClose);
+      activeSetupInstallProcesses.delete(child);
+    };
+    const finish = (callback: () => void) => {
+      if (settled) {
         return;
       }
-      reject(new Error(`${command} exited with code ${code}`));
-    });
+      settled = true;
+      cleanup();
+      destroyChildProcessStdio(child);
+      callback();
+    };
+    const onError = (error: Error) => finish(() => reject(error));
+    const onClose = (code: number | null, signal: NodeJS.Signals | null) => {
+      if (code === 0) {
+        finish(resolve);
+        return;
+      }
+      finish(() =>
+        reject(
+          new Error(
+            `${command} exited with code ${code ?? "unknown"}${signal ? ` signal ${signal}` : ""}`,
+          ),
+        ),
+      );
+    };
+
+    child.stdout?.on("data", onStdoutData);
+    child.stderr?.on("data", onStderrData);
+    child.once("error", onError);
+    child.once("close", onClose);
   });
 }
 
@@ -298,91 +375,19 @@ export function setupSetupInstallHandlers() {
     return (
       getSetupStatus() ?? {
         needsLibreOffice: false,
-        needsChrome: false,
         needsImageMagick: false,
       }
     );
   });
 
   ipcMain.handle(
-    "setup:install-chrome",
-    async (event): Promise<{ ok: boolean; error?: string }> => {
-      const wc = event.sender;
-
-      const cacheDir = getPuppeteerCacheDir();
-      const platform = detectBrowserPlatform();
-      if (!platform) {
-        const msg = "Unable to detect platform.";
-        sendChromeLog(wc, "error", msg);
-        sendChromeProgress(wc, "error", undefined, msg);
-        return { ok: false, error: msg };
-      }
-
-      let buildId: string;
-      try {
-        buildId = await resolveBuildId(
-          Browser.CHROMIUM,
-          platform,
-          "latest" as "latest"
-        );
-      } catch (err) {
-        const msg =
-          err instanceof Error
-            ? err.message
-            : "Unable to resolve Chromium revision.";
-        sendChromeLog(wc, "error", msg);
-        sendChromeProgress(wc, "error", undefined, msg);
-        return { ok: false, error: msg };
-      }
-
-      sendChromeLog(wc, "info", `Downloading Chromium r${buildId}…`);
-      sendChromeProgress(wc, "downloading", 0, "Connecting…");
-
-      try {
-        await install({
-          cacheDir,
-          platform,
-          browser: Browser.CHROMIUM,
-          buildId,
-          downloadProgressCallback: (downloadedBytes, totalBytes) => {
-            if (totalBytes > 0 && !wc.isDestroyed()) {
-              const percent = Math.min(
-                99,
-                Math.round((downloadedBytes / totalBytes) * 100)
-              );
-              const mb = (n: number) => (n / 1024 / 1024).toFixed(1);
-              sendChromeProgress(
-                wc,
-                "downloading",
-                percent,
-                `${mb(downloadedBytes)} / ${mb(totalBytes)} MB`
-              );
-            }
-          },
-        });
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Chromium download failed.";
-        sendChromeLog(wc, "error", message);
-        sendChromeProgress(wc, "error", undefined, message);
-        return { ok: false, error: message };
-      }
-
-      sendChromeProgress(wc, "extracting", 100, "Extracting…");
-      const browsers = await getInstalledBrowsers({ cacheDir });
-      const chromium = browsers.find((b) => b.browser === Browser.CHROMIUM);
-      if (chromium?.executablePath && fs.existsSync(chromium.executablePath)) {
-        sendChromeLog(wc, "ok", `Chromium ready at ${chromium.executablePath}`);
-      }
-      sendChromeProgress(wc, "done", 100);
-      return { ok: true };
-    }
-  );
-
-  ipcMain.handle(
     "setup:install-imagemagick",
     async (event): Promise<{ ok: boolean; error?: string }> => {
       const wc = event.sender;
+      const onDestroyed = () => {
+        void stopActiveSetupInstallProcesses();
+      };
+      wc.once("destroyed", onDestroyed);
       try {
         sendImageMagickProgress(
           wc,
@@ -512,6 +517,8 @@ export function setupSetupInstallHandlers() {
           "Finish manual installation, then click Retry."
         );
         return { ok: false, error: message };
+      } finally {
+        wc.removeListener("destroyed", onDestroyed);
       }
     }
   );
