@@ -316,6 +316,69 @@ const setupUserConfigFromEnv = () => {
     existingConfig.LLM = undefined;
   }
 
+  const envValue = (key) => {
+    const value = process.env[key];
+    return value === undefined || value === "" ? undefined : value;
+  };
+
+  const configValue = (key) => envValue(key) ?? existingConfig[key];
+
+  const parseBooleanLike = (value) => {
+    if (typeof value === "boolean") {
+      return value;
+    }
+    if (typeof value !== "string") {
+      return undefined;
+    }
+
+    const normalized = value.trim().toLowerCase();
+    if (["1", "true", "yes", "on"].includes(normalized)) {
+      return true;
+    }
+    if (["0", "false", "no", "off"].includes(normalized)) {
+      return false;
+    }
+    return undefined;
+  };
+
+  const normalizeImageConfig = (config) => {
+    const parsedDisableImageGeneration = parseBooleanLike(
+      config.DISABLE_IMAGE_GENERATION
+    );
+    if (parsedDisableImageGeneration !== undefined) {
+      config.DISABLE_IMAGE_GENERATION = parsedDisableImageGeneration;
+    }
+
+    if (config.DISABLE_IMAGE_GENERATION || config.IMAGE_PROVIDER) {
+      return config;
+    }
+
+    if (
+      config.OPENAI_COMPAT_IMAGE_BASE_URL &&
+      config.OPENAI_COMPAT_IMAGE_API_KEY &&
+      config.OPENAI_COMPAT_IMAGE_MODEL
+    ) {
+      config.IMAGE_PROVIDER = "openai_compatible";
+    } else if (config.OPEN_WEBUI_IMAGE_URL) {
+      config.IMAGE_PROVIDER = "open_webui";
+    } else if (config.COMFYUI_URL) {
+      config.IMAGE_PROVIDER = "comfyui";
+    } else if (config.PEXELS_API_KEY) {
+      config.IMAGE_PROVIDER = "pexels";
+    } else if (config.PIXABAY_API_KEY) {
+      config.IMAGE_PROVIDER = "pixabay";
+    } else if (config.LLM === "openai" && config.OPENAI_API_KEY) {
+      config.IMAGE_PROVIDER = "gpt-image-1.5";
+      config.GPT_IMAGE_1_5_QUALITY = config.GPT_IMAGE_1_5_QUALITY || "medium";
+    } else if (config.LLM === "google" && config.GOOGLE_API_KEY) {
+      config.IMAGE_PROVIDER = "gemini_flash";
+    } else {
+      config.DISABLE_IMAGE_GENERATION = true;
+    }
+
+    return config;
+  };
+
   const userConfig = {
     LLM: process.env.LLM || existingConfig.LLM,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY || existingConfig.OPENAI_API_KEY,
@@ -399,7 +462,7 @@ const setupUserConfigFromEnv = () => {
     AUTH_SECRET_KEY: existingConfig.AUTH_SECRET_KEY,
   };
 
-  writeUserConfig(userConfig);
+  writeFileSync(userConfigPath, JSON.stringify(normalizeImageConfig(userConfig)));
 };
 
 const startServers = async (nginxReadyPromise) => {
