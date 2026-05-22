@@ -10,7 +10,7 @@ spec:
         tag: latest
       http_port: 80
       instance_count: 1
-      instance_size_slug: apps-s-1vcpu-1gb
+      instance_size_slug: apps-s-1vcpu-2gb
       envs:
         - key: MIGRATE_DATABASE_ON_STARTUP
           value: "true"
