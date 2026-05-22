@@ -130,6 +130,16 @@ export const getLLMConfigValidationError = (
     if (!isProvided(llmConfig.AZURE_OPENAI_MODEL)) {
       return "Azure model name is required.";
     }
+  } else if (llm === "bedrock") {
+    if (!isProvided(llmConfig.BEDROCK_MODEL)) {
+      return "Bedrock model is required.";
+    }
+    const hasApiKey = isProvided(llmConfig.BEDROCK_API_KEY);
+    const hasAwsAccess = isProvided(llmConfig.BEDROCK_AWS_ACCESS_KEY_ID);
+    const hasAwsSecret = isProvided(llmConfig.BEDROCK_AWS_SECRET_ACCESS_KEY);
+    if (!hasApiKey && !(hasAwsAccess && hasAwsSecret)) {
+      return "Provide Bedrock API key, or AWS access key ID + secret key.";
+    }
   } else if (llm === "openrouter") {
     if (!isProvided(llmConfig.OPENROUTER_API_KEY)) {
       return "OpenRouter API key is required.";
@@ -143,6 +153,20 @@ export const getLLMConfigValidationError = (
     }
     if (!isProvided(llmConfig.CEREBRAS_MODEL)) {
       return "Select or enter a Cerebras model id.";
+    }
+  } else if (llm === "fireworks") {
+    if (!isProvided(llmConfig.FIREWORKS_API_KEY)) {
+      return "Fireworks API key is required.";
+    }
+    if (!isProvided(llmConfig.FIREWORKS_MODEL)) {
+      return "Select or enter a Fireworks model id.";
+    }
+  } else if (llm === "together") {
+    if (!isProvided(llmConfig.TOGETHER_API_KEY)) {
+      return "Together API key is required.";
+    }
+    if (!isProvided(llmConfig.TOGETHER_MODEL)) {
+      return "Select or enter a Together model id.";
     }
   } else if (llm === "anthropic") {
     if (!isProvided(llmConfig.ANTHROPIC_API_KEY)) {
@@ -171,6 +195,10 @@ export const getLLMConfigValidationError = (
     }
     if (!isProvided(llmConfig.LITELLM_MODEL)) {
       return 'Use "Check models" after entering the base URL, then choose a model.';
+    }
+  } else if (llm === "lmstudio") {
+    if (!isProvided(llmConfig.LMSTUDIO_MODEL)) {
+      return 'Use "Check models" to load local models from LM Studio, then choose one.';
     }
   } else if (llm === "codex" || llm === "chatgpt") {
     if (!isProvided(llmConfig.CODEX_MODEL)) {

@@ -156,6 +156,12 @@ export const LLM_PROVIDERS: Record<string, LLMProviderOption> = {
     icon: "/providers/openai.png",
     getApiKeyUrl: "https://www.google.com/search?q=azure+openai+api+key",
   },
+  bedrock: {
+    value: "bedrock",
+    label: "Amazon Bedrock",
+    description: "AWS Bedrock foundation models",
+    icon: "/providers/custom.svg",
+  },
   openrouter: {
     value: "openrouter",
     label: "OpenRouter",
@@ -177,6 +183,29 @@ export const LLM_PROVIDERS: Record<string, LLMProviderOption> = {
     label: "LiteLLM",
     description: "OpenAI-compatible LiteLLM proxy or gateway",
     icon: "/providers/openai.png",
+  },
+  fireworks: {
+    value: "fireworks",
+    label: "Fireworks",
+    description: "Fireworks AI via OpenAI-compatible API",
+    url: "https://api.fireworks.ai/inference/v1",
+    icon: "/providers/openai.png",
+    getApiKeyUrl: "https://fireworks.ai/account/api-keys",
+  },
+  together: {
+    value: "together",
+    label: "Together AI",
+    description: "Together AI via OpenAI-compatible API",
+    url: "https://api.together.ai/v1",
+    icon: "/providers/openai.png",
+    getApiKeyUrl: "https://api.together.xyz/settings/api-keys",
+  },
+  lmstudio: {
+    value: "lmstudio",
+    label: "LM Studio",
+    description: "Local LM Studio OpenAI-compatible server",
+    url: "http://localhost:1234/v1",
+    icon: "/providers/custom.svg",
   },
   anthropic: {
     value: "anthropic",

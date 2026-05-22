@@ -19,9 +19,10 @@ import { checkIfSelectedOllamaModelIsPulled, pullOllamaModel } from '@/utils/pro
 import { getApiUrl } from '@/utils/api';
 import CodexConfig, { CHATGPT_MODELS } from '../CodexConfig';
 import VertexAzureManualFields from '@/components/VertexAzureManualFields';
+import BedrockManualFields from '@/components/BedrockManualFields';
 import OpenAICompatibleImageFields from '@/components/OpenAICompatibleImageFields';
 
-const MANUAL_MODEL_PROVIDERS = new Set(["vertex", "azure"]);
+const MANUAL_MODEL_PROVIDERS = new Set(["vertex", "azure", "bedrock"]);
 
 const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep: (step: number) => void }) => {
     const pathname = usePathname();
@@ -74,8 +75,14 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 return 'VERTEX_MODEL';
             case 'azure':
                 return 'AZURE_OPENAI_MODEL';
+            case 'bedrock':
+                return 'BEDROCK_MODEL';
             case 'openrouter':
                 return 'OPENROUTER_MODEL';
+            case 'fireworks':
+                return 'FIREWORKS_MODEL';
+            case 'together':
+                return 'TOGETHER_MODEL';
             case 'cerebras':
                 return 'CEREBRAS_MODEL';
             case 'anthropic':
@@ -86,6 +93,8 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 return 'CUSTOM_MODEL';
             case 'litellm':
                 return 'LITELLM_MODEL';
+            case 'lmstudio':
+                return 'LMSTUDIO_MODEL';
             default:
                 return '';
         }
@@ -100,8 +109,14 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 return 'VERTEX_API_KEY';
             case 'azure':
                 return 'AZURE_OPENAI_API_KEY';
+            case 'bedrock':
+                return 'BEDROCK_API_KEY';
             case 'openrouter':
                 return 'OPENROUTER_API_KEY';
+            case 'fireworks':
+                return 'FIREWORKS_API_KEY';
+            case 'together':
+                return 'TOGETHER_API_KEY';
             case 'cerebras':
                 return 'CEREBRAS_API_KEY';
             case 'anthropic':
@@ -110,6 +125,8 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 return 'CUSTOM_LLM_API_KEY';
             case 'litellm':
                 return 'LITELLM_API_KEY';
+            case 'lmstudio':
+                return 'LMSTUDIO_API_KEY';
             default:
                 return '';
         }
@@ -125,6 +142,9 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
     const currentApiKey = currentApiKeyField ? ((llmConfig as Record<string, unknown>)[currentApiKeyField] as string || '') : '';
     const currentModel = currentModelField ? ((llmConfig as Record<string, unknown>)[currentModelField] as string || '') : '';
     const currentLitellmUrl = (llmConfig.LITELLM_BASE_URL || '').trim();
+    const currentLmStudioUrl = (llmConfig.LMSTUDIO_BASE_URL || '').trim();
+    const currentFireworksUrl = (llmConfig.FIREWORKS_BASE_URL || '').trim();
+    const currentTogetherUrl = (llmConfig.TOGETHER_BASE_URL || '').trim();
     const currentOllamaUrl = llmConfig.OLLAMA_URL || '';
     const useCustomOllamaUrl = !!llmConfig.USE_CUSTOM_URL;
     const providerApiKeyLabel =
@@ -134,12 +154,20 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 ? 'Vertex API Key'
                 : llmConfig.LLM === 'azure'
                     ? 'Azure OpenAI API Key'
+                    : llmConfig.LLM === 'bedrock'
+                        ? 'Bedrock API Key (optional)'
                     : llmConfig.LLM === 'openrouter'
                         ? 'OpenRouter API Key'
+                        : llmConfig.LLM === 'fireworks'
+                            ? 'Fireworks API Key'
+                            : llmConfig.LLM === 'together'
+                                ? 'Together API Key'
                         : llmConfig.LLM === 'cerebras'
                             ? 'Cerebras API Key'
                             : llmConfig.LLM === 'litellm'
                                 ? 'LiteLLM API key (optional)'
+                                : llmConfig.LLM === 'lmstudio'
+                                    ? 'LM Studio API key (optional)'
                                 : `${llmConfig.LLM} API Key`;
 
     const getSelectedTextModel = (config: LLMConfig): string => {
@@ -152,8 +180,14 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 return config.VERTEX_MODEL || '';
             case 'azure':
                 return config.AZURE_OPENAI_MODEL || '';
+            case 'bedrock':
+                return config.BEDROCK_MODEL || '';
             case 'openrouter':
                 return config.OPENROUTER_MODEL || '';
+            case 'fireworks':
+                return config.FIREWORKS_MODEL || '';
+            case 'together':
+                return config.TOGETHER_MODEL || '';
             case 'cerebras':
                 return config.CEREBRAS_MODEL || '';
             case 'anthropic':
@@ -164,6 +198,8 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 return config.CUSTOM_MODEL || '';
             case 'litellm':
                 return config.LITELLM_MODEL || '';
+            case 'lmstudio':
+                return config.LMSTUDIO_MODEL || '';
             case 'chatgpt':
             case 'codex':
                 return config.CODEX_MODEL || '';
@@ -184,6 +220,8 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
         if (llmConfig.LLM === 'google' && !currentApiKey) return;
         if (llmConfig.LLM === 'anthropic' && !currentApiKey) return;
         if (llmConfig.LLM === 'openrouter' && !currentApiKey) return;
+        if (llmConfig.LLM === 'fireworks' && !currentApiKey) return;
+        if (llmConfig.LLM === 'together' && !currentApiKey) return;
         if (llmConfig.LLM === 'cerebras' && !currentApiKey) return;
         if (llmConfig.LLM === 'custom' && !llmConfig.CUSTOM_LLM_URL) return;
         if (llmConfig.LLM === 'litellm' && !currentLitellmUrl) return;
@@ -218,6 +256,12 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                         ? llmConfig.CUSTOM_LLM_URL
                         : llmConfig.LLM === 'litellm'
                             ? currentLitellmUrl
+                            : llmConfig.LLM === 'lmstudio'
+                                ? currentLmStudioUrl || LLM_PROVIDERS[llmConfig.LLM!]?.url || ''
+                            : llmConfig.LLM === 'fireworks'
+                                ? currentFireworksUrl || LLM_PROVIDERS[llmConfig.LLM!]?.url || ''
+                                : llmConfig.LLM === 'together'
+                                    ? currentTogetherUrl || LLM_PROVIDERS[llmConfig.LLM!]?.url || ''
                             : LLM_PROVIDERS[llmConfig.LLM!]?.url || '';
                 response = await fetch(getApiUrl('/api/v1/ppt/openai/models/available'), {
                     method: 'POST',
@@ -262,10 +306,16 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                     ? 'claude-sonnet-4-20250514'
                                     : llmConfig.LLM === 'openrouter'
                                         ? 'openai/gpt-4o'
+                                        : llmConfig.LLM === 'fireworks'
+                                            ? 'accounts/fireworks/models/llama-v3p1-8b-instruct'
+                                            : llmConfig.LLM === 'together'
+                                                ? 'openai/gpt-oss-20b'
                                         : llmConfig.LLM === 'cerebras'
                                             ? 'llama-3.3-70b'
                                             : llmConfig.LLM === 'litellm'
                                                 ? 'gpt-4.1'
+                                            : llmConfig.LLM === 'lmstudio'
+                                                ? 'openai/gpt-oss-20b'
                                                 : normalizedModels[0];
 
                     const nextModel = normalizedModels.includes(preferredDefault) ? preferredDefault : normalizedModels[0];
@@ -674,6 +724,13 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                         </PopoverContent>
                                     </Popover>
                                 </div>
+                            ) : llmConfig.LLM === 'bedrock' ? (
+                                <BedrockManualFields
+                                    llmConfig={llmConfig}
+                                    onPatch={(patch) => {
+                                        setLlmConfig((prev) => ({ ...prev, ...patch }));
+                                    }}
+                                />
                             ) : (
                                 <>
                                     <div className='flex items-center justify-between mb-2'>
@@ -737,6 +794,60 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                     </p>
                                 </>
                             )}
+                            {llmConfig.LLM === 'lmstudio' && (
+                                <>
+                                    <label className="mt-3 block text-sm font-medium text-gray-700 mb-2">
+                                        LM Studio base URL
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={llmConfig.LMSTUDIO_BASE_URL || ''}
+                                        onChange={(e) => setLlmConfig(prev => ({
+                                            ...prev,
+                                            LMSTUDIO_BASE_URL: e.target.value
+                                        }))}
+                                        className="w-full px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                        placeholder="http://localhost:1234/v1"
+                                    />
+                                    <p className="mt-1.5 text-xs text-gray-500">
+                                        Defaults to localhost:1234/v1, and /v1 is added automatically when omitted.
+                                    </p>
+                                </>
+                            )}
+                            {llmConfig.LLM === 'fireworks' && (
+                                <>
+                                    <label className="mt-3 block text-sm font-medium text-gray-700 mb-2">
+                                        Fireworks base URL (optional)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={llmConfig.FIREWORKS_BASE_URL || ''}
+                                        onChange={(e) => setLlmConfig(prev => ({
+                                            ...prev,
+                                            FIREWORKS_BASE_URL: e.target.value
+                                        }))}
+                                        className="w-full px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                        placeholder="https://api.fireworks.ai/inference/v1"
+                                    />
+                                </>
+                            )}
+                            {llmConfig.LLM === 'together' && (
+                                <>
+                                    <label className="mt-3 block text-sm font-medium text-gray-700 mb-2">
+                                        Together base URL (optional)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={llmConfig.TOGETHER_BASE_URL || ''}
+                                        onChange={(e) => setLlmConfig(prev => ({
+                                            ...prev,
+                                            TOGETHER_BASE_URL: e.target.value
+                                        }))}
+                                        className="w-full px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                        placeholder="https://api.together.ai/v1"
+                                    />
+                                </>
+                            )}
                             {(llmConfig.LLM === 'vertex' || llmConfig.LLM === 'azure') && (
                                 <VertexAzureManualFields
                                     key={llmConfig.LLM}
@@ -760,6 +871,8 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                     (llmConfig.LLM === 'google' && !currentApiKey) ||
                                     (llmConfig.LLM === 'anthropic' && !currentApiKey) ||
                                     (llmConfig.LLM === 'openrouter' && !currentApiKey) ||
+                                    (llmConfig.LLM === 'fireworks' && !currentApiKey) ||
+                                    (llmConfig.LLM === 'together' && !currentApiKey) ||
                                     (llmConfig.LLM === 'cerebras' && !currentApiKey) ||
                                     (llmConfig.LLM === 'custom' && !llmConfig.CUSTOM_LLM_URL) ||
                                     (llmConfig.LLM === 'litellm' && !currentLitellmUrl)

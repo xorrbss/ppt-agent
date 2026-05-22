@@ -126,6 +126,34 @@ def get_azure_openai_deployment_env():
     return os.getenv("AZURE_OPENAI_DEPLOYMENT")
 
 
+def get_bedrock_region_env():
+    return os.getenv("BEDROCK_REGION")
+
+
+def get_bedrock_api_key_env():
+    return os.getenv("BEDROCK_API_KEY")
+
+
+def get_bedrock_aws_access_key_id_env():
+    return os.getenv("BEDROCK_AWS_ACCESS_KEY_ID")
+
+
+def get_bedrock_aws_secret_access_key_env():
+    return os.getenv("BEDROCK_AWS_SECRET_ACCESS_KEY")
+
+
+def get_bedrock_aws_session_token_env():
+    return os.getenv("BEDROCK_AWS_SESSION_TOKEN")
+
+
+def get_bedrock_profile_name_env():
+    return os.getenv("BEDROCK_PROFILE_NAME")
+
+
+def get_bedrock_model_env():
+    return os.getenv("BEDROCK_MODEL")
+
+
 def get_openrouter_api_key_env():
     return os.getenv("OPENROUTER_API_KEY")
 
@@ -136,6 +164,30 @@ def get_openrouter_model_env():
 
 def get_openrouter_base_url_env():
     return os.getenv("OPENROUTER_BASE_URL")
+
+
+def get_fireworks_api_key_env():
+    return os.getenv("FIREWORKS_API_KEY")
+
+
+def get_fireworks_model_env():
+    return os.getenv("FIREWORKS_MODEL")
+
+
+def get_fireworks_base_url_env():
+    return os.getenv("FIREWORKS_BASE_URL")
+
+
+def get_together_api_key_env():
+    return os.getenv("TOGETHER_API_KEY")
+
+
+def get_together_model_env():
+    return os.getenv("TOGETHER_MODEL")
+
+
+def get_together_base_url_env():
+    return os.getenv("TOGETHER_BASE_URL")
 
 
 def get_cerebras_api_key_env():
@@ -160,6 +212,18 @@ def get_litellm_api_key_env():
 
 def get_litellm_model_env():
     return os.getenv("LITELLM_MODEL")
+
+
+def get_lmstudio_base_url_env():
+    return os.getenv("LMSTUDIO_BASE_URL")
+
+
+def get_lmstudio_api_key_env():
+    return os.getenv("LMSTUDIO_API_KEY")
+
+
+def get_lmstudio_model_env():
+    return os.getenv("LMSTUDIO_MODEL")
 
 
 def get_custom_llm_api_key_env():

@@ -18,10 +18,20 @@ const CurrentConfig = () => {
                     ? llmConfig.VERTEX_MODEL
                     : textProviderKey === "azure"
                         ? llmConfig.AZURE_OPENAI_MODEL
+                        : textProviderKey === "bedrock"
+                            ? llmConfig.BEDROCK_MODEL
                         : textProviderKey === "openrouter"
                             ? llmConfig.OPENROUTER_MODEL
+                            : textProviderKey === "fireworks"
+                                ? llmConfig.FIREWORKS_MODEL
+                                : textProviderKey === "together"
+                                    ? llmConfig.TOGETHER_MODEL
                             : textProviderKey === "cerebras"
                                 ? llmConfig.CEREBRAS_MODEL
+                                : textProviderKey === "litellm"
+                                    ? llmConfig.LITELLM_MODEL
+                                : textProviderKey === "lmstudio"
+                                    ? llmConfig.LMSTUDIO_MODEL
                                 : textProviderKey === "anthropic"
                                     ? llmConfig.ANTHROPIC_MODEL
                                     : textProviderKey === "ollama"

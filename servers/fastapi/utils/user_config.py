@@ -23,12 +23,28 @@ from utils.get_env import (
     get_azure_openai_base_url_env,
     get_azure_openai_api_version_env,
     get_azure_openai_deployment_env,
+    get_bedrock_region_env,
+    get_bedrock_api_key_env,
+    get_bedrock_aws_access_key_id_env,
+    get_bedrock_aws_secret_access_key_env,
+    get_bedrock_aws_session_token_env,
+    get_bedrock_profile_name_env,
+    get_bedrock_model_env,
+    get_fireworks_api_key_env,
+    get_fireworks_model_env,
+    get_fireworks_base_url_env,
+    get_together_api_key_env,
+    get_together_model_env,
+    get_together_base_url_env,
     get_cerebras_api_key_env,
     get_cerebras_base_url_env,
     get_cerebras_model_env,
     get_litellm_base_url_env,
     get_litellm_api_key_env,
     get_litellm_model_env,
+    get_lmstudio_base_url_env,
+    get_lmstudio_api_key_env,
+    get_lmstudio_model_env,
     get_openrouter_api_key_env,
     get_openrouter_base_url_env,
     get_openrouter_model_env,
@@ -85,12 +101,28 @@ from utils.set_env import (
     set_azure_openai_base_url_env,
     set_azure_openai_api_version_env,
     set_azure_openai_deployment_env,
+    set_bedrock_region_env,
+    set_bedrock_api_key_env,
+    set_bedrock_aws_access_key_id_env,
+    set_bedrock_aws_secret_access_key_env,
+    set_bedrock_aws_session_token_env,
+    set_bedrock_profile_name_env,
+    set_bedrock_model_env,
+    set_fireworks_api_key_env,
+    set_fireworks_model_env,
+    set_fireworks_base_url_env,
+    set_together_api_key_env,
+    set_together_model_env,
+    set_together_base_url_env,
     set_cerebras_api_key_env,
     set_cerebras_base_url_env,
     set_cerebras_model_env,
     set_litellm_base_url_env,
     set_litellm_api_key_env,
     set_litellm_model_env,
+    set_lmstudio_base_url_env,
+    set_lmstudio_api_key_env,
+    set_lmstudio_model_env,
     set_openrouter_api_key_env,
     set_openrouter_base_url_env,
     set_openrouter_model_env,
@@ -154,15 +186,36 @@ def get_user_config():
         or get_azure_openai_api_version_env(),
         AZURE_OPENAI_DEPLOYMENT=existing_config.AZURE_OPENAI_DEPLOYMENT
         or get_azure_openai_deployment_env(),
+        BEDROCK_REGION=existing_config.BEDROCK_REGION or get_bedrock_region_env(),
+        BEDROCK_API_KEY=existing_config.BEDROCK_API_KEY or get_bedrock_api_key_env(),
+        BEDROCK_AWS_ACCESS_KEY_ID=existing_config.BEDROCK_AWS_ACCESS_KEY_ID
+        or get_bedrock_aws_access_key_id_env(),
+        BEDROCK_AWS_SECRET_ACCESS_KEY=existing_config.BEDROCK_AWS_SECRET_ACCESS_KEY
+        or get_bedrock_aws_secret_access_key_env(),
+        BEDROCK_AWS_SESSION_TOKEN=existing_config.BEDROCK_AWS_SESSION_TOKEN
+        or get_bedrock_aws_session_token_env(),
+        BEDROCK_PROFILE_NAME=existing_config.BEDROCK_PROFILE_NAME
+        or get_bedrock_profile_name_env(),
+        BEDROCK_MODEL=existing_config.BEDROCK_MODEL or get_bedrock_model_env(),
         OPENROUTER_API_KEY=existing_config.OPENROUTER_API_KEY or get_openrouter_api_key_env(),
         OPENROUTER_MODEL=existing_config.OPENROUTER_MODEL or get_openrouter_model_env(),
         OPENROUTER_BASE_URL=existing_config.OPENROUTER_BASE_URL or get_openrouter_base_url_env(),
+        FIREWORKS_API_KEY=existing_config.FIREWORKS_API_KEY or get_fireworks_api_key_env(),
+        FIREWORKS_MODEL=existing_config.FIREWORKS_MODEL or get_fireworks_model_env(),
+        FIREWORKS_BASE_URL=existing_config.FIREWORKS_BASE_URL
+        or get_fireworks_base_url_env(),
+        TOGETHER_API_KEY=existing_config.TOGETHER_API_KEY or get_together_api_key_env(),
+        TOGETHER_MODEL=existing_config.TOGETHER_MODEL or get_together_model_env(),
+        TOGETHER_BASE_URL=existing_config.TOGETHER_BASE_URL or get_together_base_url_env(),
         CEREBRAS_API_KEY=existing_config.CEREBRAS_API_KEY or get_cerebras_api_key_env(),
         CEREBRAS_MODEL=existing_config.CEREBRAS_MODEL or get_cerebras_model_env(),
         CEREBRAS_BASE_URL=existing_config.CEREBRAS_BASE_URL or get_cerebras_base_url_env(),
         LITELLM_BASE_URL=existing_config.LITELLM_BASE_URL or get_litellm_base_url_env(),
         LITELLM_API_KEY=existing_config.LITELLM_API_KEY or get_litellm_api_key_env(),
         LITELLM_MODEL=existing_config.LITELLM_MODEL or get_litellm_model_env(),
+        LMSTUDIO_BASE_URL=existing_config.LMSTUDIO_BASE_URL or get_lmstudio_base_url_env(),
+        LMSTUDIO_API_KEY=existing_config.LMSTUDIO_API_KEY or get_lmstudio_api_key_env(),
+        LMSTUDIO_MODEL=existing_config.LMSTUDIO_MODEL or get_lmstudio_model_env(),
         ANTHROPIC_API_KEY=existing_config.ANTHROPIC_API_KEY
         or get_anthropic_api_key_env(),
         ANTHROPIC_MODEL=existing_config.ANTHROPIC_MODEL or get_anthropic_model_env(),
@@ -257,12 +310,38 @@ def update_env_with_user_config():
         set_azure_openai_api_version_env(user_config.AZURE_OPENAI_API_VERSION)
     if user_config.AZURE_OPENAI_DEPLOYMENT:
         set_azure_openai_deployment_env(user_config.AZURE_OPENAI_DEPLOYMENT)
+    if user_config.BEDROCK_REGION:
+        set_bedrock_region_env(user_config.BEDROCK_REGION)
+    if user_config.BEDROCK_API_KEY:
+        set_bedrock_api_key_env(user_config.BEDROCK_API_KEY)
+    if user_config.BEDROCK_AWS_ACCESS_KEY_ID:
+        set_bedrock_aws_access_key_id_env(user_config.BEDROCK_AWS_ACCESS_KEY_ID)
+    if user_config.BEDROCK_AWS_SECRET_ACCESS_KEY:
+        set_bedrock_aws_secret_access_key_env(user_config.BEDROCK_AWS_SECRET_ACCESS_KEY)
+    if user_config.BEDROCK_AWS_SESSION_TOKEN:
+        set_bedrock_aws_session_token_env(user_config.BEDROCK_AWS_SESSION_TOKEN)
+    if user_config.BEDROCK_PROFILE_NAME:
+        set_bedrock_profile_name_env(user_config.BEDROCK_PROFILE_NAME)
+    if user_config.BEDROCK_MODEL:
+        set_bedrock_model_env(user_config.BEDROCK_MODEL)
     if user_config.OPENROUTER_API_KEY:
         set_openrouter_api_key_env(user_config.OPENROUTER_API_KEY)
     if user_config.OPENROUTER_MODEL:
         set_openrouter_model_env(user_config.OPENROUTER_MODEL)
     if user_config.OPENROUTER_BASE_URL:
         set_openrouter_base_url_env(user_config.OPENROUTER_BASE_URL)
+    if user_config.FIREWORKS_API_KEY:
+        set_fireworks_api_key_env(user_config.FIREWORKS_API_KEY)
+    if user_config.FIREWORKS_MODEL:
+        set_fireworks_model_env(user_config.FIREWORKS_MODEL)
+    if user_config.FIREWORKS_BASE_URL:
+        set_fireworks_base_url_env(user_config.FIREWORKS_BASE_URL)
+    if user_config.TOGETHER_API_KEY:
+        set_together_api_key_env(user_config.TOGETHER_API_KEY)
+    if user_config.TOGETHER_MODEL:
+        set_together_model_env(user_config.TOGETHER_MODEL)
+    if user_config.TOGETHER_BASE_URL:
+        set_together_base_url_env(user_config.TOGETHER_BASE_URL)
     if user_config.CEREBRAS_API_KEY:
         set_cerebras_api_key_env(user_config.CEREBRAS_API_KEY)
     if user_config.CEREBRAS_MODEL:
@@ -275,6 +354,12 @@ def update_env_with_user_config():
         set_litellm_api_key_env(user_config.LITELLM_API_KEY)
     if user_config.LITELLM_MODEL:
         set_litellm_model_env(user_config.LITELLM_MODEL)
+    if user_config.LMSTUDIO_BASE_URL:
+        set_lmstudio_base_url_env(user_config.LMSTUDIO_BASE_URL)
+    if user_config.LMSTUDIO_API_KEY:
+        set_lmstudio_api_key_env(user_config.LMSTUDIO_API_KEY)
+    if user_config.LMSTUDIO_MODEL:
+        set_lmstudio_model_env(user_config.LMSTUDIO_MODEL)
     if user_config.ANTHROPIC_API_KEY:
         set_anthropic_api_key_env(user_config.ANTHROPIC_API_KEY)
     if user_config.ANTHROPIC_MODEL:

@@ -10,6 +10,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { notify } from '@/components/ui/sonner';
 import CodexConfig from './SettingCodex';
 import VertexAzureManualFields from '@/components/VertexAzureManualFields';
+import BedrockManualFields from '@/components/BedrockManualFields';
 
 
 interface OpenAIConfigProps {
@@ -24,7 +25,7 @@ interface ModelOption {
     size?: string;
 }
 
-const MANUAL_MODEL_PROVIDERS = new Set(['vertex', 'azure']);
+const MANUAL_MODEL_PROVIDERS = new Set(['vertex', 'azure', 'bedrock']);
 
 const TextProvider = ({
 
@@ -54,12 +55,20 @@ const TextProvider = ({
                 return 'VERTEX_MODEL';
             case 'azure':
                 return 'AZURE_OPENAI_MODEL';
+            case 'bedrock':
+                return 'BEDROCK_MODEL';
             case 'openrouter':
                 return 'OPENROUTER_MODEL';
+            case 'fireworks':
+                return 'FIREWORKS_MODEL';
+            case 'together':
+                return 'TOGETHER_MODEL';
             case 'cerebras':
                 return 'CEREBRAS_MODEL';
             case 'litellm':
                 return 'LITELLM_MODEL';
+            case 'lmstudio':
+                return 'LMSTUDIO_MODEL';
             case 'anthropic':
                 return 'ANTHROPIC_MODEL';
             case 'ollama':
@@ -83,12 +92,20 @@ const TextProvider = ({
                 return 'VERTEX_API_KEY';
             case 'azure':
                 return 'AZURE_OPENAI_API_KEY';
+            case 'bedrock':
+                return 'BEDROCK_API_KEY';
             case 'openrouter':
                 return 'OPENROUTER_API_KEY';
+            case 'fireworks':
+                return 'FIREWORKS_API_KEY';
+            case 'together':
+                return 'TOGETHER_API_KEY';
             case 'cerebras':
                 return 'CEREBRAS_API_KEY';
             case 'litellm':
                 return 'LITELLM_API_KEY';
+            case 'lmstudio':
+                return 'LMSTUDIO_API_KEY';
             case 'anthropic':
                 return 'ANTHROPIC_API_KEY';
             case 'custom':
@@ -102,6 +119,9 @@ const TextProvider = ({
     const currentApiKey = currentApiKeyField ? ((llmConfig as Record<string, unknown>)[currentApiKeyField] as string || '') : '';
     const currentCustomUrl = llmConfig.CUSTOM_LLM_URL || '';
     const currentLitellmUrl = (llmConfig.LITELLM_BASE_URL || '').trim();
+    const currentLmStudioUrl = (llmConfig.LMSTUDIO_BASE_URL || '').trim();
+    const currentFireworksUrl = (llmConfig.FIREWORKS_BASE_URL || '').trim();
+    const currentTogetherUrl = (llmConfig.TOGETHER_BASE_URL || '').trim();
     const currentOllamaUrl = llmConfig.OLLAMA_URL || '';
     const useCustomOllamaUrl = !!llmConfig.USE_CUSTOM_URL;
     const modelLabel = selectedProviderMeta?.label || selectedProvider;
@@ -112,12 +132,20 @@ const TextProvider = ({
                 ? 'Vertex API Key'
                 : selectedProvider === 'azure'
                     ? 'Azure OpenAI API Key'
+                    : selectedProvider === 'bedrock'
+                        ? 'Bedrock API Key (optional)'
                     : selectedProvider === 'openrouter'
                         ? 'OpenRouter API Key'
+                        : selectedProvider === 'fireworks'
+                            ? 'Fireworks API Key'
+                            : selectedProvider === 'together'
+                                ? 'Together API Key'
                         : selectedProvider === 'cerebras'
                             ? 'Cerebras API Key'
                             : selectedProvider === 'litellm'
                                 ? 'LiteLLM API key (optional)'
+                                : selectedProvider === 'lmstudio'
+                                    ? 'LM Studio API key (optional)'
                                 : `${selectedProvider} API Key`;
 
     useEffect(() => {
@@ -131,7 +159,7 @@ const TextProvider = ({
         if (currentModelField) {
             onInputChange('', currentModelField);
         }
-    }, [selectedProvider, currentApiKey, currentCustomUrl, currentLitellmUrl, currentModelField]);
+    }, [selectedProvider, currentApiKey, currentCustomUrl, currentLitellmUrl, currentLmStudioUrl, currentFireworksUrl, currentTogetherUrl, currentModelField]);
 
 
 
@@ -150,12 +178,20 @@ const TextProvider = ({
                         ? 'VERTEX_API_KEY'
                         : llm === 'azure'
                             ? 'AZURE_OPENAI_API_KEY'
+                        : llm === 'bedrock'
+                            ? 'BEDROCK_API_KEY'
                             : llm === 'openrouter'
                                 ? 'OPENROUTER_API_KEY'
+                                : llm === 'fireworks'
+                                    ? 'FIREWORKS_API_KEY'
+                                    : llm === 'together'
+                                        ? 'TOGETHER_API_KEY'
                                 : llm === 'cerebras'
                                     ? 'CEREBRAS_API_KEY'
                                     : llm === 'litellm'
                                         ? 'LITELLM_API_KEY'
+                                        : llm === 'lmstudio'
+                                            ? 'LMSTUDIO_API_KEY'
                                         : llm === 'anthropic'
                                             ? 'ANTHROPIC_API_KEY'
                                             : llm === 'custom'
@@ -172,6 +208,8 @@ const TextProvider = ({
         if (selectedProvider === 'google' && !currentApiKey) return;
         if (selectedProvider === 'anthropic' && !currentApiKey) return;
         if (selectedProvider === 'openrouter' && !currentApiKey) return;
+        if (selectedProvider === 'fireworks' && !currentApiKey) return;
+        if (selectedProvider === 'together' && !currentApiKey) return;
         if (selectedProvider === 'cerebras' && !currentApiKey) return;
         if (selectedProvider === 'custom' && !currentCustomUrl) return;
         if (selectedProvider === 'litellm' && !currentLitellmUrl) return;
@@ -207,6 +245,12 @@ const TextProvider = ({
                         ? currentCustomUrl
                         : selectedProvider === 'litellm'
                             ? currentLitellmUrl
+                            : selectedProvider === 'lmstudio'
+                                ? currentLmStudioUrl || selectedProviderMeta?.url || ''
+                                : selectedProvider === 'fireworks'
+                                    ? currentFireworksUrl || selectedProviderMeta?.url || ''
+                                    : selectedProvider === 'together'
+                                        ? currentTogetherUrl || selectedProviderMeta?.url || ''
                             : selectedProviderMeta?.url || '';
                 response = await fetch(getApiUrl('/api/v1/ppt/openai/models/available'), {
                     method: 'POST',
@@ -277,10 +321,16 @@ const TextProvider = ({
                                     ? 'claude-sonnet-4-20250514'
                                     : selectedProvider === 'openrouter'
                                         ? 'openai/gpt-4o'
+                                        : selectedProvider === 'fireworks'
+                                            ? 'accounts/fireworks/models/llama-v3p1-8b-instruct'
+                                            : selectedProvider === 'together'
+                                                ? 'openai/gpt-oss-20b'
                                         : selectedProvider === 'cerebras'
                                             ? 'llama-3.3-70b'
                                             : selectedProvider === 'litellm'
                                                 ? 'gpt-4.1'
+                                                : selectedProvider === 'lmstudio'
+                                                    ? 'openai/gpt-oss-20b'
                                                 : modelValues[0];
 
                     const nextModel = modelValues.includes(preferredDefault) ? preferredDefault : modelValues[0];
@@ -481,6 +531,15 @@ const TextProvider = ({
                                             }}
                                         />
                                     </div>
+                                ) : selectedProvider === 'bedrock' ? (
+                                    <BedrockManualFields
+                                        llmConfig={llmConfig}
+                                        onPatch={(patch) => {
+                                            for (const [field, value] of Object.entries(patch)) {
+                                                if (value !== undefined) onInputChange(value as string, field);
+                                            }
+                                        }}
+                                    />
                                 ) : (
                                         <>
                                             <label className="block text-sm font-medium capitalize text-gray-700 mb-2">
@@ -534,6 +593,51 @@ const TextProvider = ({
                                         </p>
                                     </>
                                 )}
+                                {selectedProvider === 'lmstudio' && (
+                                    <>
+                                        <label className="mt-3 block text-sm font-medium text-gray-700 mb-2">
+                                            LM Studio base URL
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={llmConfig.LMSTUDIO_BASE_URL || ''}
+                                            onChange={(e) => onInputChange(e.target.value, 'LMSTUDIO_BASE_URL')}
+                                            className="w-full px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            placeholder="http://localhost:1234/v1"
+                                        />
+                                        <p className="mt-1.5 text-xs text-gray-500">
+                                            Defaults to localhost:1234/v1, and /v1 is added automatically when omitted.
+                                        </p>
+                                    </>
+                                )}
+                                {selectedProvider === 'fireworks' && (
+                                    <>
+                                        <label className="mt-3 block text-sm font-medium text-gray-700 mb-2">
+                                            Fireworks base URL (optional)
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={llmConfig.FIREWORKS_BASE_URL || ''}
+                                            onChange={(e) => onInputChange(e.target.value, 'FIREWORKS_BASE_URL')}
+                                            className="w-full px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            placeholder="https://api.fireworks.ai/inference/v1"
+                                        />
+                                    </>
+                                )}
+                                {selectedProvider === 'together' && (
+                                    <>
+                                        <label className="mt-3 block text-sm font-medium text-gray-700 mb-2">
+                                            Together base URL (optional)
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={llmConfig.TOGETHER_BASE_URL || ''}
+                                            onChange={(e) => onInputChange(e.target.value, 'TOGETHER_BASE_URL')}
+                                            className="w-full px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            placeholder="https://api.together.ai/v1"
+                                        />
+                                    </>
+                                )}
                                 {(selectedProvider === 'vertex' || selectedProvider === 'azure') && (
                                     <VertexAzureManualFields
                                         key={selectedProvider}
@@ -557,6 +661,8 @@ const TextProvider = ({
                                         (selectedProvider === 'google' && !currentApiKey) ||
                                         (selectedProvider === 'anthropic' && !currentApiKey) ||
                                         (selectedProvider === 'openrouter' && !currentApiKey) ||
+                                        (selectedProvider === 'fireworks' && !currentApiKey) ||
+                                        (selectedProvider === 'together' && !currentApiKey) ||
                                         (selectedProvider === 'cerebras' && !currentApiKey) ||
                                         (selectedProvider === 'custom' && !currentCustomUrl) ||
                                         (selectedProvider === 'litellm' && !currentLitellmUrl)
