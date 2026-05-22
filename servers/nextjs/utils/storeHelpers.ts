@@ -6,12 +6,77 @@ function isProvided(value: unknown): boolean {
   return value !== "" && value !== null && value !== undefined;
 }
 
+function parseOptionalBool(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "no", "off"].includes(normalized)) {
+    return false;
+  }
+  return undefined;
+}
+
+export const normalizeLLMConfig = (llmConfig: LLMConfig): LLMConfig => {
+  const normalizedConfig: LLMConfig = { ...llmConfig };
+
+  if (!normalizedConfig.LLM) {
+    normalizedConfig.LLM = "openai";
+  }
+
+  const parsedDisableImageGeneration = parseOptionalBool(
+    (normalizedConfig as Record<string, unknown>).DISABLE_IMAGE_GENERATION
+  );
+  if (parsedDisableImageGeneration !== undefined) {
+    normalizedConfig.DISABLE_IMAGE_GENERATION = parsedDisableImageGeneration;
+  }
+
+  if (normalizedConfig.DISABLE_IMAGE_GENERATION || normalizedConfig.IMAGE_PROVIDER) {
+    return normalizedConfig;
+  }
+
+  if (
+    normalizedConfig.OPENAI_COMPAT_IMAGE_BASE_URL &&
+    normalizedConfig.OPENAI_COMPAT_IMAGE_API_KEY &&
+    normalizedConfig.OPENAI_COMPAT_IMAGE_MODEL
+  ) {
+    normalizedConfig.IMAGE_PROVIDER = "openai_compatible";
+  } else if (normalizedConfig.OPEN_WEBUI_IMAGE_URL) {
+    normalizedConfig.IMAGE_PROVIDER = "open_webui";
+  } else if (normalizedConfig.COMFYUI_URL) {
+    normalizedConfig.IMAGE_PROVIDER = "comfyui";
+  } else if (normalizedConfig.PEXELS_API_KEY) {
+    normalizedConfig.IMAGE_PROVIDER = "pexels";
+  } else if (normalizedConfig.PIXABAY_API_KEY) {
+    normalizedConfig.IMAGE_PROVIDER = "pixabay";
+  } else if (normalizedConfig.LLM === "openai" && normalizedConfig.OPENAI_API_KEY) {
+    normalizedConfig.IMAGE_PROVIDER = "gpt-image-1.5";
+    normalizedConfig.GPT_IMAGE_1_5_QUALITY =
+      normalizedConfig.GPT_IMAGE_1_5_QUALITY || "medium";
+  } else if (normalizedConfig.LLM === "google" && normalizedConfig.GOOGLE_API_KEY) {
+    normalizedConfig.IMAGE_PROVIDER = "gemini_flash";
+  } else {
+    normalizedConfig.DISABLE_IMAGE_GENERATION = true;
+  }
+
+  return normalizedConfig;
+};
+
 /**
  * Returns a user-facing validation message, or null when the config is valid.
  */
 export const getLLMConfigValidationError = (
-  llmConfig: LLMConfig
+  inputConfig: LLMConfig
 ): string | null => {
+  const llmConfig = normalizeLLMConfig(inputConfig);
+
   if (!llmConfig.LLM) {
     return "Select a text provider.";
   }
@@ -211,22 +276,23 @@ export function syncStoreAfterCodexSignOut(): void {
 }
 
 export const handleSaveLLMConfig = async (llmConfig: LLMConfig) => {
-  const validationError = getLLMConfigValidationError(llmConfig);
+  const normalizedConfig = normalizeLLMConfig(llmConfig);
+  const validationError = getLLMConfigValidationError(normalizedConfig);
   if (validationError) {
     throw new Error(validationError);
   }
 
   // Prefer shared API routes; fallback to Electron IPC for packaged compatibility.
   if (typeof window !== "undefined" && window.electron?.setUserConfig) {
-    await window.electron.setUserConfig(llmConfig);
+    await window.electron.setUserConfig(normalizedConfig);
   } else {
     await fetch("/api/user-config", {
       method: "POST",
-      body: JSON.stringify(llmConfig),
+      body: JSON.stringify(normalizedConfig),
     });
   }
 
-  store.dispatch(setLLMConfig(llmConfig));
+  store.dispatch(setLLMConfig(normalizedConfig));
 };
 
 export const hasValidLLMConfig = (llmConfig: LLMConfig) =>
