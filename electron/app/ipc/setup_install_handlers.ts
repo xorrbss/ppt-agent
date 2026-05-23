@@ -13,6 +13,11 @@ import * as http from "http";
 import { IncomingMessage } from "http";
 import { getSetupStatus } from "../utils/setup-dependencies";
 import {
+  installExportChromium,
+  isExportChromiumAvailable,
+  resolveInstalledExportChromiumPath,
+} from "../utils/export-chromium";
+import {
   getImageMagickBinaryPath,
   getImageMagickDownloadUrl,
   getImageMagickManualInstallCommands,
@@ -56,6 +61,19 @@ function sendImageMagickProgress(
 
 function sendImageMagickLog(wc: WebContents, level: string, text: string) {
   safeSendToWebContents(wc, "setup:imagemagick-log", { level, text });
+}
+
+function sendChromiumProgress(
+  wc: WebContents,
+  phase: "downloading" | "installing" | "done" | "error",
+  percent?: number,
+  message?: string
+) {
+  safeSendToWebContents(wc, "setup:chromium-progress", { phase, percent, message });
+}
+
+function sendChromiumLog(wc: WebContents, level: string, text: string) {
+  safeSendToWebContents(wc, "setup:chromium-log", { level, text });
 }
 
 function commandExists(command: string, versionArgs: string[] = ["--version"]): boolean {
@@ -376,6 +394,7 @@ export function setupSetupInstallHandlers() {
       getSetupStatus() ?? {
         needsLibreOffice: false,
         needsImageMagick: false,
+        needsChromium: false,
       }
     );
   });
@@ -541,6 +560,77 @@ export function setupSetupInstallHandlers() {
         "ImageMagick is not detected yet. Install it, then click Retry.";
       sendImageMagickProgress(wc, "error", undefined, message);
       sendImageMagickLog(wc, "error", message);
+      return { ok: false, error: message };
+    }
+  );
+
+  ipcMain.handle(
+    "setup:install-chromium",
+    async (event): Promise<{ ok: boolean; error?: string }> => {
+      const wc = event.sender;
+      try {
+        sendChromiumLog(wc, "info", "Preparing Chromium for PDF/PPTX export…");
+        sendChromiumProgress(wc, "downloading", 0, "Starting download…");
+
+        await installExportChromium((progress) => {
+          if (progress.message) {
+            sendChromiumLog(wc, "info", progress.message);
+          }
+          if (progress.phase === "downloading") {
+            sendChromiumProgress(
+              wc,
+              "downloading",
+              progress.percent,
+              progress.message ?? "Downloading Chromium…"
+            );
+            return;
+          }
+          if (progress.phase === "installing") {
+            sendChromiumProgress(wc, "installing", progress.percent, progress.message);
+            return;
+          }
+          if (progress.phase === "done") {
+            sendChromiumProgress(wc, "done", 100, progress.message ?? "Chromium ready");
+          }
+        });
+
+        if (!isExportChromiumAvailable()) {
+          throw new Error("Chromium install finished but the executable was not detected.");
+        }
+
+        sendChromiumLog(
+          wc,
+          "ok",
+          `Chromium is installed (${resolveInstalledExportChromiumPath()}).`
+        );
+        sendChromiumProgress(wc, "done", 100, "Chromium install finished");
+        return { ok: true };
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Chromium install failed";
+        sendChromiumLog(wc, "error", message);
+        sendChromiumProgress(wc, "error", undefined, message);
+        return { ok: false, error: message };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    "setup:check-chromium",
+    async (event): Promise<{ ok: boolean; error?: string }> => {
+      const wc = event.sender;
+      if (isExportChromiumAvailable()) {
+        sendChromiumProgress(wc, "done", 100, "Chromium detected");
+        sendChromiumLog(
+          wc,
+          "ok",
+          `Chromium is installed and ready (${resolveInstalledExportChromiumPath()}).`
+        );
+        return { ok: true };
+      }
+      const message = "Chromium is not installed yet. Click Install to download it.";
+      sendChromiumProgress(wc, "error", undefined, message);
+      sendChromiumLog(wc, "error", message);
       return { ok: false, error: message };
     }
   );

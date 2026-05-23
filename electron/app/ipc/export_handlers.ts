@@ -11,6 +11,12 @@ import { addMainBreadcrumb } from "../sentry/main";
 import { BoundedTextBuffer, memorySnapshotMb } from "../utils/memory";
 import { destroyChildProcessStdio, terminateChildProcess } from "../utils/lifecycle";
 import { killProcess } from "../utils";
+import {
+  isExportChromiumAvailable,
+  removeBrokenExportChromiumCaches,
+  resolveInstalledExportChromiumPath,
+} from "../utils/export-chromium";
+import { resolveExportSpawnTarget } from "../utils/export-msix-runtime";
 
 type BinaryFormat = "elf" | "mach-o" | "pe" | "unknown";
 type RuntimeCandidate = {
@@ -54,6 +60,15 @@ export function setupExportHandlers() {
   ipcMain.handle("export-presentation", async (_, id: string, title: string, exportAs: "pptx" | "pdf") => {
     let exportTempDir: string | undefined;
     try {
+      await removeBrokenExportChromiumCaches();
+      if (!isExportChromiumAvailable()) {
+        return {
+          success: false,
+          message:
+            "Export requires Chromium. Restart Presenton and complete the Chromium setup step when prompted.",
+        };
+      }
+
       addMainBreadcrumb("export", "electron.ipc_export.start", {
         id,
         title,
@@ -83,8 +98,14 @@ export function setupExportHandlers() {
       const exportTaskPath = path.join(exportTempDir, "export_task.json");
       await fs.promises.writeFile(exportTaskPath, JSON.stringify(exportTask));
 
-      const exportScriptPath = path.join(baseDir, "resources", "export", "index.js");
-      const pythonModulePath = await resolveConverterPath(baseDir);
+      const packagedExportRoot = path.join(baseDir, "resources", "export");
+      const packagedExportScriptPath = path.join(packagedExportRoot, "index.js");
+      const { scriptPath: exportScriptPath, converterPath: pythonModulePath } =
+        await resolveExportSpawnTarget(
+          packagedExportRoot,
+          packagedExportScriptPath,
+          (exportRoot) => resolveConverterPath(exportRoot)
+        );
       safeLog("[Export] Spawning export task with config:", {
         exportAs,
         id,
@@ -96,21 +117,24 @@ export function setupExportHandlers() {
         NEXT_PUBLIC_URL: process.env.NEXT_PUBLIC_URL,
         NEXT_PUBLIC_FAST_API: process.env.NEXT_PUBLIC_FAST_API,
       });
+      const chromiumExecutablePath = resolveInstalledExportChromiumPath();
       const baseExportEnv = {
         ...process.env,
         TEMP_DIRECTORY: tempDir,
         APP_DATA_DIRECTORY: appDataDir,
         NODE_ENV: "development",
         BUILT_PYTHON_MODULE_PATH: pythonModulePath,
+        ...(chromiumExecutablePath && {
+          PUPPETEER_EXECUTABLE_PATH: chromiumExecutablePath,
+        }),
       };
-      await runExportTaskWithRuntimeFallback(
+      const responsePath = exportTaskPath.replace(".json", ".response.json");
+      const responseRaw = await runExportTaskAndReadResponse(
         exportScriptPath,
         exportTaskPath,
+        responsePath,
         baseExportEnv
       );
-
-      const responsePath = exportTaskPath.replace(".json", ".response.json");
-      const responseRaw = await fs.promises.readFile(responsePath, "utf8");
       const responseData = JSON.parse(responseRaw);
       const exportFilePath = resolveExportedFilePath(responseData);
 
@@ -199,27 +223,38 @@ async function runExportTaskWithRuntimeFallback(
   const failures: string[] = [];
 
   for (const runtime of runtimeCandidates) {
-    try {
+    let repairedBrowserCache = false;
+    while (true) {
       safeLog(`[Export] Trying runtime: ${runtime.label} -> ${runtime.command}`);
-      await runExportTaskOnce(
-        runtime,
-        exportScriptPath,
-        exportTaskPath,
-        baseEnv
-      );
-      return;
-    } catch (error: any) {
-      const details = [
-        `${runtime.label}: ${error?.message || "Unknown error"}`,
-        error?.code ? `code=${error.code}` : "",
-      ]
-        .filter(Boolean)
-        .join(" ");
-      failures.push(details);
-      safeError(`[Export] Runtime failed (${runtime.label})`, error);
+      try {
+        await runExportTaskOnce(
+          runtime,
+          exportScriptPath,
+          exportTaskPath,
+          baseEnv
+        );
+        return;
+      } catch (error: any) {
+        if (!repairedBrowserCache && (await repairBrokenPuppeteerCache(error))) {
+          repairedBrowserCache = true;
+          safeLog(`[Export] Retrying runtime ${runtime.label} after repairing Puppeteer cache.`);
+          continue;
+        }
 
-      if (!isRetryableRuntimeError(error)) {
-        throw error;
+        const details = [
+          `${runtime.label}: ${error?.message || "Unknown error"}`,
+          error?.code ? `code=${error.code}` : "",
+        ]
+          .filter(Boolean)
+          .join(" ");
+        failures.push(details);
+        safeError(`[Export] Runtime failed (${runtime.label})`, error);
+
+        if (!isRetryableRuntimeError(error)) {
+          throw error;
+        }
+
+        break;
       }
     }
   }
@@ -227,6 +262,60 @@ async function runExportTaskWithRuntimeFallback(
   throw new Error(
     `Export failed to start with all runtimes.\n${failures.map((f) => `- ${f}`).join("\n")}`
   );
+}
+
+async function runExportTaskAndReadResponse(
+  exportScriptPath: string,
+  exportTaskPath: string,
+  responsePath: string,
+  baseEnv: NodeJS.ProcessEnv
+): Promise<string> {
+  const maxAttempts = 2;
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    await runExportTaskWithRuntimeFallback(exportScriptPath, exportTaskPath, baseEnv);
+    try {
+      return await fs.promises.readFile(responsePath, "utf8");
+    } catch (error: any) {
+      if (error?.code === "ENOENT" && attempt < maxAttempts) {
+        safeError(
+          `[Export] Response file missing after successful export process. Retrying (${attempt}/${maxAttempts}).`,
+          error
+        );
+        lastError = error;
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Export task completed without creating a response file.");
+}
+
+function extractMissingChromeFolderFromError(error: unknown): string | null {
+  const message = String((error as any)?.message ?? "");
+  const match = message.match(/browser folder \(([^)]+)\) exists but the executable \(([^)]+)\) is missing/i);
+  if (!match) return null;
+  const browserFolder = path.normalize(match[1]);
+  const missingExecutablePath = path.normalize(match[2]);
+  if (!browserFolder || !missingExecutablePath.startsWith(browserFolder)) return null;
+  const normalized = browserFolder.toLowerCase().replace(/\\/g, "/");
+  if (!normalized.includes("/.cache/puppeteer/chrome/")) return null;
+  return browserFolder;
+}
+
+async function repairBrokenPuppeteerCache(error: unknown): Promise<boolean> {
+  const browserFolder = extractMissingChromeFolderFromError(error);
+  if (!browserFolder) return false;
+  try {
+    await fs.promises.rm(browserFolder, { recursive: true, force: true });
+    safeLog(`[Export] Removed broken Puppeteer browser cache: ${browserFolder}`);
+    return true;
+  } catch (rmError) {
+    safeError(`[Export] Failed to remove broken Puppeteer cache at ${browserFolder}`, rmError);
+    return false;
+  }
 }
 
 async function runExportTaskOnce(
@@ -242,7 +331,7 @@ async function runExportTaskOnce(
 
   const exportTaskProcess = spawn(runtime.command, [exportScriptPath, exportTaskPath], {
     stdio: ["ignore", "pipe", "pipe"],
-    cwd: baseDir,
+    cwd: path.dirname(exportScriptPath),
     windowsHide: process.platform === "win32",
     env: runtimeEnv,
   });
@@ -349,8 +438,8 @@ async function runExportTaskOnce(
   }
 }
 
-async function resolveConverterPath(currentBaseDir: string): Promise<string> {
-  const pyDir = path.join(currentBaseDir, "resources", "export", "py");
+async function resolveConverterPath(exportRoot: string): Promise<string> {
+  const pyDir = path.join(exportRoot, "py");
   const extension = process.platform === "win32" ? ".exe" : "";
   const converterCandidates = [
     path.join(pyDir, `convert-${process.platform}-${process.arch}${extension}`),

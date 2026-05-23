@@ -141,7 +141,7 @@
       <div id="state-prompt" class="state active">
         <div class="icon-wrap purple">📦</div>
         <p class="heading" id="prompt-heading">Dependencies required</p>
-        <p class="sub" id="prompt-sub">Presenton needs LibreOffice and ImageMagick to create and export presentations reliably. Install them now so everything works.</p>
+        <p class="sub" id="prompt-sub">Presenton needs LibreOffice, ImageMagick, and Chromium to create and export presentations reliably. Install them now so everything works.</p>
         <div class="btn-row">
           <button class="btn-primary" id="btn-install">Install</button>
           <button class="btn-ghost" id="btn-skip">Skip for now</button>
@@ -213,8 +213,8 @@
     const STATES = ['prompt','downloading','installing','success','error'];
     const setupInstallerApi = window.setupInstaller;
     let logLines = 0;
-    let currentStep = null; // 'libreoffice' | 'imagemagick'
-    let status = { needsLibreOffice: false, needsImageMagick: false };
+    let currentStep = null; // 'libreoffice' | 'imagemagick' | 'chromium'
+    let status = { needsLibreOffice: false, needsImageMagick: false, needsChromium: false };
     let steps = [];
     let logOpen = false;
 
@@ -270,6 +270,7 @@
       const queue = [];
       if (status.needsLibreOffice) queue.push('libreoffice');
       if (status.needsImageMagick) queue.push('imagemagick');
+      if (status.needsChromium) queue.push('chromium');
       return queue;
     }
 
@@ -277,15 +278,21 @@
       currentStep = step;
       const total = steps.length || 1;
       const stepNum = Math.max(1, steps.indexOf(step) + 1);
-      const stepLabel = step === 'libreoffice' ? 'LibreOffice' : 'ImageMagick';
+      const stepLabel =
+        step === 'libreoffice' ? 'LibreOffice' :
+        step === 'imagemagick' ? 'ImageMagick' :
+        'Chromium';
       setStepBadge(stepNum, total, stepLabel);
       document.getElementById('prompt-heading').textContent =
         step === 'libreoffice' ? 'LibreOffice required' :
-        'ImageMagick required';
+        step === 'imagemagick' ? 'ImageMagick required' :
+        'Chromium required';
       document.getElementById('prompt-sub').innerHTML =
         step === 'libreoffice'
           ? '<strong>Presenton</strong> uses LibreOffice to generate custom templates from PPTX files.'
-          : '<strong>Presenton</strong> uses ImageMagick for OCR/document conversion support. Linux uses apt, macOS installs Homebrew first (if needed) and then runs brew install imagemagick, and Windows downloads and installs it directly into the Presenton runtime.';
+          : step === 'imagemagick'
+            ? '<strong>Presenton</strong> uses ImageMagick for OCR/document conversion support. Linux uses apt, macOS installs Homebrew first (if needed) and then runs brew install imagemagick, and Windows downloads and installs it directly into the Presenton runtime.'
+            : '<strong>Presenton</strong> uses Chromium to render slides for PDF and PPTX export. This is a one-time download (~150–200 MB). Keep the app open until it finishes.';
       document.getElementById('btn-install').onclick = () => startInstall(step);
       document.getElementById('btn-skip').onclick = () => handleSkip();
       showState('prompt');
@@ -305,7 +312,7 @@
         document.getElementById('dl-heading').textContent = 'Downloading LibreOffice';
         document.getElementById('dl-phase').textContent = 'This may take a few minutes (~300 MB)';
         setupInstallerApi.installLibreOffice();
-      } else {
+      } else if (step === 'imagemagick') {
         document.getElementById('dl-heading').textContent = 'Installing ImageMagick';
         document.getElementById('dl-phase').textContent = 'Linux: apt-get | macOS: Homebrew + brew install | Windows: direct installer (Presenton runtime)';
         setupInstallerApi.installImageMagick().then((installResult) => {
@@ -323,6 +330,28 @@
               document.getElementById('err-msg').textContent = res.error || 'ImageMagick is not installed yet.';
               showState('error');
               document.getElementById('btn-retry').onclick = () => startInstall('imagemagick');
+              document.getElementById('btn-skip-error').onclick = () => nextOrDone();
+            }
+          });
+        });
+      } else {
+        document.getElementById('dl-heading').textContent = 'Downloading Chromium';
+        document.getElementById('dl-phase').textContent = 'This may take a few minutes depending on your connection';
+        setupInstallerApi.installChromium().then((installResult) => {
+          if (!installResult || !installResult.ok) {
+            if (currentStep !== 'chromium') return;
+            document.getElementById('err-msg').textContent = installResult?.error || 'Chromium download failed.';
+            showState('error');
+            document.getElementById('btn-retry').onclick = () => startInstall('chromium');
+            document.getElementById('btn-skip-error').onclick = () => nextOrDone();
+            return;
+          }
+
+          setupInstallerApi.checkChromium().then((res) => {
+            if (!res.ok && currentStep === 'chromium') {
+              document.getElementById('err-msg').textContent = res.error || 'Chromium is not installed yet.';
+              showState('error');
+              document.getElementById('btn-retry').onclick = () => startInstall('chromium');
               document.getElementById('btn-skip-error').onclick = () => nextOrDone();
             }
           });
@@ -376,7 +405,8 @@
         showState('success');
         document.getElementById('success-heading').textContent =
           currentStep === 'libreoffice' ? 'LibreOffice installed' :
-          'ImageMagick ready';
+          currentStep === 'imagemagick' ? 'ImageMagick ready' :
+          'Chromium ready';
         const idx = steps.indexOf(currentStep);
         const nextStep = idx >= 0 ? steps[idx + 1] : null;
         document.getElementById('success-sub').textContent = nextStep ? 'Continuing with next step…' : 'Continuing in a moment…';
@@ -415,6 +445,8 @@
       setupInstallerApi.onLibreOfficeLog((data) => onLog('libreoffice', data));
       setupInstallerApi.onImageMagickProgress((data) => onProgress('imagemagick', data));
       setupInstallerApi.onImageMagickLog((data) => onLog('imagemagick', data));
+      setupInstallerApi.onChromiumProgress((data) => onProgress('chromium', data));
+      setupInstallerApi.onChromiumLog((data) => onLog('chromium', data));
 
       setupInstallerApi.getStatus().then(s => {
         status = s;
