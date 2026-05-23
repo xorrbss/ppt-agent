@@ -3,6 +3,7 @@
 import React, { useRef, useEffect, useState, ReactNode } from "react";
 import ReactDOM from "react-dom/client";
 import TiptapText from "./TiptapText";
+import MarkdownInlineText from "./MarkdownInlineText";
 import { useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
@@ -14,6 +15,7 @@ interface TiptapTextReplacerProps {
   children: ReactNode;
   slideData?: any;
   slideIndex?: number;
+  readOnly?: boolean;
   onContentChange?: (
     content: string,
     path: string,
@@ -25,6 +27,7 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
   children,
   slideData,
   slideIndex,
+  readOnly = false,
   onContentChange = () => {},
 }) => {
 
@@ -107,28 +110,35 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
           fallbackText: trimmedText,
         });
         root.render(
-          <TiptapText
-            content={initialContent}
-           
-            onContentChange={(content: string) => {
-              if (dataPath && onContentChange) {
-                onContentChange(content, dataPath.path, slideIndex);
-              }
-            }}
-            placeholder="Enter text..."
-          />
+          readOnly ? (
+            <MarkdownInlineText content={initialContent} />
+          ) : (
+            <TiptapText
+              content={initialContent}
+              onContentChange={(content: string) => {
+                if (dataPath && onContentChange) {
+                  onContentChange(content, dataPath.path, slideIndex);
+                }
+              }}
+              placeholder="Enter text..."
+            />
+          )
         );
       });
+
+      if (readOnly && container) {
+        container.setAttribute("data-markdown-rendered", "true");
+      }
     };
 
   
     // Replace text elements after a short delay to ensure DOM is ready
-    const timer = setTimeout(replaceTextElements, 1000);
+    const timer = setTimeout(replaceTextElements, readOnly ? 250 : 1000);
 
     return () => {
       clearTimeout(timer);
     };
-  }, [slideData, slideIndex]);
+  }, [slideData, slideIndex, readOnly]);
   
   // When slideData changes, update existing editors' content using the stored dataPath
   useEffect(() => {
@@ -136,18 +146,22 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
     rootsRef.current.forEach(({ root, dataPath,  fallbackText }) => {
       const newContent = dataPath ? getValueByPath(slideData, dataPath) ?? fallbackText : fallbackText;
       root.render(
-        <TiptapText
-          content={newContent}
-          onContentChange={(content: string) => {
-            if (dataPath && onContentChange) {
-              onContentChange(content, dataPath, slideIndex);
-            }
-          }}
-          placeholder="Enter text..."
-        />
+        readOnly ? (
+          <MarkdownInlineText content={newContent} />
+        ) : (
+          <TiptapText
+            content={newContent}
+            onContentChange={(content: string) => {
+              if (dataPath && onContentChange) {
+                onContentChange(content, dataPath, slideIndex);
+              }
+            }}
+            placeholder="Enter text..."
+          />
+        )
       );
     });
-  }, [slideData, slideIndex]);
+  }, [slideData, slideIndex, readOnly]);
   // helper functions
     // Function to check if element is inside an ignored element tree
     const isInIgnoredElementTree = (element: HTMLElement): boolean => {

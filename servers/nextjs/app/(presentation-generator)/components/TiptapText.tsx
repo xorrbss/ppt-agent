@@ -57,7 +57,7 @@ const TiptapText: React.FC<TiptapTextProps> = ({
     // Compare against current plain text to avoid unnecessary updates
     const currentText = editor?.storage.markdown.getMarkdown();
     if ((content || "") !== currentText) {
-      editor.commands.setContent(content || "");
+      editor.commands.setContent(content || "", false);
     }
   }, [content, editor]);
 
