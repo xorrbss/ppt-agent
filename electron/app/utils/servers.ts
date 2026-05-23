@@ -14,6 +14,48 @@ type ManagedServerProcess = {
   stop: () => Promise<void>;
 };
 
+function resolveNextJsStandaloneServer(directory: string): {
+  serverScript: string;
+  cwd: string;
+} {
+  const directScript = path.join(directory, "server.js");
+  if (fs.existsSync(directScript)) {
+    return { serverScript: directScript, cwd: directory };
+  }
+
+  const nestedScript = path.join(directory, "servers", "nextjs", "server.js");
+  if (fs.existsSync(nestedScript)) {
+    return { serverScript: nestedScript, cwd: path.dirname(nestedScript) };
+  }
+
+  throw new Error(`Next.js standalone server not found under: ${directory}`);
+}
+
+/** Next.js 16+ standalone runs from servers/nextjs/; static/public must sit next to server.js. */
+function ensureNestedStandaloneAssets(bundleRoot: string, serverCwd: string): void {
+  if (path.resolve(bundleRoot) === path.resolve(serverCwd)) {
+    return;
+  }
+
+  const copyIfMissing = (source: string, destination: string) => {
+    if (!fs.existsSync(source) || fs.existsSync(destination)) {
+      return;
+    }
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    fs.cpSync(source, destination, { recursive: true });
+    safeConsoleLog(`[Presenton] Linked Next.js assets: ${path.basename(source)} -> ${destination}`);
+  };
+
+  copyIfMissing(
+    path.join(bundleRoot, ".next-build", "static"),
+    path.join(serverCwd, ".next-build", "static"),
+  );
+  copyIfMissing(
+    path.join(bundleRoot, "public"),
+    path.join(serverCwd, "public"),
+  );
+}
+
 function createManagedServerProcess(params: {
   name: string;
   process: ChildProcess;
@@ -192,16 +234,14 @@ export async function startNextJsServer(
       },
     });
   } else {
-    const serverScript = path.join(directory, "server.js");
-    if (!fs.existsSync(serverScript)) {
-      throw new Error(`Next.js standalone server not found: ${serverScript}`);
-    }
+    const { serverScript, cwd } = resolveNextJsStandaloneServer(directory);
+    ensureNestedStandaloneAssets(directory, cwd);
 
     nextjsProcess = spawn(
       process.execPath,
       [serverScript],
       {
-        cwd: directory,
+        cwd,
         stdio: ["ignore", "pipe", "pipe"],
         env: {
           ...process.env,

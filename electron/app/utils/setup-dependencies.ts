@@ -1,10 +1,8 @@
 /**
  * setup-dependencies.ts
  *
- * Single installer window that ensures LibreOffice and ImageMagick are available
- * before the user starts creating presentations. Runs checks, then if either is
- * missing shows one installer that runs dependency setup steps in sequence
- * (each with Install / Skip).
+ * Single installer window that ensures LibreOffice, ImageMagick, and export
+ * Chromium are available before the user starts creating presentations.
  */
 
 import { BrowserWindow, ipcMain } from "electron";
@@ -12,10 +10,15 @@ import * as path from "path";
 import { baseDir } from "./constants";
 import { isLibreOfficeInstalled } from "./libreoffice-check";
 import { isImageMagickInstalled } from "./imagemagick-check";
+import {
+  isExportChromiumAvailable,
+  removeBrokenExportChromiumCaches,
+} from "./export-chromium";
 
 export interface SetupStatus {
   needsLibreOffice: boolean;
   needsImageMagick: boolean;
+  needsChromium: boolean;
 }
 
 /** Set by checkDependenciesBeforeWindow; read by setup installer IPC. */
@@ -26,40 +29,45 @@ export function getSetupStatus(): SetupStatus | null {
 }
 
 /**
- * Checks LibreOffice and ImageMagick. If both are present, returns
- * immediately. If any are missing, opens one installer window that runs each
- * missing setup step in sequence. Returns true only when all required dependencies
- * are installed; false when the installer is closed/skipped before completion.
+ * Checks LibreOffice, ImageMagick, and export Chromium. If all are present,
+ * returns immediately. If any are missing, opens one installer window that runs
+ * each missing setup step in sequence. Returns true only when all required
+ * dependencies are installed; false when the installer is closed/skipped before
+ * completion.
  */
 export async function checkDependenciesBeforeWindow(): Promise<boolean> {
-  const [loResult, imageMagickInstalled] = await Promise.all([
+  await removeBrokenExportChromiumCaches();
+
+  const [loResult, imageMagickInstalled, chromiumInstalled] = await Promise.all([
     isLibreOfficeInstalled(),
     Promise.resolve(isImageMagickInstalled()),
+    Promise.resolve(isExportChromiumAvailable()),
   ]);
 
   const needsLibreOffice = !loResult.installed;
   const needsImageMagick = !imageMagickInstalled;
+  const needsChromium = !chromiumInstalled;
 
-  if (!needsLibreOffice && !needsImageMagick) {
+  if (!needsLibreOffice && !needsImageMagick && !needsChromium) {
     return true;
   }
 
   currentSetupStatus = {
     needsLibreOffice,
     needsImageMagick,
+    needsChromium,
   };
 
   await showSetupInstallerWindow();
 
-  // Re-check after installer closes; setup can only proceed when all
-  // required dependencies are actually installed.
-  const [postLoResult, postImageMagickInstalled] = await Promise.all([
+  const [postLoResult, postImageMagickInstalled, postChromiumInstalled] = await Promise.all([
     isLibreOfficeInstalled(),
     Promise.resolve(isImageMagickInstalled()),
+    Promise.resolve(isExportChromiumAvailable()),
   ]);
 
   currentSetupStatus = null;
-  return postLoResult.installed && postImageMagickInstalled;
+  return postLoResult.installed && postImageMagickInstalled && postChromiumInstalled;
 }
 
 /**
@@ -82,7 +90,6 @@ function showSetupInstallerWindow(): Promise<void> {
         webSecurity: false,
         contextIsolation: true,
         nodeIntegration: false,
-        // Keep preload runtime consistent with the main window in packaged builds.
         sandbox: false,
         preload: path.join(__dirname, "../preloads/setup-installer.js"),
       },

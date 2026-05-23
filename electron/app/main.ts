@@ -26,6 +26,7 @@ import { checkDependenciesBeforeWindow } from "./utils/setup-dependencies";
 import { getSofficePath, isLibreOfficeInstalled } from "./utils/libreoffice-check";
 import { getLiteParseRunnerPath } from "./utils/liteparse-check";
 import { getImageMagickBinaryPath, isImageMagickInstalled } from "./utils/imagemagick-check";
+import { isExportChromiumAvailable } from "./utils/export-chromium";
 import { startUpdateChecker, stopUpdateChecker } from "./utils/update-checker";
 import {
   addMainBreadcrumb,
@@ -79,6 +80,7 @@ let isStopping = false;
 const startupStatus: Record<string, string> = {
   libreoffice: "checking",
   imagemagick: "checking",
+  chromium: "checking",
 };
 
 function getLiveMainWindow(): BrowserWindow | undefined {
@@ -161,6 +163,11 @@ app.commandLine.appendSwitch('gtk-version', '3');
 // Work around Chromium/Electron GPU compositor issues that can cause
 // startup white screens on some Linux/driver combinations.
 app.disableHardwareAcceleration();
+
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
 
 const electronAppPaths = initializeAppPaths();
 const chromiumCacheRecovery = prepareChromiumCacheRecovery(
@@ -261,6 +268,24 @@ const createWindow = () => {
   });
 
 };
+
+function focusMainWindow(): void {
+  const mainWindow = getLiveMainWindow();
+  if (!mainWindow) {
+    return;
+  }
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+if (gotSingleInstanceLock) {
+  app.on("second-instance", () => {
+    focusMainWindow();
+  });
+}
 
 async function startServers(fastApiPort: number, nextjsPort: number) {
   try {
@@ -403,6 +428,7 @@ async function forceQuitApp(exitCode = 0) {
   }
 }
 
+if (gotSingleInstanceLock) {
 app.whenReady().then(async () => {
   // Ensure all required directories exist before starting
   ensureDirectoriesExist();
@@ -430,8 +456,8 @@ app.whenReady().then(async () => {
       });
   }
 
-  // Single installer: checks LibreOffice and ImageMagick; if either is missing, shows one
-  // window that installs them one after another. Resolves when the window closes.
+  // Single installer: checks LibreOffice, ImageMagick, and export Chromium; if any are
+  // missing, shows one window that installs them one after another.
   const setupCompleted = await checkDependenciesBeforeWindow();
   if (!setupCompleted) {
     // Block app usage when required setup is not completed.
@@ -447,6 +473,7 @@ app.whenReady().then(async () => {
   ]);
   startupStatus.libreoffice = loResult.installed ? "installed" : "missing";
   startupStatus.imagemagick = imageMagickOk ? "installed" : "missing";
+  startupStatus.chromium = isExportChromiumAvailable() ? "installed" : "missing";
 
   // Ensure the launch screen stays visible and focused during the server boot.
   const launchWindow = getLiveMainWindow();
@@ -467,6 +494,7 @@ app.whenReady().then(async () => {
     statusWindow.webContents.once("did-finish-load", () => {
       sendStartupStatus("libreoffice", startupStatus.libreoffice);
       sendStartupStatus("imagemagick", startupStatus.imagemagick);
+      sendStartupStatus("chromium", startupStatus.chromium);
     });
   }
 
@@ -569,3 +597,4 @@ app.on("will-quit", async (event) => {
   event.preventDefault();
   await forceQuitApp(0);
 });
+}

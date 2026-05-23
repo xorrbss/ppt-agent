@@ -112,6 +112,7 @@ const config = {
     publisher: "CN=8A2C57B5-F1C6-473A-93EE-2E9B72134341",
     publisherDisplayName: "Presenton Inc.",
     applicationId: "PresentonAI.Presenton",
+    
   },
 }
 

@@ -7,6 +7,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const currentStatus = {
     libreoffice: "checking",
     imagemagick: "checking",
+    chromium: "checking",
   };
 
   const completeStates = new Set(["installed", "downloaded", "skipped"]);
@@ -108,6 +109,9 @@ window.addEventListener("DOMContentLoaded", () => {
       if (statusMap.libreoffice) setStatus("libreoffice", statusMap.libreoffice);
       if (statusMap.imagemagick) {
         setStatus("imagemagick", statusMap.imagemagick);
+      }
+      if (statusMap.chromium) {
+        setStatus("chromium", statusMap.chromium);
       }
     });
   }

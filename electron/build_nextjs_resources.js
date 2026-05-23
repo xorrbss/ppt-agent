@@ -54,15 +54,31 @@ for (const name of fs.readdirSync(standaloneDir)) {
   )
 }
 
+// Next.js 16 standalone traces the app under servers/nextjs/; the server process
+// runs from that directory, so static assets and public files must live beside
+// server.js — not only at the bundle root (older Next versions used a flatter layout).
+const nestedStandaloneDir = path.join(outDir, "servers", "nextjs")
+
 const staticSrc = path.join(nextBuildDir, "static")
-const staticDest = path.join(outDir, ".next-build", "static")
+const staticDestinations = [
+  path.join(outDir, ".next-build", "static"),
+  path.join(nestedStandaloneDir, ".next-build", "static"),
+]
 if (fs.existsSync(staticSrc)) {
-  cpDir(staticSrc, staticDest)
+  for (const staticDest of staticDestinations) {
+    cpDir(staticSrc, staticDest)
+  }
+} else {
+  console.error("Expected Next.js static output at:", staticSrc)
+  process.exit(1)
 }
 
 const publicDir = path.join(nextjsDir, "public")
 if (fs.existsSync(publicDir)) {
   cpDir(publicDir, path.join(outDir, "public"))
+  if (fs.existsSync(nestedStandaloneDir)) {
+    cpDir(publicDir, path.join(nestedStandaloneDir, "public"))
+  }
 }
 
 const templatesSrc = path.join(nextjsDir, "app", "presentation-templates")

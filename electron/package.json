@@ -55,6 +55,7 @@
   },
   "dependencies": {
     "@llamaindex/liteparse": "^1.5.2",
+    "@puppeteer/browsers": "^3.0.3",
     "@sentry/electron": "^7.10.0",
     "@tailwindcss/cli": "^4.1.5",
     "@types/uuid": "^10.0.0",
