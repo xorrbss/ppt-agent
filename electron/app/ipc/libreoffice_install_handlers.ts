@@ -180,10 +180,12 @@ function downloadWithProgress(
         return;
       }
       const requester = requestUrl.startsWith("https") ? https.get : http.get;
-      requester(requestUrl, (res: IncomingMessage) => {
+      currentRequest = requester(requestUrl, (res: IncomingMessage) => {
+        currentResponse = res;
         const redirectCodes = new Set([301, 302, 303, 307, 308]);
         if (redirectCodes.has(res.statusCode ?? 0) && res.headers.location) {
           sendLog(wc, "info", `HTTP ${res.statusCode} → Redirecting to ${res.headers.location}`);
+          res.resume();
           doRequest(res.headers.location);
           return;
         }
