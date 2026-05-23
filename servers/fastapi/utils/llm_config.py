@@ -2,6 +2,12 @@ import time
 from typing import Optional
 
 from fastapi import HTTPException
+from llmai import (
+    BedrockClientConfig,
+    FireworksClientConfig,
+    LMStudioClientConfig,
+    TogetherAIClientConfig,
+)
 from llmai.shared import (
     AnthropicClientConfig,
     AzureOpenAIClientConfig,
@@ -9,6 +15,7 @@ from llmai.shared import (
     ChatGPTClientConfig,
     ClientConfig,
     GoogleClientConfig,
+    LiteLLMClientConfig,
     OpenAIApiType,
     OpenAIClientConfig,
     OpenRouterClientConfig,
@@ -23,6 +30,12 @@ from utils.get_env import (
     get_azure_openai_deployment_env,
     get_azure_openai_endpoint_env,
     get_anthropic_api_key_env,
+    get_bedrock_api_key_env,
+    get_bedrock_aws_access_key_id_env,
+    get_bedrock_aws_secret_access_key_env,
+    get_bedrock_aws_session_token_env,
+    get_bedrock_profile_name_env,
+    get_bedrock_region_env,
     get_cerebras_api_key_env,
     get_cerebras_base_url_env,
     get_codex_access_token_env,
@@ -32,17 +45,26 @@ from utils.get_env import (
     get_custom_llm_api_key_env,
     get_custom_llm_url_env,
     get_disable_thinking_env,
+    get_fireworks_api_key_env,
+    get_fireworks_base_url_env,
     get_google_api_key_env,
+    get_litellm_api_key_env,
+    get_litellm_base_url_env,
+    get_lmstudio_api_key_env,
+    get_lmstudio_base_url_env,
     get_ollama_url_env,
     get_openai_api_key_env,
     get_openrouter_api_key_env,
     get_openrouter_base_url_env,
+    get_together_api_key_env,
+    get_together_base_url_env,
     get_vertex_api_key_env,
     get_vertex_base_url_env,
     get_vertex_location_env,
     get_vertex_project_env,
     get_web_grounding_env,
 )
+from utils.available_models import normalize_openai_compatible_base_url
 from utils.llm_provider import get_llm_provider
 from utils.parsers import parse_bool_or_none
 from utils.set_env import (
@@ -186,6 +208,34 @@ def get_llm_config() -> ClientConfig:
                 base_url=base_url or None,
                 deployment=deployment or None,
             )
+        case LLMProvider.BEDROCK:
+            region = (get_bedrock_region_env() or "us-east-1").strip()
+            api_key = (get_bedrock_api_key_env() or "").strip()
+            aws_access_key_id = (get_bedrock_aws_access_key_id_env() or "").strip()
+            aws_secret_access_key = (get_bedrock_aws_secret_access_key_env() or "").strip()
+            aws_session_token = (get_bedrock_aws_session_token_env() or "").strip()
+            profile_name = (get_bedrock_profile_name_env() or "").strip()
+
+            kwargs = {
+                "region": region,
+                "api_key": api_key or None,
+                "aws_access_key_id": aws_access_key_id or None,
+                "aws_secret_access_key": aws_secret_access_key or None,
+                "aws_session_token": aws_session_token or None,
+                "profile_name": profile_name or None,
+            }
+            if not kwargs["api_key"] and not (
+                kwargs["aws_access_key_id"] and kwargs["aws_secret_access_key"]
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Bedrock auth is incomplete. Set BEDROCK_API_KEY, or "
+                        "set BEDROCK_AWS_ACCESS_KEY_ID and "
+                        "BEDROCK_AWS_SECRET_ACCESS_KEY."
+                    ),
+                )
+            return BedrockClientConfig(**kwargs)
         case LLMProvider.ANTHROPIC:
             api_key = get_anthropic_api_key_env()
             if not api_key:
@@ -206,6 +256,30 @@ def get_llm_config() -> ClientConfig:
                 api_key=api_key,
                 base_url=base_url or None,
             )
+        case LLMProvider.FIREWORKS:
+            api_key = (get_fireworks_api_key_env() or "").strip()
+            if not api_key:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Fireworks API Key is not set",
+                )
+            base_url = (get_fireworks_base_url_env() or "").strip()
+            return FireworksClientConfig(
+                api_key=api_key,
+                base_url=base_url or None,
+            )
+        case LLMProvider.TOGETHER:
+            api_key = (get_together_api_key_env() or "").strip()
+            if not api_key:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Together API Key is not set",
+                )
+            base_url = (get_together_base_url_env() or "").strip()
+            return TogetherAIClientConfig(
+                api_key=api_key,
+                base_url=base_url or None,
+            )
         case LLMProvider.CEREBRAS:
             api_key = get_cerebras_api_key_env()
             if not api_key:
@@ -218,6 +292,27 @@ def get_llm_config() -> ClientConfig:
                 api_key=api_key,
                 base_url=base_url or None,
             )
+        case LLMProvider.LITELLM:
+            base_url = normalize_openai_compatible_base_url(
+                get_litellm_base_url_env() or ""
+            )
+            if not base_url:
+                raise HTTPException(
+                    status_code=400,
+                    detail="LiteLLM base URL is not set (LITELLM_BASE_URL).",
+                )
+            lk = (get_litellm_api_key_env() or "").strip()
+            return LiteLLMClientConfig(
+                base_url=base_url,
+                api_key=lk if lk else None,
+            )
+        case LLMProvider.LMSTUDIO:
+            base_url = (get_lmstudio_base_url_env() or "").strip()
+            lk = (get_lmstudio_api_key_env() or "").strip()
+            kwargs: dict = {"base_url": base_url or None}
+            if lk:
+                kwargs["api_key"] = lk
+            return LMStudioClientConfig(**kwargs)
         case LLMProvider.OLLAMA:
             return OpenAIClientConfig(
                 base_url=(get_ollama_url_env() or "http://localhost:11434") + "/v1",
@@ -244,8 +339,8 @@ def get_llm_config() -> ClientConfig:
                 status_code=400,
                 detail=(
                     "LLM Provider must be either openai, google, vertex, azure, "
-                    "openrouter, cerebras, anthropic, ollama, "
-                    "custom, or codex"
+                    "bedrock, openrouter, fireworks, together, cerebras, "
+                    "anthropic, litellm, lmstudio, ollama, custom, or codex"
                 ),
             )
 

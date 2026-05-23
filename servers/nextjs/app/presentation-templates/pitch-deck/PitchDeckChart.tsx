@@ -1,21 +1,8 @@
 "use client";
 
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  LabelList,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Scatter,
-  ScatterChart,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { useEffect, useRef } from "react";
+import Chart from "chart.js/auto";
+import type { ChartConfiguration, ChartOptions } from "chart.js";
 
 export type PitchChartType = "bar" | "pie" | "scatter" | "stackedBar" | "line";
 
@@ -51,14 +38,6 @@ type Props = {
   payload?: Partial<PitchChartPayload> | null;
 };
 
-type PieLabelProps = {
-  cx?: number;
-  cy?: number;
-  midAngle?: number;
-  outerRadius?: number;
-  value?: string | number;
-};
-
 const DEFAULT_CHART_COLORS = [
   "#8B5CF6",
   "#06B6D4",
@@ -66,16 +45,23 @@ const DEFAULT_CHART_COLORS = [
   "#F59E0B",
   "#EF4444",
   "#EC4899",
+  "#3B82F6",
+  "#84CC16",
+  "#F97316",
+  "#6366F1",
 ];
 const AXIS = "var(--background-text,#d8d4bf)";
 const GRID = "var(--background-text,#585a61)";
-const CHART_RIGHT_MARGIN = 36;
+const PRIMARY_TEXT = "var(--primary-text,#ffffff)";
+const BODY_FONT = "var(--body-font-family,Inter)";
 
 const graphColors = (index: number, fallbackColor?: string) => {
+  const slot = index % 10;
   const fallback =
     fallbackColor || DEFAULT_CHART_COLORS[index % DEFAULT_CHART_COLORS.length];
-  return `var(--graph-${index}, ${fallback})`;
+  return `var(--graph-${slot}, ${fallback})`;
 };
+
 const DEFAULT_CHART_PAYLOAD: PitchChartPayload = {
   chartType: "bar",
   legendLabel: "Series Label",
@@ -150,41 +136,486 @@ function resolveChartPayload(
   };
 }
 
-function PiePercentLabel({
-  cx = 0,
-  cy = 0,
-  midAngle = 0,
-  outerRadius = 0,
-  value = "",
-}: PieLabelProps) {
-  const radius = outerRadius * 0.72;
-  const x = cx + radius * Math.cos((-midAngle * Math.PI) / 180);
-  const y = cy + radius * Math.sin((-midAngle * Math.PI) / 180);
-  const text = `${value}%`;
+function cssVarParts(value: string) {
+  const match = value.match(/^var\((--[^,\s)]+)\s*,?\s*([^)]+)?\)$/);
+  if (!match) return null;
 
-  return (
-    <g>
-      <rect
-        x={x - 24}
-        y={y - 13}
-        rx={11}
-        ry={11}
-        width={48}
-        height={26}
-        fill={"var(--card-color,#ececeb)"}
-      />
-      <text
-        x={x}
-        y={y + 5}
-        textAnchor="middle"
-        fontSize={16}
-        fontWeight={600}
-        fill={"var(--background-text,#2f2f2f)"}
-      >
-        {text}
-      </text>
-    </g>
-  );
+  return {
+    name: match[1],
+    fallback: match[2]?.trim(),
+  };
+}
+
+function resolveToken(element: HTMLElement, value: string, fallback: string) {
+  const parts = cssVarParts(value);
+  if (!parts) return value;
+
+  const resolved = getComputedStyle(element)
+    .getPropertyValue(parts.name)
+    .trim();
+  return resolved || parts.fallback || fallback;
+}
+
+function resolveColor(element: HTMLElement, value: string) {
+  return resolveToken(element, value, "#d8d4bf");
+}
+
+function resolveFont(element: HTMLElement) {
+  return resolveToken(element, BODY_FONT, "Inter").replace(/^['"]|['"]$/g, "");
+}
+
+function formatValue(value: number | string) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric.toLocaleString("en-US") : String(value);
+}
+
+function colorLuminance(color: string) {
+  const weights = [0.2126, 0.7152, 0.0722];
+  const hex = color.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (hex) {
+    const raw = hex[1].length === 3
+      ? hex[1].split("").map((char) => char + char).join("")
+      : hex[1];
+    const int = Number.parseInt(raw, 16);
+    const rgb = [(int >> 16) & 255, (int >> 8) & 255, int & 255];
+    return rgb
+      .map((value) => {
+        const channel = value / 255;
+        return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+      })
+      .reduce((sum, channel, index) => sum + channel * (weights[index] ?? 0), 0);
+  }
+
+  const rgb = color.trim().match(/^rgba?\(([^)]+)\)$/i);
+  if (rgb) {
+    const channels = rgb[1].split(",").slice(0, 3).map((part) => Number(part.trim()));
+    if (channels.every(Number.isFinite)) {
+      return channels
+        .map((value) => {
+          const channel = value / 255;
+          return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+        })
+        .reduce((sum, channel, index) => sum + channel * (weights[index] ?? 0), 0);
+    }
+  }
+
+  return 0;
+}
+
+function readableTextColor(fill: unknown) {
+  const color = Array.isArray(fill) ? fill[0] : fill;
+  if (typeof color !== "string") return "#ffffff";
+
+  return colorLuminance(color) > 0.52 ? "#27292d" : "#ffffff";
+}
+
+function labelPlugin({
+  axisColor,
+  fontFamily,
+  mode,
+  primaryText,
+}: {
+  axisColor: string;
+  fontFamily: string;
+  mode: "bar" | "pie" | "stacked" | "none";
+  primaryText: string;
+}) {
+  return {
+    id: `pitchDeckLabels-${mode}`,
+    afterDatasetsDraw(chart: any) {
+      if (mode === "none") return;
+
+      const ctx = chart.ctx as CanvasRenderingContext2D;
+      ctx.save();
+
+      if (mode === "bar") {
+        const dataset = chart.data.datasets[0];
+        const meta = chart.getDatasetMeta(0);
+        ctx.fillStyle = axisColor;
+        ctx.font = `600 16px ${fontFamily}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        meta.data.forEach((element: any, index: number) => {
+          const position = element.tooltipPosition();
+          ctx.fillText(formatValue(dataset.data[index]), position.x, position.y - 20);
+        });
+      }
+
+      if (mode === "stacked") {
+        ctx.fillStyle = primaryText;
+        ctx.font = `600 16px ${fontFamily}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        chart.data.datasets.forEach((dataset: any, datasetIndex: number) => {
+          const meta = chart.getDatasetMeta(datasetIndex);
+          meta.data.forEach((element: any, index: number) => {
+            const value = Number(dataset.data[index]) || 0;
+            if (!value) return;
+            const position = element.tooltipPosition();
+            ctx.fillText(formatValue(value), position.x, position.y);
+          });
+        });
+      }
+
+      if (mode === "pie") {
+        const dataset = chart.data.datasets[0];
+        const meta = chart.getDatasetMeta(0);
+        ctx.font = `700 18px ${fontFamily}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.shadowColor = "rgba(0,0,0,0.18)";
+        ctx.shadowBlur = 1;
+        ctx.shadowOffsetY = 1;
+        meta.data.forEach((element: any, index: number) => {
+          const value = Number(dataset.data[index]) || 0;
+          if (!value) return;
+          const arc = element.getProps(
+            ["x", "y", "startAngle", "endAngle", "innerRadius", "outerRadius"],
+            true
+          );
+          const angle = (arc.startAngle + arc.endAngle) / 2;
+          const radius = arc.outerRadius * 0.72;
+          const x = arc.x + Math.cos(angle) * radius;
+          const y = arc.y + Math.sin(angle) * radius;
+          const text = `${value}%`;
+
+          const sliceFill = Array.isArray(dataset.backgroundColor)
+            ? dataset.backgroundColor[index]
+            : dataset.backgroundColor;
+          ctx.fillStyle = readableTextColor(sliceFill);
+          ctx.fillText(text, x, y + 1);
+        });
+      }
+
+      ctx.restore();
+    },
+  };
+}
+
+function categoryScale(axisColor: string, gridColor: string, fontFamily: string, showGrid = false) {
+  return {
+    type: "category",
+    grid: {
+      color: gridColor,
+      display: showGrid,
+      drawTicks: false,
+    },
+    border: {
+      color: axisColor,
+      display: true,
+    },
+    ticks: {
+      color: axisColor,
+      font: {
+        family: fontFamily,
+        size: 18,
+      },
+      maxRotation: 0,
+      padding: 10,
+    },
+  };
+}
+
+function linearScale(axisColor: string, gridColor: string, fontFamily: string, showGrid = false) {
+  return {
+    type: "linear",
+    beginAtZero: true,
+    grace: "6%",
+    grid: {
+      color: gridColor,
+      display: showGrid,
+      drawTicks: false,
+    },
+    border: {
+      display: false,
+    },
+    ticks: {
+      color: axisColor,
+      font: {
+        family: fontFamily,
+        size: 18,
+      },
+      padding: 8,
+    },
+  };
+}
+
+function baseOptions(axisColor: string, fontFamily: string): ChartOptions {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    resizeDelay: 0,
+    color: axisColor,
+    font: {
+      family: fontFamily,
+    },
+    layout: {
+      padding: 4,
+    },
+    plugins: {
+      legend: {
+        display: false,
+      },
+      tooltip: {
+        enabled: false,
+      },
+    },
+  };
+}
+
+function makeChartConfig(canvas: HTMLCanvasElement, payload: PitchChartPayload): ChartConfiguration {
+  const axisColor = resolveColor(canvas, AXIS);
+  const gridColor = resolveColor(canvas, GRID);
+  const primaryText = resolveColor(canvas, PRIMARY_TEXT);
+  const fontFamily = resolveFont(canvas);
+  const options = baseOptions(axisColor, fontFamily);
+  const chartColor = (index: number, fallbackColor?: string) =>
+    resolveColor(canvas, graphColors(index, fallbackColor));
+
+  if (payload.chartType === "pie") {
+    return {
+      type: "pie",
+      data: {
+        labels: payload.pieData.map((item) => item.label),
+        datasets: [
+          {
+            data: payload.pieData.map((item) => item.value),
+            backgroundColor: payload.pieData.map((item, index) =>
+              chartColor(index, item.color)
+            ),
+            borderColor: "transparent",
+            borderWidth: 0,
+            hoverBorderWidth: 0,
+            spacing: 0,
+          },
+        ],
+      },
+      options: {
+        ...options,
+        layout: {
+          padding: {
+            top: 18,
+            right: 36,
+            bottom: 18,
+            left: 28,
+          },
+        },
+      },
+      plugins: [
+        labelPlugin({
+          axisColor,
+          fontFamily,
+          mode: "pie",
+          primaryText,
+        }),
+      ],
+    } as ChartConfiguration;
+  }
+
+  if (payload.chartType === "scatter") {
+    return {
+      type: "scatter",
+      data: {
+        datasets: [
+          {
+            data: payload.scatterData.map((item, index) => ({
+              x: index + 1,
+              y: item.value,
+            })),
+            backgroundColor: chartColor(0),
+            borderColor: chartColor(0),
+            clip: false,
+            pointRadius: 5,
+            pointHoverRadius: 5,
+          },
+        ],
+      },
+      options: {
+        ...options,
+        layout: {
+          padding: {
+            top: 18,
+            right: 36,
+            bottom: 20,
+            left: 18,
+          },
+        },
+        scales: {
+          x: {
+            ...linearScale(axisColor, gridColor, fontFamily, false),
+            min: 0.65,
+            max: Math.max(payload.scatterData.length, 2) + 0.35,
+            border: {
+              color: axisColor,
+              display: true,
+            },
+            ticks: {
+              color: axisColor,
+              font: {
+                family: fontFamily,
+                size: 18,
+              },
+              padding: 10,
+              stepSize: 1,
+              callback(value: string | number) {
+                const index = Math.round(Number(value)) - 1;
+                return payload.scatterData[index]?.label ?? "";
+              },
+            },
+          },
+          y: {
+            ...linearScale(axisColor, gridColor, fontFamily, false),
+            suggestedMin: 0,
+            suggestedMax: 100,
+            title: {
+              color: axisColor,
+              display: true,
+              font: {
+                family: fontFamily,
+                size: 18,
+              },
+              text: payload.yAxisLabel,
+            },
+          },
+        },
+      },
+    } as ChartConfiguration;
+  }
+
+  if (payload.chartType === "line") {
+    return {
+      type: "line",
+      data: {
+        labels: payload.lineData.map((item) => item.label),
+        datasets: [
+          {
+            data: payload.lineData.map((item) => item.value),
+            borderColor: chartColor(0),
+            backgroundColor: chartColor(0),
+            borderWidth: 4,
+            pointBackgroundColor: chartColor(0),
+            pointBorderColor: chartColor(0),
+            clip: false,
+            pointRadius: 5,
+            pointHoverRadius: 5,
+            tension: 0.35,
+          },
+        ],
+      },
+      options: {
+        ...options,
+        layout: {
+          padding: {
+            top: 24,
+            right: 36,
+            bottom: 20,
+            left: 8,
+          },
+        },
+        scales: {
+          x: {
+            ...categoryScale(axisColor, gridColor, fontFamily, false),
+            offset: true,
+          },
+          y: linearScale(axisColor, gridColor, fontFamily, true),
+        },
+      },
+    } as ChartConfiguration;
+  }
+
+  if (payload.chartType === "stackedBar") {
+    return {
+      type: "bar",
+      data: {
+        labels: payload.stackedBarData.map((item) => item.label),
+        datasets: [
+          {
+            data: payload.stackedBarData.map((item) => item.value),
+            backgroundColor: chartColor(1),
+            borderRadius: 5,
+            borderWidth: 0,
+            stack: "stack",
+          },
+          {
+            data: payload.stackedBarData.map((item) => item.value2 ?? 0),
+            backgroundColor: chartColor(0),
+            borderRadius: 5,
+            borderWidth: 0,
+            stack: "stack",
+          },
+        ],
+      },
+      options: {
+        ...options,
+        layout: {
+          padding: {
+            top: 28,
+            right: 36,
+            bottom: 20,
+            left: 8,
+          },
+        },
+        scales: {
+          x: {
+            ...categoryScale(axisColor, gridColor, fontFamily, false),
+            stacked: true,
+          },
+          y: {
+            ...linearScale(axisColor, gridColor, fontFamily, false),
+            stacked: true,
+          },
+        },
+      },
+      plugins: [
+        labelPlugin({
+          axisColor,
+          fontFamily,
+          mode: "stacked",
+          primaryText,
+        }),
+      ],
+    } as ChartConfiguration;
+  }
+
+  return {
+    type: "bar",
+    data: {
+      labels: payload.barData.map((item) => item.label),
+      datasets: [
+        {
+          data: payload.barData.map((item) => item.value),
+          backgroundColor: chartColor(0),
+          borderRadius: 5,
+          borderWidth: 0,
+          barThickness: 34,
+        },
+      ],
+    },
+    options: {
+      ...options,
+      layout: {
+        padding: {
+          top: 36,
+          right: 36,
+          bottom: 20,
+          left: 8,
+        },
+      },
+      scales: {
+        x: categoryScale(axisColor, gridColor, fontFamily, false),
+        y: linearScale(axisColor, gridColor, fontFamily, false),
+      },
+    },
+    plugins: [
+      labelPlugin({
+        axisColor,
+        fontFamily,
+        mode: "bar",
+        primaryText,
+      }),
+    ],
+  } as ChartConfiguration;
 }
 
 function Legend({
@@ -208,62 +639,70 @@ function Legend({
   );
 }
 
-export default function PitchDeckChart({ payload }: Props) {
-  const {
-    chartType,
-    barData,
-    pieData,
-    scatterData,
-    lineData,
-    stackedBarData,
-    legendLabel,
-    yAxisLabel,
-  } = resolveChartPayload(payload);
+function ChartCanvas({ payload }: { payload: PitchChartPayload }) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  if (chartType === "pie") {
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    let frame: number | null = null;
+    let chart: Chart | null = null;
+
+    const renderChart = () => {
+      chart?.destroy();
+      chart = new Chart(canvas, makeChartConfig(canvas, payload));
+    };
+
+    const scheduleRender = () => {
+      if (frame !== null) {
+        cancelAnimationFrame(frame);
+      }
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        renderChart();
+      });
+    };
+
+    renderChart();
+
+    const observer = new MutationObserver(scheduleRender);
+    let node: HTMLElement | null = canvas.parentElement;
+    while (node) {
+      observer.observe(node, {
+        attributeFilter: ["class", "data-theme", "style"],
+        attributes: true,
+      });
+      node = node.parentElement;
+    }
+
+    return () => {
+      if (frame !== null) {
+        cancelAnimationFrame(frame);
+      }
+      observer.disconnect();
+      chart?.destroy();
+    };
+  }, [payload]);
+
+  return <canvas ref={canvasRef} className="block h-full w-full" />;
+}
+
+export default function PitchDeckChart({ payload }: Props) {
+  const resolvedPayload = resolveChartPayload(payload);
+
+  if (resolvedPayload.chartType === "pie") {
     return (
-      <div className="flex h-full min-h-[320px] w-full flex-col overflow-hidden">
+      <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
         <div className="min-h-0 flex-1">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart
-              margin={{ top: 18, right: CHART_RIGHT_MARGIN, bottom: 18, left: 28 }}
-            >
-              <Pie
-                data={pieData}
-                dataKey="value"
-                nameKey="label"
-                cx="50%"
-                cy="50%"
-                outerRadius="74%"
-                stroke="none"
-                labelLine={false}
-                label={({ cx, cy, midAngle, outerRadius, value }) => (
-                  <PiePercentLabel
-                    cx={Number(cx)}
-                    cy={Number(cy)}
-                    midAngle={Number(midAngle)}
-                    outerRadius={Number(outerRadius)}
-                    value={String(value)}
-                  />
-                )}
-                isAnimationActive={false}
-              >
-                {pieData.map((entry, index) => (
-                  <Cell
-                    key={`${entry.label}-${index}`}
-                    fill={graphColors(index, entry.color)}
-                  />
-                ))}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
+          <ChartCanvas payload={resolvedPayload} />
         </div>
 
         <div
           className="flex shrink-0 items-center justify-center gap-[26px] pb-[2px] pt-[8px] text-[18px] leading-none"
           style={{ color: AXIS }}
         >
-          {pieData.map((entry, index) => (
+          {resolvedPayload.pieData.map((entry, index) => (
             <span key={entry.label} className="flex items-center gap-[10px]">
               <span
                 className="h-[15px] w-[15px] rounded-full"
@@ -277,201 +716,12 @@ export default function PitchDeckChart({ payload }: Props) {
     );
   }
 
-  if (chartType === "scatter") {
-    const points = scatterData.map((item, index) => ({
-      x: index + 1,
-      y: item.value,
-      label: item.label,
-    }));
-
-    return (
-      <div className="flex h-full min-h-[320px] w-full flex-col overflow-hidden">
-        <div className="min-h-0 flex-1">
-          <ResponsiveContainer width="100%" height="100%">
-            <ScatterChart
-              margin={{ top: 18, right: CHART_RIGHT_MARGIN, left: 18, bottom: 20 }}
-            >
-              <CartesianGrid
-                vertical={false}
-                horizontal={false}
-                stroke={GRID}
-                opacity={0.7}
-              />
-              <XAxis
-                type="number"
-                dataKey="x"
-                domain={[1, Math.max(points.length, 2)]}
-                tickCount={points.length}
-                tickFormatter={(value) =>
-                  points[Number(value) - 1]?.label ?? "label"
-                }
-                tick={{ fill: AXIS, fontSize: 18 }}
-                axisLine={{ stroke: AXIS }}
-                tickLine={false}
-              />
-              <YAxis
-                type="number"
-                dataKey="y"
-                domain={[0, 100]}
-                tick={{ fill: AXIS, fontSize: 18 }}
-                axisLine={false}
-                tickLine={false}
-                tickSize={0}
-                width={64}
-                label={{
-                  value: yAxisLabel,
-                  angle: -90,
-                  position: "insideLeft",
-                  fill: AXIS,
-                  fontSize: 18,
-                  offset: 0,
-                }}
-              />
-              <Scatter
-                data={points}
-                fill={graphColors(0)}
-                isAnimationActive={false}
-              />
-            </ScatterChart>
-          </ResponsiveContainer>
-        </div>
-        <Legend label={legendLabel} />
-      </div>
-    );
-  }
-
-  if (chartType === "line") {
-    return (
-      <div className="flex h-full min-h-[320px] w-full flex-col overflow-hidden">
-        <div className="min-h-0 flex-1">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart
-              data={lineData}
-              margin={{ top: 24, right: CHART_RIGHT_MARGIN, left: 8, bottom: 20 }}
-            >
-              <CartesianGrid stroke={GRID} vertical={false} opacity={0.7} />
-              <XAxis
-                dataKey="label"
-                tick={{ fill: AXIS, fontSize: 18 }}
-                tickLine={false}
-                axisLine={{ stroke: AXIS }}
-              />
-              <YAxis
-                tick={{ fill: AXIS, fontSize: 18 }}
-                tickLine={false}
-                axisLine={false}
-                width={34}
-              />
-              <Line
-                dataKey="value"
-                stroke={graphColors(0)}
-                strokeWidth={4}
-                dot={{ r: 5, fill: graphColors(0) }}
-                isAnimationActive={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-        <Legend label={legendLabel} />
-      </div>
-    );
-  }
-
-  if (chartType === "stackedBar") {
-    return (
-      <div className="flex h-full min-h-[320px] w-full flex-col overflow-hidden">
-        <div className="min-h-0 flex-1">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={stackedBarData}
-              margin={{ top: 28, right: CHART_RIGHT_MARGIN, left: 8, bottom: 20 }}
-            >
-              <XAxis
-                dataKey="label"
-                tick={{ fill: AXIS, fontSize: 18 }}
-                tickLine={false}
-                axisLine={{ stroke: AXIS }}
-              />
-              <YAxis
-                tick={{ fill: AXIS, fontSize: 18 }}
-                tickLine={false}
-                axisLine={false}
-                width={34}
-              />
-              <Bar
-                dataKey="value"
-                stackId="stack"
-                fill={graphColors(1)}
-                radius={[5, 5, 0, 0]}
-                isAnimationActive={false}
-              >
-                <LabelList
-                  dataKey="value"
-                  position="insideTop"
-                  fill={"var(--primary-text,#ffffff)"}
-                  fontSize={16}
-                />
-              </Bar>
-              <Bar
-                dataKey="value2"
-                stackId="stack"
-                fill={graphColors(0)}
-                radius={[5, 5, 0, 0]}
-                isAnimationActive={false}
-              >
-                <LabelList
-                  dataKey="value2"
-                  position="insideTop"
-                  fill={"var(--primary-text,#ffffff)"}
-                  fontSize={16}
-                />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <Legend label={legendLabel} />
-      </div>
-    );
-  }
-
   return (
-    <div className="flex h-full min-h-[320px] w-full flex-col overflow-hidden">
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
       <div className="min-h-0 flex-1">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={barData}
-            margin={{ top: 36, right: CHART_RIGHT_MARGIN, left: 8, bottom: 20 }}
-          >
-            <XAxis
-              dataKey="label"
-              tick={{ fill: AXIS, fontSize: 18 }}
-              tickLine={false}
-              axisLine={{ stroke: AXIS }}
-            />
-            <YAxis
-              tick={{ fill: AXIS, fontSize: 18 }}
-              tickLine={false}
-              axisLine={false}
-              width={34}
-            />
-            <Bar
-              dataKey="value"
-              fill={graphColors(0)}
-              radius={[5, 5, 0, 0]}
-              barSize={34}
-              isAnimationActive={false}
-            >
-              <LabelList
-                dataKey="value"
-                position="top"
-                fill={AXIS}
-                fontSize={16}
-              />
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+        <ChartCanvas payload={resolvedPayload} />
       </div>
-      <Legend label={legendLabel} />
+      <Legend label={resolvedPayload.legendLabel} />
     </div>
   );
 }

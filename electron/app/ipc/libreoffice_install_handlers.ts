@@ -1,5 +1,5 @@
 import { ipcMain, WebContents } from "electron";
-import { spawn } from "child_process";
+import { ChildProcess, spawn } from "child_process";
 import * as fs from "fs";
 import * as https from "https";
 import * as http from "http";
@@ -11,6 +11,44 @@ import {
   type LibreOfficeDownloadPlatform,
 } from "../utils/libreoffice-urls";
 import { getLinuxInstallCommand } from "../utils/libreoffice-check";
+import { getTempDir } from "../utils/constants";
+import { destroyChildProcessStdio, safeSendToWebContents, terminateChildProcess } from "../utils/lifecycle";
+import { killProcess } from "../utils";
+
+const activeLibreOfficeInstallProcesses = new Set<ChildProcess>();
+const activeLibreOfficeDownloadAborters = new Set<() => void>();
+
+function trackLibreOfficeChild(child: ChildProcess): () => void {
+  activeLibreOfficeInstallProcesses.add(child);
+  return () => {
+    child.stdout?.removeAllListeners("data");
+    child.stderr?.removeAllListeners("data");
+    child.removeAllListeners("error");
+    child.removeAllListeners("close");
+    activeLibreOfficeInstallProcesses.delete(child);
+    destroyChildProcessStdio(child);
+  };
+}
+
+export async function stopActiveLibreOfficeInstallProcesses(): Promise<void> {
+  const aborters = Array.from(activeLibreOfficeDownloadAborters);
+  activeLibreOfficeDownloadAborters.clear();
+  for (const abort of aborters) {
+    try {
+      abort();
+    } catch {
+      /* Best-effort cancellation. */
+    }
+  }
+
+  const processes = Array.from(activeLibreOfficeInstallProcesses);
+  activeLibreOfficeInstallProcesses.clear();
+  await Promise.all(
+    processes.map((process) =>
+      terminateChildProcess(process, "LibreOffice install", killProcess).catch(() => {}),
+    ),
+  );
+}
 
 // ---------------------------------------------------------------------------
 // IPC helpers
@@ -22,9 +60,7 @@ function sendProgress(
   percent?: number,
   message?: string
 ) {
-  if (!wc.isDestroyed()) {
-    wc.send("lo:progress", { phase, percent, message });
-  }
+  safeSendToWebContents(wc, "lo:progress", { phase, percent, message });
 }
 
 function sendLog(
@@ -32,12 +68,10 @@ function sendLog(
   level: "info" | "warn" | "error" | "ok" | "cmd",
   text: string
 ) {
-  if (!wc.isDestroyed()) {
-    // Split multi-line output into individual log entries
-    const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
-    for (const line of lines) {
-      wc.send("lo:log", { level, text: line });
-    }
+  // Split multi-line output into individual log entries
+  const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  for (const line of lines) {
+    safeSendToWebContents(wc, "lo:log", { level, text: line });
   }
 }
 
@@ -69,6 +103,56 @@ function downloadWithProgress(
   knownTotalBytes?: number
 ): Promise<void> {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    let currentRequest: http.ClientRequest | null = null;
+    let currentResponse: IncomingMessage | null = null;
+    let currentFile: fs.WriteStream | null = null;
+
+    const cleanup = () => {
+      currentResponse?.removeAllListeners("data");
+      currentFile?.removeAllListeners("finish");
+      currentFile?.removeAllListeners("error");
+      currentRequest?.removeAllListeners("error");
+      activeLibreOfficeDownloadAborters.delete(abortDownload);
+    };
+
+    const finish = (callback: () => void) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      callback();
+    };
+
+    const fail = (error: Error) => {
+      finish(() => {
+        try {
+          currentRequest?.on("error", () => {});
+          currentRequest?.destroy();
+        } catch {
+          /* ignore */
+        }
+        try {
+          currentResponse?.destroy();
+        } catch {
+          /* ignore */
+        }
+        try {
+          currentFile?.destroy();
+        } catch {
+          /* ignore */
+        }
+        fs.unlink(dest, () => {});
+        reject(error);
+      });
+    };
+
+    const abortDownload = () => {
+      fail(new Error("LibreOffice download was cancelled."));
+    };
+    activeLibreOfficeDownloadAborters.add(abortDownload);
+
     const fmtBytes = (bytes: number) => {
       if (bytes <= 0) return "0 B";
       const mb = bytes / 1024 / 1024;
@@ -92,6 +176,9 @@ function downloadWithProgress(
     sendLog(wc, "info", `Connecting to ${new URL(url).hostname}…`);
 
     const doRequest = (requestUrl: string) => {
+      if (settled) {
+        return;
+      }
       const requester = requestUrl.startsWith("https") ? https.get : http.get;
       requester(requestUrl, (res: IncomingMessage) => {
         const redirectCodes = new Set([301, 302, 303, 307, 308]);
@@ -102,7 +189,8 @@ function downloadWithProgress(
         }
 
         if (res.statusCode !== 200) {
-          reject(new Error(`Download failed: HTTP ${res.statusCode}`));
+          res.resume();
+          fail(new Error(`Download failed: HTTP ${res.statusCode}`));
           return;
         }
 
@@ -123,8 +211,12 @@ function downloadWithProgress(
         let lastLoggedPct = 0;
 
         const file = fs.createWriteStream(dest);
+        currentFile = file;
 
         res.on("data", (chunk: Buffer) => {
+          if (settled) {
+            return;
+          }
           downloaded += chunk.length;
           const now = Date.now();
           const elapsedMs = now - startTime;
@@ -161,28 +253,28 @@ function downloadWithProgress(
         res.pipe(file);
         file.on("finish", () =>
           file.close(() => {
+            if (settled) {
+              return;
+            }
             const elapsedSec = (Date.now() - startTime) / 1000;
             const avgSpeed = downloaded / elapsedSec;
             sendLog(wc, "ok", `Download complete — ${fmtBytes(downloaded)} in ${elapsedSec.toFixed(1)}s (avg ${fmtSpeed(avgSpeed)})`);
             if (downloaded < minSizeBytes) {
-              fs.unlink(dest, () => {});
-              reject(
+              fail(
                 new Error(
                   `Download failed: received ${fmtBytes(downloaded)} (expected > 50 MB). The server may have returned an HTML page instead of the installer.`
                 )
               );
               return;
             }
-            resolve();
+            finish(resolve);
           })
         );
         file.on("error", (err) => {
-          fs.unlink(dest, () => {});
-          reject(err);
+          fail(err);
         });
       }).on("error", (err) => {
-        fs.unlink(dest, () => {});
-        reject(err);
+        fail(err);
       });
     };
 
@@ -249,9 +341,11 @@ async function installWindows(wc: WebContents): Promise<void> {
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
     });
+    const cleanupChild = trackLibreOfficeChild(child);
     child.stdout?.on("data", (d: Buffer) => sendLog(wc, "info", d.toString()));
     child.stderr?.on("data", (d: Buffer) => sendLog(wc, "warn", d.toString()));
-    child.on("close", (code) => {
+    child.once("close", (code) => {
+      cleanupChild();
       fs.unlink(dest, () => {});
       if (code === 0 || code === 3010) {
         sendLog(wc, "ok", `msiexec exited with code ${code} (success)`);
@@ -266,7 +360,8 @@ async function installWindows(wc: WebContents): Promise<void> {
         reject(new Error(`msiexec exited with code ${code}${hint}`));
       }
     });
-    child.on("error", (err) => {
+    child.once("error", (err) => {
+      cleanupChild();
       fs.unlink(dest, () => {});
       reject(err);
     });
@@ -285,13 +380,15 @@ async function installMac(wc: WebContents): Promise<void> {
       const child = spawn(brew, ["install", "--cask", "libreoffice"], {
         stdio: ["ignore", "pipe", "pipe"],
       });
+      const cleanupChild = trackLibreOfficeChild(child);
       child.stdout?.on("data", (d: Buffer) => sendLog(wc, "info", d.toString()));
       child.stderr?.on("data", (d: Buffer) => {
         const text = d.toString();
         // brew writes normal output to stderr too
         sendLog(wc, text.toLowerCase().includes("error") ? "error" : "info", text);
       });
-      child.on("close", (code) => {
+      child.once("close", (code) => {
+        cleanupChild();
         if (code === 0) {
           sendLog(wc, "ok", "Homebrew install succeeded");
           resolve();
@@ -299,7 +396,10 @@ async function installMac(wc: WebContents): Promise<void> {
           reject(new Error(`brew exit ${code}`));
         }
       });
-      child.on("error", reject);
+      child.once("error", (error) => {
+        cleanupChild();
+        reject(error);
+      });
     });
     return;
   }
@@ -320,12 +420,17 @@ async function installMac(wc: WebContents): Promise<void> {
       ["attach", dmgPath, "-nobrowse", "-quiet", "-mountpoint", mountPoint],
       { stdio: ["ignore", "pipe", "pipe"] }
     );
+    const cleanupChild = trackLibreOfficeChild(child);
     child.stdout?.on("data", (d: Buffer) => sendLog(wc, "info", d.toString()));
     child.stderr?.on("data", (d: Buffer) => sendLog(wc, "warn", d.toString()));
-    child.on("close", (code) =>
-      code === 0 ? resolve() : reject(new Error("hdiutil attach failed"))
-    );
-    child.on("error", reject);
+    child.once("close", (code) => {
+      cleanupChild();
+      code === 0 ? resolve() : reject(new Error("hdiutil attach failed"));
+    });
+    child.once("error", (error) => {
+      cleanupChild();
+      reject(error);
+    });
   });
 
   try {
@@ -342,7 +447,10 @@ async function installMac(wc: WebContents): Promise<void> {
     sendLog(wc, "ok", `Installed to ~/Applications/${bundle}`);
   } finally {
     sendLog(wc, "info", "Unmounting DMG…");
-    spawn("hdiutil", ["detach", mountPoint, "-quiet"], { stdio: "ignore" });
+    const detachChild = spawn("hdiutil", ["detach", mountPoint, "-quiet"], { stdio: "ignore" });
+    const cleanupDetachChild = trackLibreOfficeChild(detachChild);
+    detachChild.once("close", cleanupDetachChild);
+    detachChild.once("error", cleanupDetachChild);
     fs.unlink(dmgPath, () => {});
     try { fs.rmdirSync(mountPoint); } catch { /* ignore */ }
   }
@@ -377,6 +485,7 @@ async function installLinux(wc: WebContents): Promise<void> {
         ["apt-get", "install", "-y", "-o", "APT::Status-Fd=1", "libreoffice"],
         { stdio: ["ignore", "pipe", "pipe"] }
       );
+      const cleanupChild = trackLibreOfficeChild(child);
 
       let stdoutBuf = "";
 
@@ -415,7 +524,8 @@ async function installLinux(wc: WebContents): Promise<void> {
         sendLog(wc, text.toLowerCase().includes("error") ? "error" : "info", text);
       });
 
-      child.on("close", (code) => {
+      child.once("close", (code) => {
+        cleanupChild();
         if (code === 0) {
           sendLog(wc, "ok", "apt-get exited successfully");
           resolve();
@@ -423,7 +533,10 @@ async function installLinux(wc: WebContents): Promise<void> {
           reject(new Error(`apt-get exited with code ${code}`));
         }
       });
-      child.on("error", reject);
+      child.once("error", (error) => {
+        cleanupChild();
+        reject(error);
+      });
     });
     return;
   }
@@ -441,6 +554,7 @@ async function installLinux(wc: WebContents): Promise<void> {
     const child = spawn("pkexec", [installCmd.cmd, ...installCmd.args], {
       stdio: ["ignore", "pipe", "pipe"],
     });
+    const cleanupChild = trackLibreOfficeChild(child);
 
     child.stdout?.on("data", (d: Buffer) => {
       const text = d.toString();
@@ -459,7 +573,8 @@ async function installLinux(wc: WebContents): Promise<void> {
       sendLog(wc, text.toLowerCase().includes("error") ? "error" : "info", text);
     });
 
-    child.on("close", (code) => {
+    child.once("close", (code) => {
+      cleanupChild();
       if (code === 0) {
         sendLog(wc, "ok", `${installCmd.cmd} exited successfully`);
         resolve();
@@ -467,7 +582,10 @@ async function installLinux(wc: WebContents): Promise<void> {
         reject(new Error(`${installCmd.cmd} exited with code ${code}`));
       }
     });
-    child.on("error", reject);
+    child.once("error", (error) => {
+      cleanupChild();
+      reject(error);
+    });
   });
 }
 
@@ -478,6 +596,10 @@ async function installLinux(wc: WebContents): Promise<void> {
 export function setupLibreOfficeInstallHandlers() {
   ipcMain.handle("lo:start-install", async (event) => {
     const wc = event.sender;
+    const onDestroyed = () => {
+      void stopActiveLibreOfficeInstallProcesses();
+    };
+    wc.once("destroyed", onDestroyed);
     try {
       const platform = process.platform;
       sendLog(wc, "info", `Platform: ${platform} (${process.arch})`);
@@ -496,6 +618,8 @@ export function setupLibreOfficeInstallHandlers() {
           : "An unexpected error occurred. You can install LibreOffice manually later.";
       sendLog(wc, "error", message);
       sendProgress(wc, "error", undefined, message);
+    } finally {
+      wc.removeListener("destroyed", onDestroyed);
     }
   });
 }

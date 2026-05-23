@@ -19,7 +19,7 @@ import {
     Legend,
     Cell,
     ReferenceLine,
-} from "recharts";
+} from "./NeoChartPrimitives";
 
 export const layoutId = 'title-description-multi-chart-grid-metrics';
 export const layoutName = 'Title Description With Multi-Chart Grid + Metrics';
@@ -262,20 +262,28 @@ const MiniChartRenderer: React.FC<{
     };
 
     const renderPieLabel = (props: any) => {
-        const { percent } = props;
+        const { cx, cy, fill, midAngle, outerRadius, percent } = props;
         if (percent < 0.08) return null;
-        return `${(percent * 100).toFixed(0)}%`;
+        const labelRadius = outerRadius + 10;
+        const x = cx + labelRadius * Math.cos((-midAngle * Math.PI) / 180);
+        const y = cy + labelRadius * Math.sin((-midAngle * Math.PI) / 180);
+
+        return (
+            <text x={x} y={y} fill={fill} fontSize={13} fontWeight={500} textAnchor={x >= cx ? 'start' : 'end'} dominantBaseline="central">
+                {`${(percent * 100).toFixed(0)}%`}
+            </text>
+        );
     };
 
     const graphColors = (index: number, serieColor?: string) => {
         const fallback = serieColor || CHART_COLOR_PALETTES[index % CHART_COLOR_PALETTES.length];
-        return `var(--graph-${index}, ${fallback})`;
+        return `var(--graph-${index % 10}, ${fallback})`;
     };
 
     switch (chart.type) {
         case 'bar-vertical':
             return (
-                <ResponsiveContainer width="100%" height="100%" maxHeight={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={data}
                         margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
                         {showGrid && <CartesianGrid {...gridProps} />}
@@ -293,7 +301,7 @@ const MiniChartRenderer: React.FC<{
 
         case 'bar-horizontal':
             return (
-                <ResponsiveContainer width="100%" height="100%" maxHeight={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={data} layout="vertical" margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
                         {showGrid && <CartesianGrid {...gridProps} />}
                         <XAxis type="number" {...axisProps} tickFormatter={formatComma} />
@@ -311,7 +319,7 @@ const MiniChartRenderer: React.FC<{
         case 'bar-grouped-vertical': {
             const transformedData = transformMultiSeriesData(data, series);
             return (
-                <ResponsiveContainer width="100%" height="100%" maxHeight={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={transformedData} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
                         {showGrid && <CartesianGrid {...gridProps} />}
                         <XAxis dataKey="name" {...axisProps} tickFormatter={formatComma} />
@@ -329,7 +337,7 @@ const MiniChartRenderer: React.FC<{
         case 'bar-grouped-horizontal': {
             const transformedData = transformMultiSeriesData(data, series);
             return (
-                <ResponsiveContainer width="100%" height="100%" maxHeight={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={transformedData} layout="vertical" margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
                         {showGrid && <CartesianGrid {...gridProps} />}
                         <XAxis type="number" {...axisProps} tickFormatter={formatComma} />
@@ -347,7 +355,7 @@ const MiniChartRenderer: React.FC<{
         case 'bar-stacked-vertical': {
             const transformedData = transformMultiSeriesData(data, series);
             return (
-                <ResponsiveContainer width="100%" height="100%" maxHeight={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={transformedData} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
                         {showGrid && <CartesianGrid {...gridProps} />}
                         <XAxis dataKey="name" {...axisProps} tickFormatter={formatComma} />
@@ -365,7 +373,7 @@ const MiniChartRenderer: React.FC<{
         case 'bar-stacked-horizontal': {
             const transformedData = transformMultiSeriesData(data, series);
             return (
-                <ResponsiveContainer width="100%" height="100%" maxHeight={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={transformedData} layout="vertical" margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
                         {showGrid && <CartesianGrid {...gridProps} />}
                         <XAxis type="number" {...axisProps} tickFormatter={formatComma} />
@@ -384,7 +392,7 @@ const MiniChartRenderer: React.FC<{
             // If no series provided, fall back to simple bar chart behavior
             if (series.length === 0) {
                 return (
-                    <ResponsiveContainer width="100%" height="100%" maxHeight={400}>
+                    <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={data} barGap={2} barCategoryGap="20%" margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
                             {showGrid && <CartesianGrid {...gridProps} />}
                             <XAxis dataKey="name" {...axisProps} tickFormatter={formatComma} />
@@ -401,7 +409,7 @@ const MiniChartRenderer: React.FC<{
             }
             const transformedData = transformMultiSeriesData(data, series);
             return (
-                <ResponsiveContainer width="100%" height="100%" maxHeight={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={transformedData} barGap={1} barCategoryGap="15%" margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
                         {showGrid && <CartesianGrid {...gridProps} />}
                         <XAxis dataKey="name" {...axisProps} tickFormatter={formatComma} />
@@ -428,7 +436,7 @@ const MiniChartRenderer: React.FC<{
                 }));
             const seriesLabels = chart.series || ['Positive', 'Negative'];
             return (
-                <ResponsiveContainer width="100%" height="100%" maxHeight={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={transformedData} layout="vertical" stackOffset="sign" margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
                         {showGrid && <CartesianGrid {...gridProps} />}
                         <XAxis type="number" {...axisProps} tickFormatter={formatComma} />
@@ -445,7 +453,7 @@ const MiniChartRenderer: React.FC<{
 
         case 'line':
             return (
-                <ResponsiveContainer width="100%" height="100%" maxHeight={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={data} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
                         {showGrid && <CartesianGrid {...gridProps} />}
                         <XAxis dataKey="name" {...axisProps} tickFormatter={formatComma} />
@@ -458,7 +466,7 @@ const MiniChartRenderer: React.FC<{
 
         case 'area':
             return (
-                <ResponsiveContainer width="100%" height="100%" maxHeight={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={data} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
                         {showGrid && <CartesianGrid {...gridProps} />}
                         <XAxis dataKey="name" {...axisProps} tickFormatter={formatComma} />
@@ -478,7 +486,7 @@ const MiniChartRenderer: React.FC<{
         case 'area-stacked': {
             const transformedData = transformMultiSeriesData(data, series);
             return (
-                <ResponsiveContainer width="100%" height="100%" maxHeight={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={transformedData} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
                         {showGrid && <CartesianGrid {...gridProps} />}
                         <XAxis dataKey="name" {...axisProps} tickFormatter={formatComma} />
@@ -495,10 +503,10 @@ const MiniChartRenderer: React.FC<{
 
         case 'pie':
             return (
-                <ResponsiveContainer width="100%" height="100%" maxHeight={400}>
-                    <PieChart margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                    <PieChart margin={{ top: 14, right: 32, left: 32, bottom: 14 }}>
                         <Tooltip content={<CustomTooltip />} cursor={{ fill: 'transparent' }} />
-                        <Pie data={data} cx="50%" cy="50%" outerRadius="75%" dataKey="value" label={renderPieLabel} labelLine={false}>
+                        <Pie data={data} cx="50%" cy="50%" outerRadius="68%" dataKey="value" label={renderPieLabel} labelLine={false}>
                             {data.map((_, index) => (
                                 <Cell key={`cell-${index}`} fill={graphColors(index)} stroke="white" strokeWidth={2} />
                             ))}
@@ -509,10 +517,10 @@ const MiniChartRenderer: React.FC<{
 
         case 'donut':
             return (
-                <ResponsiveContainer width="100%" height="100%" maxHeight={400}>
-                    <PieChart margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                    <PieChart margin={{ top: 14, right: 32, left: 32, bottom: 14 }}>
                         <Tooltip content={<CustomTooltip />} cursor={{ fill: 'transparent' }} />
-                        <Pie data={data} cx="50%" cy="50%" innerRadius="40%" outerRadius="75%" dataKey="value" label={renderPieLabel} labelLine={false} paddingAngle={2}>
+                        <Pie data={data} cx="50%" cy="50%" innerRadius="42%" outerRadius="68%" dataKey="value" label={renderPieLabel} labelLine={false} paddingAngle={2}>
                             {data.map((_, index) => (
                                 <Cell key={`cell-${index}`} fill={graphColors(index)} stroke="white" strokeWidth={2} />
                             ))}
@@ -523,7 +531,7 @@ const MiniChartRenderer: React.FC<{
 
         case 'scatter':
             return (
-                <ResponsiveContainer width="100%" height="100%" maxHeight={400}>
+                <ResponsiveContainer width="100%" height="100%">
                     <ScatterChart margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
                         {showGrid && <CartesianGrid {...gridProps} />}
                         <XAxis type="number" dataKey="x" {...axisProps} tickFormatter={formatComma} />
@@ -575,12 +583,6 @@ const MultiChartGridWithMetricsSlideLayout: React.FC<MultiChartGridWithMetricsSl
     const hasMetrics = metrics.length > 0;
 
     // Calculate chart height based on count
-    const getChartHeight = () => {
-        if (chartCount <= 2) return hasMetrics ? 230 : 280;
-        if (chartCount <= 3) return hasMetrics ? 210 : 260;
-        return hasMetrics ? 160 : 180;
-    };
-
     return (
         <>
             <link
@@ -616,9 +618,9 @@ const MultiChartGridWithMetricsSlideLayout: React.FC<MultiChartGridWithMetricsSl
                 )}
 
                 {/* Main Content */}
-                <div className="relative h-full px-10 pt-10 pb-8 flex flex-col z-10">
+                <div className="relative h-full min-h-0 overflow-hidden px-10 pt-10 pb-8 flex flex-col z-10">
                     {/* Header Section */}
-                    <div className="mb-4">
+                    <div className="mb-4 shrink-0">
                         <div className="max-w-[760px]">
                             <h1
                                 className="text-[42.7px] font-bold mb-1 tracking-tight"
@@ -661,11 +663,11 @@ const MultiChartGridWithMetricsSlideLayout: React.FC<MultiChartGridWithMetricsSl
                     </div>
 
                     {/* Charts Grid */}
-                    <div className={`flex-1 grid ${gridLayout.className} gap-4`} style={{ height: hasMetrics ? '450px' : '525px' }}>
+                    <div className={`flex-1 min-h-0 grid ${gridLayout.className} auto-rows-fr gap-4 overflow-hidden`}>
                         {charts.map((chart, index) => (
                             <div
                                 key={index}
-                                className="backdrop-blur-sm rounded-xl border border-gray-100/80 shadow-sm flex flex-col overflow-hidden"
+                                className="backdrop-blur-sm rounded-xl border border-gray-100/80 shadow-sm flex min-h-0 flex-col overflow-hidden"
                                 style={{ borderColor: 'var(--stroke,#F8F9FA)', backgroundColor: 'var(--card-color,#FFFFFF)' }}
                             >
                                 {/* Chart Header */}
@@ -679,7 +681,7 @@ const MultiChartGridWithMetricsSlideLayout: React.FC<MultiChartGridWithMetricsSl
                                 </div>
 
                                 {/* Chart Container */}
-                                <div className="flex-1 px-2 pb-2" style={{ height: `${getChartHeight()}px` }}>
+                                <div className="flex-1 min-h-0 overflow-hidden px-2 pb-2">
                                     <MiniChartRenderer
                                         chart={chart}
                                         showLegend={showLegend && chartCount <= 4}

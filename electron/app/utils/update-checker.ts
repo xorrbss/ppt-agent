@@ -1,6 +1,7 @@
 import { net } from "electron";
 import { app, BrowserWindow } from "electron";
 import { isDev } from "./constants";
+import { safeStderrWrite } from "./safe-console";
 
 /**
  * Version check URL — GitHub raw version.json (no API required).
@@ -27,7 +28,7 @@ const INJECT_DELAY_MS = isDev ? 500 : 1_000;
 
 function log(msg: string): void {
   const line = `[UpdateChecker] ${msg}\n`;
-  process.stderr.write(line);
+  safeStderrWrite(line);
 }
 
 interface VersionResponse {
@@ -86,6 +87,71 @@ async function fetchVersionInfo(): Promise<VersionResponse | null> {
 
 /** Pending update to re-inject on navigation (production: React/Next.js may replace DOM). */
 let pendingUpdate: { version: string; downloadUrl: string; message?: string } | null = null;
+type UpdateTimer = ReturnType<typeof setTimeout>;
+const scheduledTimers = new Set<UpdateTimer>();
+const delayCancels = new Set<() => void>();
+let updateCheckerStopped = true;
+let cleanupUpdateCheckerListeners: (() => void) | null = null;
+
+function hasLiveWebContents(win: BrowserWindow): boolean {
+  return !win.isDestroyed() && !win.webContents.isDestroyed();
+}
+
+function scheduleUpdateTimer(callback: () => void, delayMs: number): void {
+  if (updateCheckerStopped) return;
+
+  const timer = setTimeout(() => {
+    scheduledTimers.delete(timer);
+    if (!updateCheckerStopped) {
+      callback();
+    }
+  }, delayMs);
+  scheduledTimers.add(timer);
+}
+
+function waitForUpdateDelay(delayMs: number): Promise<boolean> {
+  if (updateCheckerStopped) {
+    return Promise.resolve(false);
+  }
+
+  return new Promise((resolve) => {
+    let settled = false;
+    let cancel = () => {};
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      scheduledTimers.delete(timer);
+      delayCancels.delete(cancel);
+      resolve(!updateCheckerStopped);
+    }, delayMs);
+
+    cancel = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      scheduledTimers.delete(timer);
+      delayCancels.delete(cancel);
+      resolve(false);
+    };
+
+    scheduledTimers.add(timer);
+    delayCancels.add(cancel);
+  });
+}
+
+function clearScheduledUpdateWork(): void {
+  for (const cancel of Array.from(delayCancels)) {
+    cancel();
+  }
+  for (const timer of Array.from(scheduledTimers)) {
+    clearTimeout(timer);
+    scheduledTimers.delete(timer);
+  }
+  if (cleanupUpdateCheckerListeners) {
+    cleanupUpdateCheckerListeners();
+    cleanupUpdateCheckerListeners = null;
+  }
+}
 
 /**
  * Schedules banner injection after INJECT_DELAY_MS so React/Next.js can mount first.
@@ -98,8 +164,8 @@ function scheduleBannerInjection(
   message?: string
 ): void {
   pendingUpdate = { version, downloadUrl, message };
-  setTimeout(() => {
-    if (win.isDestroyed() || !pendingUpdate) return;
+  scheduleUpdateTimer(() => {
+    if (!hasLiveWebContents(win) || !pendingUpdate) return;
     log(`Injecting banner now`);
     injectUpdateBanner(win, pendingUpdate.version, pendingUpdate.downloadUrl, pendingUpdate.message);
   }, INJECT_DELAY_MS);
@@ -125,6 +191,10 @@ function injectUpdateBanner(
   downloadUrl: string,
   message?: string
 ): void {
+  if (!hasLiveWebContents(win)) {
+    return;
+  }
+
   const hasMessage = Boolean(message && message.trim());
   const safeMessage = hasMessage ? escapeHtml(message!.trim()) : "";
   const safeMessageJson = JSON.stringify(safeMessage);
@@ -216,13 +286,17 @@ function injectUpdateBanner(
 async function checkForUpdatesWithRetry(win: BrowserWindow): Promise<void> {
   log(`Starting check (current: ${CURRENT_VERSION})`);
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    if (win.isDestroyed()) {
+    if (updateCheckerStopped || !hasLiveWebContents(win)) {
       log("Window destroyed, aborting");
       return;
     }
 
     log(`Attempt ${attempt}/${MAX_ATTEMPTS}`);
     const data = await fetchVersionInfo();
+    if (updateCheckerStopped || !hasLiveWebContents(win)) {
+      log("Window destroyed, aborting");
+      return;
+    }
 
     if (data) {
       const newer = isNewerVersion(CURRENT_VERSION, data.version);
@@ -240,7 +314,8 @@ async function checkForUpdatesWithRetry(win: BrowserWindow): Promise<void> {
     // Wait 1 minute before the next poll (skip delay after the last attempt)
     if (attempt < MAX_ATTEMPTS) {
       log(`Next poll in ${POLL_INTERVAL_MS / 1_000}s...`);
-      await new Promise<void>((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+      const shouldContinue = await waitForUpdateDelay(POLL_INTERVAL_MS);
+      if (!shouldContinue) return;
     }
   }
   log("All attempts failed, no update info");
@@ -252,34 +327,64 @@ async function checkForUpdatesWithRetry(win: BrowserWindow): Promise<void> {
  * Re-injects banner on every navigation (handles Next.js client routing).
  */
 export function startUpdateChecker(win: BrowserWindow): void {
+  stopUpdateChecker();
+  updateCheckerStopped = false;
+  if (!hasLiveWebContents(win)) {
+    updateCheckerStopped = true;
+    return;
+  }
+
   log("Registered, waiting for did-finish-load");
   let hasRunCheck = false;
 
   const onLoad = () => {
+    if (updateCheckerStopped || !hasLiveWebContents(win)) return;
+
     if (pendingUpdate) {
       log("did-finish-load (navigation), re-injecting banner");
       scheduleBannerInjection(win, pendingUpdate.version, pendingUpdate.downloadUrl, pendingUpdate.message);
     } else if (!hasRunCheck) {
       hasRunCheck = true;
       log(`did-finish-load fired, first poll in ${INITIAL_DELAY_MS / 1_000}s`);
-      setTimeout(() => {
-        if (win.isDestroyed()) return;
-        checkForUpdatesWithRetry(win);
+      scheduleUpdateTimer(() => {
+        if (!hasLiveWebContents(win)) return;
+        void checkForUpdatesWithRetry(win).catch((err) => {
+          log(`Update check failed: ${err}`);
+        });
       }, INITIAL_DELAY_MS);
+    }
+  };
+
+  const onClosed = () => {
+    stopUpdateChecker();
+  };
+  win.once("closed", onClosed);
+  cleanupUpdateCheckerListeners = () => {
+    if (hasLiveWebContents(win)) {
+      win.webContents.removeListener("did-finish-load", onLoad);
+    }
+    try {
+      win.removeListener("closed", onClosed);
+    } catch {
+      // BrowserWindow may already be torn down when cleanup runs from "closed".
     }
   };
 
   if (!win.webContents.isLoading()) {
     log(`Page already loaded, first poll in ${INITIAL_DELAY_MS / 1_000}s`);
     hasRunCheck = true;
-    setTimeout(() => {
-      if (win.isDestroyed()) return;
-      checkForUpdatesWithRetry(win);
+    scheduleUpdateTimer(() => {
+      if (!hasLiveWebContents(win)) return;
+      void checkForUpdatesWithRetry(win).catch((err) => {
+        log(`Update check failed: ${err}`);
+      });
     }, INITIAL_DELAY_MS);
   }
   win.webContents.on("did-finish-load", onLoad);
 }
 
 export function stopUpdateChecker(): void {
+  updateCheckerStopped = true;
   pendingUpdate = null;
+  clearScheduledUpdateWork();
 }

@@ -1,26 +1,13 @@
 "use client";
 
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  LabelList,
-  Legend,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ReferenceLine,
-  ResponsiveContainer,
-  Scatter,
-  ScatterChart,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { useEffect, useRef } from "react";
+import Chart from "chart.js/auto";
+import type {
+  ChartConfiguration,
+  ChartDataset,
+  ChartOptions,
+  TooltipItem,
+} from "chart.js";
 
 export type EducationChartType =
   | "bar"
@@ -60,17 +47,11 @@ export type ScatterDatum = {
   name?: string;
 };
 
-export type EducationChartDatum = SimpleDatum | MultiSeriesDatum | DivergingDatum | ScatterDatum;
-
-type TooltipPayloadItem = {
-  color?: string;
-  dataKey?: string | number;
-  name?: string;
-  value?: string | number;
-};
-
-
-
+export type EducationChartDatum =
+  | SimpleDatum
+  | MultiSeriesDatum
+  | DivergingDatum
+  | ScatterDatum;
 
 const DEFAULT_COLORS = [
   "var(--graph-0,#4A15A8)",
@@ -79,11 +60,16 @@ const DEFAULT_COLORS = [
   "var(--graph-3,#9F94CD)",
   "var(--graph-4,#6A31B8)",
   "var(--graph-5,#4D2A97)",
+  "var(--graph-6,#8357C7)",
+  "var(--graph-7,#A178D8)",
+  "var(--graph-8,#C0A5E8)",
+  "var(--graph-9,#DDCFF5)",
 ];
 
 const AXIS = "var(--background-text,#7C7A83)";
 const GRID = "var(--stroke,#CFCBD8)";
 const PRIMARY_TEXT = "var(--background-text,#3E3C45)";
+const BODY_FONT = "var(--body-font-family,'Times New Roman')";
 
 function formatComma(value: number | string) {
   if (typeof value === "number") {
@@ -99,22 +85,56 @@ function formatComma(value: number | string) {
 }
 
 function isSimpleDatum(item: EducationChartDatum): item is SimpleDatum {
-  return typeof (item as SimpleDatum).name === "string" && typeof (item as SimpleDatum).value === "number";
+  return (
+    typeof (item as SimpleDatum).name === "string" &&
+    typeof (item as SimpleDatum).value === "number"
+  );
 }
 
+function isMultiSeriesDatum(
+  item: EducationChartDatum
+): item is MultiSeriesDatum {
+  return (
+    typeof (item as MultiSeriesDatum).name === "string" &&
+    typeof (item as MultiSeriesDatum).values === "object"
+  );
+}
 
+function isDivergingDatum(item: EducationChartDatum): item is DivergingDatum {
+  return (
+    typeof (item as DivergingDatum).name === "string" &&
+    typeof (item as DivergingDatum).positive === "number" &&
+    typeof (item as DivergingDatum).negative === "number"
+  );
+}
 
 function isScatterDatum(item: EducationChartDatum): item is ScatterDatum {
-  return typeof (item as ScatterDatum).x === "number" && typeof (item as ScatterDatum).y === "number";
+  return (
+    typeof (item as ScatterDatum).x === "number" &&
+    typeof (item as ScatterDatum).y === "number"
+  );
 }
 
 function toSimpleData(data: EducationChartDatum[]) {
-  return data
-    .filter(isSimpleDatum)
-    .map((item) => ({
-      name: item.name,
-      value: item.value,
-    }));
+  return data.filter(isSimpleDatum).map((item) => ({
+    name: item.name,
+    value: item.value,
+  }));
+}
+
+function toMultiSeriesData(data: EducationChartDatum[], series: string[]) {
+  return data.filter(isMultiSeriesDatum).map((item) => ({
+    name: item.name,
+    values: series.map((serie) => item.values?.[serie] ?? 0),
+  }));
+}
+
+function toDivergingData(data: EducationChartDatum[]) {
+  return data.filter(isDivergingDatum).map((item) => ({
+    name: item.name,
+    positive: item.positive,
+    negative: -Math.abs(item.negative),
+  }));
 }
 
 function toScatterData(data: EducationChartDatum[]) {
@@ -128,83 +148,737 @@ function toScatterData(data: EducationChartDatum[]) {
     }));
   }
 
-  return data
-    .filter(isSimpleDatum)
-    .map((item, index) => ({
-      x: index + 1,
-      y: item.value,
-      name: item.name,
-    }));
+  return data.filter(isSimpleDatum).map((item, index) => ({
+    x: index + 1,
+    y: item.value,
+    name: item.name,
+  }));
 }
 
-const renderPieInsideLabel = (props: any) => {
-  const {
-    cx = 0,
-    cy = 0,
-    midAngle = 0,
-    innerRadius: ir = 0,
-    outerRadius: or = 0,
-    percent = 0,
-    name,
-  } = props;
-  if (percent < 0.08) return null;
-  const toNum = (v: unknown) => {
-    if (typeof v === "number" && Number.isFinite(v)) return v;
-    if (typeof v === "string" && v.trim().endsWith("%")) return NaN;
-    const n = Number(v);
-    return Number.isFinite(n) ? n : NaN;
+function cssVarParts(value: string) {
+  const match = value.match(/^var\((--[^,\s)]+)\s*,?\s*([^)]+)?\)$/);
+  if (!match) return null;
+
+  return {
+    name: match[1],
+    fallback: match[2]?.trim(),
   };
-  let inner = toNum(ir);
-  let outer = toNum(or);
-  if (!Number.isFinite(outer)) {
-    outer = 140;
-    inner = Number.isFinite(inner) ? inner : 0;
-  }
-  if (!Number.isFinite(inner)) inner = 0;
-  const midR = inner + (outer - inner) * 0.5;
-  const rad = (-midAngle * Math.PI) / 180;
-  const x = cx + midR * Math.cos(rad);
-  const y = cy + midR * Math.sin(rad);
-  const nm = String(name ?? "");
-  const short = nm.length <= 10;
-  const pct = `${(percent * 100).toFixed(0)}%`;
-  const fontSize = short ? 10 : 9;
-  const labelText = short ? `${name} ${pct}` : pct;
-  return (
-    <text
-      x={x}
-      y={y}
-      textAnchor="middle"
-      dominantBaseline="central"
-      fill="var(--primary-text,#ffffff)"
-      fontSize={fontSize}
-      fontWeight={600}
-      style={{
-        paintOrder: "stroke fill",
-        stroke: "rgba(0,0,0,0.28)",
-        strokeWidth: 2,
-      }}
-    >
-      {labelText}
-    </text>
-  );
-};
-
-
-
-
-
-function getChartColor(index: number) {
-  return DEFAULT_COLORS[index % DEFAULT_COLORS.length];
 }
 
+function resolveToken(element: HTMLElement, value: string, fallback: string) {
+  const parts = cssVarParts(value);
+  if (!parts) return value;
 
-function ChartLegend({ showLegend }: { showLegend: boolean }) {
-  if (!showLegend) {
-    return null;
+  const resolved = getComputedStyle(element)
+    .getPropertyValue(parts.name)
+    .trim();
+  return resolved || parts.fallback || fallback;
+}
+
+function resolveColor(element: HTMLElement, value: string) {
+  return resolveToken(element, value, "#7C7A83");
+}
+
+function resolveFont(element: HTMLElement) {
+  return resolveToken(element, BODY_FONT, "Times New Roman").replace(
+    /^['"]|['"]$/g,
+    ""
+  );
+}
+
+function withAlpha(color: string, alpha: number) {
+  const hex = color.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (hex) {
+    const raw =
+      hex[1].length === 3
+        ? hex[1]
+            .split("")
+            .map((char) => char + char)
+            .join("")
+        : hex[1];
+    const int = Number.parseInt(raw, 16);
+    const r = (int >> 16) & 255;
+    const g = (int >> 8) & 255;
+    const b = int & 255;
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   }
 
-  return <Legend wrapperStyle={{ fontSize: "12px", color: AXIS, paddingTop: "8px" }} iconType="circle" />;
+  const rgb = color.trim().match(/^rgba?\(([^)]+)\)$/i);
+  if (rgb) {
+    const [r, g, b] = rgb[1].split(",").map((part) => part.trim());
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+
+  return color;
+}
+
+function getChartColor(colors: string[], index: number) {
+  return colors[index % colors.length];
+}
+
+function makeDatasets(
+  data: { name: string; values: number[] }[],
+  series: string[],
+  colors: string[],
+  overrides: Partial<ChartDataset<"bar" | "line">> = {}
+) {
+  return series.map((serie, index) => ({
+    label: serie,
+    data: data.map((item) => item.values[index] ?? 0),
+    backgroundColor: getChartColor(colors, index),
+    borderColor: getChartColor(colors, index),
+    borderRadius: 10,
+    borderWidth: 2,
+    pointRadius: 0,
+    tension: 0.35,
+    ...overrides,
+  }));
+}
+
+function makeValueLabelPlugin(
+  mode: "bar" | "bar-horizontal" | "pie" | "none",
+  textColor: string,
+  fontFamily: string
+) {
+  return {
+    id: `educationValueLabels-${mode}`,
+    afterDatasetsDraw(chart: any) {
+      if (mode === "none") return;
+
+      const ctx = chart.ctx as CanvasRenderingContext2D;
+      ctx.save();
+
+      if (mode === "bar" || mode === "bar-horizontal") {
+        const dataset = chart.data.datasets[0];
+        const meta = chart.getDatasetMeta(0);
+        if (!dataset || meta.hidden) {
+          ctx.restore();
+          return;
+        }
+
+        ctx.fillStyle = textColor;
+        ctx.font = `600 12px ${fontFamily}`;
+        ctx.textBaseline = "middle";
+
+        meta.data.forEach((element: any, index: number) => {
+          const value = dataset.data[index];
+          const position = element.tooltipPosition();
+          const text = formatComma(
+            typeof value === "number" ? value : Number(value)
+          );
+
+          if (mode === "bar-horizontal") {
+            ctx.textAlign = "left";
+            ctx.fillText(text, position.x + 8, position.y);
+          } else {
+            ctx.textAlign = "center";
+            ctx.fillText(text, position.x, position.y - 16);
+          }
+        });
+      }
+
+      if (mode === "pie") {
+        const dataset = chart.data.datasets[0];
+        const meta = chart.getDatasetMeta(0);
+        const values = dataset?.data ?? [];
+        const total = values.reduce(
+          (sum: number, value: number) => sum + Math.abs(Number(value) || 0),
+          0
+        );
+        if (!total) {
+          ctx.restore();
+          return;
+        }
+
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = `700 14px ${fontFamily}`;
+        ctx.fillStyle = textColor;
+        ctx.shadowColor = "rgba(0,0,0,0.18)";
+        ctx.shadowBlur = 1;
+        ctx.shadowOffsetY = 1;
+
+        meta.data.forEach((element: any, index: number) => {
+          const value = Number(values[index]) || 0;
+          const percent = Math.abs(value) / total;
+          if (percent < 0.08) return;
+
+          const label = String(chart.data.labels?.[index] ?? "");
+          const text =
+            label.length <= 10
+              ? `${label} ${(percent * 100).toFixed(0)}%`
+              : `${(percent * 100).toFixed(0)}%`;
+          const arc = element.getProps(
+            ["x", "y", "startAngle", "endAngle", "innerRadius", "outerRadius"],
+            true
+          );
+          const angle = (arc.startAngle + arc.endAngle) / 2;
+          const radius =
+            arc.innerRadius + (arc.outerRadius - arc.innerRadius) * 0.55;
+          const x = arc.x + Math.cos(angle) * radius;
+          const y = arc.y + Math.sin(angle) * radius;
+
+          ctx.fillText(text, x, y);
+        });
+      }
+
+      ctx.restore();
+    },
+  };
+}
+
+function makeBaseOptions({
+  axisColor,
+  fontFamily,
+  gridColor,
+  showLegend,
+  showTooltip,
+}: {
+  axisColor: string;
+  fontFamily: string;
+  gridColor: string;
+  showLegend: boolean;
+  showTooltip: boolean;
+}): ChartOptions {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    resizeDelay: 0,
+    color: axisColor,
+    layout: {
+      padding: 6,
+    },
+    font: {
+      family: fontFamily,
+    },
+    plugins: {
+      legend: {
+        display: showLegend,
+        labels: {
+          boxHeight: 8,
+          boxWidth: 8,
+          color: axisColor,
+          font: {
+            family: fontFamily,
+            size: 12,
+          },
+          usePointStyle: true,
+        },
+      },
+      tooltip: {
+        enabled: showTooltip,
+        callbacks: {
+          label(context: TooltipItem<any>) {
+            const datasetLabel = context.dataset.label
+              ? `${context.dataset.label}: `
+              : "";
+            const parsed = context.parsed as any;
+            const value =
+              typeof parsed === "number"
+                ? parsed
+                : parsed?.y ?? parsed?.x ?? context.raw;
+            return `${datasetLabel}${formatComma(Number(value))}`;
+          },
+        },
+      },
+    },
+    scales: {
+      x: categoryScale(axisColor, gridColor, fontFamily, true, false),
+      y: linearScale(axisColor, gridColor, fontFamily, true, true),
+    },
+  };
+}
+
+function withoutScales(options: ChartOptions) {
+  const next = { ...options } as ChartOptions & { scales?: unknown };
+  delete next.scales;
+  return next;
+}
+
+function categoryScale(
+  axisColor: string,
+  gridColor: string,
+  fontFamily: string,
+  display: boolean,
+  showGrid: boolean
+) {
+  return {
+    display,
+    grid: {
+      color: gridColor,
+      display: showGrid,
+      drawTicks: false,
+    },
+    border: {
+      color: gridColor,
+      display: false,
+    },
+    ticks: {
+      color: axisColor,
+      font: {
+        family: fontFamily,
+        size: 12,
+      },
+      maxRotation: 0,
+      padding: 10,
+    },
+  };
+}
+
+function linearScale(
+  axisColor: string,
+  gridColor: string,
+  fontFamily: string,
+  display: boolean,
+  showGrid: boolean
+) {
+  return {
+    beginAtZero: true,
+    display,
+    grid: {
+      color: gridColor,
+      display: showGrid,
+      drawTicks: false,
+    },
+    border: {
+      color: gridColor,
+      display: false,
+    },
+    ticks: {
+      color: axisColor,
+      font: {
+        family: fontFamily,
+        size: 12,
+      },
+      padding: 8,
+      callback(value: string | number) {
+        return formatComma(value);
+      },
+    },
+  };
+}
+
+function makeChartConfig({
+  canvas,
+  chartData,
+  chartType,
+  divergingLabels,
+  series,
+  showLegend,
+  showTooltip,
+}: {
+  canvas: HTMLCanvasElement;
+  chartData: EducationChartDatum[];
+  chartType: EducationChartType;
+  divergingLabels: [string, string];
+  series: string[];
+  showLegend: boolean;
+  showTooltip: boolean;
+}): ChartConfiguration {
+  const axisColor = resolveColor(canvas, AXIS);
+  const gridColor = resolveColor(canvas, GRID);
+  const primaryText = resolveColor(canvas, PRIMARY_TEXT);
+  const primaryLabelText = resolveColor(canvas, "var(--primary-text,#ffffff)");
+  const fontFamily = resolveFont(canvas);
+  const colors = DEFAULT_COLORS.map((color) => resolveColor(canvas, color));
+  const baseOptions = makeBaseOptions({
+    axisColor,
+    fontFamily,
+    gridColor,
+    showLegend,
+    showTooltip,
+  });
+  const simpleData = toSimpleData(chartData);
+  const labels = simpleData.map((item) => item.name);
+  const values = simpleData.map((item) => item.value);
+
+  switch (chartType) {
+    case "bar":
+      return {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [
+            {
+              data: values,
+              backgroundColor: values.map((_, index) =>
+                getChartColor(colors, index)
+              ),
+              borderRadius: 18,
+              barThickness: 30,
+            },
+          ],
+        },
+        options: {
+          ...baseOptions,
+          plugins: {
+            ...baseOptions.plugins,
+            legend: { display: false },
+          },
+          scales: {
+            x: categoryScale(axisColor, gridColor, fontFamily, true, false),
+            y: linearScale(axisColor, gridColor, fontFamily, false, false),
+          },
+        },
+        plugins: [makeValueLabelPlugin("bar", axisColor, fontFamily)],
+      } as ChartConfiguration;
+
+    case "bar-horizontal":
+      return {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [
+            {
+              data: values,
+              backgroundColor: values.map((_, index) =>
+                getChartColor(colors, index)
+              ),
+              borderRadius: 10,
+            },
+          ],
+        },
+        options: {
+          ...baseOptions,
+          indexAxis: "y",
+          plugins: {
+            ...baseOptions.plugins,
+            legend: { display: false },
+          },
+          scales: {
+            x: linearScale(axisColor, gridColor, fontFamily, true, true),
+            y: categoryScale(axisColor, gridColor, fontFamily, true, false),
+          },
+        },
+      } as ChartConfiguration;
+
+    case "bar-grouped-vertical":
+    case "bar-clustered": {
+      const multiData = toMultiSeriesData(chartData, series);
+      return {
+        type: "bar",
+        data: {
+          labels: multiData.map((item) => item.name),
+          datasets: makeDatasets(multiData, series, colors, {
+            borderWidth: 0,
+            barPercentage: 0.78,
+            categoryPercentage: 0.7,
+          }),
+        },
+        options: {
+          ...baseOptions,
+          scales: {
+            x: categoryScale(axisColor, gridColor, fontFamily, true, false),
+            y: linearScale(axisColor, gridColor, fontFamily, true, true),
+          },
+        },
+      } as ChartConfiguration;
+    }
+
+    case "bar-grouped-horizontal": {
+      const multiData = toMultiSeriesData(chartData, series);
+      return {
+        type: "bar",
+        data: {
+          labels: multiData.map((item) => item.name),
+          datasets: makeDatasets(multiData, series, colors, {
+            borderWidth: 0,
+            barPercentage: 0.78,
+            categoryPercentage: 0.7,
+          }),
+        },
+        options: {
+          ...baseOptions,
+          indexAxis: "y",
+          scales: {
+            x: linearScale(axisColor, gridColor, fontFamily, true, true),
+            y: categoryScale(axisColor, gridColor, fontFamily, true, false),
+          },
+        },
+      } as ChartConfiguration;
+    }
+
+    case "bar-stacked-vertical": {
+      const multiData = toMultiSeriesData(chartData, series);
+      return {
+        type: "bar",
+        data: {
+          labels: multiData.map((item) => item.name),
+          datasets: makeDatasets(multiData, series, colors, { borderWidth: 0 }),
+        },
+        options: {
+          ...baseOptions,
+          scales: {
+            x: {
+              ...categoryScale(axisColor, gridColor, fontFamily, true, false),
+              stacked: true,
+            },
+            y: {
+              ...linearScale(axisColor, gridColor, fontFamily, true, true),
+              stacked: true,
+            },
+          },
+        },
+      } as ChartConfiguration;
+    }
+
+    case "bar-stacked-horizontal": {
+      const multiData = toMultiSeriesData(chartData, series);
+      return {
+        type: "bar",
+        data: {
+          labels: multiData.map((item) => item.name),
+          datasets: makeDatasets(multiData, series, colors, { borderWidth: 0 }),
+        },
+        options: {
+          ...baseOptions,
+          indexAxis: "y",
+          scales: {
+            x: {
+              ...linearScale(axisColor, gridColor, fontFamily, true, true),
+              stacked: true,
+            },
+            y: {
+              ...categoryScale(axisColor, gridColor, fontFamily, true, false),
+              stacked: true,
+            },
+          },
+        },
+      } as ChartConfiguration;
+    }
+
+    case "bar-diverging": {
+      const divergingData = toDivergingData(chartData);
+      return {
+        type: "bar",
+        data: {
+          labels: divergingData.map((item) => item.name),
+          datasets: [
+            {
+              label: divergingLabels[0],
+              data: divergingData.map((item) => item.positive),
+              backgroundColor: getChartColor(colors, 0),
+              borderRadius: 8,
+              borderWidth: 0,
+            },
+            {
+              label: divergingLabels[1],
+              data: divergingData.map((item) => item.negative),
+              backgroundColor: getChartColor(colors, 2),
+              borderRadius: 8,
+              borderWidth: 0,
+            },
+          ],
+        },
+        options: {
+          ...baseOptions,
+          indexAxis: "y",
+          scales: {
+            x: {
+              ...linearScale(axisColor, gridColor, fontFamily, true, true),
+              stacked: true,
+            },
+            y: {
+              ...categoryScale(axisColor, gridColor, fontFamily, true, false),
+              stacked: true,
+            },
+          },
+        },
+      } as ChartConfiguration;
+    }
+
+    case "line":
+      return {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            {
+              data: values,
+              borderColor: getChartColor(colors, 0),
+              backgroundColor: getChartColor(colors, 0),
+              borderWidth: 2,
+              pointRadius: 0,
+              tension: 0.35,
+            },
+          ],
+        },
+        options: {
+          ...baseOptions,
+          plugins: {
+            ...baseOptions.plugins,
+            legend: { display: false },
+          },
+          scales: {
+            x: categoryScale(axisColor, gridColor, fontFamily, true, true),
+            y: linearScale(axisColor, gridColor, fontFamily, true, false),
+          },
+        },
+      } as ChartConfiguration;
+
+    case "area":
+      return {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            {
+              data: values,
+              borderColor: getChartColor(colors, 0),
+              backgroundColor: withAlpha(getChartColor(colors, 0), 0.22),
+              borderWidth: 2,
+              fill: true,
+              pointRadius: 0,
+              tension: 0.35,
+            },
+          ],
+        },
+        options: {
+          ...baseOptions,
+          plugins: {
+            ...baseOptions.plugins,
+            legend: { display: false },
+          },
+          scales: {
+            x: categoryScale(axisColor, gridColor, fontFamily, true, false),
+            y: linearScale(axisColor, gridColor, fontFamily, true, true),
+          },
+        },
+      } as ChartConfiguration;
+
+    case "area-stacked": {
+      const multiData = toMultiSeriesData(chartData, series);
+      return {
+        type: "line",
+        data: {
+          labels: multiData.map((item) => item.name),
+          datasets: makeDatasets(multiData, series, colors, {
+            fill: true,
+            backgroundColor(context: any) {
+              const index = context.datasetIndex ?? 0;
+              return withAlpha(getChartColor(colors, index), 0.22);
+            },
+          }),
+        },
+        options: {
+          ...baseOptions,
+          scales: {
+            x: categoryScale(axisColor, gridColor, fontFamily, true, false),
+            y: {
+              ...linearScale(axisColor, gridColor, fontFamily, true, true),
+              stacked: true,
+            },
+          },
+        },
+      } as ChartConfiguration;
+    }
+
+    case "pie":
+    case "donut":
+      return {
+        type: chartType === "donut" ? "doughnut" : "pie",
+        data: {
+          labels,
+          datasets: [
+            {
+              data: values,
+              backgroundColor: values.map((_, index) =>
+                getChartColor(colors, index)
+              ),
+              borderColor: "transparent",
+              borderWidth: 0,
+              hoverBorderWidth: 0,
+              spacing: 0,
+            },
+          ],
+        },
+        options: {
+          ...withoutScales(baseOptions),
+          cutout: chartType === "donut" ? "52%" : undefined,
+          layout: {
+            padding: 18,
+          },
+          plugins: {
+            ...baseOptions.plugins,
+            legend: { display: false },
+          },
+        },
+        plugins: [makeValueLabelPlugin("pie", primaryLabelText, fontFamily)],
+      } as ChartConfiguration;
+
+    case "scatter": {
+      const scatterData = toScatterData(chartData);
+      const labelMap = new Map<number, string>();
+      const xTicks = Array.from(
+        new Set(scatterData.map((item) => item.x))
+      ).sort((a, b) => a - b);
+      const minTick = xTicks[0] ?? 0;
+      const maxTick = xTicks[xTicks.length - 1] ?? 1;
+      scatterData.forEach((item) => labelMap.set(item.x, item.name));
+
+      return {
+        type: "scatter",
+        data: {
+          datasets: [
+            {
+              label: "",
+              data: scatterData.map((item) => ({ x: item.x, y: item.y })),
+              backgroundColor: scatterData.map((_, index) =>
+                getChartColor(colors, index)
+              ),
+              pointRadius: 5,
+            },
+          ],
+        },
+        options: {
+          ...baseOptions,
+          plugins: {
+            ...baseOptions.plugins,
+            legend: { display: false },
+          },
+          scales: {
+            x: {
+              ...linearScale(axisColor, gridColor, fontFamily, true, false),
+              min: minTick - 0.5,
+              max: maxTick + 0.5,
+              ticks: {
+                color: axisColor,
+                font: { family: fontFamily, size: 12 },
+                padding: 10,
+                stepSize: 1,
+                callback(value: string | number) {
+                  return labelMap.get(Number(value)) ?? String(value);
+                },
+              },
+            },
+            y: linearScale(axisColor, gridColor, fontFamily, true, true),
+          },
+        },
+      } as ChartConfiguration;
+    }
+
+    default:
+      return {
+        type: "bar",
+        data: {
+          labels: ["Unsupported"],
+          datasets: [{ data: [0], backgroundColor: primaryText }],
+        },
+        options: {
+          ...baseOptions,
+          plugins: {
+            ...baseOptions.plugins,
+            legend: { display: false },
+            tooltip: { enabled: false },
+          },
+          scales: {
+            x: { display: false },
+            y: { display: false },
+          },
+        },
+      } as ChartConfiguration;
+  }
 }
 
 export default function EducationChartPrimitives({
@@ -212,7 +886,7 @@ export default function EducationChartPrimitives({
   chartData,
   series,
   showLegend,
-
+  showTooltip,
   divergingLabels,
 }: {
   chartType: EducationChartType;
@@ -222,215 +896,65 @@ export default function EducationChartPrimitives({
   showTooltip: boolean;
   divergingLabels: [string, string];
 }) {
-  const axisProps = {
-    tick: { fill: AXIS, fontSize: 12, fontFamily: "var(--body-font-family,'Times New Roman')" },
-    axisLine: { stroke: GRID },
-    tickLine: { stroke: GRID },
-  } as const;
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  const gridProps = {
-    strokeDasharray: "0",
-    stroke: GRID,
-    opacity: 1,
-  } as const;
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-  const commonMargin = { top: 10, right: 12, left: 6, bottom: 8 };
+    let frame: number | null = null;
+    let chart: Chart | null = null;
 
-  const simpleData = toSimpleData(chartData);
+    const renderChart = () => {
+      chart?.destroy();
+      chart = new Chart(
+        canvas,
+        makeChartConfig({
+          canvas,
+          chartData: chartData ?? [],
+          chartType,
+          divergingLabels,
+          series: series ?? [],
+          showLegend,
+          showTooltip,
+        })
+      );
+    };
 
-  const chart = (() => {
-    switch (chartType) {
-      case "bar":
-        return (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={simpleData} margin={commonMargin}>
-              <XAxis dataKey="name" {...axisProps} axisLine={false} tickLine={false} />
-              <ChartLegend showLegend={showLegend} />
-              <Bar dataKey="value" radius={[18, 18, 18, 18]} barSize={30} isAnimationActive={false}>
-                {simpleData.map((_, index) => (
-                  <Cell key={`bar-cell-${index}`} fill={getChartColor(index)} />
-                ))}
-                <LabelList
-                  dataKey="value"
-                  position="top"
-                  fill={AXIS}
-                  fontSize={12}
-                  offset={10}
-                />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-
-        );
-
-      case "bar-horizontal":
-        return (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={simpleData} layout="vertical" margin={commonMargin}>
-              <CartesianGrid {...gridProps} horizontal={false} />
-              <XAxis type="number" {...axisProps} tickFormatter={formatComma} />
-              <YAxis type="category" dataKey="name" {...axisProps} width={74} />
-
-              <ChartLegend showLegend={showLegend} />
-              <Bar dataKey="value" radius={[0, 10, 10, 0]} isAnimationActive={false}>
-                {simpleData.map((_, index) => (
-                  <Cell key={`barh-cell-${index}`} fill={getChartColor(index)} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        );
-
-
-
-
-
-
-
-
-
-
-      case "line":
-        return (
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={simpleData} margin={commonMargin}>
-              <CartesianGrid {...gridProps} horizontal={false} />
-              <XAxis dataKey="name" {...axisProps} axisLine={false} tickLine={false} />
-              <YAxis {...axisProps} tickFormatter={formatComma} axisLine={false} tickLine={false} />
-
-              <ChartLegend showLegend={showLegend} />
-              <Line
-                type="monotone"
-                dataKey="value"
-                stroke={getChartColor(0)}
-                strokeWidth={2}
-                dot={false}
-                isAnimationActive={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        );
-
-      case "area":
-        return (
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={simpleData} margin={commonMargin}>
-              <CartesianGrid {...gridProps} vertical={false} />
-              <XAxis dataKey="name" {...axisProps} axisLine={false} tickLine={false} />
-              <YAxis {...axisProps} tickFormatter={formatComma} axisLine={false} tickLine={false} />
-
-              <ChartLegend showLegend={showLegend} />
-              <defs>
-                <linearGradient id="education-area-fill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={getChartColor(0)} stopOpacity={0.35} />
-                  <stop offset="95%" stopColor={getChartColor(0)} stopOpacity={0.05} />
-                </linearGradient>
-              </defs>
-              <Area
-                type="monotone"
-                dataKey="value"
-                stroke={getChartColor(0)}
-                strokeWidth={2}
-                fill="url(#education-area-fill)"
-                isAnimationActive={false}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        );
-
-
-
-      case "pie":
-        return (
-          <ResponsiveContainer width="100%" height="100%">
-
-            <PieChart margin={commonMargin}>
-              <Pie
-                data={simpleData}
-                dataKey="value"
-                nameKey="name"
-                cx="50%"
-                cy="50%"
-
-                label={renderPieInsideLabel}
-                labelLine={false}
-              >
-                {simpleData.map((_, index) => (
-                  <Cell key={`pie-cell-${index}`} fill={getChartColor(index)} />
-                ))}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
-        );
-
-      case "donut":
-        return (
-          <ResponsiveContainer width="100%" height="100%">
-
-            <PieChart margin={commonMargin}>
-              <Pie
-                data={simpleData}
-                dataKey="value"
-                nameKey="name"
-                cx="50%"
-                cy="50%"
-                innerRadius={90}
-                label={renderPieInsideLabel}
-                paddingAngle={2}
-                labelLine={false}
-              >
-                {simpleData.map((_, index) => (
-                  <Cell key={`donut-cell-${index}`} fill={getChartColor(index)} />
-                ))}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
-        );
-
-      case "scatter": {
-        const scatterData = toScatterData(chartData);
-        const labelMap = new Map<number, string>();
-        const xTicks = Array.from(new Set(scatterData.map((item) => item.x))).sort((a, b) => a - b);
-        const minTick = xTicks[0] ?? 0;
-        const maxTick = xTicks[xTicks.length - 1] ?? 1;
-
-        scatterData.forEach((item) => {
-          labelMap.set(item.x, item.name);
-        });
-
-        return (
-          <ResponsiveContainer width="100%" height="100%">
-            <ScatterChart margin={commonMargin}>
-              <CartesianGrid {...gridProps} vertical={false} />
-              <XAxis
-                type="number"
-                dataKey="x"
-                {...axisProps}
-                ticks={xTicks}
-                domain={[minTick - 0.5, maxTick + 0.5]}
-                tickFormatter={(value) => labelMap.get(Number(value)) ?? String(value)}
-              />
-              <YAxis type="number" dataKey="y" {...axisProps} tickFormatter={formatComma} />
-
-              <ChartLegend showLegend={showLegend} />
-              <Scatter data={scatterData} fill={getChartColor(0)} isAnimationActive={false}>
-                {scatterData.map((_, index) => (
-                  <Cell key={`scatter-cell-${index}`} fill={getChartColor(index)} />
-                ))}
-              </Scatter>
-            </ScatterChart>
-          </ResponsiveContainer>
-        );
+    const scheduleRender = () => {
+      if (frame !== null) {
+        cancelAnimationFrame(frame);
       }
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        renderChart();
+      });
+    };
 
-      default:
-        return (
-          <div className="flex h-full items-center justify-center text-[14px]" style={{ color: PRIMARY_TEXT }}>
-            Unsupported chart type
-          </div>
-        );
+    renderChart();
+
+    const observer = new MutationObserver(scheduleRender);
+    let node: HTMLElement | null = canvas.parentElement;
+    while (node) {
+      observer.observe(node, {
+        attributeFilter: ["class", "data-theme", "style"],
+        attributes: true,
+      });
+      node = node.parentElement;
     }
-  })();
 
-  return <ResponsiveContainer width="100%" height="100%">{chart}</ResponsiveContainer>;
+    return () => {
+      if (frame !== null) {
+        cancelAnimationFrame(frame);
+      }
+      observer.disconnect();
+      chart?.destroy();
+    };
+  }, [chartType, chartData, divergingLabels, series, showLegend, showTooltip]);
+
+  return (
+    <div className="relative h-full min-h-0 w-full overflow-hidden">
+      <canvas ref={canvasRef} className="block h-full w-full" />
+    </div>
+  );
 }

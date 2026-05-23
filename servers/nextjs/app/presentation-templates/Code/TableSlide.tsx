@@ -51,12 +51,16 @@ export const Schema = z.object({
 
 export type SchemaType = z.infer<typeof Schema>;
 
-function getGridTemplateColumns(columnCount: number) {
+function getColumnWidth(columnCount: number, columnIndex: number) {
   if (columnCount <= 1) {
-    return "minmax(0, 1fr)";
+    return "100%";
   }
 
-  return `minmax(0, 1.4fr) repeat(${columnCount - 1}, minmax(0, 1fr))`;
+  const firstColumnWeight = 1.4;
+  const totalWeight = firstColumnWeight + columnCount - 1;
+  const columnWeight = columnIndex === 0 ? firstColumnWeight : 1;
+
+  return `${(columnWeight / totalWeight) * 100}%`;
 }
 
 function renderCell(value: string, isFirstColumn: boolean) {
@@ -81,7 +85,6 @@ function renderCell(value: string, isFirstColumn: boolean) {
 const CodeSlide05ComparisonTable = ({ data }: { data: Partial<SchemaType> }) => {
   const tableColumns = data.tableColumns?.length ? data.tableColumns : DEFAULT_TABLE_COLUMNS;
   const rows = data.rows?.length ? data.rows : DEFAULT_ROWS;
-  const gridTemplateColumns = getGridTemplateColumns(tableColumns.length);
 
   return (
     <>
@@ -103,54 +106,49 @@ const CodeSlide05ComparisonTable = ({ data }: { data: Partial<SchemaType> }) => 
             borderColor: "var(--stroke,#1D293D80)",
           }}
         >
-          <div
-            className="grid items-center"
-            style={{
-              color: "var(--background-text,#8ea1da)",
-              gridTemplateColumns,
-            }}
-          >
-
-            {tableColumns.map((column, columnIndex) => (
-              <p
-                key={`${column}-${columnIndex}`}
-                className="px-[32px] py-[16px] text-[18px] text-center border-b border-r"
-                style={{
-                  color: "var(--background-text,#ffffff)",
-                  borderColor: "var(--stroke,#1D293D80)",
-                  borderRightWidth: columnIndex === tableColumns.length - 1 ? "0px" : undefined,
-                }}
-              >
-                {column}
-              </p>
-            ))}
-          </div>
-
-          <div className="">
-            {rows.map((row, rowIndex) => (
-              <div
-                key={`row-${rowIndex}`}
-                className="grid"
-                style={{
-                  gridTemplateColumns,
-                }}
-              >
-                {row.cells.map((cell, cellIndex) => (
-                  <div
-                    key={`row-${rowIndex}-cell-${cellIndex}`}
-                    className="flex items-center justify-center border-b border-r px-[20px] py-[20px] text-center"
+          <table className="w-full table-fixed border-separate border-spacing-0" style={{ color: "var(--background-text,#8ea1da)" }}>
+            <colgroup>
+              {tableColumns.map((_, columnIndex) => (
+                <col key={columnIndex} style={{ width: getColumnWidth(tableColumns.length, columnIndex) }} />
+              ))}
+            </colgroup>
+            <thead>
+              <tr>
+                {tableColumns.map((column, columnIndex) => (
+                  <th
+                    key={`${column}-${columnIndex}`}
+                    scope="col"
+                    className="px-[32px] py-[16px] text-[18px] text-center font-normal border-b border-r"
                     style={{
+                      color: "var(--background-text,#ffffff)",
                       borderColor: "var(--stroke,#1D293D80)",
-                      borderRightWidth: cellIndex === row.cells.length - 1 ? "0px" : undefined,
+                      borderRightWidth: columnIndex === tableColumns.length - 1 ? "0px" : undefined,
                     }}
                   >
-                    {renderCell(cell, cellIndex === 0)}
-                  </div>
+                    {column}
+                  </th>
                 ))}
-              </div>
-            ))}
-          </div>
-
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, rowIndex) => (
+                <tr key={`row-${rowIndex}`}>
+                  {Array.from({ length: tableColumns.length }, (_, cellIndex) => (
+                    <td
+                      key={`row-${rowIndex}-cell-${cellIndex}`}
+                      className="border-b border-r px-[20px] py-[20px] text-center align-middle"
+                      style={{
+                        borderColor: "var(--stroke,#1D293D80)",
+                        borderRightWidth: cellIndex === tableColumns.length - 1 ? "0px" : undefined,
+                      }}
+                    >
+                      {renderCell(row.cells[cellIndex] || "", cellIndex === 0)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </>

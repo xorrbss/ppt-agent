@@ -1,5 +1,12 @@
 "use client";
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import "../../utils/prism-languages";
@@ -32,6 +39,12 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   const [loading, setLoading] = useState(true);
   const [selectedSlide, setSelectedSlide] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isChatSending, setIsChatSending] = useState(false);
+  const [isFollowModeEnabled, setIsFollowModeEnabled] = useState(true);
+  const [agentFocusedSlide, setAgentFocusedSlide] = useState<number | null>(null);
+  const [agentFocusEventId, setAgentFocusEventId] = useState<string | null>(null);
+  const [glowingSlideIndex, setGlowingSlideIndex] = useState<number | null>(null);
+  const [chatTargetedSlides, setChatTargetedSlides] = useState<number[]>([]);
   const [error, setError] = useState(false);
   const slidesScrollContainerRef = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
@@ -139,6 +152,102 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     handleSlideChange(newSlide, presentationData);
   };
 
+  const handlePresentationChanged = useCallback(() => {
+    return fetchUserSlides({ clearHistory: false });
+  }, [fetchUserSlides]);
+
+  const handleChatSendingStateChange = useCallback((sending: boolean) => {
+    setIsChatSending(sending);
+    if (sending) {
+      setChatTargetedSlides((previous) => (previous.length === 0 ? previous : []));
+      return;
+    }
+    setAgentFocusedSlide(null);
+    setAgentFocusEventId(null);
+  }, []);
+
+  const handleAgentSlideFocus = useCallback(
+    ({ slideIndex, eventId }: { slideIndex: number; eventId: string }) => {
+      if (slideIndex < 0) {
+        return;
+      }
+      setAgentFocusedSlide(slideIndex);
+      setAgentFocusEventId(eventId);
+      setChatTargetedSlides((previous) =>
+        previous.includes(slideIndex) ? previous : [...previous, slideIndex]
+      );
+    },
+    []
+  );
+
+  const totalSlides = presentationData?.slides?.length ?? 0;
+  const highlightedSlideIndex = glowingSlideIndex;
+  const targetedSlidesSet = useMemo(
+    () => new Set(chatTargetedSlides),
+    [chatTargetedSlides]
+  );
+
+  useEffect(() => {
+    if (!isFollowModeEnabled || !isChatSending || totalSlides <= 0) {
+      return;
+    }
+    if (agentFocusedSlide === null) {
+      return;
+    }
+
+    const clampedIndex = Math.min(Math.max(agentFocusedSlide, 0), totalSlides - 1);
+    if (clampedIndex !== selectedSlide) {
+      handleSlideClick(clampedIndex);
+    }
+  }, [
+    isFollowModeEnabled,
+    isChatSending,
+    totalSlides,
+    agentFocusedSlide,
+    agentFocusEventId,
+    selectedSlide,
+    handleSlideClick,
+  ]);
+
+  useEffect(() => {
+    if (totalSlides <= 0) {
+      setGlowingSlideIndex(null);
+      setChatTargetedSlides([]);
+      return;
+    }
+
+    if (!isChatSending) {
+      if (glowingSlideIndex === null && chatTargetedSlides.length === 0) {
+        return;
+      }
+      const clearTimer = window.setTimeout(() => {
+        setGlowingSlideIndex(null);
+        setChatTargetedSlides([]);
+      }, 900);
+      return () => window.clearTimeout(clearTimer);
+    }
+
+    // Do not show glow/scanner until chat traces identify an actual target slide.
+    // This avoids the "instant scanner on send" effect before tools start editing.
+    if (agentFocusedSlide === null) {
+      if (glowingSlideIndex !== null) {
+        setGlowingSlideIndex(null);
+      }
+      return;
+    }
+
+    const targetIndex = Math.min(Math.max(agentFocusedSlide, 0), totalSlides - 1);
+    setGlowingSlideIndex(targetIndex);
+  }, [
+    isChatSending,
+    totalSlides,
+    selectedSlide,
+    isFollowModeEnabled,
+    agentFocusedSlide,
+    chatTargetedSlides.length,
+    glowingSlideIndex,
+  ]);
+
 
   // Presentation Mode View
   if (isPresentMode) {
@@ -228,6 +337,15 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                           slide={slide}
                           index={index}
                           presentationId={presentation_id}
+                          isChatEditing={
+                            highlightedSlideIndex !== null &&
+                            index === highlightedSlideIndex
+                          }
+                          isChatTargeted={
+                            isChatSending &&
+                            highlightedSlideIndex !== index &&
+                            targetedSlidesSet.has(index)
+                          }
                         />
                       ))}
                   </>
@@ -239,7 +357,10 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
             <Chat
               presentationId={presentation_id}
               currentSlide={selectedSlide}
-              onPresentationChanged={() => fetchUserSlides({ clearHistory: false })}
+              onPresentationChanged={handlePresentationChanged}
+              onChatSendingStateChange={handleChatSendingStateChange}
+              onFollowModeChange={setIsFollowModeEnabled}
+              onAgentSlideFocus={handleAgentSlideFocus}
             />
           </div>
         </div>

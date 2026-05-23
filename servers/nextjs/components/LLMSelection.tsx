@@ -84,13 +84,27 @@ export default function LLMProviderSelection({
       llmConfig.IMAGE_PROVIDER === "comfyui" &&
       (!llmConfig.COMFYUI_URL || !llmConfig.COMFYUI_WORKFLOW);
 
+    const needsOpenWebUIImageUrl =
+      !llmConfig.DISABLE_IMAGE_GENERATION &&
+      llmConfig.IMAGE_PROVIDER === "open_webui" &&
+      !llmConfig.OPEN_WEBUI_IMAGE_URL;
+
+    const needsOpenAICompatImageConfig =
+      !llmConfig.DISABLE_IMAGE_GENERATION &&
+      llmConfig.IMAGE_PROVIDER === "openai_compatible" &&
+      (!llmConfig.OPENAI_COMPAT_IMAGE_BASE_URL?.trim() ||
+        !llmConfig.OPENAI_COMPAT_IMAGE_API_KEY?.trim() ||
+        !llmConfig.OPENAI_COMPAT_IMAGE_MODEL?.trim());
+
     setButtonState({
       isLoading: false,
       isDisabled:
         needsModelSelection ||
         needsApiKey ||
         needsOllamaUrl ||
-        needsComfyUIConfig,
+        needsComfyUIConfig ||
+        needsOpenWebUIImageUrl ||
+        needsOpenAICompatImageConfig,
       text: needsModelSelection
         ? "Please Select a Model"
         : needsApiKey
@@ -99,7 +113,11 @@ export default function LLMProviderSelection({
             ? "Please Enter Ollama URL"
             : needsComfyUIConfig
               ? "Please Configure ComfyUI"
-              : "Save Configuration",
+              : needsOpenWebUIImageUrl
+                ? "Please Enter Open WebUI URL"
+                : needsOpenAICompatImageConfig
+                  ? "Please Configure Custom Image API"
+                  : "Save Configuration",
       showProgress: false,
     });
   }, [llmConfig]);

@@ -24,15 +24,44 @@ export interface LLMConfig {
   AZURE_OPENAI_API_VERSION?: string;
   AZURE_OPENAI_DEPLOYMENT?: string;
 
+  // Amazon Bedrock
+  BEDROCK_REGION?: string;
+  BEDROCK_API_KEY?: string;
+  BEDROCK_AWS_ACCESS_KEY_ID?: string;
+  BEDROCK_AWS_SECRET_ACCESS_KEY?: string;
+  BEDROCK_AWS_SESSION_TOKEN?: string;
+  BEDROCK_PROFILE_NAME?: string;
+  BEDROCK_MODEL?: string;
+
   // OpenRouter
   OPENROUTER_API_KEY?: string;
   OPENROUTER_MODEL?: string;
   OPENROUTER_BASE_URL?: string;
 
+  // Fireworks
+  FIREWORKS_API_KEY?: string;
+  FIREWORKS_MODEL?: string;
+  FIREWORKS_BASE_URL?: string;
+
+  // Together AI
+  TOGETHER_API_KEY?: string;
+  TOGETHER_MODEL?: string;
+  TOGETHER_BASE_URL?: string;
+
   // Cerebras
   CEREBRAS_API_KEY?: string;
   CEREBRAS_MODEL?: string;
   CEREBRAS_BASE_URL?: string;
+
+  // LiteLLM
+  LITELLM_BASE_URL?: string;
+  LITELLM_API_KEY?: string;
+  LITELLM_MODEL?: string;
+
+  // LM Studio
+  LMSTUDIO_BASE_URL?: string;
+  LMSTUDIO_API_KEY?: string;
+  LMSTUDIO_MODEL?: string;
 
   // Anthropic
   ANTHROPIC_API_KEY?: string;
@@ -60,6 +89,11 @@ export interface LLMConfig {
   // Open WebUI Image Provider
   OPEN_WEBUI_IMAGE_URL?: string;
   OPEN_WEBUI_IMAGE_API_KEY?: string;
+
+  // OpenAI-compatible image API (LiteLLM, Azure, vLLM gateways, etc.)
+  OPENAI_COMPAT_IMAGE_BASE_URL?: string;
+  OPENAI_COMPAT_IMAGE_API_KEY?: string;
+  OPENAI_COMPAT_IMAGE_MODEL?: string;
 
   // Dalle 3 Quality
   DALL_E_3_QUALITY?: string;

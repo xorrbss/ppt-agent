@@ -6,12 +6,77 @@ function isProvided(value: unknown): boolean {
   return value !== "" && value !== null && value !== undefined;
 }
 
+function parseOptionalBool(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "no", "off"].includes(normalized)) {
+    return false;
+  }
+  return undefined;
+}
+
+export const normalizeLLMConfig = (llmConfig: LLMConfig): LLMConfig => {
+  const normalizedConfig: LLMConfig = { ...llmConfig };
+
+  if (!normalizedConfig.LLM) {
+    normalizedConfig.LLM = "openai";
+  }
+
+  const parsedDisableImageGeneration = parseOptionalBool(
+    (normalizedConfig as Record<string, unknown>).DISABLE_IMAGE_GENERATION
+  );
+  if (parsedDisableImageGeneration !== undefined) {
+    normalizedConfig.DISABLE_IMAGE_GENERATION = parsedDisableImageGeneration;
+  }
+
+  if (normalizedConfig.DISABLE_IMAGE_GENERATION || normalizedConfig.IMAGE_PROVIDER) {
+    return normalizedConfig;
+  }
+
+  if (
+    normalizedConfig.OPENAI_COMPAT_IMAGE_BASE_URL &&
+    normalizedConfig.OPENAI_COMPAT_IMAGE_API_KEY &&
+    normalizedConfig.OPENAI_COMPAT_IMAGE_MODEL
+  ) {
+    normalizedConfig.IMAGE_PROVIDER = "openai_compatible";
+  } else if (normalizedConfig.OPEN_WEBUI_IMAGE_URL) {
+    normalizedConfig.IMAGE_PROVIDER = "open_webui";
+  } else if (normalizedConfig.COMFYUI_URL) {
+    normalizedConfig.IMAGE_PROVIDER = "comfyui";
+  } else if (normalizedConfig.PEXELS_API_KEY) {
+    normalizedConfig.IMAGE_PROVIDER = "pexels";
+  } else if (normalizedConfig.PIXABAY_API_KEY) {
+    normalizedConfig.IMAGE_PROVIDER = "pixabay";
+  } else if (normalizedConfig.LLM === "openai" && normalizedConfig.OPENAI_API_KEY) {
+    normalizedConfig.IMAGE_PROVIDER = "gpt-image-1.5";
+    normalizedConfig.GPT_IMAGE_1_5_QUALITY =
+      normalizedConfig.GPT_IMAGE_1_5_QUALITY || "medium";
+  } else if (normalizedConfig.LLM === "google" && normalizedConfig.GOOGLE_API_KEY) {
+    normalizedConfig.IMAGE_PROVIDER = "gemini_flash";
+  } else {
+    normalizedConfig.DISABLE_IMAGE_GENERATION = true;
+  }
+
+  return normalizedConfig;
+};
+
 /**
  * Returns a user-facing validation message, or null when the config is valid.
  */
 export const getLLMConfigValidationError = (
-  llmConfig: LLMConfig
+  inputConfig: LLMConfig
 ): string | null => {
+  const llmConfig = normalizeLLMConfig(inputConfig);
+
   if (!llmConfig.LLM) {
     return "Select a text provider.";
   }
@@ -27,7 +92,7 @@ export const getLLMConfigValidationError = (
       return "OpenAI API key is required.";
     }
     if (!isProvided(llmConfig.OPENAI_MODEL)) {
-      return 'No OpenAI model selected. Use "Check models" after entering your API key, then choose a model.';
+      return 'Text provider (OpenAI): choose a chat model on the Text Provider tab—use "Check models" after your API key, then pick a model. The model under Image Provider → Custom is only for image generation.';
     }
   } else if (llm === "google") {
     if (!isProvided(llmConfig.GOOGLE_API_KEY)) {
@@ -65,6 +130,16 @@ export const getLLMConfigValidationError = (
     if (!isProvided(llmConfig.AZURE_OPENAI_MODEL)) {
       return "Azure model name is required.";
     }
+  } else if (llm === "bedrock") {
+    if (!isProvided(llmConfig.BEDROCK_MODEL)) {
+      return "Bedrock model is required.";
+    }
+    const hasApiKey = isProvided(llmConfig.BEDROCK_API_KEY);
+    const hasAwsAccess = isProvided(llmConfig.BEDROCK_AWS_ACCESS_KEY_ID);
+    const hasAwsSecret = isProvided(llmConfig.BEDROCK_AWS_SECRET_ACCESS_KEY);
+    if (!hasApiKey && !(hasAwsAccess && hasAwsSecret)) {
+      return "Provide Bedrock API key, or AWS access key ID + secret key.";
+    }
   } else if (llm === "openrouter") {
     if (!isProvided(llmConfig.OPENROUTER_API_KEY)) {
       return "OpenRouter API key is required.";
@@ -78,6 +153,20 @@ export const getLLMConfigValidationError = (
     }
     if (!isProvided(llmConfig.CEREBRAS_MODEL)) {
       return "Select or enter a Cerebras model id.";
+    }
+  } else if (llm === "fireworks") {
+    if (!isProvided(llmConfig.FIREWORKS_API_KEY)) {
+      return "Fireworks API key is required.";
+    }
+    if (!isProvided(llmConfig.FIREWORKS_MODEL)) {
+      return "Select or enter a Fireworks model id.";
+    }
+  } else if (llm === "together") {
+    if (!isProvided(llmConfig.TOGETHER_API_KEY)) {
+      return "Together API key is required.";
+    }
+    if (!isProvided(llmConfig.TOGETHER_MODEL)) {
+      return "Select or enter a Together model id.";
     }
   } else if (llm === "anthropic") {
     if (!isProvided(llmConfig.ANTHROPIC_API_KEY)) {
@@ -99,6 +188,17 @@ export const getLLMConfigValidationError = (
     }
     if (!isProvided(llmConfig.CUSTOM_MODEL)) {
       return 'No model selected for your custom endpoint. Use "Check models" after entering the URL, then choose a model.';
+    }
+  } else if (llm === "litellm") {
+    if (!isProvided(llmConfig.LITELLM_BASE_URL)) {
+      return "LiteLLM base URL is required.";
+    }
+    if (!isProvided(llmConfig.LITELLM_MODEL)) {
+      return 'Use "Check models" after entering the base URL, then choose a model.';
+    }
+  } else if (llm === "lmstudio") {
+    if (!isProvided(llmConfig.LMSTUDIO_MODEL)) {
+      return 'Use "Check models" to load local models from LM Studio, then choose one.';
     }
   } else if (llm === "codex" || llm === "chatgpt") {
     if (!isProvided(llmConfig.CODEX_MODEL)) {
@@ -150,6 +250,15 @@ export const getLLMConfigValidationError = (
           return "Open WebUI URL is required.";
         }
         break;
+      case "openai_compatible":
+        if (
+          !isProvided(llmConfig.OPENAI_COMPAT_IMAGE_BASE_URL?.trim()) ||
+          !isProvided(llmConfig.OPENAI_COMPAT_IMAGE_API_KEY?.trim()) ||
+          !isProvided(llmConfig.OPENAI_COMPAT_IMAGE_MODEL?.trim())
+        ) {
+          return "OpenAI-compatible image API requires base URL, API key, and model.";
+        }
+        break;
       default:
         return "Select a valid image provider.";
     }
@@ -195,22 +304,23 @@ export function syncStoreAfterCodexSignOut(): void {
 }
 
 export const handleSaveLLMConfig = async (llmConfig: LLMConfig) => {
-  const validationError = getLLMConfigValidationError(llmConfig);
+  const normalizedConfig = normalizeLLMConfig(llmConfig);
+  const validationError = getLLMConfigValidationError(normalizedConfig);
   if (validationError) {
     throw new Error(validationError);
   }
 
   // Prefer shared API routes; fallback to Electron IPC for packaged compatibility.
   if (typeof window !== "undefined" && window.electron?.setUserConfig) {
-    await window.electron.setUserConfig(llmConfig);
+    await window.electron.setUserConfig(normalizedConfig);
   } else {
     await fetch("/api/user-config", {
       method: "POST",
-      body: JSON.stringify(llmConfig),
+      body: JSON.stringify(normalizedConfig),
     });
   }
 
-  store.dispatch(setLLMConfig(llmConfig));
+  store.dispatch(setLLMConfig(normalizedConfig));
 };
 
 export const hasValidLLMConfig = (llmConfig: LLMConfig) =>

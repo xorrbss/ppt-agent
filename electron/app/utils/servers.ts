@@ -1,8 +1,56 @@
-import { spawn } from "child_process";
-import { localhost, logsDir, userDataDir } from "./constants";
+import { ChildProcess, spawn } from "child_process";
+import { getLogsDir, localhost } from "./constants";
 import http from "http";
 import fs from "fs";
 import path from "path";
+import { safeError, safeLog as safeConsoleLog } from "./safe-console";
+import { memorySnapshotMb } from "./memory";
+import { destroyChildProcessStdio, terminateChildProcess } from "./lifecycle";
+import { killProcess } from "./index";
+
+type ManagedServerProcess = {
+  process: ChildProcess;
+  ready: Promise<void>;
+  stop: () => Promise<void>;
+};
+
+function createManagedServerProcess(params: {
+  name: string;
+  process: ChildProcess;
+  readyUrl: string;
+  cleanupListeners: () => void;
+  markStopping?: (stopping: boolean) => void;
+}): ManagedServerProcess {
+  const abortController = new AbortController();
+  let stopPromise: Promise<void> | null = null;
+
+  const stop = async () => {
+    if (stopPromise) {
+      return stopPromise;
+    }
+
+    params.markStopping?.(true);
+    abortController.abort();
+    params.cleanupListeners();
+
+    stopPromise = terminateChildProcess(
+      params.process,
+      params.name,
+      killProcess,
+    ).finally(() => {
+      params.cleanupListeners();
+      destroyChildProcessStdio(params.process);
+    });
+
+    return stopPromise;
+  };
+
+  return {
+    process: params.process,
+    ready: waitForServer(params.readyUrl, 120000, abortController.signal),
+    stop,
+  };
+}
 
 export async function startFastApiServer(
   directory: string,
@@ -23,13 +71,14 @@ export async function startFastApiServer(
     args = ["--port", port.toString()];
   }
 
-  const safeLog = (data: Buffer | string, logPath: string) => {
+  const safeFileLog = (data: Buffer | string, logPath: string) => {
     try {
       fs.appendFileSync(logPath, data);
     } catch {
       /* ignore if logs dir not writable */
     }
   };
+  const logsDir = getLogsDir();
   const fastapiLogPath = path.join(logsDir, "fastapi-server.log");
 
   const fastApiProcess = spawn(
@@ -42,21 +91,36 @@ export async function startFastApiServer(
       windowsHide: process.platform === "win32" && !isDev,
     }
   );
-  fastApiProcess.stdout.on("data", (data: any) => {
-    safeLog(data, fastapiLogPath);
-    console.log(`FastAPI: ${data}`);
-  });
-  fastApiProcess.stderr.on("data", (data: any) => {
-    safeLog(data, fastapiLogPath);
-    console.error(`FastAPI: ${data}`);
-  });
-  fastApiProcess.on("error", (err) => {
-    safeLog(`Spawn error: ${err.message}\n`, fastapiLogPath);
-  });
-  return {
-    process: fastApiProcess,
-    ready: waitForServer(`${localhost}:${port}/docs`),
+  const onFastApiStdoutData = (data: any) => {
+    safeFileLog(data, fastapiLogPath);
+    safeConsoleLog(`FastAPI: ${data}`);
   };
+  const onFastApiStderrData = (data: any) => {
+    safeFileLog(data, fastapiLogPath);
+    safeError(`FastAPI: ${data}`);
+  };
+  const onFastApiError = (err: Error) => {
+    safeFileLog(`Spawn error: ${err.message}\n`, fastapiLogPath);
+  };
+  fastApiProcess.stdout.on("data", onFastApiStdoutData);
+  fastApiProcess.stderr.on("data", onFastApiStderrData);
+  fastApiProcess.on("error", onFastApiError);
+  safeConsoleLog("[Presenton] FastAPI process spawned:", {
+    pid: fastApiProcess.pid,
+    memory: memorySnapshotMb(),
+  });
+  const cleanupListeners = () => {
+    fastApiProcess.stdout?.removeListener("data", onFastApiStdoutData);
+    fastApiProcess.stderr?.removeListener("data", onFastApiStderrData);
+    fastApiProcess.removeListener("error", onFastApiError);
+  };
+
+  return createManagedServerProcess({
+    name: "FastAPI",
+    process: fastApiProcess,
+    readyUrl: `${localhost}:${port}/docs`,
+    cleanupListeners,
+  });
 }
 
 export async function startNextJsServer(
@@ -65,7 +129,8 @@ export async function startNextJsServer(
   env: NextJsEnv,
   isDev: boolean,
 ) {
-  let nextjsProcess;
+  let nextjsProcess: ChildProcess;
+  let stopping = false;
 
   if (isDev) {
     // Windows: npm is npm.cmd; spawn() needs a shell or ENOENT.
@@ -79,7 +144,7 @@ export async function startNextJsServer(
         shell: process.platform === "win32",
       }
     );
-    const nextjsLogPath = path.join(logsDir, "nextjs-server.log");
+    const nextjsLogPath = path.join(getLogsDir(), "nextjs-server.log");
     const safeNextLog = (d: Buffer | string) => {
       try {
         fs.appendFileSync(nextjsLogPath, d);
@@ -87,20 +152,44 @@ export async function startNextJsServer(
         /* ignore */
       }
     };
-    nextjsProcess.stdout.on("data", (data: any) => {
+    const onStdoutData = (data: any) => {
       safeNextLog(data);
-      console.log(`NextJS: ${data}`);
-    });
-    nextjsProcess.stderr.on("data", (data: any) => {
+      safeConsoleLog(`NextJS: ${data}`);
+    };
+    const onStderrData = (data: any) => {
       safeNextLog(data);
-      console.error(`NextJS: ${data}`);
-    });
-    nextjsProcess.on("error", (err: Error) => {
+      safeError(`NextJS: ${data}`);
+    };
+    const onError = (err: Error) => {
       safeNextLog(`Spawn error: ${err.message}\n`);
-      console.error(`NextJS spawn error: ${err.message}`);
-    });
-    nextjsProcess.on("exit", (code: number | null, signal: string | null) => {
-      console.error(`NextJS process exited unexpectedly: code=${code}, signal=${signal}`);
+      safeError(`NextJS spawn error: ${err.message}`);
+    };
+    const onExit = (code: number | null, signal: string | null) => {
+      if (stopping) {
+        return;
+      }
+      safeError(`NextJS process exited unexpectedly: code=${code}, signal=${signal}`);
+    };
+    nextjsProcess.stdout?.on("data", onStdoutData);
+    nextjsProcess.stderr?.on("data", onStderrData);
+    nextjsProcess.on("error", onError);
+    nextjsProcess.on("exit", onExit);
+
+    const cleanupListeners = () => {
+      nextjsProcess.stdout?.removeListener("data", onStdoutData);
+      nextjsProcess.stderr?.removeListener("data", onStderrData);
+      nextjsProcess.removeListener("error", onError);
+      nextjsProcess.removeListener("exit", onExit);
+    };
+
+    return createManagedServerProcess({
+      name: "NextJS",
+      process: nextjsProcess,
+      readyUrl: `${localhost}:${port}`,
+      cleanupListeners,
+      markStopping: (value) => {
+        stopping = value;
+      },
     });
   } else {
     const serverScript = path.join(directory, "server.js");
@@ -124,7 +213,7 @@ export async function startNextJsServer(
         windowsHide: process.platform === "win32",
       }
     );
-    const nextjsLogPath = path.join(logsDir, "nextjs-server.log");
+    const nextjsLogPath = path.join(getLogsDir(), "nextjs-server.log");
     const safeNextLog = (d: Buffer | string) => {
       try {
         fs.appendFileSync(nextjsLogPath, d);
@@ -132,53 +221,132 @@ export async function startNextJsServer(
         /* ignore */
       }
     };
-    nextjsProcess.stdout.on("data", (data: any) => {
+    const onStdoutData = (data: any) => {
       safeNextLog(data);
-      console.log(`NextJS: ${data}`);
-    });
-    nextjsProcess.stderr.on("data", (data: any) => {
+      safeConsoleLog(`NextJS: ${data}`);
+    };
+    const onStderrData = (data: any) => {
       safeNextLog(data);
-      console.error(`NextJS: ${data}`);
-    });
-    nextjsProcess.on("error", (err: Error) => {
+      safeError(`NextJS: ${data}`);
+    };
+    const onError = (err: Error) => {
       safeNextLog(`Spawn error: ${err.message}\n`);
-      console.error(`NextJS spawn error: ${err.message}`);
-    });
-    nextjsProcess.on("exit", (code: number | null, signal: string | null) => {
-      console.error(`NextJS process exited unexpectedly: code=${code}, signal=${signal}`);
+      safeError(`NextJS spawn error: ${err.message}`);
+    };
+    const onExit = (code: number | null, signal: string | null) => {
+      if (stopping) {
+        return;
+      }
+      safeError(`NextJS process exited unexpectedly: code=${code}, signal=${signal}`);
+    };
+    nextjsProcess.stdout?.on("data", onStdoutData);
+    nextjsProcess.stderr?.on("data", onStderrData);
+    nextjsProcess.on("error", onError);
+    nextjsProcess.on("exit", onExit);
+
+    const cleanupListeners = () => {
+      nextjsProcess.stdout?.removeListener("data", onStdoutData);
+      nextjsProcess.stderr?.removeListener("data", onStderrData);
+      nextjsProcess.removeListener("error", onError);
+      nextjsProcess.removeListener("exit", onExit);
+    };
+
+    return createManagedServerProcess({
+      name: "NextJS",
+      process: nextjsProcess,
+      readyUrl: `${localhost}:${port}`,
+      cleanupListeners,
+      markStopping: (value) => {
+        stopping = value;
+      },
     });
   }
-
-  return {
-    process: nextjsProcess,
-    ready: waitForServer(`${localhost}:${port}`),
-  };
 }
 
 
-async function waitForServer(url: string, timeout = 120000): Promise<void> {
+function abortableDelay(delayMs: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) {
+    return Promise.reject(new Error("Server wait aborted"));
+  }
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => {
+      signal?.removeEventListener("abort", onAbort);
+    };
+    const finish = (callback: () => void) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      cleanup();
+      callback();
+    };
+    const onAbort = () => {
+      finish(() => reject(new Error("Server wait aborted")));
+    };
+    const timer = setTimeout(() => finish(resolve), delayMs);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+async function waitForServer(url: string, timeout = 120000, signal?: AbortSignal): Promise<void> {
   const startTime = Date.now();
 
   while (Date.now() - startTime < timeout) {
+    if (signal?.aborted) {
+      throw new Error("Server wait aborted");
+    }
+
     try {
       await new Promise<void>((resolve, reject) => {
+        let settled = false;
         const req = http.get(url, (res) => {
+          cleanup();
           res.resume();
           if (res.statusCode && res.statusCode >= 200 && res.statusCode < 500) {
-            resolve();
+            finish(resolve);
           } else {
-            reject(new Error(`Unexpected status code: ${res.statusCode}`));
+            finish(() => reject(new Error(`Unexpected status code: ${res.statusCode}`)));
           }
         });
-        req.on('error', reject);
-        req.setTimeout(5000, () => {
+
+        const finish = (callback: () => void) => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          cleanup();
+          callback();
+        };
+
+        const onError = (error: Error) => finish(() => reject(error));
+        const onAbort = () => {
+          req.on("error", () => {});
           req.destroy();
-          reject(new Error('Request timed out'));
-        });
+          finish(() => reject(new Error("Server wait aborted")));
+        };
+        const onTimeout = () => {
+          req.on("error", () => {});
+          req.destroy();
+          finish(() => reject(new Error('Request timed out')));
+        };
+        const cleanup = () => {
+          req.removeListener("error", onError);
+          signal?.removeEventListener("abort", onAbort);
+        };
+
+        req.on('error', onError);
+        req.setTimeout(5000, onTimeout);
+        signal?.addEventListener("abort", onAbort, { once: true });
       });
       return;
     } catch (error) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (signal?.aborted) {
+        throw error;
+      }
+      await abortableDelay(1000, signal);
     }
   }
   throw new Error(`Server did not start within ${timeout}ms`);

@@ -34,19 +34,21 @@ export default function AuthGate() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
+    if (typeof window === "undefined" || isLoading) {
       return;
     }
     const params = new URLSearchParams(window.location.search);
     if (params.get("reason") === "unauthorized") {
-      toast.error("Unauthorized", {
-        id: "auth-unauthorized-redirect",
-        description: "Sign in to view this page.",
-        duration: 5000,
-      });
+      if (status.configured && !status.authenticated) {
+        toast.error("Unauthorized", {
+          id: "auth-unauthorized-redirect",
+          description: "Sign in to view this page.",
+          duration: 5000,
+        });
+      }
       window.history.replaceState({}, "", window.location.pathname);
     }
-  }, []);
+  }, [isLoading, status.authenticated, status.configured]);
 
   const refreshStatus = async () => {
     setIsLoading(true);

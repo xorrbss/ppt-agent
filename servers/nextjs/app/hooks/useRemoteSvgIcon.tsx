@@ -10,6 +10,12 @@ export type RemoteSvgOptions = {
  
 };
 
+function isEmptyPaint(value: string | null): boolean {
+  if (value === null) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === "none" || normalized === "transparent";
+}
+
 function transformSvg(svgText: string, options: RemoteSvgOptions): string {
   try {
     const parser = new DOMParser();
@@ -26,8 +32,34 @@ function transformSvg(svgText: string, options: RemoteSvgOptions): string {
     svgEl.style.position = "relative";
     // Set only provided attributes to avoid clobbering inner shapes
     if (options.className) svgEl.setAttribute("class", options.className);
-    if (options.strokeColor) svgEl.setAttribute("stroke", options.strokeColor);
-    if (options.fillColor !== undefined) svgEl.setAttribute("fill", options.fillColor);
+
+    // Phosphor weights are mixed: line weights use explicit stroke attributes,
+    // fill icons rely on inherited fill, and duotone icons combine inherited
+    // fill/opacity shapes with strokes. Avoid setting stroke on the root or
+    // filled icons get an unwanted outline.
+    const fillColor = options.fillColor ?? options.strokeColor ?? "currentColor";
+    svgEl.setAttribute("fill", fillColor);
+
+    // Recolor explicit fill values too. This covers duotone assets that include
+    // hard-coded fills while preserving fill="none" placeholders/line paths.
+    svgEl.querySelectorAll<SVGElement>("[fill]").forEach((el) => {
+      if (!isEmptyPaint(el.getAttribute("fill"))) {
+        el.setAttribute("fill", fillColor);
+      }
+    });
+
+    if (options.strokeColor) {
+      svgEl.querySelectorAll<SVGElement>("[stroke]").forEach((el) => {
+        if (!isEmptyPaint(el.getAttribute("stroke"))) {
+          el.setAttribute("stroke", options.strokeColor as string);
+        }
+      });
+
+      const rootStroke = svgEl.getAttribute("stroke");
+      if (rootStroke && !isEmptyPaint(rootStroke)) {
+        svgEl.setAttribute("stroke", options.strokeColor);
+      }
+    }
 
   
       const viewBox = svgEl.getAttribute("viewBox");

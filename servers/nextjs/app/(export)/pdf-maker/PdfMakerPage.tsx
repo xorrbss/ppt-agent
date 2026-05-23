@@ -275,6 +275,7 @@ const PresentationPage = ({ presentation_id, exportCookie }: PresentationPagePro
                       <SlideScale
                         slide={slide}
                         theme={presentationData?.theme ?? null}
+                        isEditMode={false}
                         fixedSize
                       />
                     </div>

@@ -9,7 +9,7 @@ from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_utils import generate_structured_with_schema_retries
 from utils.llm_provider import get_model
 from utils.get_dynamic_models import get_presentation_structure_model_with_n_slides
-from utils.schema_utils import ensure_array_schemas_have_items
+from utils.schema_utils import prepare_schema_for_validation
 from models.presentation_structure_model import PresentationStructureModel
 
 
@@ -102,7 +102,7 @@ def get_messages(
     instructions: Optional[str] = None,
 ) -> list[Message]:
     system_prompt = GET_MESSAGES_SYSTEM_PROMPT.format(
-        user_instruction_header="# User Instruction:" if instructions else "",
+        user_instruction_header=f"# User Instruction: {instructions or ''}" if instructions else "",
         n_slides=n_slides,
     )
 
@@ -160,7 +160,10 @@ async def generate_presentation_structure(
                 instructions,
             )
         )
-        structure_schema = ensure_array_schemas_have_items(response_model.model_json_schema())
+        structure_schema = prepare_schema_for_validation(
+            response_model.model_json_schema(),
+            strict=True,
+        )
         response_format = JSONSchemaResponse(
             name="response",
             json_schema=structure_schema,

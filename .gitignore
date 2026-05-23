@@ -25,9 +25,11 @@ skills-lock.json
 
 # presentation-export runtime (downloaded via scripts/sync-presentation-export.cjs or Docker build)
 presentation-export/index.js
+presentation-export/index.cjs
 presentation-export/py/
 .cache/presentation-export/
 servers/fastapi/build/
 servers/fastapi/dist/
 servers/fastapi/fastembed_cache/
 servers/fastapi/*.egg-info/
+.codex/

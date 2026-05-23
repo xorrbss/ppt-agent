@@ -5,6 +5,7 @@ type AuthStatus = {
   configured: boolean;
   authenticated: boolean;
   username: string | null;
+  available: boolean;
 };
 
 function isAuthDisabled(): boolean {
@@ -41,6 +42,7 @@ export async function getServerAuthStatus(): Promise<AuthStatus> {
       configured: true,
       authenticated: true,
       username: "electron",
+      available: true,
     };
   }
 
@@ -59,6 +61,7 @@ export async function getServerAuthStatus(): Promise<AuthStatus> {
         configured: true,
         authenticated: false,
         username: null,
+        available: false,
       };
     }
     const data = (await response.json()) as Partial<AuthStatus>;
@@ -66,12 +69,14 @@ export async function getServerAuthStatus(): Promise<AuthStatus> {
       configured: Boolean(data.configured),
       authenticated: Boolean(data.authenticated),
       username: data.username ?? null,
+      available: true,
     };
   } catch {
     return {
       configured: true,
       authenticated: false,
       username: null,
+      available: false,
     };
   }
 }
@@ -85,6 +90,9 @@ export async function requireAppSession() {
     return;
   }
   const s = await getServerAuthStatus();
+  if (!s.available) {
+    redirect("/");
+  }
   if (!s.configured) {
     redirect("/");
   }

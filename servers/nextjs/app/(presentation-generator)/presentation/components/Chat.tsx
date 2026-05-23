@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronRight,
   Loader2,
+  LocateFixed,
   MessageCircleMore,
   Plus,
   RefreshCw,
@@ -14,6 +15,7 @@ import React, {
   FormEvent,
   KeyboardEvent,
   ReactNode,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -233,6 +235,16 @@ type ChatProps = {
   presentationId: string;
   currentSlide?: number;
   onPresentationChanged?: () => Promise<void> | void;
+  onChatMutationStateChange?: (isMutating: boolean) => void;
+  onAgentSlideFocus?: (focus: {
+    slideIndex: number;
+    eventId: string;
+    tool?: string;
+    status?: string;
+    isMutatingTool: boolean;
+  }) => void;
+  onChatSendingStateChange?: (isSending: boolean) => void;
+  onFollowModeChange?: (isEnabled: boolean) => void;
 };
 
 type AssistantActivity = {
@@ -266,12 +278,21 @@ const TOOL_LABELS: Record<string, string> = {
   getPresentationOutline: "Outline reader",
   searchSlides: "Slide search",
   getSlideAtIndex: "Slide reader",
+  getPresentationThemeCatalog: "Theme catalog",
   getAvailableLayouts: "Layout finder",
   getContentSchemaFromLayoutId: "Schema checker",
   generateAssets: "Asset generator",
   saveSlide: "Slide saver",
   deleteSlide: "Slide remover",
+  setPresentationTheme: "Theme applier",
 };
+
+const MUTATING_TOOLS = new Set(["saveSlide", "deleteSlide", "setPresentationTheme"]);
+// Only focus slides when the agent is actively mutating them.
+// Read/open traces (e.g. getSlideAtIndex) can happen ahead of edits and feel jumpy.
+const SLIDE_FOCUS_TOOLS = new Set(["saveSlide", "deleteSlide"]);
+const SLIDE_FOCUS_STATUSES = new Set(["start"]);
+const MIN_SLIDE_FOCUS_DWELL_MS = 700;
 
 const getToolLabel = (tool?: string) => {
   if (!tool) {
@@ -299,6 +320,9 @@ const humanizeTraceMessage = (message: string, tool?: string) => {
   if (lower === "opening the requested slide") {
     return "Opening the selected slide.";
   }
+  if (lower === "checking available themes") {
+    return "Checking available color themes.";
+  }
   if (lower === "checking available layouts") {
     return "Checking available layouts.";
   }
@@ -313,6 +337,9 @@ const humanizeTraceMessage = (message: string, tool?: string) => {
   }
   if (lower === "deleting the slide") {
     return "Deleting the slide.";
+  }
+  if (lower === "applying presentation theme") {
+    return "Applying the selected theme.";
   }
   if (lower.startsWith("using tools:")) {
     const toolNames = trimmed
@@ -369,6 +396,21 @@ const isAbortError = (error: unknown) =>
     error.message.toLowerCase().includes("aborted") &&
     error.message.toLowerCase().includes("request"));
 
+const stripBackendContextFromUserMessage = (rawMessage: string) => {
+  const message = rawMessage ?? "";
+  if (!message.startsWith("UI context:")) {
+    return message;
+  }
+
+  const marker = "\nUser message:";
+  const markerIndex = message.indexOf(marker);
+  if (markerIndex === -1) {
+    return message;
+  }
+
+  return message.slice(markerIndex + marker.length).trimStart();
+};
+
 const formatTraceActivity = (
   trace: ChatStreamTrace
 ): Omit<AssistantActivity, "id"> | null => {
@@ -382,10 +424,10 @@ const formatTraceActivity = (
         trace.status === "error"
           ? "error"
           : trace.status === "success"
-            ? "success"
-            : trace.status === "ready" || trace.status === "info"
-              ? "info"
-            : "running",
+          ? "success"
+          : trace.status === "ready" || trace.status === "info"
+          ? "info"
+          : "running",
     };
   }
 
@@ -419,9 +461,15 @@ const formatTraceActivity = (
     };
   }
 
-  if (trace.kind === "tool_plan" && Array.isArray(trace.tools) && trace.tools.length) {
+  if (
+    trace.kind === "tool_plan" &&
+    Array.isArray(trace.tools) &&
+    trace.tools.length
+  ) {
     return {
-      label: `Planning tools: ${trace.tools.map((tool) => getToolLabel(tool)).join(", ")}.`,
+      label: `Planning tools: ${trace.tools
+        .map((tool) => getToolLabel(tool))
+        .join(", ")}.`,
       kind: trace.kind,
       round: trace.round,
       state: "info",
@@ -431,16 +479,32 @@ const formatTraceActivity = (
   return null;
 };
 
+const readTraceSlideIndex = (trace: ChatStreamTrace) => {
+  if (typeof trace.slideIndex === "number" && trace.slideIndex >= 0) {
+    return trace.slideIndex;
+  }
+  if (typeof trace.slideNumber === "number" && trace.slideNumber > 0) {
+    return trace.slideNumber - 1;
+  }
+  return null;
+};
+
 const Chat = ({
   presentationId,
   currentSlide,
   onPresentationChanged,
+  onChatMutationStateChange,
+  onAgentSlideFocus,
+  onChatSendingStateChange,
+  onFollowModeChange,
 }: ChatProps) => {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isFollowAgentEnabled, setIsFollowAgentEnabled] = useState(true);
+  const [activeMutationToolCount, setActiveMutationToolCount] = useState(0);
   const [activeAssistantMessageId, setActiveAssistantMessageId] = useState<
     string | null
   >(null);
@@ -452,6 +516,15 @@ const Chat = ({
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const lastFollowedTraceRef = useRef<string | null>(null);
+  const focusEventSequenceRef = useRef(0);
+  const activeFocusedSlideRef = useRef<number | null>(null);
+  const pendingFocusTraceRef = useRef<ChatStreamTrace | null>(null);
+  const lastFocusDispatchAtRef = useRef<number>(0);
+  const focusDispatchTimerRef = useRef<number | null>(null);
+  const refreshInFlightRef = useRef(false);
+  const refreshQueuedRef = useRef(false);
+  const didIncrementalRefreshRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -461,6 +534,7 @@ const Chat = ({
     setInput("");
     setConversationId(null);
     setIsSending(false);
+    setActiveMutationToolCount(0);
     setActiveAssistantMessageId(null);
     setErrorMessage(null);
     setExpandedActivityByMessage({});
@@ -505,9 +579,12 @@ const Chat = ({
               m.role === "assistant"
                 ? "assistant"
                 : m.role === "user"
-                  ? "user"
-                  : "user",
-            content: m.content,
+                ? "user"
+                : "user",
+            content:
+              m.role === "user"
+                ? stripBackendContextFromUserMessage(m.content)
+                : m.content,
           }))
         );
       } catch (error) {
@@ -533,13 +610,143 @@ const Chat = ({
     messagesEndRef.current?.scrollIntoView({ block: "end" });
   }, [messages, isSending]);
 
+  useEffect(() => {
+    onChatMutationStateChange?.(activeMutationToolCount > 0);
+  }, [activeMutationToolCount, onChatMutationStateChange]);
+
+  useEffect(() => {
+    onFollowModeChange?.(isFollowAgentEnabled);
+  }, [isFollowAgentEnabled, onFollowModeChange]);
+
+  useEffect(() => {
+    onChatSendingStateChange?.(isSending);
+    if (!isSending) {
+      lastFollowedTraceRef.current = null;
+      activeFocusedSlideRef.current = null;
+      pendingFocusTraceRef.current = null;
+      lastFocusDispatchAtRef.current = 0;
+      if (focusDispatchTimerRef.current !== null) {
+        window.clearTimeout(focusDispatchTimerRef.current);
+        focusDispatchTimerRef.current = null;
+      }
+    }
+  }, [isSending, onChatSendingStateChange]);
+
+  useEffect(
+    () => () => {
+      if (focusDispatchTimerRef.current !== null) {
+        window.clearTimeout(focusDispatchTimerRef.current);
+      }
+    },
+    []
+  );
+
+  const updateMutationToolActivity = (tool: string | undefined, isActive: boolean) => {
+    if (!tool || !MUTATING_TOOLS.has(tool)) {
+      return;
+    }
+    setActiveMutationToolCount((previous) =>
+      Math.max(0, previous + (isActive ? 1 : -1))
+    );
+  };
+
+  const emitAgentSlideFocus = useCallback(
+    (trace: ChatStreamTrace, targetSlideIndex: number) => {
+      if (!onAgentSlideFocus) {
+        return;
+      }
+      focusEventSequenceRef.current += 1;
+      onAgentSlideFocus({
+        slideIndex: targetSlideIndex,
+        eventId: `${Date.now()}-${focusEventSequenceRef.current}`,
+        tool: trace.tool,
+        status: trace.status,
+        isMutatingTool: Boolean(trace.tool && MUTATING_TOOLS.has(trace.tool)),
+      });
+      activeFocusedSlideRef.current = targetSlideIndex;
+      lastFocusDispatchAtRef.current = Date.now();
+    },
+    [onAgentSlideFocus]
+  );
+
+  const flushPendingSlideFocus = useCallback(() => {
+    focusDispatchTimerRef.current = null;
+    const pendingTrace = pendingFocusTraceRef.current;
+    pendingFocusTraceRef.current = null;
+    if (!pendingTrace) {
+      return;
+    }
+    const targetSlideIndex = readTraceSlideIndex(pendingTrace);
+    if (targetSlideIndex === null) {
+      return;
+    }
+    emitAgentSlideFocus(pendingTrace, targetSlideIndex);
+  }, [emitAgentSlideFocus]);
+
+  const schedulePendingSlideFocus = useCallback(() => {
+    if (focusDispatchTimerRef.current !== null) {
+      return;
+    }
+    const elapsed = Date.now() - lastFocusDispatchAtRef.current;
+    const waitMs = Math.max(MIN_SLIDE_FOCUS_DWELL_MS - elapsed, 0);
+    focusDispatchTimerRef.current = window.setTimeout(
+      flushPendingSlideFocus,
+      waitMs
+    );
+  }, [flushPendingSlideFocus]);
+
+  const maybeFollowAgentSlide = useCallback(
+    (trace: ChatStreamTrace) => {
+      if (!trace.tool || !SLIDE_FOCUS_TOOLS.has(trace.tool)) {
+        return;
+      }
+      if (!trace.status || !SLIDE_FOCUS_STATUSES.has(trace.status)) {
+        return;
+      }
+
+      const targetSlideIndex = readTraceSlideIndex(trace);
+      if (targetSlideIndex === null) {
+        return;
+      }
+
+      const traceSignature = `${trace.round ?? "?"}:${trace.tool}:${trace.status}:${targetSlideIndex}`;
+      if (lastFollowedTraceRef.current === traceSignature) {
+        return;
+      }
+      lastFollowedTraceRef.current = traceSignature;
+
+      const activeFocusedSlide = activeFocusedSlideRef.current;
+      const elapsed = Date.now() - lastFocusDispatchAtRef.current;
+      const shouldDispatchImmediately =
+        activeFocusedSlide === null ||
+        activeFocusedSlide === targetSlideIndex ||
+        elapsed >= MIN_SLIDE_FOCUS_DWELL_MS;
+
+      if (shouldDispatchImmediately) {
+        pendingFocusTraceRef.current = null;
+        if (focusDispatchTimerRef.current !== null) {
+          window.clearTimeout(focusDispatchTimerRef.current);
+          focusDispatchTimerRef.current = null;
+        }
+        emitAgentSlideFocus(trace, targetSlideIndex);
+        return;
+      }
+
+      pendingFocusTraceRef.current = trace;
+      schedulePendingSlideFocus();
+    },
+    [emitAgentSlideFocus, schedulePendingSlideFocus]
+  );
+
   const buildBackendMessage = (message: string) => {
     if (typeof currentSlide !== "number") {
       return message;
     }
 
     return [
-      `UI context: the currently selected slide is slide ${currentSlide + 1} (zero-based index ${currentSlide}).`,
+      `UI context: the currently selected slide is slide ${
+        currentSlide + 1
+      } (zero-based index ${currentSlide}).`,
       `User message: ${message}`,
     ].join("\n");
   };
@@ -548,6 +755,7 @@ const Chat = ({
     setMessages([]);
     setInput("");
     setConversationId(null);
+    setActiveMutationToolCount(0);
     setErrorMessage(null);
     setExpandedActivityByMessage({});
     if (presentationId && typeof sessionStorage !== "undefined") {
@@ -557,10 +765,41 @@ const Chat = ({
     inputRef.current?.focus();
   };
 
+  const refreshPresentationIncrementally = useCallback(async () => {
+    if (!onPresentationChanged) {
+      return;
+    }
+    if (refreshInFlightRef.current) {
+      refreshQueuedRef.current = true;
+      return;
+    }
+
+    refreshInFlightRef.current = true;
+    didIncrementalRefreshRef.current = true;
+    try {
+      await onPresentationChanged();
+    } catch (error) {
+      console.error("Failed to refresh presentation after tool mutation:", error);
+      toast.error("Slides were saved, but refresh failed");
+    } finally {
+      refreshInFlightRef.current = false;
+      if (refreshQueuedRef.current) {
+        refreshQueuedRef.current = false;
+        void refreshPresentationIncrementally();
+      }
+    }
+  }, [onPresentationChanged]);
+
   const refreshPresentationIfNeeded = async (toolCalls: string[]) => {
     const hasSlideMutation =
-      toolCalls.includes("saveSlide") || toolCalls.includes("deleteSlide");
-    if (!hasSlideMutation || !onPresentationChanged) {
+      toolCalls.includes("saveSlide") ||
+      toolCalls.includes("deleteSlide") ||
+      toolCalls.includes("setPresentationTheme");
+    if (
+      !hasSlideMutation ||
+      !onPresentationChanged ||
+      didIncrementalRefreshRef.current
+    ) {
       return;
     }
 
@@ -696,6 +935,9 @@ const Chat = ({
     setErrorMessage(null);
     setIsSending(true);
     setActiveAssistantMessageId(assistantMessageId);
+    didIncrementalRefreshRef.current = false;
+    refreshQueuedRef.current = false;
+    refreshInFlightRef.current = false;
     const streamAbortController = new AbortController();
     abortControllerRef.current = streamAbortController;
 
@@ -726,6 +968,19 @@ const Chat = ({
             });
           },
           onTrace: (trace) => {
+            maybeFollowAgentSlide(trace);
+            if (
+              trace.status === "success" &&
+              trace.tool &&
+              MUTATING_TOOLS.has(trace.tool)
+            ) {
+              void refreshPresentationIncrementally();
+            }
+            if (trace.status === "start") {
+              updateMutationToolActivity(trace.tool, true);
+            } else if (trace.status === "success" || trace.status === "error") {
+              updateMutationToolActivity(trace.tool, false);
+            }
             const traceActivity = formatTraceActivity(trace);
             if (!traceActivity) {
               return;
@@ -740,11 +995,11 @@ const Chat = ({
         previous.map((message) =>
           message.id === assistantMessageId
             ? {
-              ...message,
-              content: response.response,
+                ...message,
+                content: response.response,
                 toolCalls: [],
                 activity: [],
-            }
+              }
             : message
         )
       );
@@ -758,15 +1013,8 @@ const Chat = ({
           typeof response.conversation_id === "string"
             ? response.conversation_id
             : previous;
-        if (
-          next &&
-          presentationId &&
-          typeof sessionStorage !== "undefined"
-        ) {
-          sessionStorage.setItem(
-            conversationStorageKey(presentationId),
-            next
-          );
+        if (next && presentationId && typeof sessionStorage !== "undefined") {
+          sessionStorage.setItem(conversationStorageKey(presentationId), next);
         }
         return next;
       });
@@ -825,6 +1073,7 @@ const Chat = ({
       ]);
       toast.error(message);
     } finally {
+      setActiveMutationToolCount(0);
       if (abortControllerRef.current === streamAbortController) {
         abortControllerRef.current = null;
       }
@@ -925,7 +1174,7 @@ const Chat = ({
               </div>
             </div>
 
-            <div className="mt-10">
+            {/* <div className="mt-10">
               <h4 className="mb-2 text-[10px] font-normal leading-[15px] tracking-[0.367px] text-[#99A1AF]">
                 QUICK PROMPTS
               </h4>
@@ -943,7 +1192,7 @@ const Chat = ({
                   </button>
                 ))}
               </div>
-            </div>
+            </div> */}
           </>
         ) : (
           <div className="flex flex-col gap-9">
@@ -954,7 +1203,9 @@ const Chat = ({
                   className="flex items-start justify-end gap-2"
                 >
                   <div className="max-w-[78%] rounded-[20px] bg-[#A100FF] px-4 py-3 text-sm font-medium leading-5 text-white">
-                    <p className="whitespace-pre-wrap">{message.content}</p>
+                    <p className="whitespace-pre-wrap">
+                      {stripBackendContextFromUserMessage(message.content)}
+                    </p>
                   </div>
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FF8617] text-sm font-semibold text-white">
                     U
@@ -974,19 +1225,20 @@ const Chat = ({
                           content={message.content}
                           className="chat-markdown mb-0 text-sm font-normal leading-5 text-[#535862]"
                         />
-                        {isSending && message.id === activeAssistantMessageId && (
-                          <span
-                            aria-hidden="true"
-                            className="ml-1 inline-block h-4 w-0.5 animate-pulse rounded-full bg-[#98A2B3] align-middle"
-                          />
-                        )}
+                        {isSending &&
+                          message.id === activeAssistantMessageId && (
+                            <span
+                              aria-hidden="true"
+                              className="ml-1 inline-block h-4 w-0.5 animate-pulse rounded-full bg-[#98A2B3] align-middle"
+                            />
+                          )}
                       </div>
                     )
                   ) : (
                     <div className="text-sm font-normal leading-5 text-[#535862]">
                       {isSending && message.role === "assistant"
-                        ? message.activity?.[message.activity.length - 1]?.label ||
-                          "Working on it..."
+                        ? message.activity?.[message.activity.length - 1]
+                            ?.label || "Working on it..."
                         : ""}
                     </div>
                   )}
@@ -1003,7 +1255,9 @@ const Chat = ({
                           <ChevronRight className="h-3 w-3" />
                         )}
                         <span>Thinking</span>
-                        {message.activity.some((item) => item.state === "running") && (
+                        {message.activity.some(
+                          (item) => item.state === "running"
+                        ) && (
                           <Loader2 className="h-3 w-3 animate-spin text-[#98A2B3]" />
                         )}
                       </button>
@@ -1023,11 +1277,12 @@ const Chat = ({
                               <span>{activityItem.label}</span>
                             </div>
                           ))}
-                          {message.toolCalls && message.toolCalls.length > 0 && (
-                            <div className="pt-0.5 text-[11px] text-[#98A2B3]">
-                              Tools called: {message.toolCalls.join(", ")}
-                            </div>
-                          )}
+                          {message.toolCalls &&
+                            message.toolCalls.length > 0 && (
+                              <div className="pt-0.5 text-[11px] text-[#98A2B3]">
+                                Tools called: {message.toolCalls.join(", ")}
+                              </div>
+                            )}
                         </div>
                       )}
                     </div>
@@ -1043,7 +1298,7 @@ const Chat = ({
 
       <form
         onSubmit={handleSubmit}
-        className="relative mx-4 mb-4 rounded-[8px] border border-[#F4F4F4] bg-white px-2.5 py-3"
+        className="mx-4 mb-4 rounded-[8px] border border-[#F4F4F4] bg-white px-2.5 py-3"
         style={{
           boxShadow: "0 4px 14px 0 rgba(0, 0, 0, 0.04)",
         }}
@@ -1052,8 +1307,8 @@ const Chat = ({
           ref={inputRef}
           name="chat-input"
           id="chat-input"
-          className="min-h-[92px] w-full resize-none bg-transparent pb-10 text-sm text-[#101828] placeholder:text-[#99A1AF] focus:outline-none focus:ring-0"
-          rows={4}
+          className="min-h-[92px] w-full resize-none bg-transparent text-sm text-[#101828] placeholder:text-[#99A1AF] focus:outline-none focus:ring-0"
+          rows={3}
           value={input}
           disabled={isSending || isHistoryLoading}
           onChange={(event) => setInput(event.target.value)}
@@ -1061,51 +1316,78 @@ const Chat = ({
           placeholder="Improve your slides..."
           aria-invalid={Boolean(errorMessage)}
         />
-        <button
-          type="button"
-          disabled
-          className="absolute bottom-3 left-3 h-[28px] rounded-[64px] border border-[#EDEEEF] bg-white px-3 py-1 opacity-50"
-          aria-label="Attach files"
-          title="Attachments are not supported yet"
-        >
-          <Plus className="h-3 w-3 text-black" />
-        </button>
-        {isSending ? (
-          <div className="absolute bottom-3 right-3 flex items-center gap-2">
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               disabled
-              className="flex cursor-wait items-center gap-1.5 rounded-[34px] border border-[#EAECF0] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#667085]"
-              aria-label="Chat is processing"
+              className="inline-flex h-[28px] items-center rounded-[64px] border border-[#EDEEEF] bg-white px-3 py-1 opacity-50"
+              aria-label="Attach files"
+              title="Attachments are not supported yet"
             >
-              <Loader2 className="h-3 w-3 animate-spin text-[#667085]" />
-              Processing
+              <Plus className="h-3 w-3 text-black" />
             </button>
             <button
               type="button"
-              onClick={stopStreaming}
-              className="flex items-center gap-1.5 rounded-[34px] border border-[#E4E7EC] bg-white px-3 py-2 text-sm font-medium text-[#344054] transition-colors hover:bg-[#F9FAFB]"
-              aria-label="Stop chat response"
+              onClick={() => setIsFollowAgentEnabled((previous) => !previous)}
+              disabled={isHistoryLoading || isSending}
+              className={`inline-flex h-[28px] items-center gap-1 rounded-[64px] border px-2.5 text-[11px] font-medium transition-colors ${
+                isFollowAgentEnabled
+                  ? "border-[#D9D6FE] bg-[#F4F3FF] text-[#5A3ECC]"
+                  : "border-[#E5E7EB] bg-white text-[#667085]"
+              } disabled:cursor-not-allowed disabled:opacity-50`}
+              aria-label={
+                isFollowAgentEnabled ? "Disable follow AI mode" : "Enable follow AI mode"
+              }
+              title={
+                isFollowAgentEnabled
+                  ? "Follow AI is on: auto-jump to active slide"
+                  : "Follow AI is off"
+              }
             >
-              <Square className="h-3 w-3 fill-current" />
-              Stop
+              <LocateFixed className="h-3 w-3" />
+              <span>{isFollowAgentEnabled ? "Following" : "Follow AI"}</span>
             </button>
           </div>
-        ) : (
-          <button
-            type="submit"
-            disabled={!input.trim() || isHistoryLoading}
-            className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-[#191919] disabled:cursor-not-allowed disabled:opacity-60"
-            style={{
-              background:
-                "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
-              borderRadius: "34px",
-            }}
-          >
-            <Send className="h-3 w-3 text-[#191919]" />
-            Send
-          </button>
-        )}
+          <div className="ml-auto flex items-center gap-2">
+            {isSending ? (
+              <>
+                <button
+                  type="button"
+                  disabled
+                  className="flex cursor-wait items-center gap-1.5 whitespace-nowrap rounded-[34px] border border-[#EAECF0] bg-[#F9FAFB] px-3 py-2 text-sm font-medium text-[#667085]"
+                  aria-label="Chat is processing"
+                >
+                  <Loader2 className="h-3 w-3 animate-spin text-[#667085]" />
+                  Processing
+                </button>
+                <button
+                  type="button"
+                  onClick={stopStreaming}
+                  className="flex items-center gap-1.5 whitespace-nowrap rounded-[34px] border border-[#E4E7EC] bg-white px-3 py-2 text-sm font-medium text-[#344054] transition-colors hover:bg-[#F9FAFB]"
+                  aria-label="Stop chat response"
+                >
+                  <Square className="h-3 w-3 fill-current" />
+                  Stop
+                </button>
+              </>
+            ) : (
+              <button
+                type="submit"
+                disabled={!input.trim() || isHistoryLoading}
+                className="flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-sm font-medium text-[#191919] disabled:cursor-not-allowed disabled:opacity-60"
+                style={{
+                  background:
+                    "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
+                  borderRadius: "34px",
+                }}
+              >
+                <Send className="h-3 w-3 text-[#191919]" />
+                Send
+              </button>
+            )}
+          </div>
+        </div>
       </form>
     </div>
   );

@@ -2,8 +2,6 @@
 
 import * as z from "zod";
 
-import { ResponsiveContainer } from "recharts";
-
 import { FlexibleReportChart, flexibleChartDataSchema } from "./flexibleReportChart";
 import { RemoteSvgIcon } from "@/app/hooks/useRemoteSvgIcon";
 
@@ -126,9 +124,9 @@ const DataAnalysisInsightBarSlide = ({
           </div>
 
           <div className="ml-[28px] flex w-1/2 flex-col items-center">
-            <ResponsiveContainer height={400} width="100%">
+            <div className="h-[400px] min-h-0 w-full overflow-hidden">
               <FlexibleReportChart chartType={chartType} data={chartData} series={series} colorFallback="#157CFF" />
-            </ResponsiveContainer>
+            </div>
             <div
               className="mt-[12px] flex items-center gap-[10px] text-[24px] tracking-[-0.03em] text-[#157CFF]"
               style={{ color: "var(--primary-color,#157CFF)" }}

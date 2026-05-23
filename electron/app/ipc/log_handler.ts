@@ -1,11 +1,11 @@
 import { ipcMain } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
-import { userDataDir } from '../utils/constants';
+import { getLogsDir } from '../utils/constants';
 
 export function setupLogHandler() {
   // Ensure logs directory exists
-  const logsDir = path.join(userDataDir, 'logs');
+  const logsDir = getLogsDir();
   if (!fs.existsSync(logsDir)) {
     fs.mkdirSync(logsDir, { recursive: true });
   }

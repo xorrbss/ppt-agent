@@ -142,6 +142,13 @@ const SettingsPage = () => {
     const validationError = getLLMConfigValidationError(llmConfig);
     if (validationError) {
       notify.error("Cannot save settings", validationError);
+      if (
+        selectedProvider === "image-provider" &&
+        llmConfig.LLM === "openai" &&
+        !String(llmConfig.OPENAI_MODEL || "").trim()
+      ) {
+        setSelectedProvider("text-provider");
+      }
       return;
     }
 
@@ -293,19 +300,29 @@ const SettingsPage = () => {
           ? llmConfig.VERTEX_MODEL
           : textProviderKey === "azure"
             ? llmConfig.AZURE_OPENAI_MODEL
+          : textProviderKey === "bedrock"
+            ? llmConfig.BEDROCK_MODEL
             : textProviderKey === "openrouter"
               ? llmConfig.OPENROUTER_MODEL
+              : textProviderKey === "fireworks"
+                ? llmConfig.FIREWORKS_MODEL
+                : textProviderKey === "together"
+                  ? llmConfig.TOGETHER_MODEL
               : textProviderKey === "cerebras"
                 ? llmConfig.CEREBRAS_MODEL
-                : textProviderKey === "anthropic"
-                  ? llmConfig.ANTHROPIC_MODEL
-                  : textProviderKey === "ollama"
-                    ? llmConfig.OLLAMA_MODEL
-                    : textProviderKey === "custom"
-                      ? llmConfig.CUSTOM_MODEL
-                      : textProviderKey === "codex"
-                        ? llmConfig.CODEX_MODEL
-                        : "";
+                : textProviderKey === "litellm"
+                    ? llmConfig.LITELLM_MODEL
+                    : textProviderKey === "lmstudio"
+                      ? llmConfig.LMSTUDIO_MODEL
+                    : textProviderKey === "anthropic"
+                      ? llmConfig.ANTHROPIC_MODEL
+                      : textProviderKey === "ollama"
+                        ? llmConfig.OLLAMA_MODEL
+                        : textProviderKey === "custom"
+                          ? llmConfig.CUSTOM_MODEL
+                          : textProviderKey === "codex"
+                            ? llmConfig.CODEX_MODEL
+                            : "";
   const textSummary = selectedTextModel
     ? `${textProviderLabel} (${selectedTextModel})`
     : textProviderLabel;
@@ -326,8 +343,13 @@ const SettingsPage = () => {
       (llmConfig.LLM === "google" && !llmConfig.GOOGLE_MODEL) ||
       (llmConfig.LLM === "vertex" && !llmConfig.VERTEX_MODEL) ||
       (llmConfig.LLM === "azure" && !llmConfig.AZURE_OPENAI_MODEL) ||
+      (llmConfig.LLM === "bedrock" && !llmConfig.BEDROCK_MODEL) ||
       (llmConfig.LLM === "openrouter" && !llmConfig.OPENROUTER_MODEL) ||
+      (llmConfig.LLM === "fireworks" && !llmConfig.FIREWORKS_MODEL) ||
+      (llmConfig.LLM === "together" && !llmConfig.TOGETHER_MODEL) ||
       (llmConfig.LLM === "cerebras" && !llmConfig.CEREBRAS_MODEL) ||
+      (llmConfig.LLM === "litellm" && !llmConfig.LITELLM_MODEL) ||
+      (llmConfig.LLM === "lmstudio" && !llmConfig.LMSTUDIO_MODEL) ||
       (llmConfig.LLM === "anthropic" && !llmConfig.ANTHROPIC_MODEL) ||
       (llmConfig.LLM === "ollama" && !llmConfig.OLLAMA_MODEL) ||
       (llmConfig.LLM === "custom" && !llmConfig.CUSTOM_MODEL)

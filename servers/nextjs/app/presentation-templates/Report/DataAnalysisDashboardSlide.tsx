@@ -3,8 +3,6 @@
 import type { ReactNode } from "react";
 import * as z from "zod";
 
-import { ResponsiveContainer } from "recharts";
-
 import {
   DivergingDataPointSchema,
   FlexibleReportChart,
@@ -217,15 +215,15 @@ const DataAnalysisDashboardSlide = ({ data }: { data: Partial<SchemaType> }) => 
             />
           ))}
         </div>}
-        <div className="flex-1 flex flex-col pb-[30px]">
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden pb-[30px]">
 
-          {halfChart && halfChart.length > 0 && <div className="mt-[14px] px-[64px] flex-1 "
+          {halfChart && halfChart.length > 0 && <div className="mt-[14px] min-h-0 px-[64px] flex-1 overflow-hidden"
             style={{
               height: otherHalfChart && otherHalfChart?.length > 0 ? '200px' : 'auto',
             }}
           >
             <div
-              className={`grid h-full bg-white p-[13px] rounded-[14px] min-h-0 gap-[10px] `}
+              className={`grid h-full min-h-0 overflow-hidden bg-white p-[13px] rounded-[14px] gap-[10px] `}
               style={{
                 gridTemplateColumns: `repeat(${halfChart.length}, minmax(150px, 1fr))`,
                 backgroundColor: "var(--card-color,#ffffff)",
@@ -234,23 +232,20 @@ const DataAnalysisDashboardSlide = ({ data }: { data: Partial<SchemaType> }) => 
               {halfChart?.map((chart, index) => (
                 <div
                   key={index}
-                  className="rounded-[6px]  flex flex-col overflow-hidden"
+                  className="rounded-[6px] min-h-0 flex flex-col overflow-hidden"
 
                 >
 
-                  <div className="flex-1 " >
-                    <ResponsiveContainer width="100%" height="100%" maxHeight={otherHalfChart && otherHalfChart?.length > 0 ? 200 : 400}>
-
-                      <FlexibleReportChart density="compact" chartType={chart.type} data={chart.data} series={chart.series} />
-                    </ResponsiveContainer>
+                  <div className="flex-1 min-h-0 overflow-hidden" >
+                    <FlexibleReportChart density="compact" chartType={chart.type} data={chart.data} series={chart.series} />
                   </div>
                 </div>
               ))}
             </div>
           </div>}
-          {otherHalfChart && otherHalfChart.length > 0 && <div className="mt-[14px] px-[64px] flex-1 h-[200px] ">
+          {otherHalfChart && otherHalfChart.length > 0 && <div className="mt-[14px] min-h-0 px-[64px] flex-1 h-[200px] overflow-hidden">
             <div
-              className={`grid h-full bg-white p-[13px] rounded-[14px] min-h-0 gap-[10px] `}
+              className={`grid h-full min-h-0 overflow-hidden bg-white p-[13px] rounded-[14px] gap-[10px] `}
               style={{
                 gridTemplateColumns: `repeat(${otherHalfChart.length}, minmax(150px, 1fr))`,
                 backgroundColor: "var(--card-color,#ffffff)",
@@ -259,13 +254,10 @@ const DataAnalysisDashboardSlide = ({ data }: { data: Partial<SchemaType> }) => 
               {otherHalfChart?.map((chart, index) => (
                 <div
                   key={index}
-                  className="rounded-[6px] flex flex-col overflow-hidden"
+                  className="rounded-[6px] min-h-0 flex flex-col overflow-hidden"
                 >
-                  <div className="flex-1 " >
-                    <ResponsiveContainer width="100%" height="100%" maxHeight={180}>
-
-                      <FlexibleReportChart density="compact" chartType={chart.type} data={chart.data} series={chart.series} />
-                    </ResponsiveContainer>
+                  <div className="flex-1 min-h-0 overflow-hidden" >
+                    <FlexibleReportChart density="compact" chartType={chart.type} data={chart.data} series={chart.series} />
                   </div>
                 </div>
               ))}

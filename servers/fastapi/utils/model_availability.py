@@ -6,6 +6,7 @@ from utils.available_models import (
     list_available_anthropic_models,
     list_available_google_models,
     list_available_openai_compatible_models,
+    normalize_openai_compatible_base_url,
 )
 from utils.get_env import (
     get_azure_openai_api_key_env,
@@ -14,12 +15,27 @@ from utils.get_env import (
     get_azure_openai_endpoint_env,
     get_anthropic_api_key_env,
     get_anthropic_model_env,
+    get_bedrock_api_key_env,
+    get_bedrock_aws_access_key_id_env,
+    get_bedrock_aws_secret_access_key_env,
+    get_bedrock_model_env,
     get_can_change_keys_env,
     get_cerebras_api_key_env,
+    get_fireworks_api_key_env,
+    get_fireworks_base_url_env,
+    get_fireworks_model_env,
     get_google_model_env,
+    get_litellm_base_url_env,
+    get_litellm_model_env,
+    get_lmstudio_api_key_env,
+    get_lmstudio_base_url_env,
+    get_lmstudio_model_env,
     get_openai_api_key_env,
     get_openai_model_env,
     get_openrouter_api_key_env,
+    get_together_api_key_env,
+    get_together_base_url_env,
+    get_together_model_env,
     get_pixabay_api_key_env,
     get_pexels_api_key_env,
     get_vertex_api_key_env,
@@ -102,13 +118,83 @@ async def check_llm_and_image_provider_api_or_model_availability():
                     "AZURE_OPENAI_ENDPOINT or AZURE_OPENAI_BASE_URL must be provided"
                 )
 
+        elif get_llm_provider() == LLMProvider.BEDROCK:
+            bedrock_model = (get_bedrock_model_env() or "").strip()
+            if not bedrock_model:
+                raise Exception("BEDROCK_MODEL must be provided")
+            has_api_key = bool((get_bedrock_api_key_env() or "").strip())
+            has_access_key = bool((get_bedrock_aws_access_key_id_env() or "").strip())
+            has_secret_key = bool((get_bedrock_aws_secret_access_key_env() or "").strip())
+            if not has_api_key and not (has_access_key and has_secret_key):
+                raise Exception(
+                    "Set BEDROCK_API_KEY, or set BEDROCK_AWS_ACCESS_KEY_ID and "
+                    "BEDROCK_AWS_SECRET_ACCESS_KEY"
+                )
+
         elif get_llm_provider() == LLMProvider.OPENROUTER:
             if not get_openrouter_api_key_env():
                 raise Exception("OPENROUTER_API_KEY must be provided")
 
+        elif get_llm_provider() == LLMProvider.FIREWORKS:
+            fireworks_api_key = (get_fireworks_api_key_env() or "").strip()
+            fireworks_model = (get_fireworks_model_env() or "").strip()
+            if not fireworks_api_key:
+                raise Exception("FIREWORKS_API_KEY must be provided")
+            if not fireworks_model:
+                raise Exception("FIREWORKS_MODEL must be provided")
+            fireworks_base_url = normalize_openai_compatible_base_url(
+                get_fireworks_base_url_env() or "https://api.fireworks.ai/inference/v1"
+            )
+            available_models = await list_available_openai_compatible_models(
+                fireworks_base_url, fireworks_api_key
+            )
+            print("-" * 50)
+            print("Available models: ", available_models)
+            if fireworks_model not in available_models:
+                raise Exception(f"Model {fireworks_model} is not available")
+
+        elif get_llm_provider() == LLMProvider.TOGETHER:
+            together_api_key = (get_together_api_key_env() or "").strip()
+            together_model = (get_together_model_env() or "").strip()
+            if not together_api_key:
+                raise Exception("TOGETHER_API_KEY must be provided")
+            if not together_model:
+                raise Exception("TOGETHER_MODEL must be provided")
+            together_base_url = normalize_openai_compatible_base_url(
+                get_together_base_url_env() or "https://api.together.ai/v1"
+            )
+            available_models = await list_available_openai_compatible_models(
+                together_base_url, together_api_key
+            )
+            print("-" * 50)
+            print("Available models: ", available_models)
+            if together_model not in available_models:
+                raise Exception(f"Model {together_model} is not available")
+
         elif get_llm_provider() == LLMProvider.CEREBRAS:
             if not get_cerebras_api_key_env():
                 raise Exception("CEREBRAS_API_KEY must be provided")
+
+        elif get_llm_provider() == LLMProvider.LITELLM:
+            if not (get_litellm_base_url_env() or "").strip():
+                raise Exception("LITELLM_BASE_URL must be provided")
+            if not (get_litellm_model_env() or "").strip():
+                raise Exception("LITELLM_MODEL must be provided")
+
+        elif get_llm_provider() == LLMProvider.LMSTUDIO:
+            lmstudio_model = (get_lmstudio_model_env() or "").strip()
+            if not lmstudio_model:
+                raise Exception("LMSTUDIO_MODEL must be provided")
+            lmstudio_base_url = normalize_openai_compatible_base_url(
+                get_lmstudio_base_url_env() or "http://localhost:1234/v1"
+            )
+            available_models = await list_available_openai_compatible_models(
+                lmstudio_base_url, get_lmstudio_api_key_env() or ""
+            )
+            print("-" * 50)
+            print("Available models: ", available_models)
+            if lmstudio_model not in available_models:
+                raise Exception(f"Model {lmstudio_model} is not available")
 
         elif get_llm_provider() == LLMProvider.ANTHROPIC:
             anthropic_api_key = get_anthropic_api_key_env()

@@ -11,7 +11,7 @@ export const slideLayoutDescription =
   "A split layout with narrative text on the left and a configurable chart canvas on the right.";
 
 const DEFAULT_CHART = {
-  chartType: "scatter" as const,
+  chartType: "bar" as const,
   legendLabel: "Series Label",
   yAxisLabel: "Y axis name",
   barData: [

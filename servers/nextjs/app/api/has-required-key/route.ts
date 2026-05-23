@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import fs from "fs";
+import { readUserConfigFile } from "@/lib/user-config-store";
 
 export const dynamic = "force-dynamic";
 
@@ -7,19 +7,16 @@ export async function GET() {
   const userConfigPath = process.env.USER_CONFIG_PATH;
 
   let keyFromFile = "";
-  if (userConfigPath && fs.existsSync(userConfigPath)) {
+  if (userConfigPath) {
     try {
-      const raw = fs.readFileSync(userConfigPath, "utf-8");
-      const cfg = JSON.parse(raw || "{}");
+      const cfg = readUserConfigFile<{ OPENAI_API_KEY?: string }>(userConfigPath);
       keyFromFile = cfg?.OPENAI_API_KEY || "";
-    } catch { }
+    } catch {
+      keyFromFile = "";
+    }
   }
-
-
-
   const keyFromEnv = process.env.OPENAI_API_KEY || "";
-  console.log(keyFromEnv);
   const hasKey = Boolean((keyFromFile || keyFromEnv).trim());
 
   return NextResponse.json({ hasKey });
-} 
+}

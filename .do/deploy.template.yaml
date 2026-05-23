@@ -1,0 +1,25 @@
+spec:
+  name: presenton
+  region: nyc
+  services:
+    - name: presenton
+      image:
+        registry_type: GHCR
+        registry: ghcr.io
+        repository: presenton/presenton
+        tag: latest
+      http_port: 80
+      instance_count: 1
+      instance_size_slug: apps-s-1vcpu-2gb
+      envs:
+        - key: MIGRATE_DATABASE_ON_STARTUP
+          value: "true"
+          scope: RUN_TIME
+          type: GENERAL
+        - key: START_OLLAMA
+          value: "false"
+          scope: RUN_TIME
+          type: GENERAL
+  alerts:
+    - rule: DEPLOYMENT_FAILED
+    - rule: DOMAIN_FAILED
