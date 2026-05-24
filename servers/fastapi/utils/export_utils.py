@@ -1,13 +1,16 @@
-import hashlib
 import os
 import logging
 from typing import Literal
 from urllib.parse import urlencode
 import uuid
+
 from pathvalidate import sanitize_filename
+
 from models.presentation_and_path import PresentationAndPath
+from utils.filename_utils import safe_export_basename
 from services.export_task_service import EXPORT_TASK_SERVICE
 from utils.runtime_limits import log_memory
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -32,21 +35,6 @@ def _build_presentation_export_url(presentation_id: uuid.UUID) -> tuple[str, str
     )
 
 
-def _safe_filename(name: str, max_bytes: int = 200) -> str:
-    """Truncate filename to avoid OSError on long names (e.g. Japanese characters).
-    
-    On most Linux/macOS systems, the filename limit is 255 bytes.
-    Japanese characters take 3 bytes each in UTF-8, so a short-looking
-    title can easily exceed this limit and raise an OSError.
-    """
-    encoded = name.encode('utf-8')
-    if len(encoded) <= max_bytes:
-        return name
-    hash_suffix = hashlib.md5(encoded).hexdigest()[:8]
-    truncated = encoded[:max_bytes - 9].decode('utf-8', errors='ignore')
-    return f"{truncated}_{hash_suffix}"
-
-
 async def export_presentation(
     presentation_id: uuid.UUID,
     title: str,
@@ -60,9 +48,10 @@ async def export_presentation(
         export_as=export_as,
     )
     export_url, fastapi_url = _build_presentation_export_url(presentation_id)
+    name = (title or "").strip() or str(uuid.uuid4())
     export_result = await EXPORT_TASK_SERVICE.export_from_url(
         url=export_url,
-        title=_safe_filename(sanitize_filename(title or str(uuid.uuid4()))),
+        title=safe_export_basename(sanitize_filename(name)),
         export_as=export_as,
         fastapi_url=fastapi_url,
         cookie_header=cookie_header,
