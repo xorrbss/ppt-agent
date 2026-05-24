@@ -20,7 +20,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { toast } from "sonner";
+import { notify } from "@/components/ui/sonner";
 import MarkdownRenderer from "@/components/MarkDownRender";
 import { PresentationChatApi } from "../../services/api/chat";
 import type { ChatStreamTrace } from "../../services/api/chat";
@@ -593,7 +593,7 @@ const Chat = ({
           error instanceof Error
             ? error.message
             : "Could not load previous chat";
-        toast.error(detail);
+        notify.error("Could not load chat", detail);
       } finally {
         if (!cancelled) {
           setIsHistoryLoading(false);
@@ -780,7 +780,7 @@ const Chat = ({
       await onPresentationChanged();
     } catch (error) {
       console.error("Failed to refresh presentation after tool mutation:", error);
-      toast.error("Slides were saved, but refresh failed");
+      notify.error("Refresh failed", "Slides were saved, but refresh failed.");
     } finally {
       refreshInFlightRef.current = false;
       if (refreshQueuedRef.current) {
@@ -807,7 +807,7 @@ const Chat = ({
       await onPresentationChanged();
     } catch (error) {
       console.error("Failed to refresh presentation after chat update:", error);
-      toast.error("Chat completed, but slide refresh failed");
+      notify.error("Refresh failed", "Chat completed, but slide refresh failed.");
     }
   };
 
@@ -905,7 +905,7 @@ const Chat = ({
     }
 
     if (!presentationId) {
-      toast.error("Presentation is not ready yet");
+      notify.error("Presentation not ready", "The presentation is not ready yet.");
       return;
     }
 
@@ -1071,7 +1071,7 @@ const Chat = ({
           content: message,
         },
       ]);
-      toast.error(message);
+      notify.error("Chat error", message);
     } finally {
       setActiveMutationToolCount(0);
       if (abortControllerRef.current === streamAbortController) {
