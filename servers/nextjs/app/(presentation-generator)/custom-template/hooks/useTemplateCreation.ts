@@ -139,8 +139,18 @@ export const useTemplateCreation = () => {
             return [];
         }
         return state.fontsData.unavailable_fonts
-            .map(font => font.name)
-            .filter(fontName => !uploadedFonts.some(uploaded => uploaded.fontName === fontName));
+            .map((font) => font.name)
+            .filter(
+                (fontName) =>
+                    !uploadedFonts.some(
+                        (uploaded) =>
+                            uploaded.fontName === fontName ||
+                            uploaded.fontName ===
+                                state.fontsData?.unavailable_fonts.find(
+                                    (f) => f.name === fontName
+                                )?.original_name
+                    )
+            );
     }, [state.fontsData, uploadedFonts]);
 
     // Check if all required fonts are uploaded
