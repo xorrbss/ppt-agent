@@ -11,6 +11,8 @@ services:
       - "1455:1455"
     volumes:
       - ./app_data:/app_data
+      - ./servers/fastapi/templates:/app/servers/fastapi/templates:ro
+      - ./servers/fastapi/utils/internal_http.py:/app/servers/fastapi/utils/internal_http.py:ro
     environment:
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
       - MIGRATE_DATABASE_ON_STARTUP=true

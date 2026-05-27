@@ -521,10 +521,10 @@ def test_get_layout_by_name_returns_model():
 
     async def runner():
         with patch(
-            "templates.get_layout_by_name.get_configured_auth_username",
+            "utils.internal_http.get_configured_auth_username",
             return_value="",
         ), patch(
-            "templates.get_layout_by_name.create_session_token",
+            "utils.internal_http.create_session_token",
             return_value="cookie",
         ), patch(
             "templates.get_layout_by_name.aiohttp.ClientSession",
@@ -543,7 +543,7 @@ def test_get_layout_by_name_raises_on_http_failure():
 
     async def runner():
         with patch(
-            "templates.get_layout_by_name.get_configured_auth_username",
+            "utils.internal_http.get_configured_auth_username",
             return_value="",
         ), patch(
             "templates.get_layout_by_name.aiohttp.ClientSession",
@@ -568,9 +568,13 @@ def test_get_layout_by_name_attach_auth_cookie(monkeypatch):
 
     captured: dict[str, str | None] = {}
 
-    monkeypatch.setattr(tpl_layout_fetcher, "get_configured_auth_username", lambda: "user")
-    monkeypatch.setattr(tpl_layout_fetcher, "create_session_token", lambda _u: "tok123")
-    monkeypatch.setattr(tpl_layout_fetcher, "SESSION_COOKIE_NAME", "sess")
+    monkeypatch.setattr(
+        "utils.internal_http.get_configured_auth_username", lambda: "user"
+    )
+    monkeypatch.setattr(
+        "utils.internal_http.create_session_token", lambda _u: "tok123"
+    )
+    monkeypatch.setattr("utils.internal_http.SESSION_COOKIE_NAME", "sess")
 
     def capture_session(*_a, **_k):
         sess = MagicMock()
