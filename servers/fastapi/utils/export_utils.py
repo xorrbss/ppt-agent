@@ -7,6 +7,7 @@ import uuid
 from pathvalidate import sanitize_filename
 
 from models.presentation_and_path import PresentationAndPath
+from utils.filename_utils import safe_export_basename
 from services.export_task_service import EXPORT_TASK_SERVICE
 from utils.runtime_limits import log_memory
 
@@ -28,7 +29,6 @@ def _build_presentation_export_url(presentation_id: uuid.UUID) -> tuple[str, str
     fastapi_url = _get_next_public_fastapi_url()
     if fastapi_url:
         params["fastapiUrl"] = fastapi_url
-
     return (
         f"{_get_next_public_url().rstrip('/')}/pdf-maker?{urlencode(params)}",
         fastapi_url,
@@ -48,9 +48,10 @@ async def export_presentation(
         export_as=export_as,
     )
     export_url, fastapi_url = _build_presentation_export_url(presentation_id)
+    name = (title or "").strip() or str(uuid.uuid4())
     export_result = await EXPORT_TASK_SERVICE.export_from_url(
         url=export_url,
-        title=sanitize_filename(title or str(uuid.uuid4())),
+        title=safe_export_basename(sanitize_filename(name)),
         export_as=export_as,
         fastapi_url=fastapi_url,
         cookie_header=cookie_header,
@@ -61,7 +62,6 @@ async def export_presentation(
         presentation_id=str(presentation_id),
         export_as=export_as,
     )
-
     return PresentationAndPath(
         presentation_id=presentation_id,
         path=export_result.path,
