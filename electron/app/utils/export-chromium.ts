@@ -1,7 +1,13 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { Browser, detectBrowserPlatform, install } from "@puppeteer/browsers";
+import {
+  Browser,
+  Cache,
+  computeExecutablePath,
+  detectBrowserPlatform,
+  install,
+} from "@puppeteer/browsers";
 import { safeLog } from "./safe-console";
 
 /** Must match the Chrome revision expected by the bundled presentation-export runtime. */
@@ -22,41 +28,83 @@ function resolvePuppeteerCacheRoot(): string {
   return path.join(os.homedir(), ".cache", "puppeteer");
 }
 
-function resolvePuppeteerChromeBaseDir(): string {
-  return path.join(resolvePuppeteerCacheRoot(), "chrome");
+function resolveExportChromeInstallOptions():
+  | { browser: Browser.CHROME; buildId: string; cacheDir: string; platform: NonNullable<ReturnType<typeof detectBrowserPlatform>> }
+  | null {
+  const platform = detectBrowserPlatform();
+  if (!platform) {
+    return null;
+  }
+  return {
+    browser: Browser.CHROME,
+    buildId: EXPORT_CHROME_BUILD_ID,
+    cacheDir: resolvePuppeteerCacheRoot(),
+    platform,
+  };
 }
 
-function getExpectedExecutableRelativePath(): string {
+/** Pre–Chrome-for-Testing cache layouts still present on some machines. */
+function getLegacyExecutableRelativePaths(): string[] {
   if (process.platform === "win32") {
-    return path.join("chrome-win64", "chrome.exe");
+    return [
+      path.join("chrome-win64", "chrome.exe"),
+      path.join("chrome-win32", "chrome.exe"),
+    ];
   }
   if (process.platform === "darwin") {
-    return path.join("chrome-mac", "Chromium.app", "Contents", "MacOS", "Chromium");
+    return [
+      path.join("chrome-mac", "Chromium.app", "Contents", "MacOS", "Chromium"),
+      path.join("chrome-mac-arm64", "Chromium.app", "Contents", "MacOS", "Chromium"),
+      path.join("chrome-mac-x64", "Chromium.app", "Contents", "MacOS", "Chromium"),
+    ];
   }
-  return path.join("chrome-linux64", "chrome");
+  return [path.join("chrome-linux64", "chrome")];
 }
 
-function getChromeRevisionDirectories(): string[] {
-  const chromeBaseDir = resolvePuppeteerChromeBaseDir();
+function resolveLegacyInstalledExportChromiumPath(): string | null {
+  const chromeBaseDir = path.join(resolvePuppeteerCacheRoot(), "chrome");
+  let revisionDirs: string[] = [];
   try {
-    const entries = fs.readdirSync(chromeBaseDir, { withFileTypes: true });
-    return entries
+    revisionDirs = fs
+      .readdirSync(chromeBaseDir, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) => path.join(chromeBaseDir, entry.name));
   } catch {
-    return [];
+    return null;
   }
-}
 
-export function resolveInstalledExportChromiumPath(): string | null {
-  const executableRelativePath = getExpectedExecutableRelativePath();
-  for (const revisionDir of getChromeRevisionDirectories()) {
-    const executablePath = path.join(revisionDir, executableRelativePath);
-    if (fs.existsSync(executablePath)) {
-      return executablePath;
+  const legacyRelativePaths = getLegacyExecutableRelativePaths();
+  for (const revisionDir of revisionDirs) {
+    for (const relativePath of legacyRelativePaths) {
+      const executablePath = path.join(revisionDir, relativePath);
+      if (fs.existsSync(executablePath)) {
+        return executablePath;
+      }
     }
   }
   return null;
+}
+
+export function resolveInstalledExportChromiumPath(): string | null {
+  const options = resolveExportChromeInstallOptions();
+  if (options) {
+    const expectedPath = computeExecutablePath(options);
+    if (fs.existsSync(expectedPath)) {
+      return expectedPath;
+    }
+
+    const cache = new Cache(options.cacheDir);
+    for (const installed of cache.getInstalledBrowsers()) {
+      if (installed.browser !== Browser.CHROME || installed.buildId !== options.buildId) {
+        continue;
+      }
+      if (fs.existsSync(installed.executablePath)) {
+        return installed.executablePath;
+      }
+    }
+  }
+
+  return resolveLegacyInstalledExportChromiumPath();
 }
 
 export function isExportChromiumAvailable(): boolean {
@@ -64,13 +112,51 @@ export function isExportChromiumAvailable(): boolean {
 }
 
 export async function removeBrokenExportChromiumCaches(): Promise<number> {
-  const executableRelativePath = getExpectedExecutableRelativePath();
+  const cacheDir = resolvePuppeteerCacheRoot();
+  const cache = new Cache(cacheDir);
   let removedCount = 0;
-  for (const revisionDir of getChromeRevisionDirectories()) {
-    const executablePath = path.join(revisionDir, executableRelativePath);
-    if (fs.existsSync(executablePath)) {
+
+  for (const installed of cache.getInstalledBrowsers()) {
+    if (installed.browser !== Browser.CHROME) {
       continue;
     }
+    if (fs.existsSync(installed.executablePath)) {
+      continue;
+    }
+    try {
+      await fs.promises.rm(installed.path, { recursive: true, force: true });
+      removedCount += 1;
+      safeLog(`[Chromium] Removed broken cache: ${installed.path}`);
+    } catch {
+      // Best effort cleanup only.
+    }
+  }
+
+  const chromeBaseDir = path.join(cacheDir, "chrome");
+  const legacyRelativePaths = getLegacyExecutableRelativePaths();
+  let revisionDirs: string[] = [];
+  try {
+    revisionDirs = fs
+      .readdirSync(chromeBaseDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => path.join(chromeBaseDir, entry.name));
+  } catch {
+    return removedCount;
+  }
+
+  for (const revisionDir of revisionDirs) {
+    const hasLegacyExecutable = legacyRelativePaths.some((relativePath) =>
+      fs.existsSync(path.join(revisionDir, relativePath))
+    );
+    if (hasLegacyExecutable) {
+      continue;
+    }
+
+    const basename = path.basename(revisionDir);
+    if (basename.includes("-")) {
+      continue;
+    }
+
     try {
       await fs.promises.rm(revisionDir, { recursive: true, force: true });
       removedCount += 1;
@@ -79,6 +165,7 @@ export async function removeBrokenExportChromiumCaches(): Promise<number> {
       // Best effort cleanup only.
     }
   }
+
   return removedCount;
 }
 
@@ -102,27 +189,22 @@ export async function installExportChromium(
     return;
   }
 
-  const platform = detectBrowserPlatform();
-  if (!platform) {
+  const options = resolveExportChromeInstallOptions();
+  if (!options) {
     throw new Error(`Unsupported platform for Chromium export runtime: ${process.platform}-${process.arch}`);
   }
 
-  const cacheDir = resolvePuppeteerCacheRoot();
-  await fs.promises.mkdir(cacheDir, { recursive: true });
+  await fs.promises.mkdir(options.cacheDir, { recursive: true });
 
-  const buildId = EXPORT_CHROME_BUILD_ID;
   onProgress?.({
     phase: "downloading",
     percent: 0,
-    message: `Downloading Chromium ${buildId}…`,
+    message: `Downloading Chromium ${options.buildId}…`,
   });
 
   let lastLoggedPercent = -1;
   await install({
-    browser: Browser.CHROME,
-    buildId,
-    cacheDir,
-    platform,
+    ...options,
     downloadProgressCallback(downloadedBytes, totalBytes) {
       if (totalBytes <= 0) {
         return;
@@ -141,8 +223,9 @@ export async function installExportChromium(
   });
 
   if (!isExportChromiumAvailable()) {
+    const expectedPath = computeExecutablePath(options);
     throw new Error(
-      "Chromium download finished but chrome executable was not found. Check your network connection and try again."
+      `Chromium download finished but chrome executable was not found at ${expectedPath}. Check your network connection and try again.`
     );
   }
 
