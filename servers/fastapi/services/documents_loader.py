@@ -250,7 +250,9 @@ class DocumentsLoader:
         document: str = ""
 
         if load_text:
-            document = await asyncio.to_thread(self._parse_with_liteparse, file_path)
+            is_scanned = await asyncio.to_thread(self._is_scanned_pdf, file_path)
+            dpi = 300 if is_scanned else None
+            document = await asyncio.to_thread(self._parse_with_liteparse, file_path, dpi)
 
         if load_images:
             if temp_dir is None:
@@ -261,6 +263,19 @@ class DocumentsLoader:
             image_paths = await self.get_page_images_from_pdf_async(file_path, temp_dir)
 
         return document, image_paths
+
+    @staticmethod
+    def _is_scanned_pdf(file_path: str, sample_pages: int = 5, threshold: int = 50) -> bool:
+        """Check if a PDF is scanned (image-only) by sampling pages for text content."""
+        try:
+            with pdfplumber.open(file_path) as pdf:
+                total_chars = 0
+                for i, page in enumerate(pdf.pages[:sample_pages]):
+                    text = page.extract_text() or ""
+                    total_chars += len(text.strip())
+                return total_chars < threshold
+        except Exception:
+            return False
 
     async def load_text(self, file_path: str) -> str:
         with open(file_path, "r", encoding="utf-8") as file:
@@ -300,13 +315,14 @@ class DocumentsLoader:
             )
             return self._parse_with_liteparse(converted_path)
 
-    def _parse_with_liteparse(self, file_path: str) -> str:
+    def _parse_with_liteparse(self, file_path: str, dpi: int = None) -> str:
         try:
             LOGGER.info("[DocumentsLoader] LiteParse start file=%s", file_path)
             return self.liteparse_service.parse_to_markdown(
                 file_path,
                 ocr_enabled=True,
                 ocr_language=self._ocr_language,
+                dpi=dpi,
             )
         except (LiteParseError, DocumentConversionError) as exc:
             LOGGER.warning(

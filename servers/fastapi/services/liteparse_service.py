@@ -19,7 +19,7 @@ class LiteParseError(Exception):
 LOGGER = logging.getLogger(__name__)
 _LOG_SNIPPET_LIMIT = 600
 _DEFAULT_DPI = 120
-_DEFAULT_NUM_WORKERS = 1
+_DEFAULT_NUM_WORKERS = max(os.cpu_count() - 2, 1)
 
 
 def _snippet(value: str, limit: int = _LOG_SNIPPET_LIMIT) -> str:
@@ -65,7 +65,7 @@ def _env_int(name: str, default: int, minimum: int, maximum: int) -> int:
 
 
 class LiteParseService:
-    def __init__(self, timeout_seconds: int = 180):
+    def __init__(self, timeout_seconds: int = 600):
         self.timeout_seconds = timeout_seconds
         self.node_binary = os.getenv("LITEPARSE_NODE_BINARY", "node")
         self.dpi = _env_int("LITEPARSE_DPI", _DEFAULT_DPI, minimum=72, maximum=600)
@@ -244,11 +244,13 @@ class LiteParseService:
         file_path: str,
         ocr_enabled: bool = True,
         ocr_language: str = "eng",
+        dpi: int = None,
     ) -> str:
         result = self.parse(
             file_path=file_path,
             ocr_enabled=ocr_enabled,
             ocr_language=ocr_language,
+            dpi=dpi,
         )
         return str(result.get("text") or "")
 
@@ -257,10 +259,13 @@ class LiteParseService:
         file_path: str,
         ocr_enabled: bool = True,
         ocr_language: str = "eng",
+        dpi: int = None,
     ) -> Dict[str, Any]:
         is_ready, reason = self.check_runtime_ready()
         if not is_ready:
             raise LiteParseError(reason)
+
+        effective_dpi = dpi if dpi is not None else self.dpi
 
         command = [
             self.node_binary,
@@ -272,7 +277,7 @@ class LiteParseService:
             "--ocr-language",
             ocr_language,
             "--dpi",
-            str(self.dpi),
+            str(effective_dpi),
             "--num-workers",
             str(self.num_workers),
         ]
@@ -291,7 +296,7 @@ class LiteParseService:
             file_path,
             ocr_enabled,
             ocr_language,
-            self.dpi,
+            effective_dpi,
             self.num_workers,
         )
 
