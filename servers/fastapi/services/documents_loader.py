@@ -288,7 +288,8 @@ class DocumentsLoader:
                 temp_dir,
                 timeout_seconds=self.DECOMPOSE_TIMEOUT_SECONDS,
             )
-            return self._parse_with_liteparse(converted_path)
+            is_scanned = self._is_scanned_pdf(converted_path)
+            return self._parse_with_liteparse(converted_path, dpi=300 if is_scanned else None)
 
         with tempfile.TemporaryDirectory(prefix="office-convert-") as conversion_dir:
             converted_path = self.document_conversion_service.convert_office_to_pdf(
@@ -296,7 +297,8 @@ class DocumentsLoader:
                 conversion_dir,
                 timeout_seconds=self.DECOMPOSE_TIMEOUT_SECONDS,
             )
-            return self._parse_with_liteparse(converted_path)
+            is_scanned = self._is_scanned_pdf(converted_path)
+            return self._parse_with_liteparse(converted_path, dpi=300 if is_scanned else None)
 
     def load_image(self, file_path: str, temp_dir: Optional[str] = None) -> str:
         if temp_dir:
@@ -305,7 +307,7 @@ class DocumentsLoader:
                 temp_dir,
                 timeout_seconds=self.DECOMPOSE_TIMEOUT_SECONDS,
             )
-            return self._parse_with_liteparse(converted_path)
+            return self._parse_with_liteparse(converted_path, dpi=300)
 
         with tempfile.TemporaryDirectory(prefix="image-convert-") as conversion_dir:
             converted_path = self.document_conversion_service.convert_image_to_png(
@@ -313,7 +315,7 @@ class DocumentsLoader:
                 conversion_dir,
                 timeout_seconds=self.DECOMPOSE_TIMEOUT_SECONDS,
             )
-            return self._parse_with_liteparse(converted_path)
+            return self._parse_with_liteparse(converted_path, dpi=300)
 
     def _parse_with_liteparse(self, file_path: str, dpi: int = None) -> str:
         try:
