@@ -491,6 +491,8 @@ def test_presentation_layout_model_surface():
         ],
     )
     assert "From schema" in layout.to_string()
+    with_schema = layout.to_string(with_schema=True)
+    assert '"title": "From schema"' in with_schema
     assert layout.to_presentation_structure().slides == [0]
     assert layout.get_slide_layout_index("sid") == 0
     with pytest.raises(HTTPException):
