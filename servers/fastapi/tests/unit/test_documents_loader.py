@@ -1,5 +1,6 @@
 import asyncio
 import json
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -61,3 +62,49 @@ def test_load_pdf_requires_temp_dir_when_images_are_requested():
 
     assert exc.value.status_code == 400
     assert "temp_dir is required" in exc.value.detail
+
+
+def _make_mock_page(text: str) -> MagicMock:
+    page = MagicMock()
+    page.extract_text.return_value = text
+    return page
+
+
+@patch("services.documents_loader.pdfplumber.open")
+def test_is_scanned_pdf_returns_true_for_empty_pages(mock_open):
+    mock_pdf = MagicMock()
+    mock_pdf.pages = [_make_mock_page(""), _make_mock_page("")]
+    mock_open.return_value.__enter__ = MagicMock(return_value=mock_pdf)
+    mock_open.return_value.__exit__ = MagicMock(return_value=False)
+
+    assert DocumentsLoader._is_scanned_pdf("/tmp/scanned.pdf") is True
+
+
+@patch("services.documents_loader.pdfplumber.open")
+def test_is_scanned_pdf_returns_false_for_text_pages(mock_open):
+    mock_pdf = MagicMock()
+    mock_pdf.pages = [
+        _make_mock_page("Chapter 1: Introduction to calculus"),
+        _make_mock_page("This chapter covers derivatives and integrals"),
+    ]
+    mock_open.return_value.__enter__ = MagicMock(return_value=mock_pdf)
+    mock_open.return_value.__exit__ = MagicMock(return_value=False)
+
+    assert DocumentsLoader._is_scanned_pdf("/tmp/text.pdf") is False
+
+
+@patch("services.documents_loader.pdfplumber.open")
+def test_is_scanned_pdf_threshold_edge_case(mock_open):
+    mock_pdf = MagicMock()
+    mock_pdf.pages = [_make_mock_page("x" * 49)]
+    mock_open.return_value.__enter__ = MagicMock(return_value=mock_pdf)
+    mock_open.return_value.__exit__ = MagicMock(return_value=False)
+
+    assert DocumentsLoader._is_scanned_pdf("/tmp/edge.pdf", threshold=50) is True
+
+
+@patch("services.documents_loader.pdfplumber.open")
+def test_is_scanned_pdf_handles_exception_gracefully(mock_open):
+    mock_open.side_effect = Exception("corrupt file")
+
+    assert DocumentsLoader._is_scanned_pdf("/tmp/corrupt.pdf") is False
