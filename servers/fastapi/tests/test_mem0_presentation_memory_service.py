@@ -1,4 +1,5 @@
 import asyncio
+import os
 import uuid
 from unittest.mock import patch
 
@@ -68,6 +69,11 @@ class TestMem0PresentationMemoryService:
             "os.environ",
             {
                 "MEM0_ENABLED": "true",
+                # This test exercises the LLM-config branch, not the optional
+                # spaCy NER dependency. Disable the spaCy-model guard so the
+                # client initializes even when en_core_web_sm is not installed
+                # (e.g. on Windows dev machines).
+                "MEM0_REQUIRE_SPACY_MODEL": "false",
                 "APP_DATA_DIRECTORY": "/tmp/presenton-test",
                 "OLLAMA_URL": "http://ollama:11434",
                 "OLLAMA_MODEL": "llama3.1:8b",
@@ -80,7 +86,13 @@ class TestMem0PresentationMemoryService:
             client = mem0_oss.get_shared_mem0_client()
 
         assert client is not None
-        assert captured["telemetry_base"].endswith("/mem0/telemetry/oss")
+        # telemetry_base is built with os.path.join, so the separator is
+        # platform-dependent (backslash on Windows). Normalize before the
+        # suffix check so the assertion validates the directory structure on
+        # any OS.
+        assert captured["telemetry_base"].replace(os.sep, "/").endswith(
+            "/mem0/telemetry/oss"
+        )
         assert captured["config"]["llm"]["provider"] == "openai"
         assert captured["config"]["llm"]["config"]["model"] == "llama3.1:8b"
         assert captured["config"]["llm"]["config"]["api_key"] == "ollama"

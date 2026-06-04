@@ -1,4 +1,5 @@
 import asyncio
+import types
 import uuid
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -17,6 +18,16 @@ from tests.conftest import FakeAsyncSession
 
 def _run(coro):
     return asyncio.run(coro)
+
+
+def _fake_request() -> types.SimpleNamespace:
+    # Minimal stand-in for the FastAPI Request passed as request_http;
+    # _build_export_cookie_header only reads headers/cookies/state.
+    return types.SimpleNamespace(
+        headers={},
+        cookies={},
+        state=types.SimpleNamespace(),
+    )
 
 
 def _mock_layout() -> PresentationLayoutModel:
@@ -179,6 +190,7 @@ def test_generate_presentation_sync_rejects_invalid_slide_count(fake_async_sessi
     with pytest.raises(HTTPException) as exc:
         _run(
             presentation_endpoint.generate_presentation_sync(
+                request_http=_fake_request(),
                 request=request,
                 sql_session=fake_async_session,
             )

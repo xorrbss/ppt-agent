@@ -1,4 +1,5 @@
 import asyncio
+import types
 import uuid
 from unittest.mock import AsyncMock, patch
 
@@ -9,6 +10,17 @@ from pydantic import ValidationError
 from api.v1.ppt.endpoints.presentation import generate_presentation_sync
 from models.generate_presentation_request import GeneratePresentationRequest
 from models.presentation_and_path import PresentationPathAndEditPath
+
+
+def _fake_request() -> types.SimpleNamespace:
+    # Minimal stand-in for the FastAPI Request passed as request_http.
+    # _build_export_cookie_header only reads headers.get("cookie"),
+    # cookies.get(...), and request.state.auth_username.
+    return types.SimpleNamespace(
+        headers={},
+        cookies={},
+        state=types.SimpleNamespace(),
+    )
 
 
 class FakeAsyncSession:
@@ -45,7 +57,9 @@ class TestPresentationGenerationAPI:
             new=AsyncMock(return_value=response_payload),
         ) as mock_handler:
             response = asyncio.run(
-                generate_presentation_sync(request, sql_session=FakeAsyncSession())
+                generate_presentation_sync(
+                    _fake_request(), request, sql_session=FakeAsyncSession()
+                )
             )
 
         assert response == response_payload
@@ -70,7 +84,9 @@ class TestPresentationGenerationAPI:
             new=AsyncMock(return_value=response_payload),
         ) as mock_handler:
             response = asyncio.run(
-                generate_presentation_sync(request, sql_session=FakeAsyncSession())
+                generate_presentation_sync(
+                    _fake_request(), request, sql_session=FakeAsyncSession()
+                )
             )
 
         assert response == response_payload
@@ -98,7 +114,9 @@ class TestPresentationGenerationAPI:
 
         with pytest.raises(HTTPException) as exc:
             asyncio.run(
-                generate_presentation_sync(request, sql_session=FakeAsyncSession())
+                generate_presentation_sync(
+                    _fake_request(), request, sql_session=FakeAsyncSession()
+                )
             )
 
         assert exc.value.status_code == 400

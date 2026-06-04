@@ -6,6 +6,10 @@
 // server-side export 'path'. Optionally downloads the produced file over the
 // auth-protected GET <base>/app_data/exports/<basename> static mount.
 //
+// With --async it instead POSTs to .../generate/async and polls
+// GET <base>/api/v1/ppt/presentation/status/<task-id> until the task completes
+// (or fails), respecting --timeout and the progress heartbeat.
+//
 // Requires Node 18+ (uses global fetch). No npm dependencies.
 //
 // Usage:
@@ -15,7 +19,7 @@
 // Common options:
 //   --content <text>         Prompt/content for the deck (required unless --batch)
 //   --batch <file>           File with one topic per line; each line becomes one deck
-//   --slides <n>             n_slides (default 8). Use --slides auto to let the model decide
+//   --slides <n>             n_slides (default 8, max 50). Use --slides auto to let the model decide
 //   --language <str>         language (default "Korean (한국어)")
 //   --template <name>        template id (default "general")
 //   --export <pptx|pdf>      export_as (default pptx)
@@ -25,10 +29,13 @@
 //   --web-search             enable web_search
 //   --no-title               set include_title_slide=false (default true)
 //   --toc                    set include_table_of_contents=true (default false)
-//   --base <url>             backend base URL (default http://127.0.0.1:8000)
+//   --base <url>             backend (API) base URL (default http://127.0.0.1:8000)
+//   --ui-base <url>          UI origin for the printed edit URL (default: --base origin).
+//                            Useful for web/Docker where the UI origin differs from the API --base
 //   --user <u> --password <p>  HTTP Basic creds for web/Docker (omit for Electron DISABLE_AUTH)
 //   --out <dir>              download the produced file into <dir>
-//   --timeout <sec>          per-request timeout in seconds (default 600)
+//   --async                  use the async generate endpoint and poll status to completion
+//   --timeout <sec>          per-request / overall poll timeout in seconds (default 600)
 //   -h, --help               show this help
 //
 // Examples:
@@ -48,12 +55,14 @@ import path from "node:path";
 const TONES = ["default", "casual", "professional", "funny", "educational", "sales_pitch"];
 const VERBOSITIES = ["concise", "standard", "text-heavy"];
 const EXPORTS = ["pptx", "pdf"];
+// Mirror of the server constant MAX_NUMBER_OF_SLIDES (constants/presentation.py).
+const MAX_SLIDES = 50;
 
 // ---------- arg parsing ----------
 
 function parseArgs(argv) {
   // Flags that take no value.
-  const booleans = new Set(["web-search", "no-title", "toc", "help", "h"]);
+  const booleans = new Set(["web-search", "no-title", "toc", "async", "help", "h"]);
   const out = { _: [] };
   for (let i = 0; i < argv.length; i++) {
     const tok = argv[i];
@@ -104,7 +113,7 @@ function printHelpAndExit() {
       "Options:",
       "  --content <text>        prompt/content (required unless --batch)",
       "  --batch <file>          one topic per line",
-      "  --slides <n|auto>       n_slides (default 8)",
+      "  --slides <n|auto>       n_slides (default 8, max 50)",
       '  --language <str>        default "Korean (한국어)"',
       "  --template <name>       default general",
       "  --export <pptx|pdf>     default pptx",
@@ -114,10 +123,12 @@ function printHelpAndExit() {
       "  --web-search            enable web search",
       "  --no-title              include_title_slide=false (default true)",
       "  --toc                   include_table_of_contents=true (default false)",
-      "  --base <url>            default http://127.0.0.1:8000",
+      "  --base <url>            API base URL, default http://127.0.0.1:8000",
+      "  --ui-base <url>         UI origin for edit URL (default: --base origin)",
       "  --user <u> --password <p>  HTTP Basic (omit for Electron)",
       "  --out <dir>             download produced file into <dir>",
-      "  --timeout <sec>         default 600",
+      "  --async                 use async endpoint + poll status",
+      "  --timeout <sec>         per-request / overall poll timeout, default 600",
       "  -h, --help              this help",
     ].join("\n")
   );
@@ -172,6 +183,35 @@ function extractDetail(json, text) {
   return t.length ? t.slice(0, 500) : "(no response body)";
 }
 
+// ---------- progress heartbeat ----------
+
+// Prints an elapsed-seconds line to stderr every ~15s while a long request is in
+// flight, then clears it. Independent of the AbortController timeout. Returns a
+// stop() that clears the interval and erases the heartbeat line (TTY only).
+function startHeartbeat(label = "generating") {
+  const startedAt = Date.now();
+  const isTty = Boolean(process.stderr.isTTY);
+  const emit = () => {
+    const elapsed = Math.round((Date.now() - startedAt) / 1000);
+    const line = `  …${label} (${elapsed}s elapsed)`;
+    if (isTty) {
+      process.stderr.write(`\r${line}`);
+    } else {
+      process.stderr.write(`${line}\n`);
+    }
+  };
+  const timer = setInterval(emit, 15000);
+  // Don't let the heartbeat keep the event loop alive on its own.
+  if (typeof timer.unref === "function") timer.unref();
+  return function stop() {
+    clearInterval(timer);
+    if (isTty) {
+      // Erase the heartbeat line so it doesn't clutter final output.
+      process.stderr.write("\r\x1b[K");
+    }
+  };
+}
+
 // ---------- core generate ----------
 
 async function generateOne(content, opts) {
@@ -185,6 +225,7 @@ async function generateOne(content, opts) {
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
+  const stopHeartbeat = startHeartbeat("generating");
 
   let res;
   try {
@@ -196,12 +237,14 @@ async function generateOne(content, opts) {
     });
   } catch (err) {
     clearTimeout(timer);
+    stopHeartbeat();
     if (err && err.name === "AbortError") {
       throw new Error(`request timed out after ${opts.timeoutMs / 1000}s (--timeout)`);
     }
     throw new Error(`network error reaching ${url}: ${err && err.message ? err.message : err}`);
   }
   clearTimeout(timer);
+  stopHeartbeat();
 
   const { json, text } = await readJsonSafely(res);
 
@@ -222,6 +265,115 @@ async function generateOne(content, opts) {
     throw new Error(`unexpected response (no presentation_id): ${(text || "").slice(0, 500)}`);
   }
   return json; // { presentation_id, path, edit_path }
+}
+
+// ---------- async generate (POST /generate/async + poll GET /status/{id}) ----------
+
+// One-shot fetch with a per-call timeout bounded by `remainingMs` (the overall
+// --timeout budget). Returns { res, json, text }.
+async function fetchWithTimeout(url, init, remainingMs, descr) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), remainingMs);
+  let res;
+  try {
+    res = await fetch(url, { ...init, signal: controller.signal });
+  } catch (err) {
+    clearTimeout(timer);
+    if (err && err.name === "AbortError") {
+      throw new Error(`${descr} timed out (--timeout budget exhausted)`);
+    }
+    throw new Error(`network error reaching ${url}: ${err && err.message ? err.message : err}`);
+  }
+  clearTimeout(timer);
+  const { json, text } = await readJsonSafely(res);
+  return { res, json, text };
+}
+
+function throwForStatus(res, json, text, descr) {
+  const detail = extractDetail(json, text);
+  if (res.status === 428) {
+    throw new Error(`HTTP 428: server needs first-time login setup — ${detail}`);
+  }
+  if (res.status === 401) {
+    throw new Error(
+      `HTTP 401 Unauthorized — ${detail}. Provide --user/--password (web/Docker) or run against an Electron DISABLE_AUTH backend.`
+    );
+  }
+  throw new Error(`${descr} failed HTTP ${res.status}: ${detail}`);
+}
+
+async function generateOneAsync(content, opts) {
+  const headers = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    ...authHeader(opts.user, opts.password),
+  };
+  const body = buildBody(content, opts);
+  const deadline = Date.now() + opts.timeoutMs;
+  const remaining = () => deadline - Date.now();
+
+  // 1) Kick off the async task.
+  const postUrl = `${opts.base}/api/v1/ppt/presentation/generate/async`;
+  const started = await fetchWithTimeout(
+    postUrl,
+    { method: "POST", headers, body: JSON.stringify(body) },
+    Math.max(1, remaining()),
+    "async generate request"
+  );
+  if (!started.res.ok) {
+    throwForStatus(started.res, started.json, started.text, "async generate request");
+  }
+  const taskId = started.json && started.json.id;
+  if (!taskId) {
+    throw new Error(
+      `unexpected async response (no task id): ${(started.text || "").slice(0, 500)}`
+    );
+  }
+
+  // 2) Poll status until completed/error or the --timeout budget runs out.
+  const statusUrl = `${opts.base}/api/v1/ppt/presentation/status/${encodeURIComponent(taskId)}`;
+  const pollIntervalMs = 5000;
+  const stopHeartbeat = startHeartbeat("generating (async)");
+  try {
+    while (true) {
+      const left = remaining();
+      if (left <= 0) {
+        throw new Error(`async generation timed out after ${opts.timeoutMs / 1000}s (--timeout)`);
+      }
+      const poll = await fetchWithTimeout(
+        statusUrl,
+        { method: "GET", headers: { Accept: "application/json", ...authHeader(opts.user, opts.password) } },
+        Math.max(1, left),
+        "status poll"
+      );
+      if (!poll.res.ok) {
+        throwForStatus(poll.res, poll.json, poll.text, "status poll");
+      }
+      const task = poll.json || {};
+      const status = task.status;
+      if (status === "completed") {
+        const data = task.data;
+        if (!data || !data.presentation_id) {
+          throw new Error(
+            `async task completed but had no result data: ${(poll.text || "").slice(0, 500)}`
+          );
+        }
+        return data; // { presentation_id, path, edit_path }
+      }
+      if (status === "error") {
+        const errDetail =
+          task.error && (task.error.detail || JSON.stringify(task.error))
+            ? task.error.detail || JSON.stringify(task.error)
+            : task.message || "(no detail)";
+        throw new Error(`async generation failed: ${errDetail}`);
+      }
+      // pending / in-progress: wait, but never sleep past the deadline.
+      const wait = Math.min(pollIntervalMs, Math.max(1, remaining()));
+      await new Promise((r) => setTimeout(r, wait));
+    }
+  } finally {
+    stopHeartbeat();
+  }
 }
 
 // ---------- download ----------
@@ -288,7 +440,9 @@ async function downloadExport(result, opts) {
 // ---------- orchestration ----------
 
 function reportResult(content, result, opts, savedTo) {
-  const origin = originOf(opts.base);
+  // The edit URL targets the UI origin (--ui-base) when given; otherwise it falls
+  // back to the API --base origin (in Electron/local they are the same).
+  const origin = originOf(opts.uiBase || opts.base);
   const editUrl = result.edit_path
     ? `${origin}${result.edit_path.startsWith("/") ? "" : "/"}${result.edit_path}`
     : "(none)";
@@ -300,7 +454,9 @@ function reportResult(content, result, opts, savedTo) {
 }
 
 async function processTopic(content, opts) {
-  const result = await generateOne(content, opts);
+  const result = opts.asyncMode
+    ? await generateOneAsync(content, opts)
+    : await generateOne(content, opts);
   let savedTo = null;
   if (opts.outDir) {
     savedTo = await downloadExport(result, opts);
@@ -315,6 +471,11 @@ async function main() {
 
   // --- validate / normalize options ---
   const base = (args.base || "http://127.0.0.1:8000").replace(/\/+$/, "");
+  // --ui-base is optional; when given its origin is used for the printed edit URL.
+  const uiBase = args["ui-base"] ? args["ui-base"].replace(/\/+$/, "") : null;
+  if (args["ui-base"] !== undefined && !uiBase) {
+    die(`--ui-base requires a URL value`);
+  }
 
   const exportAs = args.export || "pptx";
   if (!EXPORTS.includes(exportAs)) {
@@ -340,6 +501,11 @@ async function main() {
       if (!Number.isInteger(n) || n <= 0) {
         die(`--slides must be a positive integer or "auto" (got "${args.slides}")`);
       }
+      // Client-side guard matching the server cap (MAX_NUMBER_OF_SLIDES=50) so we
+      // fail fast before any network call.
+      if (n > MAX_SLIDES) {
+        die(`--slides cannot exceed ${MAX_SLIDES} (server cap MAX_NUMBER_OF_SLIDES=${MAX_SLIDES}); got ${n}`);
+      }
       nSlides = n;
     }
   }
@@ -358,6 +524,8 @@ async function main() {
 
   const opts = {
     base,
+    uiBase,
+    asyncMode: Boolean(args.async),
     exportAs,
     nSlides,
     slidesProvided,

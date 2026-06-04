@@ -429,6 +429,10 @@ def test_export_includes_optional_fastapi_param():
     asyncio.run(runner())
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="POSIX file-mode semantics: NTFS/Windows does not implement chmod 0o755/0o644 bits.",
+)
 def test_export_task_output_permissions_are_readable(tmp_path):
     export_dir = tmp_path / "exports"
     export_dir.mkdir(mode=0o700)
