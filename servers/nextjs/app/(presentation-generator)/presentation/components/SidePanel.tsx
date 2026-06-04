@@ -213,7 +213,7 @@ const SidePanel = ({
           >
             <Plus className="w-3.5 h-3.5" />
             <span className="text-[11px] font-normal text-[#000000]">
-              Add Slide
+              슬라이드 추가
             </span>
           </button>
         </div>

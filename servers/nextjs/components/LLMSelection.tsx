@@ -106,18 +106,18 @@ export default function LLMProviderSelection({
         needsOpenWebUIImageUrl ||
         needsOpenAICompatImageConfig,
       text: needsModelSelection
-        ? "Please Select a Model"
+        ? "모델을 선택하세요"
         : needsApiKey
-          ? "Please Enter API Key"
+          ? "API 키를 입력하세요"
           : needsOllamaUrl
-            ? "Please Enter Ollama URL"
+            ? "Ollama URL을 입력하세요"
             : needsComfyUIConfig
-              ? "Please Configure ComfyUI"
+              ? "ComfyUI를 설정하세요"
               : needsOpenWebUIImageUrl
-                ? "Please Enter Open WebUI URL"
+                ? "Open WebUI URL을 입력하세요"
                 : needsOpenAICompatImageConfig
-                  ? "Please Configure Custom Image API"
-                  : "Save Configuration",
+                  ? "사용자 지정 이미지 API를 설정하세요"
+                  : "설정 저장",
       showProgress: false,
     });
   }, [llmConfig]);

@@ -246,7 +246,7 @@ export function OutlineItem({
           className="flex flex-col basis-full gap-2"
         >
           <p className="text-black w-fit text-[10px] font-medium  bg-white border border-[#EDEEEF] rounded-[80px] px-2.5">
-            Slide {index}
+            슬라이드 {index}
           </p>
           {/* Editable Markdown Content */}
           {isStreaming ? (
@@ -273,14 +273,14 @@ export function OutlineItem({
                   value={slideOutline.content || ""}
                   onChange={handleTextareaChange}
                   onBlur={() => setIsEditing(false)}
-                  placeholder="Enter markdown content here..."
+                  placeholder="여기에 마크다운 내용을 입력하세요…"
                   className="min-h-[140px] resize-none overflow-hidden rounded-[8px] border-[#D8D8DF] bg-[#FBFBFC] px-3 py-3 font-mono text-[13px] leading-6 text-[#191919] shadow-none focus-visible:border-[#7A5AF8] focus-visible:ring-2 focus-visible:ring-[#7A5AF8]/20"
                 />
               ) : (
                 <div
                   role="button"
                   tabIndex={0}
-                  aria-label={`Edit slide ${index} markdown`}
+                  aria-label={`슬라이드 ${index} 마크다운 편집`}
                   onClick={() => setIsEditing(true)}
                   onFocus={() => setIsEditing(true)}
                   onKeyDown={(event) => {
@@ -298,7 +298,7 @@ export function OutlineItem({
                     />
                   ) : (
                     <p className="text-sm text-[#6B6B73]">
-                      Empty outline
+                      빈 개요
                     </p>
                   )}
                 </div>
@@ -308,7 +308,7 @@ export function OutlineItem({
         </div>
 
         <div className="hidden group-hover:flex absolute -top-3 -right-3 gap-1 sm:gap-2 items-center">
-          <ToolTip content="Delete Slide">
+          <ToolTip content="슬라이드 삭제">
             <button
               onClick={handleSlideDelete}
               className="p-1.5 sm:p-2 bg-white shadow-md  rounded-full transition-colors"

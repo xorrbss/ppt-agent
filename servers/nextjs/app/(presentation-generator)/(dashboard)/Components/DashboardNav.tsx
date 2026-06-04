@@ -29,29 +29,29 @@ const DashboardNav = () => {
                     {activeTab !== "playground" && activeTab !== "theme" && <Link
                         href="/generate"
                         className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-black text-sm font-medium shadow-sm hover:shadow-md"
-                        aria-label="Create new presentation"
+                        aria-label="새 발표자료 만들기"
                         style={{
                             borderRadius: "48px",
                             background: "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
                         }}
                     >
 
-                        <span className="hidden md:inline">New presentation</span>
-                        <span className="md:hidden">New</span>
+                        <span className="hidden md:inline">새 발표자료</span>
+                        <span className="md:hidden">새로 만들기</span>
                         <ChevronRight className="w-4 h-4" />
                     </Link>}
                     {activeTab === "theme" &&
                         <Link
                             href="/theme?tab=new-theme"
                             className="inline-flex items-center font-inter font-normal gap-2 rounded-xl px-4 py-2.5 text-black text-sm  shadow-sm hover:shadow-md"
-                            aria-label="Create new themes"
+                            aria-label="새 테마 만들기"
                             style={{
                                 borderRadius: "48px",
                                 background: "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
                             }}
                         >
-                            <span className="hidden md:inline">New Themes</span>
-                            <span className="md:hidden">New</span>
+                            <span className="hidden md:inline">새 테마</span>
+                            <span className="md:hidden">새로 만들기</span>
                             <ChevronRight className="w-4 h-4" />
                         </Link>
                     }

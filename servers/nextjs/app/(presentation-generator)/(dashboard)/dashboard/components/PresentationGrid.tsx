@@ -57,7 +57,7 @@ export const PresentationGrid = ({
             onClick={() => window.location.reload()}
             className="text-primary hover:text-primary/80 underline"
           >
-            Try again
+            재시도
           </button>
         </div>
       </div>

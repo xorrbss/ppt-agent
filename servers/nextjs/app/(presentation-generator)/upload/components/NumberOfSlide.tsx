@@ -29,7 +29,7 @@ const NumberOfSlide = ({ value, onValueChange }: { value: string, onValueChange:
                 className="w-[180px] font-instrument_sans font-medium bg-blue-100 border-blue-200 focus-visible:ring-blue-300"
                 data-testid="slides-select"
             >
-                <SelectValue placeholder="Select Slides" />
+                <SelectValue placeholder="슬라이드 선택" />
             </SelectTrigger>
             <SelectContent className="font-instrument_sans">
                 {/* Sticky custom input at the top */}
@@ -61,14 +61,14 @@ const NumberOfSlide = ({ value, onValueChange }: { value: string, onValueChange:
                             placeholder="--"
                             className="h-8 w-16 px-2 text-sm"
                         />
-                        <span className="text-sm font-medium">slides</span>
+                        <span className="text-sm font-medium">슬라이드</span>
                     </div>
                 </div>
 
                 {/* Hidden item to allow SelectValue to render custom selection */}
                 {value && !SLIDE_OPTIONS.includes(value) && (
                     <SelectItem value={value} className="hidden">
-                        {value} slides
+                        슬라이드 {value}개
                     </SelectItem>
                 )}
 
@@ -79,7 +79,7 @@ const NumberOfSlide = ({ value, onValueChange }: { value: string, onValueChange:
                         className="font-instrument_sans text-sm font-medium"
                         role="option"
                     >
-                        {option} slides
+                        슬라이드 {option}개
                     </SelectItem>
                 ))}
             </SelectContent>

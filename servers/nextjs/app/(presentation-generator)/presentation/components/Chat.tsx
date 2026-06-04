@@ -94,7 +94,7 @@ const suggestions: { id: string; icon: ReactNode; suggestion: string }[] = [
         </defs>
       </svg>
     ),
-    suggestion: "Generate a full presentation from my topic",
+    suggestion: "주제로 발표자료 전체 생성하기",
   },
   {
     id: "improve",
@@ -146,7 +146,7 @@ const suggestions: { id: string; icon: ReactNode; suggestion: string }[] = [
         </defs>
       </svg>
     ),
-    suggestion: "Improve this slide content",
+    suggestion: "이 슬라이드 내용 개선하기",
   },
   {
     id: "rewrite",
@@ -173,7 +173,7 @@ const suggestions: { id: string; icon: ReactNode; suggestion: string }[] = [
         />
       </svg>
     ),
-    suggestion: "Rewrite this content professionally",
+    suggestion: "이 내용을 전문적으로 다시 작성하기",
   },
   {
     id: "notes",
@@ -212,7 +212,7 @@ const suggestions: { id: string; icon: ReactNode; suggestion: string }[] = [
         />
       </svg>
     ),
-    suggestion: "Add speaker notes to this slide",
+    suggestion: "이 슬라이드에 발표자 노트 추가하기",
   },
 ];
 
@@ -275,16 +275,16 @@ const AssistantMarker = () => (
 );
 
 const TOOL_LABELS: Record<string, string> = {
-  getPresentationOutline: "Outline reader",
-  searchSlides: "Slide search",
-  getSlideAtIndex: "Slide reader",
-  getPresentationThemeCatalog: "Theme catalog",
-  getAvailableLayouts: "Layout finder",
-  getContentSchemaFromLayoutId: "Schema checker",
-  generateAssets: "Asset generator",
-  saveSlide: "Slide saver",
-  deleteSlide: "Slide remover",
-  setPresentationTheme: "Theme applier",
+  getPresentationOutline: "개요 읽기",
+  searchSlides: "슬라이드 검색",
+  getSlideAtIndex: "슬라이드 읽기",
+  getPresentationThemeCatalog: "테마 카탈로그",
+  getAvailableLayouts: "레이아웃 찾기",
+  getContentSchemaFromLayoutId: "스키마 확인",
+  generateAssets: "에셋 생성",
+  saveSlide: "슬라이드 저장",
+  deleteSlide: "슬라이드 삭제",
+  setPresentationTheme: "테마 적용",
 };
 
 const MUTATING_TOOLS = new Set(["saveSlide", "deleteSlide", "setPresentationTheme"]);
@@ -309,37 +309,37 @@ const humanizeTraceMessage = (message: string, tool?: string) => {
 
   const lower = trimmed.toLowerCase();
   if (lower === "reading deck context") {
-    return "Reviewing your presentation context.";
+    return "발표자료 맥락을 검토하는 중입니다.";
   }
   if (lower === "reading the presentation outline") {
-    return "Reading the presentation outline.";
+    return "발표자료 개요를 읽는 중입니다.";
   }
   if (lower === "searching relevant slides") {
-    return "Searching slides for relevant content.";
+    return "관련 내용을 슬라이드에서 검색하는 중입니다.";
   }
   if (lower === "opening the requested slide") {
-    return "Opening the selected slide.";
+    return "선택한 슬라이드를 여는 중입니다.";
   }
   if (lower === "checking available themes") {
-    return "Checking available color themes.";
+    return "사용 가능한 색상 테마를 확인하는 중입니다.";
   }
   if (lower === "checking available layouts") {
-    return "Checking available layouts.";
+    return "사용 가능한 레이아웃을 확인하는 중입니다.";
   }
   if (lower === "checking the layout schema") {
-    return "Validating the slide schema.";
+    return "슬라이드 스키마를 검증하는 중입니다.";
   }
   if (lower === "generating slide assets") {
-    return "Generating images and icons.";
+    return "이미지와 아이콘을 생성하는 중입니다.";
   }
   if (lower === "saving the slide") {
-    return "Saving slide updates.";
+    return "슬라이드 변경 사항을 저장하는 중입니다.";
   }
   if (lower === "deleting the slide") {
-    return "Deleting the slide.";
+    return "슬라이드를 삭제하는 중입니다.";
   }
   if (lower === "applying presentation theme") {
-    return "Applying the selected theme.";
+    return "선택한 테마를 적용하는 중입니다.";
   }
   if (lower.startsWith("using tools:")) {
     const toolNames = trimmed
@@ -349,18 +349,18 @@ const humanizeTraceMessage = (message: string, tool?: string) => {
       .filter(Boolean)
       .map((entry) => getToolLabel(entry));
     if (toolNames.length === 0) {
-      return "Planning tool steps.";
+      return "도구 사용 단계를 계획하는 중입니다.";
     }
-    return `Planning tools: ${toolNames.join(", ")}.`;
+    return `도구 사용 계획: ${toolNames.join(", ")}.`;
   }
   if (lower.includes("found requested data")) {
     if (tool === "getSlideAtIndex") {
-      return "Found the requested slide details.";
+      return "요청한 슬라이드 정보를 찾았습니다.";
     }
     if (tool === "getPresentationOutline") {
-      return "Found the requested outline details.";
+      return "요청한 개요 정보를 찾았습니다.";
     }
-    return "Found the requested information.";
+    return "요청한 정보를 찾았습니다.";
   }
   if (lower.endsWith("completed.")) {
     return trimmed;
@@ -433,7 +433,7 @@ const formatTraceActivity = (
 
   if (trace.tool && trace.status === "start") {
     return {
-      label: `Running ${getToolLabel(trace.tool)}...`,
+      label: `${getToolLabel(trace.tool)} 실행 중...`,
       kind: trace.kind,
       round: trace.round,
       tool: trace.tool,
@@ -443,7 +443,7 @@ const formatTraceActivity = (
 
   if (trace.tool && trace.status === "success") {
     return {
-      label: `${getToolLabel(trace.tool)} completed.`,
+      label: `${getToolLabel(trace.tool)} 완료.`,
       kind: trace.kind,
       round: trace.round,
       tool: trace.tool,
@@ -453,7 +453,7 @@ const formatTraceActivity = (
 
   if (trace.tool && trace.status === "error") {
     return {
-      label: `${getToolLabel(trace.tool)} failed.`,
+      label: `${getToolLabel(trace.tool)} 실패.`,
       kind: trace.kind,
       round: trace.round,
       tool: trace.tool,
@@ -467,7 +467,7 @@ const formatTraceActivity = (
     trace.tools.length
   ) {
     return {
-      label: `Planning tools: ${trace.tools
+      label: `도구 사용 계획: ${trace.tools
         .map((tool) => getToolLabel(tool))
         .join(", ")}.`,
       kind: trace.kind,
@@ -592,8 +592,8 @@ const Chat = ({
         const detail =
           error instanceof Error
             ? error.message
-            : "Could not load previous chat";
-        notify.error("Could not load chat", detail);
+            : "이전 대화를 불러오지 못했습니다";
+        notify.error("대화를 불러올 수 없습니다", detail);
       } finally {
         if (!cancelled) {
           setIsHistoryLoading(false);
@@ -780,7 +780,7 @@ const Chat = ({
       await onPresentationChanged();
     } catch (error) {
       console.error("Failed to refresh presentation after tool mutation:", error);
-      notify.error("Refresh failed", "Slides were saved, but refresh failed.");
+      notify.error("새로고침 실패", "슬라이드는 저장되었지만 새로고침에 실패했습니다.");
     } finally {
       refreshInFlightRef.current = false;
       if (refreshQueuedRef.current) {
@@ -807,7 +807,7 @@ const Chat = ({
       await onPresentationChanged();
     } catch (error) {
       console.error("Failed to refresh presentation after chat update:", error);
-      notify.error("Refresh failed", "Chat completed, but slide refresh failed.");
+      notify.error("새로고침 실패", "대화는 완료되었지만 슬라이드 새로고침에 실패했습니다.");
     }
   };
 
@@ -905,7 +905,7 @@ const Chat = ({
     }
 
     if (!presentationId) {
-      notify.error("Presentation not ready", "The presentation is not ready yet.");
+      notify.error("발표자료가 준비되지 않았습니다", "발표자료가 아직 준비되지 않았습니다.");
       return;
     }
 
@@ -1044,7 +1044,7 @@ const Chat = ({
       }
 
       const message =
-        error instanceof Error ? error.message : "Failed to send chat message";
+        error instanceof Error ? error.message : "메시지를 전송하지 못했습니다";
 
       setMessages((previous) =>
         previous.map((entry) =>
@@ -1071,7 +1071,7 @@ const Chat = ({
           content: message,
         },
       ]);
-      notify.error("Chat error", message);
+      notify.error("대화 오류", message);
     } finally {
       setActiveMutationToolCount(0);
       if (abortControllerRef.current === streamAbortController) {
@@ -1124,12 +1124,12 @@ const Chat = ({
                 fill="#7A5AF8"
               />
             </svg>
-            AI Assistant
+            AI 어시스턴트
           </h4>
           {isSending && (
             <span className="inline-flex items-center gap-1 rounded-full bg-[#F4F3FF] px-2 py-0.5 text-[10px] font-medium text-[#6941C6]">
               <Loader2 className="h-2.5 w-2.5 animate-spin" />
-              Live
+              실시간
             </span>
           )}
         </div>
@@ -1138,8 +1138,8 @@ const Chat = ({
           onClick={resetChat}
           disabled={isSending || isHistoryLoading}
           className="rounded-full p-1 text-[#8C8C8C] transition-colors hover:bg-[#F7F7F7] hover:text-[#191919] disabled:cursor-not-allowed disabled:opacity-50"
-          aria-label="Reset chat"
-          title="Reset chat"
+          aria-label="대화 초기화"
+          title="대화 초기화"
         >
           <RefreshCw className="h-4 w-4" />
         </button>
@@ -1149,13 +1149,13 @@ const Chat = ({
         {isHistoryLoading && messages.length === 0 ? (
           <div className="flex items-center justify-center py-8 text-sm text-[#99A1AF]">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Loading chat…
+            대화 불러오는 중…
           </div>
         ) : messages.length === 0 ? (
           <>
             <div>
               <h4 className="mb-2 text-[10px] font-normal leading-[15px] tracking-[0.367px] text-[#99A1AF]">
-                SUGGESTIONS
+                추천
               </h4>
               <div className="flex flex-col gap-1.5">
                 {suggestions.map((suggestion) => (
@@ -1238,7 +1238,7 @@ const Chat = ({
                     <div className="text-sm font-normal leading-5 text-[#535862]">
                       {isSending && message.role === "assistant"
                         ? message.activity?.[message.activity.length - 1]
-                            ?.label || "Working on it..."
+                            ?.label || "작업 중입니다..."
                         : ""}
                     </div>
                   )}
@@ -1254,7 +1254,7 @@ const Chat = ({
                         ) : (
                           <ChevronRight className="h-3 w-3" />
                         )}
-                        <span>Thinking</span>
+                        <span>생각 중</span>
                         {message.activity.some(
                           (item) => item.state === "running"
                         ) && (
@@ -1280,7 +1280,7 @@ const Chat = ({
                           {message.toolCalls &&
                             message.toolCalls.length > 0 && (
                               <div className="pt-0.5 text-[11px] text-[#98A2B3]">
-                                Tools called: {message.toolCalls.join(", ")}
+                                호출된 도구: {message.toolCalls.join(", ")}
                               </div>
                             )}
                         </div>
@@ -1313,7 +1313,7 @@ const Chat = ({
           disabled={isSending || isHistoryLoading}
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Improve your slides..."
+          placeholder="슬라이드를 개선해 보세요..."
           aria-invalid={Boolean(errorMessage)}
         />
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
@@ -1322,8 +1322,8 @@ const Chat = ({
               type="button"
               disabled
               className="inline-flex h-[28px] items-center rounded-[64px] border border-[#EDEEEF] bg-white px-3 py-1 opacity-50"
-              aria-label="Attach files"
-              title="Attachments are not supported yet"
+              aria-label="파일 첨부"
+              title="첨부 파일은 아직 지원되지 않습니다"
             >
               <Plus className="h-3 w-3 text-black" />
             </button>
@@ -1337,16 +1337,16 @@ const Chat = ({
                   : "border-[#E5E7EB] bg-white text-[#667085]"
               } disabled:cursor-not-allowed disabled:opacity-50`}
               aria-label={
-                isFollowAgentEnabled ? "Disable follow AI mode" : "Enable follow AI mode"
+                isFollowAgentEnabled ? "AI 따라가기 끄기" : "AI 따라가기 켜기"
               }
               title={
                 isFollowAgentEnabled
-                  ? "Follow AI is on: auto-jump to active slide"
-                  : "Follow AI is off"
+                  ? "AI 따라가기 켜짐: 작업 중인 슬라이드로 자동 이동"
+                  : "AI 따라가기 꺼짐"
               }
             >
               <LocateFixed className="h-3 w-3" />
-              <span>{isFollowAgentEnabled ? "Following" : "Follow AI"}</span>
+              <span>{isFollowAgentEnabled ? "따라가는 중" : "AI 따라가기"}</span>
             </button>
           </div>
           <div className="ml-auto flex items-center gap-2">
@@ -1355,11 +1355,11 @@ const Chat = ({
                 type="button"
                 onClick={stopStreaming}
                 className="flex items-center gap-1.5 whitespace-nowrap rounded-[34px] border border-[#E4E7EC] bg-white px-3 py-2 text-sm font-medium text-[#344054] transition-colors hover:bg-[#F9FAFB]"
-                aria-label="Stop chat response"
+                aria-label="응답 중지"
               >
                 <Loader2 className="h-3 w-3 animate-spin text-[#667085]" aria-hidden="true" />
                 <Square className="h-3 w-3 fill-current" aria-hidden="true" />
-                Stop
+                중지
               </button>
             ) : (
               <button
@@ -1373,7 +1373,7 @@ const Chat = ({
                 }}
               >
                 <Send className="h-3 w-3 text-[#191919]" />
-                Send
+                전송
               </button>
             )}
           </div>

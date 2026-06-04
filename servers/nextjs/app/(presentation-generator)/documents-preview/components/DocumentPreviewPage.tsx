@@ -131,7 +131,7 @@ const DocumentsPreviewPage: React.FC = () => {
         });
       } catch (error) {
         console.error("Error reading files:", error);
-        notify.error("Could not read document", "Failed to read document content.");
+        notify.error("문서를 읽을 수 없습니다", "문서 내용을 불러오지 못했습니다.");
       }
       setDownloadingDocuments([]);
     }
@@ -140,7 +140,7 @@ const DocumentsPreviewPage: React.FC = () => {
   const handleCreatePresentation = async () => {
     try {
       setShowLoading({
-        message: "Generating presentation outline...",
+        message: "발표자료 개요를 생성하는 중…",
         show: true,
         duration: 40,
         progress: true,
@@ -170,9 +170,9 @@ const DocumentsPreviewPage: React.FC = () => {
       router.replace("/outline");
     } catch (error: any) {
       console.error("Error in radar presentation creation:", error);
-      notify.error("Creation failed", error.message || "Something went wrong while creating the presentation.");
+      notify.error("생성 실패", error.message || "발표자료를 생성하는 중 문제가 발생했습니다.");
       setShowLoading({
-        message: "Error in radar presentation creation.",
+        message: "발표자료 생성 중 오류가 발생했습니다.",
         show: true,
         duration: 10,
         progress: false,
@@ -207,7 +207,7 @@ const DocumentsPreviewPage: React.FC = () => {
       <div className="h-full mr-4">
         <div className="overflow-y-auto custom_scrollbar h-full">
           <div className="h-full w-full max-w-full flex flex-col mb-5">
-            <h1 className="text-2xl font-medium mb-5">Content:</h1>
+            <h1 className="text-2xl font-medium mb-5">내용:</h1>
             {downloadingDocuments.includes(selectedDocument) ? (
               <Skeleton className="w-full h-full" />
             ) : (
@@ -235,7 +235,7 @@ const DocumentsPreviewPage: React.FC = () => {
 
         {documentKeys.length > 0 && (
           <div className="mt-8">
-            <p className="text-xs mt-2 text-[#2E2E2E] opacity-70">DOCUMENTS</p>
+            <p className="text-xs mt-2 text-[#2E2E2E] opacity-70">문서</p>
             <div className="flex flex-col gap-2 mt-6">
               {documentKeys.map((key: string) => (
                 <div
@@ -247,7 +247,7 @@ const DocumentsPreviewPage: React.FC = () => {
                   <img
                     className="h-6 w-6 border border-gray-200"
                     src={getIconFromFile(key)}
-                    alt="Document icon"
+                    alt="문서 아이콘"
                   />
                   <span className="text-sm h-6 text-[#2E2E2E] overflow-hidden">
                     {key.split("/").pop() ?? "file.txt"}
@@ -273,7 +273,7 @@ const DocumentsPreviewPage: React.FC = () => {
       <div className="flex mt-6 gap-4 font-instrument_sans">
         {!isOpen && (
           <div className="fixed left-4 top-1/2 -translate-y-1/2 z-50">
-            <ToolTip content="Open Panel">
+            <ToolTip content="패널 열기">
               <Button
                 onClick={() => setIsOpen(true)}
                 className="bg-[#5146E5] text-white p-3 shadow-lg"
@@ -295,7 +295,7 @@ const DocumentsPreviewPage: React.FC = () => {
             onClick={handleCreatePresentation}
             className="flex items-center gap-2 px-8 py-6 rounded-sm text-md bg-[#5146E5] hover:bg-[#5146E5]/90"
           >
-            <span className="text-white font-semibold">Next</span>
+            <span className="text-white font-semibold">다음</span>
             <ChevronRight />
           </Button>
         </div>

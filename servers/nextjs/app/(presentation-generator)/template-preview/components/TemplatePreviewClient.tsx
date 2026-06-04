@@ -54,16 +54,16 @@ const GroupLayoutPreview = () => {
     if (!customTemplateId) return;
 
     const confirmed = window.confirm(
-      "Are you sure you want to delete this template? This action cannot be undone."
+      "이 템플릿을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다."
     );
     if (!confirmed) return;
 
     const success = await TemplateService.deleteCustomTemplate(customTemplateId);
     if (success.success) {
-      notify.success("Template deleted", "The template was deleted successfully.");
+      notify.success("템플릿 삭제됨", "템플릿이 성공적으로 삭제되었습니다.");
       router.push("/templates");
     } else {
-      notify.error("Could not delete template", "Something went wrong while deleting the template.");
+      notify.error("템플릿을 삭제할 수 없습니다", "템플릿을 삭제하는 중 문제가 발생했습니다.");
     }
   };
 
@@ -73,7 +73,7 @@ const GroupLayoutPreview = () => {
         <Header />
         <div className="flex items-center justify-center py-24">
           <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-          <span className="ml-3 text-gray-600">Compiling templates...</span>
+          <span className="ml-3 text-gray-600">템플릿 컴파일 중…</span>
         </div>
       </div>
     );
@@ -84,11 +84,11 @@ const GroupLayoutPreview = () => {
       <div className="min-h-screen bg-gray-50">
         <Header />
         <div className="flex flex-col items-center justify-center py-24">
-          <h2 className="text-2xl font-bold text-red-600 mb-4">Error loading template</h2>
+          <h2 className="text-2xl font-bold text-red-600 mb-4">템플릿을 불러오는 중 오류가 발생했습니다</h2>
           <p className="text-gray-600 mb-4">{customError}</p>
           <Button onClick={() => router.push("/templates")}>
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Templates
+            템플릿으로 돌아가기
           </Button>
         </div>
       </div>
@@ -104,11 +104,11 @@ const GroupLayoutPreview = () => {
         <Header />
         <div className="flex flex-col items-center justify-center py-24">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            Template not found
+            템플릿을 찾을 수 없습니다
           </h2>
           <Button onClick={() => router.push("/templates")}>
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Templates
+            템플릿으로 돌아가기
           </Button>
         </div>
       </div>
@@ -145,7 +145,7 @@ const GroupLayoutPreview = () => {
                   className="flex items-center gap-2 border-red-200 text-red-700 hover:bg-red-50"
                 >
                   <Trash2 className="w-4 h-4" />
-                  Delete Template
+                  템플릿 삭제
                 </Button>
               </div>
             )}
@@ -156,7 +156,7 @@ const GroupLayoutPreview = () => {
               <h1 className="text-[64px] font-bold text-gray-900">{templateName}</h1>
               {isCustom && (
                 <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-sm">
-                  Custom
+                  사용자 지정
                 </span>
               )}
             </div>

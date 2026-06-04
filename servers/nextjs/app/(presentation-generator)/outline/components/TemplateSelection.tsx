@@ -103,7 +103,7 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = memo(function Templa
       return (
         <div className="flex items-center justify-center py-12 font-syne">
           <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-          <span className="ml-3 text-gray-600">Loading custom templates...</span>
+          <span className="ml-3 text-gray-600">사용자 정의 템플릿을 불러오는 중…</span>
         </div>
       );
     }
@@ -145,12 +145,12 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = memo(function Templa
     <div className="space-y-[30px] mb-4">
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-base font-semibold text-gray-900 font-syne">Custom</h3>
+          <h3 className="text-base font-semibold text-gray-900 font-syne">사용자 정의</h3>
         </div>
         {customTemplateCards}
       </div>
       <div>
-        <h3 className="text-base font-semibold text-gray-900 mb-3 font-syne">In Built</h3>
+        <h3 className="text-base font-semibold text-gray-900 mb-3 font-syne">기본 제공</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {builtInTemplateCards}
         </div>

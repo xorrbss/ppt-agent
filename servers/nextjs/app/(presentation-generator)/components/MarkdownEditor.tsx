@@ -35,7 +35,7 @@ export default function MarkdownEditor({ content, onChange }: { content: string;
             <EditorContent
                 className="text-sm sm:text-base outline-none resize-none min-h-[60px] prose prose-sm max-w-none"
                 editor={editor}
-                placeholder="Enter markdown content here..."
+                placeholder="여기에 마크다운 내용을 입력하세요..."
             />
         </div>
     );

@@ -32,11 +32,11 @@ export const SlidePreviewSection: React.FC<SlidePreviewSectionProps> = ({
                                 <Images className="w-6 h-6 text-[#7A5AF8]" />
                             </div>
                             <div>
-                                <h2 className="text-xl font-semibold text-[#111827]">Slide Preview</h2>
+                                <h2 className="text-xl font-semibold text-[#111827]">슬라이드 미리보기</h2>
                                 <p className="text-sm text-[#6B7280] mt-0.5">
-                                    {slideCount} slide{slideCount !== 1 ? 's' : ''} ready
+                                    슬라이드 {slideCount}개 준비됨
                                     {fontCount > 0 && (
-                                        <> · {fontCount} font{fontCount !== 1 ? 's' : ''} applied</>
+                                        <> · 글꼴 {fontCount}개 적용됨</>
                                     )}
                                 </p>
                             </div>
@@ -74,7 +74,7 @@ export const SlidePreviewSection: React.FC<SlidePreviewSectionProps> = ({
                 <div className="px-6 py-5 border-t border-[#F3F4F6] bg-gradient-to-r from-[#FAFAFA] to-white">
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                         <p className="text-sm text-[#6B7280] max-w-md text-center sm:text-left">
-                            Ready to generate your template. Each slide will be converted to a reusable React component.
+                            템플릿을 생성할 준비가 되었습니다. 각 슬라이드는 재사용 가능한 React 컴포넌트로 변환됩니다.
                         </p>
                         <Button
                             size="lg"
@@ -91,12 +91,12 @@ export const SlidePreviewSection: React.FC<SlidePreviewSectionProps> = ({
                             {isLoading ? (
                                 <>
                                     <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                                    Starting...
+                                    시작하는 중…
                                 </>
                             ) : (
                                 <>
 
-                                    Generate Template
+                                    템플릿 생성
                                     <ChevronRight className="w-4 h-4 ml-1" />
                                 </>
                             )}

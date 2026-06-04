@@ -119,7 +119,7 @@ const UploadPage = () => {
   const [files, setFiles] = useState<File[]>([]);
   const [config, setConfig] = useState<PresentationConfig>({
     slides: null,
-    language: LanguageType.Auto,
+    language: LanguageType.Korean,
     prompt: "",
     tone: ToneType.Default,
     verbosity: VerbosityType.Standard,
@@ -206,9 +206,9 @@ const UploadPage = () => {
       return true;
     } catch (error: any) {
       notify.error(
-        "Image provider unavailable",
+        "이미지 제공자에 연결할 수 없습니다",
         error?.message ||
-        `Unable to reach ${selectedProvider} right now. Please check your API key/settings and try again.`
+        `현재 ${selectedProvider}에 연결할 수 없습니다. API 키와 설정을 확인한 후 다시 시도해 주세요.`
       );
       return false;
     }
@@ -221,19 +221,19 @@ const UploadPage = () => {
   const validateConfiguration = (): boolean => {
     if (!config.language) {
       trackUploadValidationFailure("language_missing");
-      notify.warning("Language required", "Please select a language.");
+      notify.warning("언어를 선택해 주세요", "언어를 선택해 주세요.");
       return false;
     }
 
     if (files.length > 0 && config.language === LanguageType.Auto) {
       trackUploadValidationFailure("language_auto_with_documents");
-      notify.warning("Language required", "Please choose a language before processing uploaded documents.");
+      notify.warning("언어를 선택해 주세요", "업로드한 문서를 처리하기 전에 언어를 선택해 주세요.");
       return false;
     }
 
     if (!config.prompt.trim() && files.length === 0) {
       trackUploadValidationFailure("prompt_or_document_missing");
-      notify.warning("Input required", "Provide a prompt or upload at least one document.");
+      notify.warning("입력이 필요합니다", "프롬프트를 입력하거나 문서를 하나 이상 업로드해 주세요.");
       return false;
     }
     return true;
@@ -272,10 +272,10 @@ const UploadPage = () => {
   const handleDocumentProcessing = async () => {
     setLoadingState({
       isLoading: true,
-      message: "Processing documents...",
+      message: "문서를 처리하는 중…",
       showProgress: true,
       duration: 90,
-      extra_info: files.length > 0 ? "It might take a few minutes for large documents." : "",
+      extra_info: files.length > 0 ? "용량이 큰 문서는 몇 분 정도 걸릴 수 있습니다." : "",
     });
 
     let documents = [];
@@ -319,7 +319,7 @@ const UploadPage = () => {
   const handleDirectPresentationGeneration = async () => {
     setLoadingState({
       isLoading: true,
-      message: "Generating outlines...",
+      message: "개요를 생성하는 중…",
       showProgress: true,
       duration: 30,
     });
@@ -364,8 +364,8 @@ const UploadPage = () => {
       showProgress: false,
     });
     notify.error(
-      "Generation failed",
-      error.message || "Something went wrong while starting your presentation."
+      "생성에 실패했습니다",
+      error.message || "발표자료를 시작하는 중 문제가 발생했습니다."
     );
   };
 
@@ -398,7 +398,7 @@ const UploadPage = () => {
           </div>
         </div>
         <div className="p-4 ">
-          <h3 className="text-sm font-medium text-[#333333] mb-2">Attachments (optional)</h3>
+          <h3 className="text-sm font-medium text-[#333333] mb-2">첨부파일 (선택)</h3>
           <SupportingDoc
             files={[...files]}
             onFilesChange={setFiles}
@@ -413,7 +413,7 @@ const UploadPage = () => {
             }}
             className="w-fit mr-0 ml-auto rounded-[28px] flex items-center justify-center py-5 px-4  text-[#101323] font-syne font-semibold text-xs  "
           >
-            <span>Get Started</span>
+            <span>시작하기</span>
             <ChevronRight className="!w-5 !h-5 " />
           </Button>
         </div>

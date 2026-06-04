@@ -90,15 +90,15 @@ export default function OpenAICompatibleImageFields({
         setModels([]);
         setModelsChecked(true);
         notify.error(
-          "Could not load models",
-          "The server could not list models. Check your API key or endpoint and try again."
+          "모델을 불러올 수 없습니다",
+          "서버에서 모델 목록을 가져오지 못했습니다. API 키 또는 엔드포인트를 확인한 후 다시 시도하세요."
         );
       }
     } catch (error) {
       console.error("Error fetching models:", error);
       notify.error(
-        "Could not load models",
-        "Something went wrong while contacting the provider. Check your network and try again."
+        "모델을 불러올 수 없습니다",
+        "제공자에 연결하는 중 문제가 발생했습니다. 네트워크를 확인한 후 다시 시도하세요."
       );
       setModels([]);
       setModelsChecked(true);
@@ -117,14 +117,14 @@ export default function OpenAICompatibleImageFields({
       <div className="flex shrink-0 flex-col items-end gap-4">
         <div className="relative flex w-[222px] min-w-0 max-w-full shrink-0 flex-col items-end justify-end">
           <div className="flex w-full flex-col justify-start">
-            <label className="mb-2 block text-sm font-medium text-gray-700">Image API key</label>
+            <label className="mb-2 block text-sm font-medium text-gray-700">이미지 API 키</label>
             <div className="relative">
               <input
                 type={showApiKey ? "text" : "password"}
                 value={apiKey}
                 onChange={(e) => onApiKeyChange(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-2 py-3 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                placeholder="Key for your image endpoint"
+                placeholder="이미지 엔드포인트용 키"
               />
               <button
                 type="button"
@@ -139,7 +139,7 @@ export default function OpenAICompatibleImageFields({
               value={baseUrl}
               onChange={(e) => onBaseUrlChange(e.target.value)}
               className="mt-2 w-full rounded-lg border border-gray-300 px-2 py-3 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-              placeholder="Base URL (include /v1)"
+              placeholder="기본 URL (/v1 포함)"
             />
           </div>
           {(!modelsChecked || (modelsChecked && models.length === 0)) && (
@@ -156,10 +156,10 @@ export default function OpenAICompatibleImageFields({
               {modelsLoading ? (
                 <span className="flex items-center justify-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Checking for models...
+                  모델 확인 중…
                 </span>
               ) : (
-                "Check models"
+                "모델 확인"
               )}
             </button>
           )}
@@ -168,7 +168,7 @@ export default function OpenAICompatibleImageFields({
         {modelsChecked && models.length > 0 ? (
           <div className="w-[222px]">
             <div>
-              <label className="mb-3 block text-sm font-medium text-gray-700">Select image model</label>
+              <label className="mb-3 block text-sm font-medium text-gray-700">이미지 모델 선택</label>
               <div className="w-full">
                 <Popover open={openModelSelect} onOpenChange={setOpenModelSelect}>
                   <PopoverTrigger asChild>
@@ -179,16 +179,16 @@ export default function OpenAICompatibleImageFields({
                       className="flex h-12 w-full justify-between rounded-lg border border-gray-300 px-4 py-4 outline-none transition-colors hover:border-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                     >
                       <span className="truncate text-sm font-medium text-gray-900">
-                        {model || "Select a model"}
+                        {model || "모델 선택"}
                       </span>
                       <ChevronUp className="h-4 w-4 text-gray-500" />
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="p-0" align="start" style={{ width: "var(--radix-popover-trigger-width)" }}>
                     <Command>
-                      <CommandInput placeholder="Search models..." />
+                      <CommandInput placeholder="모델 검색…" />
                       <CommandList>
-                        <CommandEmpty>No model found.</CommandEmpty>
+                        <CommandEmpty>모델을 찾을 수 없습니다.</CommandEmpty>
                         <CommandGroup>
                           {models.map((m) => (
                             <CommandItem
@@ -225,18 +225,18 @@ export default function OpenAICompatibleImageFields({
     <div className="w-full space-y-6">
       <p className="-mt-2 mb-2 flex items-center gap-2 text-sm text-gray-500">
         <span className="block h-1 w-1 rounded-full bg-gray-400" />
-        Use an endpoint that supports OpenAI-style{" "}
-        <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">/v1/images/generations</code>. Include{" "}
-        <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">/v1</code> in the URL.
+        OpenAI 방식의{" "}
+        <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">/v1/images/generations</code>을(를) 지원하는 엔드포인트를 사용하세요. URL에{" "}
+        <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">/v1</code>을(를) 포함하세요.
       </p>
 
       <div className="mb-4">
-        <label className="mb-2 block text-sm font-medium text-gray-700">OpenAI Compatible URL</label>
+        <label className="mb-2 block text-sm font-medium text-gray-700">OpenAI 호환 URL</label>
         <div className="relative">
           <input
             type="text"
             required
-            placeholder="Enter your URL"
+            placeholder="URL을 입력하세요"
             className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
             value={baseUrl}
             onChange={(e) => onBaseUrlChange(e.target.value)}
@@ -245,12 +245,12 @@ export default function OpenAICompatibleImageFields({
       </div>
 
       <div className="mb-4">
-        <label className="mb-2 block text-sm font-medium text-gray-700">OpenAI Compatible API Key</label>
+        <label className="mb-2 block text-sm font-medium text-gray-700">OpenAI 호환 API 키</label>
         <div className="relative">
           <input
             type="text"
             required
-            placeholder="Enter your API Key"
+            placeholder="API 키를 입력하세요"
             className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
             value={apiKey}
             onChange={(e) => onApiKeyChange(e.target.value)}
@@ -273,10 +273,10 @@ export default function OpenAICompatibleImageFields({
             {modelsLoading ? (
               <div className="flex items-center justify-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Checking for models...
+                모델 확인 중…
               </div>
             ) : (
-              "Check for available models"
+              "사용 가능한 모델 확인"
             )}
           </button>
         </div>
@@ -285,19 +285,19 @@ export default function OpenAICompatibleImageFields({
       {modelsChecked && models.length === 0 && (
         <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 p-3">
           <p className="text-sm text-yellow-800">
-            No models found. Please make sure your API key is valid and has access to models.
+            모델을 찾을 수 없습니다. API 키가 유효하며 모델에 접근 권한이 있는지 확인하세요.
           </p>
         </div>
       )}
 
       {modelsChecked && models.length === 0 && (
         <div className="mb-4">
-          <label className="mb-2 block text-sm font-medium text-gray-700">Image model id</label>
+          <label className="mb-2 block text-sm font-medium text-gray-700">이미지 모델 ID</label>
           <div className="relative">
             <input
               type="text"
               required
-              placeholder="e.g. dall-e-3, gpt-image-1"
+              placeholder="예: dall-e-3, gpt-image-1"
               className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
               value={model}
               onChange={(e) => onModelChange(e.target.value)}
@@ -310,10 +310,10 @@ export default function OpenAICompatibleImageFields({
         <div className="mb-4">
           <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
             <p className="text-sm text-amber-800">
-              <strong>Important:</strong> Choose a model your server exposes for image generation.
+              <strong>중요:</strong> 서버가 이미지 생성용으로 제공하는 모델을 선택하세요.
             </p>
           </div>
-          <label className="mb-2 block text-sm font-medium text-gray-700">Select image model</label>
+          <label className="mb-2 block text-sm font-medium text-gray-700">이미지 모델 선택</label>
           <div className="w-full">
             <Popover open={openModelSelect} onOpenChange={setOpenModelSelect}>
               <PopoverTrigger asChild>
@@ -323,15 +323,15 @@ export default function OpenAICompatibleImageFields({
                   aria-expanded={openModelSelect}
                   className="flex h-12 w-full justify-between rounded-lg border border-gray-300 px-4 py-4 font-normal outline-none transition-colors hover:border-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                 >
-                  <span className="text-sm font-medium text-gray-900">{model || "Select a model"}</span>
+                  <span className="text-sm font-medium text-gray-900">{model || "모델 선택"}</span>
                   <ChevronUp className="h-4 w-4 text-gray-500" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="p-0" align="start" style={{ width: "var(--radix-popover-trigger-width)" }}>
                 <Command>
-                  <CommandInput placeholder="Search model..." />
+                  <CommandInput placeholder="모델 검색…" />
                   <CommandList>
-                    <CommandEmpty>No model found.</CommandEmpty>
+                    <CommandEmpty>모델을 찾을 수 없습니다.</CommandEmpty>
                     <CommandGroup>
                       {models.map((m, index) => (
                         <CommandItem

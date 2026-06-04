@@ -53,7 +53,7 @@ export default function AuthGate() {
     const params = new URLSearchParams(window.location.search);
     if (params.get("reason") === "unauthorized") {
       if (status.configured && !status.authenticated) {
-        notify.error("Unauthorized", "Sign in to view this page.", {
+        notify.error("권한 없음", "이 페이지를 보려면 로그인하세요.", {
           id: "auth-unauthorized-redirect",
           duration: 5000,
         });
@@ -85,8 +85,8 @@ export default function AuthGate() {
     } catch (fetchError) {
       console.error(fetchError);
       notify.error(
-        "Could not load login",
-        "We could not connect to the login service. Please refresh and try again."
+        "로그인을 불러올 수 없음",
+        "로그인 서비스에 연결할 수 없습니다. 페이지를 새로고침한 후 다시 시도하세요."
       );
     } finally {
       setIsLoading(false);
@@ -99,24 +99,24 @@ export default function AuthGate() {
     const cleanedUsername = username.trim();
     if (cleanedUsername.length < 3) {
       notify.warning(
-        "Username too short",
-        "Your username must be at least 3 characters."
+        "사용자 이름이 너무 짧음",
+        "사용자 이름은 3자 이상이어야 합니다."
       );
       return;
     }
 
     if (password.length < 6) {
       notify.warning(
-        "Password too short",
-        "Your password must be at least 6 characters."
+        "비밀번호가 너무 짧음",
+        "비밀번호는 6자 이상이어야 합니다."
       );
       return;
     }
 
     if (isSetupMode && password !== confirmPassword) {
       notify.warning(
-        "Passwords do not match",
-        "Make sure both password fields match before continuing."
+        "비밀번호가 일치하지 않음",
+        "계속하기 전에 두 비밀번호가 일치하는지 확인하세요."
       );
       return;
     }
@@ -144,15 +144,15 @@ export default function AuthGate() {
         const detail = formatFastApiDetail(payload?.detail);
         if (response.status === 401) {
           notify.error(
-            "Sign-in failed",
+            "로그인 실패",
             detail === UNAUTHORIZED_DETAIL
-              ? "The username or password is incorrect. Please try again."
+              ? "사용자 이름 또는 비밀번호가 올바르지 않습니다. 다시 시도하세요."
               : detail
           );
         } else {
           notify.error(
-            isSetupMode ? "Could not create account" : "Sign-in failed",
-            detail || "Something went wrong. Please try again."
+            isSetupMode ? "계정을 만들 수 없음" : "로그인 실패",
+            detail || "문제가 발생했습니다. 다시 시도하세요."
           );
         }
         return;
@@ -166,7 +166,7 @@ export default function AuthGate() {
         });
         setPassword("");
         setConfirmPassword("");
-        notify.success("Account created", "Sign in with your new username and password to continue.", {
+        notify.success("계정 생성됨", "새로 만든 사용자 이름과 비밀번호로 로그인하여 계속하세요.", {
           duration: 6000,
         });
         return;
@@ -180,14 +180,14 @@ export default function AuthGate() {
       setPassword("");
       setConfirmPassword("");
       notify.success(
-        "Signed in",
-        "Welcome back. Loading your workspace."
+        "로그인됨",
+        "다시 오신 것을 환영합니다. 작업 공간을 불러오는 중입니다."
       );
     } catch (submitError) {
       console.error(submitError);
       notify.error(
-        "Login unavailable",
-        "The login service is unavailable right now. Please try again in a moment."
+        "로그인을 사용할 수 없음",
+        "현재 로그인 서비스를 사용할 수 없습니다. 잠시 후 다시 시도하세요."
       );
     } finally {
       setIsSubmitting(false);
@@ -209,7 +209,7 @@ export default function AuthGate() {
             />
             <div className="mx-auto mb-4 h-1 w-16 rounded-full bg-[#7C51F8]" />
             <h1 className="font-syne text-lg font-semibold text-black">Presenton</h1>
-            <p className="mt-3 font-syne text-sm text-[#000000CC]">Preparing your workspace…</p>
+            <p className="mt-3 font-syne text-sm text-[#000000CC]">작업 공간을 준비하는 중…</p>
             <div className="mt-6 flex justify-center gap-1.5">
               <span className="h-2 w-2 animate-pulse rounded-full bg-[#5146E5]" />
               <span
@@ -243,10 +243,10 @@ export default function AuthGate() {
             </div>
             <div>
               <p className="font-syne text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7A5AF8]">
-                Secure instance
+                보안 인스턴스
               </p>
               <h1 className="mt-1 font-syne text-2xl font-semibold leading-tight text-black sm:text-[26px]">
-                {isSetupMode ? "Create your admin login" : "Sign in to continue"}
+                {isSetupMode ? "관리자 로그인 만들기" : "계속하려면 로그인하세요"}
               </h1>
             </div>
           </div>
@@ -254,21 +254,21 @@ export default function AuthGate() {
 
         <p className="font-syne text-base text-[#000000CC] sm:text-lg">
           {isSetupMode
-            ? "One-time setup for this deployment. You will use the same username and password on future visits."
-            : "This deployment is protected. Enter your credentials to open the app."}
+            ? "이 배포에 대한 1회성 설정입니다. 이후 방문 시에도 동일한 사용자 이름과 비밀번호를 사용합니다."
+            : "이 배포는 보호되어 있습니다. 앱을 열려면 자격 증명을 입력하세요."}
         </p>
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-5">
           <div className="space-y-2">
             <label htmlFor="username" className="block font-syne text-sm font-medium text-black">
-              Username
+              사용자 이름
             </label>
             <input
               id="username"
               autoComplete="username"
               value={username}
               onChange={(event) => setUsername(event.target.value)}
-              placeholder="your-admin-user"
+              placeholder="관리자 사용자 이름"
               className="w-full rounded-[11px] border border-[#EDEEEF] bg-white px-4 py-3 font-syne text-sm text-black outline-none transition placeholder:text-[#999999] focus:border-[#a49cfc] focus:ring-2 focus:ring-[#5146E5]/20"
               disabled={isSubmitting}
             />
@@ -276,7 +276,7 @@ export default function AuthGate() {
 
           <div className="space-y-2">
             <label htmlFor="password" className="block font-syne text-sm font-medium text-black">
-              Password
+              비밀번호
             </label>
             <input
               id="password"
@@ -284,7 +284,7 @@ export default function AuthGate() {
               autoComplete={isSetupMode ? "new-password" : "current-password"}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder="At least 6 characters"
+              placeholder="6자 이상"
               className="w-full rounded-[11px] border border-[#EDEEEF] bg-white px-4 py-3 font-syne text-sm text-black outline-none transition placeholder:text-[#999999] focus:border-[#a49cfc] focus:ring-2 focus:ring-[#5146E5]/20"
               disabled={isSubmitting}
             />
@@ -293,7 +293,7 @@ export default function AuthGate() {
           {isSetupMode ? (
             <div className="space-y-2">
               <label htmlFor="confirmPassword" className="block font-syne text-sm font-medium text-black">
-                Confirm password
+                비밀번호 확인
               </label>
               <input
                 id="confirmPassword"
@@ -301,7 +301,7 @@ export default function AuthGate() {
                 autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
-                placeholder="Re-enter your password"
+                placeholder="비밀번호를 다시 입력하세요"
                 className="w-full rounded-[11px] border border-[#EDEEEF] bg-white px-4 py-3 font-syne text-sm text-black outline-none transition placeholder:text-[#999999] focus:border-[#a49cfc] focus:ring-2 focus:ring-[#5146E5]/20"
                 disabled={isSubmitting}
               />
@@ -310,7 +310,7 @@ export default function AuthGate() {
 
           {!isSetupMode && status.configured ? (
             <p className="font-syne text-sm text-[#494A4D]">
-              Setup is complete for this instance. Use the username and password you configured.
+              이 인스턴스의 설정이 완료되었습니다. 설정한 사용자 이름과 비밀번호를 사용하세요.
             </p>
           ) : null}
 
@@ -321,11 +321,11 @@ export default function AuthGate() {
           >
             {isSubmitting
               ? isSetupMode
-                ? "Saving credentials…"
-                : "Signing in…"
+                ? "자격 증명 저장 중…"
+                : "로그인 중…"
               : isSetupMode
-                ? "Create account"
-                : "Sign in"}
+                ? "계정 만들기"
+                : "로그인"}
           </button>
         </form>
       </section>

@@ -47,7 +47,7 @@ const page = () => {
       <Header />
       <div className="flex flex-col items-center justify-center  mb-8 ">
         <h1 className="text-[64px] relative leading-[112%] font-semibold font-syne text-[#101323] ">
-          Generate
+          생성
 
           <svg className="absolute top-[-4rem] left-[-5rem]" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 13 13" fill="none">
             <path d="M9.73497 5.85272C8.05237 5.69492 6.72098 4.39958 6.55904 2.76316L6.28582 0L6.0126 2.76316C5.85066 4.39985 4.51927 5.6952 2.83667 5.85272L0 6.11849L2.83667 6.38426C4.51927 6.54206 5.85066 7.8374 6.0126 9.47382L6.28582 12.237L6.55904 9.47382C6.72098 7.83713 8.05237 6.54178 9.73497 6.38426L12.5716 6.11849L9.73497 5.85272Z" fill="#09CCFE" />
@@ -60,7 +60,7 @@ const page = () => {
           </svg>
 
         </h1>
-        <p className="text-xl  font-syne text-[#101323CC]">Turn prompts or documents into presentations with AI</p>
+        <p className="text-xl  font-syne text-[#101323CC]">AI로 프롬프트나 문서를 발표자료로 만들어 보세요</p>
       </div>
 
       <UploadPage />

@@ -356,9 +356,13 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         }),
         IMAGEMAGICK_BINARY: getImageMagickBinaryPath(),
         LITEPARSE_RUNNER_PATH: getLiteParseRunnerPath(),
-        // Use Electron's embedded runtime for LiteParse so parsing does not
-        // depend on a system-wide Node installation.
-        LITEPARSE_NODE_BINARY: process.execPath,
+        // Packaged builds use Electron's embedded runtime so LiteParse does not
+        // depend on a system-wide Node install. In dev, electron-as-node imports
+        // @llamaindex/liteparse too slowly (>20s, native-addon ABI mismatch),
+        // tripping the backend's readiness timeout — use system Node instead.
+        // PRESENTON_DEV_NODE_BINARY lets the launcher pin an absolute node path.
+        LITEPARSE_NODE_BINARY:
+          process.env.PRESENTON_DEV_NODE_BINARY || (isDev ? "node" : process.execPath),
         ELECTRON_RUN_AS_NODE: "1",
         EXPORT_PACKAGE_ROOT: exportPackageRoot,
         EXPORT_RUNTIME_DIR: exportPackageRoot,

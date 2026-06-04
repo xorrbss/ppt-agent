@@ -134,16 +134,16 @@ export default function CodexConfig({
               onInputChange(DEFAULT_CODEX_MODEL, "codex_model");
             }
             notify.success(
-              "Signed in to ChatGPT",
-              "Your ChatGPT account is connected and ready to use."
+              "ChatGPT 로그인 완료",
+              "ChatGPT 계정이 연결되어 사용할 준비가 되었습니다."
             );
           } else if (pollData.status === "failed") {
             stopPolling();
             setAuthStatus("unauthenticated");
             applyProfile({});
             notify.error(
-              "Sign-in failed",
-              "Authentication did not complete. Please try signing in again."
+              "로그인 실패",
+              "인증이 완료되지 않았습니다. 다시 로그인해 주세요."
             );
           }
         } catch {
@@ -152,8 +152,8 @@ export default function CodexConfig({
       }, 2000);
     } catch (err) {
       notify.error(
-        "Sign-in failed",
-        "Could not start the sign-in flow. Please try again."
+        "로그인 실패",
+        "로그인 과정을 시작할 수 없습니다. 다시 시도해 주세요."
       );
       setAuthStatus("unauthenticated");
       applyProfile({});
@@ -183,13 +183,13 @@ export default function CodexConfig({
         onInputChange(DEFAULT_CODEX_MODEL, "codex_model");
       }
       notify.success(
-        "Signed in to ChatGPT",
-        "Your ChatGPT account is connected and ready to use."
+        "ChatGPT 로그인 완료",
+        "ChatGPT 계정이 연결되어 사용할 준비가 되었습니다."
       );
     } catch (err: any) {
       notify.error(
-        "Sign-in failed",
-        err.message || "The verification code could not be accepted. Please try again."
+        "로그인 실패",
+        err.message || "인증 코드를 처리할 수 없습니다. 다시 시도해 주세요."
       );
     } finally {
       setIsExchanging(false);
@@ -214,13 +214,13 @@ export default function CodexConfig({
       onInputChange("openai", "LLM");
       onInputChange("", "codex_model");
       notify.success(
-        "Signed out",
-        "You have been disconnected from ChatGPT."
+        "로그아웃 완료",
+        "ChatGPT 연결이 해제되었습니다."
       );
     } catch {
       notify.error(
-        "Sign-out failed",
-        "Could not disconnect from ChatGPT. Please try again."
+        "로그아웃 실패",
+        "ChatGPT 연결을 해제할 수 없습니다. 다시 시도해 주세요."
       );
     } finally {
       setIsLoggingOut(false);
@@ -237,13 +237,13 @@ export default function CodexConfig({
       const data = await res.json();
       applyProfile(data);
       notify.success(
-        "Session refreshed",
-        "Your ChatGPT connection was renewed successfully."
+        "세션 갱신 완료",
+        "ChatGPT 연결이 성공적으로 갱신되었습니다."
       );
     } catch {
       notify.error(
-        "Session refresh failed",
-        "Your ChatGPT session could not be renewed. Please sign in again."
+        "세션 갱신 실패",
+        "ChatGPT 세션을 갱신할 수 없습니다. 다시 로그인해 주세요."
       );
       setAuthStatus("unauthenticated");
       applyProfile({});
@@ -259,9 +259,9 @@ export default function CodexConfig({
           <Loader2 className="w-10 h-10 text-[#191919] animate-spin" />
         </div>
         <div className="text-start flex-1 min-w-0">
-          <h4 className="text-[#191919] text-lg font-medium">Checking status</h4>
+          <h4 className="text-[#191919] text-lg font-medium">상태 확인 중</h4>
           <p className="text-[#B3B3B3] text-sm font-normal">
-            Verifying your ChatGPT connection…
+            ChatGPT 연결을 확인하는 중…
           </p>
         </div>
       </div>
@@ -277,9 +277,9 @@ export default function CodexConfig({
               <Loader2 className="w-5 h-5 text-[#191919] animate-spin" />
             </div>
             <div className="text-start min-w-0">
-              <h4 className="text-[#191919] text-lg font-medium">Waiting for sign-in</h4>
+              <h4 className="text-[#191919] text-lg font-medium">로그인 대기 중</h4>
               <p className="text-[#B3B3B3] text-sm font-normal">
-                Complete sign-in in the browser tab we opened.
+                새로 열린 브라우저 탭에서 로그인을 완료해 주세요.
               </p>
             </div>
           </div>
@@ -288,18 +288,18 @@ export default function CodexConfig({
             onClick={handleCancelPolling}
             className="shrink-0 text-sm text-[#B3B3B3] hover:text-[#191919] underline underline-offset-2 transition-colors"
           >
-            Cancel
+            취소
           </button>
         </div>
 
         <div className="space-y-2 rounded-[8px] border border-[#EDEEEF] p-3">
           <p className="text-[#191919] text-xs font-normal">
-            Paste redirect URL or code if you were not redirected automatically
+            자동으로 이동되지 않았다면 리디렉션 URL 또는 코드를 붙여넣으세요
           </p>
           <div className="flex gap-2">
             <input
               type="text"
-              placeholder="Paste URL or code…"
+              placeholder="URL 또는 코드 붙여넣기…"
               className="flex-1 min-w-0 px-3 py-2.5 outline-none border border-[#EDEEEF] rounded-[8px]  text-sm text-[#191919] placeholder:text-[#666666] focus:border-[#555555] transition-colors"
               value={manualCode}
               onChange={(e) => setManualCode(e.target.value)}
@@ -313,7 +313,7 @@ export default function CodexConfig({
               {isExchanging ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
-                "Submit"
+                "제출"
               )}
             </button>
           </div>
@@ -336,7 +336,7 @@ export default function CodexConfig({
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 min-w-0">
                 <p className="text-sm font-medium text-[#191919] truncate">
-                  {username || email || (accountId ? `Account ${accountId}` : "ChatGPT Account")}
+                  {username || email || (accountId ? `계정 ${accountId}` : "ChatGPT 계정")}
                 </p>
 
               </div>
@@ -346,14 +346,14 @@ export default function CodexConfig({
               {!email && accountId && (
                 <p className="text-xs text-[#B3B3B3] truncate">ID: {accountId}</p>
               )}
-              <p className="text-xs text-[#B3B3B3]">Signed in to ChatGPT</p>
+              <p className="text-xs text-[#B3B3B3]">ChatGPT에 로그인됨</p>
             </div>
           </div>
           <div className="flex gap-1.5 shrink-0">
             <button
               onClick={handleRefreshToken}
               disabled={isRefreshing}
-              title="Refresh token"
+              title="토큰 갱신"
               className="flex items-center justify-center px-3.5 py-2.5  border border-[#EDEEEF] rounded-[58px] minid:opacity-40 transition-colors"
             >
               {isRefreshing ? (
@@ -365,7 +365,7 @@ export default function CodexConfig({
             <button
               onClick={handleSignOut}
               disabled={isLoggingOut}
-              title="Sign out"
+              title="로그아웃"
               className="flex items-center justify-center px-3.5 py-2.5  border border-[#EDEEEF] rounded-[58px]  disabled:opacity-40 transition-colors"
             >
               {isLoggingOut ? (
@@ -393,8 +393,8 @@ export default function CodexConfig({
           <img src="/providers/OpenAI-white.png" alt="openai Logo" className="w-[27px] h-[27px]" />
         </div>
         <div className="text-start flex-1">
-          <h4 className="text-[#191919] text-sm font-medium">Sign in with ChatGPT</h4>
-          <p className="text-[#B3B3B3]   text-xs font-normal">Use your ChatGPT account — no API  key required</p>
+          <h4 className="text-[#191919] text-sm font-medium">ChatGPT로 로그인</h4>
+          <p className="text-[#B3B3B3]   text-xs font-normal">ChatGPT 계정을 사용하세요 — API 키가 필요 없습니다</p>
         </div>
       </div>
       <ArrowRight className="w-[22px] h-[22px] text-[#4C4C4C]" />

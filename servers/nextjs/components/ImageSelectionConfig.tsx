@@ -11,32 +11,32 @@ import { Select, SelectItem, SelectContent, SelectTrigger, SelectValue } from '.
 
 const DALLE_3_QUALITY_OPTIONS = [
     {
-        label: "Standard",
+        label: "표준",
         value: "standard",
-        description: "Faster generation with lower cost",
+        description: "더 빠른 생성과 낮은 비용",
     },
     {
         label: "HD",
         value: "hd",
-        description: "Higher quality images with increased cost",
+        description: "비용은 높지만 더 높은 화질의 이미지",
     },
 ];
 
 const GPT_IMAGE_1_5_QUALITY_OPTIONS = [
     {
-        label: "Low",
+        label: "낮음",
         value: "low",
-        description: "Fastest and most cost-effective",
+        description: "가장 빠르고 비용 효율적",
     },
     {
-        label: "Medium",
+        label: "보통",
         value: "medium",
-        description: "Balanced quality and speed",
+        description: "화질과 속도의 균형",
     },
     {
-        label: "High",
+        label: "높음",
         value: "high",
-        description: "Best quality with longer generation time",
+        description: "생성 시간은 길지만 최고 화질",
     },
 ];
 const renderQualitySelector = (llmConfig: LLMConfig, input_field_changed: (value: string, field: string) => void) => {
@@ -44,12 +44,12 @@ const renderQualitySelector = (llmConfig: LLMConfig, input_field_changed: (value
         return (
             <div className="w-[295px]">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                    DALL·E 3 Image Quality
+                    DALL·E 3 이미지 화질
                 </label>
                 <div className="">
                     <Select value={llmConfig.DALL_E_3_QUALITY} onValueChange={(value) => input_field_changed(value, "dall_e_3_quality")}>
                         <SelectTrigger className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between">
-                            <SelectValue placeholder="Select a quality" />
+                            <SelectValue placeholder="화질 선택" />
                         </SelectTrigger>
                         <SelectContent>
                             {DALLE_3_QUALITY_OPTIONS.map((option) => (
@@ -88,7 +88,7 @@ const renderQualitySelector = (llmConfig: LLMConfig, input_field_changed: (value
         return (
             <div className="w-[295px]">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                    GPT Image 1.5 Quality
+                    GPT Image 1.5 화질
                 </label>
                 <div className="">
                     <Select
@@ -98,7 +98,7 @@ const renderQualitySelector = (llmConfig: LLMConfig, input_field_changed: (value
                         <SelectTrigger
 
                             className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between">
-                            <SelectValue placeholder="Select a quality" />
+                            <SelectValue placeholder="화질 선택" />
                         </SelectTrigger>
                         <SelectContent>
                             {GPT_IMAGE_1_5_QUALITY_OPTIONS.map((option) => (
@@ -141,9 +141,9 @@ const ImageSelectionConfig = ({ isImageGenerationDisabled, openImageProviderSele
         <div className='mt-7'>
             <div className="p-10 flex justify-between items-center bg-white rounded-[12px]">
                 <div>
-                    <h4 className="text-xl font-normal text-[#191919]">Image Generation Settings</h4>
+                    <h4 className="text-xl font-normal text-[#191919]">이미지 생성 설정</h4>
                     <p className="mt-2 text-sm max-w-[205px] text-gray-500">
-                        Choosing where images come from.
+                        이미지를 가져올 위치를 선택합니다.
                     </p>
                 </div>
                 <div className='flex items-center gap-4'>
@@ -154,7 +154,7 @@ const ImageSelectionConfig = ({ isImageGenerationDisabled, openImageProviderSele
                             {/* Image Provider Selection */}
                             <div className="my-8">
                                 <label className="block text-sm font-medium text-gray-700 mb-3">
-                                    Select Image Provider
+                                    이미지 제공자 선택
                                 </label>
                                 <div className="w-full">
                                     <Popover
@@ -173,7 +173,7 @@ const ImageSelectionConfig = ({ isImageGenerationDisabled, openImageProviderSele
                                                         {llmConfig.IMAGE_PROVIDER
                                                             ? IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]
                                                                 ?.label || llmConfig.IMAGE_PROVIDER
-                                                            : "Select image provider"}
+                                                            : "이미지 제공자 선택"}
                                                     </span>
                                                 </div>
                                                 <ChevronsUpDown className="w-4 h-4 text-gray-500" />
@@ -185,9 +185,9 @@ const ImageSelectionConfig = ({ isImageGenerationDisabled, openImageProviderSele
                                             style={{ width: "var(--radix-popover-trigger-width)" }}
                                         >
                                             <Command>
-                                                <CommandInput placeholder="Search provider..." />
+                                                <CommandInput placeholder="제공자 검색…" />
                                                 <CommandList>
-                                                    <CommandEmpty>No provider found.</CommandEmpty>
+                                                    <CommandEmpty>제공자를 찾을 수 없습니다.</CommandEmpty>
                                                     <CommandGroup>
                                                         {Object.values(IMAGE_PROVIDERS).map(
                                                             (provider, index) => (
@@ -311,17 +311,17 @@ const ImageSelectionConfig = ({ isImageGenerationDisabled, openImageProviderSele
                                                     </div>
                                                     <p className="mt-2 text-sm text-gray-500 flex items-center gap-2">
                                                         <span className="block w-1 h-1 rounded-full bg-gray-400"></span>
-                                                        Image model is configured in Open WebUI admin settings
+                                                        이미지 모델은 Open WebUI 관리자 설정에서 구성합니다
                                                     </p>
                                                 </div>
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                        API Key (optional)
+                                                        API 키 (선택)
                                                     </label>
                                                     <div className="relative">
                                                         <input
                                                             type="text"
-                                                            placeholder="Open WebUI API key"
+                                                            placeholder="Open WebUI API 키"
                                                             className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
                                                             value={llmConfig.OPEN_WEBUI_IMAGE_API_KEY || ""}
                                                             onChange={(e) => {
@@ -343,7 +343,7 @@ const ImageSelectionConfig = ({ isImageGenerationDisabled, openImageProviderSele
                                             <div className=" space-y-4 w-[295px]">
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                        ComfyUI Server URL
+                                                        ComfyUI 서버 URL
                                                     </label>
                                                     <div className="relative">
                                                         <input
@@ -361,17 +361,17 @@ const ImageSelectionConfig = ({ isImageGenerationDisabled, openImageProviderSele
                                                     </div>
                                                     <p className="mt-2 text-sm text-gray-500 flex items-center gap-2">
                                                         <span className="block w-1 h-1 rounded-full bg-gray-400"></span>
-                                                        Use your machine IP address (not localhost) when
-                                                        running in Docker
+                                                        Docker에서 실행할 때는 localhost가 아닌
+                                                        실제 컴퓨터의 IP 주소를 사용하세요
                                                     </p>
                                                 </div>
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                        Workflow JSON
+                                                        워크플로 JSON
                                                     </label>
                                                     <div className="relative">
                                                         <textarea
-                                                            placeholder='Paste your ComfyUI workflow JSON here (export via "Export (API)" in ComfyUI)'
+                                                            placeholder='ComfyUI 워크플로 JSON을 여기에 붙여넣으세요 (ComfyUI에서 "Export (API)"로 내보내기)'
                                                             className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors font-mono text-xs"
                                                             rows={6}
                                                             value={llmConfig.COMFYUI_WORKFLOW || ""}
@@ -384,8 +384,8 @@ const ImageSelectionConfig = ({ isImageGenerationDisabled, openImageProviderSele
                                                         />
                                                     </div>
                                                     <p className="mt-2 text-sm text-gray-500">
-                                                        Export your workflow from ComfyUI using &quot;Export
-                                                        (API)&quot; and paste the JSON here.
+                                                        ComfyUI에서 &quot;Export
+                                                        (API)&quot;로 워크플로를 내보낸 뒤 JSON을 여기에 붙여넣으세요.
                                                     </p>
                                                 </div>
                                             </div>
@@ -401,7 +401,7 @@ const ImageSelectionConfig = ({ isImageGenerationDisabled, openImageProviderSele
                                             <div className="relative">
                                                 <input
                                                     type="text"
-                                                    placeholder={`Enter your ${provider.apiKeyFieldLabel}`}
+                                                    placeholder={`${provider.apiKeyFieldLabel}을(를) 입력하세요`}
                                                     className="w-full px-4 py-2.5 h-12 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
                                                     value={getApiKeyValue(provider.apiKeyField || "")}
                                                     onChange={(e) =>

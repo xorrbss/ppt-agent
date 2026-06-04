@@ -46,10 +46,10 @@ const CurrentConfig = () => {
         : textProviderLabel;
 
     const imageSummary = llmConfig.DISABLE_IMAGE_GENERATION
-        ? "Image generation disabled"
+        ? "이미지 생성 사용 안 함"
         : llmConfig.IMAGE_PROVIDER
             ? IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]?.label || llmConfig.IMAGE_PROVIDER
-            : "No image provider";
+            : "이미지 제공자 없음";
     return (
         <p className="text-[10px] px-2.5 py-0.5 rounded-[50px] text-[#7A5AF8] border border-[#EDEEEF]  font-medium ">
             {textSummary} · {imageSummary}

@@ -57,8 +57,8 @@ const LayoutItem = memo(({ layout, onSelect }: LayoutItemProps) => {
     <div
       role="button"
       tabIndex={0}
-      aria-label={`Add ${layoutName || "slide"} layout`}
-      title={layoutName || "Slide layout"}
+      aria-label={`${layoutName || "슬라이드"} 레이아웃 추가`}
+      title={layoutName || "슬라이드 레이아웃"}
       onClick={selectLayout}
       onKeyDown={(event) => {
         if (event.key !== "Enter" && event.key !== " ") return;
@@ -128,7 +128,7 @@ const NewSlideV1 = ({
         setShowNewSlideSelection(false);
       } catch (error: any) {
         console.error(error);
-        notify.error("Could not add slide", "Something went wrong while adding the new slide.");
+        notify.error("슬라이드를 추가할 수 없습니다", "새 슬라이드를 추가하는 중 문제가 발생했습니다.");
       }
     },
     [
@@ -151,8 +151,8 @@ const NewSlideV1 = ({
           const customTemplateId = templateID.split("custom-")[1];
           const templateDetails = await getCustomTemplateDetails(
             customTemplateId,
-            "Custom Template",
-            "User-created template"
+            "사용자 지정 템플릿",
+            "사용자가 만든 템플릿"
           );
           if (isMounted) setLayouts(templateDetails?.layouts || []);
         } else {
@@ -174,9 +174,7 @@ const NewSlideV1 = ({
     };
   }, [isCustomTemplate, templateID]);
 
-  const layoutCountText = `${layouts.length} Layout${
-    layouts.length === 1 ? "" : "s"
-  }`;
+  const layoutCountText = `레이아웃 ${layouts.length}개`;
 
   return (
     <div
@@ -187,7 +185,7 @@ const NewSlideV1 = ({
     >
       <button
         type="button"
-        aria-label="Close layout picker"
+        aria-label="레이아웃 선택 닫기"
         onClick={() => setShowNewSlideSelection(false)}
         className="absolute right-0 top-[-52px] z-50 flex h-10 w-10 items-center justify-center rounded-full border border-[#EDEEEF] bg-white text-[#191919] shadow-[0_6.6px_13.2px_rgba(0,0,0,0.10)] transition hover:bg-[#F7F6F9]"
       >
@@ -200,10 +198,10 @@ const NewSlideV1 = ({
             id="choose-slide-layout-title"
             className="text-base font-medium leading-tight text-[#191919]"
           >
-            Choose Slide Layout
+            슬라이드 레이아웃 선택
           </h2>
           <p className="mt-1 text-xs font-normal leading-none text-[#7A7A85]">
-            {loading ? "Loading layouts" : layoutCountText}
+            {loading ? "레이아웃 불러오는 중…" : layoutCountText}
           </p>
         </div>
         {loading && (
@@ -228,7 +226,7 @@ const NewSlideV1 = ({
           </div>
         ) : (
           <div className="flex h-56 items-center justify-center rounded-lg border border-dashed border-[#D9D9E1] bg-[#FAFAFB] text-sm text-[#7A7A85]">
-            No layouts available.
+            사용할 수 있는 레이아웃이 없습니다.
           </div>
         )}
       </div>

@@ -76,7 +76,7 @@ export default function AnthropicConfig({
       }
     } catch (error) {
       console.error('Error fetching models:', error);
-      notify.error("Could not load models", "The server could not list models. Check your API key or endpoint and try again.");
+      notify.error("모델을 불러올 수 없습니다", "서버에서 모델 목록을 가져오지 못했습니다. API 키 또는 엔드포인트를 확인한 후 다시 시도해 주세요.");
       setAvailableModels([]);
       setModelsChecked(true);
     } finally {
@@ -89,23 +89,23 @@ export default function AnthropicConfig({
       {/* API Key Input */}
       <div className="mb-4 flex items-center justify-between bg-white p-10">
         <div className="">
-          <h3 className="text-xl font-normal text-[#191919]">Anthropic API key</h3>
+          <h3 className="text-xl font-normal text-[#191919]">Anthropic API 키</h3>
           <p className="mt-2 text-sm max-w-[205px] text-gray-500">
-            Your API key will be stored locally and never shared
+            API 키는 로컬에만 저장되며 외부에 공유되지 않습니다
           </p>
         </div>
         <div className="flex items-center gap-4">
           <div className="relative  w-[275px] ">
             <div className="flex flex-col justify-start gap-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Anthropic API Key
+                Anthropic API 키
               </label>
               <input
                 type="text"
                 value={anthropicApiKey}
                 onChange={(e) => onApiKeyChange(e.target.value)}
                 className="w-full px-2 py-3 outline-none border  border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                placeholder="Enter your Anthropic API key"
+                placeholder="Anthropic API 키를 입력하세요"
               />
             </div>
 
@@ -122,10 +122,10 @@ export default function AnthropicConfig({
                 {modelsLoading ? (
                   <span className="flex items-center justify-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Checking for models...
+                    모델 확인 중…
                   </span>
                 ) : (
-                  "Check for available models"
+                  "사용 가능한 모델 확인"
                 )}
               </button>
             )}
@@ -135,7 +135,7 @@ export default function AnthropicConfig({
             {modelsChecked && availableModels.length === 0 && (
               <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                 <p className="text-sm text-yellow-800">
-                  No models found. Please make sure your API key is valid and has access to Anthropic models.
+                  사용 가능한 모델이 없습니다. API 키가 올바르며 Anthropic 모델에 접근할 수 있는지 확인해 주세요.
                 </p>
               </div>
             )}
@@ -144,7 +144,7 @@ export default function AnthropicConfig({
             {modelsChecked && availableModels.length > 0 ? (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Select Anthropic Model
+                  Anthropic 모델 선택
                 </label>
                 <div className="w-full">
                   <Popover
@@ -162,7 +162,7 @@ export default function AnthropicConfig({
                           <span className="text-sm font-medium text-gray-900">
                             {anthropicModel
                               ? availableModels.find(model => model === anthropicModel) || anthropicModel
-                              : "Select a model"}
+                              : "모델을 선택하세요"}
                           </span>
                         </div>
                         <ChevronsUpDown className="w-4 h-4 text-gray-500" />
@@ -174,9 +174,9 @@ export default function AnthropicConfig({
                       style={{ width: "var(--radix-popover-trigger-width)" }}
                     >
                       <Command>
-                        <CommandInput placeholder="Search models..." />
+                        <CommandInput placeholder="모델 검색..." />
                         <CommandList>
-                          <CommandEmpty>No model found.</CommandEmpty>
+                          <CommandEmpty>모델을 찾을 수 없습니다.</CommandEmpty>
                           <CommandGroup>
                             {availableModels.map((model, index) => (
                               <CommandItem
@@ -221,9 +221,9 @@ export default function AnthropicConfig({
       {/* Web Grounding Toggle - show at the end, below models dropdown */}
       <div className="bg-white flex justify-between items-center p-10 rounded-[12px]">
         <div>
-          <h4 className="text-xl font-normal text-[#191919]">Model Controls</h4>
+          <h4 className="text-xl font-normal text-[#191919]">모델 설정</h4>
           <p className="mt-2 text-sm max-w-[205px] text-gray-500">
-            Configure web access and advanced AI features.
+            웹 접근 및 고급 AI 기능을 설정합니다.
           </p>
         </div>
         <div className="flex items-center gap-4">
@@ -234,7 +234,7 @@ export default function AnthropicConfig({
                 onCheckedChange={(checked) => onInputChange(checked, "web_grounding")}
               />
               <label className="text-sm font-medium text-gray-700">
-                Enable Web Grounding
+                웹 그라운딩 사용
               </label>
             </div>
             {/* Extended Reasoning Toggle */}

@@ -72,7 +72,7 @@ const SlideCountSelect: React.FC<{
         }
     };
 
-    const displayLabel = value ? `${value} slides` : "Auto slides";
+    const displayLabel = value ? `슬라이드 ${value}개` : "슬라이드 자동";
 
     return (
         <Popover open={open} onOpenChange={onOpenChange}>
@@ -123,7 +123,7 @@ const SlideCountSelect: React.FC<{
                             placeholder="--"
                             className="h-8 w-16 px-2 text-sm"
                         />
-                        <span className="text-sm font-medium">slides</span>
+                        <span className="text-sm font-medium">슬라이드</span>
                     </div>
                 </div>
                 <Command>
@@ -147,7 +147,7 @@ const SlideCountSelect: React.FC<{
                                             value === option ? "opacity-100" : "opacity-0"
                                         )}
                                     />
-                                    {option} slides
+                                    슬라이드 {option}개
                                 </CommandItem>
                             ))}
                         </CommandGroup>
@@ -179,7 +179,7 @@ const LanguageSelect: React.FC<{
                 <Languages className="w-3.5 h-3.5" />
                 <span className="w-[40px] text-left">
                     <span className="text-xs font-medium truncate block">
-                        {value || "Select language"}
+                        {value || "언어 선택"}
                     </span>
                 </span>
                 <ChevronUp className="ml-2 h-4 w-4 shrink-0" />
@@ -189,11 +189,11 @@ const LanguageSelect: React.FC<{
         <PopoverContent className="w-[300px] p-0" align="end">
             <Command>
                 <CommandInput
-                    placeholder="Search language..."
+                    placeholder="언어 검색..."
                     className="font-instrument_sans"
                 />
                 <CommandList>
-                    <CommandEmpty>No language found.</CommandEmpty>
+                    <CommandEmpty>언어를 찾을 수 없습니다.</CommandEmpty>
                     <CommandGroup>
                         {Object.values(LanguageType).map((language) => (
                             <CommandItem

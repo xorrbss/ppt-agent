@@ -42,12 +42,12 @@ const ICON_WEIGHT_PATTERN = ICON_WEIGHTS.join("|");
 const ICON_SEARCH_DEBOUNCE_MS = 500;
 
 const ICON_WEIGHT_LABELS: Record<IconWeight, string> = {
-  thin: "Thin",
-  light: "Light",
-  regular: "Regular",
-  bold: "Bold",
-  fill: "Fill",
-  duotone: "Duotone",
+  thin: "얇게",
+  light: "가늘게",
+  regular: "기본",
+  bold: "굵게",
+  fill: "채움",
+  duotone: "투톤",
 };
 
 const normalizeIconWeight = (weight?: string | null): IconWeight => {
@@ -233,8 +233,8 @@ const IconsEditor = ({
         if (requestIdRef.current === requestId) {
           console.error("Error fetching icons:", error);
           notify.error(
-            "Could not load icons",
-            error.message || "Failed to fetch icons. Please try again."
+            "아이콘을 불러올 수 없습니다",
+            error.message || "아이콘을 가져오지 못했습니다. 다시 시도해 주세요."
           );
           setIcons([]);
         }
@@ -266,7 +266,7 @@ const IconsEditor = ({
     );
 
     if (!replacementIcon) {
-      notify.warning("Icon required", "Select an icon before replacing.");
+      notify.warning("아이콘을 선택하세요", "교체하기 전에 아이콘을 선택해 주세요.");
       return;
     }
 
@@ -299,7 +299,7 @@ const IconsEditor = ({
         >
           <SheetHeader className="border-b border-[#EDEEEF] px-4 py-4 text-left">
             <SheetTitle className="text-sm font-semibold text-[#191919]">
-              Icon Customizer
+              아이콘 편집
             </SheetTitle>
           </SheetHeader>
 
@@ -308,9 +308,9 @@ const IconsEditor = ({
               <div className="pb-5">
                 <div className="mb-[15px] flex items-center gap-1.5">
                   <p className="text-sn font-normal text-[#191919]">
-                    Icon Weight
+                    아이콘 두께
                   </p>
-                  <ToolTip content="Choose the visual weight used for icon search and replacement.">
+                  <ToolTip content="아이콘 검색 및 교체에 사용할 시각적 두께를 선택하세요.">
                     <button
                       type="button"
                       className="inline-flex h-4 w-4 items-center justify-center text-[#A1A1AA]"
@@ -373,7 +373,7 @@ const IconsEditor = ({
 
               <div className="flex items-center justify-between gap-3 pb-5">
                 <p className="text-sm font-medium text-[#191919] ">
-                  Apply styles to entire presentation
+                  발표자료 전체에 스타일 적용
                 </p>
                 <Switch
                   checked={applyStylesToPresentation}
@@ -392,7 +392,7 @@ const IconsEditor = ({
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9B9CA3]" />
                   <Input
-                    placeholder="Find an Icon"
+                    placeholder="아이콘 검색"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onClick={(e) => e.stopPropagation()}
@@ -418,7 +418,7 @@ const IconsEditor = ({
                       <button
                         key={`${iconSrc}-${index}`}
                         type="button"
-                        aria-label={`Select icon ${index + 1}`}
+                        aria-label={`아이콘 ${index + 1} 선택`}
                         aria-pressed={isSelected}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -442,9 +442,9 @@ const IconsEditor = ({
               ) : (
                 <div className="flex h-44 flex-col items-center justify-center text-center text-[#73737A]">
                   <Search className="mb-3 h-8 w-8 text-[#B7B8BE]" />
-                  <p className="text-[12px] font-medium">No icons found</p>
+                  <p className="text-[12px] font-medium">아이콘이 없습니다</p>
                   <p className="mt-1 text-[11px]">
-                    Try a different search term.
+                    다른 검색어로 시도해 보세요.
                   </p>
                 </div>
               )}
@@ -464,7 +464,7 @@ const IconsEditor = ({
                 disabled={!selectedIconUrl && !currentIconUrl}
                 className="h-10 rounded-full  px-4 text-sm font-semibold text-[#101323] shadow-none hover:bg-[#F2DDAA] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Replace Icons
+                아이콘 교체
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>

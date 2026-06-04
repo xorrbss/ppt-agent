@@ -89,7 +89,7 @@ function createManagedServerProcess(params: {
 
   return {
     process: params.process,
-    ready: waitForServer(params.readyUrl, 120000, abortController.signal),
+    ready: waitForServer(params.readyUrl, 300000, abortController.signal),
     stop,
   };
 }
@@ -106,7 +106,10 @@ export async function startFastApiServer(
 
   if (isDev) {
     command = "uv";
-    args = ["run", "python", "server.py", "--port", port.toString(), "--reload", "true"];
+    // Reload mode makes uvicorn's WatchFiles scan the whole tree (incl. .venv),
+    // pushing worker import past the 120s readiness cap on Windows. Disable it;
+    // hot-reload is not needed just to run the bundled backend.
+    args = ["run", "python", "server.py", "--port", port.toString(), "--reload", "false"];
   } else {
     const binary = process.platform === "win32" ? "fastapi.exe" : "fastapi";
     command = path.join(directory, binary);

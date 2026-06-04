@@ -89,7 +89,7 @@ const SupportingDoc = ({
     const handleValidate = (filesToReview: File[]) => {
         const disallowed = filesToReview.filter((file) => !isAllowedFile(file))
         if (disallowed.length > 0) {
-            notify.error('Some files are not supported', 'Supported: Word, PowerPoint, spreadsheets, PDF/TXT, and image files.')
+            notify.error('지원하지 않는 파일이 있습니다', '지원 형식: Word, PowerPoint, 스프레드시트, PDF/TXT, 이미지 파일.')
         }
     }
 
@@ -98,7 +98,7 @@ const SupportingDoc = ({
             return candidateFiles
         }
 
-        notify.warning('Maximum file limit reached', `You can upload up to ${MAX_SUPPORTED_FILES} documents only.`)
+        notify.warning('최대 파일 수 초과', `문서는 최대 ${MAX_SUPPORTED_FILES}개까지만 업로드할 수 있습니다.`)
 
         return candidateFiles.slice(0, MAX_SUPPORTED_FILES)
     }
@@ -113,7 +113,7 @@ const SupportingDoc = ({
         onFilesChange(allowedFiles)
         handleValidate(nextFiles)
         if (allowedFiles.length > files.length) {
-            notify.success('Files selected', `${allowedFiles.length - files.length} file(s) have been added.`)
+            notify.success('파일 선택 완료', `${allowedFiles.length - files.length}개의 파일이 추가되었습니다.`)
         }
         e.currentTarget.value = ''
     }
@@ -131,7 +131,7 @@ const SupportingDoc = ({
         onFilesChange(allowedFiles)
         handleValidate(nextFiles)
         if (allowedFiles.length > files.length) {
-            notify.success('Files selected', `${allowedFiles.length - files.length} file(s) have been added.`)
+            notify.success('파일 선택 완료', `${allowedFiles.length - files.length}개의 파일이 추가되었습니다.`)
         }
     }
 
@@ -159,7 +159,7 @@ const SupportingDoc = ({
         <div className="space-y-2" data-testid="attachments-uploader">
             <div className="flex items-center justify-between">
                 <p className="text-sm text-gray-600 font-syne">
-                    {hasFiles ? `${filteredFiles.length} attachment${filteredFiles.length > 1 ? 's' : ''}` : ''}
+                    {hasFiles ? `첨부파일 ${filteredFiles.length}개` : ''}
                 </p>
                 {hasFiles && <button
                     type="button"
@@ -169,7 +169,7 @@ const SupportingDoc = ({
                     data-testid="attachments-clear-button"
                     aria-disabled={!hasFiles}
                 >
-                    Clear all
+                    모두 지우기
                 </button>}
             </div>
 
@@ -193,13 +193,13 @@ const SupportingDoc = ({
                             <Plus className='w-3 h-3' />
                         </div>
                     </div>
-                    <p className='text-[#808080] text-sm  font-normal'>(Office docs, spreadsheets, images, PDF/TXT)</p>
+                    <p className='text-[#808080] text-sm  font-normal'>(Office 문서, 스프레드시트, 이미지, PDF/TXT)</p>
                 </div>
             </label>
 
             {hasFiles && (
                 <div className="mt-2">
-                    <ul data-testid="file-list" className="grid grid-cols-1 gap-2 sm:grid-cols-2" aria-label="Attached files">
+                    <ul data-testid="file-list" className="grid grid-cols-1 gap-2 sm:grid-cols-2" aria-label="첨부된 파일">
                         {filteredFiles.map((file, idx) => (
                             <li
                                 key={`${file.name}-${idx}`}
@@ -207,7 +207,7 @@ const SupportingDoc = ({
                                 data-testid="attached-file-item"
                             >
                                 {previewUrls[idx] ? (
-                                    <img src={previewUrls[idx] as string} alt="Preview" className="h-10 w-10 flex-none rounded object-cover" />
+                                    <img src={previewUrls[idx] as string} alt="미리보기" className="h-10 w-10 flex-none rounded object-cover" />
                                 ) : (
                                     <div className="flex h-10 w-10 flex-none items-center justify-center rounded bg-gray-100 text-gray-600">
                                         <File className="h-5 w-5" />
@@ -225,7 +225,7 @@ const SupportingDoc = ({
                                     type="button"
                                     onClick={() => handleRemoveFileAt(idx)}
                                     className="ml-2 inline-flex h-8 w-8 items-center justify-center rounded text-red-600 hover:bg-red-50 hover:text-red-700"
-                                    aria-label={`Remove ${file.name}`}
+                                    aria-label={`${file.name} 삭제`}
                                     data-testid="remove-file-button"
                                 >
                                     <X className="h-5 w-5" />
@@ -235,7 +235,7 @@ const SupportingDoc = ({
                     </ul>
                     {filteredFiles.length !== files.length && (
                         <p className="mt-2 text-xs text-amber-600 font-syne">
-                            Some files were skipped. Supported: Word, PowerPoint, spreadsheets, PDF/TXT, and image files.
+                            일부 파일이 제외되었습니다. 지원 형식: Word, PowerPoint, 스프레드시트, PDF/TXT, 이미지 파일.
                         </p>
                     )}
                 </div>

@@ -52,7 +52,7 @@ const SettingsPage = () => {
   const [buttonState, setButtonState] = useState<ButtonState>({
     isLoading: false,
     isDisabled: false,
-    text: "Save Configuration",
+    text: "설정 저장",
     showProgress: false,
   });
 
@@ -101,9 +101,9 @@ const SettingsPage = () => {
       return true;
     } catch (error: any) {
       notify.error(
-        "Cannot save settings",
+        "설정을 저장할 수 없습니다",
         error?.message ||
-        `Unable to reach ${provider} with the provided API key. Please verify your settings and try again.`
+        `제공된 API 키로 ${provider}에 연결할 수 없습니다. 설정을 확인하고 다시 시도해 주세요.`
       );
       return false;
     }
@@ -131,7 +131,7 @@ const SettingsPage = () => {
     if (llmConfig.LLM === 'codex') {
       const isAuthenticated = await checkCurrentAuthStatus();
       if (!isAuthenticated) {
-        notify.error("Sign in required", "Please sign in to ChatGPT to continue.");
+        notify.error("로그인이 필요합니다", "계속하려면 ChatGPT에 로그인해 주세요.");
         return;
       }
     }
@@ -140,7 +140,7 @@ const SettingsPage = () => {
     });
     const validationError = getLLMConfigValidationError(llmConfig);
     if (validationError) {
-      notify.warning("Cannot save settings", validationError);
+      notify.warning("설정을 저장할 수 없습니다", validationError);
       if (
         selectedProvider === "image-provider" &&
         llmConfig.LLM === "openai" &&
@@ -161,7 +161,7 @@ const SettingsPage = () => {
         ...prev,
         isLoading: true,
         isDisabled: true,
-        text: "Saving Configuration...",
+        text: "설정 저장 중...",
       }));
       trackEvent(MixpanelEvent.Settings_SaveConfiguration_API_Call);
       await handleSaveLLMConfig(llmConfig);
@@ -189,28 +189,28 @@ const SettingsPage = () => {
         }
       }
       notify.success(
-        ollamaModelDownloaded ? "Settings saved and model ready" : "Settings saved",
+        ollamaModelDownloaded ? "설정 저장 및 모델 준비 완료" : "설정 저장됨",
         ollamaModelDownloaded
-          ? "Your configuration was saved and the Ollama model finished downloading."
-          : "Your configuration was saved successfully."
+          ? "설정이 저장되었고 Ollama 모델 다운로드가 완료되었습니다."
+          : "설정이 성공적으로 저장되었습니다."
       );
       setButtonState((prev) => ({
         ...prev,
         isLoading: false,
         isDisabled: false,
-        text: "Save Configuration",
+        text: "설정 저장",
       }));
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
-          : "Something went wrong while saving.";
-      notify.error("Could not save settings", message);
+          : "저장하는 중 문제가 발생했습니다.";
+      notify.error("설정을 저장하지 못했습니다", message);
       setButtonState((prev) => ({
         ...prev,
         isLoading: false,
         isDisabled: false,
-        text: "Save Configuration",
+        text: "설정 저장",
       }));
     }
   };
@@ -233,12 +233,12 @@ const SettingsPage = () => {
         setButtonState({
           isLoading: false,
           isDisabled: false,
-          text: "Save Configuration",
+          text: "설정 저장",
           showProgress: false,
         });
         notify.info(
-          "Download cancelled",
-          "The Ollama model download was stopped. Your settings are already saved—you can save again to retry the download."
+          "다운로드 취소됨",
+          "Ollama 모델 다운로드가 중지되었습니다. 설정은 이미 저장되었으며, 다시 저장하면 다운로드를 재시도할 수 있습니다."
         );
         return "cancelled";
       }
@@ -262,7 +262,7 @@ const SettingsPage = () => {
       setButtonState({
         isLoading: true,
         isDisabled: true,
-        text: `Downloading Model (${percentage}%)`,
+        text: `모델 다운로드 중 (${percentage}%)`,
         showProgress: true,
         progressPercentage: percentage,
         status: downloadingModel.status,
@@ -327,11 +327,11 @@ const SettingsPage = () => {
     : textProviderLabel;
 
   const imageSummary = llmConfig.DISABLE_IMAGE_GENERATION
-    ? "Image generation disabled"
+    ? "이미지 생성 비활성화됨"
     : llmConfig.IMAGE_PROVIDER
       ? IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]?.label ||
       llmConfig.IMAGE_PROVIDER
-      : "No image provider";
+      : "이미지 제공자 없음";
 
 
   useEffect(() => {
@@ -353,7 +353,7 @@ const SettingsPage = () => {
       (llmConfig.LLM === "ollama" && !llmConfig.OLLAMA_MODEL) ||
       (llmConfig.LLM === "custom" && !llmConfig.CUSTOM_MODEL)
     ) {
-      notify.error("Cannot save settings", "Please select a model for the selected provider");
+      notify.error("설정을 저장할 수 없습니다", "선택한 제공자의 모델을 선택해 주세요");
 
       const currentUrl = window.location.href;
 
@@ -423,7 +423,7 @@ const SettingsPage = () => {
           <div className="sticky top-0 right-0 z-50 py-[28px]   backdrop-blur mb-4 ">
             <div className="flex  gap-3 items-center ">
               <h3 className=" text-[28px] tracking-[-0.84px] font-unbounded font-normal text-black flex items-center gap-2">
-                Settings
+                설정
               </h3>
               <p className="text-[10px] px-2.5 py-0.5 rounded-[50px] text-[#7A5AF8] border border-[#EDEEEF]  font-medium ">
                 {textSummary} · {imageSummary}
@@ -450,13 +450,13 @@ const SettingsPage = () => {
           {selectedProvider === "session" && (
             <div className="w-full max-w-lg space-y-5 rounded-[20px] border border-[#EDEEEF] bg-white p-7">
               <div>
-                <h4 className="font-unbounded text-lg font-normal text-black">Sign out</h4>
+                <h4 className="font-unbounded text-lg font-normal text-black">로그아웃</h4>
                 <p className="mt-2 font-syne text-sm leading-relaxed text-[#494A4D]">
-                  End your session on this deployment. You will need to sign in again to use the app and access the API.
+                  이 배포에서 세션을 종료합니다. 앱을 사용하고 API에 접근하려면 다시 로그인해야 합니다.
                 </p>
               </div>
               <LogoutButton
-                label="Sign out"
+                label="로그아웃"
                 className="inline-flex w-full items-center justify-center gap-2 rounded-[58px] border border-[#EDEEEF] bg-[#7C51F8] px-5 py-3 font-syne text-xs font-semibold text-white transition hover:bg-[#6d46e6] disabled:cursor-not-allowed disabled:opacity-60"
               />
             </div>
@@ -512,8 +512,8 @@ const SettingsPage = () => {
               {/* Title */}
               <h3 className="text-lg font-semibold text-gray-900 mb-2">
                 {downloadingModel.done
-                  ? "Download Complete!"
-                  : "Downloading Model"}
+                  ? "다운로드 완료!"
+                  : "모델 다운로드 중"}
               </h3>
 
               {/* Model Name */}
@@ -531,7 +531,7 @@ const SettingsPage = () => {
                     />
                   </div>
                   <p className="text-sm text-gray-600 mt-2">
-                    {downloadProgress}% Complete
+                    {downloadProgress}% 완료
                   </p>
                 </div>
               )}
@@ -551,11 +551,11 @@ const SettingsPage = () => {
                 downloadingModel.status !== "pulled" && (
                   <div className="text-xs text-gray-500">
                     {downloadingModel.status === "downloading" &&
-                      "Downloading model files..."}
+                      "모델 파일 다운로드 중..."}
                     {downloadingModel.status === "verifying" &&
-                      "Verifying model integrity..."}
+                      "모델 무결성 확인 중..."}
                     {downloadingModel.status === "pulling" &&
-                      "Pulling model from registry..."}
+                      "레지스트리에서 모델 가져오는 중..."}
                   </div>
                 )}
 
@@ -564,12 +564,12 @@ const SettingsPage = () => {
                 <div className="mt-4 p-3 bg-gray-50 rounded-lg">
                   <div className="flex justify-between text-xs text-gray-600">
                     <span>
-                      Downloaded:{" "}
+                      다운로드됨:{" "}
                       {(downloadingModel.downloaded / 1024 / 1024).toFixed(1)}{" "}
                       MB
                     </span>
                     <span>
-                      Total: {(downloadingModel.size / 1024 / 1024).toFixed(1)}{" "}
+                      전체: {(downloadingModel.size / 1024 / 1024).toFixed(1)}{" "}
                       MB
                     </span>
                   </div>
@@ -584,7 +584,7 @@ const SettingsPage = () => {
                     className="rounded-lg border-gray-300 text-gray-800 hover:bg-gray-50"
                     onClick={() => downloadAbortRef.current?.abort()}
                   >
-                    Cancel download
+                    다운로드 취소
                   </Button>
                 </div>
               )}

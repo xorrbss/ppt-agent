@@ -191,7 +191,7 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
       id="presentation-mode-wrapper"
       ref={rootRef}
       role="application"
-      aria-label="Presentation"
+      aria-label="발표"
       className="fixed inset-0 z-[100] flex flex-col outline-none select-none"
       style={{ backgroundColor: "var(--page-background-color, #c8c7c9)" }}
       tabIndex={0}
@@ -199,7 +199,7 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
       onClick={handleSlideAreaClick}
     >
       <span className="sr-only">
-        Slide {currentSlide + 1} of {slides.length}
+        슬라이드 {slides.length}개 중 {currentSlide + 1}번째
       </span>
 
       {/* Top bar — fullscreen: auto-hide */}
@@ -212,7 +212,7 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
             type="button"
             variant="ghost"
             size="icon"
-            title="Fullscreen (F)"
+            title="전체 화면 (F)"
             onClick={(e) => {
               e.stopPropagation();
               onFullscreenToggle();
@@ -225,7 +225,7 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
             type="button"
             variant="ghost"
             size="icon"
-            title="Exit presentation (Esc)"
+            title="발표 종료 (Esc)"
             onClick={(e) => {
               e.stopPropagation();
               onExit();
@@ -280,7 +280,7 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
           type="button"
           variant="ghost"
           size="icon"
-          title="Previous slide"
+          title="이전 슬라이드"
           onClick={(e) => {
             e.stopPropagation();
             goPrev();
@@ -302,7 +302,7 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
           type="button"
           variant="ghost"
           size="icon"
-          title="Next slide"
+          title="다음 슬라이드"
           onClick={(e) => {
             e.stopPropagation();
             goNext();
@@ -315,11 +315,11 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
         <div className="mx-1 hidden h-6 w-px bg-gray-200 sm:block" />
         <div
           className="hidden max-w-[200px] items-center gap-1.5 text-[11px] leading-tight text-gray-500 sm:flex"
-          title="Keyboard shortcuts"
+          title="키보드 단축키"
         >
           <Keyboard className="h-3.5 w-3.5 shrink-0" />
           <span>
-            ← → space · Home/End · F fullscreen · N notes · Esc exit
+            ← → Space · Home/End · F 전체 화면 · N 노트 · Esc 종료
           </span>
         </div>
       </div>
@@ -334,7 +334,7 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
               <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
                 <div className="flex items-center gap-2 text-sm font-medium text-gray-800">
                   <StickyNote className="h-4 w-4 text-amber-600" />
-                  Speaker notes
+                  발표자 노트
                 </div>
                 <Button
                   type="button"
@@ -347,7 +347,7 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
                   className="h-8 px-2 text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                 >
                   <EyeOff className="mr-1 h-4 w-4" />
-                  Hide
+                  숨기기
                 </Button>
               </div>
               <div className="max-h-[min(28vh,220px)] overflow-auto whitespace-pre-wrap px-3 py-2.5 text-sm leading-relaxed text-gray-700">
@@ -365,7 +365,7 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
               className="h-9 rounded-full border border-gray-200 bg-white/95 px-3 text-gray-800 shadow-md backdrop-blur-sm hover:bg-gray-50"
             >
               <StickyNote className="mr-2 h-4 w-4 text-amber-600" />
-              Show notes
+              노트 보기
             </Button>
           )}
         </div>

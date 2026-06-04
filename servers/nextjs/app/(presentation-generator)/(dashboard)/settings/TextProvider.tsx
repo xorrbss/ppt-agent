@@ -137,26 +137,26 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
   const modelLabel = selectedProviderMeta?.label || selectedProvider;
   const providerApiKeyLabel =
     selectedProvider === "custom"
-      ? "Custom LLM API Key"
+      ? "Custom LLM API 키"
       : selectedProvider === "vertex"
-      ? "Vertex API Key"
+      ? "Vertex API 키"
       : selectedProvider === "azure"
-      ? "Azure OpenAI API Key"
+      ? "Azure OpenAI API 키"
       : selectedProvider === "bedrock"
-      ? "Bedrock API Key (optional)"
+      ? "Bedrock API 키 (선택)"
       : selectedProvider === "openrouter"
-      ? "OpenRouter API Key"
+      ? "OpenRouter API 키"
       : selectedProvider === "fireworks"
-      ? "Fireworks API Key"
+      ? "Fireworks API 키"
       : selectedProvider === "together"
-      ? "Together API Key"
+      ? "Together API 키"
       : selectedProvider === "cerebras"
-      ? "Cerebras API Key"
+      ? "Cerebras API 키"
       : selectedProvider === "litellm"
-      ? "LiteLLM API key (optional)"
+      ? "LiteLLM API 키 (선택)"
       : selectedProvider === "lmstudio"
-      ? "LM Studio API key (optional)"
-      : `${selectedProvider} API Key`;
+      ? "LM Studio API 키 (선택)"
+      : `${selectedProvider} API 키`;
 
   useEffect(() => {
     if (isFirstRender.current) {
@@ -376,15 +376,15 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
         setAvailableModels([]);
         setModelsChecked(true);
         notify.error(
-          "Could not load models",
-          `The server could not list ${modelLabel} models. Check your API key or endpoint and try again.`
+          "모델을 불러올 수 없습니다",
+          `서버에서 ${modelLabel} 모델 목록을 가져오지 못했습니다. API 키 또는 엔드포인트를 확인한 후 다시 시도하세요.`
         );
       }
     } catch (error) {
       console.error("Error fetching models:", error);
       notify.error(
-        "Could not load models",
-        "Something went wrong while contacting the provider. Check your network and try again."
+        "모델을 불러올 수 없습니다",
+        "제공자에 연결하는 중 문제가 발생했습니다. 네트워크 상태를 확인한 후 다시 시도하세요."
       );
       setAvailableModels([]);
       setModelsChecked(true);
@@ -439,10 +439,10 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
             </svg>
           </div>
           <h3 className="text-xl font-normal text-[#191919] py-2.5">
-            Text Generation Settings
+            텍스트 생성 설정
           </h3>
           <p className=" text-sm  text-gray-500">
-            Choosing where text content comes from
+            텍스트 콘텐츠를 어디서 생성할지 선택하세요
           </p>
         </div>
         <div className="flex min-w-0 flex-1 flex-col items-stretch justify-end gap-4 sm:items-end">
@@ -458,7 +458,7 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
             >
               <div className="flex flex-col justify-start ">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select Text Provider
+                  텍스트 제공자 선택
                 </label>
                 <Popover
                   open={openProviderSelect}
@@ -476,7 +476,7 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                           {llmConfig.LLM
                             ? LLM_PROVIDERS[llmConfig.LLM]?.label ||
                               llmConfig.LLM
-                            : "Select text provider"}
+                            : "텍스트 제공자 선택"}
                         </span>
                       </div>
                       <ChevronUp className="w-4 h-4 text-gray-500" />
@@ -488,9 +488,9 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                     style={{ width: "300px" }}
                   >
                     <Command>
-                      <CommandInput placeholder="Search provider..." />
+                      <CommandInput placeholder="제공자 검색..." />
                       <CommandList>
-                        <CommandEmpty>No provider found.</CommandEmpty>
+                        <CommandEmpty>제공자를 찾을 수 없습니다.</CommandEmpty>
                         <CommandGroup>
                           {Object.values(LLM_PROVIDERS).map(
                             (provider, index) => (
@@ -556,7 +556,7 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                         }}
                         className="mt-8 py-2.5 bg-[#EDEEEF] px-3.5 w-fit rounded-[48px] text-xs font-semibold text-[#101323] transition-all duration-200 border border-[#EDEEEF] hover:bg-[#E8F0FF]/90 focus:ring-2 focus:ring-blue-500/20"
                       >
-                        Use Ollama URL
+                        Ollama URL 사용
                       </button>
                     ) : (
                       <>
@@ -585,7 +585,7 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                           }}
                           className="mt-2 text-xs font-medium text-[#4B5563] underline underline-offset-2"
                         >
-                          Use default Ollama URL
+                          기본 Ollama URL 사용
                         </button>
                       </>
                     )}
@@ -626,8 +626,8 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                         className="w-full px-2 py-3 outline-none border  border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
                         placeholder={
                           selectedProvider === "litellm"
-                            ? "Optional if your proxy does not require auth"
-                            : `Enter your ${providerApiKeyLabel}`
+                            ? "프록시에 인증이 필요 없으면 선택 입력입니다"
+                            : `${providerApiKeyLabel} 입력`
                         }
                       />
                       <button
@@ -652,13 +652,13 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                       onInputChange(e.target.value, "CUSTOM_LLM_URL")
                     }
                     className="w-full mt-2 px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                    placeholder="OpenAI-compatible URL"
+                    placeholder="OpenAI 호환 URL"
                   />
                 )}
                 {selectedProvider === "litellm" && (
                   <>
                     <label className="mt-3 block text-sm font-medium text-gray-700 mb-2">
-                      LiteLLM base URL
+                      LiteLLM 기본 URL
                     </label>
                     <input
                       type="text"
@@ -667,19 +667,19 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                         onInputChange(e.target.value, "LITELLM_BASE_URL")
                       }
                       className="w-full px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                      placeholder="e.g. http://host.docker.internal:4000/v1"
+                      placeholder="예: http://host.docker.internal:4000/v1"
                     />
                     <p className="mt-1.5 text-xs text-gray-500">
-                      OpenAI-compatible root (usually ends with /v1); /v1 is
-                      added if omitted. API key above is optional for local
-                      proxies with no auth.
+                      OpenAI 호환 루트 주소입니다(보통 /v1로 끝남). /v1을 생략하면
+                      자동으로 추가됩니다. 인증이 필요 없는 로컬 프록시의 경우
+                      위 API 키는 선택 사항입니다.
                     </p>
                   </>
                 )}
                 {selectedProvider === "lmstudio" && (
                   <>
                     <label className="mt-3 block text-sm font-medium text-gray-700 mb-2">
-                      LM Studio base URL
+                      LM Studio 기본 URL
                     </label>
                     <input
                       type="text"
@@ -691,15 +691,15 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                       placeholder="http://localhost:1234/v1"
                     />
                     <p className="mt-1.5 text-xs text-gray-500">
-                      Defaults to localhost:1234/v1, and /v1 is added
-                      automatically when omitted.
+                      기본값은 localhost:1234/v1이며, /v1을 생략하면 자동으로
+                      추가됩니다.
                     </p>
                   </>
                 )}
                 {selectedProvider === "fireworks" && (
                   <>
                     <label className="mt-3 block text-sm font-medium text-gray-700 mb-2">
-                      Fireworks base URL (optional)
+                      Fireworks 기본 URL (선택)
                     </label>
                     <input
                       type="text"
@@ -715,7 +715,7 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                 {selectedProvider === "together" && (
                   <>
                     <label className="mt-3 block text-sm font-medium text-gray-700 mb-2">
-                      Together base URL (optional)
+                      Together 기본 URL (선택)
                     </label>
                     <input
                       type="text"
@@ -771,10 +771,10 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                     {modelsLoading ? (
                       <span className="flex items-center justify-center gap-2">
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        Checking for models...
+                        모델 확인 중...
                       </span>
                     ) : (
-                      "Check models"
+                      "모델 확인"
                     )}
                   </button>
                 )}
@@ -789,8 +789,8 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-3">
                   {selectedProvider === "ollama"
-                    ? "Choose a supported model"
-                    : `Select ${modelLabel} Model`}
+                    ? "지원되는 모델 선택"
+                    : `${modelLabel} 모델 선택`}
                 </label>
                 <div className="w-full">
                   <Popover
@@ -806,7 +806,7 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                       >
                         <span className="text-sm truncate font-medium text-gray-900">
                           {(() => {
-                            if (!currentModel) return "Select a model";
+                            if (!currentModel) return "모델 선택";
                             const selectedModel = availableModels.find(
                               (model) => model.value === currentModel
                             );
@@ -830,9 +830,9 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                       style={{ width: "var(--radix-popover-trigger-width)" }}
                     >
                       <Command>
-                        <CommandInput placeholder="Search models..." />
+                        <CommandInput placeholder="모델 검색..." />
                         <CommandList>
-                          <CommandEmpty>No model found.</CommandEmpty>
+                          <CommandEmpty>모델을 찾을 수 없습니다.</CommandEmpty>
                           <CommandGroup>
                             {availableModels.map((model) => (
                               <CommandItem
@@ -888,8 +888,8 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
       {modelsChecked && availableModels.length === 0 && (
         <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
           <p className="text-sm text-yellow-800">
-            No models found. Please make sure your provider credentials are
-            valid and the selected provider is reachable.
+            모델을 찾을 수 없습니다. 제공자 인증 정보가 올바른지, 선택한
+            제공자에 연결할 수 있는지 확인하세요.
           </p>
         </div>
       )}

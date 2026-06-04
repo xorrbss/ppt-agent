@@ -549,7 +549,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
         if (!isOpen) return;
 
         if (!compiledLayout?.schemaJSON) {
-            setParseError("Could not parse schema from slide code");
+            setParseError("슬라이드 코드에서 스키마를 분석할 수 없습니다");
             setFields([]);
             return;
         }
@@ -562,7 +562,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
             setParseError(null);
         } catch (error) {
             console.error("Error parsing schema:", error);
-            setParseError("Failed to parse schema");
+            setParseError("스키마 분석에 실패했습니다");
             setFields([]);
         }
     }, [compiledLayout, isOpen]);
@@ -683,14 +683,14 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
         return name
             .replace(/([A-Z])/g, ' $1')
             .replace(/^./, str => str.toUpperCase())
-            .replace(/\[\]$/, ' (items)')
+            .replace(/\[\]$/, ' (항목)')
             .trim();
     };
 
     const getConstraintSummary = (field: SchemaField): string | null => {
         if (field.type === 'string') {
             if (field.minLength !== undefined || field.maxLength !== undefined) {
-                return `${field.minLength ?? '∞'}-${field.maxLength ?? '∞'} chars`;
+                return `${field.minLength ?? '∞'}-${field.maxLength ?? '∞'} 자`;
             }
         } else if (field.type === 'number') {
             if (field.minimum !== undefined || field.maximum !== undefined) {
@@ -698,7 +698,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
             }
         } else if (field.type === 'array') {
             if (field.minItems !== undefined || field.maxItems !== undefined) {
-                return `${field.minItems ?? '∞'}-${field.maxItems ?? '∞'} items`;
+                return `${field.minItems ?? '∞'}-${field.maxItems ?? '∞'} 개`;
             }
         }
         return null;
@@ -827,15 +827,15 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
             onFillContent(content);
 
             const modeLabels = {
-                min: 'Low',
-                normal: 'Medium',
-                max: 'Text Heavy',
+                min: '간략',
+                normal: '보통',
+                max: '텍스트 위주',
             };
-            notify.success("Content generated", `${modeLabels[mode]} content was generated successfully.`);
+            notify.success("콘텐츠 생성 완료", `${modeLabels[mode]} 콘텐츠가 성공적으로 생성되었습니다.`);
             handleCancel();
         } catch (error) {
             console.error('Error generating content:', error);
-            notify.error("Generation failed", error instanceof Error ? error.message : "Failed to generate content.");
+            notify.error("생성 실패", error instanceof Error ? error.message : "콘텐츠 생성에 실패했습니다.");
         } finally {
             setIsGenerating(false);
             setGeneratingMode(null);
@@ -854,12 +854,12 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-gray-800 text-base font-semibold">
 
-                        Schema Editor
+                        스키마 편집기
                     </div>
                     <div className="flex items-center gap-2">
                         {hasChanges && (
                             <span className="px-2 py-0.5 text-[10px] font-medium bg-amber-50 text-amber-600 rounded border border-amber-200">
-                                Unsaved
+                                저장 안 됨
                             </span>
                         )}
                         <Button
@@ -869,7 +869,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
                             className="h-7 px-3 text-[11px] bg-emerald-500 hover:bg-emerald-600 text-white disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                             <Save className="w-3 h-3 mr-1" />
-                            Save
+                            저장
                         </Button>
                         <button
                             onClick={handleCancel}
@@ -891,7 +891,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
                         <div className="flex items-center justify-between mb-1">
                             <div className="flex items-center gap-2">
                                 <span className="text-lg font-medium text-[#111827]">
-                                    Character Limits
+                                    글자 수 제한
                                 </span>
                                 <span className="text-sm px-1.5 py-0.5 bg-gray-50 text-gray-700 rounded">
                                     {fields.length}
@@ -908,12 +908,12 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
                                     }}
                                     className="text-[10px] font-medium text-gray-400 hover:text-violet-600 transition-colors"
                                 >
-                                    {areAllCollapsed ? 'Expand all' : 'Collapse all'}
+                                    {areAllCollapsed ? '모두 펼치기' : '모두 접기'}
                                 </button>
                             )}
                         </div>
                         <p className="text-sm text-gray-600 py-1">
-                            Set min/max character limits for each field. This controls how much text AI generates for your slide.
+                            각 필드의 최소/최대 글자 수를 설정하세요. AI가 슬라이드에 생성하는 텍스트 분량을 조절합니다.
                         </p>
                     </div>
 
@@ -925,7 +925,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
                     ) : fields.length === 0 ? (
                         <div className="text-center py-8 text-gray-400">
                             <Box className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                            <p className="text-xs">No editable fields</p>
+                            <p className="text-xs">편집할 수 있는 필드가 없습니다</p>
                         </div>
                     ) : (
                         <div className="space-y-1 px-2 ">
@@ -980,7 +980,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
                                                     {isHighlighted && (
                                                         <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 bg-violet-100 text-violet-600 rounded">
                                                             <MousePointer2 className="w-2.5 h-2.5" />
-                                                            clicked
+                                                            클릭됨
                                                         </span>
                                                     )}
                                                 </div>
@@ -999,7 +999,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
                                                     {(f.originalType === 'string' || f.originalType === 'number') && (
                                                         <div className="mb-2">
                                                             <div className="flex items-center gap-2">
-                                                                <Label className="text-xs text-gray-600">Type:</Label>
+                                                                <Label className="text-xs text-gray-600">유형:</Label>
                                                                 <Select
                                                                     value={f.type}
                                                                     onValueChange={(value) => handleTypeChange(f.path, value as 'string' | 'number')}
@@ -1008,12 +1008,12 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
                                                                         <SelectValue />
                                                                     </SelectTrigger>
                                                                     <SelectContent>
-                                                                        <SelectItem value="string">String</SelectItem>
-                                                                        <SelectItem value="number">Number</SelectItem>
+                                                                        <SelectItem value="string">문자열</SelectItem>
+                                                                        <SelectItem value="number">숫자</SelectItem>
                                                                     </SelectContent>
                                                                 </Select>
                                                                 {isTypeChanged(f) && (
-                                                                    <span className="text-[9px] px-1 py-0.5 bg-blue-50 text-blue-500 rounded">changed</span>
+                                                                    <span className="text-[9px] px-1 py-0.5 bg-blue-50 text-blue-500 rounded">변경됨</span>
                                                                 )}
                                                             </div>
                                                         </div>
@@ -1023,7 +1023,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
                                                     {f.type === 'string' && (
                                                         <div className="grid grid-cols-2 gap-2">
                                                             <div>
-                                                                <Label className="text-xs text-gray-600 mb-1 block">Min chars</Label>
+                                                                <Label className="text-xs text-gray-600 mb-1 block">최소 글자 수</Label>
                                                                 <Input
                                                                     type="number"
                                                                     min={0}
@@ -1034,7 +1034,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
                                                                 />
                                                             </div>
                                                             <div>
-                                                                <Label className="text-xs text-gray-600 mb-1 block">Max chars</Label>
+                                                                <Label className="text-xs text-gray-600 mb-1 block">최대 글자 수</Label>
                                                                 <Input
                                                                     type="number"
                                                                     min={0}
@@ -1050,7 +1050,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
                                                     {f.type === 'number' && (
                                                         <div className="grid grid-cols-2 gap-2">
                                                             <div>
-                                                                <Label className="text-xs text-gray-600 mb-1 block">Min value</Label>
+                                                                <Label className="text-xs text-gray-600 mb-1 block">최솟값</Label>
                                                                 <Input
                                                                     type="number"
                                                                     value={f.minimum ?? ''}
@@ -1060,7 +1060,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
                                                                 />
                                                             </div>
                                                             <div>
-                                                                <Label className="text-xs text-gray-600 mb-1 block">Max value</Label>
+                                                                <Label className="text-xs text-gray-600 mb-1 block">최댓값</Label>
                                                                 <Input
                                                                     type="number"
                                                                     value={f.maximum ?? ''}
@@ -1075,7 +1075,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
                                                     {f.type === 'array' && (
                                                         <div className="grid grid-cols-2 gap-2">
                                                             <div>
-                                                                <Label className="text-xs text-gray-600 mb-1 block">Min items</Label>
+                                                                <Label className="text-xs text-gray-600 mb-1 block">최소 항목 수</Label>
                                                                 <Input
                                                                     type="number"
                                                                     min={0}
@@ -1086,7 +1086,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
                                                                 />
                                                             </div>
                                                             <div>
-                                                                <Label className="text-xs text-gray-600 mb-1 block">Max items</Label>
+                                                                <Label className="text-xs text-gray-600 mb-1 block">최대 항목 수</Label>
                                                                 <Input
                                                                     type="number"
                                                                     min={0}
@@ -1101,7 +1101,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
 
                                                     {f.default !== undefined && typeof f.default !== 'object' && (
                                                         <div className="mt-3">
-                                                            <Label className="text-xs text-gray-600 mb-1 block">Current value</Label>
+                                                            <Label className="text-xs text-gray-600 mb-1 block">현재 값</Label>
                                                             <div className="text-xs text-gray-700 bg-gray-50 px-2 py-1 rounded border border-gray-100 truncate font-mono">
                                                                 {String(f.default)}
                                                             </div>
@@ -1120,7 +1120,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
                                 const textColor = isArrayParent ? 'text-purple-500' : 'text-blue-500';
                                 const bgColor = isArrayParent ? 'bg-purple-50' : 'bg-blue-50';
                                 const badgeTextColor = isArrayParent ? 'text-purple-400' : 'text-blue-400';
-                                const headerLabel = isArrayParent ? 'Item Fields' : `${formatFieldName(field.name)} Properties`;
+                                const headerLabel = isArrayParent ? '항목 필드' : `${formatFieldName(field.name)} 속성`;
 
                                 return (
                                     <div key={field.path} className="space-y-1">

@@ -96,13 +96,13 @@ export const PresentationCard = ({
         presentation_id: id,
         slide_count: presentation?.slides?.length || 0,
       });
-      notify.success("Presentation deleted", "The presentation was removed from your dashboard.");
+      notify.success("발표자료 삭제됨", "발표자료가 대시보드에서 삭제되었습니다.");
       setShowDeleteDialog(false);
       if (onDeleted) {
         onDeleted(id);
       }
     } else {
-      notify.error("Could not delete presentation", response?.message || "Something went wrong while deleting the presentation.");
+      notify.error("발표자료를 삭제할 수 없습니다", response?.message || "발표자료를 삭제하는 중 문제가 발생했습니다.");
     }
     setIsDeleting(false);
   };
@@ -151,7 +151,7 @@ export const PresentationCard = ({
                     setShowDeleteDialog(true);
                   }}
                 >
-                  <p>Delete</p>
+                  <p>삭제</p>
                   <Trash className="w- h-4 text-red-500" />
                 </button>
               </PopoverContent>
@@ -183,12 +183,11 @@ export const PresentationCard = ({
                 <AlertTriangle className="h-6 w-6 text-red-500" />
               </div>
               <h3 className="mb-2 text-lg font-semibold text-[#191919]">
-                Delete Presentation?
+                발표자료를 삭제하시겠습니까?
               </h3>
               <p className="text-sm leading-relaxed text-gray-500">
-                You are about to delete{" "}
-                <span className="font-medium text-gray-700">&quot;{title}&quot;</span>.
-                This action cannot be undone.
+                <span className="font-medium text-gray-700">&quot;{title}&quot;</span>
+                {" "}발표자료를 삭제하려고 합니다. 이 작업은 되돌릴 수 없습니다.
               </p>
             </div>
             <div className="flex border-t border-gray-100">
@@ -197,7 +196,7 @@ export const PresentationCard = ({
                 disabled={isDeleting}
                 className="flex-1 px-4 py-3.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Cancel
+                취소
               </button>
               <button
                 onClick={() => void handleDelete()}
@@ -207,10 +206,10 @@ export const PresentationCard = ({
                 {isDeleting ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Deleting...
+                    삭제 중…
                   </>
                 ) : (
-                  "Delete"
+                  "삭제"
                 )}
               </button>
             </div>

@@ -53,7 +53,7 @@ const SlideContent = ({
 
   const handleSubmit = async () => {
     if (!editPrompt.trim()) {
-      notify.warning("Prompt required", "Please enter a prompt before submitting.");
+      notify.warning("프롬프트가 필요합니다", "제출하기 전에 프롬프트를 입력해 주세요.");
       return;
     }
     setIsUpdating(true);
@@ -76,17 +76,17 @@ const SlideContent = ({
           prompt_word_count: editPrompt.trim().split(/\s+/).filter(Boolean)
             .length,
         });
-        notify.success("Slide updated", "Your changes were applied to this slide.");
+        notify.success("슬라이드 수정 완료", "변경 사항이 이 슬라이드에 적용되었습니다.");
         setEditPrompt("");
       } else {
         notify.error(
-          "Slide edit failed",
-          "The server did not return an updated slide. Please try again."
+          "슬라이드 수정 실패",
+          "서버가 수정된 슬라이드를 반환하지 않았습니다. 다시 시도해 주세요."
         );
       }
     } catch (error: any) {
       console.error("Error in slide editing:", error);
-      notify.error("Slide edit failed", error.message || "Something went wrong while editing the slide.");
+      notify.error("슬라이드 수정 실패", error.message || "슬라이드를 수정하는 중 문제가 발생했습니다.");
     } finally {
       setIsUpdating(false);
     }
@@ -111,7 +111,7 @@ const SlideContent = ({
       dispatch(deletePresentationSlide(slide.index));
     } catch (error: any) {
       console.error("Error deleting slide:", error);
-      notify.error("Could not delete slide", error.message || "Something went wrong while deleting the slide.");
+      notify.error("슬라이드를 삭제할 수 없습니다", error.message || "슬라이드를 삭제하는 중 문제가 발생했습니다.");
     }
   };
   useEffect(() => {
@@ -160,7 +160,7 @@ const SlideContent = ({
           </div>
           {!showNewSlideSelection && (
             <div className="group-hover:opacity-100 hidden md:block opacity-0 transition-opacity my-4 duration-300">
-              <ToolTip content="Add new slide below">
+              <ToolTip content="아래에 새 슬라이드 추가">
                 {!isStreaming && (
                   <div
                     onClick={() => {
@@ -215,7 +215,7 @@ const SlideContent = ({
                     type="button"
                     className="flex px-3.5 py-2.5 items-center justify-center rounded-full bg-[#F7F6F9] font-syne"
                   >
-                    <ToolTip content="Update slide using prompt">
+                    <ToolTip content="프롬프트로 슬라이드 수정">
                       <Pencil className="h-4 w-4" />
                     </ToolTip>
                   </button>
@@ -228,10 +228,10 @@ const SlideContent = ({
                 >
                   <div className="border-b border-gray-100 px-4 py-3">
                     <p className="text-sm font-semibold text-gray-900">
-                      Update slide
+                      슬라이드 수정
                     </p>
                     <p className="mt-1 text-xs text-gray-500">
-                      Describe how this slide should be improved.
+                      이 슬라이드를 어떻게 개선할지 설명해 주세요.
                     </p>
                   </div>
                   <form
@@ -244,7 +244,7 @@ const SlideContent = ({
                     <Textarea
                       id={`slide-${slide.index}-prompt`}
                       value={editPrompt}
-                      placeholder="Enter your prompt here..."
+                      placeholder="여기에 프롬프트를 입력하세요..."
                       className="min-h-[110px] max-h-[180px] w-full resize-none rounded-xl border border-gray-200 p-3 text-sm focus-visible:ring-1 focus-visible:ring-[#5141e5]"
                       disabled={isUpdating}
                       onChange={(e) => setEditPrompt(e.target.value)}
@@ -266,7 +266,7 @@ const SlideContent = ({
                           : "hover:opacity-90"
                       }`}
                     >
-                      {isUpdating ? "Updating..." : "Update"}
+                      {isUpdating ? "수정 중..." : "수정"}
                       <SendHorizontal className="h-4 w-4" />
                     </button>
                   </form>
@@ -291,7 +291,7 @@ const SlideContent = ({
                           : "border-gray-200 bg-white text-gray-600"
                       }`}
                     >
-                      <ToolTip content="Edit speaker notes">
+                      <ToolTip content="발표자 노트 편집">
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
                           width="14"
@@ -332,7 +332,7 @@ const SlideContent = ({
                   >
                     <div className="border-b border-gray-100 px-4 py-3">
                       <p className="text-sm font-semibold text-gray-900">
-                        Speaker notes
+                        발표자 노트
                       </p>
                     </div>
                     <div className="space-y-3 p-4">
@@ -349,7 +349,7 @@ const SlideContent = ({
                 onClick={onDeleteSlide}
                 className="flex px-4 py-2.5 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 font-syne"
               >
-                <ToolTip content="Delete slide">
+                <ToolTip content="슬라이드 삭제">
                   <Trash className="h-4 w-4" />
                 </ToolTip>
               </button>

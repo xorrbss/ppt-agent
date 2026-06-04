@@ -39,7 +39,7 @@ export class SlideErrorBoundary extends React.Component<
       return (
         <div className="aspect-video w-full h-full bg-red-50 text-red-700 flex flex-col items-start justify-start p-4 space-y-2 rounded-md border border-red-200">
           <div className="text-sm font-semibold">
-            {this.props.label ? `${this.props.label} render error` : "Slide render error"}
+            {this.props.label ? `${this.props.label} 렌더링 오류` : "슬라이드 렌더링 오류"}
           </div>
           <pre className="text-xs whitespace-pre-wrap break-words max-h-full overflow-auto bg-red-100 rounded-md p-2 border border-red-200">
             {this.state.errorMessage}

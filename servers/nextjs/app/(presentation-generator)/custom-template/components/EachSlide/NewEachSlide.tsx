@@ -139,7 +139,7 @@ const EachSlide: React.FC<EachSlideProps> = ({
   const handleDeleteSlide = () => {
     // warmin
     const confirmed = window.confirm(
-      `Are you sure you want to delete slide ${index + 1}? This action cannot be undone.`
+      `슬라이드 ${index + 1}을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`
     );
     if (!confirmed) return;
     setSlides(prev => prev.filter((_, i) => i !== index));
@@ -167,7 +167,7 @@ const EachSlide: React.FC<EachSlideProps> = ({
             </div>
             <div>
               <h3 className="text-base font-semibold text-[#111827] tracking-tight">
-                {compiledLayout?.layoutId || `Slide ${index + 1}`}
+                {compiledLayout?.layoutId || `슬라이드 ${index + 1}`}
               </h3>
               {compiledLayout?.layoutDescription && (
                 <p className="text-sm text-[#6B7280] mt-0.5 line-clamp-1 max-w-[300px]">
@@ -203,7 +203,7 @@ const EachSlide: React.FC<EachSlideProps> = ({
                     `}
                   >
                     <Sparkles className="w-3.5 h-3.5" />
-                    <span>AI Edit</span>
+                    <span>AI 편집</span>
                   </button>
                 </PopoverTrigger>
                 <PopoverContent
@@ -219,8 +219,8 @@ const EachSlide: React.FC<EachSlideProps> = ({
                           <Sparkles className="w-3.5 h-3.5 text-white" />
                         </div>
                         <div>
-                          <span className="text-sm font-semibold text-gray-800">AI Edit</span>
-                          <p className="text-[10px] text-gray-400">Apply AI edits & tweaks</p>
+                          <span className="text-sm font-semibold text-gray-800">AI 편집</span>
+                          <p className="text-[10px] text-gray-400">AI로 편집 및 세부 조정 적용</p>
                         </div>
                       </div>
                       <button
@@ -238,7 +238,7 @@ const EachSlide: React.FC<EachSlideProps> = ({
                       onChange={(e) => setPrompt(e.target.value)}
                       rows={3}
                       autoFocus
-                      placeholder="What changes would you like? e.g., 'Make the title larger' or 'Change colors to blue theme'"
+                      placeholder="어떻게 변경할까요? 예: '제목을 더 크게' 또는 '색상을 파란색 테마로 변경'"
                       disabled={isUpdating}
                       className="w-full px-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-800 placeholder:text-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 focus:bg-white transition-all"
                     />
@@ -259,12 +259,12 @@ const EachSlide: React.FC<EachSlideProps> = ({
                         {isUpdating ? (
                           <>
                             <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            Applying...
+                            적용 중…
                           </>
                         ) : (
                           <>
                             <Check className="w-3.5 h-3.5" />
-                            Apply
+                            적용
                           </>
                         )}
                       </button>
@@ -274,7 +274,7 @@ const EachSlide: React.FC<EachSlideProps> = ({
               </Popover>
 
               {/* Schema Button */}
-              <ToolTip content="Edit content schema">
+              <ToolTip content="콘텐츠 스키마 편집">
                 <button
                   onClick={() => {
                     if (isSchemaEditorOpen) {
@@ -290,7 +290,7 @@ const EachSlide: React.FC<EachSlideProps> = ({
                     }`}
                 >
                   <Edit className="w-3.5 h-3.5" />
-                  <span>Schema</span>
+                  <span>스키마</span>
                 </button>
               </ToolTip>
 
@@ -331,7 +331,7 @@ const EachSlide: React.FC<EachSlideProps> = ({
 
             {/* Undo/Redo Group */}
             <div className="flex items-center bg-gray-50/80 rounded-lg p-1 gap-0.5">
-              <ToolTip content={canUndo ? "Undo (Ctrl+Z)" : "Nothing to undo"}>
+              <ToolTip content={canUndo ? "실행 취소 (Ctrl+Z)" : "실행 취소할 항목 없음"}>
                 <button
                   onClick={undo}
                   disabled={!canUndo || !isSlideReady}
@@ -347,7 +347,7 @@ const EachSlide: React.FC<EachSlideProps> = ({
                   <Undo className="w-4 h-4" />
                 </button>
               </ToolTip>
-              <ToolTip content={canRedo ? "Redo (Ctrl+Shift+Z)" : "Nothing to redo"}>
+              <ToolTip content={canRedo ? "다시 실행 (Ctrl+Shift+Z)" : "다시 실행할 항목 없음"}>
                 <button
                   onClick={redo}
                   disabled={!canRedo || !isSlideReady}
@@ -369,7 +369,7 @@ const EachSlide: React.FC<EachSlideProps> = ({
             <div className="w-px h-6 bg-gray-200 mx-1" />
 
             {/* Re-Construct Button */}
-            <ToolTip content="Re-Design this slide">
+            <ToolTip content="이 슬라이드 다시 디자인">
               <button
                 onClick={handleRetrySlide}
                 disabled={!isSlideReady}
@@ -386,13 +386,13 @@ const EachSlide: React.FC<EachSlideProps> = ({
                 } : undefined}
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                Re-Construct
+                다시 구성
               </button>
 
             </ToolTip>
 
             {/* Delete Button */}
-            <ToolTip content="Delete slide">
+            <ToolTip content="슬라이드 삭제">
               <button
                 onClick={handleDeleteSlide}
                 disabled={!isSlideReady}
@@ -415,7 +415,7 @@ const EachSlide: React.FC<EachSlideProps> = ({
           <div className="mt-4">
             <div className="flex items-center gap-2 mb-2">
               <Loader2 className="w-4 h-4 animate-spin text-[#7A5AF8]" />
-              <span className="text-sm font-medium text-[#7A5AF8]">Generating slide layout...</span>
+              <span className="text-sm font-medium text-[#7A5AF8]">슬라이드 레이아웃 생성 중…</span>
             </div>
             <Timer duration={120} />
           </div>
@@ -432,14 +432,14 @@ const EachSlide: React.FC<EachSlideProps> = ({
                 <MousePointer2 className="w-3.5 h-3.5 text-white" />
               </div>
               <span className="text-sm font-medium text-indigo-700">
-                Selection Edit Mode — Click on any element to edit with AI
+                선택 편집 모드 — 요소를 클릭하면 AI로 편집할 수 있습니다
               </span>
             </div>
             <button
               onClick={() => setIsSelectionEditMode(false)}
               className="h-8 px-3 text-sm font-medium text-indigo-600 hover:text-indigo-800 hover:bg-indigo-100 rounded-md transition-colors"
             >
-              Exit
+              종료
             </button>
           </div>
         )}

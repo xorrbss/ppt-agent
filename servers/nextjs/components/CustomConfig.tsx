@@ -78,11 +78,11 @@ export default function CustomConfig({
         console.error('Failed to fetch custom models');
         setCustomModels([]);
         setCustomModelsChecked(true);
-        notify.error("Could not load models", "The server could not list models. Check your API key or endpoint and try again.");
+        notify.error("모델을 불러올 수 없습니다", "서버에서 모델 목록을 가져오지 못했습니다. API 키 또는 엔드포인트를 확인한 후 다시 시도해 주세요.");
       }
     } catch (error) {
       console.error('Error fetching custom models:', error);
-      notify.error("Could not load models", "The server could not list models. Check your API key or endpoint and try again.");
+      notify.error("모델을 불러올 수 없습니다", "서버에서 모델 목록을 가져오지 못했습니다. API 키 또는 엔드포인트를 확인한 후 다시 시도해 주세요.");
       setCustomModels([]);
       setCustomModelsChecked(true);
     } finally {
@@ -95,13 +95,13 @@ export default function CustomConfig({
       {/* URL Input */}
       <div className="mb-4">
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          OpenAI Compatible URL
+          OpenAI 호환 URL
         </label>
         <div className="relative">
           <input
             type="text"
             required
-            placeholder="Enter your URL"
+            placeholder="URL을 입력하세요"
             className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
             value={customLlmUrl}
             onChange={(e) => onUrlChange(e.target.value)}
@@ -112,13 +112,13 @@ export default function CustomConfig({
       {/* API Key Input */}
       <div className="mb-4">
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          OpenAI Compatible API Key
+          OpenAI 호환 API 키
         </label>
         <div className="relative">
           <input
             type="text"
             required
-            placeholder="Enter your API Key"
+            placeholder="API 키를 입력하세요"
             className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
             value={customLlmApiKey}
             onChange={(e) => onApiKeyChange(e.target.value)}
@@ -140,10 +140,10 @@ export default function CustomConfig({
             {customModelsLoading ? (
               <div className="flex items-center justify-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Checking for models...
+                모델 확인 중…
               </div>
             ) : (
-              "Check for available models"
+              "사용 가능한 모델 확인"
             )}
           </button>
         </div>
@@ -153,7 +153,7 @@ export default function CustomConfig({
       {customModelsChecked && customModels.length === 0 && (
         <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
           <p className="text-sm text-yellow-800">
-            No models found. Please make sure your API key is valid and has access to models.
+            사용 가능한 모델이 없습니다. API 키가 올바르며 모델에 접근할 수 있는지 확인해 주세요.
           </p>
         </div>
       )}
@@ -163,12 +163,12 @@ export default function CustomConfig({
         <div className="mb-4">
           <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
             <p className="text-sm text-amber-800">
-              <strong>Important:</strong> Only models with structured
-              JSON schema output support will work reliably.
+              <strong>중요:</strong> 구조화된 JSON 스키마 출력을
+              지원하는 모델만 안정적으로 작동합니다.
             </p>
           </div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Select Model
+            모델 선택
           </label>
           <div className="w-full">
             <Popover
@@ -183,7 +183,7 @@ export default function CustomConfig({
                   className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
                 >
                   <span className="text-sm font-medium text-gray-900">
-                    {customModel || "Select a model"}
+                    {customModel || "모델을 선택하세요"}
                   </span>
                   <ChevronsUpDown className="w-4 h-4 text-gray-500" />
                 </Button>
@@ -194,9 +194,9 @@ export default function CustomConfig({
                 style={{ width: "var(--radix-popover-trigger-width)" }}
               >
                 <Command>
-                  <CommandInput placeholder="Search model..." />
+                  <CommandInput placeholder="모델 검색..." />
                   <CommandList>
-                    <CommandEmpty>No model found.</CommandEmpty>
+                    <CommandEmpty>모델을 찾을 수 없습니다.</CommandEmpty>
                     <CommandGroup>
                       {customModels.map((model, index) => (
                         <CommandItem
@@ -232,7 +232,7 @@ export default function CustomConfig({
       <div>
         <div className="flex items-center justify-between mb-4 bg-green-50 p-2 rounded-sm">
           <label className="text-sm font-medium text-gray-700">
-            Disable Thinking
+            사고 과정 비활성화
           </label>
           <Switch
             checked={disableThinking}
@@ -241,7 +241,7 @@ export default function CustomConfig({
         </div>
         <p className="mt-2 text-sm text-gray-500 flex items-center gap-2">
           <span className="block w-1 h-1 rounded-full bg-gray-400"></span>
-          If enabled, Thinking will be disabled.
+          활성화하면 사고 과정이 비활성화됩니다.
         </p>
       </div>
     </div >

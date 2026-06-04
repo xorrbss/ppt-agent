@@ -22,9 +22,9 @@ const GenerateButton: React.FC<GenerateButtonProps> = ({
 
   const getButtonText = () => {
     if (loadingState.isLoading) return loadingState.message;
-    if (streamState.isLoading || streamState.isStreaming) return "Loading...";
-    if (!selectedTemplate) return "Select a Template";
-    return "Generate Presentation";
+    if (streamState.isLoading || streamState.isStreaming) return "불러오는 중…";
+    if (!selectedTemplate) return "템플릿 선택";
+    return "발표자료 생성";
   };
 
   return (

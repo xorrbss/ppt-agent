@@ -27,7 +27,7 @@ const TiptapText: React.FC<TiptapTextProps> = ({
   content,
   onContentChange,
   className = "",
-  placeholder = "Enter text...",
+  placeholder = "텍스트를 입력하세요...",
 }) => {
   const editor = useEditor({
     extensions: [StarterKit, Markdown, Underline],
@@ -85,7 +85,7 @@ const TiptapText: React.FC<TiptapTextProps> = ({
             className={`p-1 rounded hover:bg-gray-100 transition-colors ${
               editor?.isActive("bold") ? "bg-blue-100 text-blue-600" : ""
             }`}
-            title="Bold"
+            title="굵게"
           >
             <Bold className="h-4 w-4" />
           </button>
@@ -94,7 +94,7 @@ const TiptapText: React.FC<TiptapTextProps> = ({
             className={`p-1 rounded hover:bg-gray-100 transition-colors ${
               editor?.isActive("italic") ? "bg-blue-100 text-blue-600" : ""
             }`}
-            title="Italic"
+            title="기울임"
           >
             <Italic className="h-4 w-4" />
           </button>
@@ -103,7 +103,7 @@ const TiptapText: React.FC<TiptapTextProps> = ({
             className={`p-1 rounded hover:bg-gray-100 transition-colors ${
               editor?.isActive("underline") ? "bg-blue-100 text-blue-600" : ""
             }`}
-            title="Underline"
+            title="밑줄"
           >
             <UnderlinedIcon className="h-4 w-4" />
           </button>
@@ -112,7 +112,7 @@ const TiptapText: React.FC<TiptapTextProps> = ({
             className={`p-1 rounded hover:bg-gray-100 transition-colors ${
               editor?.isActive("strike") ? "bg-blue-100 text-blue-600" : ""
             }`}
-            title="Strikethrough"
+            title="취소선"
           >
             <Strikethrough className="h-4 w-4" />
           </button>
@@ -121,7 +121,7 @@ const TiptapText: React.FC<TiptapTextProps> = ({
             className={`p-1 rounded hover:bg-gray-100 transition-colors ${
               editor?.isActive("code") ? "bg-blue-100 text-blue-600" : ""
             }`}
-            title="Code"
+            title="코드"
           >
             <Code className="h-4 w-4" />
           </button>

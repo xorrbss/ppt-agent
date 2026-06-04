@@ -56,7 +56,7 @@ export function SortableListItem({ slide, index, selectedSlide, onSlideClick }: 
                     : 'hover:slide-box/40 border-gray-300'
                 }`}
         >
-            <span className="font-medium slide-title">Slide {index + 1}</span>
+            <span className="font-medium slide-title">슬라이드 {index + 1}</span>
           
         </div>
     );

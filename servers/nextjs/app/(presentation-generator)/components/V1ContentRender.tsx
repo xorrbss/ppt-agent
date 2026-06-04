@@ -65,16 +65,16 @@ export const V1ContentRender = ({ slide, isEditMode, theme }: { slide: any, isEd
         if (Object.keys(slide.content).length === 0) {
             return (
                 <div className="flex flex-col items-center cursor-pointer justify-center aspect-video h-full bg-gray-100 rounded-lg">
-                    <p className="text-gray-600 text-center text-base">Blank Slide</p>
-                    <p className="text-gray-600 text-center text-sm">This slide is empty. Please add content to it using the edit button.</p>
+                    <p className="text-gray-600 text-center text-base">빈 슬라이드</p>
+                    <p className="text-gray-600 text-center text-sm">이 슬라이드는 비어 있습니다. 편집 버튼을 눌러 내용을 추가하세요.</p>
                 </div>
             )
         }
         return (
             <div className="flex flex-col items-center justify-center aspect-video h-full bg-gray-100 rounded-lg">
                 <p className="text-gray-600 text-center text-base">
-                    Layout &quot;{slide.layout}&quot; not found in &quot;
-                    {slide.layout_group}&quot; Template
+                    &quot;{slide.layout_group}&quot; 템플릿에서 &quot;{slide.layout}&quot;
+                    레이아웃을 찾을 수 없습니다
                 </p>
             </div>
         );

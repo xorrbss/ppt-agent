@@ -31,3 +31,10 @@ servers/fastapi/dist/
 servers/fastapi/fastembed_cache/
 servers/fastapi/*.egg-info/
 .codex/
+
+# --- Local dev/test artifacts (Windows local run; not part of the project) ---
+/.cache/
+/.run_app_data/
+/.run_tmp/
+/.heartbeat
+/kor.traineddata

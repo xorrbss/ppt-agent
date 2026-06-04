@@ -12,7 +12,7 @@ type LogoutButtonProps = {
 };
 
 export default function LogoutButton({
-  label = "Logout",
+  label = "로그아웃",
   className = "",
   iconOnly = false,
 }: LogoutButtonProps) {
@@ -47,7 +47,7 @@ export default function LogoutButton({
       title={label}
     >
       <LogOut className="h-4 w-4" />
-      {!iconOnly ? <span>{isSubmitting ? "Signing out..." : label}</span> : null}
+      {!iconOnly ? <span>{isSubmitting ? "로그아웃 중..." : label}</span> : null}
     </button>
   );
 }
