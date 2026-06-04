@@ -57,6 +57,27 @@ Electron runs with `DISABLE_AUTH=true` (no login). Provider keys are set in-app
 On Windows dev, set `PRESENTON_DEV_NODE_BINARY` to your system `node.exe` so LiteParse
 runs on system Node.
 
+## Automation: `scripts/ppt-agent.mjs`
+A zero-dependency Node 18+ CLI that drives deck generation over the API
+(`POST /api/v1/ppt/presentation/generate`). Defaults to Korean.
+
+```powershell
+# single deck (Electron / DISABLE_AUTH backend — no credentials):
+node scripts/ppt-agent.mjs --content "인공지능 개요와 활용 사례" --slides 3 --out ./out
+
+# web/Docker with HTTP Basic auth:
+node scripts/ppt-agent.mjs --content "회사 소개" --user admin --password s3cret --base http://localhost:5000 --out ./out
+
+# batch (one topic per line; '#' comments skipped; continues on failure):
+node scripts/ppt-agent.mjs --batch topics.txt --export pdf --out ./decks
+```
+Key flags: `--content` / `--batch`, `--slides <n|auto>` (default 8), `--language`
+(default `"Korean (한국어)"`), `--template`, `--export pptx|pdf`, `--instructions`,
+`--tone`, `--verbosity`, `--web-search`, `--toc`, `--no-title`, `--base`,
+`--user`/`--password`, `--out <dir>`, `--timeout <sec>`. `--flag=value` also works.
+Verified end-to-end: a 3-slide Korean PPTX (valid OOXML) generated and downloaded.
+
 ## Notes
 - API keys live in `app_data/userConfig.json` (gitignored) — never committed.
 - Next.js build output is `.next-build` (not `.next`).
+- Generation+export is synchronous and can take minutes per deck (LLM + headless render).
