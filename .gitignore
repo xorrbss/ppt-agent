@@ -37,7 +37,6 @@ servers/fastapi/*.egg-info/
 /.run_app_data/
 /.run_tmp/
 /.heartbeat
-/kor.traineddata
 
 # --- Regenerable caches/build artifacts (slimmed from history 2026-06) ---
 servers/fastapi/fastembed_cache/
