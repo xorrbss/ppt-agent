@@ -13,14 +13,14 @@ export const useFileUpload = () => {
       const lowerName = file.name.toLowerCase();
       const isPptx = lowerName.endsWith(".pptx");
       if (!isPptx) {
-        notify.error("Invalid file", "Please select a valid PPTX file.");
+        notify.error("잘못된 파일", "올바른 PPTX 파일을 선택해 주세요.");
         return;
       }
 
       // Validate file size (100MB limit)
       const maxSize = 100 * 1024 * 1024; // 100MB
       if (file.size > maxSize) {
-        notify.error("File too large", "File size must be less than 100MB.");
+        notify.error("파일이 너무 큽니다", "파일 크기는 100MB 미만이어야 합니다.");
         return;
       }
 

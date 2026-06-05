@@ -65,8 +65,8 @@ export const useSlideEdit = (
     } catch (error) {
       console.error("Error updating slide:", error);
       notify.error(
-        "Could not update slide",
-        error instanceof Error ? error.message : "Unknown error"
+        "슬라이드를 업데이트하지 못했습니다",
+        error instanceof Error ? error.message : "알 수 없는 오류"
       );
       return false;
     } finally {

@@ -381,7 +381,7 @@ const SettingsPage = () => {
           targetAttr !== "_blank"
         ) {
 
-          // notify.error("Cannot save settings", "Please select a model for the selected provider");
+          // notify.error("설정을 저장할 수 없습니다", "선택한 제공자에 사용할 모델을 선택해 주세요");
           e.preventDefault();
           window.history.pushState(null, "", pathname);
         }

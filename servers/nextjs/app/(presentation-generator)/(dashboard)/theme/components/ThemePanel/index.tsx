@@ -149,8 +149,8 @@ const ThemePanel: React.FC = () => {
       } catch (error: any) {
         console.error('Failed to load custom themes', error)
         notify.error(
-          'Could not load themes',
-          error?.message || 'Your saved themes could not be loaded. Built-in themes are still available.'
+          '테마를 불러오지 못했습니다',
+          error?.message || '저장된 테마를 불러올 수 없습니다. 기본 제공 테마는 계속 사용할 수 있습니다.'
         )
       }
     }
@@ -161,8 +161,8 @@ const ThemePanel: React.FC = () => {
       } catch (error: any) {
         console.error('Failed to load user fonts', error)
         notify.error(
-          'Could not load fonts',
-          error?.message || 'Your uploaded fonts could not be loaded right now.'
+          '폰트를 불러오지 못했습니다',
+          error?.message || '업로드한 폰트를 지금 불러올 수 없습니다.'
         )
       }
     }
@@ -319,8 +319,8 @@ const ThemePanel: React.FC = () => {
     } catch (error: any) {
       console.error('Failed to upload logo', error)
       notify.error(
-        'Could not upload logo',
-        error?.message || 'Something went wrong while uploading your logo. Please try again.'
+        '로고를 업로드하지 못했습니다',
+        error?.message || '로고를 업로드하는 중 문제가 발생했습니다. 다시 시도해 주세요.'
       )
     } finally {
       setIsLogoUploading(false)
@@ -463,12 +463,12 @@ const ThemePanel: React.FC = () => {
             has_logo: Boolean(updated.logo_url),
             font_name: updated.data?.fonts?.textFont?.name || "",
           })
-          notify.success('Theme updated', 'Your theme changes were saved.')
+          notify.success('테마가 업데이트되었습니다', '테마 변경 사항이 저장되었습니다.')
         } catch (error: any) {
           console.error('Failed to update theme', error)
           notify.error(
-            'Could not update theme',
-            error?.message || 'Something went wrong while saving your theme changes.'
+            '테마를 업데이트하지 못했습니다',
+            error?.message || '테마 변경 사항을 저장하는 중 문제가 발생했습니다.'
           )
         }
       })()
@@ -483,7 +483,7 @@ const ThemePanel: React.FC = () => {
       })
       const params: ThemeParams = {
         name: selectedTheme.name,
-        description: selectedTheme.description || `Custom version of ${selectedTheme.name}`,
+        description: selectedTheme.description || `${selectedTheme.name}의 커스텀 버전`,
         logo: customBrandLogoId || null,
         logo_url: customBrandLogo || null,
         company_name: themeCompanyName || null,
@@ -507,12 +507,12 @@ const ThemePanel: React.FC = () => {
         has_logo: Boolean(created.logo_url),
         font_name: created.data?.fonts?.textFont?.name || "",
       })
-      notify.success('Theme saved', 'Your new theme was created and is ready to use.')
+      notify.success('테마가 저장되었습니다', '새 테마가 생성되어 사용할 준비가 되었습니다.')
     } catch (error: any) {
       console.error('Failed to save theme', error)
       notify.error(
-        'Could not save theme',
-        error?.message || 'Something went wrong while creating your theme.'
+        '테마를 저장하지 못했습니다',
+        error?.message || '테마를 생성하는 중 문제가 발생했습니다.'
       )
     }
   }
@@ -528,12 +528,12 @@ const ThemePanel: React.FC = () => {
         pathname,
         theme_id: themeId,
       })
-      notify.success("Theme deleted", "The theme was removed from your library.")
+      notify.success("테마가 삭제되었습니다", "라이브러리에서 테마가 제거되었습니다.")
     } catch (error: any) {
       console.error('Failed to delete theme', error)
       notify.error(
-        'Could not delete theme',
-        error?.message || 'Something went wrong while deleting the theme.'
+        '테마를 삭제하지 못했습니다',
+        error?.message || '테마를 삭제하는 중 문제가 발생했습니다.'
       )
     }
   }
@@ -567,14 +567,14 @@ const ThemePanel: React.FC = () => {
         }))
       }
       notify.success(
-        'Font uploaded',
-        `Font "${font_name}" is now available for your themes.`
+        '폰트가 업로드되었습니다',
+        `이제 "${font_name}" 폰트를 테마에서 사용할 수 있습니다.`
       )
     } catch (error: any) {
       console.error('Failed to upload font', error)
       notify.error(
-        'Could not upload font',
-        error?.message || 'Something went wrong while uploading the font file.'
+        '폰트를 업로드하지 못했습니다',
+        error?.message || '폰트 파일을 업로드하는 중 문제가 발생했습니다.'
       )
     } finally {
       setIsFontUploading(false)
@@ -601,7 +601,7 @@ const ThemePanel: React.FC = () => {
 
         <div>
 
-          {step === 2 && <p className="text-xs text-[#4C4C4C] font-medium rounded-lg text-end pb-1.5">Brand Colors</p>}
+          {step === 2 && <p className="text-xs text-[#4C4C4C] font-medium rounded-lg text-end pb-1.5">브랜드 색상</p>}
           <div className="space-y-4"
             style={{
               padding: step === 2 ? '10px' : '0px',
@@ -610,7 +610,7 @@ const ThemePanel: React.FC = () => {
           >
             <ColorPickerComponent
               colorKey="primary"
-              label="Primary Color"
+              label="주요 색상"
               currentColor={customColors['primary']}
               onColorChange={handleColorChange}
               showColorPicker={showColorPicker}
@@ -618,7 +618,7 @@ const ThemePanel: React.FC = () => {
             />
             <ColorPickerComponent
               colorKey="background"
-              label="Background Color"
+              label="배경 색상"
               currentColor={customColors['background']}
               onColorChange={handleColorChange}
               showColorPicker={showColorPicker}
@@ -627,7 +627,7 @@ const ThemePanel: React.FC = () => {
           </div>
         </div>
         {step === 2 && <div>
-          <p className="text-xs text-[#4C4C4C] font-medium text-end pb-1.5">Text Colors</p>
+          <p className="text-xs text-[#4C4C4C] font-medium text-end pb-1.5">텍스트 색상</p>
           <div className="space-y-4"
             style={{
               padding: step === 2 ? '10px' : '0px',
@@ -636,7 +636,7 @@ const ThemePanel: React.FC = () => {
           >
             <ColorPickerComponent
               colorKey="background_text"
-              label="Background Text"
+              label="배경 텍스트"
               currentColor={customColors['background_text']}
               onColorChange={handleColorChange}
               showColorPicker={showColorPicker}
@@ -644,7 +644,7 @@ const ThemePanel: React.FC = () => {
             />
             <ColorPickerComponent
               colorKey="primary_text"
-              label="Primary Text"
+              label="주요 텍스트"
               currentColor={customColors['primary_text']}
               onColorChange={handleColorChange}
               showColorPicker={showColorPicker}
@@ -655,7 +655,7 @@ const ThemePanel: React.FC = () => {
         {step === 2 && <div className='px-2.5'>
           <ColorPickerComponent
             colorKey="card"
-            label="Card Color"
+            label="카드 색상"
             currentColor={customColors['card']}
             onColorChange={handleColorChange}
             showColorPicker={showColorPicker}
@@ -766,7 +766,7 @@ const ThemePanel: React.FC = () => {
       }}
     >
       <Label className="flex text-xl font-medium text-[#191919] items-center gap-2 px-2.5">
-        Typography
+        타이포그래피
       </Label>
 
 
@@ -774,7 +774,7 @@ const ThemePanel: React.FC = () => {
 
       {/* Upload Custom Font */}
       <div className="px-2.5">
-        <p className='text-xs text-[#4C4C4C] font-medium text-end pb-1.5'>Upload Custom Font</p>
+        <p className='text-xs text-[#4C4C4C] font-medium text-end pb-1.5'>커스텀 폰트 업로드</p>
         <div
           className={`p-3 rounded-xl border-2 border-dashed transition-all duration-200 cursor-pointer group
             ${isFontUploading
@@ -795,8 +795,8 @@ const ThemePanel: React.FC = () => {
                 <Loader2 className='w-5 h-5 text-[#7A5AF8] animate-spin' />
               </div>
               <div className='flex-1'>
-                <p className='text-sm font-medium text-[#7A5AF8]'>Uploading font...</p>
-                <p className='text-xs text-[#888]'>Please wait</p>
+                <p className='text-sm font-medium text-[#7A5AF8]'>폰트 업로드 중...</p>
+                <p className='text-xs text-[#888]'>잠시만 기다려 주세요</p>
               </div>
             </div>
           ) : (
@@ -805,7 +805,7 @@ const ThemePanel: React.FC = () => {
                 <Plus className='w-5 h-5 text-[#7A5AF8]' />
               </div>
               <div className='flex-1'>
-                <p className='text-sm font-medium text-[#151515]'>Upload Font File</p>
+                <p className='text-sm font-medium text-[#151515]'>폰트 파일 업로드</p>
                 <p className='text-xs text-[#888]'>.ttf, .otf, .woff, .woff2</p>
               </div>
               <ChevronRight className='w-4 h-4 text-[#999] group-hover:text-[#7A5AF8] transition-colors' />
@@ -829,7 +829,7 @@ const ThemePanel: React.FC = () => {
       {/* User's Uploaded Fonts */}
       {userFonts.fonts.length > 0 && (
         <div className="px-2.5">
-          <p className='text-xs text-[#4C4C4C] font-medium text-end pb-1.5'>Your Uploaded Fonts</p>
+          <p className='text-xs text-[#4C4C4C] font-medium text-end pb-1.5'>업로드한 폰트</p>
           <div className='grid grid-cols-2 gap-2'>
             {userFonts.fonts?.map((font) => (
               <FontCard
@@ -867,23 +867,23 @@ const ThemePanel: React.FC = () => {
     <div className="space-y-4 px-5">
       <Label className="flex text-xl font-medium text-[#191919] items-center gap-2">
 
-        Logo
+        로고
         {/* <RefreshCcw className='w-5 h-5 text-[#808080] hover:text-[#191919] duration-300 transition-all cursor-pointer' /> */}
       </Label>
       <div className="space-y-2">
         <Label className="flex text-base items-center gap-2">
 
-          Company Name
+          회사명
         </Label>
         <Input
           defaultValue={themeCompanyName}
-          placeholder="Enter company name"
+          placeholder="회사명을 입력하세요"
           onBlur={(e) => setThemeCompanyName(e.target.value)}
         />
       </div>
       <Label className="flex text-base items-center gap-2">
 
-        Brand Logo
+        브랜드 로고
       </Label>
 
       <div className="space-y-2 bg-[#F6F6F9] rounded-md p-1 cursor-pointer"
@@ -901,13 +901,13 @@ const ThemePanel: React.FC = () => {
           {isLogoUploading ? (
             <div className="flex flex-col items-center justify-center py-6 text-gray-500">
               <Loader2 className="h-6 w-6 animate-spin mb-2" />
-              <p className="text-sm">Uploading logo...</p>
+              <p className="text-sm">로고 업로드 중...</p>
             </div>
           ) : customBrandLogo ? (
             <div className="space-y-2">
               <img
                 src={customBrandLogo}
-                alt="Brand Logo"
+                alt="브랜드 로고"
                 className="mx-auto h-16 w-auto object-contain"
               />
               <Button
@@ -919,7 +919,7 @@ const ThemePanel: React.FC = () => {
                   setCustomBrandLogoId('')
                 }}
               >
-                Remove Logo
+                로고 제거
               </Button>
             </div>
           ) : (
@@ -931,7 +931,7 @@ const ThemePanel: React.FC = () => {
               </div>
               <div className="mt-2">
                 <label htmlFor="logo-upload" className="cursor-pointer">
-                  <span className="text-blue-600 hover:text-blue-500">Click to upload</span>
+                  <span className="text-blue-600 hover:text-blue-500">클릭하여 업로드</span>
                   <span className="text-gray-500"> or drag and drop</span>
                 </label>
                 <input
@@ -971,7 +971,7 @@ const ThemePanel: React.FC = () => {
       <div className='py-[28px] flex justify-between'>
 
         <h3 className=" text-[28px]  tracking-[-0.84px] font-unbounded font-normal text-[#101828] flex items-center gap-2">
-          Themes
+          테마
         </h3>
         <Link
           href="/theme?tab=new-theme"
@@ -980,15 +980,15 @@ const ThemePanel: React.FC = () => {
             source: "theme_page_header",
           })}
           className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-black text-sm font-semibold font-syne shadow-sm hover:shadow-md"
-          aria-label="Create new theme"
+          aria-label="새 테마 만들기"
           style={{
             borderRadius: "48px",
             background: "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
           }}
         >
 
-          <span className="hidden md:inline">New Theme</span>
-          <span className="md:hidden">New</span>
+          <span className="hidden md:inline">새 테마</span>
+          <span className="md:hidden">새 테마</span>
           <ChevronRight className="w-4 h-4" />
         </Link>
       </div>
@@ -1002,7 +1002,7 @@ const ThemePanel: React.FC = () => {
           style={{
             background: tab === 'custom' ? 'linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)' : 'transparent'
           }}
-        >Custom</button>
+        >커스텀</button>
         <svg xmlns="http://www.w3.org/2000/svg" className='mx-1' width="2" height="17" viewBox="0 0 2 17" fill="none">
           <path d="M1 0V16.5" stroke="#EDECEC" strokeWidth="2" />
         </svg>
@@ -1014,7 +1014,7 @@ const ThemePanel: React.FC = () => {
           style={{
             background: tab === 'default' ? 'linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)' : 'transparent'
           }}
-        >Built-in</button>
+        >기본 제공</button>
       </div>
       {/* Built-in Themes */}
 
@@ -1086,7 +1086,7 @@ const ThemePanel: React.FC = () => {
 
                         className='px-3.5 py-2.5 bg-[#F7F6F9] rounded-[48px] text-xs font-semibold text-[#101323]'
                         onClick={() => setCurrentStep(currentStep - 1)}
-                      >Back</button>}
+                      >뒤로</button>}
 
                       <button className='px-7 py-2.5 flex items-center gap-1 rounded-[48px] text-xs font-semibold text-[#101323] '
 
@@ -1112,7 +1112,7 @@ const ThemePanel: React.FC = () => {
                           background: 'linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)'
                         }}
                       >
-                        {currentStep === 1 ? 'Generate theme palette' : currentStep === 2 ? 'Continue to Fonts' : currentStep === 3 ? 'Continue to Design' : 'Save as Custom Theme'}
+                        {currentStep === 1 ? '테마 팔레트 생성' : currentStep === 2 ? '폰트로 계속' : currentStep === 3 ? '디자인으로 계속' : '커스텀 테마로 저장'}
                         <ChevronRight className='w-4 h-4' />
                       </button>
                     </div>

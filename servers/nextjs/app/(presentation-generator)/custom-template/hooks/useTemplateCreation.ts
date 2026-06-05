@@ -82,9 +82,9 @@ export const useTemplateCreation = () => {
 
             return data;
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : "Font check failed";
+            const errorMessage = error instanceof Error ? error.message : "폰트 확인 실패";
             updateState({ error: errorMessage, isLoading: false });
-            notify.error("Font check failed", errorMessage);
+            notify.error("폰트 확인 실패", errorMessage);
             return null;
         }
     }, [updateState]);
@@ -94,7 +94,7 @@ export const useTemplateCreation = () => {
         // Check if font is already added
         const existingFont = uploadedFonts.find((f) => f.fontName === fontName);
         if (existingFont) {
-            notify.warning("Font already added", `Font "${fontName}" is already in your upload list.`);
+            notify.warning("이미 추가된 폰트", `"${fontName}" 폰트가 이미 업로드 목록에 있습니다.`);
             return fontName;
         }
 
@@ -103,14 +103,14 @@ export const useTemplateCreation = () => {
         const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf("."));
 
         if (!validExtensions.includes(fileExtension)) {
-            notify.error("Invalid font file", "Please upload .ttf, .otf, .woff, .woff2, or .eot files.");
+            notify.error("잘못된 폰트 파일", ".ttf, .otf, .woff, .woff2 또는 .eot 파일을 업로드해 주세요.");
             return null;
         }
 
         // Validate file size (10MB limit)
         const maxSize = 10 * 1024 * 1024;
         if (file.size > maxSize) {
-            notify.error("File too large", "Font file size must be less than 10MB.");
+            notify.error("파일이 너무 큽니다", "폰트 파일 크기는 10MB 미만이어야 합니다.");
             return null;
         }
 
@@ -123,14 +123,14 @@ export const useTemplateCreation = () => {
         };
 
         setUploadedFonts(prev => [...prev, newFont]);
-        notify.success("Font added", `Font "${fontName}" was added successfully.`);
+        notify.success("폰트가 추가되었습니다", `"${fontName}" 폰트가 성공적으로 추가되었습니다.`);
         return fontName;
     }, [uploadedFonts]);
 
     // Remove a font
     const removeFont = useCallback((fontName: string) => {
         setUploadedFonts(prev => prev.filter(font => font.fontName !== fontName));
-        notify.info("Font removed", "The font was removed from your upload list.");
+        notify.info("폰트가 제거되었습니다", "업로드 목록에서 폰트가 제거되었습니다.");
     }, []);
 
     // Get all unsupported fonts that need upload
@@ -194,12 +194,12 @@ export const useTemplateCreation = () => {
                 isLoading: false
             });
 
-            notify.success("Preview generated", "Slides preview was generated successfully.");
+            notify.success("미리보기가 생성되었습니다", "슬라이드 미리보기가 성공적으로 생성되었습니다.");
             return data;
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Preview generation failed";
             updateState({ error: errorMessage, isLoading: false });
-            notify.error("Preview failed", errorMessage);
+            notify.error("미리보기 실패", errorMessage);
             return null;
         }
     }, [uploadedFonts, updateState]);
@@ -207,7 +207,7 @@ export const useTemplateCreation = () => {
     // Step 3: Initialize template creation
     const initTemplateCreation = useCallback(async (): Promise<string | null> => {
         if (!state.previewData) {
-            notify.error("No preview data", "Generate a preview before continuing.");
+            notify.error("미리보기 데이터 없음", "계속하기 전에 미리보기를 생성하세요.");
             return null;
         }
 
@@ -252,7 +252,7 @@ export const useTemplateCreation = () => {
                 uploaded_font_count: state.previewData.fonts?.length || 0,
             });
 
-            notify.success("Template initialized", "Template creation was initialized successfully.");
+            notify.success("템플릿이 초기화되었습니다", "템플릿 생성이 성공적으로 초기화되었습니다.");
 
             // Automatically start processing the first slide
             if (typeof data === 'string') {
@@ -263,9 +263,9 @@ export const useTemplateCreation = () => {
 
             return typeof data === 'string' ? data : data.id;
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : "Initialization failed";
+            const errorMessage = error instanceof Error ? error.message : "초기화 실패";
             updateState({ error: errorMessage, isLoading: false });
-            notify.error("Initialization failed", errorMessage);
+            notify.error("초기화 실패", errorMessage);
             // reset the state
             reset();
             return null;
@@ -381,20 +381,20 @@ export const useTemplateCreation = () => {
                             const processedCount = newSlides.filter(s => s.processed).length;
                             if (failedCount > 0) {
                                 notify.warning(
-                                    "Some slides could not be processed",
-                                    `${processedCount} of ${newSlides.length} slides were reconstructed. ${failedCount} slide(s) failed — review them and try again.`
+                                    "일부 슬라이드를 처리하지 못했습니다",
+                                    `${newSlides.length}개 중 ${processedCount}개 슬라이드가 재구성되었습니다. ${failedCount}개 슬라이드가 실패했습니다 — 확인 후 다시 시도해 주세요.`
                                 );
                             } else {
                                 notify.success(
-                                    "All slides processed",
-                                    "Every slide was reconstructed successfully."
+                                    "모든 슬라이드 처리 완료",
+                                    "모든 슬라이드가 성공적으로 재구성되었습니다."
                                 );
                             }
                         }
                     }
                 } else {
                     // Single slide reconstruction - just show success
-                    notify.success("Slide reconstructed", `Slide ${slideIndex + 1} was reconstructed successfully.`);
+                    notify.success("슬라이드 재구성됨", `${slideIndex + 1}번 슬라이드가 성공적으로 재구성되었습니다.`);
                 }
 
                 return newSlides;
@@ -442,13 +442,13 @@ export const useTemplateCreation = () => {
                     .trim()
                     .replace(/^\n+/, "");
                 notify.error(
-                    "Vision-capable text model required",
+                    "비전 지원 텍스트 모델이 필요합니다",
                     description ||
-                        "Choose a text model that accepts images in Settings, save, and try again.",
+                        "설정에서 이미지를 지원하는 텍스트 모델을 선택하고 저장한 뒤 다시 시도해 주세요.",
                     { duration: 12_000 }
                 );
             } else {
-                notify.error(`Slide ${slideIndex + 1} failed`, errorMessage);
+                notify.error(`${slideIndex + 1}번 슬라이드 실패`, errorMessage);
             }
             return null;
         }

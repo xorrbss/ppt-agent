@@ -32,7 +32,7 @@ export const useLayoutSaving = (
 
   const saveLayout = useCallback(async (layoutName: string, description: string, template_info_id: string): Promise<string | null> => {
     if (!slides.length) {
-      notify.error("No slides to save", "Add at least one slide before saving the layout.");
+      notify.error("저장할 슬라이드가 없습니다", "레이아웃을 저장하기 전에 슬라이드를 하나 이상 추가하세요.");
       return null;
     }
 
@@ -75,12 +75,12 @@ export const useLayoutSaving = (
 
       const data = await ApiResponseHandler.handleResponse(
         saveResponse,
-        "Failed to save layout components"
+        "레이아웃 저장 실패 components"
       );
       if (!data) {
         notify.error(
-          "Could not save layout",
-          "Some layout components could not be saved. Please try again."
+          "레이아웃을 저장하지 못했습니다",
+          "일부 레이아웃 구성 요소를 저장하지 못했습니다. 다시 시도해 주세요."
         );
         return null;
       }
@@ -91,8 +91,8 @@ export const useLayoutSaving = (
       });
 
       notify.success(
-        "Layout saved",
-        `Layout "${layoutName}" was saved successfully.`
+        "레이아웃이 저장되었습니다",
+        `"${layoutName}" 레이아웃이 성공적으로 저장되었습니다.`
       );
       trackEvent(MixpanelEvent.CustomTemplate_Saved, {
         template_info_id,
@@ -106,10 +106,10 @@ export const useLayoutSaving = (
     } catch (error) {
       console.error("Error saving layout:", error);
       notify.error(
-        "Failed to save layout",
+        "레이아웃 저장 실패",
         error instanceof Error
           ? error.message
-          : "An unexpected error occurred"
+          : "예상치 못한 오류가 발생했습니다"
       );
       return null;
     } finally {
