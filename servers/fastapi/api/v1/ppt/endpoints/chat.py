@@ -81,7 +81,9 @@ async def chat_message(
         presentation_id=payload.presentation_id,
         conversation_id=payload.conversation_id,
     )
-    result = await service.generate_reply(payload.message)
+    result = await service.generate_reply(
+        payload.message, attachments=payload.attachments
+    )
     return ChatMessageResponse(
         conversation_id=result.conversation_id,
         response=result.response_text,
@@ -102,7 +104,9 @@ async def chat_message_stream(
 
     async def inner():
         try:
-            async for event_type, value in service.stream_reply(payload.message):
+            async for event_type, value in service.stream_reply(
+                payload.message, attachments=payload.attachments
+            ):
                 if event_type == "chunk" and isinstance(value, str):
                     yield SSEResponse(
                         event="response",

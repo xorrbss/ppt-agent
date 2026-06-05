@@ -19,6 +19,7 @@ from llmai.shared import (  # type: ignore[import-not-found]
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from models.chat import ChatAttachment
 from models.sql.presentation import PresentationModel
 from services.chat.conversation_store import ChatConversationStore
 from services.chat.presentation_context_store import PresentationContextStore
@@ -64,8 +65,14 @@ class PresentationChatService:
         self._memory = PresentationContextStore(sql_session, presentation_id)
         self._tools = ChatTools(self._memory)
 
-    async def generate_reply(self, user_message: str) -> ChatTurnResult:
-        conversation_id, messages = await self._prepare_turn_context(user_message)
+    async def generate_reply(
+        self,
+        user_message: str,
+        attachments: list[ChatAttachment] | None = None,
+    ) -> ChatTurnResult:
+        conversation_id, messages = await self._prepare_turn_context(
+            user_message, attachments
+        )
         response_text, tool_calls = await self._run_llm_with_tools(messages)
         return await self._persist_turn(
             conversation_id=conversation_id,
@@ -75,10 +82,14 @@ class PresentationChatService:
         )
 
     async def stream_reply(
-        self, user_message: str
+        self,
+        user_message: str,
+        attachments: list[ChatAttachment] | None = None,
     ) -> AsyncGenerator[tuple[ChatStreamEventType, ChatStreamEventValue], None]:
         yield "status", "Reading deck context"
-        conversation_id, messages = await self._prepare_turn_context(user_message)
+        conversation_id, messages = await self._prepare_turn_context(
+            user_message, attachments
+        )
 
         client = get_client(config=get_llm_config())
         model = get_model()
@@ -230,7 +241,9 @@ class PresentationChatService:
         yield "complete", result
 
     async def _prepare_turn_context(
-        self, user_message: str
+        self,
+        user_message: str,
+        attachments: list[ChatAttachment] | None = None,
     ) -> tuple[uuid.UUID, list[Message]]:
         if not (user_message or "").strip():
             raise HTTPException(status_code=400, detail="Message is required")
@@ -256,6 +269,12 @@ class PresentationChatService:
             conversation_id=conversation_id,
             query=memory_query,
         )
+        attachment_context = self._build_attachment_context(attachments)
+        user_content = (
+            f"{attachment_context}\n\n{user_message}"
+            if attachment_context
+            else user_message
+        )
         messages: list[Message] = [
             SystemMessage(
                 content=build_system_prompt(
@@ -264,7 +283,7 @@ class PresentationChatService:
                 )
             ),
             *history_messages,
-            UserMessage(content=user_message),
+            UserMessage(content=user_content),
         ]
         return conversation_id, messages
 
@@ -395,6 +414,31 @@ class PresentationChatService:
         if marker_index == -1:
             return user_message
         return user_message[marker_index + len(marker) :].lstrip()
+
+    @staticmethod
+    def _build_attachment_context(
+        attachments: list[ChatAttachment] | None,
+    ) -> str:
+        """Render attached files as an LLM context block (per-turn, not persisted)."""
+        if not attachments:
+            return ""
+        max_chars_per_file = 50000
+        parts: list[str] = []
+        for attachment in attachments:
+            content = (attachment.content or "").strip()
+            if not content:
+                continue
+            name = (attachment.name or "file").strip() or "file"
+            if len(content) > max_chars_per_file:
+                content = content[:max_chars_per_file].rstrip() + "\n...[truncated]"
+            parts.append(f"--- 파일: {name} ---\n{content}")
+        if not parts:
+            return ""
+        return (
+            "[첨부 파일]\n"
+            "사용자가 다음 파일을 첨부했습니다. 슬라이드 작업 시 이 내용을 참고하세요.\n\n"
+            + "\n\n".join(parts)
+        )
 
     @staticmethod
     def _tool_focus_from_arguments(

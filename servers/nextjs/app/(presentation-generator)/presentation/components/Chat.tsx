@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Send,
   Square,
+  X,
 } from "lucide-react";
 import React, {
   FormEvent,
@@ -23,7 +24,8 @@ import React, {
 import { notify } from "@/components/ui/sonner";
 import MarkdownRenderer from "@/components/MarkDownRender";
 import { PresentationChatApi } from "../../services/api/chat";
-import type { ChatStreamTrace } from "../../services/api/chat";
+import type { ChatStreamTrace, ChatAttachmentPayload } from "../../services/api/chat";
+import { filesToChatAttachments } from "../utils/chatAttachments";
 
 const suggestions: { id: string; icon: ReactNode; suggestion: string }[] = [
   {
@@ -509,6 +511,28 @@ const Chat = ({
     string | null
   >(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<ChatAttachmentPayload[]>([]);
+  const [isAttaching, setIsAttaching] = useState(false);
+  const attachInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAttachFiles = useCallback(async (fileList: FileList | null) => {
+    const files = Array.from(fileList ?? []);
+    if (files.length === 0) return;
+    setIsAttaching(true);
+    try {
+      const collected = await filesToChatAttachments(files);
+      if (collected.length === 0) {
+        notify.error("첨부 실패", "첨부한 파일에서 텍스트를 추출하지 못했습니다.");
+        return;
+      }
+      setAttachments((previous) => [...previous, ...collected].slice(0, 8));
+      notify.success("첨부 완료", `${collected.length}개 파일을 첨부했습니다.`);
+    } catch (error: any) {
+      notify.error("첨부 실패", error?.message || "파일을 처리하지 못했습니다.");
+    } finally {
+      setIsAttaching(false);
+    }
+  }, []);
   const [expandedActivityByMessage, setExpandedActivityByMessage] = useState<
     Record<string, boolean>
   >({});
@@ -932,6 +956,7 @@ const Chat = ({
       [assistantMessageId]: false,
     }));
     setInput("");
+    setAttachments([]);
     setErrorMessage(null);
     setIsSending(true);
     setActiveAssistantMessageId(assistantMessageId);
@@ -947,6 +972,7 @@ const Chat = ({
           presentation_id: presentationId,
           message: buildBackendMessage(trimmedMessage),
           conversation_id: conversationId ?? undefined,
+          attachments: attachments.length > 0 ? attachments : undefined,
         },
         {
           onChunk: (chunk) => {
@@ -1316,16 +1342,58 @@ const Chat = ({
           placeholder="슬라이드를 개선해 보세요..."
           aria-invalid={Boolean(errorMessage)}
         />
+        {attachments.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {attachments.map((attachment, index) => (
+              <span
+                key={`${attachment.name}-${index}`}
+                className="inline-flex items-center gap-1 rounded-[64px] border border-[#EDEEEF] bg-[#F9FAFB] px-2 py-1 text-[11px] text-[#344054]"
+              >
+                <span className="max-w-[140px] truncate" title={attachment.name}>
+                  {attachment.name}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setAttachments((previous) =>
+                      previous.filter((_, i) => i !== index)
+                    )
+                  }
+                  className="text-[#98A2B3] transition-colors hover:text-[#475467]"
+                  aria-label={`${attachment.name} 첨부 제거`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
+            <input
+              ref={attachInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(event) => {
+                void handleAttachFiles(event.target.files);
+                event.currentTarget.value = "";
+              }}
+            />
             <button
               type="button"
-              disabled
-              className="inline-flex h-[28px] items-center rounded-[64px] border border-[#EDEEEF] bg-white px-3 py-1 opacity-50"
+              onClick={() => attachInputRef.current?.click()}
+              disabled={isSending || isHistoryLoading || isAttaching}
+              className="inline-flex h-[28px] items-center gap-1 rounded-[64px] border border-[#EDEEEF] bg-white px-3 py-1 text-[11px] font-medium text-[#191919] transition-colors hover:bg-[#F7F7F7] disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="파일 첨부"
-              title="첨부 파일은 아직 지원되지 않습니다"
+              title="문서를 첨부하면 AI가 그 내용을 참고해 슬라이드를 수정합니다"
             >
-              <Plus className="h-3 w-3 text-black" />
+              {isAttaching ? (
+                <Loader2 className="h-3 w-3 animate-spin text-black" />
+              ) : (
+                <Plus className="h-3 w-3 text-black" />
+              )}
+              <span>{isAttaching ? "처리 중" : "첨부"}</span>
             </button>
             <button
               type="button"
