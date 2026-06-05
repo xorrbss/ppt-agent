@@ -1,15 +1,19 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
-import { sanitizeFilename } from '@/app/(presentation-generator)/utils/others';
 
 
 export async function POST(request: Request) {
   try {
     const { filePath } = await request.json();
-   
-      const sanitizedFilePath = sanitizeFilename(filePath);
-      const normalizedPath = path.normalize(sanitizedFilePath);
+    if (!filePath || typeof filePath !== 'string') {
+      return NextResponse.json({ error: 'filePath is required' }, { status: 400 });
+    }
+
+      // Do NOT run sanitizeFilename() on a full path: it strips ':' and '\\' and
+      // corrupts absolute Windows paths. Traversal is already blocked by the
+      // realpath + allowedBaseDirs check below.
+      const normalizedPath = path.normalize(filePath.replace(/\0/g, ''));
       const allowedBaseDirs = [
         process.env.APP_DATA_DIRECTORY || '/app/user_data',
         process.env.TEMP_DIRECTORY || '/tmp',
