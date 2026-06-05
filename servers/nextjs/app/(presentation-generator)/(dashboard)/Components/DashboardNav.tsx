@@ -27,7 +27,7 @@ const DashboardNav = () => {
 
 
                     {activeTab !== "playground" && activeTab !== "theme" && <Link
-                        href="/generate"
+                        href="/upload"
                         className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-black text-sm font-medium shadow-sm hover:shadow-md"
                         aria-label="새 발표자료 만들기"
                         style={{

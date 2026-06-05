@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RootState } from "@/store/store";
 import { useSelector } from "react-redux";
@@ -16,27 +16,70 @@ import { useOutlineManagement } from "../hooks/useOutlineManagement";
 import { usePresentationGeneration } from "../hooks/usePresentationGeneration";
 import TemplateSelection from "./TemplateSelection";
 import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
+import { resolveTemplateSelection } from "@/app/presentation-templates/select";
 import { Separator } from "@/components/ui/separator";
 
-const OutlinePage: React.FC = () => {
+const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
   const { presentation_id, outlines } = useSelector(
     (state: RootState) => state.presentationGeneration
+  );
+  const storedTemplateId = useSelector(
+    (state: RootState) => state.pptGenUpload.selectedTemplate
   );
 
   const [activeTab, setActiveTab] = useState<string>(TABS.OUTLINE);
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateLayoutsWithSettings | string | null>(null);
+
+  // In auto (compose) mode the template was chosen up-front and lives in Redux;
+  // in manual mode the user picks it on this page.
+  const autoTemplate = useMemo(
+    () => resolveTemplateSelection(storedTemplateId),
+    [storedTemplateId]
+  );
+  const generationTemplate = auto ? autoTemplate : selectedTemplate;
+
   // Custom hooks
   const streamState = useOutlineStreaming(presentation_id);
   const { handleDragEnd, handleAddSlide } = useOutlineManagement(outlines);
   const { loadingState, handleSubmit } = usePresentationGeneration(
     presentation_id,
     outlines,
-    selectedTemplate,
+    generationTemplate,
     setActiveTab
   );
+
+  // Auto-bridge: once the outline stream completes, submit exactly once.
+  const autoSubmittedRef = useRef(false);
+  useEffect(() => {
+    if (!auto || autoSubmittedRef.current) return;
+    if (!presentation_id || streamState.isStreaming) return;
+    if (!outlines || outlines.length === 0) return;
+    if (!generationTemplate) return;
+    autoSubmittedRef.current = true;
+    handleSubmit();
+  }, [auto, presentation_id, streamState.isStreaming, outlines, generationTemplate, handleSubmit]);
+
   if (!presentation_id) {
     return <EmptyStateView />;
   }
+
+  // Auto mode shows only a progress view; if the stream ends with no outlines
+  // (error), fall through to the normal UI so the user isn't stuck on a loader.
+  const showAutoProgress =
+    auto && (streamState.isStreaming || (outlines?.length ?? 0) > 0);
+  if (showAutoProgress) {
+    return (
+      <div className="font-syne pb-9">
+        <OverlayLoader
+          show={true}
+          text={streamState.isStreaming ? "개요를 생성하는 중…" : "발표자료를 만드는 중…"}
+          showProgress={true}
+          duration={60}
+        />
+      </div>
+    );
+  }
+
   const handleTabChange = (tab: string) => {
     if (streamState.isStreaming) {
       return;

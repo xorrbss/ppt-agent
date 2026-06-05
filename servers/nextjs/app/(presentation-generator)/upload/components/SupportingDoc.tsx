@@ -9,6 +9,8 @@ interface SupportingDocProps {
     onFilesChange: (files: File[]) => void
     accept?: string
     multiple?: boolean
+    /** Compact variant for the compose card: a paperclip button + file chips instead of the full dropzone. */
+    compact?: boolean
 }
 
 const MAX_SUPPORTED_FILES = 8
@@ -65,6 +67,7 @@ const SupportingDoc = ({
     onFilesChange,
     accept = ACCEPT_DEFAULT,
     multiple = true,
+    compact = false,
 }: SupportingDocProps) => {
     const [isDragging, setIsDragging] = useState(false)
     const [previewUrls, setPreviewUrls] = useState<(string | null)[]>([])
@@ -157,49 +160,78 @@ const SupportingDoc = ({
 
     return (
         <div className="space-y-2" data-testid="attachments-uploader">
-            <div className="flex items-center justify-between">
-                <p className="text-sm text-gray-600 font-syne">
-                    {hasFiles ? `첨부파일 ${filteredFiles.length}개` : ''}
-                </p>
-                {hasFiles && <button
-                    type="button"
-                    onClick={handleClearFiles}
-                    disabled={!hasFiles}
-                    className={`text-sm font-medium font-syne ${!hasFiles ? 'cursor-not-allowed text-gray-400' : 'text-red-600 hover:text-red-700'}`}
-                    data-testid="attachments-clear-button"
-                    aria-disabled={!hasFiles}
-                >
-                    모두 지우기
-                </button>}
-            </div>
-
-            <label
-                className={`mt-1 block cursor-pointer rounded-lg border-2 border-dashed px-4 py-6 text-center transition-colors ${isDragging ? 'border-[#5146E5] bg-[#5146E5]/5' : 'border-gray-200 hover:border-[#5146E5]'}`}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-            >
-                <input
-                    type="file"
-                    className="hidden"
-                    onChange={handleFilesSelected}
-                    accept={accept}
-                    multiple={multiple}
-                    data-testid="file-upload-input"
-                />
-                <div className="flex flex-col items-center gap-2">
-                    <div className='w-[42px] h-[42px] flex justify-center items-center rounded-full bg-[#EBE9FE]' >
-                        <div className='w-[22px] h-[22px] rounded-full bg-[#7A5AF8] flex items-center justify-center text-white'>
-                            <Plus className='w-3 h-3' />
-                        </div>
-                    </div>
-                    <p className='text-[#808080] text-sm  font-normal'>(Office 문서, 스프레드시트, 이미지, PDF/TXT)</p>
+            {compact ? (
+                <div className="flex items-center gap-3">
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-full h-[34px] px-3.5 ring-1 ring-inset ring-slate-200 shadow-sm text-xs font-medium text-[#191919] font-syne transition-colors hover:ring-[#5146E5]/40">
+                        <input
+                            type="file"
+                            className="hidden"
+                            onChange={handleFilesSelected}
+                            accept={accept}
+                            multiple={multiple}
+                            data-testid="file-upload-input"
+                        />
+                        <Paperclip className="w-3.5 h-3.5" />
+                        <span>{hasFiles ? `첨부 ${filteredFiles.length}개` : '파일 첨부'}</span>
+                    </label>
+                    {hasFiles && (
+                        <button
+                            type="button"
+                            onClick={handleClearFiles}
+                            className="text-xs font-medium text-red-600 hover:text-red-700 font-syne"
+                            data-testid="attachments-clear-button"
+                        >
+                            모두 지우기
+                        </button>
+                    )}
                 </div>
-            </label>
+            ) : (
+                <>
+                    <div className="flex items-center justify-between">
+                        <p className="text-sm text-gray-600 font-syne">
+                            {hasFiles ? `첨부파일 ${filteredFiles.length}개` : ''}
+                        </p>
+                        {hasFiles && <button
+                            type="button"
+                            onClick={handleClearFiles}
+                            disabled={!hasFiles}
+                            className={`text-sm font-medium font-syne ${!hasFiles ? 'cursor-not-allowed text-gray-400' : 'text-red-600 hover:text-red-700'}`}
+                            data-testid="attachments-clear-button"
+                            aria-disabled={!hasFiles}
+                        >
+                            모두 지우기
+                        </button>}
+                    </div>
+
+                    <label
+                        className={`mt-1 block cursor-pointer rounded-lg border-2 border-dashed px-4 py-6 text-center transition-colors ${isDragging ? 'border-[#5146E5] bg-[#5146E5]/5' : 'border-gray-200 hover:border-[#5146E5]'}`}
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        onDrop={handleDrop}
+                    >
+                        <input
+                            type="file"
+                            className="hidden"
+                            onChange={handleFilesSelected}
+                            accept={accept}
+                            multiple={multiple}
+                            data-testid="file-upload-input"
+                        />
+                        <div className="flex flex-col items-center gap-2">
+                            <div className='w-[42px] h-[42px] flex justify-center items-center rounded-full bg-[#EBE9FE]' >
+                                <div className='w-[22px] h-[22px] rounded-full bg-[#7A5AF8] flex items-center justify-center text-white'>
+                                    <Plus className='w-3 h-3' />
+                                </div>
+                            </div>
+                            <p className='text-[#808080] text-sm  font-normal'>(Office 문서, 스프레드시트, 이미지, PDF/TXT)</p>
+                        </div>
+                    </label>
+                </>
+            )}
 
             {hasFiles && (
                 <div className="mt-2">
-                    <ul data-testid="file-list" className="grid grid-cols-1 gap-2 sm:grid-cols-2" aria-label="첨부된 파일">
+                    <ul data-testid="file-list" className={`grid grid-cols-1 gap-2 ${compact ? '' : 'sm:grid-cols-2'}`} aria-label="첨부된 파일">
                         {filteredFiles.map((file, idx) => (
                             <li
                                 key={`${file.name}-${idx}`}
