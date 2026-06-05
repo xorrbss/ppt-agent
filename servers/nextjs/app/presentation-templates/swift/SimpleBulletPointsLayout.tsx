@@ -2,47 +2,47 @@ import React from "react"
 import * as z from "zod"
 
 const layoutId = "simple-bullet-points-layout"
-const layoutName = "Simple Bullet Points"
-const layoutDescription = "Bullet Points with title and description"
+const layoutName = "간단한 글머리"
+const layoutDescription = "제목과 설명이 있는 글머리"
 
 const PointSchema = z
   .object({
-    title: z.string().min(6).max(60).default("Your Title Here"),
+    title: z.string().min(6).max(60).default("여기에 제목 입력"),
     body: z
       .string()
       .min(30)
       .max(220)
       .default(
-        "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aenean commodo ligula eget dolor. Aenean massa."
+        "여기에 항목을 설명하는 본문을 입력하세요. 핵심 내용을 간결하고 명확하게 작성합니다."
       ),
   })
-  .default({ title: "Your Title Here", body: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aenean commodo ligula eget dolor. Aenean massa." })
+  .default({ title: "여기에 제목 입력", body: "여기에 항목을 설명하는 본문을 입력하세요. 핵심 내용을 간결하고 명확하게 작성합니다." })
 
 const Schema = z
   .object({
-    title: z.string().min(4).max(36).default("Our Commitment"),
+    title: z.string().min(4).max(36).default("우리의 약속"),
     statement: z
       .string()
       .min(20)
       .max(260)
       .default(
-        "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+        "우리가 추구하는 가치를 간결하게 전달하는 설명 문장입니다."
       ),
     points: z
       .array(PointSchema)
       .min(1)
       .max(4)
-      .default([PointSchema.parse({}), PointSchema.parse({}), PointSchema.parse({}), PointSchema.parse({ title: "Your Title Here", body: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aenean commodo ligula eget dolor. Aenean massa." })]),
+      .default([PointSchema.parse({}), PointSchema.parse({}), PointSchema.parse({}), PointSchema.parse({ title: "여기에 제목 입력", body: "여기에 항목을 설명하는 본문을 입력하세요. 핵심 내용을 간결하고 명확하게 작성합니다." })]),
     website: z.string().min(6).max(60).default("www.yourwebsite.com"),
   })
   .default({
-    title: "Our Commitment to Innovation",
-    statement: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+    title: "혁신을 향한 우리의 약속",
+    statement: "우리가 추구하는 가치를 간결하게 전달하는 설명 문장입니다.",
     points: [
-      { title: "Your Title Here", body: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aenean commodo ligula eget dolor. Aenean massa." },
-      { title: "Your Title Here", body: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aenean commodo ligula eget dolor. Aenean massa." },
-      { title: "Your Title Here", body: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aenean commodo ligula eget dolor. Aenean massa." },
-      { title: "Your Title Here", body: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aenean commodo ligula eget dolor. Aenean massa." },
+      { title: "여기에 제목 입력", body: "여기에 항목을 설명하는 본문을 입력하세요. 핵심 내용을 간결하고 명확하게 작성합니다." },
+      { title: "여기에 제목 입력", body: "여기에 항목을 설명하는 본문을 입력하세요. 핵심 내용을 간결하고 명확하게 작성합니다." },
+      { title: "여기에 제목 입력", body: "여기에 항목을 설명하는 본문을 입력하세요. 핵심 내용을 간결하고 명확하게 작성합니다." },
+      { title: "여기에 제목 입력", body: "여기에 항목을 설명하는 본문을 입력하세요. 핵심 내용을 간결하고 명확하게 작성합니다." },
 
     ],
     website: "www.yourwebsite.com",

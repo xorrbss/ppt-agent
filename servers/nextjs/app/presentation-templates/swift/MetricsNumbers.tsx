@@ -2,25 +2,25 @@ import React from "react"
 import * as z from "zod"
 
 const layoutId = "MetricsNumbers"
-const layoutName = "Metrics Numbers"
-const layoutDescription = "Swift: Our Impact in Numbers with three stacked metric cards"
+const layoutName = "지표 수치"
+const layoutDescription = "Swift: 세 개의 누적 지표 카드로 표현한 숫자로 보는 우리의 성과"
 
 const MetricSchema = z
   .object({
     value: z.string().min(1).max(8).default("10K+"),
-    line1: z.string().min(2).max(22).default("Total"),
-    line2: z.string().min(0).max(22).default("Users"),
+    line1: z.string().min(2).max(22).default("전체"),
+    line2: z.string().min(0).max(22).default("사용자"),
     description: z
       .string()
       .min(10)
       .max(140)
-      .default("active users across multiple industries"),
+      .default("여러 산업에 걸친 활성 사용자"),
   })
   .default({
     value: "10K+",
-    line1: "Total",
-    line2: "Users",
-    description: "active users across multiple industries",
+    line1: "전체",
+    line2: "사용자",
+    description: "여러 산업에 걸친 활성 사용자",
   })
 
 const Schema = z
@@ -29,18 +29,18 @@ const Schema = z
       .string()
       .min(8)
       .max(60)
-      .default("Our Impact in Numbers"),
+      .default("숫자로 보는 우리의 성과"),
     leftTitle: z
       .string()
       .min(6)
       .max(40)
-      .default("Proven Results\nThrough Data"),
+      .default("데이터로 입증된\n성과"),
     leftBody: z
       .string()
       .min(30)
       .max(220)
       .default(
-        "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+        "데이터를 바탕으로 거둔 성과를 간결하게 소개하는 설명 문장입니다."
       ),
     website: z.string().min(6).max(60).default("www.yourwebsite.com"),
     metrics: z
@@ -50,47 +50,47 @@ const Schema = z
       .default([
         MetricSchema.parse({
           value: "10K+",
-          line1: "Total",
-          line2: "Users",
-          description: "active users across multiple industries",
+          line1: "전체",
+          line2: "사용자",
+          description: "여러 산업에 걸친 활성 사용자",
         }),
         MetricSchema.parse({
           value: "150%",
-          line1: "Revenue",
-          line2: "Growth",
-          description: "year-over-year revenue growth",
+          line1: "매출",
+          line2: "성장",
+          description: "전년 대비 매출 성장",
         }),
         MetricSchema.parse({
           value: "95%",
-          line1: "Customer",
-          line2: "Satisfaction",
-          description: "retention rate with an average rating of 4.8/5",
+          line1: "고객",
+          line2: "만족도",
+          description: "평균 4.8/5점 평가를 기록한 고객 유지율",
         }),
       ]),
   })
   .default({
-    title: "Our Impact in Numbers",
-    leftTitle: "Proven Results\nThrough Data",
-    leftBody: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+    title: "숫자로 보는 우리의 성과",
+    leftTitle: "데이터로 입증된\n성과",
+    leftBody: "데이터를 바탕으로 거둔 성과를 간결하게 소개하는 설명 문장입니다.",
     website: "www.yourwebsite.com",
     metrics: [
       MetricSchema.parse({
         value: "10K+",
-        line1: "Total",
-        line2: "Users",
-        description: "active users across multiple industries",
+        line1: "전체",
+        line2: "사용자",
+        description: "여러 산업에 걸친 활성 사용자",
       }),
       MetricSchema.parse({
         value: "150%",
-        line1: "Revenue",
-        line2: "Growth",
-        description: "year-over-year revenue growth",
+        line1: "매출",
+        line2: "성장",
+        description: "전년 대비 매출 성장",
       }),
       MetricSchema.parse({
         value: "95%",
-        line1: "Customer",
-        line2: "Satisfaction",
-        description: "retention rate with an average rating of 4.8/5",
+        line1: "고객",
+        line2: "만족도",
+        description: "평균 4.8/5점 평가를 기록한 고객 유지율",
       }),
     ],
   })

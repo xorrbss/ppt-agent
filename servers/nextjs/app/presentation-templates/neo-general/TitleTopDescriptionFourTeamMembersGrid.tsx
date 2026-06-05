@@ -3,8 +3,8 @@
  */
 import * as z from "zod";
 export const Schema = z.object({
-    title: z.string().max(30).describe('The main heading of the slide').default('Our Team Members'),
-    description: z.string().max(400).describe('Supporting description text for the slide').default('Focus on companies with 500+ employees in Financial Services, Healthcare, and Technology sectors. Target $3.5M in new pipeline with sub-$150 CAC through account-based marketing and content-led strategies.'),
+    title: z.string().max(30).describe('The main heading of the slide').default('우리 팀원'),
+    description: z.string().max(400).describe('Supporting description text for the slide').default('금융 서비스, 헬스케어, 기술 분야의 임직원 500명 이상 기업에 집중합니다. 어카운트 기반 마케팅과 콘텐츠 중심 전략을 통해 $150 미만의 CAC로 $3.5M의 신규 파이프라인을 목표로 합니다.'),
     teamMembers: z.array(z.object({
         name: z.string().max(40).describe('Name of the person'),
         designation: z.string().max(50).describe('Role or position title'),
@@ -15,40 +15,40 @@ export const Schema = z.object({
         bio: z.string().max(100).describe('Brief biography or description text'),
     })).max(4).describe('List of person cards, up to 4 items').default([
         {
-            name: 'Hannah Morales',
-            designation: 'Founder & CEO',
+            name: '김서연',
+            designation: '창립자 겸 CEO',
             image: {
                 __image_url__: 'https://presenton-public-assets.s3.ap-southeast-1.amazonaws.com/replaceable_template_image.png',
                 __image_prompt__: 'Professional headshot of a female executive',
             },
-            bio: 'Focus on companies with 500+ employees.',
+            bio: '임직원 500명 이상 기업에 집중합니다.',
         },
         {
-            name: 'James Wilson',
-            designation: 'Head of Sales',
+            name: '박지훈',
+            designation: '영업 총괄',
             image: {
                 __image_url__: 'https://presenton-public-assets.s3.ap-southeast-1.amazonaws.com/replaceable_template_image.png',
                 __image_prompt__: 'Professional headshot of a male executive',
             },
-            bio: 'Focus on companies with 500+ employees.',
+            bio: '임직원 500명 이상 기업에 집중합니다.',
         },
         {
-            name: 'Helene Paquet',
-            designation: 'Chief Tech Officer',
+            name: '이하나',
+            designation: '최고 기술 책임자',
             image: {
                 __image_url__: 'https://presenton-public-assets.s3.ap-southeast-1.amazonaws.com/replaceable_template_image.png',
                 __image_prompt__: 'Professional headshot of a female technology leader',
             },
-            bio: 'Focus on companies with 500+ employees.',
+            bio: '임직원 500명 이상 기업에 집중합니다.',
         },
         {
-            name: 'Marcus Chen',
-            designation: 'Creative Director',
+            name: '최민준',
+            designation: '크리에이티브 디렉터',
             image: {
                 __image_url__: 'https://presenton-public-assets.s3.ap-southeast-1.amazonaws.com/replaceable_template_image.png',
                 __image_prompt__: 'Professional headshot of a male creative professional',
             },
-            bio: 'Focus on companies with 500+ employees.',
+            bio: '임직원 500명 이상 기업에 집중합니다.',
         },
     ]),
 });
@@ -57,8 +57,8 @@ export const Schema = z.object({
  * Layout ID, Name, and Description
  */
 export const layoutId = 'title-description-team-grid';
-export const layoutName = 'Title Description With Photo Row';
-export const layoutDescription = 'A top-aligned layout featuring split title and description sections at the top, followed by a horizontal row of up to 4 person cards. Each card shows name, designation, square photo, and brief bio.';
+export const layoutName = '사진 행이 있는 제목 설명';
+export const layoutDescription = '상단에 분할된 제목과 설명 섹션을 배치하고, 그 아래에 최대 4개의 인물 카드를 가로로 배열한 상단 정렬 레이아웃입니다. 각 카드는 이름, 직책, 정사각형 사진, 간단한 약력을 표시합니다.';
 
 /**
  * React Component: dynamicSlideLayout
@@ -88,7 +88,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                                     style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                                     className=' w-[2px] h-4'></span>
                                 {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(data as any)?.__companyName__ || 'Company Name'}
+                                    {(data as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>

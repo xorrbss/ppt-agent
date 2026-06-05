@@ -2,9 +2,9 @@ import React from "react";
 import * as z from "zod";
 
 export const layoutId = "table-of-contents";
-export const layoutName = "Table Of Contents";
+export const layoutName = "목차";
 export const layoutDescription =
-  "A clean table of contents layout with up to 10 items, each with a short description, styled to match the modern template.";
+  "최대 10개의 항목과 각 항목별 짧은 설명을 담은 깔끔한 목차 레이아웃으로, 모던 템플릿에 어울리도록 스타일링되었습니다.";
 
 const TocItemSchema = z.object({
   title: z.string().min(3).max(40).meta({
@@ -16,7 +16,7 @@ const TocItemSchema = z.object({
 });
 
 const tableOfContentsSchema = z.object({
-  title: z.string().min(3).max(40).default("Table Of Contents").meta({
+  title: z.string().min(3).max(40).default("목차").meta({
     description: "Main title displayed at the top",
   }),
   items: z
@@ -25,8 +25,8 @@ const tableOfContentsSchema = z.object({
     .max(10)
     .default(
       Array.from({ length: 10 }).map((_, i) => ({
-        title: `Section ${i + 1}`,
-        description: "Brief description for this section.",
+        title: `섹션 ${i + 1}`,
+        description: "이 섹션에 대한 간단한 설명입니다.",
       }))
     )
     .meta({ description: "List of up to 10 TOC items" }),
@@ -65,7 +65,7 @@ const TableOfContentsLayout: React.FC<TableOfContentsLayoutProps> = ({
 
                 {(slideData as any)?._logo_url__ && <img src={(slideData as any)?._logo_url__} alt="logo" className="w-6 h-6" />}
                 {(slideData as any)?.__companyName__ && <span className="text-sm sm:text-base font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                  {(slideData as any)?.__companyName__ || 'Company Name'}
+                  {(slideData as any)?.__companyName__ || '회사명'}
                 </span>}
               </div>
             </div>

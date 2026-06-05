@@ -1,8 +1,8 @@
 import * as z from 'zod'
 
 export const Schema = z.object({
-    title: z.string().max(50).describe('The main title of the slide').default('Image with Description'),
-    description: z.string().max(350).describe('The body text or description of the slide').default('Focus on companies with 500+ employees in Financial Services, Healthcare, and Technology sectors. Target $3.5M in new pipeline with sub-$150 CAC through account-based marketing and content-led strategies.'),
+    title: z.string().max(50).describe('The main title of the slide').default('이미지와 설명'),
+    description: z.string().max(350).describe('The body text or description of the slide').default('금융 서비스, 헬스케어, 기술 분야에서 직원 500명 이상의 기업에 집중합니다. 어카운트 기반 마케팅과 콘텐츠 중심 전략을 통해 CAC 150달러 미만으로 350만 달러의 신규 파이프라인을 목표로 합니다.'),
     image: z.object({
         __image_url__: z.string().describe('The URL of the featured image'),
         __image_prompt__: z.string().max(100).describe('A description for generating a replacement image')
@@ -13,8 +13,8 @@ export const Schema = z.object({
 });
 
 export const layoutId = 'title-description-image-right';
-export const layoutName = 'Title Description Image Right';
-export const layoutDescription = 'A two-column slide with a title and description on the left and a large featured image on the right. The balanced layout provides equal emphasis on textual content and visual representation.';
+export const layoutName = '제목 설명 이미지 오른쪽';
+export const layoutDescription = '왼쪽에 제목과 설명, 오른쪽에 큰 대표 이미지를 배치한 2열 슬라이드입니다. 균형 잡힌 레이아웃으로 텍스트 내용과 시각적 표현에 동등하게 강조를 둡니다.';
 
 const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = ({ data }) => {
     const { title, description, image } = data;
@@ -59,7 +59,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                         {image?.__image_url__ && (
                             <img
                                 src={image.__image_url__}
-                                alt={image.__image_prompt__ || 'Slide Visual'}
+                                alt={image.__image_prompt__ || '슬라이드 시각 자료'}
                                 className="w-full h-full object-cover"
                                 style={{ objectPosition: '52.9% 44.07%' }}
                             />
@@ -72,7 +72,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                         style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                         className=' w-[2px] h-4'></span>
                     {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                        {(data as any)?.__companyName__ || 'Company Name'}
+                        {(data as any)?.__companyName__ || '회사명'}
                     </span>}
                 </div>}
             </div>

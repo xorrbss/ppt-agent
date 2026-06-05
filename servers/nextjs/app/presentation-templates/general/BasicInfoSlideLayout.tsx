@@ -3,14 +3,14 @@ import * as z from "zod";
 import { ImageSchema } from '../defaultSchemes';
 
 export const layoutId = 'basic-info-slide'
-export const layoutName = 'Basic Info'
-export const layoutDescription = 'A clean slide layout with title, description text, and a supporting image.'
+export const layoutName = '기본 정보'
+export const layoutDescription = '제목, 설명 텍스트, 보조 이미지로 구성된 깔끔한 슬라이드 레이아웃입니다.'
 
 const basicInfoSlideSchema = z.object({
-    title: z.string().min(3).max(40).default('Product Overview').meta({
+    title: z.string().min(3).max(40).default('제품 개요').meta({
         description: "Main title of the slide",
     }),
-    description: z.string().min(10).max(150).default('Our product offers customizable dashboards for real-time reporting and data-driven decisions. It integrates with third-party tools to enhance operations and scales with business growth for improved efficiency.').meta({
+    description: z.string().min(10).max(150).default('저희 제품은 실시간 보고와 데이터 기반 의사결정을 위한 맞춤형 대시보드를 제공합니다. 서드파티 도구와 연동되어 업무를 강화하고, 비즈니스 성장에 맞춰 확장되어 효율성을 높입니다.').meta({
         description: "Main description text content",
     }),
     image: ImageSchema.default({
@@ -56,7 +56,7 @@ const BasicInfoSlideLayout: React.FC<BasicInfoSlideLayoutProps> = ({ data: slide
 
                                 {(slideData as any)?._logo_url__ && <img src={(slideData as any)?._logo_url__} alt="logo" className="w-6 h-6" />}
                                 {(slideData as any)?.__companyName__ && <span className="text-sm sm:text-base font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(slideData as any)?.__companyName__ || 'Company Name'}
+                                    {(slideData as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>
@@ -81,7 +81,7 @@ const BasicInfoSlideLayout: React.FC<BasicInfoSlideLayoutProps> = ({ data: slide
                     <div className="flex-1 flex flex-col justify-center pl-8 space-y-6">
                         {/* Title */}
                         <h1 style={{ color: "var(--background-text, #111827)" }} className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight">
-                            {slideData?.title || 'Product Overview'}
+                            {slideData?.title || '제품 개요'}
                         </h1>
 
                         {/* Purple accent line */}
@@ -89,7 +89,7 @@ const BasicInfoSlideLayout: React.FC<BasicInfoSlideLayoutProps> = ({ data: slide
 
                         {/* Description */}
                         <p style={{ color: "var(--background-text, #4b5563)" }} className="text-base sm:text-lg text-gray-700 leading-relaxed">
-                            {slideData?.description || 'Our product offers customizable dashboards for real-time reporting and data-driven decisions. It integrates with third-party tools to enhance operations and scales with business growth for improved efficiency.'}
+                            {slideData?.description || '저희 제품은 실시간 보고와 데이터 기반 의사결정을 위한 맞춤형 대시보드를 제공합니다. 서드파티 도구와 연동되어 업무를 강화하고, 비즈니스 성장에 맞춰 확장되어 효율성을 높입니다.'}
                         </p>
 
 

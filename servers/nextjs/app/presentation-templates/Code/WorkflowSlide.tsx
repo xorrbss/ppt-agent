@@ -23,12 +23,12 @@ const WorkflowStepSchema = z.object({
 });
 
 export const slideLayoutId = "workflow-slide";
-export const slideLayoutName = "Workflow Slide";
+export const slideLayoutName = "워크플로 슬라이드";
 export const slideLayoutDescription =
-  "A workflow slide with cards and directional arrows between steps.";
+  "단계 사이에 방향 화살표가 있는 카드 형식의 워크플로 슬라이드.";
 
 export const Schema = z.object({
-  title: z.string().min(6).max(16).default("Workflow").meta({
+  title: z.string().min(6).max(16).default("워크플로").meta({
     description: "Slide title shown above the workflow row.",
   }),
   steps: z
@@ -37,32 +37,32 @@ export const Schema = z.object({
     .max(4)
     .default([
       {
-        title: "Design",
-        description: "Create wireframes and design system components.",
+        title: "디자인",
+        description: "와이어프레임과 디자인 시스템 컴포넌트를 만듭니다.",
         icon: {
           __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
           __icon_query__: "check icon",
         },
       },
       {
-        title: "Develop",
-        description: "Build features using modern frameworks and best practices.",
+        title: "개발",
+        description: "최신 프레임워크와 모범 사례로 기능을 구축합니다.",
         icon: {
           __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
           __icon_query__: "check icon",
         },
       },
       {
-        title: "Test & QA",
-        description: "Run automated tests and quality assurance checks.",
+        title: "테스트 & QA",
+        description: "자동화된 테스트와 품질 검증을 실행합니다.",
         icon: {
           __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
           __icon_query__: "check icon",
         },
       },
       {
-        title: "Deploy",
-        description: "Ship to production with CI and CD pipeline automation.",
+        title: "배포",
+        description: "CI/CD 파이프라인 자동화로 프로덕션에 배포합니다.",
         icon: {
           __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
           __icon_query__: "check icon",

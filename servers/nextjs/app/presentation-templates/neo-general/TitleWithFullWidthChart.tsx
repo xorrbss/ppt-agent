@@ -54,7 +54,7 @@ export const Schema = z.object({
     .string()
     .max(30)
     .describe("The main title of the slide")
-    .default("Spend & ROI Dashbo       ard"),
+    .default("지출 및 ROI 대시보드"),
   chart: z
     .object({
       title: z.string().max(64).optional(),
@@ -83,16 +83,16 @@ export const Schema = z.object({
     })
     .describe("Chart configuration to render on the slide")
     .default({
-      title: "Revenue vs Spend",
+      title: "매출 대 지출",
       type: "bar",
-      categories: ["Jan", "Feb", "Mar"],
+      categories: ["1월", "2월", "3월"],
       series: [
         {
-          name: "Revenue",
+          name: "매출",
           color: "#8910FA",
           values: [520, 660, 185, 200, 250, 300],
         },
-        { name: "Spend", color: "#457EE5", values: [140, 245, 400] },
+        { name: "지출", color: "#457EE5", values: [140, 245, 400] },
       ],
     }),
 });
@@ -100,9 +100,9 @@ export const Schema = z.object({
 type FormData = z.infer<typeof Schema>;
 
 export const layoutId = "title-with-full-width-chart";
-export const layoutName = "Title With Full-Width Chart";
+export const layoutName = "전체 너비 차트가 있는 제목";
 export const layoutDescription =
-  "A centered layout with a bold title and underline accent, followed by a full-width chart container with legend. Supports line, bar, grouped, stacked, clustered, diverging, area, pie, and donut charts.";
+  "굵은 제목과 밑줄 강조를 가운데 배치하고, 그 아래에 범례가 있는 전체 너비 차트 컨테이너를 배치한 레이아웃입니다. 선, 막대, 그룹, 누적, 클러스터, 발산, 영역, 파이, 도넛 차트를 지원합니다.";
 
 const ChartLegend: React.FC<{
   series: z.infer<typeof SeriesSchema>[];
@@ -526,8 +526,8 @@ const ChartRenderer: React.FC<{ chart: z.infer<typeof Schema>["chart"] }> = ({
           }))
         : [];
       const labels = chart.divergingLabels || [
-        chart.series[0]?.name || "Positive",
-        chart.series[1]?.name || "Negative",
+        chart.series[0]?.name || "긍정",
+        chart.series[1]?.name || "부정",
       ];
 
       return (
@@ -744,7 +744,7 @@ const ChartRenderer: React.FC<{ chart: z.infer<typeof Schema>["chart"] }> = ({
     default:
       return (
         <div className="flex h-full items-center justify-center text-gray-500">
-          Unsupported chart type: {chart.type}
+          지원하지 않는 차트 유형: {chart.type}
         </div>
       );
   }
@@ -790,7 +790,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<FormData> }> = ({
                     className="text-sm  font-semibold"
                     style={{ color: "var(--background-text, #111827)" }}
                   >
-                    {(data as any)?.__companyName__ || "Company Name"}
+                    {(data as any)?.__companyName__ || "회사명"}
                   </span>
                 )}
               </div>
@@ -802,7 +802,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<FormData> }> = ({
             className="text-[42.7px] font-bold tracking-[-2px]"
             style={{ color: "var(--background-text,#101828)" }}
           >
-            {title || "Spend & ROI Dashboard"}
+            {title || "지출 및 ROI 대시보드"}
           </h1>
           <div
             className="w-[116.6px] h-[5.7px]"

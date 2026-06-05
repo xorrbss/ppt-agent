@@ -4,12 +4,12 @@ import * as z from "zod";
 import { IconSchema } from "../defaultSchemes";
 
 export const layoutId = "bullet-with-icons-description-grid";
-export const layoutName = "Bullet With Icons Description Grid";
+export const layoutName = "아이콘 글머리 설명 그리드";
 export const layoutDescription =
-  "A bullet with icons description grid slide layout";
+  "아이콘 글머리 설명 그리드 슬라이드 레이아웃";
 
 const bulletWithIconsDescriptionGridSlideSchema = z.object({
-  title: z.string().min(3).max(25).default("Businesses struggle").meta({
+  title: z.string().min(3).max(25).default("기업의 어려움").meta({
     description: "Main title of the slide",
   }),
   mainDescription: z
@@ -17,7 +17,7 @@ const bulletWithIconsDescriptionGridSlideSchema = z.object({
     .min(20)
     .max(300)
     .default(
-      "Show that we offer a solution that solves the problems previously described and identified. Make sure that the solutions we offer uphold the values of effectiveness, efficiency, and are highly relevant to the market situation and society is here and what is hsd sdksdf klfdslkf lkflkfsldkf."
+      "앞서 설명하고 파악한 문제들을 해결하는 솔루션을 제시합니다. 우리가 제공하는 솔루션이 효과성과 효율성의 가치를 지키며 시장 상황과 사회에 매우 적합하다는 점을 분명히 보여줍니다."
     )
     .meta({
       description: "Main content text describing the solution",
@@ -40,9 +40,9 @@ const bulletWithIconsDescriptionGridSlideSchema = z.object({
     .max(6)
     .default([
       {
-        title: "Market",
+        title: "시장",
         description:
-          "Innovative and widely accepted. Innovative and widely accepted. Innovative and widely accepted.",
+          "혁신적이고 폭넓게 인정받습니다. 혁신적이고 폭넓게 인정받습니다. 혁신적이고 폭넓게 인정받습니다.",
         icon: {
           __icon_query__: "market innovation",
           __icon_url__:
@@ -50,8 +50,8 @@ const bulletWithIconsDescriptionGridSlideSchema = z.object({
         },
       },
       {
-        title: "Industry",
-        description: "Based on sound market decisions.",
+        title: "산업",
+        description: "건전한 시장 판단을 기반으로 합니다.",
         icon: {
           __icon_query__: "industry building",
           __icon_url__:
@@ -60,7 +60,7 @@ const bulletWithIconsDescriptionGridSlideSchema = z.object({
       },
       {
         title: "SEM",
-        description: "Driven by precise data and analysis.",
+        description: "정밀한 데이터와 분석을 기반으로 합니다.",
         icon: {
           __icon_query__: "SEM data analysis",
           __icon_url__:
@@ -68,8 +68,8 @@ const bulletWithIconsDescriptionGridSlideSchema = z.object({
         },
       },
       {
-        title: "End User",
-        description: "Focused on real user impact.",
+        title: "최종 사용자",
+        description: "실제 사용자 영향에 집중합니다.",
         icon: {
           __icon_query__: "end user impact",
           __icon_url__:
@@ -77,8 +77,8 @@ const bulletWithIconsDescriptionGridSlideSchema = z.object({
         },
       },
       {
-        title: "Industry",
-        description: "Based on sound market decisions.",
+        title: "산업",
+        description: "건전한 시장 판단을 기반으로 합니다.",
         icon: {
           __icon_query__: "industry building",
           __icon_url__:
@@ -87,7 +87,7 @@ const bulletWithIconsDescriptionGridSlideSchema = z.object({
       },
       {
         title: "SEM",
-        description: "Driven by precise data and analysis.",
+        description: "정밀한 데이터와 분석을 기반으로 합니다.",
         icon: {
           __icon_query__: "SEM data analysis",
           __icon_url__:
@@ -148,7 +148,7 @@ const BulletWithIconsDescriptionGridSlideLayout = ({
                     className="text-sm sm:text-base font-semibold"
                     style={{ color: "var(--background-text, #111827)" }}
                   >
-                    {(slideData as any)?.__companyName__ || "Company Name"}
+                    {(slideData as any)?.__companyName__ || "회사명"}
                   </span>
                 )}
               </div>

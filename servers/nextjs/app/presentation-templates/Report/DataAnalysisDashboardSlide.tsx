@@ -41,9 +41,9 @@ const SummaryCardSchema = z.object({
 
 
 export const slideLayoutId = "data-analysis-dashboard-slide";
-export const slideLayoutName = "Data Analysis Dashboard Slide";
+export const slideLayoutName = "데이터 분석 대시보드 슬라이드";
 export const slideLayoutDescription =
-  "A dashboard-style slide with a title, summary cards, and a responsive grid of chart panels (1–9). Each panel uses the same flexible chart types as other report slides; labels and margins are compact for small cells.";
+  "제목, 요약 카드, 그리고 반응형 차트 패널 그리드(1~9개)로 구성된 대시보드 형식의 슬라이드. 각 패널은 다른 보고서 슬라이드와 동일한 유연한 차트 유형을 사용하며, 작은 셀에 맞게 라벨과 여백이 압축되어 있습니다.";
 
 const ChartItemSchema = z.object({
 
@@ -63,7 +63,7 @@ const ChartItemSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().min(3).max(12).default("Data Analysis").meta({
+  title: z.string().min(3).max(12).default("데이터 분석").meta({
     description: "Slide title shown at the top-left.",
   }),
 
@@ -74,25 +74,25 @@ export const Schema = z.object({
     .optional()
     .default([
       {
-        value: "5", label: "Text 1", icon: {
+        value: "5", label: "텍스트 1", icon: {
           __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
           __icon_query__: "placeholder icon",
         }
       },
       {
-        value: "52", label: "Text 2", icon: {
+        value: "52", label: "텍스트 2", icon: {
           __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
           __icon_query__: "placeholder icon",
         }
       },
       {
-        value: "4", label: "Text 3", icon: {
+        value: "4", label: "텍스트 3", icon: {
           __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
           __icon_query__: "placeholder icon",
         }
       },
       {
-        value: "80%", label: "Text 4", icon: {
+        value: "80%", label: "텍스트 4", icon: {
           __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
           __icon_query__: "placeholder icon",
         }
@@ -102,12 +102,12 @@ export const Schema = z.object({
       description: "Four compact summary cards displayed above the dashboard panels.",
     }),
   charts: z.array(ChartItemSchema).min(1).max(6).default([
-    { type: 'bar', data: [{ name: 'Q1', value: 125000 }, { name: 'Q2', value: 158000 }, { name: 'Q3', value: 142000 }, { name: 'Q4', value: 189000 }] },
-    { type: 'donut', data: [{ name: 'North America', value: 35 }, { name: 'Europe', value: 28 }, { name: 'Asia Pacific', value: 25 }, { name: 'Others', value: 12 }] },
-    { type: 'line', data: [{ name: 'Jan', value: 30 }, { name: 'Feb', value: 45 }, { name: 'Mar', value: 52 }, { name: 'Apr', value: 48 }, { name: 'May', value: 67 }, { name: 'Jun', value: 82 }] },
-    { type: 'bar', data: [{ name: 'Sales', value: 87 }, { name: 'Marketing', value: 72 }, { name: 'Engineering', value: 95 }, { name: 'Support', value: 68 }] },
-    { type: 'bar-clustered', data: [{ name: 'Q1', values: { 'Product A': 45, 'Product B': 62 } }, { name: 'Q2', values: { 'Product A': 58, 'Product B': 71 } }, { name: 'Q3', values: { 'Product A': 72, 'Product B': 65 } }], series: ['Product A', 'Product B'] },
-    { type: 'bar-diverging', data: [{ name: 'Quality', positive: 78, negative: 22 }, { name: 'Service', positive: 65, negative: 35 }, { name: 'Price', positive: 42, negative: 58 }], series: ['Satisfied', 'Unsatisfied'] },
+    { type: 'bar', data: [{ name: '1분기', value: 125000 }, { name: '2분기', value: 158000 }, { name: '3분기', value: 142000 }, { name: '4분기', value: 189000 }] },
+    { type: 'donut', data: [{ name: '북미', value: 35 }, { name: '유럽', value: 28 }, { name: '아시아 태평양', value: 25 }, { name: '기타', value: 12 }] },
+    { type: 'line', data: [{ name: '1월', value: 30 }, { name: '2월', value: 45 }, { name: '3월', value: 52 }, { name: '4월', value: 48 }, { name: '5월', value: 67 }, { name: '6월', value: 82 }] },
+    { type: 'bar', data: [{ name: '영업', value: 87 }, { name: '마케팅', value: 72 }, { name: '엔지니어링', value: 95 }, { name: '지원', value: 68 }] },
+    { type: 'bar-clustered', data: [{ name: '1분기', values: { 'Product A': 45, 'Product B': 62 } }, { name: '2분기', values: { 'Product A': 58, 'Product B': 71 } }, { name: '3분기', values: { 'Product A': 72, 'Product B': 65 } }], series: ['Product A', 'Product B'] },
+    { type: 'bar-diverging', data: [{ name: '품질', positive: 78, negative: 22 }, { name: '서비스', positive: 65, negative: 35 }, { name: '가격', positive: 42, negative: 58 }], series: ['만족', '불만족'] },
   ]),
 });
 

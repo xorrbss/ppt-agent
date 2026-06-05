@@ -21,8 +21,8 @@ const IconSchema = z.object({
 })
 
 const layoutId = "header-smallbar-title-team-cards-slide"
-const layoutName = "Image List With Description"
-const layoutDescription = "A slide with a top utility bar, centered title, and a grid of cards with names, roles, and background images."
+const layoutName = "이미지 목록과 설명"
+const layoutDescription = "상단 도구 바, 가운데 정렬된 제목, 그리고 이름과 역할, 배경 이미지가 있는 카드 그리드로 구성된 슬라이드."
 
 const Schema = z.object({
   utilityBar: z.object({
@@ -44,37 +44,37 @@ const Schema = z.object({
       __icon_query__: "green line separator",
     },
   }),
-  title: z.string().min(10).max(50).default("Our Professional Team").meta({
+  title: z.string().min(10).max(50).default("우리의 전문가 팀").meta({
     description: "Centered main title. Max 5 words",
   }),
   cards: z.array(z.object({
-    name: z.string().min(3).max(30).default("Sam Rawlings").meta({
+    name: z.string().min(3).max(30).default("김서연").meta({
       description: "Member name. Up to 3 words.",
     }),
-    role: z.string().min(20).max(50).default("Marketing specialist with brand and growth experience").meta({
+    role: z.string().min(20).max(50).default("브랜드와 성장 경험을 갖춘 마케팅 전문가").meta({
       description: "Short description under name. Up to 10 words",
     }),
     photo: ImageSchema,
   })).min(1).max(4).default([
     {
-      name: "Sam Rawlings",
-      role: "Marketing specialist with brand and growth experience",
+      name: "김서연",
+      role: "브랜드와 성장 경험을 갖춘 마케팅 전문가",
       photo: {
         __image_url__: "https://images.pexels.com/photos/1181695/pexels-photo-1181695.jpeg",
         __image_prompt__: "Portrait of a professional team member with subtle background, soft light, business attire",
       },
     },
     {
-      name: "Sam Rawlings",
-      role: "Marketing specialist with brand and growth experience",
+      name: "박지훈",
+      role: "브랜드와 성장 경험을 갖춘 마케팅 전문가",
       photo: {
         __image_url__: "https://images.pexels.com/photos/450214/pexels-photo-450214.jpeg",
         __image_prompt__: "Portrait of a professional team member with subtle background, soft light, business attire",
       },
     },
     {
-      name: "Sam Rawlings",
-      role: "Marketing specialist with brand and growth experience",
+      name: "이하나",
+      role: "브랜드와 성장 경험을 갖춘 마케팅 전문가",
       photo: {
         __image_url__: "https://images.pexels.com/photos/756484/pexels-photo-756484.jpeg",
         __image_prompt__: "Portrait of a professional team member with subtle background, soft light, business attire",
@@ -117,7 +117,7 @@ const dynamicSlideLayout: React.FC<SlideLayoutProps> = ({ data: slideData }) => 
         </div>
 
         <h1 className="mt-4 text-center text-[64px] leading-[1.05]  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-          {slideData?.title || "Our Professional Team"}
+          {slideData?.title || "우리의 전문가 팀"}
         </h1>
 
         <div className="px-10 mt-8">

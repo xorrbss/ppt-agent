@@ -1,21 +1,21 @@
 import * as z from 'zod';
 
 export const Schema = z.object({
-    title: z.string().max(20).describe("The main heading of the slide").default("Thank you"),
-    description: z.string().max(300).describe("A brief description or concluding text").default("Focus on companies with 500+ employees in Financial Services, Healthcare, and Technology sectors. Target $3.5M in new pipeline with sub-$150 CAC through account-based marketing and content-led strategies."),
+    title: z.string().max(20).describe("The main heading of the slide").default("감사합니다"),
+    description: z.string().max(300).describe("A brief description or concluding text").default("금융 서비스, 헬스케어, 기술 분야의 직원 500명 이상 기업에 집중합니다. 어카운트 기반 마케팅과 콘텐츠 중심 전략으로 CAC 150달러 미만, 신규 파이프라인 350만 달러를 목표로 합니다."),
     contactItems: z.array(z.object({
         label: z.string().max(20).describe("The label of the item"),
         value: z.string().max(50).describe("The value of the item")
     })).max(3).optional().describe("A list of items").default([
-        { label: "Email", value: "presenton@gmail.com" },
-        { label: "Phone", value: "+977-9800789088" },
-        { label: "Website", value: "www.hello@gmail.com" }
+        { label: "이메일", value: "presenton@gmail.com" },
+        { label: "전화", value: "+977-9800789088" },
+        { label: "웹사이트", value: "www.hello@gmail.com" }
     ])
 });
 
 export const layoutId = 'title-description-contact-cards';
-export const layoutName = 'Title Description Contact Cards';
-export const layoutDescription = 'A closing slide with a title, description text, and three contact information cards for email, phone, and website, ideal for thank you or contact pages.';
+export const layoutName = '제목 설명 연락처 카드';
+export const layoutDescription = '제목, 설명 텍스트와 이메일, 전화, 웹사이트를 위한 세 개의 연락처 정보 카드로 구성된 마무리 슬라이드로, 감사 인사나 연락처 페이지에 이상적입니다.';
 
 const dynamicSlideLayout = ({ data }: { data: Partial<z.infer<typeof Schema>> }) => {
     const { title, description, contactItems } = data;
@@ -99,7 +99,7 @@ const dynamicSlideLayout = ({ data }: { data: Partial<z.infer<typeof Schema>> })
                         style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                         className=' w-[2px] h-4'></span>
                     {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                        {(data as any)?.__companyName__ || 'Company Name'}
+                        {(data as any)?.__companyName__ || '회사명'}
                     </span>}
                 </div>}
             </div>

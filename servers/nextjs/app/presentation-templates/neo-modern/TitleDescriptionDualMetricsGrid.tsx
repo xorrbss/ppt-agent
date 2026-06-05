@@ -4,29 +4,29 @@
 import * as z from 'zod'
 
 export const Schema = z.object({
-    title: z.string().describe('The main heading of the slide').max(30).default('Description and Metrix'),
-    description: z.string().describe('Supporting description text').max(250).default('Focus on companies with 500+ employees in Financial Services, Healthcare, and Technology sectors. Target $3.5M in new pipeline with sub-$150 CAC through account-based marketing and content-led strategies.'),
+    title: z.string().describe('The main heading of the slide').max(30).default('설명과 지표'),
+    description: z.string().describe('Supporting description text').max(250).default('금융 서비스, 헬스케어, 기술 분야에서 직원 500명 이상의 기업에 집중합니다. 어카운트 기반 마케팅과 콘텐츠 중심 전략을 통해 CAC 150달러 미만으로 350만 달러의 신규 파이프라인을 목표로 합니다.'),
     primaryMetrics: z.array(z.object({
         label: z.string().max(25).describe('Label text for the metric'),
         value: z.string().max(8).describe('Value displayed for the metric')
     })).max(3).describe('List of primary metrics displayed').default([
-        { label: 'Main Challenge: Delayed Client', value: '85%' },
-        { label: 'Main Challenge: Delayed Client', value: '85%' },
-        { label: 'Main Challenge: Delayed Client', value: '85%' }
+        { label: '주요 과제: 고객 지연', value: '85%' },
+        { label: '주요 과제: 고객 지연', value: '85%' },
+        { label: '주요 과제: 고객 지연', value: '85%' }
     ]),
     secondaryMetrics: z.array(z.object({
         label: z.string().max(25).describe('Label text for the metric'),
         value: z.string().max(8).describe('Value displayed for the metric')
     })).max(3).describe('List of secondary metrics displayed').default([
-        { label: 'Total Registered Users', value: '>500 M' },
-        { label: 'Total Registered Users', value: '>500 M' },
-        { label: 'Total Registered Users', value: '>500 M' }
+        { label: '총 등록 사용자 수', value: '>500 M' },
+        { label: '총 등록 사용자 수', value: '>500 M' },
+        { label: '총 등록 사용자 수', value: '>500 M' }
     ])
 });
 
 export const layoutId = 'title-description-dual-metrics-grid';
-export const layoutName = 'Title Description Dual Metrics Grid';
-export const layoutDescription = 'A slide featuring a title and description on the left, with two columns of metric cards on the right - primary metrics in bold styling and secondary metrics in subtle styling. Supports up to 6 metrics total (3 per column).';
+export const layoutName = '제목 설명 듀얼 지표 그리드';
+export const layoutDescription = '왼쪽에 제목과 설명, 오른쪽에 두 개의 지표 카드 열을 배치한 슬라이드입니다. 주요 지표는 굵은 스타일로, 보조 지표는 은은한 스타일로 표시됩니다. 총 6개(열당 3개)까지의 지표를 지원합니다.';
 
 const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = ({ data }) => {
     const { title, description, primaryMetrics, secondaryMetrics } = data;

@@ -48,7 +48,7 @@ export const Schema = z.object({
   title: z
     .string()
     .describe("The main heading of the slide")
-    .default("Competitive Comparison"),
+    .default("경쟁사 비교"),
   comparisonSections: z
     .array(
       z.object({
@@ -96,31 +96,31 @@ export const Schema = z.object({
     .max(2)
     .default([
       {
-        heading: "Campaign A",
-        tagline: "Top Campaign",
-        footerLabel: "Engangment Rate",
+        heading: "캠페인 A",
+        tagline: "최고 캠페인",
+        footerLabel: "참여율",
         chartType: "bar",
-        legendItems: ["Planned Budget", "Actual Budget"],
+        legendItems: ["계획 예산", "실제 예산"],
         graph: {
           rows: [
-            { label: "Paid Social", value1: 520, value2: 485 },
-            { label: "Content Marketing", value1: 380, value2: 412 },
-            { label: "Events & Sponsorships", value1: 450, value2: 468 },
-            { label: "SEO & Organic", value1: 280, value2: 276 },
+            { label: "유료 소셜", value1: 520, value2: 485 },
+            { label: "콘텐츠 마케팅", value1: 380, value2: 412 },
+            { label: "이벤트 및 협찬", value1: 450, value2: 468 },
+            { label: "SEO 및 오가닉", value1: 280, value2: 276 },
           ],
         },
       },
       {
-        heading: "Campaign B",
-        footerLabel: "Engangment Rate",
+        heading: "캠페인 B",
+        footerLabel: "참여율",
         chartType: "bar",
-        legendItems: ["Planned Budget", "Actual Budget"],
+        legendItems: ["계획 예산", "실제 예산"],
         graph: {
           rows: [
-            { label: "Paid Social", value1: 520, value2: 485 },
-            { label: "Content Marketing", value1: 380, value2: 412 },
-            { label: "Events & Sponsorships", value1: 450, value2: 468 },
-            { label: "SEO & Organic", value1: 280, value2: 276 },
+            { label: "유료 소셜", value1: 520, value2: 485 },
+            { label: "콘텐츠 마케팅", value1: 380, value2: 412 },
+            { label: "이벤트 및 협찬", value1: 450, value2: 468 },
+            { label: "SEO 및 오가닉", value1: 280, value2: 276 },
           ],
         },
       },
@@ -128,9 +128,9 @@ export const Schema = z.object({
 });
 
 export const layoutId = "title-dual-charts-comparison";
-export const layoutName = "Title Dual Charts Comparison";
+export const layoutName = "제목 양면 차트 비교";
 export const layoutDescription =
-  "A comparison slide with a centered title and two side-by-side chart panels, each supporting bar, grouped bar, stacked bar, clustered bar, diverging bar, horizontal bar, line, area, pie, donut, and scatter chart types for data visualization.";
+  "중앙 정렬된 제목과 나란히 배치된 두 개의 차트 패널로 구성된 비교 슬라이드로, 각 패널은 데이터 시각화를 위한 막대, 그룹 막대, 누적 막대, 클러스터 막대, 발산 막대, 가로 막대, 선, 영역, 파이, 도넛, 산점도 차트 유형을 지원합니다.";
 
 const CHART_COLORS = [
   "#1F8A2E",
@@ -542,14 +542,14 @@ const dynamicSlideLayout: React.FC<{
               <Legend />
               <Bar
                 dataKey="positive"
-                name={section?.legendItems?.[0] || "Positive"}
+                name={section?.legendItems?.[0] || "긍정"}
                 stackId="stack"
                 fill={graphColors(0)}
                 radius={[0, 4, 4, 0]}
               />
               <Bar
                 dataKey="negative"
-                name={section?.legendItems?.[1] || "Negative"}
+                name={section?.legendItems?.[1] || "부정"}
                 stackId="stack"
                 fill={graphColors(3)}
                 radius={[4, 0, 0, 4]}
@@ -970,7 +970,7 @@ const dynamicSlideLayout: React.FC<{
                   className="text-sm  font-semibold"
                   style={{ color: "var(--background-text, #111827)" }}
                 >
-                  {(data as any)?.__companyName__ || "Company Name"}
+                  {(data as any)?.__companyName__ || "회사명"}
                 </span>
               )}
             </div>

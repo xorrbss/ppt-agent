@@ -4,7 +4,7 @@ import { IconSchema } from '../defaultSchemes';
 
 export const layoutId = 'korean-biz-bullets'
 export const layoutName = '핵심 내용'
-export const layoutDescription = 'Korean key-points slide: a title and 3-4 bullet cards each with an icon, heading and description'
+export const layoutDescription = '제목과, 각각 아이콘·소제목·설명을 담은 3~4개의 글머리 카드로 구성된 한국형 핵심 내용 슬라이드'
 
 // Single source of truth for the sample bullets: used both as the Zod schema
 // default and as the component's fallback when no data is provided.

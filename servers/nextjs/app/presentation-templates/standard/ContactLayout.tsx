@@ -21,8 +21,8 @@ const IconSchema = z.object({
 })
 
 const layoutId = "header-left-media-contact-info-slide"
-const layoutName = "ContactLayout"
-const layoutDescription = "A slide with a top bar, left media with overlay and bottom bar, and right content with header and text blocks. This should only be used for contact information."
+const layoutName = "연락처"
+const layoutDescription = "상단 바, 오버레이와 하단 바가 있는 왼쪽 미디어, 헤더와 텍스트 블록이 있는 오른쪽 내용으로 구성된 슬라이드. 연락처 정보에만 사용해야 합니다."
 
 const Schema = z.object({
   metaMaxWords: z.number().default(24).meta({
@@ -82,14 +82,14 @@ const Schema = z.object({
   }),
 
   rightContent: z.object({
-    title: z.string().min(18).max(40).default("Let’s Get in\nTouch with Us").meta({
+    title: z.string().min(18).max(40).default("지금 바로\n문의하세요").meta({
       description: "Main heading. Max 6 words",
     }),
     sections: z.array(z.object({
-      label: z.string().min(4).max(10).default("Label").meta({
+      label: z.string().min(4).max(10).default("라벨").meta({
         description: "Section label text. Max 2 words",
       }),
-      value: z.string().min(8).max(50).default("Value text").meta({
+      value: z.string().min(8).max(50).default("값 텍스트").meta({
         description: "Section value text. Max 100 characters",
       }),
       showDivider: z.boolean().default(true).meta({
@@ -97,17 +97,17 @@ const Schema = z.object({
       }),
     })).min(1).max(3).default([
       {
-        label: "Address",
-        value: "Boston, Downtown Main Street 233, New York, US",
+        label: "주소",
+        value: "서울특별시 강남구 테헤란로 233",
         showDivider: true,
       },
       {
-        label: "Phone",
+        label: "전화",
         value: "+1234 2345 1234",
         showDivider: true,
       },
       {
-        label: "E-mail:",
+        label: "이메일:",
         value: "mail@company.com",
         showDivider: false,
       },
@@ -115,20 +115,20 @@ const Schema = z.object({
       description: "List of content sections",
     }),
   }).default({
-    title: "Let’s Get in\nTouch with Us",
+    title: "지금 바로\n문의하세요",
     sections: [
       {
-        label: "Address",
-        value: "Boston, Downtown Main Street 233, New York, US",
+        label: "주소",
+        value: "서울특별시 강남구 테헤란로 233",
         showDivider: true,
       },
       {
-        label: "Phone",
+        label: "전화",
         value: "+1234 2345 1234",
         showDivider: true,
       },
       {
-        label: "E-mail:",
+        label: "이메일:",
         value: "mail@company.com",
         showDivider: false,
       },
@@ -177,7 +177,7 @@ const dynamicSlideLayout: React.FC<SlideLayoutProps> = ({ data: slideData }) => 
 
             <div className="h-full flex flex-col">
               <h1 className=" text-[64px] leading-[1.12] font-semibold mb-8 whitespace-pre-line" style={{ color: 'var(--background-text, #111827)' }}>
-                {slideData?.rightContent?.title || "Let’s Get in\nTouch with Us"}
+                {slideData?.rightContent?.title || "지금 바로\n문의하세요"}
               </h1>
 
               <div className="mb-6">

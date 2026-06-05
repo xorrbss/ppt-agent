@@ -2,8 +2,8 @@ import React from "react"
 import * as z from "zod"
 
 const layoutId = "image-list-description-slide"
-const layoutName = "Image List Description"
-const layoutDescription = "List of Images with subtitle and description with one description for the entire page"
+const layoutName = "이미지 목록 설명"
+const layoutDescription = "부제목과 설명이 있는 이미지 목록으로, 페이지 전체에 대한 하나의 설명을 포함"
 
 const ImageSchema = z
   .object({
@@ -27,30 +27,30 @@ const ImageSchema = z
 
 const ItemSchema = z
   .object({
-    title: z.string().min(2).max(40).default("Sample Title"),
+    title: z.string().min(2).max(40).default("예시 제목"),
     description: z
       .string()
       .min(10)
       .max(140)
-      .default("Short description for the image or item."),
+      .default("이미지나 항목에 대한 간단한 설명입니다."),
     image: ImageSchema,
   })
   .default({
-    title: "Sample Title",
-    description: "Short description for the image or item.",
+    title: "예시 제목",
+    description: "이미지나 항목에 대한 간단한 설명입니다.",
     image: ImageSchema.parse({}),
   })
 
 const Schema = z
   .object({
-    titleLine1: z.string().min(3).max(24).default("Meet Our"),
-    titleLine2: z.string().min(3).max(24).default("Team"),
+    titleLine1: z.string().min(3).max(24).default("우리 팀을"),
+    titleLine2: z.string().min(3).max(24).default("소개합니다"),
     description: z
       .string()
       .min(20)
       .max(200)
       .default(
-        "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+        "팀과 구성원을 소개하는 간단한 설명 문장입니다."
       ),
     items: z
       .array(ItemSchema)
@@ -58,21 +58,21 @@ const Schema = z
       .max(6)
       .default([
         ItemSchema.parse({}),
-        ItemSchema.parse({ title: "Another Item", description: "Concise supporting text.", image: ImageSchema.parse({}) }),
-        ItemSchema.parse({ title: "Third Item", description: "Concise supporting text.", image: ImageSchema.parse({}) }),
+        ItemSchema.parse({ title: "두 번째 항목", description: "간결한 보조 텍스트입니다.", image: ImageSchema.parse({}) }),
+        ItemSchema.parse({ title: "세 번째 항목", description: "간결한 보조 텍스트입니다.", image: ImageSchema.parse({}) }),
       ]),
     website: z.string().min(6).max(60).default("www.yourwebsite.com"),
   })
   .default({
 
-    titleLine1: "Meet Our",
-    titleLine2: "Team",
+    titleLine1: "우리 팀을",
+    titleLine2: "소개합니다",
     description:
-      "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+      "팀과 구성원을 소개하는 간단한 설명 문장입니다.",
     items: [
       ItemSchema.parse({}),
-      ItemSchema.parse({ title: "Another Item", description: "Concise supporting text.", image: ImageSchema.parse({}) }),
-      ItemSchema.parse({ title: "Third Item", description: "Concise supporting text.", image: ImageSchema.parse({}) }),
+      ItemSchema.parse({ title: "두 번째 항목", description: "간결한 보조 텍스트입니다.", image: ImageSchema.parse({}) }),
+      ItemSchema.parse({ title: "세 번째 항목", description: "간결한 보조 텍스트입니다.", image: ImageSchema.parse({}) }),
     ],
     website: "www.yourwebsite.com",
   })

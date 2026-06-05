@@ -2,14 +2,14 @@ import * as z from "zod";
 import React from "react";
 
 export const Schema = z.object({
-    title: z.string().max(25).describe('The main heading of the slide').default('Key Insights & Learnings'),
-    insightTitle: z.string().max(63).describe('Heading for the highlighted card').default('CONTENT + PAID SOCIAL COMBINATION DRIVES HIGHEST QUALITY LEADS'),
-    insightDescription: z.string().max(99).describe('Description text for the highlighted card').default('Leads from integrated campaigns had 47% faster time-to-close and 28% higher average contract value.')
+    title: z.string().max(25).describe('The main heading of the slide').default('핵심 인사이트와 교훈'),
+    insightTitle: z.string().max(63).describe('Heading for the highlighted card').default('콘텐츠와 유료 소셜의 조합이 최고 품질의 리드를 창출'),
+    insightDescription: z.string().max(99).describe('Description text for the highlighted card').default('통합 캠페인에서 발생한 리드는 마감 시간이 47% 빠르고 평균 계약 가치가 28% 높았습니다.')
 });
 
 export const layoutId = 'title-side-insight-slide';
-export const layoutName = 'Split Title With Text Card';
-export const layoutDescription = 'A balanced two-section layout with bold title and accent bar on the left, paired with a white card on the right containing accent-colored heading and description text.';
+export const layoutName = '분할 제목과 텍스트 카드';
+export const layoutDescription = '왼쪽에 굵은 제목과 강조 바를 배치하고 오른쪽에 강조 색상의 제목과 설명 텍스트를 담은 흰색 카드를 함께 배치한 균형 잡힌 2개 섹션 레이아웃입니다.';
 
 const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = ({ data }) => {
     const { title, insightTitle, insightDescription } = data;
@@ -36,7 +36,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                                     style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                                     className=' w-[2px] h-4'></span>
                                 {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(data as any)?.__companyName__ || 'Company Name'}
+                                    {(data as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>

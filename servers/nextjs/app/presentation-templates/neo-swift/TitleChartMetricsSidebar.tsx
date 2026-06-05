@@ -49,7 +49,7 @@ export const Schema = z.object({
     .string()
     .max(15)
     .describe("The main title of the slide")
-    .default("Spend & ROI"),
+    .default("지출 및 ROI"),
   chartType: chartTypeEnum.describe("Type of chart to display").default("bar"),
   chart: z
     .object({
@@ -57,7 +57,7 @@ export const Schema = z.object({
         .array(z.string())
         .max(2)
         .describe("The labels for the data series, e.g., Revenue and Spend")
-        .default(["Revenue", "Spend"]),
+        .default(["매출", "지출"]),
       rows: z
         .array(
           z.object({
@@ -65,7 +65,7 @@ export const Schema = z.object({
               .string()
               .max(3)
               .describe("The X-axis label, e.g., Month names")
-              .default("Jan"),
+              .default("1월"),
             value: z
               .number()
               .describe("The primary metric value for this label")
@@ -80,11 +80,11 @@ export const Schema = z.object({
         .describe("The data points for the graph"),
     })
     .default({
-      columns: ["Revenue", "Spend"],
+      columns: ["매출", "지출"],
       rows: [
-        { label: "Jan", value: 520, value2: 140 },
-        { label: "Feb", value: 670, value2: 250 },
-        { label: "Mar", value: 980, value2: 400 },
+        { label: "1월", value: 520, value2: 140 },
+        { label: "2월", value: 670, value2: 250 },
+        { label: "3월", value: 980, value2: 400 },
       ],
     })
     .describe("Configuration and data for the chart"),
@@ -101,39 +101,39 @@ export const Schema = z.object({
           .string()
           .max(35)
           .describe("Bottom description or challenge text")
-          .default("Main Challenge: Delayed Client"),
+          .default("주요 과제: 고객 지연"),
       })
     )
     .max(4)
     .describe("List of metric cards shown on the right side")
     .default([
       {
-        heading: "Research",
+        heading: "리서치",
         value: "8,450",
-        description: "Main Challenge: Delayed Client",
+        description: "주요 과제: 고객 지연",
       },
       {
-        heading: "Research",
+        heading: "리서치",
         value: "8,450",
-        description: "Main Challenge: Delayed Client",
+        description: "주요 과제: 고객 지연",
       },
       {
-        heading: "Research",
+        heading: "리서치",
         value: "8,450",
-        description: "Main Challenge: Delayed Client",
+        description: "주요 과제: 고객 지연",
       },
       {
-        heading: "Research",
+        heading: "리서치",
         value: "8,450",
-        description: "Main Challenge: Delayed Client",
+        description: "주요 과제: 고객 지연",
       },
     ]),
 });
 
 export const layoutId = "title-chart-metrics-sidebar";
-export const layoutName = "Title Chart Metrics Sidebar";
+export const layoutName = "제목 차트 지표 사이드바";
 export const layoutDescription =
-  "A professional slide featuring a prominent chart (bar, grouped bar, stacked bar, clustered bar, diverging bar, horizontal bar, line, area, pie, donut, or scatter) on the left displaying trend data, and a vertical stack of metric cards on the right. Ideal for presenting performance metrics, financial trends, or KPI comparisons with supporting data points.";
+  "왼쪽에 추세 데이터를 보여주는 돋보이는 차트(막대, 그룹 막대, 누적 막대, 클러스터 막대, 발산 막대, 가로 막대, 선, 영역, 파이, 도넛 또는 산점도), 오른쪽에 세로로 쌓인 지표 카드로 구성된 전문적인 슬라이드입니다. 성과 지표, 재무 추세 또는 보조 데이터와 함께 KPI 비교를 표현하는 데 적합합니다.";
 
 const COLORS = [
   "#4169E1",
@@ -554,14 +554,14 @@ const dynamicSlideLayout: React.FC<{
               <Legend />
               <Bar
                 dataKey="positive"
-                name={chart?.columns?.[0] || "Positive"}
+                name={chart?.columns?.[0] || "긍정"}
                 fill={graphColors(0)}
                 stackId="stack"
                 radius={[0, 4, 4, 0]}
               />
               <Bar
                 dataKey="negative"
-                name={chart?.columns?.[1] || "Negative"}
+                name={chart?.columns?.[1] || "부정"}
                 fill={graphColors(3)}
                 stackId="stack"
                 radius={[4, 0, 0, 4]}
@@ -1010,7 +1010,7 @@ const dynamicSlideLayout: React.FC<{
                   className="text-sm  font-semibold"
                   style={{ color: "var(--background-text, #111827)" }}
                 >
-                  {(data as any)?.__companyName__ || "Company Name"}
+                  {(data as any)?.__companyName__ || "회사명"}
                 </span>
               )}
             </div>

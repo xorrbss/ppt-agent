@@ -6,8 +6,8 @@ import Chart from "chart.js/auto"
 import type { ChartConfiguration, ChartOptions, Plugin } from "chart.js"
 
 const layoutId = "tableorChart"
-const layoutName = "Table Or Chart"
-const layoutDescription = "Swift: Generic data table with option to render a chart (bar, horizontalBar, line, pie)"
+const layoutName = "표 또는 차트"
+const layoutDescription = "Swift: 차트(막대, 가로 막대, 선, 원형)로 렌더링하는 옵션이 있는 범용 데이터 표"
 
 const ChartDatumSchema = z.object({
   label: z.string().min(1).max(12).default("A"),
@@ -19,19 +19,19 @@ const TableRowSchema = z.object({
     .array(z.string().min(0).max(200))
     .min(2)
     .max(10)
-    .default(["Row 1", "Value", "Value"])
+    .default(["행 1", "값", "값"])
     .meta({ description: "Row cells; count should match columns length" }),
 })
 
 const Schema = z
   .object({
-    title: z.string().min(6).max(60).default("Data Table or Chart"),
+    title: z.string().min(6).max(60).default("데이터 표 또는 차트"),
     description: z
       .string()
       .min(20)
       .max(220)
       .default(
-        "Present structured information in a flexible table or visualize it with a chart."
+        "구조화된 정보를 유연한 표로 제시하거나 차트로 시각화하세요."
       ),
 
     mode: z.enum(["table", "chart"]).default("table"),
@@ -41,15 +41,15 @@ const Schema = z
       .array(z.string().min(1).max(40))
       .min(2)
       .max(10)
-      .default(["Column 1", "Column 2", "Column 3"]),
+      .default(["열 1", "열 2", "열 3"]),
     rows: z
       .array(TableRowSchema)
       .min(1)
       .max(30)
       .default([
-        { cells: ["Row A", "✓", "-"] },
-        { cells: ["Row B", "Text", "123"] },
-        { cells: ["Row C", "More text", "456"] },
+        { cells: ["행 A", "✓", "-"] },
+        { cells: ["행 B", "텍스트", "123"] },
+        { cells: ["행 C", "추가 텍스트", "456"] },
       ]),
 
     // Chart configuration (parity with @standard ChartLeftTextRightLayout)
@@ -80,15 +80,15 @@ const Schema = z
     website: z.string().min(6).max(60).default("www.yourwebsite.com"),
   })
   .default({
-    title: "Data Table or Chart",
+    title: "데이터 표 또는 차트",
     description:
-      "Present structured information in a flexible table or visualize it with a chart.",
+      "구조화된 정보를 유연한 표로 제시하거나 차트로 시각화하세요.",
     mode: "table",
-    columns: ["Column 1", "Column 2", "Column 3"],
+    columns: ["열 1", "열 2", "열 3"],
     rows: [
-      { cells: ["Row A", "✓", "-"] },
-      { cells: ["Row B", "Text", "123"] },
-      { cells: ["Row C", "More text", "456"] },
+      { cells: ["행 A", "✓", "-"] },
+      { cells: ["행 B", "텍스트", "123"] },
+      { cells: ["행 C", "추가 텍스트", "456"] },
     ],
     chart: {
       type: "line",
@@ -305,7 +305,7 @@ const SwiftChart: React.FC<{
               labels,
               datasets: [
                 {
-                  label: "value",
+                  label: "값",
                   data: values,
                   backgroundColor: colors,
                   borderWidth: 0,
@@ -328,7 +328,7 @@ const SwiftChart: React.FC<{
               labels,
               datasets: [
                 {
-                  label: "value",
+                  label: "값",
                   data: values,
                   backgroundColor:
                     type === "line"

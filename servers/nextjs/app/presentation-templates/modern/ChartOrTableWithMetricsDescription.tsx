@@ -5,9 +5,9 @@ import * as z from "zod";
 import { ModernMultiLineChart } from "./ModernChartPrimitives";
 
 export const layoutId = "chart-with-metrics";
-export const layoutName = "Chart With Metrics Slide";
+export const layoutName = "지표가 있는 차트 슬라이드";
 export const layoutDescription =
-  "A chart or table with metrics slide layout";
+  "지표가 있는 차트 또는 표 슬라이드 레이아웃";
 
 const growthStatsSchema = z
   .object({
@@ -23,7 +23,7 @@ const growthStatsSchema = z
 const tractionSchema = z.object({
 
 
-  title: z.string().default("Company Traction").meta({
+  title: z.string().default("기업 성장세").meta({
     description: "Main title of the slide",
   }),
   description: z
@@ -31,15 +31,15 @@ const tractionSchema = z.object({
     .min(3)
     .max(200)
     .default(
-      "Traction is a period where the company is feeling momentum during its development period. If traction momentum is not harnessed, sales figures can decline and the customer base can shrink. In general, companies will judge success by the amount of revenue and new customers they receive.",
+      "트랙션은 기업이 발전 과정에서 성장 모멘텀을 체감하는 시기입니다. 이 모멘텀을 제대로 활용하지 못하면 매출이 감소하고 고객 기반이 줄어들 수 있습니다. 일반적으로 기업은 확보한 매출과 신규 고객 수로 성공을 판단합니다.",
     )
     .meta({
       description:
         "Main content text describing the company's traction and growth momentum.",
     }),
   tableMode: z.boolean().default(false),
-  tableColumns: z.array(z.string().min(1).max(40)).min(2).max(10).default(["Metric", "Value"]),
-  tableRows: z.array(z.array(z.string().min(0).max(200)).min(2).max(10)).min(1).max(30).default([["Users", "10K+"], ["Revenue", "$1.2M"], ["Satisfaction", "95%"]]),
+  tableColumns: z.array(z.string().min(1).max(40)).min(2).max(10).default(["지표", "값"]),
+  tableRows: z.array(z.array(z.string().min(0).max(200)).min(2).max(10)).min(1).max(30).default([["사용자", "10K+"], ["매출", "$1.2M"], ["만족도", "95%"]]),
   // growthStats is a list of objects, each with a 'year' and any number of metric keys (all numbers)
   growthStats: z
     .array(growthStatsSchema)
@@ -149,10 +149,10 @@ function computeStats(
       label: key
         .replace(/([A-Z])/g, " $1")
         .replace(/^./, (str) => str.toUpperCase()),
-      value: `${growth >= 0 ? "+" : ""}${Math.round(growth)}% growth`,
+      value: `${growth >= 0 ? "+" : ""}${Math.round(growth)}% 성장`,
       description: `${key
         .replace(/([A-Z])/g, " $1")
-        .replace(/^./, (str) => str.toUpperCase())} growth over the period.`,
+        .replace(/^./, (str) => str.toUpperCase())} 기간 동안의 성장.`,
     };
   });
 }
@@ -187,7 +187,7 @@ const CompanyTractionSlideLayout: React.FC<Props> = ({ data }) => {
 
                 {(data as any)?._logo_url__ && <img src={(data as any)?._logo_url__} alt="logo" className="w-6 h-6" />}
                 {(data as any)?.__companyName__ && <span className="text-sm sm:text-base font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                  {(data as any)?.__companyName__ || 'Company Name'}
+                  {(data as any)?.__companyName__ || '회사명'}
                 </span>}
               </div>
             </div>
@@ -214,7 +214,7 @@ const CompanyTractionSlideLayout: React.FC<Props> = ({ data }) => {
           <div className="flex flex-col items-start justify-center w-[52%] gap-8">
             <p className="text-base leading-relaxed font-normal mb-6 max-w-xl text-left" style={{ color: 'var(--background-text, #234CD9)' }}>
               {data?.description ||
-                "Traction is a period where the company is feeling momentum during its development period. If traction momentum is not harnessed, sales figures can decline and the customer base can shrink. In general, companies will judge success by the amount of revenue and new customers they receive."}
+                "트랙션은 기업이 발전 과정에서 성장 모멘텀을 체감하는 시기입니다. 이 모멘텀을 제대로 활용하지 못하면 매출이 감소하고 고객 기반이 줄어들 수 있습니다. 일반적으로 기업은 확보한 매출과 신규 고객 수로 성공을 판단합니다."}
             </p>
             {data?.tableMode ? (
               <div className="w-full">

@@ -2,8 +2,8 @@ import * as z from 'zod';
 import React from 'react';
 
 export const Schema = z.object({
-    title: z.string().describe('The main heading of the slide').default('Our Team Members'),
-    subtitle: z.string().max(300).describe('A descriptive sub-heading explaining the team\'s focus').default('Focus on companies with 500+ employees in Financial Services, Healthcare, and Technology sectors. Target $3.5M in new pipeline with sub-$150 CAC through account-based marketing and content-led strategies.'),
+    title: z.string().describe('The main heading of the slide').default('우리 팀 구성원'),
+    subtitle: z.string().max(300).describe('A descriptive sub-heading explaining the team\'s focus').default('금융 서비스, 헬스케어, 기술 분야에서 직원 500명 이상 기업에 집중합니다. 어카운트 기반 마케팅과 콘텐츠 중심 전략을 통해 CAC를 150달러 미만으로 유지하며 350만 달러의 신규 파이프라인을 목표로 합니다.'),
     teamMembers: z.array(z.object({
         name: z.string().max(30).describe('Name of the team member'),
         designation: z.string().max(40).describe('Job title or role of the team member'),
@@ -14,47 +14,47 @@ export const Schema = z.object({
         summary: z.string().max(100).describe('Short summary or focus area of the team member')
     })).max(4).describe('List of team members').default([
         {
-            name: 'Hannah Morales',
-            designation: 'Founder & CEO',
+            name: '김서연',
+            designation: '창업자 & CEO',
             image: {
                 __image_url__: 'https://presenton-public-assets.s3.ap-southeast-1.amazonaws.com/replaceable_template_image.png',
                 __image_prompt__: 'Professional headshot of a female executive smiling'
             },
-            summary: 'Focus on companies with 500+ employees.'
+            summary: '직원 500명 이상 기업에 집중합니다.'
         },
         {
-            name: 'Hannah Morales',
-            designation: 'Founder & CEO',
+            name: '김서연',
+            designation: '창업자 & CEO',
             image: {
                 __image_url__: 'https://presenton-public-assets.s3.ap-southeast-1.amazonaws.com/replaceable_template_image.png',
                 __image_prompt__: 'Professional headshot of a female executive smiling'
             },
-            summary: 'Focus on companies with 500+ employees.'
+            summary: '직원 500명 이상 기업에 집중합니다.'
         },
         {
-            name: 'Hannah Morales',
-            designation: 'Founder & CEO',
+            name: '김서연',
+            designation: '창업자 & CEO',
             image: {
                 __image_url__: 'https://presenton-public-assets.s3.ap-southeast-1.amazonaws.com/replaceable_template_image.png',
                 __image_prompt__: 'Professional headshot of a female executive smiling'
             },
-            summary: 'Focus on companies with 500+ employees.'
+            summary: '직원 500명 이상 기업에 집중합니다.'
         },
         {
-            name: 'Hannah Morales',
-            designation: 'Founder & CEO',
+            name: '김서연',
+            designation: '창업자 & CEO',
             image: {
                 __image_url__: 'https://presenton-public-assets.s3.ap-southeast-1.amazonaws.com/replaceable_template_image.png',
                 __image_prompt__: 'Professional headshot of a female executive smiling'
             },
-            summary: 'Focus on companies with 500+ employees.'
+            summary: '직원 500명 이상 기업에 집중합니다.'
         }
     ]),
 });
 
 export const layoutId = 'title-subtitle-four-team-member-cards';
-export const layoutName = 'Title Subtitle Four Team Member Cards';
-export const layoutDescription = 'A professional team showcase slide featuring a centered title and descriptive subtitle at the top, followed by four horizontal team member cards. Each card displays the member\'s name, designation, profile image, and a brief summary. Ideal for introducing leadership teams, project members, advisory boards, or key personnel with their roles and focus areas.';
+export const layoutName = '제목 부제목 4인 팀 구성원 카드';
+export const layoutDescription = '상단에 가운데 정렬된 제목과 설명 부제목을 두고 그 아래에 네 개의 가로형 팀 구성원 카드를 배치한 전문적인 팀 소개 슬라이드입니다. 각 카드에는 구성원의 이름, 직책, 프로필 이미지, 간단한 요약이 표시됩니다. 리더십 팀, 프로젝트 구성원, 자문위원회 또는 역할과 담당 영역과 함께 핵심 인력을 소개하는 데 적합합니다.';
 
 const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = ({ data }) => {
     const { title, subtitle, teamMembers } = data;
@@ -141,7 +141,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                             style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                             className=' w-[2px] h-4'></span>
                         {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                            {(data as any)?.__companyName__ || 'Company Name'}
+                            {(data as any)?.__companyName__ || '회사명'}
                         </span>}
                     </div>}
                     <div className="flex-1 h-[3.6px] bg-[#55626E]"

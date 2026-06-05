@@ -5,13 +5,13 @@ export const Schema = z.object({
     .string()
     .max(10)
     .describe("The main title of the slide")
-    .default("TABLE"),
+    .default("표"),
   description: z
     .string()
     .max(250)
     .describe("The descriptive paragraph at the top right of the slide")
     .default(
-      "Focus on companies with 500+ employees in Financial Services, Healthcare, and Technology sectors. Target $3.5M in new pipeline with sub-$150 CAC through account-based marketing and content-led strategies."
+      "금융 서비스, 헬스케어, 기술 분야의 직원 500명 이상 기업에 집중합니다. 어카운트 기반 마케팅과 콘텐츠 중심 전략으로 CAC 150달러 미만, 신규 파이프라인 350만 달러를 목표로 합니다."
     ),
   table: z
     .object({
@@ -27,28 +27,28 @@ export const Schema = z.object({
         ),
     })
     .default({
-      columns: ["Problem", "Description", "Solution"],
+      columns: ["문제", "설명", "해결책"],
       rows: [
         [
-          "Self-motivation\nReference: Book and Inspirational Videos",
-          "Self-motivation\nReference: Book and Inspirational Videos",
-          "Self-motivation\nReference: Book and Inspirational Videos",
+          "자기 동기부여\n참고: 도서 및 영감을 주는 영상",
+          "자기 동기부여\n참고: 도서 및 영감을 주는 영상",
+          "자기 동기부여\n참고: 도서 및 영감을 주는 영상",
         ],
         [
-          "Self-motivation\nReference: Book and Inspirational Videos",
-          "Self-motivation\nReference: Book and Inspirational Videos",
-          "Self-motivation\nReference: Book and Inspirational Videos",
+          "자기 동기부여\n참고: 도서 및 영감을 주는 영상",
+          "자기 동기부여\n참고: 도서 및 영감을 주는 영상",
+          "자기 동기부여\n참고: 도서 및 영감을 주는 영상",
         ],
-        ["Self-motivation\nReference: Book and Inspirational Videos"],
-        ["Self-motivation\nReference: Book and Inspirational Videos"],
+        ["자기 동기부여\n참고: 도서 및 영감을 주는 영상"],
+        ["자기 동기부여\n참고: 도서 및 영감을 주는 영상"],
       ],
     }),
 });
 
 export const layoutId = "title-description-table";
-export const layoutName = "Title Description Table";
+export const layoutName = "제목 설명 표";
 export const layoutDescription =
-  "A slide featuring a title and description at the top, followed by a 3-column table with color-highlighted headers, ideal for comparisons, matrices, or structured data.";
+  "상단에 제목과 설명을 두고, 그 아래에 색상으로 강조된 헤더가 있는 3열 표를 배치한 슬라이드로, 비교, 매트릭스, 구조화된 데이터에 이상적입니다.";
 
 const dynamicSlideLayout: React.FC<{
   data: Partial<z.infer<typeof Schema>>;
@@ -163,7 +163,7 @@ const dynamicSlideLayout: React.FC<{
                 className="text-sm  font-semibold"
                 style={{ color: "var(--background-text, #111827)" }}
               >
-                {(data as any)?.__companyName__ || "Company Name"}
+                {(data as any)?.__companyName__ || "회사명"}
               </span>
             )}
           </div>

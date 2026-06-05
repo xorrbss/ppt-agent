@@ -203,7 +203,7 @@ class PresentationChatService:
             if not response_text and completion_chunk:
                 response_text = extract_text(getattr(completion_chunk, "content", None))
             if not response_text:
-                response_text = "I could not generate a response for that request."
+                response_text = "해당 요청에 대한 응답을 생성하지 못했습니다."
 
             if not round_content_chunks:
                 yield "chunk", response_text
@@ -227,7 +227,7 @@ class PresentationChatService:
                 response_text = self._build_tool_limit_fallback(last_tool_results)
             yield "chunk", response_text
 
-        final_response_text = response_text or "I could not generate a response for that request."
+        final_response_text = response_text or "해당 요청에 대한 응답을 생성하지 못했습니다."
         if response_text is None:
             yield "chunk", final_response_text
 
@@ -333,7 +333,7 @@ class PresentationChatService:
 
             if not response.tool_calls:
                 response_text = extract_text(response.content) or (
-                    "I could not generate a response for that request."
+                    "해당 요청에 대한 응답을 생성하지 못했습니다."
                 )
                 return response_text, called_tools
 
@@ -582,8 +582,8 @@ class PresentationChatService:
                 return message.strip()
 
         return (
-            "I completed several tool operations but could not finalize the response "
-            "within the tool limit. Please ask a follow-up and I will continue."
+            "여러 도구 작업을 완료했지만 도구 호출 제한 내에 응답을 마무리하지 못했습니다. "
+            "후속 질문을 주시면 이어서 진행하겠습니다."
         )
 
     @staticmethod

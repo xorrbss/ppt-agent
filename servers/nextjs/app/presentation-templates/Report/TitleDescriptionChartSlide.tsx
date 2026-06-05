@@ -6,13 +6,13 @@ import { FlexibleReportChart, flexibleChartDataSchema } from "./flexibleReportCh
 import { RemoteSvgIcon } from "@/app/hooks/useRemoteSvgIcon";
 
 export const slideLayoutId = "title-description-chart-slide";
-export const slideLayoutName = "Title Description Chart Slide";
+export const slideLayoutName = "제목·설명·차트 슬라이드";
 export const slideLayoutDescription =
-  "A slide with a title at the top, description text in left and chart in the right.";
+  "상단에 제목이 있고, 왼쪽에 설명 텍스트, 오른쪽에 차트가 배치된 슬라이드.";
 
 
 export const Schema = z.object({
-  title: z.string().min(3).max(80).default("Data Analysis").meta({
+  title: z.string().min(3).max(80).default("데이터 분석").meta({
     description: "Slide title shown at the top-left.",
   }),
   insightIcon: z
@@ -34,7 +34,7 @@ export const Schema = z.object({
     .min(30)
     .max(320)
     .default(
-      "Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut alut enim ad minima veniam, quis. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut alut enim ad minima veniam, quis"
+      "여기에 본문 내용을 입력하세요. 슬라이드의 핵심 메시지를 설명하는 문단으로, 데이터의 의미와 시사점을 간결하게 정리하여 청중이 한눈에 이해할 수 있도록 작성합니다. 발표 주제에 맞게 자유롭게 수정할 수 있습니다."
     )
     .meta({
       description: "Description text shown in the left content area.",
@@ -42,14 +42,14 @@ export const Schema = z.object({
   chartData: flexibleChartDataSchema.default({
     type: "line-dual",
     data: [
-      { name: "Q1", value: 45 },
-      { name: "Q2", value: 72 },
-      { name: "Q3", value: 58 },
-      { name: "Q4", value: 89 },
+      { name: "1분기", value: 45 },
+      { name: "2분기", value: 72 },
+      { name: "3분기", value: 58 },
+      { name: "4분기", value: 89 },
     ],
 
   }),
-  legendLabel: z.string().min(3).max(32).default("Traditional Workflow").meta({
+  legendLabel: z.string().min(3).max(32).default("기존 워크플로").meta({
     description: "Legend label shown below the chart.",
   }),
 });

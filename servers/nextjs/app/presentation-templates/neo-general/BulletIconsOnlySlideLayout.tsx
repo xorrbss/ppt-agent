@@ -4,11 +4,11 @@ import { ImageSchema, IconSchema } from '../defaultSchemes';
 import { RemoteSvgIcon } from '@/app/hooks/useRemoteSvgIcon';
 
 export const layoutId = 'bullet-icons-only-slide'
-export const layoutName = 'Icon Bullet Grid With Image'
-export const layoutDescription = 'A layout featuring a large left-aligned title with a 2-4 icon bullet point grid, each with circular icon badge, title, and optional subtitle. A rounded supporting image sits on the right.'
+export const layoutName = '이미지가 있는 아이콘 글머리 그리드'
+export const layoutDescription = '왼쪽 정렬된 큰 제목과 2~4개의 아이콘 글머리 그리드로 구성된 레이아웃으로, 각 항목은 원형 아이콘 배지, 제목, 선택적 부제목을 포함합니다. 둥근 모서리의 보조 이미지가 오른쪽에 배치됩니다.'
 
 const bulletIconsOnlySlideSchema = z.object({
-    title: z.string().min(3).max(40).default('Solutions').meta({
+    title: z.string().min(3).max(40).default('솔루션').meta({
         description: "Heading text of the slide",
     }),
     image: ImageSchema.default({
@@ -27,32 +27,32 @@ const bulletIconsOnlySlideSchema = z.object({
         icon: IconSchema,
     })).min(2).max(3).default([
         {
-            title: 'Custom Software',
-            subtitle: 'We create tailored software to optimize processes and boost efficiency.',
+            title: '맞춤형 소프트웨어',
+            subtitle: '프로세스를 최적화하고 효율성을 높이는 맞춤형 소프트웨어를 제작합니다.',
             icon: {
                 __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/code-bold.svg',
                 __icon_query__: 'code software development'
             }
         },
         {
-            title: 'Digital Consulting',
-            subtitle: 'Our consultants guide organizations in leveraging the latest technologies.',
+            title: '디지털 컨설팅',
+            subtitle: '컨설턴트가 조직이 최신 기술을 활용하도록 안내합니다.',
             icon: {
                 __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/users-four-bold.svg',
                 __icon_query__: 'users consulting team'
             }
         },
         {
-            title: 'Support Services',
-            subtitle: 'We provide ongoing support to help businesses adapt and maintain performance.',
+            title: '지원 서비스',
+            subtitle: '기업이 변화에 적응하고 성과를 유지하도록 지속적인 지원을 제공합니다.',
             icon: {
                 __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/headphones-bold.svg',
                 __icon_query__: 'headphones support service'
             }
         },
         {
-            title: 'Scalable Marketing',
-            subtitle: 'Our data-driven strategies help businesses expand their reach and engagement.',
+            title: '확장 가능한 마케팅',
+            subtitle: '데이터 기반 전략으로 기업의 도달 범위와 참여를 확대합니다.',
             icon: {
                 __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/code-bold.svg',
                 __icon_query__: 'trending up marketing growth'
@@ -111,7 +111,7 @@ const BulletIconsOnlySlideLayout: React.FC<BulletIconsOnlySlideLayoutProps> = ({
                                     style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                                     className=' w-[2px] h-4'></span>
                                 {(slideData as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(slideData as any)?.__companyName__ || 'Company Name'}
+                                    {(slideData as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>
@@ -137,7 +137,7 @@ const BulletIconsOnlySlideLayout: React.FC<BulletIconsOnlySlideLayoutProps> = ({
                     <div className="flex-1 flex flex-col pr-8">
                         {/* Title */}
                         <h1 style={{ color: "var(--background-text,#111827)" }} className="text-[42.7px] font-bold text-gray-900 mb-8">
-                            {slideData?.title || 'Solutions'}
+                            {slideData?.title || '솔루션'}
                         </h1>
 
                         {/* Bullet Points Grid */}

@@ -3,8 +3,8 @@ import * as z from "zod"
 import { RemoteSvgIcon } from "@/app/hooks/useRemoteSvgIcon";
 
 const layoutId = "icon-bullet-list-description-slide"
-const layoutName = "Icon Bullet List Description"
-const layoutDescription = "Bullet list with title, description, and icon"
+const layoutName = "아이콘 글머리 목록 설명"
+const layoutDescription = "제목, 설명, 아이콘이 있는 글머리 목록"
 
 const IconSchema = z
   .object({
@@ -23,17 +23,17 @@ const IconSchema = z
 
 const FeatureSchema = z
   .object({
-    title: z.string().min(4).max(28).default("Customizable Workflows"),
+    title: z.string().min(4).max(28).default("맞춤형 워크플로우"),
     body: z
       .string()
       .min(20)
       .max(140)
-      .default("Lorem ipsum dolor sit amet, dolor sit amet."),
+      .default("여기에 기능을 설명하는 간단한 문구를 입력하세요."),
     icon: IconSchema,
   })
   .default({
-    title: "Customizable Workflows",
-    body: "Lorem ipsum dolor sit amet, dolor sit amet.",
+    title: "맞춤형 워크플로우",
+    body: "여기에 기능을 설명하는 간단한 문구를 입력하세요.",
     icon: IconSchema.parse({}),
   })
 
@@ -44,13 +44,13 @@ const Schema = z
       .string()
       .min(8)
       .max(48)
-      .default("Key Product Features"),
+      .default("핵심 제품 기능"),
     description: z
       .string()
       .min(30)
       .max(200)
       .default(
-        "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aenean commodo ligula eget dolor."
+        "제품의 주요 기능을 간결하게 소개하는 설명 문장입니다. 핵심 가치를 명확하게 전달하세요."
       ),
     features: z
       .array(FeatureSchema)
@@ -59,24 +59,24 @@ const Schema = z
       .default([
         FeatureSchema.parse({}),
         {
-          title: "Multi-Device Access",
-          body: "Lorem ipsum dolor sit amet.",
+          title: "멀티 디바이스 접근",
+          body: "여기에 간단한 설명을 입력하세요.",
           icon: IconSchema.parse({
             __icon_url__:
               "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/devices-bold.svg",
           }),
         },
         {
-          title: "Scalable Architecture",
-          body: "Lorem ipsum dolor sit amet.",
+          title: "확장 가능한 아키텍처",
+          body: "여기에 간단한 설명을 입력하세요.",
           icon: IconSchema.parse({
             __icon_url__:
               "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/chart-line-up-bold.svg",
           }),
         },
         {
-          title: "Detailed Reports",
-          body: "Lorem ipsum dolor sit amet.",
+          title: "상세 리포트",
+          body: "여기에 간단한 설명을 입력하세요.",
           icon: IconSchema.parse({
             __icon_url__:
               "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/checks-bold.svg",
@@ -87,30 +87,30 @@ const Schema = z
   })
   .default({
 
-    title: "Key Product Features",
+    title: "핵심 제품 기능",
     description:
-      "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aenean commodo ligula eget dolor.",
+      "제품의 주요 기능을 간결하게 소개하는 설명 문장입니다. 핵심 가치를 명확하게 전달하세요.",
     features: [
       FeatureSchema.parse({}),
       {
-        title: "Multi-Device Access",
-        body: "Lorem ipsum dolor sit amet.",
+        title: "멀티 디바이스 접근",
+        body: "여기에 간단한 설명을 입력하세요.",
         icon: IconSchema.parse({
           __icon_url__:
             "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/devices-bold.svg",
         }),
       },
       {
-        title: "Scalable Architecture",
-        body: "Lorem ipsum dolor sit amet.",
+        title: "확장 가능한 아키텍처",
+        body: "여기에 간단한 설명을 입력하세요.",
         icon: IconSchema.parse({
           __icon_url__:
             "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/chart-line-up-bold.svg",
         }),
       },
       {
-        title: "Detailed Reports",
-        body: "Lorem ipsum dolor sit amet.",
+        title: "상세 리포트",
+        body: "여기에 간단한 설명을 입력하세요.",
         icon: IconSchema.parse({
           __icon_url__:
             "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/checks-bold.svg",

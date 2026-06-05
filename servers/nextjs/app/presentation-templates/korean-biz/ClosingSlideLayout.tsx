@@ -3,7 +3,7 @@ import * as z from "zod";
 
 export const layoutId = 'korean-biz-closing'
 export const layoutName = '마무리'
-export const layoutDescription = 'Korean closing / thank-you slide with a message and contact info'
+export const layoutDescription = '메시지와 연락처 정보를 담은 한국형 마무리 / 감사 슬라이드'
 
 export const Schema = z.object({
   title: z

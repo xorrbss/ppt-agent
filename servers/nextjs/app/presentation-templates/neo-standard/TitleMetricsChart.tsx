@@ -49,13 +49,13 @@ export const Schema = z.object({
     .string()
     .max(40)
     .describe("The main title of the slide")
-    .default("Barchart with Description & metrix"),
+    .default("설명 및 지표가 있는 막대 차트"),
   description: z
     .string()
     .max(250)
     .describe("The description of the slide")
     .default(
-      "Focus on companies with 500+ employees in Financial Services, Healthcare, and Technology sectors. Target $3.5M in new pipeline with sub-$150 CAC through account-based marketing and content-led strategies."
+      "금융 서비스, 헬스케어, 기술 분야의 직원 500명 이상 기업에 집중합니다. 어카운트 기반 마케팅과 콘텐츠 중심 전략으로 CAC 150달러 미만, 신규 파이프라인 350만 달러를 목표로 합니다."
     ),
   metrics: z
     .array(
@@ -67,10 +67,10 @@ export const Schema = z.object({
     .max(4)
     .describe("Four metric boxes displayed in a grid")
     .default([
-      { value: "85%", label: "Main Challenge: Delayed Client" },
-      { value: "85%", label: "Main Challenge: Delayed Client" },
-      { value: "85%", label: "Main Challenge: Delayed Client" },
-      { value: "85%", label: "Main Challenge: Delayed Client" },
+      { value: "85%", label: "주요 과제: 고객 지연" },
+      { value: "85%", label: "주요 과제: 고객 지연" },
+      { value: "85%", label: "주요 과제: 고객 지연" },
+      { value: "85%", label: "주요 과제: 고객 지연" },
     ]),
   chart: z
     .object({
@@ -109,24 +109,24 @@ export const Schema = z.object({
     })
     .describe("Configuration for the chart")
     .default({
-      title: "Campaign A",
-      topLabel: "Top Campaign",
-      bottomLabel: "Engangment Rate",
+      title: "캠페인 A",
+      topLabel: "최고 캠페인",
+      bottomLabel: "참여율",
       chartType: "bar",
-      seriesNames: ["Planned_Budget_K", "Actual_Budget_K"],
+      seriesNames: ["계획 예산(K)", "실제 예산(K)"],
       data: [
-        { label: "Paid Social", value1: 520, value2: 485 },
-        { label: "Content Marketing", value1: 380, value2: 412 },
-        { label: "Events & Sponsorships", value1: 450, value2: 468 },
-        { label: "SEO & Organic", value1: 280, value2: 276 },
+        { label: "유료 소셜", value1: 520, value2: 485 },
+        { label: "콘텐츠 마케팅", value1: 380, value2: 412 },
+        { label: "이벤트 및 협찬", value1: 450, value2: 468 },
+        { label: "SEO 및 오가닉", value1: 280, value2: 276 },
       ],
     }),
 });
 
 export const layoutId = "title-metrics-chart";
-export const layoutName = "Title Metrics Chart";
+export const layoutName = "제목 지표 차트";
 export const layoutDescription =
-  "A two-column slide with a title, description, and 2x2 metric grid on the left, and a chart panel on the right supporting bar, grouped bar, stacked bar, clustered bar, diverging bar, horizontal bar, line, area, pie, donut, and scatter chart types.";
+  "왼쪽에 제목, 설명, 2x2 지표 그리드를 두고 오른쪽에 차트 패널을 배치한 2열 슬라이드로, 막대, 그룹 막대, 누적 막대, 클러스터 막대, 발산 막대, 가로 막대, 선, 영역, 파이, 도넛, 산점도 차트 유형을 지원합니다.";
 
 const CHART_COLORS = [
   "#1F8A2E",
@@ -550,14 +550,14 @@ const dynamicSlideLayout: React.FC<{
               <Legend />
               <Bar
                 dataKey="positive"
-                name={chart?.seriesNames?.[0] || "Positive"}
+                name={chart?.seriesNames?.[0] || "긍정"}
                 stackId="stack"
                 fill={graphColors(0)}
                 radius={[0, 4, 4, 0]}
               />
               <Bar
                 dataKey="negative"
-                name={chart?.seriesNames?.[1] || "Negative"}
+                name={chart?.seriesNames?.[1] || "부정"}
                 stackId="stack"
                 fill={graphColors(3)}
                 radius={[4, 0, 0, 4]}
@@ -987,7 +987,7 @@ const dynamicSlideLayout: React.FC<{
                   className="text-sm  font-semibold"
                   style={{ color: "var(--background-text, #111827)" }}
                 >
-                  {(data as any)?.__companyName__ || "Company Name"}
+                  {(data as any)?.__companyName__ || "회사명"}
                 </span>
               )}
             </div>

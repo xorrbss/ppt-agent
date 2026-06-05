@@ -6,8 +6,8 @@ import Chart from "chart.js/auto"
 import type { ChartConfiguration, ChartOptions, Plugin } from "chart.js"
 
 const layoutId = 'chart-left-text-right-layout'
-const layoutName = 'Chart Left Text Right'
-const layoutDescription = 'A slide with header label, a left-side inline bar chart, and right-side title with paragraph.'
+const layoutName = '왼쪽 차트 오른쪽 텍스트'
+const layoutDescription = '헤더 라벨, 왼쪽의 인라인 막대 차트, 오른쪽의 제목과 단락으로 구성된 슬라이드.'
 
 const ChartDatumSchema = z.object({
   label: z.string().min(1).max(12).default('A').meta({ description: 'Category label' }),
@@ -20,14 +20,14 @@ const Schema = z.object({
     .string()
     .min(16)
     .max(64)
-    .default('Insights At A Glance')
+    .default('한눈에 보는 인사이트')
     .meta({ description: 'Main heading (max ~7 words)' }),
   paragraph: z
     .string()
     .min(50)
     .max(200)
     .default(
-      'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.'
+      '여기에 핵심 내용을 뒷받침하는 설명을 입력하는 예시 문구입니다. 메시지를 명확하게 전달할 수 있도록 간결하게 작성하세요.'
     )
     .meta({ description: 'Supporting description' }),
   chart: z
@@ -369,11 +369,11 @@ const dynamicSlideLayout: React.FC<SlideLayoutProps> = ({ data: slideData }) => 
           {/* Right: Text */}
           <div className="h-full px-12 flex flex-col justify-center">
             <h1 className="text-[64px] leading-[1.05] tracking-tight font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-              {slideData?.title || 'Insights At A Glance'}
+              {slideData?.title || '한눈에 보는 인사이트'}
             </h1>
             <p className="mt-6 text-[16px] leading-[28px]" style={{ color: 'var(--background-text, #6B7280)' }}>
               {slideData?.paragraph ||
-                'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.'}
+                '여기에 핵심 내용을 뒷받침하는 설명을 입력하는 예시 문구입니다. 메시지를 명확하게 전달할 수 있도록 간결하게 작성하세요.'}
             </p>
           </div>
         </div>

@@ -2,9 +2,9 @@ import { RemoteSvgIcon } from "@/app/hooks/useRemoteSvgIcon";
 import * as z from "zod";
 
 export const slideLayoutId = "horizontal-timeline";
-export const slideLayoutName = "Horizontal Timeline";
+export const slideLayoutName = "가로 타임라인";
 export const slideLayoutDescription =
-  "A horizontal timeline with step markers, item text, continuation state, and optional endpoint label.";
+  "단계 마커, 항목 텍스트, 이어짐 상태, 선택적 종료 라벨을 갖춘 가로 타임라인입니다.";
 
 const MAX_TIMELINE_ITEMS_PER_SLIDE = 5;
 const DEFAULT_ICON = {
@@ -32,10 +32,10 @@ const TimelineItemSchema = z.object({
 });
 
 const DEFAULT_DESCRIPTION =
-  "Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut alUt enim ad minima veniam.";
+  "여기에 청중에게 전달할 핵심 메시지를 입력하세요. 이 영역에는 보조 설명과 세부 내용을 자유롭게 작성할 수 있습니다.";
 
 export const Schema = z.object({
-  title: z.string().max(18).default("Timeline").meta({
+  title: z.string().max(18).default("타임라인").meta({
     description: "Top-left heading.",
   }),
   isContinue: z.boolean().default(false).meta({
@@ -45,7 +45,7 @@ export const Schema = z.object({
   showEndLabel: z.boolean().default(true).meta({
     description: "Whether to show right-end label near timeline axis.",
   }),
-  endLabel: z.string().max(12).default("THE END").meta({
+  endLabel: z.string().max(12).default("끝").meta({
     description: "Right-end label text.",
   }),
   items: z
@@ -54,33 +54,33 @@ export const Schema = z.object({
     .max(MAX_TIMELINE_ITEMS_PER_SLIDE)
     .default([
       {
-        label: "Phase 1",
+        label: "1단계",
         icon: DEFAULT_ICON,
-        title: "Insert text here",
+        title: "텍스트 입력",
         description: DEFAULT_DESCRIPTION,
       },
       {
-        label: "Phase 2",
+        label: "2단계",
         icon: DEFAULT_ICON,
-        title: "Insert text here",
+        title: "텍스트 입력",
         description: DEFAULT_DESCRIPTION,
       },
       {
-        label: "Phase 3",
+        label: "3단계",
         icon: DEFAULT_ICON,
-        title: "Insert text here",
+        title: "텍스트 입력",
         description: DEFAULT_DESCRIPTION,
       },
       {
-        label: "Phase 4",
+        label: "4단계",
         icon: DEFAULT_ICON,
-        title: "Insert text here",
+        title: "텍스트 입력",
         description: DEFAULT_DESCRIPTION,
       },
       {
-        label: "Phase 5",
+        label: "5단계",
         icon: DEFAULT_ICON,
-        title: "Insert text here",
+        title: "텍스트 입력",
         description: DEFAULT_DESCRIPTION,
       },
     ])
@@ -96,7 +96,7 @@ const TIMELINE_AXIS_Y = 355;
 const TIMELINE_LEFT_CENTER = 106;
 const TIMELINE_RIGHT_CENTER = 1058;
 const THREE_STEP_CENTERS = [106, 580, 1058];
-const CONTINUATION_TITLE = "Continue...";
+const CONTINUATION_TITLE = "계속...";
 
 const getTimelineCenters = (count: number) => {
   if (count === 3) {

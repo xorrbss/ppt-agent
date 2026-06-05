@@ -2,9 +2,9 @@ import { RemoteSvgIcon } from "@/app/hooks/useRemoteSvgIcon";
 import * as z from "zod";
 
 export const slideLayoutId = "adaptive-value-card-grid";
-export const slideLayoutName = "Adaptive Value Card Grid";
+export const slideLayoutName = "적응형 값 카드 그리드";
 export const slideLayoutDescription =
-  "A card grid that supports even layouts and odd-count variants with an emphasized trailing card.";
+  "짝수 레이아웃과, 마지막 카드를 강조하는 홀수 개수 변형을 함께 지원하는 카드 그리드입니다.";
 
 const ValueCardSchema = z.object({
   value: z.string().max(6).meta({
@@ -20,7 +20,7 @@ const ValueCardSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().max(16).default("Highlights").meta({
+  title: z.string().max(16).default("하이라이트").meta({
     description: "Top-left heading.",
   }),
   items: z
@@ -30,7 +30,7 @@ export const Schema = z.object({
     .default([
       {
         value: "X 5",
-        label: "Lorem ipsum dolor sit.",
+        label: "여기에 라벨을 입력하세요",
         icon: {
           __icon_url__:
             "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
@@ -39,7 +39,7 @@ export const Schema = z.object({
       },
       {
         value: "X 5",
-        label: "Lorem ipsum dolor sit.",
+        label: "여기에 라벨을 입력하세요",
         icon: {
           __icon_url__:
             "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
@@ -48,7 +48,7 @@ export const Schema = z.object({
       },
       {
         value: "X 5",
-        label: "Lorem ipsum dolor sit.",
+        label: "여기에 라벨을 입력하세요",
         icon: {
           __icon_url__:
             "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
@@ -57,7 +57,7 @@ export const Schema = z.object({
       },
       {
         value: "X 5",
-        label: "Lorem ipsum dolor sit.",
+        label: "여기에 라벨을 입력하세요",
         icon: {
           __icon_url__:
             "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
@@ -66,7 +66,7 @@ export const Schema = z.object({
       },
       {
         value: "X 5",
-        label: "Lorem ipsum dolor sit.",
+        label: "여기에 라벨을 입력하세요",
         icon: {
           __icon_url__:
             "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
@@ -75,7 +75,7 @@ export const Schema = z.object({
       },
       {
         value: "X 5",
-        label: "Lorem ipsum dolor sit.",
+        label: "여기에 라벨을 입력하세요",
         icon: {
           __icon_url__:
             "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
@@ -84,7 +84,7 @@ export const Schema = z.object({
       },
       {
         value: "X 5",
-        label: "Lorem ipsum dolor sit.",
+        label: "여기에 라벨을 입력하세요",
         icon: {
           __icon_url__:
             "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",

@@ -1,22 +1,22 @@
 import * as z from 'zod';
 
 export const Schema = z.object({
-    title: z.string().describe("The main heading of the slide").default("Executive Summary"),
-    description: z.string().describe("A brief summary or descriptive paragraph").default("Focus on companies with 500+ employees in Financial Services, Healthcare, and Technology sectors. Target $3.5M in new pipeline with sub-$150 CAC through account-based marketing and content-led strategies."),
+    title: z.string().describe("The main heading of the slide").default("경영 요약"),
+    description: z.string().describe("A brief summary or descriptive paragraph").default("금융 서비스, 헬스케어, 기술 분야에서 직원 500명 이상 기업에 집중합니다. 어카운트 기반 마케팅과 콘텐츠 중심 전략을 통해 CAC를 150달러 미만으로 유지하며 350만 달러의 신규 파이프라인을 목표로 합니다."),
     metrics: z.array(z.object({
         label: z.string().describe("The label for the metric").max(20),
         value: z.string().describe("The primary numerical or text value").max(15),
         description: z.string().describe("A supporting detail or challenge description").max(50),
     })).max(8).describe("A list of up to 8 cards showing key metrics").default(Array(8).fill({
-        label: "Research",
+        label: "리서치",
         value: "8,450",
-        description: "Main Challenge: Delayed Client"
+        description: "주요 과제: 고객 지연"
     })),
 });
 
 export const layoutId = "title-description-eight-metrics-grid";
-export const layoutName = "Title Description Eight Metrics Grid";
-export const layoutDescription = "A data-centric slide with a centered title and description at the top, followed by a 4x2 grid of metric cards. Each card displays a label, a prominent value, and a supporting description. Ideal for presenting KPIs, dashboards, performance snapshots, or comparative statistics in a clean, scannable format.";
+export const layoutName = "제목 설명 8개 지표 그리드";
+export const layoutDescription = "상단에 가운데 정렬된 제목과 설명을 두고 그 아래에 4x2 지표 카드 그리드를 배치한 데이터 중심 슬라이드입니다. 각 카드에는 라벨, 돋보이는 값, 보조 설명이 표시됩니다. KPI, 대시보드, 성과 스냅샷 또는 비교 통계를 깔끔하고 한눈에 보기 좋은 형식으로 표현하는 데 적합합니다.";
 
 const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = ({ data }) => {
     const { title, description, metrics } = data;
@@ -87,7 +87,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                             style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                             className=' w-[2px] h-4'></span>
                         {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                            {(data as any)?.__companyName__ || 'Company Name'}
+                            {(data as any)?.__companyName__ || '회사명'}
                         </span>}
                     </div>}
                     <div className="flex-1 h-[3.6px] bg-[#55626E]"

@@ -5,8 +5,8 @@ import { RemoteSvgIcon } from '@/app/hooks/useRemoteSvgIcon';
 import * as z from 'zod';
 
 export const Schema = z.object({
-    title: z.string().max(20).describe('The main title of the slide').default('Timeline Flow'),
-    description: z.string().max(300).describe('A detailed description on the left side of the slide').default('Focus on companies with 500+ employees in Financial Services, Healthcare, and Technology sectors. Target $3.5M in new pipeline with sub-$150 CAC through account-based marketing and content-led strategies.'),
+    title: z.string().max(20).describe('The main title of the slide').default('타임라인 흐름'),
+    description: z.string().max(300).describe('A detailed description on the left side of the slide').default('금융 서비스, 헬스케어, 기술 분야의 직원 500명 이상 기업에 집중합니다. 어카운트 기반 마케팅과 콘텐츠 중심 전략으로 CAC 150달러 미만, 신규 파이프라인 350만 달러를 목표로 합니다.'),
     timelineItems: z.array(z.object({
         icon: z.object({
             __icon_url__: z.string(),
@@ -15,17 +15,17 @@ export const Schema = z.object({
         year: z.string().max(4).describe('The year of the timeline event'),
         eventDescription: z.string().max(100).describe('Brief description of the timeline event')
     })).max(5).describe('A list of events for the timeline').default([
-        { icon: { __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/checks-bold.svg', __icon_query__: 'checkmark' }, year: '2021', eventDescription: 'Briefly elaborate on what you want to discuss.' },
-        { icon: { __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/checks-bold.svg', __icon_query__: 'checkmark' }, year: '2020', eventDescription: 'Briefly elaborate on what you want to discuss.' },
-        { icon: { __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/checks-bold.svg', __icon_query__: 'checkmark' }, year: '2019', eventDescription: 'Briefly elaborate on what you want to discuss.' },
-        { icon: { __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/checks-bold.svg', __icon_query__: 'checkmark' }, year: '2018', eventDescription: 'Briefly elaborate on what you want to discuss.' },
-        { icon: { __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/checks-bold.svg', __icon_query__: 'checkmark' }, year: '2017', eventDescription: 'Briefly elaborate on what you want to discuss.' },
+        { icon: { __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/checks-bold.svg', __icon_query__: 'checkmark' }, year: '2021', eventDescription: '논의하고자 하는 내용을 간략히 설명하세요.' },
+        { icon: { __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/checks-bold.svg', __icon_query__: 'checkmark' }, year: '2020', eventDescription: '논의하고자 하는 내용을 간략히 설명하세요.' },
+        { icon: { __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/checks-bold.svg', __icon_query__: 'checkmark' }, year: '2019', eventDescription: '논의하고자 하는 내용을 간략히 설명하세요.' },
+        { icon: { __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/checks-bold.svg', __icon_query__: 'checkmark' }, year: '2018', eventDescription: '논의하고자 하는 내용을 간략히 설명하세요.' },
+        { icon: { __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/checks-bold.svg', __icon_query__: 'checkmark' }, year: '2017', eventDescription: '논의하고자 하는 내용을 간략히 설명하세요.' },
     ]),
 });
 
 export const layoutId = 'title-description-timeline';
-export const layoutName = 'Title Description Timeline';
-export const layoutDescription = 'A two-column slide with a title and description on the left, and a vertical timeline of events with year markers on the right, ideal for milestones or history.';
+export const layoutName = '제목 설명 타임라인';
+export const layoutDescription = '왼쪽에 제목과 설명, 오른쪽에 연도 표시가 있는 이벤트의 세로 타임라인을 배치한 2열 슬라이드로, 마일스톤이나 연혁에 이상적입니다.';
 
 const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = ({ data }) => {
     const { title, description, timelineItems } = data;
@@ -128,7 +128,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                         style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                         className=' w-[2px] h-4'></span>
                     {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                        {(data as any)?.__companyName__ || 'Company Name'}
+                        {(data as any)?.__companyName__ || '회사명'}
                     </span>}
                 </div>}
             </div>

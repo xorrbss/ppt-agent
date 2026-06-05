@@ -3,9 +3,9 @@ import * as z from "zod";
 
 
 export const slideLayoutId = "title-description-with-cards-text-slide";
-export const slideLayoutName = "Title Description with Cards to Text Slide";
+export const slideLayoutName = "제목·설명과 텍스트 카드 슬라이드";
 export const slideLayoutDescription =
-  "A slide with a title on top and a description below, and a content section containing cards of text.";
+  "상단에 제목과 그 아래 설명이 있고, 텍스트 카드가 담긴 콘텐츠 섹션이 있는 슬라이드.";
 
 const CardSchema = z.object({
   heading: z.string().max(16).meta({
@@ -20,14 +20,14 @@ const CardSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().min(8).max(16).default("Business Challenges").meta({
+  title: z.string().min(8).max(16).default("비즈니스 과제").meta({
     description: "Main slide title. Max 16 characters.",
   }),
-  taglineLabel: z.string().max(16).default("TAGLINE").meta({
+  taglineLabel: z.string().max(16).default("태그라인").meta({
     description: "Short label above the left-side paragraph.",
   }),
   taglineBody: z.string().max(100).default(
-    "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea."
+    "최소한의 노력으로 최대의 성과를 내기 위해 팀 전체가 함께 고민하고 실행해 나가고 있습니다."
   ).meta({
     description: "Supporting paragraph on the left side.",
   }),
@@ -47,18 +47,18 @@ export const Schema = z.object({
     .max(3)
     .default([
       {
-        heading: "HEADING 1",
-        body: "Lorem ipsum dolor sit amet, consectetur elit.",
+        heading: "제목 1",
+        body: "핵심 과제를 간결하게 설명하는 예시 문구입니다.",
         dark: false,
       },
       {
-        heading: "HEADING 2",
-        body: "Lorem ipsum dolor sit amet, consectetur elit.",
+        heading: "제목 2",
+        body: "핵심 과제를 간결하게 설명하는 예시 문구입니다.",
         dark: false,
       },
       {
-        heading: "HEADING 3",
-        body: "Lorem ipsum dolor sit amet, consectetur elit.",
+        heading: "제목 3",
+        body: "핵심 과제를 간결하게 설명하는 예시 문구입니다.",
         dark: true,
       },
     ])

@@ -1,25 +1,25 @@
 import * as z from 'zod';
 
 export const Schema = z.object({
-    title: z.string().max(20).describe('The main title of the slide').default('KPI Snapshot'),
+    title: z.string().max(20).describe('The main title of the slide').default('KPI 스냅샷'),
     kpiList: z.array(
         z.object({
             value: z.string().max(5).describe('The numeric value or percentage for the KPI'),
             description: z.string().max(25).describe('The text description or label for the KPI'),
         })
     ).max(8).describe('A list of up to 8 KPI items').default([
-        { value: '85%', description: 'Main Challenge: Delayed Client' },
-        { value: '85%', description: 'Main Challenge: Delayed Client' },
-        { value: '85%', description: 'Main Challenge: Delayed Client' },
-        { value: '85%', description: 'Main Challenge: Delayed Client' },
-        { value: '85%', description: 'Main Challenge: Delayed Client' },
-        { value: '85%', description: 'Main Challenge: Delayed Client' },
+        { value: '85%', description: '주요 과제: 고객 지연' },
+        { value: '85%', description: '주요 과제: 고객 지연' },
+        { value: '85%', description: '주요 과제: 고객 지연' },
+        { value: '85%', description: '주요 과제: 고객 지연' },
+        { value: '85%', description: '주요 과제: 고객 지연' },
+        { value: '85%', description: '주요 과제: 고객 지연' },
     ]),
 });
 
 export const layoutId = 'title-kpi-grid';
-export const layoutName = 'Title KPI Grid';
-export const layoutDescription = 'A slide featuring a centered title followed by a flexible grid of up to 8 KPI metric boxes with values and descriptions, perfect for dashboards and reports.';
+export const layoutName = '제목 KPI 그리드';
+export const layoutDescription = '중앙 정렬된 제목 아래에 값과 설명이 있는 최대 8개의 KPI 지표 박스를 유연한 그리드로 배치한 슬라이드로, 대시보드와 보고서에 적합합니다.';
 
 const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = ({ data }) => {
     const { title, kpiList } = data;
@@ -98,7 +98,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                         style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                         className=' w-[2px] h-4'></span>
                     {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                        {(data as any)?.__companyName__ || 'Company Name'}
+                        {(data as any)?.__companyName__ || '회사명'}
                     </span>}
                 </div>}
             </div>

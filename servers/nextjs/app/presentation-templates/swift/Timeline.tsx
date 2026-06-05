@@ -3,8 +3,8 @@ import * as z from "zod"
 import { resolveBackendAssetUrl } from "@/utils/api"
 
 const layoutId = "Timeline"
-const layoutName = "Timeline"
-const layoutDescription = "Timeline of cards with title, subtitle banner"
+const layoutName = "타임라인"
+const layoutDescription = "제목과 부제목 배너가 있는 카드형 타임라인"
 
 const IconSchema = z
   .object({
@@ -24,15 +24,15 @@ const IconSchema = z
 const ItemSchema = z
   .object({
     year: z.string().min(3).max(6).default("2018"),
-    heading: z.string().min(3).max(28).default("Founded in 2020"),
+    heading: z.string().min(3).max(28).default("2020년 설립"),
     body: z
       .string()
       .min(10)
       .max(160)
-      .default("Lorem ipsum dolor"),
+      .default("여기에 간단한 설명을 입력하세요."),
     icon: IconSchema,
   })
-  .default({ year: "2018", heading: "Founded in 2020", body: "Lorem ipsum dolor", icon: IconSchema.parse({}) })
+  .default({ year: "2018", heading: "2020년 설립", body: "여기에 간단한 설명을 입력하세요.", icon: IconSchema.parse({}) })
 
 const Schema = z
   .object({
@@ -40,35 +40,35 @@ const Schema = z
       .string()
       .min(8)
       .max(60)
-      .default("Our Journey at a Glance"),
+      .default("한눈에 보는 우리의 여정"),
     subtitle: z
       .string()
       .min(20)
       .max(200)
       .default(
-        "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aenean commodo ligula eget dolor. Aenean massa."
+        "우리가 걸어온 여정을 간결하게 소개하는 설명 문장입니다. 주요 순간을 한눈에 전달합니다."
       ),
     items: z
       .array(ItemSchema)
       .min(1)
       .max(4)
       .default([
-        ItemSchema.parse({ year: "2018", heading: "Founded in 2020", body: "Lorem ipsum dolor" }),
-        ItemSchema.parse({ year: "2019", heading: "First Product in 2021", body: "Lorem ipsum dolor" }),
-        ItemSchema.parse({ year: "2020", heading: "Key Milestone in 2022", body: "Lorem ipsum dolor" }),
-        ItemSchema.parse({ year: "2021", heading: "Global Expansion in 2024", body: "Lorem ipsum dolor" }),
+        ItemSchema.parse({ year: "2018", heading: "2020년 설립", body: "여기에 간단한 설명을 입력하세요." }),
+        ItemSchema.parse({ year: "2019", heading: "2021년 첫 제품 출시", body: "여기에 간단한 설명을 입력하세요." }),
+        ItemSchema.parse({ year: "2020", heading: "2022년 주요 이정표", body: "여기에 간단한 설명을 입력하세요." }),
+        ItemSchema.parse({ year: "2021", heading: "2024년 글로벌 확장", body: "여기에 간단한 설명을 입력하세요." }),
       ]),
     website: z.string().min(6).max(60).default("www.yourwebsite.com"),
   })
   .default({
-    title: "Our Journey at a Glance",
+    title: "한눈에 보는 우리의 여정",
     subtitle:
-      "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aenean commodo ligula eget dolor. Aenean massa.",
+      "우리가 걸어온 여정을 간결하게 소개하는 설명 문장입니다. 주요 순간을 한눈에 전달합니다.",
     items: [
-      ItemSchema.parse({ year: "2018", heading: "Founded in 2020", body: "Lorem ipsum dolor" }),
-      ItemSchema.parse({ year: "2019", heading: "First Product in 2021", body: "Lorem ipsum dolor" }),
-      ItemSchema.parse({ year: "2020", heading: "Key Milestone in 2022", body: "Lorem ipsum dolor" }),
-      ItemSchema.parse({ year: "2021", heading: "Global Expansion in 2024", body: "Lorem ipsum dolor" }),
+      ItemSchema.parse({ year: "2018", heading: "2020년 설립", body: "여기에 간단한 설명을 입력하세요." }),
+      ItemSchema.parse({ year: "2019", heading: "2021년 첫 제품 출시", body: "여기에 간단한 설명을 입력하세요." }),
+      ItemSchema.parse({ year: "2020", heading: "2022년 주요 이정표", body: "여기에 간단한 설명을 입력하세요." }),
+      ItemSchema.parse({ year: "2021", heading: "2024년 글로벌 확장", body: "여기에 간단한 설명을 입력하세요." }),
     ],
     website: "www.yourwebsite.com",
   })

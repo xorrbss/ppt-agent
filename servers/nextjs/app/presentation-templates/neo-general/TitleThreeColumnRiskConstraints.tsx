@@ -3,26 +3,26 @@ import * as z from "zod";
  * Zod Schema for the slide content.
  */
 export const Schema = z.object({
-    title: z.string().max(20).describe('The main heading of the slide').default('Risks & Constraints'),
+    title: z.string().max(20).describe('The main heading of the slide').default('위험 및 제약'),
     items: z.array(z.object({
-        bgTitle: z.string().max(10).describe('Large category label displayed prominently').default('MARKET'),
-        subtitle: z.string().max(20).describe('Secondary heading for the item').default('Market Saturation'),
-        description: z.string().max(70).describe('Detailed description text for the item').default('Increasing competition in key verticals may pressure conversion rates and CAC')
+        bgTitle: z.string().max(10).describe('Large category label displayed prominently').default('시장'),
+        subtitle: z.string().max(20).describe('Secondary heading for the item').default('시장 포화'),
+        description: z.string().max(70).describe('Detailed description text for the item').default('주요 버티컬의 경쟁 심화가 전환율과 CAC에 압박을 줄 수 있음')
     })).max(3).describe('List of category items with details').default([
         {
-            bgTitle: 'MARKETbaba',
-            subtitle: 'Market Saturation',
-            description: 'Increasing competition in key verticals may pressure conversion rates and CAC'
+            bgTitle: '시장',
+            subtitle: '시장 포화',
+            description: '주요 버티컬의 경쟁 심화가 전환율과 CAC에 압박을 줄 수 있음'
         },
         {
-            bgTitle: 'BUDGET',
-            subtitle: 'Budget Constraints',
-            description: 'Q1 budget reduction of 15% may limit ability to scale successful campaigns'
+            bgTitle: '예산',
+            subtitle: '예산 제약',
+            description: 'Q1 예산 15% 축소로 성공적인 캠페인 확장 역량이 제한될 수 있음'
         },
         {
-            bgTitle: 'CAPACITY',
-            subtitle: 'Resource Capacity',
-            description: 'Content production team at 110% capacity; may impact content velocity'
+            bgTitle: '역량',
+            subtitle: '리소스 역량',
+            description: '콘텐츠 제작팀이 110% 가동률로 콘텐츠 생산 속도에 영향을 줄 수 있음'
         }
     ])
 });
@@ -31,8 +31,8 @@ export const Schema = z.object({
  * Layout ID, Name, and Description.
  */
 export const layoutId = 'title-three-column-risk-constraints-slide-layout';
-export const layoutName = 'Three Column Category Cards';
-export const layoutDescription = 'A layout with bold title and accent bar at top, followed by three column cards each featuring large category label, subtitle with accent dot, and detailed description.';
+export const layoutName = '3열 카테고리 카드';
+export const layoutDescription = '상단에 굵은 제목과 강조 바를 배치하고, 그 아래에 큰 카테고리 라벨, 강조 점이 있는 부제목, 상세 설명을 각각 담은 3열 카드를 배치한 레이아웃입니다.';
 
 /**
  * React Component for the slide.
@@ -63,7 +63,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                                     style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                                     className=' w-[2px] h-4'></span>
                                 {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(data as any)?.__companyName__ || 'Company Name'}
+                                    {(data as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>

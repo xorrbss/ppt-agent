@@ -1,8 +1,8 @@
 import * as z from 'zod';
 export const Schema = z.object({
     slideNumber: z.string().max(2).describe('Slide number or index').default('1'),
-    title: z.string().max(30).describe('The main heading of the slide').default('Executive Summary'),
-    description: z.string().max(400).describe('Supporting description text').default('Focus on companies with 500+ employees in Financial Services, Healthcare, and Technology sectors. Target $3.5M in new pipeline with sub-$150 CAC through account-based marketing and content-led strategies.'),
+    title: z.string().max(30).describe('The main heading of the slide').default('핵심 요약'),
+    description: z.string().max(400).describe('Supporting description text').default('금융 서비스, 헬스케어, 기술 분야의 임직원 500명 이상 기업에 집중합니다. 어카운트 기반 마케팅과 콘텐츠 중심 전략을 통해 $150 미만의 CAC로 $3.5M의 신규 파이프라인을 목표로 합니다.'),
     firstImage: z.object({
         __image_url__: z.string(),
         __image_prompt__: z.string().max(100)
@@ -23,8 +23,8 @@ export const Schema = z.object({
  * Layout ID, Name, and Description
  */
 export const layoutId = 'headline-description-with-double-image-layout';
-export const layoutName = 'Title Description With Two Images';
-export const layoutDescription = 'A clean layout with left-aligned bold title, accent bar, and description paragraph, paired with two overlapping rounded images on the right in a grid arrangement.';
+export const layoutName = '제목 설명과 두 개의 이미지';
+export const layoutDescription = '왼쪽 정렬된 굵은 제목, 강조 바, 설명 단락에 오른쪽 그리드 배치로 겹쳐진 둥근 모서리 이미지 두 개를 함께 배치한 깔끔한 레이아웃입니다.';
 
 /**
  * React Component for the Slide Layout
@@ -51,7 +51,7 @@ const HeadlineDescriptionWithDoubleImageLayout = ({ data }: { data: Partial<z.in
                                     style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                                     className=' w-[2px] h-4'></span>
                                 {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(data as any)?.__companyName__ || 'Company Name'}
+                                    {(data as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>

@@ -1,27 +1,27 @@
 import * as z from 'zod'
 
 export const Schema = z.object({
-    title: z.string().max(20).describe('The main title of the slide').default('Table of Content'),
+    title: z.string().max(20).describe('The main title of the slide').default('목차'),
     items: z.array(z.object({
         heading: z.string().max(30).describe('The title of each list item'),
         description: z.string().max(100).describe('A short description for each list item')
     })).max(10).describe('List of content items to display').default([
-        { heading: 'Order Placement', description: 'Customers choose products and confirm purchase online.' },
-        { heading: 'Payment Process', description: 'Payment is made through card, bank transfer, or e-wallet.' },
-        { heading: 'Order Verification', description: 'The system validates transaction details before processing.' },
-        { heading: 'Packaging Stage', description: 'Items are packed securely to prepare for shipping.' },
-        { heading: 'Delivery Confirmation', description: 'Package reaches the customer and confirmation is received.' },
-        { heading: 'Shipment Dispatch', description: 'Courier services pick up the order for delivery.' },
-        { heading: 'In-Transit Tracking', description: 'Customers can monitor the real-time delivery status.' },
-        { heading: 'Delivery Confirmation', description: 'Package reaches the customer and confirmation is received.' },
-        { heading: 'In-Transit Tracking', description: 'Customers can monitor the real-time delivery status.' },
-        { heading: 'Delivery Confirmation', description: 'Package reaches the customer and confirmation is received.' }
+        { heading: '주문 접수', description: '고객이 온라인에서 제품을 선택하고 구매를 확정합니다.' },
+        { heading: '결제 처리', description: '카드, 계좌 이체, 또는 전자지갑으로 결제합니다.' },
+        { heading: '주문 확인', description: '시스템이 처리 전에 거래 내역을 검증합니다.' },
+        { heading: '포장 단계', description: '배송 준비를 위해 상품을 안전하게 포장합니다.' },
+        { heading: '배송 확인', description: '소포가 고객에게 도착하고 확인을 받습니다.' },
+        { heading: '발송 처리', description: '택배 업체가 배송을 위해 주문을 수거합니다.' },
+        { heading: '배송 추적', description: '고객이 실시간 배송 상태를 확인할 수 있습니다.' },
+        { heading: '배송 확인', description: '소포가 고객에게 도착하고 확인을 받습니다.' },
+        { heading: '배송 추적', description: '고객이 실시간 배송 상태를 확인할 수 있습니다.' },
+        { heading: '배송 확인', description: '소포가 고객에게 도착하고 확인을 받습니다.' }
     ])
 });
 
 export const layoutId = 'title-two-column-numbered-list';
-export const layoutName = 'Title Two Column Numbered List';
-export const layoutDescription = 'A slide layout featuring a large title on the left with a two-column numbered list on the right. Each item displays a circular number badge, heading, and description. The numbered format emphasizes sequential order and progression of items.';
+export const layoutName = '제목 2열 번호 목록';
+export const layoutDescription = '왼쪽에 큰 제목, 오른쪽에 2열 번호 목록을 배치한 슬라이드 레이아웃입니다. 각 항목은 원형 번호 배지, 제목, 설명을 표시합니다. 번호 형식이 항목의 순차적 순서와 진행을 강조합니다.';
 
 const dynamicSlideLayout = ({ data }: { data: Partial<z.infer<typeof Schema>> }) => {
     const { title, items } = data;
@@ -124,7 +124,7 @@ const dynamicSlideLayout = ({ data }: { data: Partial<z.infer<typeof Schema>> })
                         style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                         className=' w-[2px] h-4'></span>
                     {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                        {(data as any)?.__companyName__ || 'Company Name'}
+                        {(data as any)?.__companyName__ || '회사명'}
                     </span>}
                 </div>}
             </div>

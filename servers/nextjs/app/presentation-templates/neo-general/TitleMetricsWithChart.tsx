@@ -75,13 +75,13 @@ export const Schema = z.object({
     .string()
     .max(21)
     .describe("The main heading of the slide")
-    .default("Spend & ROI Overview"),
+    .default("지출 및 ROI 개요"),
   description: z
     .string()
     .max(100)
     .describe("Supporting description text for the slide")
     .default(
-      "Focus on companies with 500+ employees in Financial Services, Healthcare, and Technology sectors. Target $3.5M in new pipeline with sub-$150 CAC through account-based marketing and content-led strategies."
+      "금융 서비스, 헬스케어, 기술 분야의 임직원 500명 이상 기업에 집중하여 $150 미만 CAC로 $3.5M 신규 파이프라인을 목표로 합니다."
     ),
   chart: z
     .object({
@@ -113,12 +113,12 @@ export const Schema = z.object({
     })
     .describe("Chart configuration to render on the slide")
     .default({
-      title: "Revenue vs Spend",
+      title: "매출 대 지출",
       type: "line",
-      categories: ["Jan", "Feb", "Mar"],
+      categories: ["1월", "2월", "3월"],
       series: [
-        { name: "Revenue", color: "#8910FA", values: [520, 660, 985] },
-        { name: "Spend", color: "#457EE5", values: [140, 245, 400] },
+        { name: "매출", color: "#8910FA", values: [520, 660, 985] },
+        { name: "지출", color: "#457EE5", values: [140, 245, 400] },
       ],
       colorPalette: "vibrant",
     }),
@@ -131,21 +131,21 @@ export const Schema = z.object({
     )
     .max(6)
     .default([
-      { value: "$1,800K", label: "Total Planned" },
-      { value: "$1,800K", label: "Total Actual" },
-      { value: "$1,800K", label: "Total Planned" },
-      { value: "$1,800K", label: "Total Actual" },
-      { value: "$1,800K", label: "Total Planned" },
-      { value: "$1,800K", label: "Total Actual" },
+      { value: "$1,800K", label: "총 계획" },
+      { value: "$1,800K", label: "총 실적" },
+      { value: "$1,800K", label: "총 계획" },
+      { value: "$1,800K", label: "총 실적" },
+      { value: "$1,800K", label: "총 계획" },
+      { value: "$1,800K", label: "총 실적" },
     ]),
 });
 
 type SlideData = z.infer<typeof Schema>;
 
 export const layoutId = "title-metrics-with-chart";
-export const layoutName = "Chart With Sidebar Metrics";
+export const layoutName = "사이드바 지표가 있는 차트";
 export const layoutDescription =
-  "A two-column layout featuring a bold title, a large chart container on the left, and up to 6 vertical metrics on the right sidebar. Supports line, bar, grouped, stacked, clustered, diverging, area, pie, and donut charts.";
+  "굵은 제목, 왼쪽의 큰 차트 컨테이너, 그리고 오른쪽 사이드바의 최대 6개 세로 지표로 구성된 2열 레이아웃입니다. 선, 막대, 그룹, 누적, 클러스터, 발산, 영역, 파이, 도넛 차트를 지원합니다.";
 
 const buildChartData = (categories: string[], series: any[]) =>
   categories.map((category, index) => {
@@ -516,8 +516,8 @@ const ChartRenderer: React.FC<{
           }))
         : [];
       const labels = chart.divergingLabels || [
-        chart.series[0]?.name || "Positive",
-        chart.series[1]?.name || "Negative",
+        chart.series[0]?.name || "긍정",
+        chart.series[1]?.name || "부정",
       ];
 
       return (
@@ -734,7 +734,7 @@ const ChartRenderer: React.FC<{
     default:
       return (
         <div className="flex h-full items-center justify-center text-gray-500">
-          Unsupported chart type: {chart.type}
+          지원하지 않는 차트 유형: {chart.type}
         </div>
       );
   }
@@ -778,7 +778,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<SlideData> }> = ({
                     className="text-sm  font-semibold"
                     style={{ color: "var(--background-text, #111827)" }}
                   >
-                    {(data as any)?.__companyName__ || "Company Name"}
+                    {(data as any)?.__companyName__ || "회사명"}
                   </span>
                 )}
               </div>

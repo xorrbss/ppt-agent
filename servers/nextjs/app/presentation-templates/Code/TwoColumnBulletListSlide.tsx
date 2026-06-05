@@ -1,12 +1,12 @@
 import * as z from "zod";
 
 export const slideLayoutId = "bullet-list-slide";
-export const slideLayoutName = "Two Column Bullet List Slide";
+export const slideLayoutName = "2열 글머리 목록 슬라이드";
 export const slideLayoutDescription =
-  "A two-column numbered string list with items.";
+  "항목이 있는 2열 번호 목록.";
 
 export const Schema = z.object({
-  title: z.string().min(6).max(30).default("Usecase").meta({
+  title: z.string().min(6).max(30).default("활용 사례").meta({
     description: "Slide title shown above the numbered list.",
   }),
   items: z
@@ -14,14 +14,14 @@ export const Schema = z.object({
     .min(1)
     .max(8)
     .default([
-      "Use pre-built component library for UI consistency",
-      "Integrate REST API with TypeScript for type safety",
-      "Implement real-time updates using WebSocket",
-      "Deploy to production with automated CI/CD pipeline",
-      "Enable role-based permissions for protected actions",
-      "Generate docs automatically from route contracts",
-      "Track release health with telemetry dashboards",
-      "Add rollback strategy for high-risk deployments",
+      "UI 일관성을 위해 사전 구축된 컴포넌트 라이브러리 사용",
+      "타입 안정성을 위해 TypeScript로 REST API 통합",
+      "WebSocket을 사용해 실시간 업데이트 구현",
+      "자동화된 CI/CD 파이프라인으로 프로덕션 배포",
+      "보호된 작업을 위한 역할 기반 권한 적용",
+      "라우트 계약에서 문서 자동 생성",
+      "텔레메트리 대시보드로 릴리스 상태 추적",
+      "고위험 배포를 위한 롤백 전략 추가",
     ])
     .meta({
       description: "Eight use-case items shown in two columns.",

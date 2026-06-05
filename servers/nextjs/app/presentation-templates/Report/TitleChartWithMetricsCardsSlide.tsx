@@ -23,33 +23,33 @@ const StatColumnSchema = z.object({
 });
 
 export const slideLayoutId = "title-chart-metrics-cards-slide";
-export const slideLayoutName = "Title Chart with Metrics Cards Slide";
+export const slideLayoutName = "제목·차트·지표 카드 슬라이드";
 export const slideLayoutDescription =
-  "A slide with a title at the top, chart in the left content area, and optional metric cards arranged side by side on the right.";
+  "상단에 제목이 있고, 왼쪽 내용 영역에 차트, 오른쪽에 선택적 지표 카드가 나란히 배치된 슬라이드.";
 
 export const Schema = z.object({
-  title: z.string().min(3).max(80).default("Data Analysis").meta({
+  title: z.string().min(3).max(80).default("데이터 분석").meta({
     description: "Slide title shown at the top-left.",
   }),
-  seriesALabel: z.string().min(3).max(20).default("Category A").meta({
+  seriesALabel: z.string().min(3).max(20).default("카테고리 A").meta({
     description: "Legend label for the first line series.",
   }),
-  seriesBLabel: z.string().min(3).max(20).default("Category B").meta({
+  seriesBLabel: z.string().min(3).max(20).default("카테고리 B").meta({
     description: "Legend label for the second line series.",
   }),
   chartData: flexibleChartDataSchema.default({
     type: "line-dual",
     data: [
-      { label: "label", valueA: 24, valueB: 40 },
-      { label: "label", valueA: 55, valueB: 72 },
-      { label: "label", valueA: 50, valueB: 98 },
-      { label: "label", valueA: 97, valueB: 86 },
-      { label: "label", valueA: 70, valueB: 52 },
-      { label: "label", valueA: 42, valueB: 78 },
-      { label: "label", valueA: 63, valueB: 51 },
+      { label: "라벨", valueA: 24, valueB: 40 },
+      { label: "라벨", valueA: 55, valueB: 72 },
+      { label: "라벨", valueA: 50, valueB: 98 },
+      { label: "라벨", valueA: 97, valueB: 86 },
+      { label: "라벨", valueA: 70, valueB: 52 },
+      { label: "라벨", valueA: 42, valueB: 78 },
+      { label: "라벨", valueA: 63, valueB: 51 },
     ],
   }),
-  legendLabel: z.string().min(3).max(32).default("Traditional Workflow").meta({
+  legendLabel: z.string().min(3).max(32).default("기존 워크플로").meta({
     description: "Legend label shown below the chart.",
   }),
   statColumns: z
@@ -59,14 +59,14 @@ export const Schema = z.object({
     .default([
       {
         metrics: [
-          { value: "25K", label: "Students", description: "Ut enim ad minima" },
-          { value: "25K", label: "Students", description: "Ut enim ad minima" },
+          { value: "25K", label: "학생", description: "여기에 설명 입력" },
+          { value: "25K", label: "학생", description: "여기에 설명 입력" },
         ],
       },
       {
         metrics: [
-          { value: "25K", label: "Students", description: "Ut enim ad minima" },
-          { value: "25K", label: "Students", description: "Ut enim ad minima" },
+          { value: "25K", label: "학생", description: "여기에 설명 입력" },
+          { value: "25K", label: "학생", description: "여기에 설명 입력" },
         ],
       },
     ])

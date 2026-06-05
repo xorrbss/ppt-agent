@@ -1,9 +1,9 @@
 import * as z from "zod";
 
 export const slideLayoutId = "panel-list-with-media";
-export const slideLayoutName = "Panel List with Media";
+export const slideLayoutName = "미디어가 있는 패널 목록";
 export const slideLayoutDescription =
-  "A table layout with a left multi-column item list and a configurable right media or color panel.";
+  "왼쪽에 다중 열 항목 목록, 오른쪽에 설정 가능한 미디어 또는 색상 패널을 배치한 표 레이아웃입니다.";
 
 const ItemSchema = z.object({
   title: z.string().max(18).meta({
@@ -19,7 +19,7 @@ const ItemSchema = z.object({
 
 export const Schema = z
   .object({
-    title: z.string().max(14).default("List").meta({
+    title: z.string().max(14).default("목록").meta({
       description: "Main heading text.",
     }),
     rowVariant: z
@@ -51,54 +51,54 @@ export const Schema = z
       .max(10)
       .default([
         {
-          title: "Section Title",
+          title: "섹션 제목",
           number: "1",
-          description: "Ut enim ad minima. Ut enim ad minima veniam.",
+          description: "여기에 항목 설명을 입력하세요",
         },
         {
-          title: "Clarity",
+          title: "명확성",
           number: "2",
-          description: "Ut enim ad minima. Ut enim ad minima veniam.",
+          description: "여기에 항목 설명을 입력하세요",
         },
         {
-          title: "Design Principles",
+          title: "디자인 원칙",
           number: "3",
-          description: "Ut enim ad minima. Ut enim ad minima veniam.",
+          description: "여기에 항목 설명을 입력하세요",
         },
         {
-          title: "Visual Structure",
+          title: "시각적 구조",
           number: "4",
-          description: "Ut enim ad minima. Ut enim ad minima veniam.",
+          description: "여기에 항목 설명을 입력하세요",
         },
         {
-          title: "Typography",
+          title: "타이포그래피",
           number: "5",
-          description: "Ut enim ad minima. Ut enim ad minima veniam.",
+          description: "여기에 항목 설명을 입력하세요",
         },
         {
-          title: "Color & Space",
+          title: "색상과 여백",
           number: "6",
-          description: "Ut enim ad minima. Ut enim ad minima veniam.",
+          description: "여기에 항목 설명을 입력하세요",
         },
         {
-          title: "Audience Focus",
+          title: "청중 중심",
           number: "7",
-          description: "Ut enim ad minima. Ut enim ad minima veniam.",
+          description: "여기에 항목 설명을 입력하세요",
         },
         {
-          title: "Layout System",
+          title: "레이아웃 시스템",
           number: "8",
-          description: "Ut enim ad minima. Ut enim ad minima veniam.",
+          description: "여기에 항목 설명을 입력하세요",
         },
         {
-          title: "Presentation Flow",
+          title: "프레젠테이션 흐름",
           number: "9",
-          description: "Ut enim ad minima. Ut enim ad minima veniam.",
+          description: "여기에 항목 설명을 입력하세요",
         },
         {
-          title: "Key Takeaways",
+          title: "핵심 요점",
           number: "10",
-          description: "Ut enim ad minima. Ut enim ad minima veniam.",
+          description: "여기에 항목 설명을 입력하세요",
         },
       ])
       .meta({
@@ -106,7 +106,7 @@ export const Schema = z
       }),
   })
   .default({
-    title: "List",
+    title: "목록",
     rowVariant: "titleWithDescription",
     sidePanelMode: "image",
     sidePanelImage: {
@@ -116,54 +116,54 @@ export const Schema = z
     },
     items: [
       {
-        title: "Section Title",
+        title: "섹션 제목",
         number: "1",
-        description: "Ut enim ad minima. Ut enim ad minima veniam.",
+        description: "여기에 항목 설명을 입력하세요",
       },
       {
-        title: "Clarity",
+        title: "명확성",
         number: "2",
-        description: "Ut enim ad minima. Ut enim ad minima veniam.",
+        description: "여기에 항목 설명을 입력하세요",
       },
       {
-        title: "Design Principles",
+        title: "디자인 원칙",
         number: "3",
-        description: "Ut enim ad minima. Ut enim ad minima veniam.",
+        description: "여기에 항목 설명을 입력하세요",
       },
       {
-        title: "Visual Structure",
+        title: "시각적 구조",
         number: "4    ",
-        description: "Ut enim ad minima. Ut enim ad minima veniam.",
+        description: "여기에 항목 설명을 입력하세요",
       },
       {
-        title: "Typography",
+        title: "타이포그래피",
         number: "5",
-        description: "Ut enim ad minima. Ut enim ad minima veniam.",
+        description: "여기에 항목 설명을 입력하세요",
       },
       {
-        title: "Color & Space",
+        title: "색상과 여백",
         number: "6",
-        description: "Ut enim ad minima. Ut enim ad minima veniam.",
+        description: "여기에 항목 설명을 입력하세요",
       },
       {
-        title: "Audience Focus",
+        title: "청중 중심",
         number: "7",
-        description: "Ut enim ad minima. Ut enim ad minima veniam.",
+        description: "여기에 항목 설명을 입력하세요",
       },
       {
-        title: "Layout System",
+        title: "레이아웃 시스템",
         number: "8",
-        description: "Ut enim ad minima. Ut enim ad minima veniam.",
+        description: "여기에 항목 설명을 입력하세요",
       },
       {
-        title: "Presentation Flow",
+        title: "프레젠테이션 흐름",
         number: "9",
-        description: "Ut enim ad minima. Ut enim ad minima veniam.",
+        description: "여기에 항목 설명을 입력하세요",
       },
       {
-        title: "Key Takeaways",
+        title: "핵심 요점",
         number: "10",
-        description: "Ut enim ad minima. Ut enim ad minima veniam.",
+        description: "여기에 항목 설명을 입력하세요",
       },
     ],
   });
@@ -238,7 +238,7 @@ const PanelListWithMedia = ({ data }: { data: Partial<SchemaType> }) => {
                             className="mt-[6px] text-[22px] leading-[1.08]"
                             style={{ color: "var(--background-text,#cbc7b2)" }}
                           >
-                            {item.description ?? "Ut enim ad minima veniam."}
+                            {item.description ?? "여기에 항목 설명을 입력하세요"}
                           </p>
                         )}
                       </div>

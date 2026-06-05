@@ -2,17 +2,17 @@ import React from "react"
 import * as z from "zod"
 
 const layoutId = "table-of-contents-layout"
-const layoutName = "Table Of Contents"
-const layoutDescription = "Header with brand marker, title, optional description, and a two-column table of contents list"
+const layoutName = "목차"
+const layoutDescription = "브랜드 마커가 있는 헤더, 제목, 선택적 설명, 그리고 2열 목차 목록으로 구성된 슬라이드"
 
 const ToCItemSchema = z
   .object({
-    title: z.string().min(4).max(50).default("Introduction").meta({
+    title: z.string().min(4).max(50).default("소개").meta({
       description: "Section title. Max 50 characters",
     }),
   })
   .default({
-    title: "Introduction",
+    title: "소개",
   })
 
 const Schema = z
@@ -30,7 +30,7 @@ const Schema = z
       .string()
       .min(12)
       .max(68)
-      .default("Table Of Contents")
+      .default("목차")
       .meta({ description: "Main slide title. Max 10 words" }),
 
     description: z
@@ -38,7 +38,7 @@ const Schema = z
       .min(0)
       .max(200)
       .default(
-        "Use this as a quick guide to navigate the presentation sections."
+        "프레젠테이션의 각 섹션을 빠르게 살펴볼 수 있는 안내로 활용하세요."
       )
       .meta({ description: "Lead paragraph. Optional. Max 35 words" }),
 
@@ -47,35 +47,35 @@ const Schema = z
       .min(3)
       .max(10)
       .default([
-        { title: "Introduction" },
-        { title: "Problem Statement" },
-        { title: "Solution" },
-        { title: "Market" },
-        { title: "Business Model" },
-        { title: "Roadmap" },
-        { title: "Team" },
-        { title: "Go-To-Market" },
-        { title: "Financials" },
-        { title: "Ask" },
+        { title: "소개" },
+        { title: "문제 정의" },
+        { title: "해결책" },
+        { title: "시장" },
+        { title: "비즈니스 모델" },
+        { title: "로드맵" },
+        { title: "팀" },
+        { title: "시장 진출 전략" },
+        { title: "재무" },
+        { title: "투자 요청" },
       ])
       .meta({ description: "List of contents (3-10)" }),
   })
   .default({
     topBar: { marker: "2" },
-    title: "Table Of Contents",
+    title: "목차",
     description:
-      "Use this as a quick guide to navigate the presentation sections.",
+      "프레젠테이션의 각 섹션을 빠르게 살펴볼 수 있는 안내로 활용하세요.",
     items: [
-      { title: "Introduction" },
-      { title: "Problem Statement" },
-      { title: "Solution" },
-      { title: "Market" },
-      { title: "Business Model" },
-      { title: "Roadmap" },
-      { title: "Team" },
-      { title: "Go-To-Market" },
-      { title: "Financials" },
-      { title: "Ask" },
+      { title: "소개" },
+      { title: "문제 정의" },
+      { title: "해결책" },
+      { title: "시장" },
+      { title: "비즈니스 모델" },
+      { title: "로드맵" },
+      { title: "팀" },
+      { title: "시장 진출 전략" },
+      { title: "재무" },
+      { title: "투자 요청" },
     ],
   })
 

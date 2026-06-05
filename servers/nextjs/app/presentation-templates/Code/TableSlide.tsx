@@ -1,14 +1,14 @@
 import * as z from "zod";
 
-const DEFAULT_TABLE_COLUMNS = ["Feature", "Column 1", "Column 2", "Column 3"];
+const DEFAULT_TABLE_COLUMNS = ["기능", "열 1", "열 2", "열 3"];
 
 const DEFAULT_ROWS = [
-  { cells: ["Component-based", "check", "check", "check"] },
-  { cells: ["TypeScript Support", "check", "check", "check"] },
-  { cells: ["Learning Curve", "Medium", "Easy", "Steep"] },
-  { cells: ["Bundle Size", "40KB", "34KB", "167KB"] },
-  { cells: ["Performance", "Excellent", "Excellent", "Good"] },
-  { cells: ["Community Size", "Huge", "Large", "Large"] },
+  { cells: ["컴포넌트 기반", "check", "check", "check"] },
+  { cells: ["TypeScript 지원", "check", "check", "check"] },
+  { cells: ["학습 곡선", "보통", "쉬움", "가파름"] },
+  { cells: ["번들 크기", "40KB", "34KB", "167KB"] },
+  { cells: ["성능", "우수", "우수", "양호"] },
+  { cells: ["커뮤니티 규모", "매우 큼", "큼", "큼"] },
 ];
 
 const ComparisonRowSchema = z.object({
@@ -18,12 +18,12 @@ const ComparisonRowSchema = z.object({
 });
 
 export const slideLayoutId = "table-slide";
-export const slideLayoutName = "Table Slide";
+export const slideLayoutName = "표 슬라이드";
 export const slideLayoutDescription =
-  "A slide with title and a table.";
+  "제목과 표가 있는 슬라이드.";
 
 export const Schema = z.object({
-  title: z.string().min(6).max(18).default("Comparison").meta({
+  title: z.string().min(6).max(18).default("비교").meta({
     description: "Slide title shown above the table.",
   }),
   tableColumns: z.array(z.string().max(18)).min(1).max(6).meta({

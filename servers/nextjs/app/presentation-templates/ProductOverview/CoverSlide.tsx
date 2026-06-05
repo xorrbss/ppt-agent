@@ -3,19 +3,19 @@ import * as z from "zod";
 
 
 export const slideLayoutId = "cover-slide";
-export const slideLayoutName = "Cover Slide";
+export const slideLayoutName = "표지 슬라이드";
 export const slideLayoutDescription =
-  "A cover slide with a compact logo in the top-left, a date/text/label in the top-right, a centered title, and a image anchored to the bottom with a soft fade into the background.";
+  "왼쪽 상단에 작은 로고, 오른쪽 상단에 날짜/텍스트/라벨, 가운데 정렬된 제목, 그리고 하단에 배치되어 배경으로 부드럽게 사라지는 이미지가 있는 표지 슬라이드.";
 
 export const Schema = z.object({
 
-  label: z.string().min(3).max(16).optional().default("MARCH 2026").meta({
+  label: z.string().min(3).max(16).optional().default("2026년 3월").meta({
     description: "Date/text/label shown at the top-right corner.",
   }),
-  titleLine1: z.string().min(3).max(18).default("Social Media").meta({
+  titleLine1: z.string().min(3).max(18).default("소셜 미디어").meta({
     description: "First line of the cover title.",
   }),
-  titleLine2: z.string().min(3).max(20).default("Marketing Report").meta({
+  titleLine2: z.string().min(3).max(20).default("마케팅 리포트").meta({
     description: "Second line of the cover title.",
   }),
   backgroundImage: z.object({

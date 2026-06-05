@@ -46,10 +46,10 @@ export const ChartPayloadSchema = z.object({
   chartType: ChartTypeSchema.default("bar").meta({
     description: "Chart type rendered on the right side.",
   }),
-  legendLabel: z.string().max(30).default("Series Label").meta({
+  legendLabel: z.string().max(30).default("시리즈 라벨").meta({
     description: "Single-series legend label for non-pie charts.",
   }),
-  yAxisLabel: z.string().max(16).default("Y axis name").meta({
+  yAxisLabel: z.string().max(16).default("Y축 이름").meta({
     description: "Y-axis title used in scatter charts.",
   }),
   barData: z
@@ -57,13 +57,13 @@ export const ChartPayloadSchema = z.object({
     
     .max(8)
     .default([
-      { label: "Mon", value: 120 },
-      { label: "Tue", value: 200 },
-      { label: "Wed", value: 150 },
-      { label: "Thu", value: 80 },
-      { label: "Fri", value: 70 },
-      { label: "Sat", value: 110 },
-      { label: "Sun", value: 130 },
+      { label: "월", value: 120 },
+      { label: "화", value: 200 },
+      { label: "수", value: 150 },
+      { label: "목", value: 80 },
+      { label: "금", value: 70 },
+      { label: "토", value: 110 },
+      { label: "일", value: 130 },
     ])
     .meta({
       description: "Dataset for regular bar charts.",
@@ -73,9 +73,9 @@ export const ChartPayloadSchema = z.object({
     
     .max(3)
     .default([
-      { label: "Category A", value: 55, color: "#d8d4bf" },
-      { label: "Category B", value: 25, color: "#b8b4a3" },
-      { label: "Category C", value: 20, color: "#a2a091" },
+      { label: "카테고리 A", value: 55, color: "#d8d4bf" },
+      { label: "카테고리 B", value: 25, color: "#b8b4a3" },
+      { label: "카테고리 C", value: 20, color: "#a2a091" },
     ])
     .meta({
       description: "Pie chart dataset.",
@@ -85,14 +85,14 @@ export const ChartPayloadSchema = z.object({
     
     .max(10)
     .default([
-      { label: "label", value: 7 },
-      { label: "label", value: 2 },
-      { label: "label", value: 92 },
-      { label: "label", value: 15 },
-      { label: "label", value: 91 },
-      { label: "label", value: 73 },
-      { label: "label", value: 56 },
-      { label: "label", value: 90 },
+      { label: "라벨", value: 7 },
+      { label: "라벨", value: 2 },
+      { label: "라벨", value: 92 },
+      { label: "라벨", value: 15 },
+      { label: "라벨", value: 91 },
+      { label: "라벨", value: 73 },
+      { label: "라벨", value: 56 },
+      { label: "라벨", value: 90 },
     ])
     .meta({
       description: "Scatter points for distribution charts.",
@@ -102,13 +102,13 @@ export const ChartPayloadSchema = z.object({
     
     .max(8)
     .default([
-      { label: "Mon", value: 30 },
-      { label: "Tue", value: 48 },
-      { label: "Wed", value: 64 },
-      { label: "Thu", value: 42 },
-      { label: "Fri", value: 58 },
-      { label: "Sat", value: 70 },
-      { label: "Sun", value: 90 },
+      { label: "월", value: 30 },
+      { label: "화", value: 48 },
+      { label: "수", value: 64 },
+      { label: "목", value: 42 },
+      { label: "금", value: 58 },
+      { label: "토", value: 70 },
+      { label: "일", value: 90 },
     ])
     .meta({
       description: "Dataset for line charts.",
@@ -118,13 +118,13 @@ export const ChartPayloadSchema = z.object({
     
     .max(8)
     .default([
-      { label: "Mon", value: 50, value2: 50 },
-      { label: "Tue", value: 80, value2: 70 },
-      { label: "Wed", value: 90, value2: 90 },
-      { label: "Thu", value: 40, value2: 60 },
-      { label: "Fri", value: 80, value2: 70 },
-      { label: "Sat", value: 90, value2: 90 },
-      { label: "Sun", value: 70, value2: 80 },
+      { label: "월", value: 50, value2: 50 },
+      { label: "화", value: 80, value2: 70 },
+      { label: "수", value: 90, value2: 90 },
+      { label: "목", value: 40, value2: 60 },
+      { label: "금", value: 80, value2: 70 },
+      { label: "토", value: 90, value2: 90 },
+      { label: "일", value: 70, value2: 80 },
     ])
     .meta({
       description: "Dataset for stacked bar charts using value and value2.",

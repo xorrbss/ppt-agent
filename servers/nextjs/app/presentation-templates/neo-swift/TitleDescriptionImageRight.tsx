@@ -2,8 +2,8 @@ import * as z from 'zod';
 
 
 export const Schema = z.object({
-    title: z.string().max(20).describe('The main title of the slide').default('Executive Summary'),
-    description: z.string().max(250).describe('The main descriptive text').default('Focus on companies with 500+ employees in Financial Services, Healthcare, and Technology sectors. Target $3.5M in new pipeline with sub-$150 CAC through account-based marketing and content-led strategies.'),
+    title: z.string().max(20).describe('The main title of the slide').default('경영 요약'),
+    description: z.string().max(250).describe('The main descriptive text').default('금융 서비스, 헬스케어, 기술 분야에서 직원 500명 이상 기업에 집중합니다. 어카운트 기반 마케팅과 콘텐츠 중심 전략을 통해 CAC를 150달러 미만으로 유지하며 350만 달러의 신규 파이프라인을 목표로 합니다.'),
     image: z.object({
         __image_url__: z.string(),
         __image_prompt__: z.string().max(100),
@@ -15,8 +15,8 @@ export const Schema = z.object({
 
 
 export const layoutId = 'title-description-large-image-right';
-export const layoutName = 'Title Description Large Image Right';
-export const layoutDescription = 'A balanced two-column layout with a title and descriptive text on the left, and a large prominent image on the right. The footer includes a website link and a decorative line. Ideal for introducing topics, highlighting concepts with strong visual support, or presenting narratives that benefit from an impactful image.';
+export const layoutName = '제목 설명 큰 이미지 오른쪽';
+export const layoutDescription = '왼쪽에 제목과 설명 텍스트, 오른쪽에 크고 돋보이는 이미지를 배치한 균형 잡힌 2열 레이아웃입니다. 푸터에는 웹사이트 링크와 장식용 선이 포함됩니다. 주제 소개, 강력한 시각 자료로 개념 강조 또는 임팩트 있는 이미지가 돋보이는 내러티브 표현에 적합합니다.';
 
 /**
  * dynamicSlideLayout React Component.
@@ -64,7 +64,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                         {image?.__image_url__ && (
                             <img
                                 src={image.__image_url__}
-                                alt={image.__image_prompt__ || 'Executive Summary Image'}
+                                alt={image.__image_prompt__ || '경영 요약 이미지'}
                                 className="w-full h-full object-cover rounded-xl"
                             />
                         )}
@@ -79,7 +79,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                             style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                             className=' w-[2px] h-4'></span>
                         {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                            {(data as any)?.__companyName__ || 'Company Name'}
+                            {(data as any)?.__companyName__ || '회사명'}
                         </span>}
                     </div>}
                     <div className="flex-1 h-[3.6px] bg-[#55626E]"

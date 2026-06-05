@@ -50,13 +50,13 @@ export const Schema = z.object({
     .string()
     .max(25)
     .describe("The main heading of the slide")
-    .default("Barchart with Description & metrix"),
+    .default("설명과 지표가 있는 막대 차트"),
   description: z
     .string()
     .max(180)
     .describe("Supporting description text")
     .default(
-      "Focus on companies with 500+ employees in Financial Services, Healthcare, and Technology sectors. Target $3.5M in new pipeline with sub-$150 CAC through account-based marketing and content-led strategies."
+      "금융 서비스, 헬스케어, 기술 분야에서 직원 500명 이상의 기업에 집중합니다. 어카운트 기반 마케팅과 콘텐츠 중심 전략을 통해 CAC 150달러 미만으로 350만 달러의 신규 파이프라인을 목표로 합니다."
     ),
   metricCards: z
     .array(
@@ -68,24 +68,24 @@ export const Schema = z.object({
     .max(4)
     .describe("List of metric cards displayed in a grid")
     .default([
-      { heading: "Main Challenge: Delayed Client", value: "85%" },
-      { heading: "Total Registered Users", value: ">500 M" },
+      { heading: "주요 과제: 고객 지연", value: "85%" },
+      { heading: "총 등록 사용자 수", value: ">500 M" },
     ]),
   chartTitle: z
     .string()
     .max(12)
     .describe("Title text for the chart")
-    .default("Campaign A"),
+    .default("캠페인 A"),
   chartCategory: z
     .string()
     .max(12)
     .describe("Secondary label text")
-    .default("Top Campaign"),
+    .default("인기 캠페인"),
   chartFooterLabel: z
     .string()
     .max(15)
     .describe("Footer label text for the chart")
-    .default("Engangment Rate"),
+    .default("참여율"),
   chartType: chartTypeEnum.describe("Type of chart to display"),
   chartData: z
     .object({
@@ -111,20 +111,20 @@ export const Schema = z.object({
     })
     .describe("The data used to render the chart")
     .default({
-      columns: ["Planned Budget", "Actual Budget"],
+      columns: ["계획 예산", "실제 예산"],
       rows: [
-        { label: "Paid Social", value1: 920, value2: 485 },
-        { label: "Content Marketing", value1: 380, value2: 412 },
-        { label: "Events & Sponsorships", value1: 450, value2: 468 },
-        { label: "SEO & Organic", value1: 280, value2: 276 },
+        { label: "유료 소셜", value1: 920, value2: 485 },
+        { label: "콘텐츠 마케팅", value1: 380, value2: 412 },
+        { label: "이벤트 및 후원", value1: 450, value2: 468 },
+        { label: "SEO 및 오가닉", value1: 280, value2: 276 },
       ],
     }),
 });
 
 export const layoutId = "title-description-metrics-chart";
-export const layoutName = "Title Description Metrics Chart";
+export const layoutName = "제목 설명 지표 차트";
 export const layoutDescription =
-  "A slide featuring a main title, description, metric cards grid on the left, and a chart panel on the right. Supports bar, grouped bar, stacked bar, clustered bar, diverging bar, horizontal bar, line, area, pie, donut, and scatter chart types.";
+  "왼쪽에 주제목, 설명, 지표 카드 그리드, 오른쪽에 차트 패널을 배치한 슬라이드입니다. 막대, 그룹 막대, 누적 막대, 클러스터 막대, 발산형 막대, 가로 막대, 선, 영역, 파이, 도넛, 산점도 차트 유형을 지원합니다.";
 
 const CHART_COLORS = [
   "#244CD9",
@@ -970,7 +970,7 @@ const dynamicSlideLayout: React.FC<{
                   className="text-sm  font-semibold"
                   style={{ color: "var(--background-text, #111827)" }}
                 >
-                  {(data as any)?.__companyName__ || "Company Name"}
+                  {(data as any)?.__companyName__ || "회사명"}
                 </span>
               )}
             </div>

@@ -2,9 +2,9 @@ import * as z from "zod";
 
 
 export const slideLayoutId = "table-of-contents-slide";
-export const slideLayoutName = "Table Of Contents Slide";
+export const slideLayoutName = "목차 슬라이드";
 export const slideLayoutDescription =
-  "A split layout with a left title panel and a right list of numbered sections, with one subtle background image overlay.";
+  "왼쪽 제목 패널과 번호가 매겨진 섹션 목록을 담은 오른쪽 영역으로 구성되며, 은은한 배경 이미지 오버레이가 더해진 분할 레이아웃.";
 
 const TocItemSchema = z.object({
   number: z.string().min(2).max(3).meta({
@@ -16,7 +16,7 @@ const TocItemSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().min(6).max(32).default("Table of Contents").meta({
+  title: z.string().min(6).max(32).default("목차").meta({
     description: "Main centered title of the table of contents slide.",
   }),
   items: z
@@ -24,16 +24,16 @@ export const Schema = z.object({
     .min(1)
     .max(10)
     .default([
-      { number: "01", label: "ABOUT" },
-      { number: "02", label: "TIMELINE" },
-      { number: "03", label: "GROUP OF COMPANIES" },
-      { number: "04", label: "SERVICES" },
-      { number: "05", label: "IMAGE GALLERY" },
-      { number: "06", label: "STATISTICS" },
-      { number: "07", label: "REPORT" },
-      { number: "08", label: "CONCLUSION" },
-      { number: "09", label: "QUESTIONS" },
-      { number: "10", label: "CONTACT" },
+      { number: "01", label: "소개" },
+      { number: "02", label: "타임라인" },
+      { number: "03", label: "계열사 소개" },
+      { number: "04", label: "서비스" },
+      { number: "05", label: "이미지 갤러리" },
+      { number: "06", label: "통계" },
+      { number: "07", label: "보고서" },
+      { number: "08", label: "마무리" },
+      { number: "09", label: "질의응답" },
+      { number: "10", label: "연락처" },
     ])
     .meta({
       description: "table-of-content entries listed on the right.",

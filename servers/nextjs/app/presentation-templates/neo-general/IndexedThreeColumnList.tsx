@@ -3,38 +3,38 @@ import React from "react";
 
 
 export const Schema = z.object({
-    title: z.string().max(30).describe('The main heading of the slide').default('Target Audience Breakdown'),
+    title: z.string().max(30).describe('The main heading of the slide').default('타겟 고객 분석'),
     columns: z.array(z.object({
         index: z.string().max(2).describe('Display number or index for the column').default('01'),
-        heading: z.string().max(20).describe('Primary heading of the column').default('C-Suite Executives'),
-        labelOne: z.string().max(12).describe('Label for the first content block').default('KEY NEED'),
-        contentOne: z.string().max(50).describe('Content for the first block').default('Strategic growth & competitive advantage'),
-        labelTwo: z.string().max(12).describe('Label for the second content block').default('PRIMARY CHANNEL'),
-        contentTwo: z.string().max(50).describe('Content for the second block').default('LinkedIn, executive events'),
+        heading: z.string().max(20).describe('Primary heading of the column').default('C레벨 임원'),
+        labelOne: z.string().max(12).describe('Label for the first content block').default('핵심 니즈'),
+        contentOne: z.string().max(50).describe('Content for the first block').default('전략적 성장과 경쟁 우위'),
+        labelTwo: z.string().max(12).describe('Label for the second content block').default('주요 채널'),
+        contentTwo: z.string().max(50).describe('Content for the second block').default('LinkedIn, 임원 행사'),
     })).max(3).describe('Array of columns with indexed content').default([
         {
             index: '01',
-            heading: 'C-Suite Executives',
-            labelOne: 'KEY NEED',
-            contentOne: 'Strategic growth & competitive advantage',
-            labelTwo: 'PRIMARY CHANNEL',
-            contentTwo: 'LinkedIn, executive events',
+            heading: 'C레벨 임원',
+            labelOne: '핵심 니즈',
+            contentOne: '전략적 성장과 경쟁 우위',
+            labelTwo: '주요 채널',
+            contentTwo: 'LinkedIn, 임원 행사',
         },
         {
             index: '02',
-            heading: 'VP of Operations',
-            labelOne: 'KEY NEED',
-            contentOne: 'Efficiency & cost optimization',
-            labelTwo: 'PRIMARY CHANNEL',
-            contentTwo: 'Industry publications, webinars',
+            heading: '운영 담당 부사장',
+            labelOne: '핵심 니즈',
+            contentOne: '효율성과 비용 최적화',
+            labelTwo: '주요 채널',
+            contentTwo: '업계 간행물, 웨비나',
         },
         {
             index: '03',
-            heading: 'Technical Leaders',
-            labelOne: 'KEY NEED',
-            contentOne: 'Integration capabilities & security',
-            labelTwo: 'PRIMARY CHANNEL',
-            contentTwo: 'Technical content, product demos',
+            heading: '기술 리더',
+            labelOne: '핵심 니즈',
+            contentOne: '통합 역량과 보안',
+            labelTwo: '주요 채널',
+            contentTwo: '기술 콘텐츠, 제품 데모',
         },
     ]),
 });
@@ -42,8 +42,8 @@ export const Schema = z.object({
 type DataType = z.infer<typeof Schema>;
 
 export const layoutId = 'title-three-columns-with-labels';
-export const layoutName = 'Three Columns With Index Numbers';
-export const layoutDescription = 'A layout featuring bold title with accent bar, followed by three indexed columns each containing large index number, heading, and two labeled content sections.';
+export const layoutName = '번호 인덱스가 있는 3열';
+export const layoutDescription = '굵은 제목과 강조 바를 배치하고, 그 아래에 큰 인덱스 번호, 제목, 라벨이 붙은 두 개의 내용 섹션을 각각 담은 3개의 인덱스 열을 배치한 레이아웃입니다.';
 
 const dynamicSlideLayout: React.FC<{ data: Partial<DataType> }> = ({ data }) => {
     const { title, columns } = data;
@@ -70,7 +70,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<DataType> }> = ({ data }) => 
                                     style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                                     className=' w-[2px] h-4'></span>
                                 {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(data as any)?.__companyName__ || 'Company Name'}
+                                    {(data as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>

@@ -1,7 +1,7 @@
 import * as z from 'zod'
 
 export const Schema = z.object({
-    title: z.string().max(30).describe('The main heading of the slide').default('KPI Snapshot'),
+    title: z.string().max(30).describe('The main heading of the slide').default('KPI 스냅샷'),
     kpiCards: z.array(z.object({
         topLabel: z.string().max(20).describe('Text or value at the top of the card'),
         topSuffix: z.string().max(20).describe('Optional text next to the top label').optional(),
@@ -9,20 +9,20 @@ export const Schema = z.object({
         isHighlighted: z.boolean().describe('Whether the card uses highlighted styling'),
         isValueFirst: z.boolean().describe('Whether the top label uses large/bold styling'),
     })).max(8).describe('Array of metric card objects').default([
-        { topLabel: 'Revenue Increased', bottomLabel: '15%', isHighlighted: false, isValueFirst: false },
-        { topLabel: 'Social Media Engagement Grew', bottomLabel: '22%', isHighlighted: true, isValueFirst: false },
-        { topLabel: '10', bottomLabel: 'Projects Successfully Completed', isHighlighted: false, isValueFirst: true },
-        { topLabel: '10', bottomLabel: 'Projects Successfully Completed', isHighlighted: false, isValueFirst: true },
-        { topLabel: 'Revenue Increased', bottomLabel: '15%', isHighlighted: false, isValueFirst: false },
-        { topLabel: 'Social Media Engagement Grew', bottomLabel: '22%', isHighlighted: true, isValueFirst: false },
-        { topLabel: '10', topSuffix: 'Major', bottomLabel: 'Projects Successfully Completed', isHighlighted: false, isValueFirst: true },
-        { topLabel: '10', topSuffix: 'Major', bottomLabel: 'Projects Successfully Completed', isHighlighted: false, isValueFirst: true },
+        { topLabel: '매출 증가', bottomLabel: '15%', isHighlighted: false, isValueFirst: false },
+        { topLabel: '소셜 미디어 참여 증가', bottomLabel: '22%', isHighlighted: true, isValueFirst: false },
+        { topLabel: '10', bottomLabel: '성공적으로 완료한 프로젝트', isHighlighted: false, isValueFirst: true },
+        { topLabel: '10', bottomLabel: '성공적으로 완료한 프로젝트', isHighlighted: false, isValueFirst: true },
+        { topLabel: '매출 증가', bottomLabel: '15%', isHighlighted: false, isValueFirst: false },
+        { topLabel: '소셜 미디어 참여 증가', bottomLabel: '22%', isHighlighted: true, isValueFirst: false },
+        { topLabel: '10', topSuffix: '주요', bottomLabel: '성공적으로 완료한 프로젝트', isHighlighted: false, isValueFirst: true },
+        { topLabel: '10', topSuffix: '주요', bottomLabel: '성공적으로 완료한 프로젝트', isHighlighted: false, isValueFirst: true },
     ]),
 });
 
 export const layoutId = 'title-kpi-snapshot-grid';
-export const layoutName = 'Title KPI Snapshot Grid';
-export const layoutDescription = 'A slide featuring a centered title with an 8-card grid below. Each card supports flexible formatting - value-first or label-first layouts, optional highlighting, and suffix text.';
+export const layoutName = '제목 KPI 스냅샷 그리드';
+export const layoutDescription = '가운데 정렬된 제목과 그 아래 8개의 카드 그리드를 갖춘 슬라이드입니다. 각 카드는 값 우선 또는 라벨 우선 레이아웃, 선택적 강조, 접미 텍스트 등 유연한 서식을 지원합니다.';
 
 const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = ({ data }) => {
     const { title, kpiCards } = data;
@@ -98,7 +98,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                         style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                         className=' w-[2px] h-4'></span>
                     {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                        {(data as any)?.__companyName__ || 'Company Name'}
+                        {(data as any)?.__companyName__ || '회사명'}
                     </span>}
                 </div>}
             </div>

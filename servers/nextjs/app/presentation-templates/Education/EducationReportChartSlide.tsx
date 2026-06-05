@@ -6,9 +6,9 @@ import EducationChartPrimitives, {
 } from "./EducationChartPrimitives";
 
 export const slideLayoutId = "report-chart-slide";
-export const slideLayoutName = "Report Chart Slide";
+export const slideLayoutName = "보고서 차트 슬라이드";
 export const slideLayoutDescription =
-  "A left text column with a report title, body, footnote and a right-side chart.";
+  "보고서 제목, 본문, 각주가 담긴 왼쪽 텍스트 열과 오른쪽 차트로 구성된 레이아웃.";
 
 const ChartTypeSchema = z.enum([
   "bar",
@@ -71,7 +71,7 @@ const UnifiedChartDataSchema = z.union([
 ]);
 
 export const Schema = z.object({
-  title: z.string().max(24).default("Report").meta({
+  title: z.string().max(24).default("보고서").meta({
     description: "Left-side report title.",
   }),
   body: z
@@ -79,7 +79,7 @@ export const Schema = z.object({
     .min(80)
     .max(260)
     .default(
-      "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."
+      "이번 분석은 학년별 학생 분포와 학습 성과의 변화를 한눈에 살펴볼 수 있도록 정리한 자료입니다. 주요 지표를 바탕으로 강점과 개선이 필요한 영역을 명확히 파악하여, 앞으로의 교육 방향을 수립하는 데 활용할 수 있습니다."
     )
     .meta({
       description: "Left-side report body paragraph.",
@@ -89,7 +89,7 @@ export const Schema = z.object({
     .min(20)
     .max(150)
     .default(
-      "(Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.)"
+      "(본 자료는 2024년 교육 통계 연보를 기준으로 작성되었습니다.)"
     )
     .meta({
       description: "Left-side footnote line.",
@@ -98,11 +98,11 @@ export const Schema = z.object({
     .string()
     .min(8)
     .max(42)
-    .default("Students by Grade Level")
+    .default("학년별 학생 수")
     .meta({
       description: "Right-panel chart heading.",
     }),
-  dateRange: z.string().min(8).max(22).default("Apr 10 - Apr 17").meta({
+  dateRange: z.string().min(8).max(22).default("4월 10일 - 4월 17일").meta({
     description: "Right-panel date range label.",
   }),
   chartType: ChartTypeSchema.default("bar").meta({
@@ -110,24 +110,24 @@ export const Schema = z.object({
       "Chart type selector. Supports bar, grouped, stacked, clustered, diverging, line, area, pie/donut, and scatter.",
   }),
   chartData: UnifiedChartDataSchema.default([
-    { name: "Option A", value: 17.07 },
-    { name: "Option B", value: 45.23 },
-    { name: "Option C", value: 21.61 },
-    { name: "Option D", value: 16.36 },
+    { name: "항목 A", value: 17.07 },
+    { name: "항목 B", value: 45.23 },
+    { name: "항목 C", value: 21.61 },
+    { name: "항목 D", value: 16.36 },
   ]).meta({
     description: "Unified chart data payload. Shape depends on chartType.",
   }),
   series: z
     .array(z.string().min(1).max(20))
     .max(6)
-    .default(["Series A", "Series B"])
+    .default(["시리즈 A", "시리즈 B"])
     .meta({
       description:
         "Series names for grouped/stacked/clustered/area-stacked charts.",
     }),
   divergingLabels: z
     .tuple([z.string().min(1).max(24), z.string().min(1).max(24)])
-    .default(["Positive", "Negative"])
+    .default(["긍정", "부정"])
     .meta({
       description: "Legend labels for bar-diverging charts.",
     }),
@@ -143,7 +143,7 @@ export const Schema = z.object({
     .string()
     .min(8)
     .max(40)
-    .default("You are doing good!")
+    .default("아주 잘하고 있어요!")
     .meta({
       description: "Callout headline under chart.",
     }),
@@ -151,7 +151,7 @@ export const Schema = z.object({
     .string()
     .min(10)
     .max(80)
-    .default("You almost reached your goal")
+    .default("목표에 거의 다 도달했어요")
     .meta({
       description: "Callout subtitle under chart.",
     }),

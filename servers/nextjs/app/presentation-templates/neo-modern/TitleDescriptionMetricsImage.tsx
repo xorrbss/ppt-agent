@@ -2,16 +2,16 @@
 import * as z from 'zod'
 
 export const Schema = z.object({
-    title: z.string().max(25).describe("The main heading of the slide").default("Title Description Metrics Image"),
-    description: z.string().max(150).describe("Supporting description text").default("A clean professional slide featuring a title, description, a 2x2 grid of highlight metrics, and a large vertical image on the right."),
+    title: z.string().max(25).describe("The main heading of the slide").default("제목 설명 지표 이미지"),
+    description: z.string().max(150).describe("Supporting description text").default("제목, 설명, 2x2 강조 지표 그리드, 오른쪽의 큰 세로 이미지를 갖춘 깔끔하고 전문적인 슬라이드입니다."),
     metrics: z.array(z.object({
         label: z.string().max(15).describe("Label text for the metric"),
         value: z.string().max(10).describe("Value displayed for the metric")
     })).max(4).describe("Collection of metric items displayed in a grid").default([
-        { label: "Main Challenge: Delayed Client", value: "85%" },
-        { label: "Total Registered Users", value: ">500 M" },
-        { label: "Main Challenge: Delayed Client", value: "85%" },
-        { label: "Total Registered Users", value: ">500 M" }
+        { label: "주요 과제: 고객 지연", value: "85%" },
+        { label: "총 등록 사용자 수", value: ">500 M" },
+        { label: "주요 과제: 고객 지연", value: "85%" },
+        { label: "총 등록 사용자 수", value: ">500 M" }
     ]),
     image: z.object({
         __image_url__: z.string(),
@@ -24,8 +24,8 @@ export const Schema = z.object({
 
 // Layout ID, Name and Description
 export const layoutId = "title-description-metrics-image";
-export const layoutName = "Title Description Metrics Image";
-export const layoutDescription = "A slide featuring a title, description, and 2x2 metrics grid on the left with a large vertical image on the right. The alternating metric cards create visual hierarchy.";
+export const layoutName = "제목 설명 지표 이미지";
+export const layoutDescription = "왼쪽에 제목, 설명, 2x2 지표 그리드, 오른쪽에 큰 세로 이미지를 배치한 슬라이드입니다. 번갈아 배치된 지표 카드가 시각적 계층을 만듭니다.";
 
 // React Component
 const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = ({ data }) => {
@@ -107,7 +107,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                         <div className="w-[531px] h-[559px] overflow-hidden rounded-sm">
                             <img
                                 src={image?.__image_url__ || 'https://presenton-public-assets.s3.ap-southeast-1.amazonaws.com/replaceable_template_image.png'}
-                                alt={image?.__image_prompt__ || 'Layout visual content'}
+                                alt={image?.__image_prompt__ || '레이아웃 시각 콘텐츠'}
                                 className="w-full h-full object-cover"
                                 style={{ objectPosition: '52.9% 44.07%' }}
                             />
@@ -120,7 +120,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                         style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                         className=' w-[2px] h-4'></span>
                     {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                        {(data as any)?.__companyName__ || 'Company Name'}
+                        {(data as any)?.__companyName__ || '회사명'}
                     </span>}
                 </div>}
             </div>

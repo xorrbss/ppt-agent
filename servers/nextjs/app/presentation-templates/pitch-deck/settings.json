@@ -1,5 +1,5 @@
 {
-  "description": "Presentation templates for pitch decks, including title slides, team slides, and product slides",
+  "description": "제목 슬라이드, 팀 슬라이드, 제품 슬라이드를 포함한 피치덱용 프레젠테이션 템플릿",
   "ordered": false,
   "default": false,
   "icon_weight": "regular"

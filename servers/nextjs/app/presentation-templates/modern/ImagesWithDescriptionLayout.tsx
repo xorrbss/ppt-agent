@@ -3,9 +3,9 @@ import * as z from "zod";
 import { ImageSchema } from "../defaultSchemes";
 
 export const layoutId = "images-with-description";
-export const layoutName = "Images With Description";
+export const layoutName = "설명이 있는 이미지";
 export const layoutDescription =
-  "Images with description slide layout";
+  "설명이 있는 이미지 슬라이드 레이아웃";
 
 const imagesWithDescriptionSlideSchema = z.object({
   name: z.string().min(2).max(50).meta({
@@ -21,7 +21,7 @@ const imagesWithDescriptionSlideSchema = z.object({
 });
 
 const imagesWithDescriptionSlideSchema2 = z.object({
-  title: z.string().min(3).max(40).default("Our Team").meta({
+  title: z.string().min(3).max(40).default("우리 팀").meta({
     description: "Main title of the slide",
   }),
   subtitle: z.string().min(10).max(120).optional().meta({
@@ -33,9 +33,9 @@ const imagesWithDescriptionSlideSchema2 = z.object({
     .max(4)
     .default([
       {
-        name: "Sarah Johnson",
+        name: "김서연",
         description:
-          "Strategic leader with 15+ years experience in technology and business development. Former VP at Fortune 500 company.",
+          "기술과 사업 개발 분야에서 15년 이상의 경력을 갖춘 전략 리더. 포춘 500대 기업의 전 부사장.",
         image: {
           __image_url__:
             "https://plus.unsplash.com/premium_photo-1661589856899-6dd0871f9db6?fm=jpg&q=60&w=3000&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8NXx8YnVzaW5lc3N3b21lbnxlbnwwfHwwfHx8MA%3D%3D",
@@ -43,9 +43,9 @@ const imagesWithDescriptionSlideSchema2 = z.object({
         },
       },
       {
-        name: "Michael Chen",
+        name: "박지훈",
         description:
-          "Technology expert specializing in scalable architecture and AI solutions. PhD in Computer Science from MIT.",
+          "확장 가능한 아키텍처와 AI 솔루션을 전문으로 하는 기술 전문가. MIT 컴퓨터공학 박사.",
         image: {
           __image_url__:
             "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80",
@@ -53,9 +53,9 @@ const imagesWithDescriptionSlideSchema2 = z.object({
         },
       },
       {
-        name: "Emily Rodriguez",
+        name: "이하나",
         description:
-          "Sales leader with proven track record of building high-performing teams and driving revenue growth in B2B markets.",
+          "고성과 팀을 구축하고 B2B 시장에서 매출 성장을 이끈 검증된 실적을 갖춘 영업 리더.",
         image: {
           __image_url__:
             "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80",
@@ -63,9 +63,9 @@ const imagesWithDescriptionSlideSchema2 = z.object({
         },
       },
       {
-        name: "David Kim",
+        name: "최민준",
         description:
-          "Product strategist focused on user experience and market-driven solutions. Former product manager at leading tech companies.",
+          "사용자 경험과 시장 중심 솔루션에 집중하는 제품 전략가. 선도적인 기술 기업의 전 제품 매니저.",
         image: {
           __image_url__:
             "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80",
@@ -114,7 +114,7 @@ const ImagesWithDescriptionSlideLayout: React.FC<ImagesWithDescriptionSlideLayou
 
                 {(slideData as any)?._logo_url__ && <img src={(slideData as any)?._logo_url__} alt="logo" className="w-6 h-6" />}
                 {(slideData as any)?.__companyName__ && <span className="text-sm sm:text-base font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                  {(slideData as any)?.__companyName__ || 'Company Name'}
+                  {(slideData as any)?.__companyName__ || '회사명'}
                 </span>}
               </div>
             </div>

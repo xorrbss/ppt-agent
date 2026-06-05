@@ -3,17 +3,17 @@ import * as z from "zod";
 import { ImageSchema } from '../defaultSchemes';
 
 export const layoutId = 'quote-slide'
-export const layoutName = 'Centered Text On Image Overlay'
-export const layoutDescription = 'A full-screen layout with background image, semi-transparent overlay, centered heading with accent line, large quote icon, quote text, and author attribution with decorative lines.'
+export const layoutName = '이미지 오버레이 위 가운데 텍스트'
+export const layoutDescription = '배경 이미지, 반투명 오버레이, 강조선이 있는 가운데 정렬 헤더, 큰 인용 아이콘, 인용문, 그리고 장식선이 있는 저자 표기로 구성된 전체 화면 레이아웃입니다.'
 
 const quoteSlideSchema = z.object({
-    heading: z.string().min(3).max(60).default('Words of Wisdom').meta({
+    heading: z.string().min(3).max(60).default('지혜의 말').meta({
         description: "Heading text of the slide",
     }),
-    quote: z.string().min(10).max(200).default('Success is not final, failure is not fatal: it is the courage to continue that counts. The future belongs to those who believe in the beauty of their dreams.').meta({
+    quote: z.string().min(10).max(200).default('성공은 끝이 아니고 실패는 치명적이지 않습니다. 중요한 것은 계속 나아가는 용기입니다. 미래는 자신의 꿈의 아름다움을 믿는 사람들의 것입니다.').meta({
         description: "Quotation text displayed on the slide",
     }),
-    author: z.string().min(2).max(50).default('Winston Churchill').meta({
+    author: z.string().min(2).max(50).default('윈스턴 처칠').meta({
         description: "Attribution name for the quote",
     }),
     backgroundImage: ImageSchema.default({
@@ -57,7 +57,7 @@ const QuoteSlideLayout: React.FC<QuoteSlideLayoutProps> = ({ data: slideData }) 
                                     style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                                     className=' w-[2px] h-4'></span>
                                 {(slideData as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(slideData as any)?.__companyName__ || 'Company Name'}
+                                    {(slideData as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>
@@ -89,7 +89,7 @@ const QuoteSlideLayout: React.FC<QuoteSlideLayoutProps> = ({ data: slideData }) 
                         {/* Heading */}
                         <div className="space-y-4">
                             <h1 style={{ color: "var(--background-text,#ffffff)" }} className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white leading-tight">
-                                {slideData?.heading || 'Words of Wisdom'}
+                                {slideData?.heading || '지혜의 말'}
                             </h1>
                             {/* Purple accent line */}
                             <div style={{ background: "var(--primary-color,#9333ea)" }} className="w-20 h-1 bg-purple-400 mx-auto"></div>
@@ -110,7 +110,7 @@ const QuoteSlideLayout: React.FC<QuoteSlideLayoutProps> = ({ data: slideData }) 
 
                             {/* Quote Text */}
                             <blockquote style={{ color: "var(--background-text,#ffffff)" }} className="text-xl sm:text-2xl lg:text-3xl font-medium text-white leading-relaxed italic">
-                                "{slideData?.quote || 'Success is not final, failure is not fatal: it is the courage to continue that counts. The future belongs to those who believe in the beauty of their dreams.'}"
+                                "{slideData?.quote || '성공은 끝이 아니고 실패는 치명적이지 않습니다. 중요한 것은 계속 나아가는 용기입니다. 미래는 자신의 꿈의 아름다움을 믿는 사람들의 것입니다.'}"
                             </blockquote>
 
                             {/* Author */}
@@ -122,7 +122,7 @@ const QuoteSlideLayout: React.FC<QuoteSlideLayoutProps> = ({ data: slideData }) 
                                         color: 'var(--background-text,#ffffff)'
                                     }}
                                 >
-                                    {slideData?.author || 'Winston Churchill'}
+                                    {slideData?.author || '윈스턴 처칠'}
                                 </cite>
                                 <div style={{ background: "var(--primary-color,#9333ea)" }} className="w-16 h-px bg-purple-300"></div>
                             </div>

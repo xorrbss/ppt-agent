@@ -13,12 +13,12 @@ const MetricSchema = z.object({
 });
 
 export const slideLayoutId = "metrics-grid-slide";
-export const slideLayoutName = "Metrics Grid Slide";
+export const slideLayoutName = "지표 그리드 슬라이드";
 export const slideLayoutDescription =
-  "A slide with metrics card grid and title at the top.";
+  "상단에 제목과 지표 카드 그리드가 있는 슬라이드.";
 
 export const Schema = z.object({
-  title: z.string().min(6).max(18).default("Metrics").meta({
+  title: z.string().min(6).max(18).default("지표").meta({
     description: "Slide heading shown above the KPI cards.",
   }),
   metrics: z
@@ -26,12 +26,12 @@ export const Schema = z.object({
     .min(1)
     .max(6)
     .default([
-      { value: "99.9%", label: "Uptime", subtext: "Last 12 months" },
-      { value: "<100ms", label: "Response Time", subtext: "Last 12 months" },
-      { value: "50k+", label: "Active Users", subtext: "Last 12 months" },
-      { value: "99.9%", label: "Uptime", subtext: "Last 12 months" },
-      { value: "<100ms", label: "Response Time", subtext: "Last 12 months" },
-      { value: "50k+", label: "Active Users", subtext: "Last 12 months" },
+      { value: "99.9%", label: "가동 시간", subtext: "최근 12개월" },
+      { value: "<100ms", label: "응답 시간", subtext: "최근 12개월" },
+      { value: "50k+", label: "활성 사용자", subtext: "최근 12개월" },
+      { value: "99.9%", label: "가동 시간", subtext: "최근 12개월" },
+      { value: "<100ms", label: "응답 시간", subtext: "최근 12개월" },
+      { value: "50k+", label: "활성 사용자", subtext: "최근 12개월" },
     ])
     .meta({
       description: "Metrics cards in a grid.",

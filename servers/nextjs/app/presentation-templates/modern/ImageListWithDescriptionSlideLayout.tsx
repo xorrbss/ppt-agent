@@ -3,14 +3,14 @@ import * as z from "zod";
 import { ImageSchema } from "../defaultSchemes";
 
 export const layoutId = "image-list-with-description";
-export const layoutName = "Image List with Description";
+export const layoutName = "설명이 있는 이미지 목록";
 export const layoutDescription =
-  "An image list with description slide layout";
+  "설명이 있는 이미지 목록 슬라이드 레이아웃";
 
 const imageListWithDescriptionSlideSchema = z.object({
 
 
-  title: z.string().min(3).max(40).default("Product Overview").meta({
+  title: z.string().min(3).max(40).default("제품 개요").meta({
     description: "Main title of the slide. Max 4 words",
   }),
   // removed mainDescription
@@ -35,9 +35,9 @@ const imageListWithDescriptionSlideSchema = z.object({
     .max(4)
     .default([
       {
-        title: "Internet of Things",
+        title: "사물인터넷",
         description:
-          "Detail and explain each product. Our examination of community and market issues increases with additional products/services.",
+          "각 제품을 상세히 설명합니다. 제품/서비스가 추가될수록 커뮤니티와 시장 문제에 대한 검토도 확대됩니다.",
         image: {
           __image_url__:
             "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=300&h=200&fit=crop",
@@ -46,9 +46,9 @@ const imageListWithDescriptionSlideSchema = z.object({
         isBlueBackground: true,
       },
       {
-        title: "Analytics Dashboard",
+        title: "분석 대시보드",
         description:
-          "Our alternate product category is available. Our products must work together to solve social and economic issues.",
+          "대체 제품 카테고리도 제공됩니다. 우리 제품들은 사회·경제적 문제를 해결하기 위해 서로 협력해야 합니다.",
         image: {
           __image_url__: "https://images.unsplash.com/photo-1556157382-97eda2d62296?w=300&h=200&fit=crop",
           __image_prompt__: "Analytics dashboard on laptop screen",
@@ -56,9 +56,9 @@ const imageListWithDescriptionSlideSchema = z.object({
         isBlueBackground: true,
       },
       {
-        title: "Mobile App Suite",
+        title: "모바일 앱 제품군",
         description:
-          "Our alternate product category is available. Our products must work together to solve social and economic issues.",
+          "대체 제품 카테고리도 제공됩니다. 우리 제품들은 사회·경제적 문제를 해결하기 위해 서로 협력해야 합니다.",
         image: {
           __image_url__: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=300&h=200&fit=crop",
           __image_prompt__: "Mobile apps on smartphone in hand",
@@ -66,9 +66,9 @@ const imageListWithDescriptionSlideSchema = z.object({
         isBlueBackground: true,
       },
       {
-        title: "Smart Home Platform",
+        title: "스마트홈 플랫폼",
         description:
-          "Our alternate product category is available. Our products must work together to solve social and economic issues.",
+          "대체 제품 카테고리도 제공됩니다. 우리 제품들은 사회·경제적 문제를 해결하기 위해 서로 협력해야 합니다.",
         image: {
           __image_url__:
             "https://images.unsplash.com/photo-1573164713988-8665fc963095?w=300&h=200&fit=crop",
@@ -127,7 +127,7 @@ const ImageListWithDescriptionSlideLayout: React.FC<ImageListWithDescriptionSlid
 
                 {(slideData as any)?._logo_url__ && <img src={(slideData as any)?._logo_url__} alt="logo" className="w-6 h-6" />}
                 {(slideData as any)?.__companyName__ && <span className="text-sm sm:text-base font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                  {(slideData as any)?.__companyName__ || 'Company Name'}
+                  {(slideData as any)?.__companyName__ || '회사명'}
                 </span>}
               </div>
             </div>

@@ -2,27 +2,27 @@ import React from 'react'
 import * as z from "zod";
 
 export const layoutId = 'headline-text-with-stats-layout'
-export const layoutName = 'Numbered List With Side Metrics'
-export const layoutDescription = 'A two-column layout with bold title, accent bar, and numbered bullet point list on the left, paired with 3 large vertical metrics on the right. Each metric shows value with label and accent dot.'
+export const layoutName = '측면 지표가 있는 번호 목록'
+export const layoutDescription = '왼쪽에 굵은 제목, 강조 바, 번호가 매겨진 글머리 목록을 배치하고 오른쪽에 3개의 큰 세로 지표를 함께 배치한 2열 레이아웃입니다. 각 지표는 값과 라벨, 강조 점을 표시합니다.'
 
 export const Schema = z.object({
-    title: z.string().max(30).describe('The main heading of the slide').default('Executive Summary'),
+    title: z.string().max(30).describe('The main heading of the slide').default('핵심 요약'),
     bulletPoints: z.array(z.string().max(160)).max(6).describe('List of bullet point text items').default([
-        'Exceeded revenue target by 12% ($2.4M vs $2.1M target), driven by strong performance in paid search and email campaigns',
-        'Marketing influenced 68% of total pipeline value, up from 52% last quarter',
-        'Paid Search ROI improved to 5.8x (from 4.1x), making it our most efficient channel',
-        'Marketing influenced 68% of total pipeline value, up from 52% last quarter',
-        'Paid Search ROI improved to 5.8x (from 4.1x), making it our most efficient channel',
-        'Marketing influenced 68% of total pipeline value, up from 52% last quarter',
-        'Paid Search ROI improved to 5.8x (from 4.1x), making it our most efficient channel',
+        '유료 검색과 이메일 캠페인의 강력한 성과에 힘입어 매출 목표를 12% 초과 달성($2.4M, 목표 $2.1M)',
+        '마케팅이 전체 파이프라인 가치의 68%에 기여(지난 분기 52%에서 상승)',
+        '유료 검색 ROI가 4.1배에서 5.8배로 개선되어 가장 효율적인 채널로 자리매김',
+        '마케팅이 전체 파이프라인 가치의 68%에 기여(지난 분기 52%에서 상승)',
+        '유료 검색 ROI가 4.1배에서 5.8배로 개선되어 가장 효율적인 채널로 자리매김',
+        '마케팅이 전체 파이프라인 가치의 68%에 기여(지난 분기 52%에서 상승)',
+        '유료 검색 ROI가 4.1배에서 5.8배로 개선되어 가장 효율적인 채널로 자리매김',
     ]),
     metrics: z.array(z.object({
         value: z.string().max(8).describe('Value displayed for the metric'),
         label: z.string().max(10).describe('Label text for the metric')
     })).describe('Metric items displayed on the right side').default([
-        { value: '8,450', label: 'Leads' },
-        { value: '2,680', label: 'MQLS' },
-        { value: '$2400', label: 'Revenue' }
+        { value: '8,450', label: '리드' },
+        { value: '2,680', label: 'MQL' },
+        { value: '$2400', label: '매출' }
     ])
 });
 
@@ -57,7 +57,7 @@ const HeadlineTextWithBulletsAndStatsLayout: React.FC<HeadlineTextWithBulletsAnd
                                     style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                                     className=' w-[2px] h-4'></span>
                                 {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(data as any)?.__companyName__ || 'Company Name'}
+                                    {(data as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>

@@ -1,9 +1,9 @@
 import * as z from "zod";
 
 export const slideLayoutId = "overlapping-circle-cards";
-export const slideLayoutName = "Overlapping Circle Cards";
+export const slideLayoutName = "겹치는 원형 카드";
 export const slideLayoutDescription =
-  "A horizontal row of overlapping circular cards with markers, titles, and text.";
+  "마커, 제목, 텍스트가 있는 겹치는 원형 카드를 가로로 배열한 레이아웃입니다.";
 
 const CardSchema = z.object({
   number: z.string().max(2).meta({
@@ -18,10 +18,10 @@ const CardSchema = z.object({
 });
 
 const DEFAULT_DESCRIPTION =
-  "Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut alUt enim ad minima veniam.";
+  "여기에 청중에게 전달할 핵심 메시지를 입력하세요. 이 영역에는 보조 설명과 세부 내용을 자유롭게 작성할 수 있습니다.";
 
 export const Schema = z.object({
-  title: z.string().max(12).default("Cards").meta({
+  title: z.string().max(12).default("카드").meta({
     description: "Main heading text.",
   }),
   items: z
@@ -31,27 +31,27 @@ export const Schema = z.object({
     .default([
       {
         number: "01",
-        title: "Insert text here",
+        title: "텍스트 입력",
         description: DEFAULT_DESCRIPTION,
       },
       {
         number: "02",
-        title: "Insert text here",
+        title: "텍스트 입력",
         description: DEFAULT_DESCRIPTION,
       },
       {
         number: "03",
-        title: "Insert text here",
+        title: "텍스트 입력",
         description: DEFAULT_DESCRIPTION,
       },
       {
         number: "04",
-        title: "Insert text here",
+        title: "텍스트 입력",
         description: DEFAULT_DESCRIPTION,
       },
       {
         number: "05",
-        title: "Insert text here",
+        title: "텍스트 입력",
         description: DEFAULT_DESCRIPTION,
       },
     ])

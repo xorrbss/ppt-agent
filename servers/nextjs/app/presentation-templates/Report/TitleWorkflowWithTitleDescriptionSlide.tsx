@@ -23,12 +23,12 @@ const ServiceItemSchema = z.object({
 });
 
 export const slideLayoutId = "title-workflow-with-title-description-slide";
-export const slideLayoutName = "Title Workflow with Title Description Slide";
+export const slideLayoutName = "제목·설명이 있는 제목 워크플로 슬라이드";
 export const slideLayoutDescription =
-  "A slide with a title and a horizontal flow. Each step contains a circular icon area, a heading, and a description placed underneath. Directional connectors between the circles indicate sequence, and the activeIndex field determines which step is emphasized.";
+  "제목과 가로 흐름이 있는 슬라이드. 각 단계는 원형 아이콘 영역, 제목, 그리고 그 아래에 배치된 설명으로 구성됩니다. 원 사이의 방향 연결선이 순서를 나타내며, activeIndex 필드가 어느 단계를 강조할지 결정합니다.";
 
 export const Schema = z.object({
-  title: z.string().min(3).max(50).default("Services").meta({
+  title: z.string().min(3).max(50).default("서비스").meta({
     description: "Slide title shown at the top-left.",
   }),
 
@@ -46,8 +46,8 @@ export const Schema = z.object({
             "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
           __icon_query__: "pulse icon",
         },
-        heading: "Heading",
-        description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+        heading: "제목",
+        description: "여기에 설명 텍스트를 입력하세요.",
       },
       {
         icon: {
@@ -55,8 +55,8 @@ export const Schema = z.object({
             "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
           __icon_query__: "upload icon",
         },
-        heading: "Heading",
-        description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+        heading: "제목",
+        description: "여기에 설명 텍스트를 입력하세요.",
       },
       {
         icon: {
@@ -64,8 +64,8 @@ export const Schema = z.object({
             "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
           __icon_query__: "pulse icon",
         },
-        heading: "Heading",
-        description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+        heading: "제목",
+        description: "여기에 설명 텍스트를 입력하세요.",
       },
       {
         icon: {
@@ -73,8 +73,8 @@ export const Schema = z.object({
             "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
           __icon_query__: "pulse icon",
         },
-        heading: "Heading",
-        description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+        heading: "제목",
+        description: "여기에 설명 텍스트를 입력하세요.",
       },
 
     ])

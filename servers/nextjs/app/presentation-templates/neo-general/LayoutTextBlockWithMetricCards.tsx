@@ -6,20 +6,20 @@ export const Schema = z.object({
         .string()
         .max(30)
         .describe("The main heading of the slide")
-        .default("Business Objective & KPIs"),
+        .default("비즈니스 목표와 KPI"),
     objectiveTitle: z
         .string()
         .max(80)
         .describe("Subheading or objective statement")
         .default(
-            "Accelerate enterprise customer acquisition across EMEA and North America"
+            "EMEA와 북미 전역에서 엔터프라이즈 고객 확보 가속화"
         ),
     description: z
         .string()
         .max(300)
         .describe("Supporting description text")
         .default(
-            "Focus on companies with 500+ employees in Financial Services, Healthcare, and Technology sectors. Target $3.5M in new pipeline with sub-$150 CAC through account-based marketing and content-led strategies."
+            "금융 서비스, 헬스케어, 기술 분야의 임직원 500명 이상 기업에 집중합니다. 어카운트 기반 마케팅과 콘텐츠 중심 전략을 통해 $150 미만의 CAC로 $3.5M의 신규 파이프라인을 목표로 합니다."
         ),
     kpis: z
         .array(
@@ -39,58 +39,58 @@ export const Schema = z.object({
         )
         .default([
             {
-                name: "Pipeline Generated",
+                name: "생성된 파이프라인",
                 value: "$4.2M",
                 targetValue: "$3.5M",
-                targetLabel: "Target",
+                targetLabel: "목표",
                 progressPercentage: 85,
                 color: "#9234EC",
-                footerLabel: "of total",
+                footerLabel: "전체 대비",
             },
             {
-                name: "Marketing Qualified Leads",
+                name: "마케팅 검증 리드",
                 value: "8,420",
                 targetValue: "6,250",
-                targetLabel: "Target",
+                targetLabel: "목표",
                 progressPercentage: 75,
                 color: "#9234EC",
-                footerLabel: "of total",
+                footerLabel: "전체 대비",
             },
             {
-                name: "Return on Ad Spend",
+                name: "광고 투자 수익률",
                 value: "4.8X",
                 targetValue: "4.0x",
-                targetLabel: "Target",
+                targetLabel: "목표",
                 progressPercentage: 80,
                 color: "#FF5400",
-                footerLabel: "of total",
+                footerLabel: "전체 대비",
             },
             {
-                name: "Return on Ad Spend",
+                name: "광고 투자 수익률",
                 value: "4.8X",
                 targetValue: "4.0x",
-                targetLabel: "Target",
+                targetLabel: "목표",
                 progressPercentage: 80,
                 color: "#FF5400",
-                footerLabel: "of total",
+                footerLabel: "전체 대비",
             },
             {
-                name: "Return on Ad Spend",
+                name: "광고 투자 수익률",
                 value: "4.8X",
                 targetValue: "4.0x",
-                targetLabel: "Target",
+                targetLabel: "목표",
                 progressPercentage: 80,
                 color: "#FF5400",
-                footerLabel: "of total",
+                footerLabel: "전체 대비",
             },
 
 
         ]),
 });
 export const layoutId = "layout-text-block-with-metric-cards";
-export const layoutName = "Text Block With Progress Metric Cards";
+export const layoutName = "진행률 지표 카드가 있는 텍스트 블록";
 export const layoutDescription =
-    "A split layout with title, subheading, and description on the left, paired with a gray panel containing up to 5 metric cards on the right. Each card shows name, value, target comparison, and semi-circular progress indicator.";
+    "왼쪽에 제목, 부제목, 설명을 배치하고 오른쪽에 최대 5개의 지표 카드를 담은 회색 패널을 함께 배치한 분할 레이아웃입니다. 각 카드는 이름, 값, 목표 비교, 반원형 진행률 표시기를 보여줍니다.";
 const SemiCircleProgress = ({
     percentage,
     color,
@@ -235,7 +235,7 @@ const dynamicSlideLayout = ({ data }: { data: z.infer<typeof Schema> }) => {
                                     style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                                     className=' w-[2px] h-4'></span>
                                 {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(data as any)?.__companyName__ || 'Company Name'}
+                                    {(data as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>

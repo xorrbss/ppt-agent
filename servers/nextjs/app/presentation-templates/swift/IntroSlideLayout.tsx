@@ -2,8 +2,8 @@ import React from "react"
 import * as z from "zod"
 
 const layoutId = "IntroSlideLayout"
-const layoutName = "Intro Slide Layout"
-const layoutDescription = "Intro slide with header, title, subtitle, body, image. If used for last slide, then intro card should be disabled."
+const layoutName = "소개 슬라이드 레이아웃"
+const layoutDescription = "헤더, 제목, 부제목, 본문, 이미지가 있는 소개 슬라이드입니다. 마지막 슬라이드로 사용하는 경우 소개 카드를 비활성화해야 합니다."
 
 const ImageSchema = z
   .object({
@@ -23,18 +23,18 @@ const Schema = z
       .string()
       .min(12)
       .max(68)
-      .default("Pitch Deck")
+      .default("피치 덱")
       .meta({ description: "Main slide title" }),
 
-    subtitlePrefix: z.string().min(3).max(40).default("Presentation"),
-    subtitleAccent: z.string().min(3).max(40).default("Template"),
+    subtitlePrefix: z.string().min(3).max(40).default("프레젠테이션"),
+    subtitleAccent: z.string().min(3).max(40).default("템플릿"),
 
     paragraph: z
       .string()
       .min(40)
       .max(200)
       .default(
-        "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
+        "여기에 프레젠테이션을 소개하는 본문을 입력하세요. 핵심 메시지를 간결하고 명확하게 전달합니다."
       ),
 
     website: z
@@ -46,10 +46,10 @@ const Schema = z
     introCard: z
       .object({
         enabled: z.boolean().default(false),
-        name: z.string().min(3).max(40).default("John Doe"),
-        date: z.string().min(4).max(40).default("Jan 1, 2025"),
+        name: z.string().min(3).max(40).default("홍길동"),
+        date: z.string().min(4).max(40).default("2025년 1월 1일"),
       })
-      .default({ enabled: true, name: "John Doe", date: "Jan 1, 2025" }),
+      .default({ enabled: true, name: "홍길동", date: "2025년 1월 1일" }),
 
     media: z
       .object({
@@ -59,13 +59,13 @@ const Schema = z
       .default({ type: "image", image: ImageSchema.parse({}) }),
   })
   .default({
-    title: "Pitch Deck",
-    subtitlePrefix: "Presentation",
-    subtitleAccent: "Template",
+    title: "피치 덱",
+    subtitlePrefix: "프레젠테이션",
+    subtitleAccent: "템플릿",
     paragraph:
-      "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
+      "여기에 프레젠테이션을 소개하는 본문을 입력하세요. 핵심 메시지를 간결하고 명확하게 전달합니다.",
     website: "www.yourwebsite.com",
-    introCard: { enabled: true, name: "John Doe", date: "Jan 1, 2025" },
+    introCard: { enabled: true, name: "홍길동", date: "2025년 1월 1일" },
     media: { type: "image", image: ImageSchema.parse({}) },
   })
 

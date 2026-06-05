@@ -1,12 +1,12 @@
 import * as z from "zod";
 
 export const slideLayoutId = "full-width-statement";
-export const slideLayoutName = "Full-Width Statement";
+export const slideLayoutName = "전체 너비 문구";
 export const slideLayoutDescription =
-  "A minimalist emphasis layout with a compact label and a large full-width statement block.";
+  "간결한 라벨과 큰 전체 너비 문구 블록으로 구성된 미니멀한 강조 레이아웃입니다.";
 
 export const Schema = z.object({
-  label: z.string().max(12).default("Label").meta({
+  label: z.string().max(12).default("라벨").meta({
     description: "Small label above the statement.",
   }),
   statement: z
@@ -14,7 +14,7 @@ export const Schema = z.object({
 
     .max(90)
     .default(
-      "This is a sample statement used for placeholder content in presentations. This is a sample statement used for placeholder"
+      "이것은 프레젠테이션에서 자리표시자 내용으로 사용되는 예시 문구입니다. 실제 발표 내용으로 자유롭게 교체하세요."
     )
     .meta({
       description: "Main statement text, with max 90 characters.",

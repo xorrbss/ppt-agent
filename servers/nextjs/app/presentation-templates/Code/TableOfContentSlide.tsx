@@ -1,12 +1,12 @@
 import * as z from "zod";
 
 export const slideLayoutId = "table-of-content-slide";
-export const slideLayoutName = "Table Of Content Slide";
+export const slideLayoutName = "목차 슬라이드";
 export const slideLayoutDescription =
-  "A two-column table of contents with numbered entries, labels and description.";
+  "번호가 매겨진 항목, 라벨, 설명이 있는 2열 목차.";
 
 export const Schema = z.object({
-  title: z.string().min(8).max(24).default("Table of Content").meta({
+  title: z.string().min(8).max(24).default("목차").meta({
     description: "Slide heading shown above the index list.",
   }),
   items: z
@@ -18,18 +18,18 @@ export const Schema = z.object({
     .min(12)
     .max(12)
     .default([
-      { number: "01", label: "Content Section summary", description: "A quick brown fox jumps over a lazy dog." },
-      { number: "01", label: "Content Section summary", description: "A quick brown fox jumps over a lazy dog." },
-      { number: "01", label: "Content Section summary", description: "A quick brown fox jumps over a lazy dog." },
-      { number: "01", label: "Content Section summary", description: "A quick brown fox jumps over a lazy dog." },
-      { number: "01", label: "Content Section summary", description: "A quick brown fox jumps over a lazy dog." },
-      { number: "06", label: "Content 6", description: "Section summary" },
-      { number: "07", label: "Content 7", description: "Section summary" },
-      { number: "08", label: "Content 8", description: "Section summary" },
-      { number: "09", label: "Content 9", description: "Section summary" },
-      { number: "10", label: "Content 10", description: "Section summary" },
-      { number: "11", label: "Content 11", description: "Section summary" },
-      { number: "12", label: "Content 12", description: "Section summary" },
+      { number: "01", label: "내용 섹션 요약", description: "여기에 짧은 설명을 입력하세요." },
+      { number: "01", label: "내용 섹션 요약", description: "여기에 짧은 설명을 입력하세요." },
+      { number: "01", label: "내용 섹션 요약", description: "여기에 짧은 설명을 입력하세요." },
+      { number: "01", label: "내용 섹션 요약", description: "여기에 짧은 설명을 입력하세요." },
+      { number: "01", label: "내용 섹션 요약", description: "여기에 짧은 설명을 입력하세요." },
+      { number: "06", label: "내용 6", description: "섹션 요약" },
+      { number: "07", label: "내용 7", description: "섹션 요약" },
+      { number: "08", label: "내용 8", description: "섹션 요약" },
+      { number: "09", label: "내용 9", description: "섹션 요약" },
+      { number: "10", label: "내용 10", description: "섹션 요약" },
+      { number: "11", label: "내용 11", description: "섹션 요약" },
+      { number: "12", label: "내용 12", description: "섹션 요약" },
     ])
     .meta({
       description: "Table of contents entries.",

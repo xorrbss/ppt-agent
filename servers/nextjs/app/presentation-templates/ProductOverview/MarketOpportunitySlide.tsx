@@ -1,9 +1,9 @@
 import * as z from "zod";
 
 export const slideLayoutId = "title-description-with-lines-and-circles-slide";
-export const slideLayoutName = "Title Description with Lines and Circles";
+export const slideLayoutName = "제목·설명과 선·원형 슬라이드";
 export const slideLayoutDescription =
-  "A text slide with a title on top and a description below, and a content section containing a list of bullet points and a grid of circles.";
+  "상단에 제목과 그 아래 설명이 있고, 글머리 목록과 원형 그리드가 담긴 콘텐츠 섹션이 있는 텍스트 슬라이드.";
 
 const BulletSchema = z.object({
   text: z.string().min(12).max(46).meta({
@@ -12,11 +12,11 @@ const BulletSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().max(18).default("Market Opportunity").meta({
+  title: z.string().max(18).default("시장 기회").meta({
     description: "Main heading shown at the top-left.",
   }),
   subtitle: z.string().min(40).max(110).default(
-    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt."
+    "예시 설명 문구입니다. 시장 기회의 핵심을 간결하게 전달하기 위한 자리 표시 텍스트로, 실제 내용으로 자유롭게 교체해 사용하실 수 있습니다."
   ).meta({
     description: "Supporting text under the main heading.",
   }),
@@ -25,10 +25,10 @@ export const Schema = z.object({
     .min(4)
     .max(4)
     .default([
-      { text: "Ut enim ad minim veniam, quis" },
-      { text: "Ut enim ad minim veniam, quis" },
-      { text: "Ut enim ad minim veniam, quis" },
-      { text: "Ut enim ad minim veniam, quis" },
+      { text: "예시 글머리 항목 내용입니다." },
+      { text: "예시 글머리 항목 내용입니다." },
+      { text: "예시 글머리 항목 내용입니다." },
+      { text: "예시 글머리 항목 내용입니다." },
     ])
     .meta({
       description: "Four bullet-line entries shown on the left.",

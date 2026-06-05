@@ -1,15 +1,15 @@
 import * as z from "zod";
 
 export const slideLayoutId = "description-text-slide";
-export const slideLayoutName = "Description Text Slide";
+export const slideLayoutName = "설명 텍스트 슬라이드";
 export const slideLayoutDescription =
-  "A text-only description slide tihe title/heading.";
+  "제목/헤딩이 있는 텍스트 전용 설명 슬라이드.";
 
 export const Schema = z.object({
-  title: z.string().min(8).max(30).default("Code + Explanation").meta({
+  title: z.string().min(8).max(30).default("코드 + 설명").meta({
     description: "Main slide title shown at the top-left.",
   }),
-  descriptionTitle: z.string().min(4).max(20).default("Explanation").meta({
+  descriptionTitle: z.string().min(4).max(20).default("설명").meta({
     description: "Subheading above the paragraph body.",
   }),
   description: z
@@ -17,7 +17,7 @@ export const Schema = z.object({
 
     .max(360)
     .default(
-      "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."
+      "문장은 짧고 명확하게 작성하세요. 핵심 메시지를 먼저 제시하고 이를 뒷받침하는 근거와 예시를 덧붙이면 내용이 한층 설득력 있게 전달됩니다. 불필요한 수식어는 줄이고 핵심에 집중하세요."
     )
     .meta({
       description: "Long-form explanation body.",

@@ -2,12 +2,12 @@ import * as z from "zod";
 import { fitCodeBlock, PRISM_CODE_BLOCK_STYLES } from "./codeBlockFitting";
 
 export const slideLayoutId = "code-explanation-split-slide";
-export const slideLayoutName = "Code Explanation Split Slide";
+export const slideLayoutName = "코드 설명 분할 슬라이드";
 export const slideLayoutDescription =
-  "A two-column slide with a code panel on the left and description on the right.";
+  "왼쪽에 코드 패널, 오른쪽에 설명이 있는 2열 슬라이드.";
 
 export const Schema = z.object({
-  title: z.string().min(8).max(24).default("Code + Explanation").meta({
+  title: z.string().min(8).max(24).default("코드 + 설명").meta({
     description: "Slide heading shown at the top-left.",
   }),
   codeSnippet: z.object({
@@ -43,7 +43,7 @@ export function UserAuth() {
   }).meta({
     description: "Code sample shown in the left panel.",
   }),
-  descriptionTitle: z.string().min(4).max(20).default("Description").meta({
+  descriptionTitle: z.string().min(4).max(20).default("설명").meta({
     description: "Heading shown above the paragraph.",
   }),
   description: z
@@ -51,7 +51,7 @@ export function UserAuth() {
     .min(40)
     .max(360)
     .default(
-      "This component manages credentials as local state and submits them through an async handler. The login utility abstracts network details while the handler keeps the UI flow predictable. Keep validation and side effects isolated so changes remain safe when authentication requirements evolve. "
+      "이 컴포넌트는 자격 증명을 로컬 상태로 관리하고 비동기 핸들러를 통해 전송합니다. login 유틸리티는 네트워크 세부 사항을 추상화하고, 핸들러는 UI 흐름을 예측 가능하게 유지합니다. 인증 요구 사항이 변하더라도 변경이 안전하도록 검증과 부수 효과를 분리하세요. "
     )
     .meta({
       description: "Description paragraph shown in the right column.",

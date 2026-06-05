@@ -3,12 +3,12 @@ import * as z from "zod";
 import { ImageSchema } from "../defaultSchemes";
 
 export const layoutId = "metrics-with-description-image";
-export const layoutName = "Metrics With Description and Image Slide Layout";
+export const layoutName = "설명과 이미지가 있는 지표 슬라이드 레이아웃";
 export const layoutDescription =
-  "Metrics with description slide layout with an image as whole for the slide";
+  "슬라이드 전체에 이미지를 사용하는, 설명이 있는 지표 슬라이드 레이아웃";
 
 const marketSizeSlideSchema = z.object({
-  title: z.string().min(3).max(15).default("Market Size").meta({
+  title: z.string().min(3).max(15).default("시장 규모").meta({
     description: "Main slide title",
   }),
 
@@ -30,28 +30,28 @@ const marketSizeSlideSchema = z.object({
     .max(4)
     .default([
       {
-        label: "Total Available Market (TAM)",
-        value: "1.4 Billion",
+        label: "전체 시장 규모(TAM)",
+        value: "14억",
         description:
-          "In the TAM Section, we can fill in the potential of any person who can buy an offer or the maximum amount of revenue a business can earn by selling their offer.",
+          "TAM 섹션에서는 제품을 구매할 수 있는 모든 사람의 잠재력 또는 기업이 제품 판매로 얻을 수 있는 최대 매출을 기재할 수 있습니다.",
       },
       {
-        label: "Serviceable Available Market (SAM)",
-        value: "194 Million",
+        label: "유효 시장 규모(SAM)",
+        value: "1억 9,400만",
         description:
-          "It is a part of TAM that has the potential to become a target market for the company by considering the type of product, technology available and geographical conditions.",
+          "제품 유형, 보유 기술, 지리적 조건을 고려할 때 기업의 목표 시장이 될 잠재력을 가진 TAM의 일부입니다.",
       },
       {
-        label: "Total Available Market (TAM)",
-        value: "1.4 Billion",
+        label: "전체 시장 규모(TAM)",
+        value: "14억",
         description:
-          "In the TAM Section, we can fill in the potential of any person who can buy an offer or the maximum amount of revenue a business can earn by selling their offer.",
+          "TAM 섹션에서는 제품을 구매할 수 있는 모든 사람의 잠재력 또는 기업이 제품 판매로 얻을 수 있는 최대 매출을 기재할 수 있습니다.",
       },
       {
-        label: "Serviceable Available Market (SAM)",
-        value: "194 Million",
+        label: "유효 시장 규모(SAM)",
+        value: "1억 9,400만",
         description:
-          "It is a part of TAM that has the potential to become a target market for the company by considering the type of product, technology available and geographical conditions.",
+          "제품 유형, 보유 기술, 지리적 조건을 고려할 때 기업의 목표 시장이 될 잠재력을 가진 TAM의 일부입니다.",
       }
     ])
     .meta({
@@ -61,7 +61,7 @@ const marketSizeSlideSchema = z.object({
   description: z
     .string()
     .default(
-      "Market size is the total amount of all sales and customers that can be seen directly by stakeholders. This technique is usually calculated at the end of the year, the market size can be used by companies to determine the potential of their market and business in the future. This is very useful, especially for new companies that will offer services to those who are interested in our services.",
+      "시장 규모는 이해관계자가 직접 확인할 수 있는 모든 매출과 고객의 총량입니다. 이 기법은 보통 연말에 산출되며, 기업은 시장 규모를 활용해 향후 자사의 시장과 사업의 잠재력을 가늠할 수 있습니다. 이는 특히 우리 서비스에 관심 있는 이들에게 서비스를 제공하려는 신생 기업에 매우 유용합니다.",
     )
     .meta({
       description: "Main description text for the slide",
@@ -103,7 +103,7 @@ const MarketSizeSlideLayout: React.FC<MarketSizeSlideProps> = ({
 
                 {(slideData as any)?._logo_url__ && <img src={(slideData as any)?._logo_url__} alt="logo" className="w-6 h-6" />}
                 {(slideData as any)?.__companyName__ && <span className="text-sm sm:text-base font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                  {(slideData as any)?.__companyName__ || 'Company Name'}
+                  {(slideData as any)?.__companyName__ || '회사명'}
                 </span>}
               </div>
             </div>
@@ -119,13 +119,13 @@ const MarketSizeSlideLayout: React.FC<MarketSizeSlideProps> = ({
               <h1
                 className="text-5xl font-bold mb-8 leading-tight text-left"
                 style={{ color: 'var(--background-text, #1E4CD9)' }}>
-                {slideData?.title || "Market Size"}
+                {slideData?.title || "시장 규모"}
               </h1>
               <div className="w-full bg-[#CBE3CC] rounded-md mb-8 flex items-center justify-center">
                 {slideData?.mapImage?.__image_url__ && (
                   <img
                     src={slideData?.mapImage?.__image_url__}
-                    alt="Market World Map with Points"
+                    alt="지점이 표시된 세계 시장 지도"
                     className="w-full object-contain rounded-md"
                     style={{ maxHeight: 220 }}
                   />

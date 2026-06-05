@@ -24,12 +24,12 @@ const FeatureCardSchema = z.object({
 });
 
 export const slideLayoutId = "cards-grid-slide";
-export const slideLayoutName = "Cards Grid Slide";
+export const slideLayoutName = "카드 그리드 슬라이드";
 export const slideLayoutDescription =
-  "A list of cards in grid with title, icon and compact description in each.";
+  "각 카드에 제목, 아이콘, 간단한 설명이 담긴 카드 그리드 목록.";
 
 export const Schema = z.object({
-  title: z.string().min(6).max(20).default("Feature Grid").meta({
+  title: z.string().min(6).max(20).default("기능 그리드").meta({
     description: "Slide title shown above the grid.",
   }),
   features: z
@@ -38,48 +38,48 @@ export const Schema = z.object({
     .max(6)
     .default([
       {
-        title: "Modern Stack",
-        description: "Built with React, TypeScript, and Tailwind CSS for maximum developer experience.",
+        title: "최신 스택",
+        description: "최고의 개발자 경험을 위해 React, TypeScript, Tailwind CSS로 구축했습니다.",
         icon: {
           __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
           __icon_query__: "check icon",
         },
       },
       {
-        title: "Component Library ",
-        description: "Reusable UI components with consistent design patterns.",
+        title: "컴포넌트 라이브러리 ",
+        description: "일관된 디자인 패턴을 갖춘 재사용 가능한 UI 컴포넌트.",
         icon: {
           __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
           __icon_query__: "check icon",
         },
       },
       {
-        title: "CLI Tools",
-        description: "Command-line utilities for scaffolding and automation.",
+        title: "CLI 도구",
+        description: "스캐폴딩과 자동화를 위한 커맨드라인 유틸리티.",
         icon: {
           __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
           __icon_query__: "check icon",
         },
       },
       {
-        title: "Analytics",
-        description: "Built-in tracking and performance monitoring.",
+        title: "분석",
+        description: "내장된 추적 및 성능 모니터링.",
         icon: {
           __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
           __icon_query__: "check icon",
         },
       },
       {
-        title: "Version Control",
-        description: "Git-based workflow with automated deployments.",
+        title: "버전 관리",
+        description: "자동 배포를 갖춘 Git 기반 워크플로.",
         icon: {
           __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
           __icon_query__: "check icon",
         },
       },
       {
-        title: "Best Practices",
-        description: "Following industry standards and modern development patterns.",
+        title: "모범 사례",
+        description: "업계 표준과 최신 개발 패턴을 따릅니다.",
         icon: {
           __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
           __icon_query__: "check icon",

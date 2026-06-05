@@ -23,8 +23,8 @@ const IconSchema = z.object({
 })
 
 const layoutId = "header-bullets-title-description-image-slide"
-const layoutName = "Icon Bullet Description"
-const layoutDescription = "A slide with a small header label and number, a left card of ...cards with round symbols and titles with descriptions, a large heading with supporting text, and a decorative image on a mid-page band"
+const layoutName = "아이콘 글머리 설명"
+const layoutDescription = "작은 헤더 라벨과 번호, 둥근 기호와 제목 및 설명이 있는 카드들이 담긴 왼쪽 카드, 보조 텍스트가 있는 큰 제목, 그리고 페이지 중앙 띠에 놓인 장식용 이미지로 구성된 슬라이드"
 
 const Schema = z.object({
   metaMaxWords: z.number().default(240).meta({
@@ -35,10 +35,10 @@ const Schema = z.object({
   headerNumber: z.string().min(1).max(3).default("6").meta({
     description: "Small header number text. Max 3 characters",
   }),
-  rightTitle: z.string().min(24).max(72).default("Disrupting the\nIndustry").meta({
+  rightTitle: z.string().min(24).max(72).default("산업의 판도를\n바꾸다").meta({
     description: "Large heading on the right. Max 8 words",
   }),
-  rightDescription: z.string().min(120).max(240).default("Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna").meta({
+  rightDescription: z.string().min(120).max(240).default("여기에 큰 제목을 뒷받침하는 보조 설명을 입력하는 예시 문구입니다. 핵심 메시지를 명확하게 전달할 수 있도록 간결하고 구체적인 문장으로 작성하세요.").meta({
     description: "Supporting paragraph under the large heading. Max 40 words",
   }),
   // decorative image removed
@@ -52,36 +52,36 @@ const Schema = z.object({
     }).meta({
       description: "Optional icon representation for the round symbol",
     }),
-    title: z.string().min(16).max(38).default("Visionary Leadership").meta({
+    title: z.string().min(16).max(38).default("비전 있는 리더십").meta({
       description: "Title for the card item. Max 4 words",
     }),
-    description: z.string().min(50).max(100).default("Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor").meta({
+    description: z.string().min(50).max(100).default("여기에 항목 내용을 설명하는 예시 문구를 입력하세요.").meta({
       description: "Description for the card item. Max 15 words.",
     }),
   })).min(1).max(4).default([
     {
       symbolText: "i",
       symbolIcon: { __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/fediverse-logo-bold.svg", __icon_query__: "info icon" },
-      title: "Visionary Leadership",
-      description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor",
+      title: "비전 있는 리더십",
+      description: "여기에 항목 내용을 설명하는 예시 문구를 입력하세요.",
     },
     {
       symbolText: "i",
       symbolIcon: { __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/video-bold.png", __icon_query__: "info icon" },
-      title: "Innovation at the Core",
-      description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor",
+      title: "혁신을 핵심 가치로",
+      description: "여기에 항목 내용을 설명하는 예시 문구를 입력하세요.",
     },
     {
       symbolText: "i",
       symbolIcon: { __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/receipt-x-bold.png", __icon_query__: "info icon" },
-      title: "Customer-Centric Disruption",
-      description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor",
+      title: "고객 중심의 혁신",
+      description: "여기에 항목 내용을 설명하는 예시 문구를 입력하세요.",
     },
     {
       symbolText: "i",
       symbolIcon: { __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/users-four-bold.png", __icon_query__: "info icon" },
-      title: "Customer-Centric Disruption",
-      description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor",
+      title: "고객 중심의 혁신",
+      description: "여기에 항목 내용을 설명하는 예시 문구를 입력하세요.",
     }
   ]).meta({
     description: "Array of ...cards with a round symbol, title and description. Max 6 items",
@@ -151,10 +151,10 @@ const dynamicSlideLayout: React.FC<SlideLayoutProps> = ({ data: slideData }) => 
           </div>
 
           <div className="pt-[28px]">
-            <h1 className="font-['Playfair Display'] text-[64px] leading-[1.05] tracking-[-0.01em] max-w-[600px] font-semibold" style={{ color: 'var(--background-text, #111827)' }} dangerouslySetInnerHTML={{ __html: (slideData?.rightTitle || "Disrupting the\nIndustry").replace(/\n/g, "<br/>") }}></h1>
+            <h1 className="font-['Playfair Display'] text-[64px] leading-[1.05] tracking-[-0.01em] max-w-[600px] font-semibold" style={{ color: 'var(--background-text, #111827)' }} dangerouslySetInnerHTML={{ __html: (slideData?.rightTitle || "산업의 판도를\n바꾸다").replace(/\n/g, "<br/>") }}></h1>
             <div className="mt-[24px] inline-block rounded-md px-6 py-4" style={{ backgroundColor: 'var(--card-color, #F3F4F6)' }}>
               <p className="font-['Playfair Display'] text-[16px] leading-[1.6] max-w-[620px]" style={{ color: 'var(--background-text, #6B7280)' }}>
-                {slideData?.rightDescription || "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna"}
+                {slideData?.rightDescription || "여기에 큰 제목을 뒷받침하는 보조 설명을 입력하는 예시 문구입니다. 핵심 메시지를 명확하게 전달할 수 있도록 간결하고 구체적인 문장으로 작성하세요."}
               </p>
             </div>
 

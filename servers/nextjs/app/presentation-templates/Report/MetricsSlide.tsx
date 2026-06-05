@@ -20,16 +20,16 @@ const StatColumnSchema = z.object({
 });
 
 export const slideLayoutId = "metrics-slide";
-export const slideLayoutName = "Metrics Slide";
+export const slideLayoutName = "지표 슬라이드";
 export const slideLayoutDescription =
-  "A slide with a title and explanatory text on the left, an optional bulleted list underneath the text, and metric cards on the right. Each metric card contains two stacked metric blocks.";
+  "왼쪽에 제목과 설명 텍스트, 그 아래에 선택적 글머리 목록이 있고, 오른쪽에 지표 카드가 배치된 슬라이드. 각 지표 카드에는 두 개의 지표 블록이 위아래로 쌓여 있습니다.";
 
 export const Schema = z.object({
-  title: z.string().min(3).max(12).default("Introduction").meta({
+  title: z.string().min(3).max(12).default("소개").meta({
     description: "Slide title shown at the top-left.",
   }),
   body: z.string().max(250).default(
-    "Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut alut enim ad minima veniam, quis. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut alut enim ad minima veniam, quis"
+    "여기에 본문 내용을 입력하세요. 슬라이드의 핵심 메시지를 설명하는 문단으로, 데이터의 의미와 시사점을 간결하게 정리하여 청중이 한눈에 이해할 수 있도록 작성합니다. 발표 주제에 맞게 자유롭게 수정할 수 있습니다."
   ).meta({
     description: "Primary paragraph shown below the title.",
   }),
@@ -38,10 +38,10 @@ export const Schema = z.object({
     .max(4)
     .optional()
     .default([
-      "Ut enim ad minima veniam, quis nostrum",
-      "Exercitationem ullam corporis suscipit",
-      "Ut enim ad minima veniam, quis nostrum",
-      "exercitationem ullam corporis suscipit",
+      "여기에 핵심 항목을 입력하세요",
+      "주요 내용을 간결하게 작성하세요",
+      "데이터의 의미를 한 줄로 정리하세요",
+      "발표 주제에 맞게 자유롭게 수정하세요",
     ])
     .meta({
       description: "Optional bullet list shown after the description if required.",
@@ -53,14 +53,14 @@ export const Schema = z.object({
     .default([
       {
         metrics: [
-          { value: "25K", label: "Students", description: "Ut enim ad minima" },
-          { value: "25K", label: "Students", description: "Ut enim ad minima" },
+          { value: "25K", label: "학생", description: "여기에 설명 입력" },
+          { value: "25K", label: "학생", description: "여기에 설명 입력" },
         ],
       },
       {
         metrics: [
-          { value: "25K", label: "Students", description: "Ut enim ad minima" },
-          { value: "25K", label: "Students", description: "Ut enim ad minima" },
+          { value: "25K", label: "학생", description: "여기에 설명 입력" },
+          { value: "25K", label: "학생", description: "여기에 설명 입력" },
         ],
       },
     ])

@@ -5,13 +5,13 @@ export const Schema = z.object({
         .string()
         .max(17)
         .describe("The heading of the slide")
-        .default("Executive Summary"),
+        .default("핵심 요약"),
     description: z
         .string()
         .max(226)
         .describe("The main textual content of the slide")
         .default(
-            "Focus on companies with 500+ employees in Financial Services, Healthcare, and Technology sectors. Target $3.5M in new pipeline with sub-$150 CAC through account-based marketing and content-led strategies."
+            "금융 서비스, 헬스케어, 기술 분야의 직원 500명 이상 기업에 집중합니다. 어카운트 기반 마케팅과 콘텐츠 중심 전략으로 CAC 150달러 미만, 신규 파이프라인 350만 달러를 목표로 합니다."
         ),
     image: z
         .object({
@@ -28,8 +28,8 @@ export const Schema = z.object({
 });
 
 export const layoutId = "title-description-image-right";
-export const layoutName = "Title Description Image Right";
-export const layoutDescription = "A two-column slide with a title and description paragraph on the left, and a large featured image on the right.";
+export const layoutName = "제목 설명 우측 이미지";
+export const layoutDescription = "왼쪽에 제목과 설명 단락, 오른쪽에 큰 대표 이미지를 배치한 2열 슬라이드입니다.";
 
 const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = ({
     data,
@@ -100,7 +100,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                         style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                         className=' w-[2px] h-4'></span>
                     {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                        {(data as any)?.__companyName__ || 'Company Name'}
+                        {(data as any)?.__companyName__ || '회사명'}
                     </span>}
                 </div>}
             </div>

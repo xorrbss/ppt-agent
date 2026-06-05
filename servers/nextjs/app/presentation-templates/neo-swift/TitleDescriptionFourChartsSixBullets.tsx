@@ -21,10 +21,10 @@ import {
     ReferenceLine,
 } from './NeoChartPrimitives';
 const defaultCharts = [
-    { title: 'Revenue by Quarter', type: 'bar-vertical' as const, data: [{ name: 'Q1', value: 125000 }, { name: 'Q2', value: 158000 }, { name: 'Q3', value: 142000 }, { name: 'Q4', value: 189000 }], colorPalette: 'vibrant' as const },
-    { title: 'Market Distribution', type: 'donut' as const, data: [{ name: 'North America', value: 35 }, { name: 'Europe', value: 28 }, { name: 'Asia Pacific', value: 25 }, { name: 'Others', value: 12 }], colorPalette: 'ocean' as const },
-    { title: 'Growth Trend', type: 'line' as const, data: [{ name: 'Jan', value: 30 }, { name: 'Feb', value: 45 }, { name: 'Mar', value: 52 }, { name: 'Apr', value: 48 }, { name: 'May', value: 67 }, { name: 'Jun', value: 82 }], colorPalette: 'professional' as const },
-    { title: 'Department Performance', type: 'bar-horizontal' as const, data: [{ name: 'Sales', value: 87 }, { name: 'Marketing', value: 72 }, { name: 'Engineering', value: 95 }, { name: 'Support', value: 68 }], colorPalette: 'sunset' as const },
+    { title: '분기별 매출', type: 'bar-vertical' as const, data: [{ name: '1분기', value: 125000 }, { name: '2분기', value: 158000 }, { name: '3분기', value: 142000 }, { name: '4분기', value: 189000 }], colorPalette: 'vibrant' as const },
+    { title: '시장 분포', type: 'donut' as const, data: [{ name: '북미', value: 35 }, { name: '유럽', value: 28 }, { name: '아시아 태평양', value: 25 }, { name: '기타', value: 12 }], colorPalette: 'ocean' as const },
+    { title: '성장 추세', type: 'line' as const, data: [{ name: '1월', value: 30 }, { name: '2월', value: 45 }, { name: '3월', value: 52 }, { name: '4월', value: 48 }, { name: '5월', value: 67 }, { name: '6월', value: 82 }], colorPalette: 'professional' as const },
+    { title: '부서별 성과', type: 'bar-horizontal' as const, data: [{ name: '영업', value: 87 }, { name: '마케팅', value: 72 }, { name: '엔지니어링', value: 95 }, { name: '지원', value: 68 }], colorPalette: 'sunset' as const },
 ];
 
 const getGridLayout = (count: number): { cols: number; rows: number; className: string } => {
@@ -60,7 +60,7 @@ const ChartTypeEnum = z.enum([
 
 
 const ChartItemSchema = z.object({
-    title: z.string().max(40).describe("Chart title").default("Chart Title"),
+    title: z.string().max(40).describe("Chart title").default("차트 제목"),
     type: ChartTypeEnum.default('bar-vertical'),
     data: z.union([
         z.array(z.object({ name: z.string(), value: z.number() })),
@@ -79,24 +79,24 @@ const ChartItemSchema = z.object({
             name: z.string().optional(),
         })),
     ]).default([
-        { name: 'Q1', value: 45 },
-        { name: 'Q2', value: 72 },
-        { name: 'Q3', value: 58 },
-        { name: 'Q4', value: 89 },
+        { name: '1분기', value: 45 },
+        { name: '2분기', value: 72 },
+        { name: '3분기', value: 58 },
+        { name: '4분기', value: 89 },
     ]),
     series: z.array(z.string()).optional().describe("Series names for grouped/stacked charts"),
     colorPalette: z.enum(['vibrant', 'ocean', 'forest', 'sunset', 'professional']).default('vibrant'),
 });
 export const Schema = z.object({
-    title: z.string().min(3).max(50).default('Data Analytics Dashboard').describe('Main title of the slide'),
-    description: z.string().min(10).max(200).default('Comprehensive overview of key metrics and performance indicators across multiple data dimensions.').describe('Description text below the title'),
+    title: z.string().min(3).max(50).default('데이터 분석 대시보드').describe('Main title of the slide'),
+    description: z.string().min(10).max(200).default('여러 데이터 차원에 걸친 핵심 지표와 성과 지표에 대한 종합 개요.').describe('Description text below the title'),
     bullets: z.array(z.string().max(80)).max(6).default([
-        'Pipeline coverage above 3x target with strong enterprise adoption.',
-        'CAC payback under 6 months across segments.',
-        'Enterprise conversion improved quarter over quarter.',
-        'Expansion revenue driving overall growth.',
-        'Retention above 95% across key cohorts.',
-        'Forecast accuracy improved this quarter.',
+        '강력한 엔터프라이즈 도입과 함께 파이프라인 커버리지가 목표의 3배를 상회합니다.',
+        '모든 세그먼트에서 CAC 회수 기간이 6개월 미만입니다.',
+        '엔터프라이즈 전환율이 분기마다 개선되었습니다.',
+        '확장 매출이 전체 성장을 견인합니다.',
+        '핵심 코호트 전반에서 유지율이 95%를 상회합니다.',
+        '이번 분기에 예측 정확도가 개선되었습니다.',
     ]).describe('Up to 6 bullet points'),
     charts: z.array(ChartItemSchema).min(1).max(4).default(defaultCharts).describe('Array of 1–4 charts'),
     showLegend: z.boolean().default(true).describe('Whether to show chart legends'),
@@ -335,7 +335,7 @@ const MiniChartRenderer: React.FC<{
                     positive: idx % 2 === 0 ? Math.abs(item.value) : 0,
                     negative: idx % 2 === 1 ? -Math.abs(item.value) : 0,
                 }));
-            const seriesLabels = chart.series || ['Positive', 'Negative'];
+            const seriesLabels = chart.series || ['긍정', '부정'];
             return (
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={transformedData} layout="vertical" stackOffset="sign" margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
@@ -446,17 +446,17 @@ const MiniChartRenderer: React.FC<{
             );
 
         default:
-            return <div className="flex items-center justify-center h-full text-sm" style={{ color: 'var(--background-text, #9CA3AF)' }}>Unsupported chart type</div>;
+            return <div className="flex items-center justify-center h-full text-sm" style={{ color: 'var(--background-text, #9CA3AF)' }}>지원하지 않는 차트 유형</div>;
     }
 };
 
 export const layoutId = 'title-description-four-charts-six-bullets';
-export const layoutName = 'Title Description Four Charts Six Bullets';
-export const layoutDescription = 'Neo Swift layout with title, description, a grid of up to 4 charts, and up to 6 bullet points in a sidebar. Ideal for data plus key takeaways, like neo-general Chart Grid + Bullets.';
+export const layoutName = '제목 설명 4개 차트 6개 글머리';
+export const layoutDescription = 'Neo Swift 레이아웃으로 제목, 설명, 최대 4개 차트 그리드, 사이드바의 최대 6개 글머리로 구성됩니다. neo-general의 Chart Grid + Bullets처럼 데이터와 핵심 요점을 함께 보여주는 데 적합합니다.';
 
 const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = ({ data }) => {
-    const title = data?.title || 'Data Analytics Dashboard';
-    const description = data?.description || 'Comprehensive overview of key metrics and performance indicators.';
+    const title = data?.title || '데이터 분석 대시보드';
+    const description = data?.description || '핵심 지표와 성과 지표에 대한 종합 개요.';
     const bullets = (data?.bullets ?? []).slice(0, 6);
     const charts = data?.charts ?? defaultCharts;
     const showLegend = data?.showLegend ?? true;

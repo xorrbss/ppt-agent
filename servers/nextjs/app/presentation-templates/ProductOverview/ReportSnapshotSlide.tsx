@@ -7,9 +7,9 @@ import * as z from "zod";
 import { RemoteSvgIcon } from "@/app/hooks/useRemoteSvgIcon";
 
 export const slideLayoutId = "title-description-with-chart-and-kpi-cards-slide";
-export const slideLayoutName = "Title Description with Chart and KPI Cards Slide";
+export const slideLayoutName = "제목·설명과 차트·KPI 카드 슬라이드";
 export const slideLayoutDescription =
-  "A text slide with a title on top and a description below, and a content section containing a chart and a grid of KPI cards.";
+  "상단에 제목과 그 아래 설명이 있고, 차트와 KPI 카드 그리드가 담긴 콘텐츠 섹션이 있는 텍스트 슬라이드.";
 
 const LegacyBarSchema = z.object({
   value: z.number().min(10).max(100).meta({
@@ -72,14 +72,14 @@ const MetricCardSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().max(24).default("Report Report Report Report").meta({
+  title: z.string().max(24).default("리포트").meta({
     description: "Slide heading text.",
   }),
-  taglineLabel: z.string().max(24).default("TAGLINE").meta({
+  taglineLabel: z.string().max(24).default("태그라인").meta({
     description: "Small label above intro paragraph.",
   }),
   taglineBody: z.string().max(120).default(
-    "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."
+    "예시 본문 내용입니다. 리포트의 핵심 내용을 간결하게 요약해 전달하기 위한 자리 표시 문구이며, 실제 데이터로 자유롭게 교체해 사용하실 수 있습니다."
   ).meta({
     description: "Intro paragraph shown beneath the heading.",
   }),
@@ -96,7 +96,7 @@ export const Schema = z.object({
   chartStyle: z.enum(["mini-bars", "donut", "grouped-bars", "dual-line"]).default("donut").meta({
     description: "Chart style variant matching Image #1 to Image #4.",
   }),
-  chartTitle: z.string().min(3).max(20).default("Sandro Tavares").meta({
+  chartTitle: z.string().min(3).max(20).default("김서연").meta({
     description: "Name displayed in the chart card.",
   }),
   miniBars: z
@@ -122,9 +122,9 @@ export const Schema = z.object({
     .min(3)
     .max(3)
     .default([
-      { name: "Option A", value: 60 },
-      { name: "Option B", value: 20 },
-      { name: "Option C", value: 20 },
+      { name: "옵션 A", value: 60 },
+      { name: "옵션 B", value: 20 },
+      { name: "옵션 C", value: 20 },
     ])
     .meta({
       description: "Data for Image #2 donut chart.",
@@ -134,10 +134,10 @@ export const Schema = z.object({
     .min(4)
     .max(4)
     .default([
-      { label: "label", optionA: 120, optionB: 200 },
-      { label: "label", optionA: 150, optionB: 80 },
-      { label: "label", optionA: 70, optionB: 110 },
-      { label: "label", optionA: 130, optionB: 130 },
+      { label: "라벨", optionA: 120, optionB: 200 },
+      { label: "라벨", optionA: 150, optionB: 80 },
+      { label: "라벨", optionA: 70, optionB: 110 },
+      { label: "라벨", optionA: 130, optionB: 130 },
     ])
     .meta({
       description: "Data for Image #3 grouped bar chart.",
@@ -147,27 +147,27 @@ export const Schema = z.object({
     .min(6)
     .max(7)
     .default([
-      { label: "label", optionA: 8, optionB: 2 },
-      { label: "label", optionA: 45, optionB: 65 },
-      { label: "label", optionA: 35, optionB: 40 },
-      { label: "label", optionA: 95, optionB: 100 },
-      { label: "label", optionA: 50, optionB: 35 },
-      { label: "label", optionA: 5, optionB: 75 },
-      { label: "label", optionA: 55, optionB: 50 },
+      { label: "라벨", optionA: 8, optionB: 2 },
+      { label: "라벨", optionA: 45, optionB: 65 },
+      { label: "라벨", optionA: 35, optionB: 40 },
+      { label: "라벨", optionA: 95, optionB: 100 },
+      { label: "라벨", optionA: 50, optionB: 35 },
+      { label: "라벨", optionA: 5, optionB: 75 },
+      { label: "라벨", optionA: 55, optionB: 50 },
     ])
     .meta({
       description: "Data for Image #4 dual-line chart.",
     }),
-  legendLabels: z.array(z.string().min(1).max(18)).min(2).max(3).default(["Option A", "Option B", "Option C"]).meta({
+  legendLabels: z.array(z.string().min(1).max(18)).min(2).max(3).default(["옵션 A", "옵션 B", "옵션 C"]).meta({
     description: "Legend labels used by donut/grouped/line variants.",
   }),
-  xAxisName: z.string().min(3).max(16).default("X axis name").meta({
+  xAxisName: z.string().min(3).max(16).default("X축 이름").meta({
     description: "X axis title used in the dual-line variant.",
   }),
-  yAxisName: z.string().min(3).max(16).default("Y axis name").meta({
+  yAxisName: z.string().min(3).max(16).default("Y축 이름").meta({
     description: "Y axis title used in the dual-line variant.",
   }),
-  footerLabel: z.string().min(10).max(60).default("Current margin: April Spendings").meta({
+  footerLabel: z.string().min(10).max(60).default("현재 마진: 4월 지출").meta({
     description: "Footer label under mini bar chart.",
   }),
   footerValue: z.string().min(6).max(24).default("$350.00  /  $640.00").meta({
@@ -193,7 +193,7 @@ export const Schema = z.object({
   metricValue: z.string().min(1).max(8).default("X 5").meta({
     description: "Legacy single KPI value.",
   }),
-  metricBody: z.string().min(10).max(40).default("Lorem ipsum dolor sit.").meta({
+  metricBody: z.string().min(10).max(40).default("예시 지표 내용입니다.").meta({
     description: "Legacy single KPI body.",
   }),
   metricCards: z
@@ -201,8 +201,8 @@ export const Schema = z.object({
     .min(1)
     .max(2)
     .default([
-      { value: "X 5", body: "Lorem ipsum dolor sit." },
-      { value: "X 5", body: "Lorem ipsum dolor sit." },
+      { value: "X 5", body: "예시 지표 내용입니다." },
+      { value: "X 5", body: "예시 지표 내용입니다." },
     ])
     .meta({
       description: "One or two KPI cards shown on the right.",
@@ -763,7 +763,7 @@ const ReportSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
 
   const fallbackMetric = {
     value: metricValue ?? "X 5",
-    body: metricBody ?? "Lorem ipsum dolor sit.",
+    body: metricBody ?? "예시 지표 내용입니다.",
   };
 
   const resolvedMetricCards =
@@ -782,30 +782,30 @@ const ReportSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
     donutData && donutData.length > 0
       ? donutData
       : [
-        { name: "Option A", value: 60 },
-        { name: "Option B", value: 20 },
-        { name: "Option C", value: 20 },
+        { name: "옵션 A", value: 60 },
+        { name: "옵션 B", value: 20 },
+        { name: "옵션 C", value: 20 },
       ];
   const resolvedGroupedBars =
     groupedBars && groupedBars.length > 0
       ? groupedBars
       : [
-        { label: "label", optionA: 120, optionB: 200 },
-        { label: "label", optionA: 150, optionB: 80 },
-        { label: "label", optionA: 70, optionB: 110 },
-        { label: "label", optionA: 130, optionB: 130 },
+        { label: "라벨", optionA: 120, optionB: 200 },
+        { label: "라벨", optionA: 150, optionB: 80 },
+        { label: "라벨", optionA: 70, optionB: 110 },
+        { label: "라벨", optionA: 130, optionB: 130 },
       ];
   const resolvedTrendLines =
     trendLines && trendLines.length > 0
       ? trendLines
       : [
-        { label: "label", optionA: 8, optionB: 2 },
-        { label: "label", optionA: 45, optionB: 65 },
-        { label: "label", optionA: 35, optionB: 40 },
-        { label: "label", optionA: 95, optionB: 100 },
-        { label: "label", optionA: 50, optionB: 35 },
-        { label: "label", optionA: 5, optionB: 75 },
-        { label: "label", optionA: 55, optionB: 50 },
+        { label: "라벨", optionA: 8, optionB: 2 },
+        { label: "라벨", optionA: 45, optionB: 65 },
+        { label: "라벨", optionA: 35, optionB: 40 },
+        { label: "라벨", optionA: 95, optionB: 100 },
+        { label: "라벨", optionA: 50, optionB: 35 },
+        { label: "라벨", optionA: 5, optionB: 75 },
+        { label: "라벨", optionA: 55, optionB: 50 },
       ];
   const donutTotal = resolvedDonutData.reduce((sum, item) => sum + item.value, 0) || 1;
 
@@ -960,7 +960,7 @@ const ReportSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
                           className="text-[18px] font-medium leading-[1] text-[#6A6B6E]"
                           style={{ color: "var(--background-text,#6A6B6E)" }}
                         >
-                          {legendLabels?.[0] ?? "Option A"}
+                          {legendLabels?.[0] ?? "옵션 A"}
                         </p>
                       </div>
                       <div className="flex items-center gap-[10px]">
@@ -972,7 +972,7 @@ const ReportSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
                           className="text-[18px] font-medium leading-[1] text-[#6A6B6E]"
                           style={{ color: "var(--background-text,#6A6B6E)" }}
                         >
-                          {legendLabels?.[1] ?? "Option B"}
+                          {legendLabels?.[1] ?? "옵션 B"}
                         </p>
                       </div>
                     </div>
@@ -1003,7 +1003,7 @@ const ReportSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
                           className="text-[18px] font-medium leading-[1] text-[#6A6B6E]"
                           style={{ color: "var(--background-text,#6A6B6E)" }}
                         >
-                          {legendLabels?.[0] ?? "Option A"}
+                          {legendLabels?.[0] ?? "옵션 A"}
                         </p>
                       </div>
                       <div className="flex items-center gap-[10px]">
@@ -1015,7 +1015,7 @@ const ReportSnapshotSlide = ({ data }: { data: Partial<SchemaType> }) => {
                           className="text-[18px] font-medium leading-[1] text-[#6A6B6E]"
                           style={{ color: "var(--background-text,#6A6B6E)" }}
                         >
-                          {legendLabels?.[1] ?? "Option B"}
+                          {legendLabels?.[1] ?? "옵션 B"}
                         </p>
                       </div>
                     </div>

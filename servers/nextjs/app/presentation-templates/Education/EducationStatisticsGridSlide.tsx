@@ -1,9 +1,9 @@
 import * as z from "zod";
 
 export const slideLayoutId = "statistics-grid-slide";
-export const slideLayoutName = "Statistics Grid Slide";
+export const slideLayoutName = "통계 그리드 슬라이드";
 export const slideLayoutDescription =
-  "A left text column with a title, description and a right-side grid of statistics cards,value and label each in a card";
+  "제목과 설명이 담긴 왼쪽 텍스트 열과, 각 카드에 수치와 라벨이 들어간 오른쪽 통계 카드 그리드로 구성된 레이아웃.";
 
 const StatisticSchema = z.object({
   value: z.string().max(8).meta({
@@ -15,11 +15,11 @@ const StatisticSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().max(16).default("Statistics").meta({
+  title: z.string().max(16).default("통계").meta({
     description: "Main title shown in the left column.",
   }),
   description: z.string().max(160).default(
-    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+    "주요 통계 지표를 통해 저희 조직의 규모와 역량을 한눈에 확인하실 수 있습니다. 각 수치는 지속적인 성장과 끊임없는 노력의 결과를 보여 줍니다."
   ).meta({
     description: "Supporting line shown under the left title.",
   }),
@@ -28,14 +28,14 @@ export const Schema = z.object({
     .min(2)
     .max(8)
     .default([
-      { value: "120", label: "Sales Team Strength with a long label to test the layouts" },
-      { value: "15", label: "Senior Sales Officer with a long label to test the layout" },
-      { value: "1", label: "National Manager with a long label to test the layout" },
-      { value: "25", label: "Sales Officers with a long label to test the layout" },
-      { value: "2", label: "Regional Manager with a long label to test the layout" },
-      { value: "50", label: "Distributor Reps with a long label to test the layout" },
-      { value: "5", label: "Zonal Manager with a long label to test the layout" },
-      { value: "20", label: "Merchandising Team with a long label to the layout" },
+      { value: "120", label: "영업팀 규모, 레이아웃 테스트를 위한 긴 라벨" },
+      { value: "15", label: "선임 영업 담당자, 레이아웃 테스트용 긴 라벨" },
+      { value: "1", label: "전국 관리자, 레이아웃 테스트용 긴 라벨" },
+      { value: "25", label: "영업 담당자, 레이아웃 테스트용 긴 라벨" },
+      { value: "2", label: "지역 관리자, 레이아웃 테스트용 긴 라벨" },
+      { value: "50", label: "총판 담당자, 레이아웃 테스트용 긴 라벨" },
+      { value: "5", label: "권역 관리자, 레이아웃 테스트용 긴 라벨" },
+      { value: "20", label: "머천다이징팀, 레이아웃 테스트용 긴 라벨" },
     ])
     .meta({
       description: "statistic cards, with value and label each in a card",

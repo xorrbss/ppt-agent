@@ -4,7 +4,7 @@
 import * as z from 'zod'
 
 export const Schema = z.object({
-    mainTitle: z.string().max(30).describe("The main heading of the slide").default("Text Comparison"),
+    mainTitle: z.string().max(30).describe("The main heading of the slide").default("텍스트 비교"),
     comparisonSections: z.array(
         z.object({
             heading: z.string().max(20).describe("The title for the item"),
@@ -12,12 +12,12 @@ export const Schema = z.object({
         })
     ).max(2).describe("A list of up to 2 items").default([
         {
-            heading: "Problem",
-            description: "Presentation are communication tools that can be used as demontrations, lectures, reports, and more. it is mostly presented before an audience."
+            heading: "문제",
+            description: "프레젠테이션은 시연, 강의, 보고 등 다양한 용도로 사용할 수 있는 커뮤니케이션 도구입니다. 주로 청중 앞에서 발표됩니다."
         },
         {
-            heading: "Solution",
-            description: "Presentation are communication tools that can be used as demontrations, lectures, reports, and more. it is mostly presented before an audience."
+            heading: "해결책",
+            description: "프레젠테이션은 시연, 강의, 보고 등 다양한 용도로 사용할 수 있는 커뮤니케이션 도구입니다. 주로 청중 앞에서 발표됩니다."
         }
     ])
 });
@@ -25,8 +25,8 @@ export const Schema = z.object({
 type DataType = z.infer<typeof Schema>;
 
 export const layoutId = "title-dual-comparison-cards";
-export const layoutName = "Title Dual Comparison Cards";
-export const layoutDescription = "A comparison slide with a centered title and two equal-sized cards below. Each card contains a heading, decorative accent line, and detailed description. The symmetrical layout emphasizes balanced evaluation of two items.";
+export const layoutName = "제목 듀얼 비교 카드";
+export const layoutDescription = "가운데 정렬된 제목과 그 아래 동일한 크기의 카드 두 개로 구성된 비교 슬라이드입니다. 각 카드에는 제목, 장식 강조선, 상세 설명이 있습니다. 대칭 레이아웃이 두 항목의 균형 잡힌 평가를 강조합니다.";
 
 /**
  * Dynamic Slide Layout Component
@@ -98,7 +98,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<DataType> }> = ({ data }) => 
                         style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                         className=' w-[2px] h-4'></span>
                     {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                        {(data as any)?.__companyName__ || 'Company Name'}
+                        {(data as any)?.__companyName__ || '회사명'}
                     </span>}
                 </div>}
             </div>

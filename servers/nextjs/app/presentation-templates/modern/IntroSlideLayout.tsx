@@ -3,28 +3,28 @@ import * as z from "zod";
 import { ImageSchema } from "../defaultSchemes";
 
 export const layoutId = "intro-pitchdeck-slide";
-export const layoutName = "Intro Pitch Deck Slide";
+export const layoutName = "피치덱 소개 슬라이드";
 export const layoutDescription =
-  "A visually appealing introduction slide for a pitch deck, featuring a large title, company name, date, and contact information with a modern design. This Slide is always the first slide in a pitch deck, setting the tone for the presentation with a clean and professional look.";
+  "큰 제목, 회사명, 날짜, 연락처 정보를 모던한 디자인으로 담은, 시각적으로 매력적인 피치덱 소개 슬라이드입니다. 이 슬라이드는 항상 피치덱의 첫 번째 슬라이드로, 깔끔하고 전문적인 느낌으로 발표의 분위기를 잡아줍니다.";
 const introPitchDeckSchema = z.object({
-  title: z.string().min(2).max(15).default("Pitch Deck").meta({
+  title: z.string().min(2).max(15).default("피치덱").meta({
     description: "Main title of the slide",
   }),
   description: z
     .string()
     .min(1)
     .max(200)
-    .default("Add a short subtitle or description here. Add a short subtitle or description here. Add a short subtitle or description here. Add a short subtitle or description here.")
+    .default("여기에 짧은 부제목이나 설명을 추가하세요. 여기에 짧은 부제목이나 설명을 추가하세요. 여기에 짧은 부제목이나 설명을 추가하세요. 여기에 짧은 부제목이나 설명을 추가하세요.")
     .meta({
       description: "Description shown below the title",
     }),
   introCard: z
     .object({
       enabled: z.boolean().default(true),
-      name: z.string().min(1).max(60).default("John Doe"),
-      date: z.string().min(1).max(60).default("December 2025"),
+      name: z.string().min(1).max(60).default("홍길동"),
+      date: z.string().min(1).max(60).default("2025년 12월"),
     })
-    .default({ enabled: true, name: "John Doe", date: "December 2025" })
+    .default({ enabled: true, name: "홍길동", date: "2025년 12월" })
     .meta({ description: "Optional intro card shown below description" }),
   image: ImageSchema.default({
     __image_url__:
@@ -70,7 +70,7 @@ const IntroPitchDeckSlide: React.FC<IntroSlideLayoutProps> = ({
 
                 {(slideData as any)?._logo_url__ && <img src={(slideData as any)?._logo_url__} alt="logo" className="w-6 h-6" />}
                 {(slideData as any)?.__companyName__ && <span className="text-sm sm:text-base font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                  {(slideData as any)?.__companyName__ || 'Company Name'}
+                  {(slideData as any)?.__companyName__ || '회사명'}
                 </span>}
               </div>
             </div>

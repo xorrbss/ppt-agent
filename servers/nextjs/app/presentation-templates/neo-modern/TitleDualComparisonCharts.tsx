@@ -49,7 +49,7 @@ export const Schema = z.object({
     .string()
     .max(50)
     .describe("The main title of the slide")
-    .default("Competitive Comparison"),
+    .default("경쟁 비교"),
   comparisonCards: z
     .array(
       z.object({
@@ -100,64 +100,64 @@ export const Schema = z.object({
     .describe("A list of up to 2 items")
     .default([
       {
-        heading: "Campaign A",
-        subHeading: "Top Campaign",
-        footerText: "Engagement Rate",
+        heading: "캠페인 A",
+        subHeading: "인기 캠페인",
+        footerText: "참여율",
         chartType: "bar",
         chart: {
           columns: [
-            "Paid Social",
-            "Content Marketing",
-            "Events & Sponsorships",
-            "SEO & Organic",
+            "유료 소셜",
+            "콘텐츠 마케팅",
+            "이벤트 및 후원",
+            "SEO 및 오가닉",
           ],
           rows: [
             [
-              { label: "Planned", value: 520 },
-              { label: "Actual", value: 485 },
+              { label: "계획", value: 520 },
+              { label: "실제", value: 485 },
             ],
             [
-              { label: "Planned", value: 380 },
-              { label: "Actual", value: 412 },
+              { label: "계획", value: 380 },
+              { label: "실제", value: 412 },
             ],
             [
-              { label: "Planned", value: 400 },
-              { label: "Actual", value: 468 },
+              { label: "계획", value: 400 },
+              { label: "실제", value: 468 },
             ],
             [
-              { label: "Planned", value: 280 },
-              { label: "Actual", value: 276 },
+              { label: "계획", value: 280 },
+              { label: "실제", value: 276 },
             ],
           ],
         },
       },
       {
-        heading: "Campaign B",
-        footerText: "Engagement Rate",
+        heading: "캠페인 B",
+        footerText: "참여율",
         chartType: "bar",
         chart: {
           columns: [
-            "Paid Social",
-            "Content Marketing",
-            "Events & Sponsorships",
-            "SEO & Organic",
+            "유료 소셜",
+            "콘텐츠 마케팅",
+            "이벤트 및 후원",
+            "SEO 및 오가닉",
           ],
           rows: [
             [
-              { label: "Planned", value: 520 },
-              { label: "Actual", value: 485 },
+              { label: "계획", value: 520 },
+              { label: "실제", value: 485 },
             ],
             [
-              { label: "Planned", value: 380 },
-              { label: "Actual", value: 412 },
+              { label: "계획", value: 380 },
+              { label: "실제", value: 412 },
             ],
             [
-              { label: "Planned", value: 400 },
-              { label: "Actual", value: 468 },
+              { label: "계획", value: 400 },
+              { label: "실제", value: 468 },
             ],
             [
-              { label: "Planned", value: 280 },
-              { label: "Actual", value: 276 },
+              { label: "계획", value: 280 },
+              { label: "실제", value: 276 },
             ],
           ],
         },
@@ -166,9 +166,9 @@ export const Schema = z.object({
 });
 
 export const layoutId = "title-dual-comparison-charts";
-export const layoutName = "Title Dual Comparison Charts";
+export const layoutName = "제목 듀얼 비교 차트";
 export const layoutDescription =
-  "A comparison slide with a main title and two side-by-side chart panels, each supporting bar, grouped bar, stacked bar, clustered bar, diverging bar, horizontal bar, line, area, pie, donut, and scatter chart types.";
+  "주제목과 나란히 배치된 두 개의 차트 패널로 구성된 비교 슬라이드입니다. 각 패널은 막대, 그룹 막대, 누적 막대, 클러스터 막대, 발산형 막대, 가로 막대, 선, 영역, 파이, 도넛, 산점도 차트 유형을 지원합니다.";
 
 const CHART_COLORS = [
   "#244CD9",
@@ -234,8 +234,8 @@ const dynamicSlideLayout: React.FC<{
         name: col,
         series1: card.chart?.rows?.[cIdx]?.[0]?.value ?? 0,
         series2: card.chart?.rows?.[cIdx]?.[1]?.value ?? 0,
-        series1Name: card.chart?.rows?.[cIdx]?.[0]?.label || "Series 1",
-        series2Name: card.chart?.rows?.[cIdx]?.[1]?.label || "Series 2",
+        series1Name: card.chart?.rows?.[cIdx]?.[0]?.label || "시리즈 1",
+        series2Name: card.chart?.rows?.[cIdx]?.[1]?.label || "시리즈 2",
       })) || [];
 
     const hasSeries2 = chartData.some((item) => (item.series2 ?? 0) > 0);
@@ -672,7 +672,7 @@ const dynamicSlideLayout: React.FC<{
               />
               <Bar
                 dataKey="positive"
-                name={chartData[0]?.series1Name || "Positive"}
+                name={chartData[0]?.series1Name || "긍정"}
                 fill={graphColors(0)}
                 stackId="stack"
                 radius={hasSeries2 ? [0, 4, 4, 0] : [4, 4, 4, 4]}
@@ -681,7 +681,7 @@ const dynamicSlideLayout: React.FC<{
               {hasSeries2 && (
                 <Bar
                   dataKey="negative"
-                  name={chartData[0]?.series2Name || "Negative"}
+                  name={chartData[0]?.series2Name || "부정"}
                   fill={graphColors(1)}
                   stackId="stack"
                   radius={[4, 0, 0, 4]}
@@ -1084,7 +1084,7 @@ const dynamicSlideLayout: React.FC<{
                   className="text-sm  font-semibold"
                   style={{ color: "var(--background-text, #111827)" }}
                 >
-                  {(data as any)?.__companyName__ || "Company Name"}
+                  {(data as any)?.__companyName__ || "회사명"}
                 </span>
               )}
             </div>

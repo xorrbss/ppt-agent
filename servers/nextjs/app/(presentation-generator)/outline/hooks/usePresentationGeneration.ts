@@ -115,7 +115,7 @@ export const usePresentationGeneration = (
       // Check if it's a custom template (string = presentationId)
       if (typeof selectedTemplate === "string") {
         setLoadingState({
-          message: "Loading custom template...",
+          message: "커스텀 템플릿 불러오는 중…",
           isLoading: true,
           showProgress: true,
           duration: 30,
@@ -135,7 +135,7 @@ export const usePresentationGeneration = (
         }
 
         setLoadingState({
-          message: "Generating presentation data...",
+          message: "발표자료 생성 중…",
           isLoading: true,
           showProgress: true,
           duration: 30,

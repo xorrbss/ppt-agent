@@ -13,12 +13,12 @@ const MilestoneItemSchema = z.object({
 });
 
 export const slideLayoutId = "milestone-slide";
-export const slideLayoutName = "Milestone Slide";
+export const slideLayoutName = "마일스톤 슬라이드";
 export const slideLayoutDescription =
-  "A slide with a title at the top and a single horizontal milestone sequence below it. The sequence contains five circular markers aligned in one row, and each marker has a heading and description placed directly underneath. The activeIndex field controls which marker is emphasized while the remaining markers stay in the default state.";
+  "상단에 제목이 있고 그 아래에 하나의 가로 마일스톤 순서가 있는 슬라이드. 순서는 한 줄에 정렬된 다섯 개의 원형 마커로 구성되며, 각 마커 바로 아래에 제목과 설명이 배치됩니다. activeIndex 필드는 어느 마커를 강조할지 제어하며 나머지 마커는 기본 상태로 유지됩니다.";
 
 export const Schema = z.object({
-  title: z.string().min(3).max(12).default("Milestone").meta({
+  title: z.string().min(3).max(12).default("마일스톤").meta({
     description: "Slide title shown at the top-left.",
   }),
   activeIndex: z.number().int().min(0).max(4).default(4).meta({
@@ -31,28 +31,28 @@ export const Schema = z.object({
     .default([
       {
         bulletNumber: "01",
-        heading: "Heading",
-        description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Lorem ipsum dolor sit amet,",
+        heading: "제목",
+        description: "여기에 마일스톤 설명을 입력하세요. 핵심 내용을 간결하게 정리합니다.",
       },
       {
         bulletNumber: "02",
-        heading: "Heading",
-        description: "Lorem ipsum dolor sit amet,  Lorem ipsum dolor sit amet,",
+        heading: "제목",
+        description: "여기에 마일스톤 설명을 입력하세요. 간단히 작성합니다.",
       },
       {
         bulletNumber: "03",
-        heading: "Heading",
-        description: "Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet, Lorem ipsum dolor sit amet",
+        heading: "제목",
+        description: "여기에 마일스톤 설명을 입력하세요. 단계별 진행 내용을 정리합니다.",
       },
       {
         bulletNumber: "04",
-        heading: "Heading",
-        description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Lorem ipsum dolor sit amet,",
+        heading: "제목",
+        description: "여기에 마일스톤 설명을 입력하세요. 핵심 내용을 간결하게 정리합니다.",
       },
       {
         bulletNumber: "05",
-        heading: "Heading",
-        description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Lorem ipsum dolor sit amet,",
+        heading: "제목",
+        description: "여기에 마일스톤 설명을 입력하세요. 핵심 내용을 간결하게 정리합니다.",
       },
     ])
     .meta({

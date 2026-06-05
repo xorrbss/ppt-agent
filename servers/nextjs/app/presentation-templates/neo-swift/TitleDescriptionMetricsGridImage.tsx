@@ -2,8 +2,8 @@ import { RemoteSvgIcon } from '@/app/hooks/useRemoteSvgIcon';
 import * as z from 'zod';
 
 export const Schema = z.object({
-    title: z.string().max(25).describe('The main title of the slide').default('Image with Description & Metrix'),
-    description: z.string().max(120).describe('A brief description or context for the slide content').default('Focus on companies with 500+ employees in Financial Services, Healthcare, and Technology sectors. Target $3.5M.'),
+    title: z.string().max(25).describe('The main title of the slide').default('이미지와 설명 및 지표'),
+    description: z.string().max(120).describe('A brief description or context for the slide content').default('금융 서비스, 헬스케어, 기술 분야에서 직원 500명 이상 기업에 집중합니다. 350만 달러를 목표로 합니다.'),
     metrics: z.array(z.object({
         icon: z.object({
             __icon_url__: z.string(),
@@ -15,27 +15,27 @@ export const Schema = z.object({
     })).max(4).describe('A list of up to 4 metric items').default([
         {
             icon: { __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg', __icon_query__: 'search' },
-            label: 'Research',
+            label: '리서치',
             value: '8,450',
-            subText: 'Main Challenge: Delayed Client'
+            subText: '주요 과제: 고객 지연'
         },
         {
             icon: { __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg', __icon_query__: 'search' },
-            label: 'Research',
+            label: '리서치',
             value: '8,450',
-            subText: 'Main Challenge: Delayed Client'
+            subText: '주요 과제: 고객 지연'
         },
         {
             icon: { __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg', __icon_query__: 'search' },
-            label: 'Research',
+            label: '리서치',
             value: '8,450',
-            subText: 'Main Challenge: Delayed Client'
+            subText: '주요 과제: 고객 지연'
         },
         {
             icon: { __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg', __icon_query__: 'search' },
-            label: 'Research',
+            label: '리서치',
             value: '8,450',
-            subText: 'Main Challenge: Delayed Client'
+            subText: '주요 과제: 고객 지연'
         }
     ]),
     mainImage: z.object({
@@ -48,8 +48,8 @@ export const Schema = z.object({
 });
 
 export const layoutId = 'title-description-metrics-grid-large-image';
-export const layoutName = 'Title Description Metrics Grid Large Image';
-export const layoutDescription = 'A versatile slide layout combining text, metrics, and imagery. Features a title and description on the left with a 2x2 grid of icon-enhanced metric cards, and a large vertical image on the right. Each metric card includes an icon, label, value, and supporting text. Perfect for executive summaries, project overviews, or reports where key data points need visual context.';
+export const layoutName = '제목 설명 지표 그리드 큰 이미지';
+export const layoutDescription = '텍스트, 지표, 이미지를 결합한 다목적 슬라이드 레이아웃입니다. 왼쪽에는 제목과 설명, 아이콘이 강조된 2x2 지표 카드 그리드를 두고 오른쪽에는 크고 세로형 이미지를 배치합니다. 각 지표 카드에는 아이콘, 라벨, 값, 보조 텍스트가 포함됩니다. 경영 요약, 프로젝트 개요 또는 핵심 데이터에 시각적 맥락이 필요한 보고서에 적합합니다.';
 
 const dynamicSlideLayout = ({ data }: { data: Partial<z.infer<typeof Schema>> }) => {
     const { title, description, metrics, mainImage } = data;
@@ -155,7 +155,7 @@ const dynamicSlideLayout = ({ data }: { data: Partial<z.infer<typeof Schema>> })
                             style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                             className=' w-[2px] h-4'></span>
                         {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                            {(data as any)?.__companyName__ || 'Company Name'}
+                            {(data as any)?.__companyName__ || '회사명'}
                         </span>}
                     </div>}
                     <div className="flex-1 h-[3.6px] bg-[#55626E]"

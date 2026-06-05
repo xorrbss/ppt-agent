@@ -25,8 +25,8 @@ import {
 } from "./NeoChartPrimitives";
 
 export const layoutId = 'title-description-multi-chart-grid-bullets';
-export const layoutName = 'Title Description With Multi-Chart Grid + Bullets';
-export const layoutDescription = 'A neo-modern dashboard with title, description, up to 6 bullet points, and 1–4 auto-arranged charts. Supports bar (vertical, horizontal, grouped, stacked, clustered, diverging), line, area, pie, donut, and scatter charts.';
+export const layoutName = '제목 설명 멀티 차트 그리드 + 글머리';
+export const layoutDescription = '제목, 설명, 최대 6개의 글머리, 그리고 1~4개의 자동 배치 차트를 갖춘 네오 모던 대시보드입니다. 막대(세로, 가로, 그룹, 누적, 클러스터, 발산형), 선, 영역, 파이, 도넛, 산점도 차트를 지원합니다.';
 
 const DEFAULT_CHART_COLORS = ['#8B5CF6', '#06B6D4', '#10B981', '#F59E0B', '#EF4444', '#EC4899'];
 
@@ -70,7 +70,7 @@ const ScatterDataPointSchema = z.object({
 });
 
 const ChartItemSchema = z.object({
-    title: z.string().max(40).default("Chart Title"),
+    title: z.string().max(40).default("차트 제목"),
     type: ChartTypeEnum.default('bar-vertical'),
     data: z.union([
         z.array(SimpleDataPointSchema),
@@ -88,21 +88,21 @@ const ChartItemSchema = z.object({
 });
 
 export const Schema = z.object({
-    title: z.string().min(3).max(50).default('Data Analytics Dashboard'),
-    description: z.string().min(10).max(200).default('Comprehensive overview of key metrics and performance indicators across multiple data dimensions.'),
+    title: z.string().min(3).max(50).default('데이터 분석 대시보드'),
+    description: z.string().min(10).max(200).default('여러 데이터 차원에 걸친 핵심 지표와 성과 지표에 대한 종합적인 개요입니다.'),
     bullets: z.array(z.string().max(80)).max(6).default([
-        'Pipeline coverage above 3x target.',
-        'CAC payback under 6 months.',
-        'Enterprise conversion improved QoQ.',
-        'Expansion revenue driving growth.',
-        'Retention above 95% across cohorts.',
-        'Forecast accuracy improved this quarter.',
+        '파이프라인 커버리지가 목표의 3배 이상입니다.',
+        'CAC 회수 기간이 6개월 미만입니다.',
+        '엔터프라이즈 전환율이 전 분기 대비 개선되었습니다.',
+        '확장 매출이 성장을 견인합니다.',
+        '모든 코호트에서 유지율이 95% 이상입니다.',
+        '이번 분기에 예측 정확도가 개선되었습니다.',
     ]),
     charts: z.array(ChartItemSchema).min(1).max(4).default([
-        { title: 'Revenue by Quarter', type: 'bar-vertical', data: [{ name: 'Q1', value: 125000 }, { name: 'Q2', value: 158000 }, { name: 'Q3', value: 142000 }, { name: 'Q4', value: 189000 }], colorPalette: 'vibrant' },
-        { title: 'Market Distribution', type: 'donut', data: [{ name: 'North America', value: 35 }, { name: 'Europe', value: 28 }, { name: 'Asia Pacific', value: 25 }, { name: 'Others', value: 12 }], colorPalette: 'ocean' },
-        { title: 'Growth Trend', type: 'line', data: [{ name: 'Jan', value: 30 }, { name: 'Feb', value: 45 }, { name: 'Mar', value: 52 }, { name: 'Apr', value: 48 }, { name: 'May', value: 67 }, { name: 'Jun', value: 82 }], colorPalette: 'professional' },
-        { title: 'Department Performance', type: 'bar-horizontal', data: [{ name: 'Sales', value: 87 }, { name: 'Marketing', value: 72 }, { name: 'Engineering', value: 95 }, { name: 'Support', value: 68 }], colorPalette: 'sunset' },
+        { title: '분기별 매출', type: 'bar-vertical', data: [{ name: 'Q1', value: 125000 }, { name: 'Q2', value: 158000 }, { name: 'Q3', value: 142000 }, { name: 'Q4', value: 189000 }], colorPalette: 'vibrant' },
+        { title: '시장 분포', type: 'donut', data: [{ name: '북미', value: 35 }, { name: '유럽', value: 28 }, { name: '아시아 태평양', value: 25 }, { name: '기타', value: 12 }], colorPalette: 'ocean' },
+        { title: '성장 추세', type: 'line', data: [{ name: '1월', value: 30 }, { name: '2월', value: 45 }, { name: '3월', value: 52 }, { name: '4월', value: 48 }, { name: '5월', value: 67 }, { name: '6월', value: 82 }], colorPalette: 'professional' },
+        { title: '부서별 성과', type: 'bar-horizontal', data: [{ name: '영업', value: 87 }, { name: '마케팅', value: 72 }, { name: '엔지니어링', value: 95 }, { name: '지원', value: 68 }], colorPalette: 'sunset' },
     ]),
     showLegend: z.boolean().default(true),
     showGrid: z.boolean().default(true),
@@ -332,7 +332,7 @@ const MiniChartRenderer: React.FC<{
                     positive: idx % 2 === 0 ? Math.abs(item.value) : 0,
                     negative: idx % 2 === 1 ? -Math.abs(item.value) : 0,
                 }));
-            const seriesLabels = chart.series || ['Positive', 'Negative'];
+            const seriesLabels = chart.series || ['긍정', '부정'];
             return (
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={transformedData} layout="vertical" stackOffset="sign" margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
@@ -439,7 +439,7 @@ const MiniChartRenderer: React.FC<{
             );
 
         default:
-            return <div className="flex items-center justify-center h-full text-gray-400 text-sm">Unsupported chart type</div>;
+            return <div className="flex items-center justify-center h-full text-gray-400 text-sm">지원하지 않는 차트 유형</div>;
     }
 };
 
@@ -454,8 +454,8 @@ const getGridLayout = (count: number): { className: string } => {
 };
 
 const TitleDescriptionMultiChartGridWithBulletsLayout: React.FC<MultiChartGridSlideLayoutProps> = ({ data: slideData }) => {
-    const title = slideData?.title || 'Data Analytics Dashboard';
-    const description = slideData?.description || 'Comprehensive overview of key metrics and performance indicators.';
+    const title = slideData?.title || '데이터 분석 대시보드';
+    const description = slideData?.description || '여러 데이터 차원에 걸친 핵심 지표와 성과 지표에 대한 종합적인 개요입니다.';
     const charts = slideData?.charts || [];
     const bullets = (slideData?.bullets || []).slice(0, 6);
     const showLegend = slideData?.showLegend ?? true;
@@ -482,7 +482,7 @@ const TitleDescriptionMultiChartGridWithBulletsLayout: React.FC<MultiChartGridSl
                                 <span style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }} className="w-[2px] h-4" />
                                 {(slideData as any)?.__companyName__ && (
                                     <span className="text-sm font-semibold" style={{ color: 'var(--background-text, #002BB2)' }}>
-                                        {(slideData as any)?.__companyName__ || 'Company Name'}
+                                        {(slideData as any)?.__companyName__ || '회사명'}
                                     </span>
                                 )}
                             </div>

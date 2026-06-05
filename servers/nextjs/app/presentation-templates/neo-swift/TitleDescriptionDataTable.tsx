@@ -6,13 +6,13 @@ export const Schema = z.object({
     .string()
     .max(12)
     .describe("The main title of the slide displayed at the top left")
-    .default("TABLE"),
+    .default("표"),
   description: z
     .string()
     .max(180)
     .describe("The overview description paragraph displayed at the top right")
     .default(
-      "Focus on companies with 500+ employees in Financial Services, Healthcare, and Technology sectors. Target $3.5M in new pipeline with sub-$150 CAC through account-based marketing and content-led strategies."
+      "금융 서비스, 헬스케어, 기술 분야에서 직원 500명 이상 기업에 집중합니다. 어카운트 기반 마케팅과 콘텐츠 중심 전략을 통해 CAC를 150달러 미만으로 유지하며 350만 달러의 신규 파이프라인을 목표로 합니다."
     ),
   table: z
     .object({
@@ -27,30 +27,30 @@ export const Schema = z.object({
     })
     .describe("The main table content with headings and cell data")
     .default({
-      columns: ["Problem", "Description", "Solution"],
+      columns: ["문제", "설명", "해결책"],
       rows: [
         [
-          "Self-motivation\nReference: Book and Inspirational Videos",
-          "Self-motivation\nReference: Book and Inspirational Videos",
-          "Self-motivation\nReference: Book and Inspirational Videos",
+          "자기 동기부여\n참고: 도서 및 영감을 주는 영상",
+          "자기 동기부여\n참고: 도서 및 영감을 주는 영상",
+          "자기 동기부여\n참고: 도서 및 영감을 주는 영상",
         ],
         [
-          "Self-motivation\nReference: Book and Inspirational Videos",
-          "Self-motivation\nReference: Book and Inspirational Videos",
-          "Self-motivation\nReference: Book and Inspirational Videos",
+          "자기 동기부여\n참고: 도서 및 영감을 주는 영상",
+          "자기 동기부여\n참고: 도서 및 영감을 주는 영상",
+          "자기 동기부여\n참고: 도서 및 영감을 주는 영상",
         ],
         [
-          "Self-motivation\nReference: Book and Inspirational Videos",
-          "Self-motivation\nReference: Book and Inspirational Videos",
-          "Self-motivation\nReference: Book and Inspirational Videos",
+          "자기 동기부여\n참고: 도서 및 영감을 주는 영상",
+          "자기 동기부여\n참고: 도서 및 영감을 주는 영상",
+          "자기 동기부여\n참고: 도서 및 영감을 주는 영상",
         ],
       ],
     }),
 });
 export const layoutId = "title-description-three-column-table";
-export const layoutName = "Title Description Three Column Table";
+export const layoutName = "제목 설명 3열 표";
 export const layoutDescription =
-  "A structured data presentation slide featuring a large header title on the left and a descriptive paragraph on the right, followed by a three-column table with a colored header row. Each table cell supports multi-line text. Ideal for presenting structured comparisons, problem-solution matrices, feature breakdowns, or any tabular data that benefits from visual organization.";
+  "왼쪽에 큰 헤더 제목, 오른쪽에 설명 문단을 배치하고 그 아래에 색상 헤더 행이 있는 3열 표를 표시하는 구조화된 데이터 슬라이드입니다. 각 표 셀은 여러 줄 텍스트를 지원합니다. 구조화된 비교, 문제-해결 매트릭스, 기능 분석 또는 시각적으로 정리하면 좋은 표 데이터를 표현하는 데 적합합니다.";
 
 const dynamicSlideLayout: React.FC<{
   data: Partial<z.infer<typeof Schema>>;
@@ -176,7 +176,7 @@ const dynamicSlideLayout: React.FC<{
                   className="text-sm  font-semibold"
                   style={{ color: "var(--background-text, #111827)" }}
                 >
-                  {(data as any)?.__companyName__ || "Company Name"}
+                  {(data as any)?.__companyName__ || "회사명"}
                 </span>
               )}
             </div>

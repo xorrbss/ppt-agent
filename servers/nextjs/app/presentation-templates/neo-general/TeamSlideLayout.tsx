@@ -3,8 +3,8 @@ import * as z from "zod";
 import { ImageSchema } from '../defaultSchemes';
 
 export const layoutId = 'team-slide'
-export const layoutName = 'Description With Photo Cards Grid'
-export const layoutDescription = 'A two-section layout with title, accent line, and description on the left, paired with a 2x2 or flexible grid of 2-4 person cards on the right. Each card displays photo, name, position, and bio.'
+export const layoutName = '사진 카드 그리드가 있는 설명'
+export const layoutDescription = '왼쪽에 제목, 강조선, 설명을 배치하고 오른쪽에 2~4개의 인물 카드를 2x2 또는 유연한 그리드로 배치한 2개 섹션 레이아웃입니다. 각 카드는 사진, 이름, 직책, 약력을 표시합니다.'
 
 const teamMemberSchema = z.object({
     name: z.string().min(2).max(50).meta({
@@ -20,44 +20,44 @@ const teamMemberSchema = z.object({
 });
 
 const teamSlideSchema = z.object({
-    title: z.string().min(3).max(40).default('Our Team Members').meta({
+    title: z.string().min(3).max(40).default('우리 팀원').meta({
         description: "Heading text of the slide",
     }),
-    companyDescription: z.string().min(10).max(150).default('Ginyard International Co. is a leading provider of innovative digital solutions tailored for businesses. Our mission is to empower organizations to achieve their goals through cutting-edge technology and strategic partnerships.').meta({
+    companyDescription: z.string().min(10).max(150).default('지냐드 인터내셔널은 기업을 위한 혁신적인 맞춤형 디지털 솔루션을 선도적으로 제공합니다. 우리의 사명은 최첨단 기술과 전략적 파트너십을 통해 조직이 목표를 달성하도록 지원하는 것입니다.').meta({
         description: "Supporting description text",
     }),
     teamMembers: z.array(teamMemberSchema).min(2).max(4).default([
         {
-            name: 'Juliana Silva',
+            name: '김서연',
             position: 'CEO',
-            description: 'Strategic leader with 15+ years experience in digital transformation and business growth.',
+            description: '디지털 전환과 비즈니스 성장 분야에서 15년 이상의 경험을 가진 전략적 리더.',
             image: {
                 __image_url__: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
                 __image_prompt__: 'Professional businesswoman CEO headshot'
             }
         },
         {
-            name: 'Daniel Gallego',
+            name: '박지훈',
             position: 'CTO',
-            description: 'Technology expert specializing in scalable solutions and innovative software architecture.',
+            description: '확장 가능한 솔루션과 혁신적인 소프트웨어 아키텍처를 전문으로 하는 기술 전문가.',
             image: {
                 __image_url__: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
                 __image_prompt__: 'Professional businessman CTO headshot'
             }
         },
         {
-            name: 'Ketut Susilo',
+            name: '최민준',
             position: 'COO',
-            description: 'Operations leader focused on efficiency, process optimization, and team development.',
+            description: '효율성, 프로세스 최적화, 팀 개발에 집중하는 운영 리더.',
             image: {
                 __image_url__: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
                 __image_prompt__: 'Professional businessman COO headshot'
             }
         },
         {
-            name: 'Anna Robertson',
+            name: '이하나',
             position: 'CMO',
-            description: 'Marketing strategist with expertise in brand development and customer engagement.',
+            description: '브랜드 개발과 고객 참여에 전문성을 갖춘 마케팅 전략가.',
             image: {
                 __image_url__: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
                 __image_prompt__: 'Professional businesswoman CMO headshot'
@@ -113,7 +113,7 @@ const TeamSlideLayout: React.FC<TeamSlideLayoutProps> = ({ data: slideData }) =>
                                     style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                                     className=' w-[2px] h-4'></span>
                                 {(slideData as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(slideData as any)?.__companyName__ || 'Company Name'}
+                                    {(slideData as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>
@@ -133,7 +133,7 @@ const TeamSlideLayout: React.FC<TeamSlideLayoutProps> = ({ data: slideData }) =>
                     <div className="flex-1 flex flex-col justify-center pr-8 space-y-6">
                         {/* Title */}
                         <h1 style={{ color: "var(--background-text,#111827)" }} className="text-[42.7px] font-bold text-gray-900 leading-tight">
-                            {slideData?.title || 'Our Team Members'}
+                            {slideData?.title || '우리 팀원'}
                         </h1>
 
                         {/* Purple accent line */}
@@ -141,7 +141,7 @@ const TeamSlideLayout: React.FC<TeamSlideLayoutProps> = ({ data: slideData }) =>
 
                         {/* Company Description */}
                         <p style={{ color: "var(--background-text,#4b5563)" }} className="text-base sm:text-lg text-gray-700 leading-relaxed">
-                            {slideData?.companyDescription || 'Ginyard International Co. is a leading provider of innovative digital solutions tailored for businesses. Our mission is to empower organizations to achieve their goals through cutting-edge technology and strategic partnerships.'}
+                            {slideData?.companyDescription || '지냐드 인터내셔널은 기업을 위한 혁신적인 맞춤형 디지털 솔루션을 선도적으로 제공합니다. 우리의 사명은 최첨단 기술과 전략적 파트너십을 통해 조직이 목표를 달성하도록 지원하는 것입니다.'}
                         </p>
                     </div>
 

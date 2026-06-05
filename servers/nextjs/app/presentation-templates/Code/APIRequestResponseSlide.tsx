@@ -3,12 +3,12 @@ import { fitCodeBlock, PRISM_CODE_BLOCK_STYLES } from "./codeBlockFitting";
 
 
 export const slideLayoutId = "api-request-response-slide";
-export const slideLayoutName = "API Request Response Slide";
+export const slideLayoutName = "API 요청 응답 슬라이드";
 export const slideLayoutDescription =
-  "An API-focused slide with endpoint metadata, request payload, and response payload.";
+  "엔드포인트 메타데이터, 요청 페이로드, 응답 페이로드가 포함된 API 중심 슬라이드.";
 
 export const Schema = z.object({
-  title: z.string().min(8).max(26).default("API Request / Response").meta({
+  title: z.string().min(8).max(26).default("API 요청 / 응답").meta({
     description: "Main heading shown at the top-left.",
   }),
   method: z.enum(["GET", "POST", "PATCH", "DELETE"]).default("POST").meta({
@@ -133,7 +133,7 @@ const CodeSlide03ApiRequestResponse = ({
                   </p>
                   <p className="text-[23px]" style={{ color: "var(--background-text,#dde5ff)" }}>{data.endpoint}</p>
                 </div>
-                <p className="mt-[21px] text-[18px] uppercase tracking-[0.08em]" style={{ color: "var(--background-text,#90a1d8)" }}>Headers</p>
+                <p className="mt-[21px] text-[18px] uppercase tracking-[0.08em]" style={{ color: "var(--background-text,#90a1d8)" }}>헤더</p>
                 <div className="mt-[15px] space-y-[4px] text-[24px]" style={{ color: "var(--background-text,#cbd4f8)" }}>
                   {data.headers?.map((item) => (
                     <p key={item} className="text-[18px]" style={{ color: "var(--background-text,#CAD5E2)" }}>{item}</p>

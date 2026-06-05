@@ -2,28 +2,28 @@ import * as z from "zod";
 
 
 export const slideLayoutId = "about-slide";
-export const slideLayoutName = "About Slide";
+export const slideLayoutName = "소개 슬라이드";
 export const slideLayoutDescription =
-  "A left text column with company/instructor/presenter/institute name and title introduction and a right-side visual grid made from one repeated image and tinted text panels.";
+  "회사/강사/발표자/기관 이름과 제목 소개가 담긴 왼쪽 텍스트 열, 그리고 하나의 반복 이미지와 색조 텍스트 패널로 구성된 오른쪽 시각 그리드로 이루어진 레이아웃.";
 
 export const Schema = z.object({
-  name: z.string().min(3).max(22).default("Company Name").meta({
+  name: z.string().min(3).max(22).default("회사 이름").meta({
     description: "Main heading in the left content column.",
   }),
   intro: z.string().min(40).max(100).default(
-    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et."
+    "저희는 모든 학습자의 잠재력을 끌어내어 더 나은 미래를 함께 만들어 가는 교육 기관입니다."
   ).meta({
     description: "Bold intro text shown beneath the company heading.",
   }),
   body: z.string().min(120).max(280).default(
-    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."
+    "저희는 다양한 교육 프로그램과 체계적인 커리큘럼을 통해 학습자가 자신의 목표를 이룰 수 있도록 지원합니다. 풍부한 경험을 갖춘 전문 강사진이 개개인의 수준에 맞춘 학습 환경을 제공하며, 이론과 실습을 균형 있게 결합하여 실질적인 역량을 키울 수 있도록 돕습니다. 또한 지속적인 피드백과 상담을 통해 학습자가 끝까지 성장하도록 든든한 동반자가 되겠습니다."
   ).meta({
     description: "Body paragraph in the left content section.",
   }),
-  topPanelText: z.string().min(20).max(70).default("Insert info about the company.").meta({
+  topPanelText: z.string().min(20).max(70).default("회사에 대한 정보를 입력하세요.").meta({
     description: "Short text inside the top-right dark panel. ",
   }),
-  bottomPanelText: z.string().min(20).max(70).default("Insert info about the company and your mission statement.").meta({
+  bottomPanelText: z.string().min(20).max(70).default("회사와 미션에 대한 정보를 입력하세요.").meta({
     description: "Short text inside the bottom-right dark panel.",
   }),
   topFeatureImage: z.object({

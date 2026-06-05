@@ -20,12 +20,12 @@ const MetricColumnSchema = z.object({
 });
 
 export const slideLayoutId = "title-metrics-slide";
-export const slideLayoutName = "Title Metrics Slide";
+export const slideLayoutName = "제목·지표 슬라이드";
 export const slideLayoutDescription =
-  "A slide with a title at the top and tall metric cards arranged horizontally below it. Each card can contain one or two stacked metric blocks, and each block includes a main value, a label, and a supporting description.";
+  "상단에 제목이 있고 그 아래에 세로로 긴 지표 카드가 가로로 배치된 슬라이드. 각 카드에는 하나 또는 두 개의 지표 블록이 위아래로 쌓일 수 있으며, 각 블록은 주요 값, 라벨, 보조 설명으로 구성됩니다.";
 
 export const Schema = z.object({
-  title: z.string().min(3).max(80).default("Performance Snapshot").meta({
+  title: z.string().min(3).max(80).default("성과 요약").meta({
     description: "Slide title shown at the top-left.",
   }),
   columns: z
@@ -35,20 +35,20 @@ export const Schema = z.object({
     .default([
       {
         metrics: [
-          { value: "25K", label: "Students", description: "Ut enim ad minima" },
-          { value: "25K", label: "Students", description: "Ut enim ad minima" },
+          { value: "25K", label: "학생", description: "여기에 설명 입력" },
+          { value: "25K", label: "학생", description: "여기에 설명 입력" },
         ],
       },
       {
         metrics: [
-          { value: "25K", label: "Students", description: "Ut enim ad minima" },
-          { value: "25K", label: "Students", description: "Ut enim ad minima" },
+          { value: "25K", label: "학생", description: "여기에 설명 입력" },
+          { value: "25K", label: "학생", description: "여기에 설명 입력" },
         ],
       },
       {
         metrics: [
-          { value: "25K", label: "Students", description: "Ut enim ad minima" },
-          { value: "25K", label: "Students", description: "Ut enim ad minima" },
+          { value: "25K", label: "학생", description: "여기에 설명 입력" },
+          { value: "25K", label: "학생", description: "여기에 설명 입력" },
         ],
       }
     ])

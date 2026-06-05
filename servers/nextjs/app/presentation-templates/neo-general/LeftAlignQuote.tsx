@@ -2,8 +2,8 @@ import * as z from "zod";
 
 
 export const Schema = z.object({
-    title: z.string().describe('The main heading of the slide').max(20).default("Word of Wisdom"),
-    quote: z.string().describe('Quotation text displayed').max(200).default("\"Success is not final, failure is not fatal: it is the courage to continue that counts. The future belongs to those who believe in the beauty of their dreams.\""),
+    title: z.string().describe('The main heading of the slide').max(20).default("지혜의 말"),
+    quote: z.string().describe('Quotation text displayed').max(200).default("\"성공은 끝이 아니고 실패는 치명적이지 않습니다. 중요한 것은 계속 나아가는 용기입니다. 미래는 자신의 꿈의 아름다움을 믿는 사람들의 것입니다.\""),
     backgroundImage: z.object({
         __image_url__: z.string().describe('URL of the background image').default('https://images.pexels.com/photos/33508509/pexels-photo-33508509.jpeg?auto=compress&cs=tinysrgb&h=650&w=940'),
         __image_prompt__: z.string().describe('Prompt description for the image').default('Inspirational mountain landscape with dramatic sky and clouds'),
@@ -11,12 +11,12 @@ export const Schema = z.object({
         __image_url__: 'https://images.pexels.com/photos/33508509/pexels-photo-33508509.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
         __image_prompt__: 'Inspirational mountain landscape with dramatic sky and clouds',
     }),
-    author: z.string().describe('Attribution name for the quote').max(30).default("-Winston Churchill"),
+    author: z.string().describe('Attribution name for the quote').max(30).default("-윈스턴 처칠"),
 });
 
 export const layoutId = 'left-align-quote';
-export const layoutName = 'Left-Aligned Text On Background Image';
-export const layoutDescription = 'A full-bleed background image layout featuring a left-aligned bold title with accent bar, a prominent quote in large text, and author attribution below.';
+export const layoutName = '배경 이미지 위 왼쪽 정렬 텍스트';
+export const layoutDescription = '전체 화면 배경 이미지 위에 강조 바가 있는 왼쪽 정렬 굵은 제목, 큰 글씨의 두드러진 인용문, 그리고 그 아래 저자 표기를 배치한 레이아웃입니다.';
 
 const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = ({ data }) => {
     const { title, quote, author, backgroundImage } = data;
@@ -43,7 +43,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                                     style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                                     className=' w-[2px] h-4'></span>
                                 {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(data as any)?.__companyName__ || 'Company Name'}
+                                    {(data as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>

@@ -2,16 +2,16 @@ import * as z from "zod";
 
 
 export const slideLayoutId = "image-gallery-slide";
-export const slideLayoutName = "Image Gallery Slide";
+export const slideLayoutName = "이미지 갤러리 슬라이드";
 export const slideLayoutDescription =
-  "A slide with a left image gallery and right text block for gallery heading and description.";
+  "왼쪽 이미지 갤러리와 갤러리 제목 및 설명을 담은 오른쪽 텍스트 블록으로 구성된 슬라이드.";
 
 export const Schema = z.object({
-  title: z.string().max(24).default("Image Gallery").meta({
+  title: z.string().max(24).default("이미지 갤러리").meta({
     description: "Heading on the right side.",
   }),
   body: z.string().max(300).default(
-    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."
+    "생생한 현장의 모습을 담은 갤러리를 통해 저희의 교육 활동과 분위기를 한눈에 만나 보세요. 다양한 수업 현장과 학습자들의 열정이 어우러진 순간들을 모았습니다. 사진 속 이야기처럼, 여러분도 이곳에서 새로운 배움의 경험을 시작할 수 있습니다."
   ).meta({
     description: "Supporting paragraph shown below the heading.",
   }),

@@ -4,10 +4,10 @@ import { ImageSchema, IconSchema } from "../defaultSchemes";
 import { RemoteSvgIcon } from "@/app/hooks/useRemoteSvgIcon";
 
 export const layoutId = "bullet-with-icons";
-export const layoutName = "Bullet With Icons Slide Layout";
-export const layoutDescription = "Bullets with icons slide layout";
+export const layoutName = "아이콘 글머리 슬라이드 레이아웃";
+export const layoutDescription = "아이콘이 있는 글머리 슬라이드 레이아웃";
 const bulletWithIconsSlideSchema = z.object({
-  title: z.string().min(3).max(20).default("Problem").meta({
+  title: z.string().min(3).max(20).default("문제").meta({
     description: "Main title of the problem statement slide",
   }),
   description: z
@@ -15,7 +15,7 @@ const bulletWithIconsSlideSchema = z.object({
     .min(50)
     .max(200)
     .default(
-      "A problem needs to be discussed further and in detail because this problem is the main foundation in the initial development of a product, service, and decision making. Without a well-defined problem, it will have an impact on a job that is unfocused, unmanaged, and less relevant.",
+      "문제는 제품과 서비스 개발 초기 단계, 그리고 의사결정의 핵심 토대가 되므로 더 깊고 자세히 논의되어야 합니다. 잘 정의된 문제가 없으면 초점이 흐려지고 관리되지 않으며 연관성이 떨어지는 업무로 이어집니다.",
     )
     .meta({
       description: "Main content text describing the problem statement",
@@ -38,9 +38,9 @@ const bulletWithIconsSlideSchema = z.object({
     .max(3)
     .default([
       {
-        title: "Inefficiency",
+        title: "비효율성",
         description:
-          "Businesses struggle to find digital tools that meet their needs, causing operational slowdowns.",
+          "기업들은 필요에 맞는 디지털 도구를 찾는 데 어려움을 겪고, 이는 운영 지연으로 이어집니다.",
         icon: {
           __icon_url__:
             "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/checks-bold.svg",
@@ -48,9 +48,9 @@ const bulletWithIconsSlideSchema = z.object({
         },
       },
       {
-        title: "High Costs",
+        title: "높은 비용",
         description:
-          "Outdated systems increase expenses, while small businesses struggle to expand their market reach.",
+          "노후화된 시스템은 비용을 증가시키고, 소규모 기업은 시장 확대에 어려움을 겪습니다.",
         icon: {
           __icon_url__:
             "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/fediverse-logo-bold.svg",
@@ -58,9 +58,9 @@ const bulletWithIconsSlideSchema = z.object({
         },
       },
       {
-        title: "Inefficiency",
+        title: "비효율성",
         description:
-          "Businesses struggle to find digital tools that meet their needs, causing operational slowdowns.",
+          "기업들은 필요에 맞는 디지털 도구를 찾는 데 어려움을 겪고, 이는 운영 지연으로 이어집니다.",
         icon: {
           __icon_url__:
             "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/video-bold.svg",
@@ -68,9 +68,9 @@ const bulletWithIconsSlideSchema = z.object({
         },
       },
       {
-        title: "Inefficiency",
+        title: "비효율성",
         description:
-          "Businesses struggle to find digital tools that meet their needs, causing operational slowdowns.",
+          "기업들은 필요에 맞는 디지털 도구를 찾는 데 어려움을 겪고, 이는 운영 지연으로 이어집니다.",
         icon: {
           __icon_url__:
             "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/users-four-bold.svg",
@@ -124,7 +124,7 @@ const BulletWithIconsSlideLayout = ({
 
                 {(slideData as any)?._logo_url__ && <img src={(slideData as any)?._logo_url__} alt="logo" className="w-6 h-6" />}
                 {(slideData as any)?.__companyName__ && <span className="text-sm sm:text-base font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                  {(slideData as any)?.__companyName__ || 'Company Name'}
+                  {(slideData as any)?.__companyName__ || '회사명'}
                 </span>}
               </div>
             </div>

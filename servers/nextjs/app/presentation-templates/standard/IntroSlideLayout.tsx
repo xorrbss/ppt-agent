@@ -20,8 +20,8 @@ const IconSchema = z.object({
 })
 
 const layoutId = "header-counter-two-column-image-text-slide"
-const layoutName = "Intro Slide"
-const layoutDescription = "A slide with a header row containing label, separator, and counter, followed by a two-column layout with a media area and stacked text blocks. If used as the endig slide then it shoudn't have the intro card."
+const layoutName = "소개 슬라이드"
+const layoutDescription = "라벨, 구분선, 카운터가 있는 헤더 행과 그 아래 미디어 영역 및 세로로 쌓인 텍스트 블록으로 구성된 2열 레이아웃 슬라이드. 마무리 슬라이드로 사용할 경우 소개 카드는 표시하지 않아야 합니다."
 
 const Schema = z.object({
     header: z.object({
@@ -60,27 +60,27 @@ const Schema = z.object({
         },
     }),
 
-    title: z.string().min(12).max(30).default("Introduction Our Pitchdeck").meta({
+    title: z.string().min(12).max(30).default("우리의 피치덱 소개").meta({
         description: "Main title, supports a line break. Max 6 words",
     }),
     titleBreakAfter: z.number().min(1).max(25).default(12).meta({
         description: "Character index to insert a line break in title",
     }),
 
-    paragraph: z.string().min(50).max(200).default("Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris").meta({
+    paragraph: z.string().min(50).max(200).default("여기에 슬라이드의 핵심 내용을 뒷받침하는 설명을 입력하는 예시 문구입니다. 메시지를 명확하게 전달할 수 있도록 간결하고 자연스럽게 작성하세요.").meta({
         description: "Paragraph text block. Max 20 words",
     }),
 
     introCard: z.object({
         enabled: z.boolean().default(false).meta({ description: "Show intro card with name and date" }),
         initials: z.string().min(2).max(3).default("PDT").meta({ description: "Initials inside the circle" }),
-        name: z.string().min(3).max(40).default("Pitch Deck Team").meta({ description: "Display name" }),
-        date: z.string().min(6).max(40).default("December 22, 2025").meta({ description: "Display date string" }),
+        name: z.string().min(3).max(40).default("피치덱 팀").meta({ description: "Display name" }),
+        date: z.string().min(6).max(40).default("2025년 12월 22일").meta({ description: "Display date string" }),
     }).default({
         enabled: true,
         initials: "PDT",
-        name: "Pitch Deck Team",
-        date: "December 22, 2025",
+        name: "피치덱 팀",
+        date: "2025년 12월 22일",
     }),
 }).meta({
     maxWords: 460,
@@ -93,7 +93,7 @@ interface LayoutProps {
 }
 
 const dynamicSlideLayout: React.FC<LayoutProps> = ({ data: slideData }) => {
-    const title = slideData?.title || "Introduction Our Pitchdeck"
+    const title = slideData?.title || "우리의 피치덱 소개"
     const brIndex = typeof slideData?.titleBreakAfter === "number" ? slideData?.titleBreakAfter as number : 12
     const titleFirst = title.slice(0, brIndex)
     const titleSecond = title.slice(brIndex)
@@ -137,7 +137,7 @@ const dynamicSlideLayout: React.FC<LayoutProps> = ({ data: slideData }) => {
                             </h1>
 
                             <p className="mt-8 text-[16px] leading-[28px] " style={{ color: 'var(--background-text, #6B7280)' }}>
-                                {slideData?.paragraph || "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris"}
+                                {slideData?.paragraph || "여기에 슬라이드의 핵심 내용을 뒷받침하는 설명을 입력하는 예시 문구입니다. 메시지를 명확하게 전달할 수 있도록 간결하고 자연스럽게 작성하세요."}
                             </p>
 
                             {slideData?.introCard?.enabled ? (

@@ -1,9 +1,9 @@
 import * as z from "zod";
 
 export const slideLayoutId = "media-and-text-split";
-export const slideLayoutName = "Media and Text Split";
+export const slideLayoutName = "미디어와 텍스트 분할";
 export const slideLayoutDescription =
-  "A split composition with a title and media block on the left and supporting narrative plus footer text on the right.";
+  "왼쪽에 제목과 미디어 블록, 오른쪽에 보조 설명과 푸터 텍스트를 배치한 분할 구성입니다.";
 
 export const Schema = z
   .object({
@@ -13,7 +13,7 @@ export const Schema = z
       .meta({
         description: "Left panel heading.",
       })
-      .default("Overview"),
+      .default("개요"),
     sidePanelMode: z.enum(["solid", "image"]).default("image").meta({
       description: "Left media panel mode.",
     }),
@@ -37,7 +37,7 @@ export const Schema = z
 
       .max(50)
       .default(
-        "This is a sample text to tell story for audience is written here"
+        "여기에 청중에게 전달할 이야기를 담은 예시 문구를 입력하세요"
       )
       .meta({
         description: "Main headline text on the right.",
@@ -47,17 +47,17 @@ export const Schema = z
 
       .max(128)
       .default(
-        "Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut alUt enim ad minima veniam."
+        "여기에 청중에게 전달할 핵심 메시지를 입력하세요. 이 영역에는 보조 설명과 세부 내용을 자유롭게 작성할 수 있습니다."
       )
       .meta({
         description: "Supporting paragraph text.",
       }),
-    footerText: z.string().max(28).default("Footer text").meta({
+    footerText: z.string().max(28).default("푸터 텍스트").meta({
       description: "Footer text at the bottom-right.",
     }),
   })
   .default({
-    title: "Overview",
+    title: "개요",
     sidePanelMode: "image",
     sidePanelColor: "#d3d0bc",
     sidePanelImage: {
@@ -66,9 +66,9 @@ export const Schema = z
       __image_prompt__: "Glass skyscraper perspective",
     },
     headline:
-      "This is a sample text to tell story for audience is written here",
-    body: "Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut alUt enim ad minima veniam.",
-    footerText: "Footer text",
+      "여기에 청중에게 전달할 이야기를 담은 예시 문구를 입력하세요",
+    body: "여기에 청중에게 전달할 핵심 메시지를 입력하세요. 이 영역에는 보조 설명과 세부 내용을 자유롭게 작성할 수 있습니다.",
+    footerText: "푸터 텍스트",
   });
 
 export type SchemaType = z.infer<typeof Schema>;

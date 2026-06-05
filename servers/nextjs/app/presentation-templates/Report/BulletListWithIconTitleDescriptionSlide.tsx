@@ -12,12 +12,12 @@ const AnalysisItemSchema = z.object({
 });
 
 export const slideLayoutId = "bullet-list-with-icon-title-description-slide";
-export const slideLayoutName = "Bullet List with Icon Title Description Slide";
+export const slideLayoutName = "아이콘·제목·설명 글머리 목록 슬라이드";
 export const slideLayoutDescription =
-  "A slide with a title at the top and a two-column list of bullets points underneath. Each point contains a small circular icon badge, a short title on the same row, and a supporting description directly below.";
+  "상단에 제목이 있고 그 아래에 두 개 열의 글머리 목록이 있는 슬라이드. 각 항목은 작은 원형 아이콘 배지, 같은 줄의 짧은 제목, 그리고 바로 아래의 보조 설명으로 구성됩니다.";
 
 export const Schema = z.object({
-  title: z.string().min(3).max(12).default("Data Analysis").meta({
+  title: z.string().min(3).max(12).default("데이터 분석").meta({
     description: "Slide title shown at the top-left.",
   }),
   itemIcon: z.object({
@@ -35,12 +35,12 @@ export const Schema = z.object({
 
     .max(6)
     .default([
-      { title: "Title 1 title 1 title 1 title 1 title 1", description: "Ut enim ad minima veniam, quis. Ut enim ad minima veniam, quis. Ut enim" },
-      { title: "Title 3 title 3 title 3 title 3 title 3", description: "Ut enim ad minima veniam, quis. Ut enim ad minima veniam, quis. Ut enim " },
-      { title: "Title 2 title 2 title 2 title 2 title 2", description: "Ut enim ad minima veniam, quis. Ut enim ad minima veniam, quis. Ut enim " },
-      { title: "Title 4 title 4 title 4 title 4 title 4", description: "Ut enim ad minima veniam, quis. Ut enim ad minima veniam, quis. Ut enim " },
-      { title: "Title 2 title 2 title 2 title 2 title 2", description: "Ut enim ad minima veniam, quis. Ut enim ad minima veniam, quis. Ut enim " },
-      { title: "Title 5 title 5 title 5 title 5 title 5", description: "Ut enim ad minima veniam, quis. Ut enim ad minima veniam, quis. Ut enim " },
+      { title: "제목 1 제목 1 제목 1 제목 1 제목 1", description: "여기에 항목 설명을 입력하세요. 핵심 내용을 간결하게 정리하세요. 자유롭게" },
+      { title: "제목 3 제목 3 제목 3 제목 3 제목 3", description: "여기에 항목 설명을 입력하세요. 핵심 내용을 간결하게 정리하세요. 자유롭게 " },
+      { title: "제목 2 제목 2 제목 2 제목 2 제목 2", description: "여기에 항목 설명을 입력하세요. 핵심 내용을 간결하게 정리하세요. 자유롭게 " },
+      { title: "제목 4 제목 4 제목 4 제목 4 제목 4", description: "여기에 항목 설명을 입력하세요. 핵심 내용을 간결하게 정리하세요. 자유롭게 " },
+      { title: "제목 5 제목 5 제목 5 제목 5 제목 5", description: "여기에 항목 설명을 입력하세요. 핵심 내용을 간결하게 정리하세요. 자유롭게 " },
+      { title: "제목 6 제목 6 제목 6 제목 6 제목 6", description: "여기에 항목 설명을 입력하세요. 핵심 내용을 간결하게 정리하세요. 자유롭게 " },
     ])
     .meta({
       description: "List of points contains a title and description.",

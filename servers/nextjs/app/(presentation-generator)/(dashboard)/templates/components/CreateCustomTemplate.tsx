@@ -30,8 +30,8 @@ const CreateCustomTemplate = () => {
                     <Sparkles className='w-6 h-6 text-white' />
                 </div>
                 <div>
-                    <h4 className='text-[#191919] text-sm font-semibold '>Build Template</h4>
-                    <p className='flex text-[#808080] text-sm  font-medium items-center gap-2'>Build Your Own Template</p>
+                    <h4 className='text-[#191919] text-sm font-semibold '>템플릿 만들기</h4>
+                    <p className='flex text-[#808080] text-sm  font-medium items-center gap-2'>나만의 템플릿 만들기</p>
                 </div>
 
             </div>

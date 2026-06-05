@@ -2,9 +2,9 @@ import * as z from "zod";
 
 
 export const slideLayoutId = "title-description-with-cards-slide";
-export const slideLayoutName = "Title Description with Cards Slide";
+export const slideLayoutName = "제목·설명과 카드 슬라이드";
 export const slideLayoutDescription =
-  "A team introduction slide with a title and intro text on top, followed by a grid of profile cards where one card can be highlighted with a footer style.";
+  "상단에 제목과 소개 텍스트가 있고, 그 아래에 한 카드를 푸터 스타일로 강조할 수 있는 프로필 카드 그리드가 있는 팀 소개 슬라이드.";
 
 const MemberSchema = z.object({
   title: z.string().min(2).max(12).meta({
@@ -28,14 +28,14 @@ const MemberSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().max(18).default("Meet Our Team").meta({
+  title: z.string().max(18).default("팀 소개").meta({
     description: "Main title at the top-left.",
   }),
-  taglineLabel: z.string().max(16).default("TAGLINE").meta({
+  taglineLabel: z.string().max(16).default("태그라인").meta({
     description: "Small heading above team description.",
   }),
   taglineBody: z.string().max(80).default(
-    "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea."
+    "함께 성장하며 최고의 결과를 만들어 가는 우리 팀을 소개하는 자리 표시 문구입니다."
   ).meta({
     description: "Short descriptive paragraph at top-right.",
   }),
@@ -46,7 +46,7 @@ export const Schema = z.object({
     .default([
       {
         title: "CEO",
-        name: "Lanny LA",
+        name: "김서연",
         image: {
           __image_url__: "https://i.pravatar.cc/600?img=12",
           __image_prompt__: "Professional male portrait with suit",
@@ -54,8 +54,8 @@ export const Schema = z.object({
         highlighted: false,
       },
       {
-        title: "HEADING 2",
-        name: "Lanny LA",
+        title: "제목 2",
+        name: "박지훈",
         image: {
           __image_url__: "https://i.pravatar.cc/600?img=13",
           __image_prompt__: "Professional male portrait with tie",
@@ -63,8 +63,8 @@ export const Schema = z.object({
         highlighted: false,
       },
       {
-        title: "HEADING 3",
-        name: "Lanny LA",
+        title: "제목 3",
+        name: "최민준",
         image: {
           __image_url__: "https://i.pravatar.cc/600?img=14",
           __image_prompt__: "Professional male portrait smiling",
@@ -72,8 +72,8 @@ export const Schema = z.object({
         highlighted: true,
       },
       {
-        title: "HEADING 2",
-        name: "Lanny LA",
+        title: "제목 2",
+        name: "이하나",
         image: {
           __image_url__: "https://i.pravatar.cc/600?img=15",
           __image_prompt__: "Professional male portrait office",

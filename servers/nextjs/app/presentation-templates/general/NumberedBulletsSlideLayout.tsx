@@ -3,11 +3,11 @@ import * as z from "zod";
 import { ImageSchema } from '../defaultSchemes';
 
 export const layoutId = 'numbered-bullets-slide'
-export const layoutName = 'Numbered Bullets'
-export const layoutDescription = 'A slide layout with large title, supporting image, and numbered bullet points with descriptions.'
+export const layoutName = '번호 글머리'
+export const layoutDescription = '큰 제목, 보조 이미지, 설명이 있는 번호 글머리로 구성된 슬라이드 레이아웃입니다.'
 
 const numberedBulletsSlideSchema = z.object({
-    title: z.string().min(3).max(40).default('Market Validation').meta({
+    title: z.string().min(3).max(40).default('시장 검증').meta({
         description: "Main title of the slide",
     }),
     image: ImageSchema.default({
@@ -25,20 +25,20 @@ const numberedBulletsSlideSchema = z.object({
         }),
     })).min(1).max(3).default([
         {
-            title: 'Customer Insights',
-            description: 'Surveys reveal that 78% of businesses are planning to invest in digital solutions, with 85% preferring customized approaches.'
+            title: '고객 인사이트',
+            description: '설문 조사 결과, 기업의 78%가 디지털 솔루션에 투자할 계획이며 85%는 맞춤형 접근 방식을 선호하는 것으로 나타났습니다.'
         },
         {
-            title: 'Pilot Program Success',
-            description: 'The survey revealed that 78% of businesses plan to invest in digital solutions, and 85% prefer a tailored approach.'
+            title: '파일럿 프로그램 성공',
+            description: '설문 조사 결과, 기업의 78%가 디지털 솔루션에 투자할 계획이며 85%는 맞춤형 접근 방식을 선호하는 것으로 나타났습니다.'
         },
         {
-            title: 'Pilot Program Success',
-            description: 'The survey revealed that 78% of businesses plan to invest in digital solutions, and 85% prefer a tailored approach.'
+            title: '파일럿 프로그램 성공',
+            description: '설문 조사 결과, 기업의 78%가 디지털 솔루션에 투자할 계획이며 85%는 맞춤형 접근 방식을 선호하는 것으로 나타났습니다.'
         },
         {
-            title: 'Pilot Program Success',
-            description: 'The survey revealed that 78% of businesses plan to invest in digital solutions, and 85% prefer a tailored approach.'
+            title: '파일럿 프로그램 성공',
+            description: '설문 조사 결과, 기업의 78%가 디지털 솔루션에 투자할 계획이며 85%는 맞춤형 접근 방식을 선호하는 것으로 나타났습니다.'
         }
     ]).meta({
         description: "List of numbered bullet points with descriptions",
@@ -77,7 +77,7 @@ const NumberedBulletsSlideLayout: React.FC<NumberedBulletsSlideLayoutProps> = ({
 
                                 {(slideData as any)?._logo_url__ && <img src={(slideData as any)?._logo_url__} alt="logo" className="w-6 h-6" />}
                                 {(slideData as any)?.__companyName__ && <span className="text-sm sm:text-base font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(slideData as any)?.__companyName__ || 'Company Name'}
+                                    {(slideData as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>
@@ -91,7 +91,7 @@ const NumberedBulletsSlideLayout: React.FC<NumberedBulletsSlideLayoutProps> = ({
                         {/* Title Section */}
                         <div className="flex-1 pr-8">
                             <h1 style={{ color: "var(--background-text,#111827)" }} className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight mb-4">
-                                {slideData?.title || 'Market Validation'}
+                                {slideData?.title || '시장 검증'}
                             </h1>
                             {/* Purple accent line */}
                             <div style={{ background: "var(--primary-color,#9333ea)" }} className="w-24 h-1 bg-purple-600 mb-6"></div>

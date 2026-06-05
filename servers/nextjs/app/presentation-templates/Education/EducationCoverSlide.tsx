@@ -2,15 +2,15 @@ import * as z from "zod";
 
 
 export const slideLayoutId = "cover-slide";
-export const slideLayoutName = "Cover Slide";
+export const slideLayoutName = "표지 슬라이드";
 export const slideLayoutDescription =
-  "Opening/cover/intro slide with  organization/institution/presenter, presentation title/heading , and supporting subtitle.";
+  "조직/기관/발표자, 프레젠테이션 제목/헤딩, 보조 부제목으로 구성된 시작/표지/소개 슬라이드.";
 
 export const Schema = z.object({
-  name: z.string().min(3).max(16).optional().default("Name").meta({
+  name: z.string().min(3).max(16).optional().default("이름").meta({
     description: "Optional organization/institution/presenter name shown above the slide title.",
   }),
-  title: z.string().min(6).max(32).default("PowerPoint Template").meta({
+  title: z.string().min(6).max(32).default("파워포인트 템플릿").meta({
     description: "Main centered title of the cover slide.",
   }),
   backgroundImage: z.object({

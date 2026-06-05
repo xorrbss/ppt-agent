@@ -15,12 +15,12 @@ const InsightItemSchema = z.object({
 });
 
 export const slideLayoutId = "bar-chart-with-bullet-list-title-description-icon-slide";
-export const slideLayoutName = "Bar Chart with Bullet List with Title Description Icon Slide";
+export const slideLayoutName = "제목·설명·아이콘 글머리 목록과 막대 차트 슬라이드";
 export const slideLayoutDescription =
-  "A slide with a title at the top, a vertical list of three bullet points with icon, title and description on the left, and a bar chart on the right.";
+  "상단에 제목이 있고, 왼쪽에는 아이콘·제목·설명이 있는 세 개의 글머리 항목 세로 목록, 오른쪽에는 막대 차트가 배치된 슬라이드.";
 
 export const Schema = z.object({
-  title: z.string().min(3).max(80).default("Data Analysis").meta({
+  title: z.string().min(3).max(80).default("데이터 분석").meta({
     description: "Slide title shown at the top-left.",
   }),
   itemIcon: z
@@ -42,9 +42,9 @@ export const Schema = z.object({
     .min(1)
     .max(3)
     .default([
-      { title: "Title 1", description: "Ut enim ad minima veniam, quis." },
-      { title: "Title 2", description: "Ut enim ad minima veniam, quis." },
-      { title: "Title 2", description: "Ut enim ad minima veniam, quis." },
+      { title: "제목 1", description: "여기에 핵심 분석 내용을 한 줄로 작성하세요." },
+      { title: "제목 2", description: "여기에 핵심 분석 내용을 한 줄로 작성하세요." },
+      { title: "제목 3", description: "여기에 핵심 분석 내용을 한 줄로 작성하세요." },
     ])
     .meta({
       description: "Three analysis points shown in the left column,maximum 3 items",
@@ -52,17 +52,17 @@ export const Schema = z.object({
   chartData: flexibleChartDataSchema.default({
     type: "bar",
     data: [
-      { name: "Mon", value: 120 },
-      { name: "Tue", value: 200 },
-      { name: "Wed", value: 150 },
-      { name: "Thu", value: 80 },
-      { name: "Fri", value: 70 },
-      { name: "Sat", value: 110 },
-      { name: "Sun", value: 130 },
+      { name: "월", value: 120 },
+      { name: "화", value: 200 },
+      { name: "수", value: 150 },
+      { name: "목", value: 80 },
+      { name: "금", value: 70 },
+      { name: "토", value: 110 },
+      { name: "일", value: 130 },
     ],
 
   }),
-  legendLabel: z.string().min(3).max(50).default("Traditional Workflow").meta({
+  legendLabel: z.string().min(3).max(50).default("기존 워크플로").meta({
     description: "Legend label shown below the chart.",
   }),
 });

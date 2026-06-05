@@ -5,8 +5,8 @@ import { RemoteSvgIcon } from '@/app/hooks/useRemoteSvgIcon';
 import * as z from 'zod';
 
 export const Schema = z.object({
-    title: z.string().max(30).describe('The main title of the slide').default('Process / Workflow Flow'),
-    description: z.string().max(250).describe('A descriptive paragraph for the slide topic').default('Focus on companies with 500+ employees in Financial Services, Healthcare, and Technology sectors. Target $3.5M in new pipeline with sub-$150 CAC through account-based marketing and content-led strategies.'),
+    title: z.string().max(30).describe('The main title of the slide').default('프로세스 / 워크플로우 흐름'),
+    description: z.string().max(250).describe('A descriptive paragraph for the slide topic').default('금융 서비스, 헬스케어, 기술 분야의 직원 500명 이상 기업에 집중합니다. 어카운트 기반 마케팅과 콘텐츠 중심 전략으로 CAC 150달러 미만, 신규 파이프라인 350만 달러를 목표로 합니다.'),
     listItems: z.array(z.object({
         icon: z.object({
             __icon_url__: z.string(),
@@ -18,34 +18,34 @@ export const Schema = z.object({
         {
             icon: { __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/checks-bold.svg', __icon_query__: 'checkmark' },
             heading: '2021',
-            itemDescription: 'Briefly elaborate on what you want to discuss.'
+            itemDescription: '논의하고자 하는 내용을 간략히 설명하세요.'
         },
         {
             icon: { __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/checks-bold.svg', __icon_query__: 'checkmark' },
             heading: '2020',
-            itemDescription: 'Briefly elaborate on what you want to discuss.'
+            itemDescription: '논의하고자 하는 내용을 간략히 설명하세요.'
         },
         {
             icon: { __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/checks-bold.svg', __icon_query__: 'checkmark' },
             heading: '2019',
-            itemDescription: 'Briefly elaborate on what you want to discuss.'
+            itemDescription: '논의하고자 하는 내용을 간략히 설명하세요.'
         },
         {
             icon: { __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/checks-bold.svg', __icon_query__: 'checkmark' },
             heading: '2018',
-            itemDescription: 'Briefly elaborate on what you want to discuss.'
+            itemDescription: '논의하고자 하는 내용을 간략히 설명하세요.'
         },
         {
             icon: { __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/checks-bold.svg', __icon_query__: 'checkmark' },
             heading: '2017',
-            itemDescription: 'Briefly elaborate on what you want to discuss.'
+            itemDescription: '논의하고자 하는 내용을 간략히 설명하세요.'
         }
     ])
 });
 
 export const layoutId = 'title-description-icon-list';
-export const layoutName = 'Title Description Icon List';
-export const layoutDescription = 'A two-column slide with a title and description on the left, and a vertical list of icon-led items on the right, perfect for processes, steps, or feature lists.';
+export const layoutName = '제목 설명 아이콘 목록';
+export const layoutDescription = '왼쪽에 제목과 설명, 오른쪽에 아이콘이 앞서는 항목의 세로 목록을 배치한 2열 슬라이드로, 프로세스, 단계, 기능 목록에 적합합니다.';
 
 const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = ({ data }) => {
     const { title, description, listItems } = data;
@@ -125,7 +125,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                         style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                         className=' w-[2px] h-4'></span>
                     {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                        {(data as any)?.__companyName__ || 'Company Name'}
+                        {(data as any)?.__companyName__ || '회사명'}
                     </span>}
                 </div>}
             </div>

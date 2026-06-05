@@ -2,19 +2,19 @@ import React from "react"
 import * as z from "zod"
 
 const layoutId = "SwiftTableOfContents"
-const layoutName = "Table Of Contents"
-const layoutDescription = "Swift: Table of contents with up to 10 items (title + description)"
+const layoutName = "목차"
+const layoutDescription = "Swift: 최대 10개 항목(제목 + 설명)을 담은 목차"
 
 const ToCItemSchema = z
   .object({
-    title: z.string().min(3).max(40).default("Introduction"),
+    title: z.string().min(3).max(40).default("소개"),
     description: z
       .string()
       .min(0)
       .max(60)
-      .default("A brief overview of the section."),
+      .default("섹션에 대한 간단한 개요입니다."),
   })
-  .default({ title: "Introduction", description: "A brief overview of the section." })
+  .default({ title: "소개", description: "섹션에 대한 간단한 개요입니다." })
 
 const Schema = z
   .object({
@@ -22,38 +22,38 @@ const Schema = z
       .string()
       .min(3)
       .max(60)
-      .default("Table of Contents"),
+      .default("목차"),
     items: z
       .array(ToCItemSchema)
       .min(1)
       .max(10)
       .default([
-        { title: "Introduction", description: "A brief description of our company and goals." },
-        { title: "Our Team", description: "Leadership and core contributors." },
-        { title: "Timeline", description: "High-level execution plan and milestones." },
-        { title: "Recommendations", description: "Key suggestions based on initial requirements." },
-        { title: "Solution", description: "What we propose and why it works." },
-        { title: "Market", description: "Audience, segments, and opportunity size." },
-        { title: "Business Model", description: "How we create and capture value." },
-        { title: "Conclusion", description: "Closing notes and next steps." },
-        { title: "Business Model", description: "How we create and capture value." },
-        { title: "Conclusion", description: "Closing notes and next steps." },
+        { title: "소개", description: "회사와 목표를 간단히 소개하는 설명입니다." },
+        { title: "우리 팀", description: "리더십과 핵심 구성원입니다." },
+        { title: "타임라인", description: "주요 실행 계획과 마일스톤입니다." },
+        { title: "권장 사항", description: "초기 요구사항을 바탕으로 한 핵심 제안입니다." },
+        { title: "솔루션", description: "우리가 제안하는 내용과 그 이유입니다." },
+        { title: "시장", description: "대상 고객, 세그먼트, 기회 규모입니다." },
+        { title: "비즈니스 모델", description: "가치를 창출하고 확보하는 방식입니다." },
+        { title: "마무리", description: "마무리 요약과 다음 단계입니다." },
+        { title: "비즈니스 모델", description: "가치를 창출하고 확보하는 방식입니다." },
+        { title: "마무리", description: "마무리 요약과 다음 단계입니다." },
       ]),
     website: z.string().min(6).max(60).default("www.yourwebsite.com"),
   })
   .default({
-    title: "Table of Contents",
+    title: "목차",
     items: [
-      { title: "Introduction", description: "A brief description of our company and goals." },
-      { title: "Our Team", description: "Leadership and core contributors." },
-      { title: "Timeline", description: "High-level execution plan and milestones." },
-      { title: "Recommendations", description: "Key suggestions based on initial requirements." },
-      { title: "Solution", description: "What we propose and why it works." },
-      { title: "Market", description: "Audience, segments, and opportunity size." },
-      { title: "Business Model", description: "How we create and capture value." },
-      { title: "Conclusion", description: "Closing notes and next steps." },
-      { title: "Business Model", description: "How we create and capture value." },
-      { title: "Conclusion", description: "Closing notes and next steps." },
+      { title: "소개", description: "회사와 목표를 간단히 소개하는 설명입니다." },
+      { title: "우리 팀", description: "리더십과 핵심 구성원입니다." },
+      { title: "타임라인", description: "주요 실행 계획과 마일스톤입니다." },
+      { title: "권장 사항", description: "초기 요구사항을 바탕으로 한 핵심 제안입니다." },
+      { title: "솔루션", description: "우리가 제안하는 내용과 그 이유입니다." },
+      { title: "시장", description: "대상 고객, 세그먼트, 기회 규모입니다." },
+      { title: "비즈니스 모델", description: "가치를 창출하고 확보하는 방식입니다." },
+      { title: "마무리", description: "마무리 요약과 다음 단계입니다." },
+      { title: "비즈니스 모델", description: "가치를 창출하고 확보하는 방식입니다." },
+      { title: "마무리", description: "마무리 요약과 다음 단계입니다." },
 
     ],
     website: "www.yourwebsite.com",

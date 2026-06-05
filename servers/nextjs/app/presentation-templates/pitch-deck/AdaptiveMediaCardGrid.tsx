@@ -1,9 +1,9 @@
 import * as z from "zod";
 
 export const slideLayoutId = "adaptive-media-card-grid";
-export const slideLayoutName = "Adaptive Media Card Grid";
+export const slideLayoutName = "적응형 미디어 카드 그리드";
 export const slideLayoutDescription =
-  "A responsive media-card grid that supports compact and dense arrangements.";
+  "간결한 배치와 조밀한 배치를 모두 지원하는 반응형 미디어 카드 그리드입니다.";
 
 const CardSchema = z.object({
   label: z.string().max(14).meta({
@@ -26,7 +26,7 @@ const CardSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().max(16).default("Highlights").meta({
+  title: z.string().max(16).default("하이라이트").meta({
     description: "Top heading text.",
   }),
   cards: z
@@ -35,54 +35,54 @@ export const Schema = z.object({
     .max(8)
     .default([
       {
-        label: "LEAD",
-        title: "Insert Title",
-        description: "Ut enim ad minima veniam, quis nostrum",
+        label: "리드",
+        title: "제목 입력",
+        description: "여기에 짧은 설명 텍스트를 입력하세요",
         image: {
           __image_url__: "https://i.pravatar.cc/800?img=12",
           __image_prompt__: "Media card image",
         },
       },
       {
-        label: "LEAD",
-        title: "Insert Title",
-        description: "Ut enim ad minima veniam, quis nostrum",
+        label: "리드",
+        title: "제목 입력",
+        description: "여기에 짧은 설명 텍스트를 입력하세요",
         image: {
           __image_url__: "https://i.pravatar.cc/800?img=13",
           __image_prompt__: "Media card image",
         },
       },
       {
-        label: "LEAD",
-        title: "Insert Title",
-        description: "Ut enim ad minima veniam, quis nostrum",
+        label: "리드",
+        title: "제목 입력",
+        description: "여기에 짧은 설명 텍스트를 입력하세요",
         image: {
           __image_url__: "https://i.pravatar.cc/800?img=14",
           __image_prompt__: "Media card image",
         },
       },
       {
-        label: "LEAD",
-        title: "Insert Title",
-        description: "Ut enim ad minima veniam, quis nostrum",
+        label: "리드",
+        title: "제목 입력",
+        description: "여기에 짧은 설명 텍스트를 입력하세요",
         image: {
           __image_url__: "https://i.pravatar.cc/800?img=12",
           __image_prompt__: "Media card image",
         },
       },
       {
-        label: "LEAD",
-        title: "Insert Title",
-        description: "Ut enim ad minima veniam, quis nostrum",
+        label: "리드",
+        title: "제목 입력",
+        description: "여기에 짧은 설명 텍스트를 입력하세요",
         image: {
           __image_url__: "https://i.pravatar.cc/800?img=13",
           __image_prompt__: "Media card image",
         },
       },
       {
-        label: "LEAD",
-        title: "Insert Title",
-        description: "Ut enim ad minima veniam, quis nostrum",
+        label: "리드",
+        title: "제목 입력",
+        description: "여기에 짧은 설명 텍스트를 입력하세요",
         image: {
           __image_url__: "https://i.pravatar.cc/800?img=14",
           __image_prompt__: "Media card image",

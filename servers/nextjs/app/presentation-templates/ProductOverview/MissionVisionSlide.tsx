@@ -2,28 +2,28 @@ import * as z from "zod";
 
 
 export const slideLayoutId = "text-blocks-with-image-block-slide";
-export const slideLayoutName = "Text Blocks with Image Block Slide";
+export const slideLayoutName = "텍스트 블록과 이미지 블록 슬라이드";
 export const slideLayoutDescription =
-  "A slide with a title in the top-left block, text in the top-right , another text block in the bottom-left , and an image in the bottom-right block.";
+  "왼쪽 상단 블록에 제목, 오른쪽 상단에 텍스트, 왼쪽 하단에 또 다른 텍스트 블록, 오른쪽 하단 블록에 이미지가 있는 슬라이드.";
 
 export const Schema = z.object({
-  title: z.string().min(8).max(30).default("Mission & Vision").meta({
+  title: z.string().min(8).max(30).default("미션과 비전").meta({
     description: "Primary heading shown in the top-left tile.",
   }),
 
-  topleftTextBlockLabel: z.string().min(3).max(20).default("MISSION").meta({
+  topleftTextBlockLabel: z.string().min(3).max(20).default("미션").meta({
     description: "Mission section label.",
   }),
   topleftTextBlockBody: z.string().min(40).max(90).default(
-    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore."
+    "우리의 사명을 간결하게 설명하는 예시 문구입니다. 실제 내용으로 자유롭게 교체해 사용하실 수 있습니다."
   ).meta({
     description: "Mission paragraph content.",
   }),
-  bottomleftTextBlockLabel: z.string().min(3).max(20).default("VISION").meta({
+  bottomleftTextBlockLabel: z.string().min(3).max(20).default("비전").meta({
     description: "Vision section label.",
   }),
   bottomleftTextBlockBody: z.string().min(40).max(90).default(
-    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore."
+    "우리의 비전을 간결하게 설명하는 예시 문구입니다. 실제 내용으로 자유롭게 교체해 사용하실 수 있습니다."
   ).meta({
     description: "Vision paragraph content.",
   }),

@@ -1,9 +1,9 @@
 import * as z from "zod";
 
 export const slideLayoutId = "numbered-multi-column-overview";
-export const slideLayoutName = "Numbered Multi-Column Overview";
+export const slideLayoutName = "번호가 매겨진 다중 열 개요";
 export const slideLayoutDescription =
-  "A multi-column layout with numbered markers, short titles, and descriptive body text.";
+  "번호 마커, 짧은 제목, 설명 본문 텍스트로 구성된 다중 열 레이아웃입니다.";
 
 const ColumnSchema = z.object({
   marker: z.string().max(2).meta({
@@ -21,7 +21,7 @@ const ColumnSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().max(16).default("Overview").meta({
+  title: z.string().max(16).default("개요").meta({
     description: "Main heading text.",
   }),
   items: z
@@ -31,23 +31,23 @@ export const Schema = z.object({
     .default([
       {
         marker: "1",
-        title: "Heading 1",
+        title: "제목 1",
         description:
-          "Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut alUt enim.",
+          "여기에 청중에게 전달할 핵심 메시지를 입력하세요. 보조 설명과 세부 내용을 자유롭게 작성할 수 있습니다.",
         highlighted: true,
       },
       {
         marker: "2",
-        title: "Heading 2",
+        title: "제목 2",
         description:
-          "Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut alUt enim.",
+          "여기에 청중에게 전달할 핵심 메시지를 입력하세요. 보조 설명과 세부 내용을 자유롭게 작성할 수 있습니다.",
         highlighted: false,
       },
       {
         marker: "3",
-        title: "Heading 3",
+        title: "제목 3",
         description:
-          "Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut alUt enim.",
+          "여기에 청중에게 전달할 핵심 메시지를 입력하세요. 보조 설명과 세부 내용을 자유롭게 작성할 수 있습니다.",
         highlighted: false,
       },
       // { marker: "4", title: "Heading 4", description: "Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut alUt enim.", highlighted: false },

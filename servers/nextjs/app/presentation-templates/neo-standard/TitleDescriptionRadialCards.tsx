@@ -38,8 +38,8 @@ const RadialProgress = ({ value, size = 120, strokeWidth = 14 }: { value: number
 };
 
 export const Schema = z.object({
-    title: z.string().describe("The main title of the slide").default("Executive Summary"),
-    description: z.string().describe("A brief overview or summary description").default("Focus on companies with 500+ employees in Financial Services, Healthcare, and Technology sectors. Target $3.5M in new pipeline with sub-$150 CAC through account-based marketing and content-led strategies."),
+    title: z.string().describe("The main title of the slide").default("핵심 요약"),
+    description: z.string().describe("A brief overview or summary description").default("금융 서비스, 헬스케어, 기술 분야의 직원 500명 이상 기업에 집중합니다. 어카운트 기반 마케팅과 콘텐츠 중심 전략으로 CAC 150달러 미만, 신규 파이프라인 350만 달러를 목표로 합니다."),
     cards: z.array(z.object({
         heading: z.string().describe("Heading for the card item").max(20),
         graph: z.object({
@@ -48,20 +48,20 @@ export const Schema = z.object({
         }),
         footerText: z.string().describe("The descriptive text at the bottom of the card").max(50),
     })).max(8).default([
-        { heading: "Research", graph: { value: 1 }, footerText: "Main Challenge: Delayed Client" },
-        { heading: "Research", graph: { value: 40 }, footerText: "Main Challenge: Delayed Client" },
-        { heading: "Research", graph: { value: 60 }, footerText: "Main Challenge: Delayed Client" },
-        { heading: "Research", graph: { value: 80 }, footerText: "Main Challenge: Delayed Client" },
-        { heading: "Research", graph: { value: 30 }, footerText: "Main Challenge: Delayed Client" },
-        { heading: "Research", graph: { value: 99 }, footerText: "Main Challenge: Delayed Client" },
+        { heading: "리서치", graph: { value: 1 }, footerText: "주요 과제: 고객 지연" },
+        { heading: "리서치", graph: { value: 40 }, footerText: "주요 과제: 고객 지연" },
+        { heading: "리서치", graph: { value: 60 }, footerText: "주요 과제: 고객 지연" },
+        { heading: "리서치", graph: { value: 80 }, footerText: "주요 과제: 고객 지연" },
+        { heading: "리서치", graph: { value: 30 }, footerText: "주요 과제: 고객 지연" },
+        { heading: "리서치", graph: { value: 99 }, footerText: "주요 과제: 고객 지연" },
     ]),
 });
 
 type SlideData = z.infer<typeof Schema>;
 
 export const layoutId = "title-description-radial-cards";
-export const layoutName = "Title Description Radial Cards";
-export const layoutDescription = "A centered slide featuring a title and description at the top, followed by a flexible grid of up to 8 cards with radial progress charts.";
+export const layoutName = "제목 설명 방사형 카드";
+export const layoutDescription = "상단에 제목과 설명을 두고, 그 아래에 방사형 진행률 차트가 있는 최대 8개의 카드를 유연한 그리드로 배치한 중앙 정렬 슬라이드입니다.";
 
 const dynamicSlideLayout: React.FC<{ data: Partial<SlideData> }> = ({ data }) => {
     const { title, description, cards } = data;
@@ -150,7 +150,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<SlideData> }> = ({ data }) =>
                         style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                         className=' w-[2px] h-4'></span>
                     {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                        {(data as any)?.__companyName__ || 'Company Name'}
+                        {(data as any)?.__companyName__ || '회사명'}
                     </span>}
                 </div>}
             </div>

@@ -3,9 +3,9 @@ import * as z from "zod";
 
 
 export const slideLayoutId = "title-cards-list-with-text-slide";
-export const slideLayoutName = "Title with Cards List with Text";
+export const slideLayoutName = "제목과 텍스트 카드 목록 슬라이드";
 export const slideLayoutDescription =
-  "A slide with a title on top and a content section containing a list of cards with text content.";
+  "상단에 제목이 있고, 텍스트 내용이 담긴 카드 목록으로 구성된 콘텐츠 섹션이 있는 슬라이드.";
 
 const PlanSchema = z.object({
   price: z.string().min(4).max(12).meta({
@@ -27,7 +27,7 @@ const PlanSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().min(6).max(18).default("Pricing Plan").meta({
+  title: z.string().min(6).max(18).default("가격 플랜").meta({
     description: "Main slide title.",
   }),
   featureIcon: z.object({
@@ -45,35 +45,35 @@ export const Schema = z.object({
     .max(3)
     .default([
       {
-        price: "$80/MONTH",
-        description: "Lorem ipsum dolor sit.",
+        price: "$80/월",
+        description: "예시 설명입니다.",
         features: [
-          "Lorem ipsum dolor sit.",
-          "Lorem ipsum dolor sit.",
-          "Lorem ipsum dolor sit.",
-          "Lorem ipsum dolor sit.",
+          "예시 기능입니다.",
+          "예시 기능입니다.",
+          "예시 기능입니다.",
+          "예시 기능입니다.",
         ],
         highlighted: false,
       },
       {
-        price: "$80/MONTH",
-        description: "Lorem ipsum dolor sit.",
+        price: "$80/월",
+        description: "예시 설명입니다.",
         features: [
-          "Lorem ipsum dolor sit.",
-          "Lorem ipsum dolor sit.",
-          "Lorem ipsum dolor sit.",
-          "Lorem ipsum dolor sit.",
+          "예시 기능입니다.",
+          "예시 기능입니다.",
+          "예시 기능입니다.",
+          "예시 기능입니다.",
         ],
         highlighted: true,
       },
       {
-        price: "$80/MONTH",
-        description: "Lorem ipsum dolor sit.",
+        price: "$80/월",
+        description: "예시 설명입니다.",
         features: [
-          "Lorem ipsum dolor sit.",
-          "Lorem ipsum dolor sit.",
-          "Lorem ipsum dolor sit.",
-          "Lorem ipsum dolor sit.",
+          "예시 기능입니다.",
+          "예시 기능입니다.",
+          "예시 기능입니다.",
+          "예시 기능입니다.",
         ],
         highlighted: false,
       },

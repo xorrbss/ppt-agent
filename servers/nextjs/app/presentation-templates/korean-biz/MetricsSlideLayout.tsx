@@ -3,7 +3,7 @@ import * as z from "zod";
 
 export const layoutId = 'korean-biz-metrics'
 export const layoutName = '주요 지표'
-export const layoutDescription = 'Korean KPI/metrics slide: a title and 3-4 metric cards (big value + label)'
+export const layoutDescription = '제목과 3~4개의 지표 카드(큰 수치 + 라벨)로 구성된 한국형 KPI/지표 슬라이드'
 
 export const Schema = z.object({
   title: z

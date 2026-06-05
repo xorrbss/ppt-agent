@@ -2,8 +2,8 @@ import React from 'react'
 import * as z from "zod";
 
 export const layoutId = 'table-of-contents-slide'
-export const layoutName = 'Table of Contents'
-export const layoutDescription = 'A professional table of contents layout with numbered sections, and page references. This should be right after introduction slide if ever used.'
+export const layoutName = '목차'
+export const layoutDescription = '번호가 매겨진 섹션과 페이지 참조가 있는 전문적인 목차 레이아웃입니다. 사용하는 경우 소개 슬라이드 바로 다음에 배치해야 합니다.'
 
 const tableOfContentsSlideSchema = z.object({
     sections: z.array(z.object({
@@ -17,16 +17,16 @@ const tableOfContentsSlideSchema = z.object({
             description: "Page number for this section"
         })
     })).default([
-        { number: 1, title: "Problem", pageNumber: "03" },
-        { number: 2, title: "Solution", pageNumber: "04" },
-        { number: 3, title: "Product Overview", pageNumber: "05" },
-        { number: 4, title: "Market Size", pageNumber: "06" },
-        { number: 5, title: "Market Validation", pageNumber: "07" },
-        { number: 6, title: "Company Traction", pageNumber: "08" },
-        { number: 7, title: "Product Performance", pageNumber: "09" },
-        { number: 8, title: "Business Model", pageNumber: "10" },
-        { number: 9, title: "Competitive Advantage", pageNumber: "11" },
-        { number: 10, title: "Team Member", pageNumber: "12" }
+        { number: 1, title: "문제", pageNumber: "03" },
+        { number: 2, title: "솔루션", pageNumber: "04" },
+        { number: 3, title: "제품 개요", pageNumber: "05" },
+        { number: 4, title: "시장 규모", pageNumber: "06" },
+        { number: 5, title: "시장 검증", pageNumber: "07" },
+        { number: 6, title: "회사 성장세", pageNumber: "08" },
+        { number: 7, title: "제품 성과", pageNumber: "09" },
+        { number: 8, title: "비즈니스 모델", pageNumber: "10" },
+        { number: 9, title: "경쟁 우위", pageNumber: "11" },
+        { number: 10, title: "팀 구성원", pageNumber: "12" }
     ]).meta({
         description: "List of table of contents sections",
     })
@@ -67,7 +67,7 @@ const TableOfContentsSlideLayout: React.FC<TableOfContentsSlideLayoutProps> = ({
 
                                 {(slideData as any)?._logo_url__ && <img src={(slideData as any)?._logo_url__} alt="logo" className="w-6 h-6" />}
                                 {(slideData as any)?.__companyName__ && <span className="text-sm sm:text-base font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(slideData as any)?.__companyName__ || 'Company Name'}
+                                    {(slideData as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>
@@ -77,7 +77,7 @@ const TableOfContentsSlideLayout: React.FC<TableOfContentsSlideLayoutProps> = ({
                 {/* Title Section */}
                 <div className="text-center mb-8 sm:mb-12 mt-6">
                     <h1 style={{ color: "var(--background-text,#111827)" }} className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-4">
-                        Table of Contents
+                        목차
                     </h1>
                     {/* Decorative Wave */}
                     <div className="flex justify-center">

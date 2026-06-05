@@ -1,42 +1,42 @@
 import * as z from "zod";
 import React from "react";
 export const Schema = z.object({
-    title: z.string().max(25).describe('The main heading of the slide').default('Key Insights & Learnings'),
+    title: z.string().max(25).describe('The main heading of the slide').default('핵심 인사이트와 교훈'),
 
     cards: z.array(z.object({
         heading: z.string().max(56).describe('Heading text for the card'),
         description: z.string().max(46).describe('Description text for the card'),
     })).describe('Array of cards with heading and description').default([
         {
-            heading: 'ENTERPRISE ABM DELIVERS 3.2X HIGHER CONVERSION RATES',
-            description: 'Account-based campaigns targeting enterprises.',
+            heading: '엔터프라이즈 ABM이 3.2배 높은 전환율을 달성',
+            description: '엔터프라이즈를 겨냥한 어카운트 기반 캠페인.',
         },
         {
-            heading: 'CONTENT + PAID SOCIAL COMBINATION DRIVES HIGHEST',
-            description: 'Leads from integrated campaigns had 47% faster.',
+            heading: '콘텐츠와 유료 소셜의 조합이 최고 성과를 견인',
+            description: '통합 캠페인의 리드는 47% 더 빨랐습니다.',
         },
         {
-            heading: 'MOBILE OPTIMIZATION INCREASED MOBILE',
-            description: 'Landing page redesign focused on mobile.',
+            heading: '모바일 최적화로 모바일 전환 증가',
+            description: '모바일 중심의 랜딩 페이지 재설계.',
         },
         {
-            heading: 'ENTERPRISE ABM DELIVERS 3.2X HIGHER CONVERSION RATES',
-            description: 'Account-based campaigns targeting enterprises.',
+            heading: '엔터프라이즈 ABM이 3.2배 높은 전환율을 달성',
+            description: '엔터프라이즈를 겨냥한 어카운트 기반 캠페인.',
         },
         {
-            heading: 'CONTENT + PAID SOCIAL COMBINATION DRIVES HIGHEST',
-            description: 'Leads from integrated campaigns had 47% faster.',
+            heading: '콘텐츠와 유료 소셜의 조합이 최고 성과를 견인',
+            description: '통합 캠페인의 리드는 47% 더 빨랐습니다.',
         },
         {
-            heading: 'MOBILE OPTIMIZATION INCREASED MOBILE',
-            description: 'Landing page redesign focused on mobile.',
+            heading: '모바일 최적화로 모바일 전환 증가',
+            description: '모바일 중심의 랜딩 페이지 재설계.',
         },
     ]),
 });
 
 export const layoutId = 'title-six-card-grid-slide-layout';
-export const layoutName = 'Title With Six Text Cards Grid';
-export const layoutDescription = 'A layout featuring left-aligned bold title with accent bar, followed by a 3x2 grid of up to 6 cards. Each card contains an accent-colored heading and description text.';
+export const layoutName = '6개 텍스트 카드 그리드가 있는 제목';
+export const layoutDescription = '왼쪽 정렬된 굵은 제목과 강조 바를 배치하고, 그 아래에 최대 6개의 카드를 3x2 그리드로 배치한 레이아웃입니다. 각 카드는 강조 색상의 제목과 설명 텍스트를 담고 있습니다.';
 
 const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = ({ data }) => {
     const { title, cards } = data;
@@ -65,7 +65,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                                     style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                                     className=' w-[2px] h-4'></span>
                                 {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(data as any)?.__companyName__ || 'Company Name'}
+                                    {(data as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>

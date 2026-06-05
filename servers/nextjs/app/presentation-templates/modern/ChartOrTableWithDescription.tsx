@@ -5,18 +5,18 @@ import * as z from "zod";
 import { ModernSimpleChart } from "./ModernChartPrimitives";
 
 export const layoutId = "chart-or-table-with-description";
-export const layoutName = "Chart or Table With Description";
+export const layoutName = "설명이 있는 차트 또는 표";
 export const layoutDescription =
-  "Chart with description slide layout";
+  "설명이 있는 차트 슬라이드 레이아웃";
 
 const businessModelSchema = z
   .object({
 
-    title: z.string().min(3).max(60).default("Data Table or Chart"),
+    title: z.string().min(3).max(60).default("데이터 표 또는 차트"),
     description: z
       .string()
       .default(
-        "Present structured information in a flexible table or visualize it with a chart.",
+        "구조화된 정보를 유연한 표로 제시하거나 차트로 시각화하세요.",
       )
       .meta({
         description: "Supporting description for the table/chart",
@@ -29,7 +29,7 @@ const businessModelSchema = z
       .array(z.string().min(1).max(40))
       .min(2)
       .max(10)
-      .default(["Column 1", "Column 2", "Column 3"]),
+      .default(["열 1", "열 2", "열 3"]),
     rows: z
       .array(
         z.object({
@@ -37,15 +37,15 @@ const businessModelSchema = z
             .array(z.string().min(0).max(200))
             .min(2)
             .max(10)
-            .default(["Row 1", "Value", "Value"]),
+            .default(["행 1", "값", "값"]),
         }),
       )
       .min(1)
       .max(30)
       .default([
-        { cells: ["Row A", "✓", "-"] },
-        { cells: ["Row B", "Text", "123"] },
-        { cells: ["Row C", "More text", "456"] },
+        { cells: ["행 A", "✓", "-"] },
+        { cells: ["행 B", "텍스트", "123"] },
+        { cells: ["행 C", "추가 텍스트", "456"] },
       ]),
 
     // Chart configuration (parity with Swift TableorChart)
@@ -79,15 +79,15 @@ const businessModelSchema = z
   })
   .default({
 
-    title: "Data Table or Chart",
+    title: "데이터 표 또는 차트",
     description:
-      "Present structured information in a flexible table or visualize it with a chart.",
+      "구조화된 정보를 유연한 표로 제시하거나 차트로 시각화하세요.",
     mode: "table",
-    columns: ["Column 1", "Column 2", "Column 3"],
+    columns: ["열 1", "열 2", "열 3"],
     rows: [
-      { cells: ["Row A", "✓", "-"] },
-      { cells: ["Row B", "Text", "123"] },
-      { cells: ["Row C", "More text", "456"] },
+      { cells: ["행 A", "✓", "-"] },
+      { cells: ["행 B", "텍스트", "123"] },
+      { cells: ["행 C", "추가 텍스트", "456"] },
     ],
     chart: {
       type: "line",
@@ -142,7 +142,7 @@ const BusinessModelSlide: React.FC<Props> = ({ data }) => {
 
                 {(data as any)?._logo_url__ && <img src={(data as any)?._logo_url__} alt="logo" className="w-6 h-6" />}
                 {(data as any)?.__companyName__ && <span className="text-sm sm:text-base font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                  {(data as any)?.__companyName__ || 'Company Name'}
+                  {(data as any)?.__companyName__ || '회사명'}
                 </span>}
               </div>
             </div>

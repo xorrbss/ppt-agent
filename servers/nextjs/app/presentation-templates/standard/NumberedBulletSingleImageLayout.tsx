@@ -21,8 +21,8 @@ const IconSchema = z.object({
 })
 
 const layoutId = "header-bullets-image-split-slide"
-const layoutName = "Numbered Bullet Single Image"
-const layoutDescription = "A slide with a top bar, left column with numbered bullets, middle image panel, and right stacked heading with paragraph"
+const layoutName = "번호 글머리 단일 이미지"
+const layoutDescription = "상단 바, 번호 글머리가 있는 왼쪽 열, 가운데 이미지 패널, 그리고 제목과 단락이 세로로 쌓인 오른쪽 영역으로 구성된 슬라이드"
 
 const Schema = z.object({
   metaMaxWords: z.number().default(18).meta({
@@ -48,33 +48,33 @@ const Schema = z.object({
       numberText: z.string().min(2).max(2).default("01").meta({
         description: "Two-digit bullet number. Max 2 chars",
       }),
-      title: z.string().min(10).max(36).default("Strategic Execution").meta({
+      title: z.string().min(10).max(36).default("전략 실행").meta({
         description: "Bullet title text. Designed for 24px. Max ~36 chars",
       }),
-      body: z.string().min(60).max(100).default("Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor.").meta({
+      body: z.string().min(60).max(100).default("여기에 글머리 내용을 설명하는 예시 문구를 입력하세요.").meta({
         description: "Bullet body text. Max ~100 chars",
       }),
     })
   ).min(1).max(4).default([
     {
       numberText: "01",
-      title: "Strategic Execution",
-      body: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor.",
+      title: "전략 실행",
+      body: "여기에 글머리 내용을 설명하는 예시 문구를 입력하세요.",
     },
     {
       numberText: "02",
-      title: "Building a Strong Team",
-      body: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor.",
+      title: "강력한 팀 구축",
+      body: "여기에 글머리 내용을 설명하는 예시 문구를 입력하세요.",
     },
     {
       numberText: "03",
-      title: "Market Expansion Strategy",
-      body: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor.",
+      title: "시장 확장 전략",
+      body: "여기에 글머리 내용을 설명하는 예시 문구를 입력하세요.",
     },
     {
       numberText: "04",
-      title: "Innovation Pipeline",
-      body: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor.",
+      title: "혁신 파이프라인",
+      body: "여기에 글머리 내용을 설명하는 예시 문구를 입력하세요.",
     }
   ]).meta({
     description: "List of numbered bullets. Max 5 items",
@@ -86,15 +86,15 @@ const Schema = z.object({
     description: "Image displayed in the middle column",
   }),
   rightHeader: z.object({
-    heading: z.string().min(6).max(30).default("Our Journey").meta({
+    heading: z.string().min(6).max(30).default("우리의 여정").meta({
       description: "Right column heading. Max ~30 chars",
     }),
-    paragraph: z.string().min(80).max(200).default("Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore.").meta({
+    paragraph: z.string().min(80).max(200).default("여기에 제목을 뒷받침하는 설명을 입력하는 예시 문구입니다. 메시지를 명확하게 전달할 수 있도록 간결하게 작성하세요.").meta({
       description: "Right paragraph text. Max 200 chars",
     }),
   }).default({
-    heading: "Our Journey",
-    paragraph: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore.",
+    heading: "우리의 여정",
+    paragraph: "여기에 제목을 뒷받침하는 설명을 입력하는 예시 문구입니다. 메시지를 명확하게 전달할 수 있도록 간결하게 작성하세요.",
   }),
 })
 
@@ -160,10 +160,10 @@ const dynamicSlideLayout: React.FC<SlideLayoutProps> = ({ data: slideData }) => 
           <div className="pl-10 pr-12 pt-16">
             <div className="max-w-[560px] mx-auto">
               <h1 className="text-[64px] leading-[0.95]  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                <span className="block">{slideData?.rightHeader?.heading || "Our Journey"}</span>
+                <span className="block">{slideData?.rightHeader?.heading || "우리의 여정"}</span>
               </h1>
               <p className="mt-6 text-[16px] leading-relaxed " style={{ color: 'var(--background-text, #6B7280)' }}>
-                {slideData?.rightHeader?.paragraph || "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore."}
+                {slideData?.rightHeader?.paragraph || "여기에 제목을 뒷받침하는 설명을 입력하는 예시 문구입니다. 메시지를 명확하게 전달할 수 있도록 간결하게 작성하세요."}
               </p>
             </div>
           </div>

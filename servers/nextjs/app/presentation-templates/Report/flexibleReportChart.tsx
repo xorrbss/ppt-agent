@@ -999,7 +999,7 @@ export function FlexibleReportChart({
   }, [chartData, chartType, colorFallback, density, dualLineColors, series]);
 
   if (!flexibleChartTypeSchema.safeParse(chartType).success) {
-    return <div className="flex h-full items-center justify-center text-gray-500">Unsupported chart type</div>;
+    return <div className="flex h-full items-center justify-center text-gray-500">지원하지 않는 차트 유형</div>;
   }
 
   return <canvas ref={canvasRef} className="block h-full w-full" />;

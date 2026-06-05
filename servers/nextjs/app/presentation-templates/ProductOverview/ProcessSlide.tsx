@@ -3,9 +3,9 @@ import * as z from "zod";
 
 
 export const slideLayoutId = "title-with-process-steps-slide";
-export const slideLayoutName = "Title with Process Steps Slide";
+export const slideLayoutName = "제목과 프로세스 단계 슬라이드";
 export const slideLayoutDescription =
-  "A slide with a title on top and a content section containing a process diagrams with connected hexagon steps and alternating caption blocks above and below the flow.";
+  "상단에 제목이 있고, 연결된 육각형 단계와 흐름의 위아래로 번갈아 배치되는 캡션 블록으로 구성된 프로세스 다이어그램이 담긴 콘텐츠 섹션이 있는 슬라이드.";
 
 const StepSchema = z.object({
   label: z.string().max(16).meta({
@@ -27,7 +27,7 @@ const StepSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().max(14).default("PROCESS").meta({
+  title: z.string().max(14).default("프로세스").meta({
     description: "Main title shown in the top-left corner.",
   }),
 
@@ -37,31 +37,31 @@ export const Schema = z.object({
     .max(5)
     .default([
       {
-        label: "TAGLINE TAGLINE", body: "Ut enim ad minim. Ut enim ad minim. ", icon: {
+        label: "태그라인 태그라인", body: "예시 단계 설명입니다. 예시 단계 설명입니다.", icon: {
           __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
           __icon_query__: "pulse icon",
         }, highlighted: false
       },
       {
-        label: "TAGLINE", body: "Ut enim ad minim. Ut enim ad minim.", icon: {
+        label: "태그라인", body: "예시 단계 설명입니다. 예시 단계 설명입니다.", icon: {
           __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
           __icon_query__: "upload icon",
         }, highlighted: false
       },
       {
-        label: "TAGLINE", body: "Ut enim ad minim.", icon: {
+        label: "태그라인", body: "예시 단계 설명입니다.", icon: {
           __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
           __icon_query__: "pulse icon",
         }, highlighted: false
       },
       {
-        label: "TAGLINE", body: "Ut enim ad minim.", icon: {
+        label: "태그라인", body: "예시 단계 설명입니다.", icon: {
           __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
           __icon_query__: "upload icon",
         }, highlighted: false
       },
       {
-        label: "TAGLINE", body: "Ut enim ad minim.", icon: {
+        label: "태그라인", body: "예시 단계 설명입니다.", icon: {
           __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/placeholder.svg",
           __icon_query__: "pulse icon",
         }, highlighted: true

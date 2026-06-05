@@ -5,19 +5,19 @@ import { IconSchema } from '../defaultSchemes';
 import { RemoteSvgIcon } from "@/app/hooks/useRemoteSvgIcon";
 
 const layoutId = "bullet-with-icons-title-description"
-const layoutName = "Bullet With Icons Title Description"
-const layoutDescription = "Bullet with icons with title and description and title and description for whole"
+const layoutName = "아이콘·제목·설명 글머리"
+const layoutDescription = "아이콘이 있는 글머리에 각 항목의 제목·설명과 전체 제목·설명을 함께 표시"
 
 const ItemSchema = z
   .object({
     icon: IconSchema,
-    title: z.string().min(3).max(40).default("Lorem ipsum dolor"),
+    title: z.string().min(3).max(40).default("예시 제목"),
     description: z
       .string()
       .min(0)
       .max(160)
       .default(
-        "Short supporting description that fits under the icon title."
+        "아이콘 제목 아래에 들어가는 간단한 보조 설명입니다."
       ),
   })
   .default({
@@ -26,8 +26,8 @@ const ItemSchema = z
         "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/graduation-cap-bold.svg",
       __icon_query__: "feature icon",
     },
-    title: "Lorem ipsum dolor",
-    description: "Short supporting description that fits under the icon title.",
+    title: "예시 제목",
+    description: "아이콘 제목 아래에 들어가는 간단한 보조 설명입니다.",
   })
 
 const Schema = z
@@ -36,14 +36,14 @@ const Schema = z
       .string()
       .min(3)
       .max(60)
-      .default("Our Infographic"),
-    sideHeading: z.string().min(0).max(60).default("Lorem ipsum dolor sit amet,"),
+      .default("우리의 인포그래픽"),
+    sideHeading: z.string().min(0).max(60).default("예시 부제목 문구입니다,"),
     sideParagraph: z
       .string()
       .min(0)
       .max(300)
       .default(
-        "Concise paragraph describing context. Keep it short and readable across one or two lines."
+        "맥락을 설명하는 간결한 문단입니다. 한두 줄로 짧고 읽기 쉽게 작성하세요."
       ),
     items: z
       .array(ItemSchema)
@@ -56,9 +56,9 @@ const Schema = z
               "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/graduation-cap-bold.svg",
             __icon_query__: "feature icon",
           },
-          title: "Lorem ipsum dolor",
+          title: "예시 제목",
           description:
-            "Concise supporting text under the first icon explaining the point.",
+            "첫 번째 아이콘 아래에서 요점을 설명하는 간결한 보조 텍스트입니다.",
         },
         {
           icon: {
@@ -66,9 +66,9 @@ const Schema = z
               "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/user-bold.svg",
             __icon_query__: "feature icon",
           },
-          title: "Lorem ipsum dolor",
+          title: "예시 제목",
           description:
-            "Concise supporting text under the second icon explaining the point.",
+            "두 번째 아이콘 아래에서 요점을 설명하는 간결한 보조 텍스트입니다.",
         },
         {
           icon: {
@@ -76,9 +76,9 @@ const Schema = z
               "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/calendar-blank-bold.svg",
             __icon_query__: "feature icon",
           },
-          title: "Lorem ipsum dolor",
+          title: "예시 제목",
           description:
-            "Concise supporting text under the third icon explaining the point.",
+            "세 번째 아이콘 아래에서 요점을 설명하는 간결한 보조 텍스트입니다.",
         },
         {
           icon: {
@@ -86,42 +86,42 @@ const Schema = z
               "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/x-bold.svg",
             __icon_query__: "feature icon",
           },
-          title: "Lorem ipsum dolor",
+          title: "예시 제목",
           description:
-            "Concise supporting text under the fourth icon explaining the point.",
+            "네 번째 아이콘 아래에서 요점을 설명하는 간결한 보조 텍스트입니다.",
         },
       ]),
     website: z.string().min(6).max(60).default("www.yourwebsite.com"),
   })
   .default({
-    title: "Our Infographic",
-    sideHeading: "Lorem ipsum dolor sit amet,",
+    title: "우리의 인포그래픽",
+    sideHeading: "예시 부제목 문구입니다,",
     sideParagraph:
-      "Concise paragraph describing context. Keep it short and readable across one or two lines.",
+      "맥락을 설명하는 간결한 문단입니다. 한두 줄로 짧고 읽기 쉽게 작성하세요.",
     items: [
       {
         icon: { __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/graduation-cap-bold.svg", __icon_query__: "feature icon" },
-        title: "Lorem ipsum dolor",
+        title: "예시 제목",
         description:
-          "Concise supporting text under the first icon explaining the point.",
+          "첫 번째 아이콘 아래에서 요점을 설명하는 간결한 보조 텍스트입니다.",
       },
       {
         icon: { __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/user-bold.svg", __icon_query__: "feature icon" },
-        title: "Lorem ipsum dolor",
+        title: "예시 제목",
         description:
-          "Concise supporting text under the second icon explaining the point.",
+          "두 번째 아이콘 아래에서 요점을 설명하는 간결한 보조 텍스트입니다.",
       },
       {
         icon: { __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/calendar-blank-bold.svg", __icon_query__: "feature icon" },
-        title: "Lorem ipsum dolor",
+        title: "예시 제목",
         description:
-          "Concise supporting text under the third icon explaining the point.",
+          "세 번째 아이콘 아래에서 요점을 설명하는 간결한 보조 텍스트입니다.",
       },
       {
         icon: { __icon_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/x-bold.svg", __icon_query__: "feature icon" },
-        title: "Lorem ipsum dolor",
+        title: "예시 제목",
         description:
-          "Concise supporting text under the fourth icon explaining the point.",
+          "네 번째 아이콘 아래에서 요점을 설명하는 간결한 보조 텍스트입니다.",
       },
     ],
     website: "www.yourwebsite.com",

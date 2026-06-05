@@ -4,11 +4,11 @@ import { ImageSchema, IconSchema } from '../defaultSchemes';
 import { RemoteSvgIcon } from '@/app/hooks/useRemoteSvgIcon';
 
 export const layoutId = 'bullet-icons-only-slide'
-export const layoutName = 'Bullet Icons Only'
-export const layoutDescription = 'A slide layout with title, grid of bullet points (title and description) with icons, and a supporting image.'
+export const layoutName = '아이콘 글머리만'
+export const layoutDescription = '제목, 아이콘이 있는 글머리 격자(제목과 설명), 보조 이미지로 구성된 슬라이드 레이아웃입니다.'
 
 const bulletIconsOnlySlideSchema = z.object({
-    title: z.string().min(3).max(40).default('Solutions').meta({
+    title: z.string().min(3).max(40).default('솔루션').meta({
         description: "Main title of the slide",
     }),
     image: ImageSchema.default({
@@ -27,32 +27,32 @@ const bulletIconsOnlySlideSchema = z.object({
         icon: IconSchema,
     })).min(2).max(3).default([
         {
-            title: 'Custom Software',
-            subtitle: 'We create tailored software to optimize processes and boost efficiency.',
+            title: '맞춤형 소프트웨어',
+            subtitle: '프로세스를 최적화하고 효율성을 높이는 맞춤형 소프트웨어를 제작합니다.',
             icon: {
                 __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/code-bold.svg',
                 __icon_query__: 'code software development'
             }
         },
         {
-            title: 'Digital Consulting',
-            subtitle: 'Our consultants guide organizations in leveraging the latest technologies.',
+            title: '디지털 컨설팅',
+            subtitle: '저희 컨설턴트가 최신 기술을 활용하도록 조직을 안내합니다.',
             icon: {
                 __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/users-four-bold.svg',
                 __icon_query__: 'users consulting team'
             }
         },
         {
-            title: 'Support Services',
-            subtitle: 'We provide ongoing support to help businesses adapt and maintain performance.',
+            title: '지원 서비스',
+            subtitle: '비즈니스가 적응하고 성과를 유지할 수 있도록 지속적인 지원을 제공합니다.',
             icon: {
                 __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/headphones-bold.svg',
                 __icon_query__: 'headphones support service'
             }
         },
         {
-            title: 'Scalable Marketing',
-            subtitle: 'Our data-driven strategies help businesses expand their reach and engagement.',
+            title: '확장 가능한 마케팅',
+            subtitle: '데이터 기반 전략으로 비즈니스의 도달 범위와 참여도를 확장하도록 돕습니다.',
             icon: {
                 __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/code-bold.svg',
                 __icon_query__: 'trending up marketing growth'
@@ -108,7 +108,7 @@ const BulletIconsOnlySlideLayout: React.FC<BulletIconsOnlySlideLayoutProps> = ({
 
                                 {(slideData as any)?._logo_url__ && <img src={(slideData as any)?._logo_url__} alt="logo" className="w-6 h-6" />}
                                 {(slideData as any)?.__companyName__ && <span className="text-sm sm:text-base font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(slideData as any)?.__companyName__ || 'Company Name'}
+                                    {(slideData as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>
@@ -134,7 +134,7 @@ const BulletIconsOnlySlideLayout: React.FC<BulletIconsOnlySlideLayoutProps> = ({
                     <div className="flex-1 flex flex-col pr-8">
                         {/* Title */}
                         <h1 style={{ color: "var(--background-text, #111827)" }} className="text-5xl sm:text-6xl lg:text-7xl font-bold text-gray-900 mb-8">
-                            {slideData?.title || 'Solutions'}
+                            {slideData?.title || '솔루션'}
                         </h1>
 
                         {/* Bullet Points Grid */}

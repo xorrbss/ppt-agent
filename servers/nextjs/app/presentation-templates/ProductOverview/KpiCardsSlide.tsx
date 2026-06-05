@@ -3,9 +3,9 @@ import * as z from "zod";
 
 
 export const slideLayoutId = "title-with-kpi-cards-slide";
-export const slideLayoutName = "Title with KPI Cards Slide";
+export const slideLayoutName = "제목과 KPI 카드 슬라이드";
 export const slideLayoutDescription =
-  "A slide with a title on top and a content section containing a grid of KPI cards.";
+  "상단에 제목이 있고, KPI 카드 그리드가 담긴 콘텐츠 섹션이 있는 슬라이드.";
 
 const KpiSchema = z.object({
   value: z.string().max(5).meta({
@@ -17,7 +17,7 @@ const KpiSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().min(3).max(10).default("KPIs").meta({
+  title: z.string().min(3).max(10).default("KPI").meta({
     description: "Main title shown in the top-left corner.",
   }),
   kpiIcon: z.object({
@@ -45,12 +45,12 @@ export const Schema = z.object({
     .min(3)
     .max(6)
     .default([
-      { value: "X 5 Lorem", body: "Lorem ipsum dolor sit. " },
-      { value: "X 5", body: "Lorem ipsum dolor sit." },
-      { value: "X 5", body: "Lorem ipsum dolor sit." },
-      { value: "X 5", body: "Lorem ipsum dolor sit." },
-      { value: "X 5", body: "Lorem ipsum dolor sit." },
-      { value: "X 5", body: "Lorem ipsum dolor sit." },
+      { value: "X 5", body: "예시 지표 내용입니다." },
+      { value: "X 5", body: "예시 지표 내용입니다." },
+      { value: "X 5", body: "예시 지표 내용입니다." },
+      { value: "X 5", body: "예시 지표 내용입니다." },
+      { value: "X 5", body: "예시 지표 내용입니다." },
+      { value: "X 5", body: "예시 지표 내용입니다." },
     ])
     .meta({
       description: "Six KPI cards displayed in a 3x2 grid.",

@@ -3,12 +3,12 @@ import * as z from "zod";
 import { ImageSchema } from "../defaultSchemes";
 
 export const layoutId = "image-and-description";
-export const layoutName = "Image And Description";
+export const layoutName = "이미지와 설명";
 export const layoutDescription =
-  "A slide layout with a title, a description, and an image.";
+  "제목, 설명, 이미지로 구성된 슬라이드 레이아웃.";
 
 const imageWithDescriptionSlideSchema = z.object({
-  title: z.string().min(3).max(30).default("Image With Description").meta({
+  title: z.string().min(3).max(30).default("이미지와 설명").meta({
     description: "Main title of the slide",
   }),
   content: z
@@ -16,7 +16,7 @@ const imageWithDescriptionSlideSchema = z.object({
     .min(25)
     .max(300)
     .default(
-      "In the presentation session, the background/introduction can be filled with information that is arranged systematically and effectively with respect to an interesting topic to be used as material for discussion at the opening of the presentation session. The introduction can provide a general overview for those who are listening to your presentation so that the key words on the topic of discussion are emphasized during this background/introductory presentation session.",
+      "발표 세션에서 배경/소개 부분은 발표 도입부의 논의 자료로 활용할 흥미로운 주제를 중심으로 체계적이고 효과적으로 정리된 정보로 채울 수 있습니다. 소개는 청중에게 전반적인 개요를 제공하여, 이 배경/도입 발표 세션 동안 논의 주제의 핵심 키워드가 강조되도록 합니다.",
     )
     .meta({
       description: "Main content text describing the company or topic",
@@ -66,7 +66,7 @@ const ImageWithDescriptionSlideLayout: React.FC<ImageWithDescriptionSlideLayoutP
 
                 {(slideData as any)?._logo_url__ && <img src={(slideData as any)?._logo_url__} alt="logo" className="w-6 h-6" />}
                 {(slideData as any)?.__companyName__ && <span className="text-sm sm:text-base font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                  {(slideData as any)?.__companyName__ || 'Company Name'}
+                  {(slideData as any)?.__companyName__ || '회사명'}
                 </span>}
               </div>
             </div>

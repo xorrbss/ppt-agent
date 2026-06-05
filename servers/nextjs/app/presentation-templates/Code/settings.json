@@ -1,5 +1,5 @@
 {
-  "description": "Developer-focused layouts for roadmaps, APIs, code explanations, and technical metrics",
+  "description": "로드맵, API, 코드 설명, 기술 지표를 위한 개발자 중심 레이아웃",
   "ordered": false,
   "default": false,
   "icon_weight": "regular"

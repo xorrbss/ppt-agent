@@ -5,19 +5,19 @@ import * as z from "zod";
  * Zod Schema for the slide content.
  */
 export const Schema = z.object({
-    title: z.string().max(20).describe('The main heading of the slide').default('Timeline'),
+    title: z.string().max(20).describe('The main heading of the slide').default('타임라인'),
     milestones: z.array(z.object({
         year: z.string().max(4).describe('Time period or date label'),
         description: z.string().max(100).describe('Description text for the milestone'),
     })).min(2).max(6).describe('List of milestone items for the timeline').default([
-        { year: '2017', description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed facilisis lacinia dictum.' },
-        { year: '2018', description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed facilisis lacinia dictum.' },
-        { year: '2019', description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed facilisis lacinia dictum.' },
-        { year: '2020', description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed facilisis lacinia dictum.' },
-        { year: '2021', description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed facilisis lacinia dictum.' },
-        { year: '2022', description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed facilisis lacinia dictum.' },
-        { year: '2023', description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed facilisis lacinia dictum.' },
-        { year: '2024', description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed facilisis lacinia dictum.' },
+        { year: '2017', description: '여기에 마일스톤에 대한 설명을 입력하세요. 해당 기간의 주요 성과와 변화를 간단히 정리합니다.' },
+        { year: '2018', description: '여기에 마일스톤에 대한 설명을 입력하세요. 해당 기간의 주요 성과와 변화를 간단히 정리합니다.' },
+        { year: '2019', description: '여기에 마일스톤에 대한 설명을 입력하세요. 해당 기간의 주요 성과와 변화를 간단히 정리합니다.' },
+        { year: '2020', description: '여기에 마일스톤에 대한 설명을 입력하세요. 해당 기간의 주요 성과와 변화를 간단히 정리합니다.' },
+        { year: '2021', description: '여기에 마일스톤에 대한 설명을 입력하세요. 해당 기간의 주요 성과와 변화를 간단히 정리합니다.' },
+        { year: '2022', description: '여기에 마일스톤에 대한 설명을 입력하세요. 해당 기간의 주요 성과와 변화를 간단히 정리합니다.' },
+        { year: '2023', description: '여기에 마일스톤에 대한 설명을 입력하세요. 해당 기간의 주요 성과와 변화를 간단히 정리합니다.' },
+        { year: '2024', description: '여기에 마일스톤에 대한 설명을 입력하세요. 해당 기간의 주요 성과와 변화를 간단히 정리합니다.' },
 
     ]),
 });
@@ -26,8 +26,8 @@ export const Schema = z.object({
  * Layout metadata.
  */
 export const layoutId = 'timeline-alternating-cards-slide';
-export const layoutName = 'Horizontal Timeline With Cards';
-export const layoutDescription = 'A visual timeline layout featuring centered title, horizontal dashed axis line, and 2-6 milestone cards alternating above and below the axis. Each card shows a date label and description with colored accent dots.';
+export const layoutName = '카드가 있는 가로 타임라인';
+export const layoutDescription = '가운데 정렬된 제목, 가로 점선 축, 그리고 축의 위아래로 번갈아 배치된 2~6개의 마일스톤 카드로 구성된 시각적 타임라인 레이아웃입니다. 각 카드는 날짜 라벨과 설명을 색상 강조 점과 함께 표시합니다.';
 
 /**
  * React Component for the slide.
@@ -97,7 +97,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                                     style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                                     className=' w-[2px] h-4'></span>
                                 {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(data as any)?.__companyName__ || 'Company Name'}
+                                    {(data as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>

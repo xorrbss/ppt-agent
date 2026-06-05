@@ -1,24 +1,24 @@
 import * as z from "zod";
 
 export const Schema = z.object({
-  titleFirstLine: z.string().min(1).max(12).default("Company's ").meta({
+  titleFirstLine: z.string().min(1).max(12).default("우리 회사의 ").meta({
     description: "First half of title or heading",
   }),
-  titleSecondLine: z.string().min(1).max(12).default("Annual Report").meta({
+  titleSecondLine: z.string().min(1).max(12).default("연차 보고서").meta({
     description: "Second half of title or heading",
   }),
-  name: z.string().min(1).max(10).optional().default("John Doe").meta({
+  name: z.string().min(1).max(10).optional().default("홍길동").meta({
     description: "Name of the presenter/individual/company/organization.",
   }),
-  position: z.string().min(1).max(20).default("Company Name | Strategy, Content, growth").meta({
+  position: z.string().min(1).max(20).default("회사명 | 전략, 콘텐츠, 성장").meta({
     description: "Position or role of the presenter or address of the company/organization.",
   }),
 })
 export type SchemaType = z.infer<typeof Schema>;
 export const slideLayoutId = "intro-slide";
-export const slideLayoutName = "Intro/Cover Slide";
+export const slideLayoutName = "소개/표지 슬라이드";
 export const slideLayoutDescription =
-  "A cover/intro slide with a two-line title section, a divider directly beneath the title, and a presenter information block below the divider containing a name line and a supporting role or company line.";
+  "두 줄 제목 섹션, 제목 바로 아래의 구분선, 그리고 구분선 아래에 이름 줄과 직책 또는 회사명 줄로 구성된 발표자 정보 블록이 있는 표지/소개 슬라이드.";
 const IntroSlide = ({ data }: { data: Partial<SchemaType> }) => {
   const { titleFirstLine, titleSecondLine, name, position } = data;
 

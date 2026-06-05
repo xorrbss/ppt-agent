@@ -18,9 +18,9 @@ const MemberSchema = z.object({
 });
 
 export const slideLayoutId = "horizontal-height-spanning-images-with-title-slide";
-export const slideLayoutName = "Horizontal Height Spanning Images with Title Slide";
+export const slideLayoutName = "제목이 있는 가로 전체 높이 이미지 슬라이드";
 export const slideLayoutDescription =
-  "A slide of portrait cards placed side by side from edge to edge. Each card uses a full-height image background with a content overlay at the bottom containing a short subtext line and a larger title line.";
+  "세로형 카드가 화면 끝에서 끝까지 나란히 배치된 슬라이드. 각 카드는 전체 높이 이미지 배경을 사용하며, 하단에 짧은 보조 텍스트 줄과 더 큰 제목 줄로 구성된 내용 오버레이가 표시됩니다.";
 
 export const Schema = z.object({
   members: z
@@ -29,40 +29,40 @@ export const Schema = z.object({
     .max(5)
     .default([
       {
-        subtext: "Title",
-        title: "Lanny LA",
+        subtext: "직책",
+        title: "박지훈",
         image: {
           __image_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/images/placeholder.jpg",
           __image_prompt__: "Professional portrait of a male team member",
         },
       },
       {
-        subtext: "Title",
-        title: "Lanny LA",
+        subtext: "직책",
+        title: "김서연",
         image: {
           __image_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/images/placeholder.jpg",
           __image_prompt__: "Professional portrait of a female team member",
         },
       },
       {
-        subtext: "Title",
-        title: "Lanny LA",
+        subtext: "직책",
+        title: "최민준",
         image: {
           __image_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/images/placeholder.jpg",
           __image_prompt__: "Professional portrait of a business manager",
         },
       },
       {
-        subtext: "Title",
-        title: "Lanny LA",
+        subtext: "직책",
+        title: "이하나",
         image: {
           __image_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/images/placeholder.jpg",
           __image_prompt__: "Professional portrait of a senior employee",
         },
       },
       {
-        subtext: "Title",
-        title: "Lanny LA",
+        subtext: "직책",
+        title: "홍길동",
         image: {
           __image_url__: "https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/images/placeholder.jpg",
           __image_prompt__: "Professional portrait of a young executive",

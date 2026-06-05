@@ -21,8 +21,8 @@ const IconSchema = z.object({
 })
 
 const layoutId = "split-left-strip-header-title-subtitle-cards-slide"
-const layoutName = "Heading Bullet Image Description"
-const layoutDescription = "A slide with a left strip, top label with rule, right header, right description, floating small image, and a centered card with ...cards."
+const layoutName = "제목 글머리 이미지 설명"
+const layoutDescription = "왼쪽 띠, 구분선이 있는 상단 라벨, 오른쪽 헤더, 오른쪽 설명, 떠 있는 작은 이미지, 그리고 카드들이 담긴 가운데 카드로 구성된 슬라이드."
 
 const Schema = z.object({
   metaMaxWords: z.number().default(200).meta({
@@ -32,10 +32,10 @@ const Schema = z.object({
     description: "Top-right page number text. Max 3 chars",
   }),
 
-  heading: z.string().min(16).max(38).default("A Blueprint for\nSuccess").meta({
+  heading: z.string().min(16).max(38).default("성공을 위한\n청사진").meta({
     description: "Main heading across up to 2 lines. Max 7 words",
   }),
-  subheading: z.string().min(60).max(200).default("Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna").meta({
+  subheading: z.string().min(60).max(200).default("여기에 제목을 뒷받침하는 설명을 입력하는 예시 문구입니다. 메시지를 명확하게 전달할 수 있도록 간결하게 작성하세요.").meta({
     description: "Supporting paragraph under the heading. Max 35 words",
   }),
   smallImage: ImageSchema.default({
@@ -45,17 +45,17 @@ const Schema = z.object({
     description: "Small image partially behind the main card",
   }),
   cards: z.array(z.object({
-    title: z.string().min(8).max(16).default("Strategy 01").meta({
+    title: z.string().min(8).max(16).default("전략 01").meta({
       description: "Card ribbon title. Max 3 words",
     }),
-    body: z.string().min(60).max(160).default("Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor").meta({
+    body: z.string().min(60).max(160).default("여기에 카드 내용을 설명하는 예시 문구를 입력하세요.").meta({
       description: "Card body text. Max 28 words",
     }),
   })).min(1).max(4).default([
-    { title: "Strategy 01", body: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor" },
-    { title: "Strategy 02", body: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor" },
-    { title: "Strategy 03", body: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor" },
-    { title: "Strategy 04", body: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor" },
+    { title: "전략 01", body: "여기에 카드 내용을 설명하는 예시 문구를 입력하세요." },
+    { title: "전략 02", body: "여기에 카드 내용을 설명하는 예시 문구를 입력하세요." },
+    { title: "전략 03", body: "여기에 카드 내용을 설명하는 예시 문구를 입력하세요." },
+    { title: "전략 04", body: "여기에 카드 내용을 설명하는 예시 문구를 입력하세요." },
   ]).meta({
     description: "Array of strategy cards",
   }),

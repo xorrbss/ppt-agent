@@ -37,11 +37,11 @@ const RadialProgress = ({ value, size = 110, strokeWidth = 12 }: { value: number
 };
 
 export const Schema = z.object({
-    title: z.string().describe("The main title of the slide").default("Executive Summary"),
+    title: z.string().describe("The main title of the slide").default("핵심 요약"),
     points: z.array(z.string().max(200)).max(3).describe("A list of key summary points").default([
-        "Exceeded revenue target by 12% ($2.4M vs $2.1M target), driven by strong performance in paid search and email campaigns",
-        "Marketing influenced 68% of total pipeline value, up from 52% last quarter",
-        "Paid Search ROI improved to 5.8x (from 4.1x), making it our most efficient channel"
+        "매출 목표를 12% 초과 달성($2.4M vs 목표 $2.1M)했으며, 유료 검색과 이메일 캠페인의 강력한 성과가 견인했습니다",
+        "마케팅이 전체 파이프라인 가치의 68%에 기여했으며, 이는 전분기 52%에서 상승한 수치입니다",
+        "유료 검색 ROI가 4.1배에서 5.8배로 개선되어 가장 효율적인 채널로 자리 잡았습니다"
     ]),
     cards: z.array(z.object({
         heading: z.string().max(20).describe("The heading for each card"),
@@ -49,16 +49,16 @@ export const Schema = z.object({
         footerHeading: z.string().max(30).describe("The descriptive label in the card footer"),
         footerDescription: z.string().max(30).describe("The specific detail in the card footer")
     })).min(2).max(6).describe("A list of up to 6 data cards").default(Array(6).fill({
-        heading: "Research",
+        heading: "리서치",
         percentageValue: 99,
-        footerHeading: "Main Challenge:",
-        footerDescription: "Delayed Client"
+        footerHeading: "주요 과제:",
+        footerDescription: "고객 지연"
     }))
 });
 
 export const layoutId = "title-points-donut-grid";
-export const layoutName = "Title Points Donut Grid";
-export const layoutDescription = "A slide with a title and numbered summary points on the left, paired with a 2x3 grid of analytical cards featuring donut progress charts on the right.";
+export const layoutName = "제목 요점 도넛 그리드";
+export const layoutDescription = "왼쪽에 제목과 번호가 매겨진 요약 요점을 두고, 오른쪽에 도넛 진행률 차트가 있는 분석 카드를 2x3 그리드로 배치한 슬라이드입니다.";
 
 const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = ({ data }) => {
     const { title, points, cards } = data;
@@ -151,7 +151,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                         style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                         className=' w-[2px] h-4'></span>
                     {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                        {(data as any)?.__companyName__ || 'Company Name'}
+                        {(data as any)?.__companyName__ || '회사명'}
                     </span>}
                 </div>}
             </div>

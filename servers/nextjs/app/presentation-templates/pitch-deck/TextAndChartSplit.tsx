@@ -6,66 +6,66 @@ import PitchDeckChart from "./PitchDeckChart";
 import { ChartPayloadSchema } from "./pitchDeckSchemas";
 
 export const slideLayoutId = "text-and-chart-split-layout";
-export const slideLayoutName = "Text and Chart Split Layout";
+export const slideLayoutName = "텍스트와 차트 분할 레이아웃";
 export const slideLayoutDescription =
-  "A split layout with narrative text on the left and a configurable chart canvas on the right.";
+  "왼쪽에 설명 텍스트, 오른쪽에 설정 가능한 차트 영역을 배치한 분할 레이아웃입니다.";
 
 const DEFAULT_CHART = {
   chartType: "bar" as const,
-  legendLabel: "Series Label",
-  yAxisLabel: "Y axis name",
+  legendLabel: "시리즈 라벨",
+  yAxisLabel: "Y축 이름",
   barData: [
-    { label: "Mon", value: 120 },
-    { label: "Tue", value: 200 },
-    { label: "Wed", value: 150 },
-    { label: "Thu", value: 80 },
-    { label: "Fri", value: 70 },
-    { label: "Sat", value: 110 },
-    { label: "Sun", value: 130 },
+    { label: "월", value: 120 },
+    { label: "화", value: 200 },
+    { label: "수", value: 150 },
+    { label: "목", value: 80 },
+    { label: "금", value: 70 },
+    { label: "토", value: 110 },
+    { label: "일", value: 130 },
   ],
   pieData: [
-    { label: "Category A", value: 55, color: "#d8d4bf" },
-    { label: "Category B", value: 25, color: "#b8b4a3" },
-    { label: "Category C", value: 20, color: "#a2a091" },
+    { label: "카테고리 A", value: 55, color: "#d8d4bf" },
+    { label: "카테고리 B", value: 25, color: "#b8b4a3" },
+    { label: "카테고리 C", value: 20, color: "#a2a091" },
   ],
   scatterData: [
-    { label: "label", value: 7 },
-    { label: "label", value: 2 },
-    { label: "label", value: 92 },
-    { label: "label", value: 15 },
-    { label: "label", value: 91 },
-    { label: "label", value: 73 },
-    { label: "label", value: 56 },
-    { label: "label", value: 90 },
+    { label: "라벨", value: 7 },
+    { label: "라벨", value: 2 },
+    { label: "라벨", value: 92 },
+    { label: "라벨", value: 15 },
+    { label: "라벨", value: 91 },
+    { label: "라벨", value: 73 },
+    { label: "라벨", value: 56 },
+    { label: "라벨", value: 90 },
   ],
   lineData: [
-    { label: "Mon", value: 30 },
-    { label: "Tue", value: 48 },
-    { label: "Wed", value: 64 },
-    { label: "Thu", value: 42 },
-    { label: "Fri", value: 58 },
-    { label: "Sat", value: 70 },
-    { label: "Sun", value: 90 },
+    { label: "월", value: 30 },
+    { label: "화", value: 48 },
+    { label: "수", value: 64 },
+    { label: "목", value: 42 },
+    { label: "금", value: 58 },
+    { label: "토", value: 70 },
+    { label: "일", value: 90 },
   ],
   stackedBarData: [
-    { label: "Mon", value: 50, value2: 50 },
-    { label: "Tue", value: 80, value2: 70 },
-    { label: "Wed", value: 90, value2: 90 },
-    { label: "Thu", value: 40, value2: 60 },
-    { label: "Fri", value: 80, value2: 70 },
-    { label: "Sat", value: 90, value2: 90 },
-    { label: "Sun", value: 70, value2: 80 },
+    { label: "월", value: 50, value2: 50 },
+    { label: "화", value: 80, value2: 70 },
+    { label: "수", value: 90, value2: 90 },
+    { label: "목", value: 40, value2: 60 },
+    { label: "금", value: 80, value2: 70 },
+    { label: "토", value: 90, value2: 90 },
+    { label: "일", value: 70, value2: 80 },
   ],
 };
 
 export const Schema = z.object({
-  title: z.string().max(16).default("Highlights").meta({
+  title: z.string().max(16).default("하이라이트").meta({
     description: "Main heading on the left.",
   }),
   leadText: z
     .string()
     .max(52)
-    .default("This is a sample text to tell story for audience is written here")
+    .default("여기에 청중에게 전달할 이야기를 담은 예시 문구를 입력하세요")
     .meta({
       description: "Primary narrative line above supporting text.",
     }),
@@ -74,7 +74,7 @@ export const Schema = z.object({
 
     .max(126)
     .default(
-      "Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut alUt enim ad minima veniam."
+      "여기에 청중에게 전달할 핵심 메시지를 입력하세요. 이 영역에는 보조 설명과 세부 내용을 자유롭게 작성할 수 있습니다."
     )
     .meta({
       description: "Supporting paragraph text.",

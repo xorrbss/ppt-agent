@@ -2,9 +2,9 @@ import * as z from "zod";
 
 
 export const slideLayoutId = "title-image-bullet-cards-slide";
-export const slideLayoutName = "Title Image Bullet Cards Slide";
+export const slideLayoutName = "제목·이미지·글머리 카드 슬라이드";
 export const slideLayoutDescription =
-  "A slide with optional image on the left and cards with bullet on the right.";
+  "왼쪽에 선택적 이미지가 있고 오른쪽에 글머리가 있는 카드가 배치된 슬라이드.";
 
 const CardSchema = z.object({
   bulletNumber: z.string().min(2).max(4).meta({
@@ -16,7 +16,7 @@ const CardSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().min(3).max(30).default("Solution").meta({
+  title: z.string().min(3).max(30).default("솔루션").meta({
     description: "Slide heading shown in the top-left corner.",
   }),
   showImage: z.boolean().default(true).meta({
@@ -39,15 +39,15 @@ export const Schema = z.object({
     .default([
       {
         bulletNumber: "01",
-        description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+        description: "여기에 설명 텍스트를 입력하세요.",
       },
       {
         bulletNumber: "02",
-        description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+        description: "여기에 설명 텍스트를 입력하세요.",
       },
       {
         bulletNumber: "03",
-        description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+        description: "여기에 설명 텍스트를 입력하세요.",
       },
     ])
     .meta({

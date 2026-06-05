@@ -1,9 +1,9 @@
 import * as z from "zod";
 
 export const slideLayoutId = "timeline-slide";
-export const slideLayoutName = "Timeline Slide";
+export const slideLayoutName = "타임라인 슬라이드";
 export const slideLayoutDescription =
-  "A slide with a title, a horizontal progress line, and short heading and description pairs.";
+  "제목, 가로 진행 선, 그리고 짧은 제목과 설명 쌍으로 구성된 슬라이드.";
 
 const MilestoneSchema = z.object({
   heading: z.string().max(6).meta({
@@ -15,7 +15,7 @@ const MilestoneSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().min(4).max(14).default("Timeline").meta({
+  title: z.string().min(4).max(14).default("타임라인").meta({
     description: "Main timeline heading shown at the top-left.",
   }),
   milestones: z
@@ -23,14 +23,14 @@ export const Schema = z.object({
     .min(2)
     .max(12)
     .default([
-      { heading: "2022", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit." },
-      { heading: "1994", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit." },
-      { heading: "1993", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit." },
-      { heading: "1991", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit." },
-      { heading: "1991", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit." },
-      { heading: "1988", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. " },
-      { heading: "1988", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit." },
-      { heading: "1988", description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit." },
+      { heading: "2022", description: "새로운 캠퍼스를 열고 교육 영역을 넓혔습니다." },
+      { heading: "1994", description: "온라인 학습 프로그램을 처음 선보였습니다." },
+      { heading: "1993", description: "수강생 1만 명을 돌파한 의미 있는 해입니다." },
+      { heading: "1991", description: "전문 강사진을 대폭 확충하였습니다." },
+      { heading: "1991", description: "지역 교육 센터를 추가로 설립했습니다." },
+      { heading: "1988", description: "첫 정규 교육 과정을 정식으로 개설했습니다." },
+      { heading: "1988", description: "교육 기관으로 정식 설립되었습니다." },
+      { heading: "1988", description: "작은 강의실에서 첫걸음을 내디뎠습니다." },
     ])
     .meta({
       description: "Timeline milestones displayed left to right.",

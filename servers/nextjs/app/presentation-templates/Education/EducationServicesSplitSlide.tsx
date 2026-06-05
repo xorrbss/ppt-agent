@@ -2,9 +2,9 @@ import * as z from "zod";
 
 
 export const slideLayoutId = "services-split-slide";
-export const slideLayoutName = "Services Split Slide";
+export const slideLayoutName = "서비스 분할 슬라이드";
 export const slideLayoutDescription =
-  "A left text column with a heading, one image column, and stacked service description blocks on the right side.";
+  "제목이 담긴 왼쪽 텍스트 열, 하나의 이미지 열, 그리고 오른쪽에 세로로 쌓인 서비스 설명 블록으로 구성된 레이아웃.";
 
 const ServiceSchema = z.object({
   image: z.object({
@@ -29,7 +29,7 @@ const ServiceSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().max(16).default("Services").meta({
+  title: z.string().max(16).default("서비스").meta({
     description: "Main slide title shown on the left.",
   }),
   sections: z
@@ -43,9 +43,9 @@ export const Schema = z.object({
             "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1200&q=80",
           __image_prompt__: "Team meeting image reused across two rows",
         },
-        heading: "Service 1",
-        tagline: "TAGLINE",
-        body: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor.",
+        heading: "서비스 1",
+        tagline: "태그라인",
+        body: "맞춤형 정규 교육 과정을 제공합니다.",
       },
       {
         image: {
@@ -53,9 +53,9 @@ export const Schema = z.object({
             "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1200&q=80",
           __image_prompt__: "Team meeting image reused across two rows",
         },
-        heading: "Service 2",
-        tagline: "TAGLINE",
-        body: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor.",
+        heading: "서비스 2",
+        tagline: "태그라인",
+        body: "실무 중심의 전문 실습 과정입니다.",
       },
       {
         image: {
@@ -63,9 +63,9 @@ export const Schema = z.object({
             "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1200&q=80",
           __image_prompt__: "Team meeting image reused across two rows",
         },
-        heading: "Service 3",
-        tagline: "TAGLINE",
-        body: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor.",
+        heading: "서비스 3",
+        tagline: "태그라인",
+        body: "일대일 학습 상담과 진로 지원입니다.",
       },
       {
         image: {
@@ -73,9 +73,9 @@ export const Schema = z.object({
             "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1200&q=80",
           __image_prompt__: "Team meeting image reused across two rows",
         },
-        heading: "Service 4",
-        tagline: "TAGLINE",
-        body: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor.",
+        heading: "서비스 4",
+        tagline: "태그라인",
+        body: "온라인 학습 플랫폼을 운영합니다.",
       },
     ])
     .meta({

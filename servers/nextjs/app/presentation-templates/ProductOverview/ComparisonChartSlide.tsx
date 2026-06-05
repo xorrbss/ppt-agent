@@ -1,9 +1,9 @@
 import * as z from "zod";
 
 export const slideLayoutId = "title-description-with-table-slide";
-export const slideLayoutName = "Title Description with Table Slide";
+export const slideLayoutName = "제목·설명과 표 슬라이드";
 export const slideLayoutDescription =
-  "A slide with a title on top and a description below, and a content section containing a table with column headers and rows of check, cross and empty state of  content.";
+  "상단에 제목과 그 아래 설명이 있고, 열 헤더와 체크·엑스·빈 상태의 행으로 구성된 표가 담긴 콘텐츠 섹션이 있는 슬라이드.";
 
 const CellStatusSchema = z.enum(["check", "cross", "empty"]);
 
@@ -29,14 +29,14 @@ const LegacyRowSchema = z.object({
 const RowSchema = z.union([GeneralRowSchema, LegacyRowSchema]);
 
 export const Schema = z.object({
-  title: z.string().max(24).default("Comparison Chart Comparison").meta({
+  title: z.string().max(24).default("비교 차트").meta({
     description: "Main heading shown above the table.",
   }),
   subtitle: z
     .string()
     .max(80)
     .default(
-      "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt."
+      "예시 부제목입니다. 각 항목을 한눈에 비교할 수 있도록 도와주는 자리 표시 문구입니다."
     )
     .meta({
       description: "Short subtitle shown under the main heading.",
@@ -45,7 +45,7 @@ export const Schema = z.object({
     .array(z.string().max(18))
     .min(1)
     .max(4)
-    .default(["HEADING 1", "HEADING 2", "HEADING 3", "HEADING 4"])
+    .default(["제목 1", "제목 2", "제목 3", "제목 4"])
     .meta({
       description: "Table column headings.",
     }),
@@ -58,15 +58,15 @@ export const Schema = z.object({
     .max(3)
     .default([
       {
-        label: "HEADING 1",
+        label: "제목 1",
         cells: ["check", "cross", "check", "cross"],
       },
       {
-        label: "HEADING 1",
+        label: "제목 1",
         cells: ["check", "empty", "check", "empty"],
       },
       {
-        label: "HEADING 2",
+        label: "제목 2",
         cells: ["check", "check", "check", "check"],
       },
     ])

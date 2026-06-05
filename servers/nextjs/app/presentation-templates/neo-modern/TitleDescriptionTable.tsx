@@ -5,13 +5,13 @@ export const Schema = z.object({
     .string()
     .max(12)
     .describe("The main heading of the slide")
-    .default("TABLE"),
+    .default("표"),
   description: z
     .string()
     .max(250)
     .describe("Supporting description text")
     .default(
-      "Focus on companies with 500+ employees in Financial Services, Healthcare, and Technology sectors. Target $3.5M in new pipeline with sub-$150 CAC through account-based marketing and content-led strategies."
+      "금융 서비스, 헬스케어, 기술 분야에서 직원 500명 이상의 기업에 집중합니다. 어카운트 기반 마케팅과 콘텐츠 중심 전략을 통해 CAC 150달러 미만으로 350만 달러의 신규 파이프라인을 목표로 합니다."
     ),
   table: z
     .object({
@@ -25,22 +25,22 @@ export const Schema = z.object({
         .describe("Data rows for the table"),
     })
     .default({
-      columns: ["Problem", "Description", "Solution"],
+      columns: ["문제", "설명", "해결책"],
       rows: [
         [
-          "Self-motivation\nReference: Book and Inspirational Videos",
-          "Self-motivation\nReference: Book and Inspirational Videos",
-          "Self-motivation\nReference: Book and Inspirational Videos",
+          "자기 동기부여\n참고: 도서 및 영감을 주는 영상",
+          "자기 동기부여\n참고: 도서 및 영감을 주는 영상",
+          "자기 동기부여\n참고: 도서 및 영감을 주는 영상",
         ],
         [
-          "Self-motivation\nReference: Book and Inspirational Videos",
-          "Self-motivation\nReference: Book and Inspirational Videos",
-          "Self-motivation\nReference: Book and Inspirational Videos",
+          "자기 동기부여\n참고: 도서 및 영감을 주는 영상",
+          "자기 동기부여\n참고: 도서 및 영감을 주는 영상",
+          "자기 동기부여\n참고: 도서 및 영감을 주는 영상",
         ],
         [
-          "Self-motivation\nReference: Book and Inspirational Videos",
-          "Self-motivation\nReference: Book and Inspirational Videos",
-          "Self-motivation\nReference: Book and Inspirational Videos",
+          "자기 동기부여\n참고: 도서 및 영감을 주는 영상",
+          "자기 동기부여\n참고: 도서 및 영감을 주는 영상",
+          "자기 동기부여\n참고: 도서 및 영감을 주는 영상",
         ],
       ],
     }),
@@ -50,9 +50,9 @@ export const Schema = z.object({
  * Layout ID, Name and Description.
  */
 export const layoutId = "title-description-table";
-export const layoutName = "Title Description Table";
+export const layoutName = "제목 설명 표";
 export const layoutDescription =
-  "A slide featuring a bold title, description, and a clean 3-column table with color-highlighted headers. The header row provides visual hierarchy while rounded cell backgrounds maintain a modern appearance.";
+  "굵은 제목, 설명, 그리고 색상으로 강조된 헤더가 있는 깔끔한 3열 표를 갖춘 슬라이드입니다. 헤더 행이 시각적 계층을 제공하며 둥근 셀 배경이 모던한 느낌을 유지합니다.";
 
 /**
  * React Component for the slide layout.
@@ -186,7 +186,7 @@ const dynamicSlideLayout: React.FC<{
                   className="text-sm  font-semibold"
                   style={{ color: "var(--background-text, #111827)" }}
                 >
-                  {(data as any)?.__companyName__ || "Company Name"}
+                  {(data as any)?.__companyName__ || "회사명"}
                 </span>
               )}
             </div>

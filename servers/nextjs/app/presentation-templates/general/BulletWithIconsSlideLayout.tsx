@@ -4,14 +4,14 @@ import { ImageSchema, IconSchema } from '../defaultSchemes';
 import { RemoteSvgIcon } from '@/app/hooks/useRemoteSvgIcon';
 
 export const layoutId = 'bullet-with-icons-slide'
-export const layoutName = 'Bullet with Icons'
-export const layoutDescription = 'A bullets style slide with main content, supporting image, and bullet points with icons and descriptions.'
+export const layoutName = '아이콘이 있는 글머리'
+export const layoutDescription = '주요 내용, 보조 이미지, 그리고 아이콘과 설명이 있는 글머리로 구성된 글머리 스타일 슬라이드입니다.'
 
 const bulletWithIconsSlideSchema = z.object({
-    title: z.string().min(3).max(40).default('Problem').meta({
+    title: z.string().min(3).max(40).default('문제').meta({
         description: "Main title of the slide",
     }),
-    description: z.string().max(150).default('Businesses face challenges with outdated technology and rising costs, limiting efficiency and growth in competitive markets.').meta({
+    description: z.string().max(150).default('기업은 노후화된 기술과 비용 상승이라는 과제에 직면하여, 경쟁 시장에서 효율성과 성장이 제한되고 있습니다.').meta({
         description: "Main description text explaining the problem or topic",
     }),
     image: ImageSchema.default({
@@ -30,16 +30,16 @@ const bulletWithIconsSlideSchema = z.object({
         icon: IconSchema,
     })).min(1).max(3).default([
         {
-            title: 'Inefficiency',
-            description: 'Businesses struggle to find digital tools that meet their needs, causing operational slowdowns.',
+            title: '비효율성',
+            description: '기업은 자사의 요구를 충족하는 디지털 도구를 찾는 데 어려움을 겪어 운영이 지연됩니다.',
             icon: {
                 __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/checks-bold.svg',
                 __icon_query__: 'warning alert inefficiency'
             }
         },
         {
-            title: 'High Costs',
-            description: 'Outdated systems increase expenses, while small businesses struggle to expand their market reach.',
+            title: '높은 비용',
+            description: '노후화된 시스템은 비용을 증가시키고, 소규모 기업은 시장 확대에 어려움을 겪습니다.',
             icon: {
                 __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/fediverse-logo-bold.svg',
                 __icon_query__: 'trending up costs chart'
@@ -82,7 +82,7 @@ const BulletWithIconsSlideLayout: React.FC<BulletWithIconsSlideLayoutProps> = ({
 
                                 {(slideData as any)?._logo_url__ && <img src={(slideData as any)?._logo_url__} alt="logo" className="w-6 h-6" />}
                                 {(slideData as any)?.__companyName__ && <span className="text-sm sm:text-base font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(slideData as any)?.__companyName__ || 'Company Name'}
+                                    {(slideData as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>
@@ -95,7 +95,7 @@ const BulletWithIconsSlideLayout: React.FC<BulletWithIconsSlideLayoutProps> = ({
                     {/* Title Section - Full Width */}
                     <div className="mb-8">
                         <h1 style={{ color: "var(--background-text, #111827)" }} className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900">
-                            {slideData?.title || 'Problem'}
+                            {slideData?.title || '문제'}
                         </h1>
                     </div>
 
@@ -138,7 +138,7 @@ const BulletWithIconsSlideLayout: React.FC<BulletWithIconsSlideLayoutProps> = ({
                         <div className="flex-1 flex flex-col justify-center pl-8 lg:pl-16">
                             {/* Description */}
                             <p style={{ color: "var(--background-text, #4b5563)" }} className="text-lg text-gray-700 leading-relaxed mb-8">
-                                {slideData?.description || 'Businesses face challenges with outdated technology and rising costs, limiting efficiency and growth in competitive markets.'}
+                                {slideData?.description || '기업은 노후화된 기술과 비용 상승이라는 과제에 직면하여, 경쟁 시장에서 효율성과 성장이 제한되고 있습니다.'}
                             </p>
 
                             {/* Bullet Points */}

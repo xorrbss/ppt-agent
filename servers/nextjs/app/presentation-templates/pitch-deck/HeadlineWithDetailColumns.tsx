@@ -1,9 +1,9 @@
 import * as z from "zod";
 
 export const slideLayoutId = "headline-with-detail-columns";
-export const slideLayoutName = "Headline with Detail Columns";
+export const slideLayoutName = "상세 열이 있는 헤드라인";
 export const slideLayoutDescription =
-  "A layout with a large headline and detail columns containing markers, text, and bullets.";
+  "큰 헤드라인과, 마커·텍스트·글머리를 담은 상세 열로 구성된 레이아웃입니다.";
 
 const SectionSchema = z.object({
   number: z.string().max(2).meta({
@@ -24,7 +24,7 @@ const SectionSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().max(24).default("Focus Areas").meta({
+  title: z.string().max(24).default("핵심 영역").meta({
     description: "Large left-side heading.",
   }),
   sections: z
@@ -34,25 +34,25 @@ export const Schema = z.object({
     .default([
       {
         number: "1",
-        title: "Column A",
+        title: "열 A",
         description:
-          "Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut alUt enim ad minima veniam.",
+          "여기에 청중에게 전달할 핵심 메시지를 입력하세요. 이 영역에는 보조 설명과 세부 내용을 자유롭게 작성할 수 있습니다.",
         bullets: [
-          "Ut enim ad minima veniam, quis nostrum",
-          "Exercitationem ullam corporis suscipit",
-          "Laboriosam, nisi ut alUt enim ad minima",
+          "여기에 첫 번째 글머리 내용을 입력하세요",
+          "여기에 두 번째 글머리 내용을 입력하세요",
+          "여기에 세 번째 글머리 내용을 입력하세요",
         ],
         highlighted: true,
       },
       {
         number: "2",
-        title: "Column B",
+        title: "열 B",
         description:
-          "Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut alUt enim ad minima veniam.",
+          "여기에 청중에게 전달할 핵심 메시지를 입력하세요. 이 영역에는 보조 설명과 세부 내용을 자유롭게 작성할 수 있습니다.",
         bullets: [
-          "Ut enim ad minima veniam, quis nostrum",
-          "Exercitationem ullam corporis suscipit",
-          "Laboriosam, nisi ut alUt enim ad minima",
+          "여기에 첫 번째 글머리 내용을 입력하세요",
+          "여기에 두 번째 글머리 내용을 입력하세요",
+          "여기에 세 번째 글머리 내용을 입력하세요",
         ],
         highlighted: false,
       },

@@ -2,11 +2,11 @@ import React from 'react'
 import * as z from "zod";
 
 export const layoutId = 'metrics-slide'
-export const layoutName = 'Metrics'
-export const layoutDescription = 'A slide layout for showcasing key business metrics with large numbers and descriptive text boxes. This should only be used with metrics and numbers.'
+export const layoutName = '지표'
+export const layoutDescription = '큰 숫자와 설명 텍스트 박스로 핵심 비즈니스 지표를 보여주는 슬라이드 레이아웃입니다. 지표와 숫자에만 사용하세요.'
 
 const metricsSlideSchema = z.object({
-    title: z.string().min(3).max(100).default('Company Traction').meta({
+    title: z.string().min(3).max(100).default('회사 성장세').meta({
         description: "Main title of the slide",
     }),
     metrics: z.array(z.object({
@@ -22,18 +22,18 @@ const metricsSlideSchema = z.object({
     })).min(2).max(3).default([
         {
             value: '150+',
-            label: 'Clients Onboarded',
-            description: 'Larana Inc. has successfully built a diverse client base, gaining trust across industries.'
+            label: '온보딩 고객사',
+            description: '라라나는 다양한 고객 기반을 성공적으로 구축하여 여러 산업에서 신뢰를 얻었습니다.'
         },
         {
             value: '200+',
-            label: 'projects completed.',
-            description: 'Delivering over 200 projects, Larana Inc. consistently meets evolving client needs.'
+            label: '완료한 프로젝트.',
+            description: '200개 이상의 프로젝트를 완수하며, 라라나는 변화하는 고객 요구를 꾸준히 충족합니다.'
         },
         {
             value: '95%',
-            label: 'client satisfaction.',
-            description: 'With a strong focus on customer success, Larana Inc. has a 95% satisfaction rate.'
+            label: '고객 만족도.',
+            description: '고객 성공에 집중하여, 라라나는 95%의 만족도를 기록하고 있습니다.'
         }
     ]).meta({
         description: "List of key business metrics to display",
@@ -96,7 +96,7 @@ const MetricsSlideLayout: React.FC<MetricsSlideLayoutProps> = ({ data: slideData
 
                                 {(slideData as any)?._logo_url__ && <img src={(slideData as any)?._logo_url__} alt="logo" className="w-6 h-6" />}
                                 {(slideData as any)?.__companyName__ && <span className="text-sm sm:text-base font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(slideData as any)?.__companyName__ || 'Company Name'}
+                                    {(slideData as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>
@@ -127,7 +127,7 @@ const MetricsSlideLayout: React.FC<MetricsSlideLayoutProps> = ({ data: slideData
                         {/* Title */}
                         <div className="text-center">
                             <h1 style={{ color: "var(--background-text,#111827)" }} className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900">
-                                {slideData?.title || 'Company Traction'}
+                                {slideData?.title || '회사 성장세'}
                             </h1>
                         </div>
 

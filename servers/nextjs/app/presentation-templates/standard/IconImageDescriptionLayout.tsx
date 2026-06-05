@@ -24,8 +24,8 @@ const IconSchema = z.object({
 })
 
 const layoutId = "header-title-card-slide"
-const layoutName = "Icon Image Description"
-const layoutDescription = "A slide with a top bar, centered title, placeholder icon area, and a colored card with circular icon, heading, and paragraph"
+const layoutName = "아이콘 이미지 설명"
+const layoutDescription = "상단 바, 가운데 정렬된 제목, 자리표시자 아이콘 영역, 그리고 원형 아이콘과 제목, 단락이 있는 색상 카드로 구성된 슬라이드"
 
 const Schema = z.object({
   meta: z.object({
@@ -40,7 +40,7 @@ const Schema = z.object({
 
     pageNumber: "3",
   }),
-  title: z.string().min(24).max(56).default("Transforming Ideas into\nReality").meta({
+  title: z.string().min(24).max(56).default("아이디어를\n현실로").meta({
     description: "Main title split across up to two lines. Max 10 words",
   }),
   backgroundImage: ImageSchema.default({
@@ -54,10 +54,10 @@ const Schema = z.object({
       __icon_url__: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='30' height='30' viewBox='0 0 24 24' fill='%230A8016' aria-hidden='true'><path d='M10 6V7H7C5.895 7 5 7.895 5 9V18C5 19.105 5.895 20 7 20H17C18.105 20 19 19.105 19 18V9C19 7.895 18.105 7 17 7H14V6C14 4.895 13.105 4 12 4H12C10.895 4 10 4.895 10 6ZM12 6C12.552 6 13 6.448 13 7H11C11 6.448 11.448 6 12 6ZM7 9H17V11H7V9Z'/></svg>",
       __icon_query__: "badge document icon",
     }),
-    heading: z.string().min(22).max(70).default("Idea Generation and Validation").meta({
+    heading: z.string().min(22).max(70).default("아이디어 발굴과 검증").meta({
       description: "Card heading text. Max 10 words",
     }),
-    body: z.string().min(140).max(450).default("Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.").meta({
+    body: z.string().min(140).max(450).default("여기에 카드 내용을 뒷받침하는 설명을 입력하는 예시 문구입니다. 슬라이드의 메시지를 명확하게 전달할 수 있도록 간결하게 작성하세요. 청중이 한눈에 이해할 수 있는 표현을 사용하면 효과적입니다.").meta({
       description: "Card body paragraph. Max 80 words",
     }),
     image: ImageSchema.default({
@@ -71,8 +71,8 @@ const Schema = z.object({
       __icon_url__: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='30' height='30' viewBox='0 0 24 24' fill='%230A8016' aria-hidden='true'><path d='M10 6V7H7C5.895 7 5 7.895 5 9V18C5 19.105 5.895 20 7 20H17C18.105 20 19 19.105 19 18V9C19 7.895 18.105 7 17 7H14V6C14 4.895 13.105 4 12 4H12C10.895 4 10 4.895 10 6ZM12 6C12.552 6 13 6.448 13 7H11C11 6.448 11.448 6 12 6ZM7 9H17V11H7V9Z'/></svg>",
       __icon_query__: "badge document icon",
     },
-    heading: "Idea Generation and Validation",
-    body: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+    heading: "아이디어 발굴과 검증",
+    body: "여기에 카드 내용을 뒷받침하는 설명을 입력하는 예시 문구입니다. 슬라이드의 메시지를 명확하게 전달할 수 있도록 간결하게 작성하세요. 청중이 한눈에 이해할 수 있는 표현을 사용하면 효과적입니다.",
     image: {
       __image_url__: "https://via.placeholder.com/1200x600",
       __image_prompt__: "Optional supporting image inside card area",
@@ -83,7 +83,7 @@ const Schema = z.object({
 }).default({
   meta: { maxWords: 56 },
   topBar: { pageNumber: "3" },
-  title: "Transforming Ideas into\nReality",
+  title: "아이디어를\n현실로",
   backgroundImage: {
     __image_url__: "https://images.unsplash.com/photo-1650831432942-aa352df4e9b4?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
     __image_prompt__: "Background image covering the entire section behind the card",
@@ -93,8 +93,8 @@ const Schema = z.object({
       __icon_url__: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='30' height='30' viewBox='0 0 24 24' fill='%230A8016' aria-hidden='true'><path d='M10 6V7H7C5.895 7 5 7.895 5 9V18C5 19.105 5.895 20 7 20H17C18.105 20 19 19.105 19 18V9C19 7.895 18.105 7 17 7H14V6C14 4.895 13.105 4 12 4H12C10.895 4 10 4.895 10 6ZM12 6C12.552 6 13 6.448 13 7H11C11 6.448 11.448 6 12 6ZM7 9H17V11H7V9Z'/></svg>",
       __icon_query__: "badge document icon",
     },
-    heading: "Idea Generation and Validation",
-    body: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+    heading: "아이디어 발굴과 검증",
+    body: "여기에 카드 내용을 뒷받침하는 설명을 입력하는 예시 문구입니다. 슬라이드의 메시지를 명확하게 전달할 수 있도록 간결하게 작성하세요. 청중이 한눈에 이해할 수 있는 표현을 사용하면 효과적입니다.",
     image: { __image_url__: "https://via.placeholder.com/1200x600", __image_prompt__: "Optional supporting image inside card area" },
   },
   // charts removed

@@ -1,6 +1,6 @@
 import * as z from 'zod'
 export const Schema = z.object({
-    title: z.string().max(20).describe('The main title of the slide').default('Text Comparison'),
+    title: z.string().max(20).describe('The main title of the slide').default('텍스트 비교'),
     comparisonBlocks: z.array(
         z.object({
             index: z.string().max(2).describe('The sequence number or index of the block'),
@@ -10,13 +10,13 @@ export const Schema = z.object({
     ).max(2).describe('List of items').default([
         {
             index: '1',
-            heading: 'Problem',
-            description: 'Presentation are communication tools that can be used as demontrations, lectures, reports, and more. it is mostly presented before an audience.',
+            heading: '문제',
+            description: '프레젠테이션은 시연, 강의, 보고 등 다양한 용도로 사용할 수 있는 커뮤니케이션 도구이며, 대부분 청중 앞에서 발표됩니다.',
         },
         {
             index: '2',
-            heading: 'Solution',
-            description: 'Presentation are communication tools that can be used as demontrations, lectures, reports, and more. it is mostly presented before an audience.',
+            heading: '해결책',
+            description: '프레젠테이션은 시연, 강의, 보고 등 다양한 용도로 사용할 수 있는 커뮤니케이션 도구이며, 대부분 청중 앞에서 발표됩니다.',
         }
     ]),
 });
@@ -25,8 +25,8 @@ export const Schema = z.object({
  * Layout ID, Name, and Description
  */
 export const layoutId = 'title-dual-comparison-blocks-numbered';
-export const layoutName = 'Title Dual Comparison Blocks Numbered';
-export const layoutDescription = 'A comparison slide featuring a centered title and two side-by-side content blocks with circular numbered indicators. Each block has a heading and descriptive text with alternating highlight colors. Ideal for presenting problem/solution pairs, before/after scenarios, pros/cons lists, or any two-part comparison narrative.';
+export const layoutName = '제목 이중 비교 블록 번호';
+export const layoutDescription = '가운데 정렬된 제목과 원형 번호 표시가 있는 두 개의 나란한 내용 블록으로 구성된 비교 슬라이드입니다. 각 블록에는 제목과 설명 텍스트가 있으며 강조 색상이 번갈아 적용됩니다. 문제/해결 쌍, 전후 시나리오, 장단점 목록 또는 두 부분으로 나뉜 비교 내러티브를 표현하는 데 적합합니다.';
 
 /**
  * React Component: dynamicSlideLayout
@@ -115,7 +115,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                             style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                             className=' w-[2px] h-4'></span>
                         {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                            {(data as any)?.__companyName__ || 'Company Name'}
+                            {(data as any)?.__companyName__ || '회사명'}
                         </span>}
                     </div>}
                     <div className="flex-1 h-[3.6px] bg-[#55626E]"

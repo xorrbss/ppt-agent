@@ -1,15 +1,15 @@
 import * as z from "zod";
 
 export const slideLayoutId = "cover-slide";
-export const slideLayoutName = "Cover Slide";
+export const slideLayoutName = "표지 슬라이드";
 export const slideLayoutDescription =
-  "Opening/cover/intro slide with  organization/institution/presenter, presentation title/heading , and supporting subtitle.";
+  "조직/기관/발표자, 프레젠테이션 제목/헤딩, 보조 부제목이 포함된 오프닝/표지/소개 슬라이드.";
 
 export const Schema = z.object({
-  companyName: z.string().min(2).max(18).optional().default("COMPANY NAME").meta({
+  companyName: z.string().min(2).max(18).optional().default("회사명").meta({
     description: "Optional organization/institution/presenter name shown above the slide title.",
   }),
-  title: z.string().min(8).max(28).default("Development Roadmap").meta({
+  title: z.string().min(8).max(28).default("개발 로드맵").meta({
     description: "Title/heading of the slide.",
   }),
   subtitle: z
@@ -17,7 +17,7 @@ export const Schema = z.object({
     .min(24)
     .max(40)
     .default(
-      "We transform ideas into market-ready solutions through systematic development processes."
+      "체계적인 개발 프로세스를 통해 아이디어를 시장에 바로 출시할 수 있는 솔루션으로 만들어 갑니다."
     )
     .meta({
       description: "Supporting subtitle shown under the heading.",

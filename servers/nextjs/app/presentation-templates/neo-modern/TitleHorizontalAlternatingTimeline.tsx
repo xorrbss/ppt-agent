@@ -1,24 +1,24 @@
 import * as z from 'zod'
 
 export const Schema = z.object({
-    title: z.string().max(20).describe('The main title of the slide').default('Timeline'),
+    title: z.string().max(20).describe('The main title of the slide').default('타임라인'),
     items: z.array(z.object({
         heading: z.string().max(10).describe('The heading or year for the timeline event'),
         description: z.string().max(150).describe('A brief description of the event')
     })).max(7).describe('A list of up to 7 timeline events').default([
-        { heading: '2014', description: 'Business processes should have clear objectives, be as detailed as possible, and produce consistent results.' },
-        { heading: '2014', description: 'Business processes should have clear objectives, be as detailed as possible, and produce consistent results.' },
-        { heading: '2014', description: 'Business processes should have clear objectives, be as detailed as possible, and produce consistent results.' },
-        { heading: '2014', description: 'Business processes should have clear objectives, be as detailed as possible, and produce consistent results.' },
-        { heading: '2014', description: 'Business processes should have clear objectives, be as detailed as possible, and produce consistent results.' },
-        { heading: '2014', description: 'Business processes should have clear objectives, be as detailed as possible, and produce consistent results.' },
-        { heading: '2014', description: 'Business processes should have clear objectives, be as detailed as possible, and produce consistent results.' }
+        { heading: '2014', description: '비즈니스 프로세스는 명확한 목표를 갖고, 가능한 한 상세하며, 일관된 결과를 만들어야 합니다.' },
+        { heading: '2014', description: '비즈니스 프로세스는 명확한 목표를 갖고, 가능한 한 상세하며, 일관된 결과를 만들어야 합니다.' },
+        { heading: '2014', description: '비즈니스 프로세스는 명확한 목표를 갖고, 가능한 한 상세하며, 일관된 결과를 만들어야 합니다.' },
+        { heading: '2014', description: '비즈니스 프로세스는 명확한 목표를 갖고, 가능한 한 상세하며, 일관된 결과를 만들어야 합니다.' },
+        { heading: '2014', description: '비즈니스 프로세스는 명확한 목표를 갖고, 가능한 한 상세하며, 일관된 결과를 만들어야 합니다.' },
+        { heading: '2014', description: '비즈니스 프로세스는 명확한 목표를 갖고, 가능한 한 상세하며, 일관된 결과를 만들어야 합니다.' },
+        { heading: '2014', description: '비즈니스 프로세스는 명확한 목표를 갖고, 가능한 한 상세하며, 일관된 결과를 만들어야 합니다.' }
     ])
 });
 
 export const layoutId = 'title-horizontal-alternating-timeline';
-export const layoutName = 'Title Horizontal Alternating Timeline';
-export const layoutDescription = 'A horizontal timeline slide with alternating content boxes above and below a central axis line. Features a prominent title with up to 7 timeline events, each displaying a heading and description. The zigzag pattern creates visual interest while showing chronological progression.';
+export const layoutName = '제목 가로 교차 타임라인';
+export const layoutDescription = '중앙 축선의 위아래로 내용 상자가 번갈아 배치된 가로 타임라인 슬라이드입니다. 눈에 띄는 제목과 함께 최대 7개의 타임라인 이벤트가 각각 제목과 설명을 표시합니다. 지그재그 패턴이 시각적 흥미를 더하면서 시간순 진행을 보여줍니다.';
 
 const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = ({ data }) => {
     const { title, items } = data;
@@ -140,7 +140,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                         style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                         className=' w-[2px] h-4'></span>
                     {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                        {(data as any)?.__companyName__ || 'Company Name'}
+                        {(data as any)?.__companyName__ || '회사명'}
                     </span>}
                 </div>}
             </div>

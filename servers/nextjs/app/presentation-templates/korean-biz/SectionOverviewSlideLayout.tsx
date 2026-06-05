@@ -4,7 +4,7 @@ import { ImageSchema } from '../defaultSchemes';
 
 export const layoutId = 'korean-biz-overview'
 export const layoutName = '개요'
-export const layoutDescription = 'Korean section overview slide: title, longer description paragraph, supporting image'
+export const layoutDescription = '제목, 긴 설명 문단, 보조 이미지로 구성된 한국형 섹션 개요 슬라이드'
 
 export const Schema = z.object({
     title: z

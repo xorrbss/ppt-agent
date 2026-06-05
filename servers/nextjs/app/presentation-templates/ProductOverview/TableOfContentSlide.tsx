@@ -5,9 +5,9 @@ const PRODUCT_DARK = "var(--primary-color,#05463d)";
 
 
 export const slideLayoutId = "table-of-content-slide";
-export const slideLayoutName = "Table of Content Slide";
+export const slideLayoutName = "목차 슬라이드";
 export const slideLayoutDescription =
-  "A two-column table of contents slide with section titles and numbers on a left panel and a title plus description paragraph on the right panel.";
+  "왼쪽 패널에 섹션 제목과 번호가 있고, 오른쪽 패널에 제목과 설명 문단이 있는 2열 목차 슬라이드.";
 
 const SectionSchema = z.object({
   title: z.string().min(4).max(25).meta({
@@ -22,11 +22,11 @@ const SectionSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().min(6).max(18).default("Table Of Content").meta({
+  title: z.string().min(6).max(18).default("목차").meta({
     description: "Heading in the right-side content area.",
   }),
   description: z.string().min(50).max(160).default(
-    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore."
+    "예시 설명 문구입니다. 이번 발표에서 다룰 주요 섹션을 한눈에 안내하기 위한 자리 표시 텍스트로, 실제 내용으로 자유롭게 교체해 사용하실 수 있습니다."
   ).meta({
     description: "Supporting descriptive paragraph under the heading.",
   }),
@@ -34,12 +34,12 @@ export const Schema = z.object({
     .array(SectionSchema)
     .max(6)
     .default([
-      { title: "SECTION TITLE SECTION TITLE", number: "01", description: "Lorem ipsum dolor sit. Lorem ipsum dolor sit. Lorem ipsum dolor sit." },
-      { title: "SECTION TITLE SECTION TITLE", number: "02", description: "Lorem ipsum dolor sit. Lorem ipsum dolor sit. Lorem ipsum dolor sit." },
-      { title: "SECTION TITLE SECTION TITLE", number: "03", description: "Lorem ipsum dolor sit. Lorem ipsum dolor sit. Lorem ipsum dolor sit." },
-      { title: "SECTION TITLE SECTION TITLE", number: "04", description: "Lorem ipsum dolor sit. Lorem ipsum dolor sit. Lorem ipsum dolor sit." },
-      { title: "SECTION TITLE SECTION TITLE", number: "05", description: "Lorem ipsum dolor sit. Lorem ipsum dolor sit. Lorem ipsum dolor sit." },
-      { title: "SECTION TITLE SECTION TITLE", number: "06", description: "Lorem ipsum dolor sit. Lorem ipsum dolor sit. Lorem ipsum dolor sit." },
+      { title: "섹션 제목 섹션 제목", number: "01", description: "예시 섹션 설명입니다. 예시 섹션 설명입니다." },
+      { title: "섹션 제목 섹션 제목", number: "02", description: "예시 섹션 설명입니다. 예시 섹션 설명입니다." },
+      { title: "섹션 제목 섹션 제목", number: "03", description: "예시 섹션 설명입니다. 예시 섹션 설명입니다." },
+      { title: "섹션 제목 섹션 제목", number: "04", description: "예시 섹션 설명입니다. 예시 섹션 설명입니다." },
+      { title: "섹션 제목 섹션 제목", number: "05", description: "예시 섹션 설명입니다. 예시 섹션 설명입니다." },
+      { title: "섹션 제목 섹션 제목", number: "06", description: "예시 섹션 설명입니다. 예시 섹션 설명입니다." },
 
     ])
     .meta({

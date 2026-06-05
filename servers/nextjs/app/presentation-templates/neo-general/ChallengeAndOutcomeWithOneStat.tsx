@@ -6,19 +6,19 @@ import * as z from 'zod';
 import React from 'react'
 import { RemoteSvgIcon } from '@/app/hooks/useRemoteSvgIcon';
 export const Schema = z.object({
-    title: z.string().max(30).describe('The main heading of the slide').default('Customer Proof / Case Snapshot'),
-    challengeSectionTitle: z.string().max(12).describe('Heading for the first content section').default('CHALLENGE'),
-    challengeContent: z.string().max(140).describe('Descriptive text for the first section').default('Fragmented marketing operations across 12 regions leading to inefficient spend allocation and inconsistent messaging. CAC increased 43% YoY.'),
-    outcomeSectionTitle: z.string().max(12).describe('Heading for the second content section').default('OUTCOME'),
+    title: z.string().max(30).describe('The main heading of the slide').default('고객 사례 / 케이스 스냅샷'),
+    challengeSectionTitle: z.string().max(12).describe('Heading for the first content section').default('과제'),
+    challengeContent: z.string().max(140).describe('Descriptive text for the first section').default('12개 지역에 분산된 마케팅 운영으로 비효율적인 예산 배분과 일관성 없는 메시지가 발생했습니다. CAC가 전년 대비 43% 증가했습니다.'),
+    outcomeSectionTitle: z.string().max(12).describe('Heading for the second content section').default('성과'),
     outcomePoints: z.array(z.string().max(40)).min(1).max(5).describe('List of bullet points for the second section').default([
-        '34% reduction in CAC within 6 months',
-        'Unified operations across all regions',
-        '$4.2M additional pipeline generated'
+        '6개월 내 CAC 34% 절감',
+        '전 지역 운영 통합',
+        '$4.2M 추가 파이프라인 창출'
     ]),
-    customerName: z.string().max(15).describe('Primary name or title in the card').default('TechCorp Global'),
-    customerSubTitle: z.string().max(26).describe('Subtitle or secondary text in the card').default('Fortune 500 Technology Company'),
+    customerName: z.string().max(15).describe('Primary name or title in the card').default('테크코프 글로벌'),
+    customerSubTitle: z.string().max(26).describe('Subtitle or secondary text in the card').default('Fortune 500 기술 기업'),
     metricValue: z.string().max(6).describe('The primary metric or statistic value').default('$4.2M'),
-    metricLabel: z.string().max(26).describe('Label describing the metric').default('incremental pipeline in Q4'),
+    metricLabel: z.string().max(26).describe('Label describing the metric').default('Q4 증분 파이프라인'),
     metricIcon: z.object({
         __icon_url__: z.string(),
         __icon_query__: z.string().max(30),
@@ -31,8 +31,8 @@ export const Schema = z.object({
 type FormData = z.infer<typeof Schema>;
 
 export const layoutId = 'title-challenge-outcome-customer-card';
-export const layoutName = 'Two Section Text With Highlight Card';
-export const layoutDescription = 'A two-section layout featuring title with accent bar, first section with heading and description, numbered list in the second section on the left, and a highlight card on the right with name, subtitle, icon badge, and prominent metric.';
+export const layoutName = '강조 카드가 있는 2개 섹션 텍스트';
+export const layoutDescription = '강조 바가 있는 제목, 제목과 설명이 있는 첫 번째 섹션, 왼쪽 두 번째 섹션의 번호 목록, 그리고 오른쪽에 이름, 부제목, 아이콘 배지, 두드러진 지표를 담은 강조 카드를 배치한 2개 섹션 레이아웃입니다.';
 
 const dynamicSlideLayout: React.FC<{ data: Partial<FormData> }> = ({ data }) => {
     const {
@@ -70,7 +70,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<FormData> }> = ({ data }) => 
                                     style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                                     className=' w-[2px] h-4'></span>
                                 {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(data as any)?.__companyName__ || 'Company Name'}
+                                    {(data as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>

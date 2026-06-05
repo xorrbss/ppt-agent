@@ -1,9 +1,9 @@
 import * as z from "zod";
 
 export const slideLayoutId = "centered-cover-with-footer-meta";
-export const slideLayoutName = "Centered Cover with Footer Metadata";
+export const slideLayoutName = "하단 메타데이터가 있는 중앙 표지";
 export const slideLayoutDescription =
-  "A single-focus cover layout with centered title, subtitle, and footer metadata groups.";
+  "중앙 정렬된 제목, 부제목, 하단 메타데이터 그룹으로 구성된 단일 초점 표지 레이아웃입니다.";
 
 const FooterMetaSchema = z.object({
   label: z.string().max(14).meta({
@@ -15,10 +15,10 @@ const FooterMetaSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().max(20).default("Presentation").meta({
+  title: z.string().max(20).default("프레젠테이션").meta({
     description: "Main centered cover title.",
   }),
-  subtitle: z.string().max(34).default("WORKFORCE OPERATIONS").meta({
+  subtitle: z.string().max(34).default("인력 운영").meta({
     description: "Subtitle beneath the title.",
   }),
 
@@ -26,8 +26,8 @@ export const Schema = z.object({
     .array(FooterMetaSchema)
     .max(2)
     .default([
-      { label: "PRESENTED BY", value: "PRESENTER NAME" },
-      { label: "DATE", value: "2026 DECEMBER 4" },
+      { label: "발표자", value: "발표자 이름" },
+      { label: "날짜", value: "2026년 12월 4일" },
     ])
     .meta({
       description: "Footer metadata groups.",

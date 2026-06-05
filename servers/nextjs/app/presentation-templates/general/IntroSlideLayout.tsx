@@ -3,20 +3,20 @@ import * as z from "zod";
 import { ImageSchema } from '../defaultSchemes';
 
 export const layoutId = 'general-intro-slide'
-export const layoutName = 'Intro Slide'
-export const layoutDescription = 'A clean slide layout with title, description text, presenter info, and a supporting image.'
+export const layoutName = '소개 슬라이드'
+export const layoutDescription = '제목, 설명 텍스트, 발표자 정보, 보조 이미지로 구성된 깔끔한 슬라이드 레이아웃입니다.'
 
 const introSlideSchema = z.object({
-    title: z.string().min(3).max(40).default('Product Overview').meta({
+    title: z.string().min(3).max(40).default('제품 개요').meta({
         description: "Main title of the slide",
     }),
-    description: z.string().min(10).max(150).default('Our product offers customizable dashboards for real-time reporting and data-driven decisions. It integrates with third-party tools to enhance operations and scales with business growth for improved efficiency.').meta({
+    description: z.string().min(10).max(150).default('저희 제품은 실시간 보고와 데이터 기반 의사결정을 위한 맞춤형 대시보드를 제공합니다. 서드파티 도구와 연동되어 업무를 강화하고, 비즈니스 성장에 맞춰 확장되어 효율성을 높입니다.').meta({
         description: "Main description text content",
     }),
-    presenterName: z.string().min(2).max(50).default('John Doe').meta({
+    presenterName: z.string().min(2).max(50).default('홍길동').meta({
         description: "Name of the presenter",
     }),
-    presentationDate: z.string().min(2).max(50).default('December 2025').meta({
+    presentationDate: z.string().min(2).max(50).default('2025년 12월').meta({
         description: "Date of the presentation must be the latest date like today's date",
     }),
     image: ImageSchema.default({
@@ -41,7 +41,7 @@ const IntroSlideLayout: React.FC<IntroSlideLayoutProps> = ({ data: slideData }) 
         return name.split(' ').map(word => word.charAt(0).toUpperCase()).join('');
     };
 
-    const presenterInitials = getInitials(slideData?.presenterName || 'John Doe');
+    const presenterInitials = getInitials(slideData?.presenterName || '홍길동');
     return (
         <>
 
@@ -63,7 +63,7 @@ const IntroSlideLayout: React.FC<IntroSlideLayoutProps> = ({ data: slideData }) 
 
                                 {(slideData as any)?._logo_url__ && <img src={(slideData as any)?._logo_url__} alt="logo" className="w-6 h-6" />}
                                 {(slideData as any)?.__companyName__ && <span className="text-sm sm:text-base font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(slideData as any)?.__companyName__ || 'Company Name'}
+                                    {(slideData as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>
@@ -88,7 +88,7 @@ const IntroSlideLayout: React.FC<IntroSlideLayoutProps> = ({ data: slideData }) 
                     <div className="flex-1 flex flex-col justify-center pl-8 space-y-6">
                         {/* Title */}
                         <h1 style={{ color: "var(--background-text,#111827)" }} className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight">
-                            {slideData?.title || 'Product Overview'}
+                            {slideData?.title || '제품 개요'}
                         </h1>
 
                         {/* Purple accent line */}
@@ -96,7 +96,7 @@ const IntroSlideLayout: React.FC<IntroSlideLayoutProps> = ({ data: slideData }) 
 
                         {/* Description */}
                         <p style={{ color: "var(--background-text,#4b5563)" }} className="text-base sm:text-lg text-gray-700 leading-relaxed">
-                            {slideData?.description || 'Our product offers customizable dashboards for real-time reporting and data-driven decisions. It integrates with third-party tools to enhance operations and scales with business growth for improved efficiency.'}
+                            {slideData?.description || '저희 제품은 실시간 보고와 데이터 기반 의사결정을 위한 맞춤형 대시보드를 제공합니다. 서드파티 도구와 연동되어 업무를 강화하고, 비즈니스 성장에 맞춰 확장되어 효율성을 높입니다.'}
                         </p>
 
                         {/* Presenter Section */}
@@ -117,10 +117,10 @@ const IntroSlideLayout: React.FC<IntroSlideLayoutProps> = ({ data: slideData }) 
                                 {/* Presenter Info */}
                                 <div className="flex flex-col">
                                     <span style={{ color: "var(--background-text,#111827)" }} className="text-lg lg:text-xl font-bold text-gray-900">
-                                        {slideData?.presenterName || 'John Doe'}
+                                        {slideData?.presenterName || '홍길동'}
                                     </span>
                                     <span style={{ color: "var(--background-text,#4b5563)" }} className="text-sm lg:text-base text-gray-600 font-medium">
-                                        {slideData?.presentationDate || 'December 2024'}
+                                        {slideData?.presentationDate || '2025년 12월'}
                                     </span>
                                 </div>
                             </div>

@@ -5,8 +5,8 @@ import { RemoteSvgIcon } from '@/app/hooks/useRemoteSvgIcon';
 import * as z from 'zod'
 
 export const Schema = z.object({
-    title: z.string().max(20).describe('The title of the slide').default('Thank you'),
-    description: z.string().max(350).describe('The description of the slide').default('Focus on companies with 500+ employees in Financial Services, Healthcare, and Technology sectors. Target $3.5M in new pipeline with sub-$150 CAC through account-based marketing and content-led strategies.'),
+    title: z.string().max(20).describe('The title of the slide').default('감사합니다'),
+    description: z.string().max(350).describe('The description of the slide').default('금융 서비스, 헬스케어, 기술 분야에서 직원 500명 이상의 기업에 집중합니다. 어카운트 기반 마케팅과 콘텐츠 중심 전략을 통해 CAC 150달러 미만으로 350만 달러의 신규 파이프라인을 목표로 합니다.'),
     contactItems: z.array(z.object({
         icon: z.object({
             __icon_url__: z.string(),
@@ -20,7 +20,7 @@ export const Schema = z.object({
                 __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/checks-bold.svg',
                 __icon_query__: 'envelope',
             },
-            label: 'Email',
+            label: '이메일',
             value: 'presenton@gmail.com',
         },
         {
@@ -28,7 +28,7 @@ export const Schema = z.object({
                 __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/checks-bold.svg',
                 __icon_query__: 'phone',
             },
-            label: 'Phone',
+            label: '전화',
             value: '+977-98000000',
         },
         {
@@ -36,15 +36,15 @@ export const Schema = z.object({
                 __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/checks-bold.svg',
                 __icon_query__: 'globe',
             },
-            label: 'Website',
+            label: '웹사이트',
             value: 'www.presenton.com',
         },
     ]),
 });
 
 export const layoutId = 'title-description-contact-list';
-export const layoutName = 'Title Description Contact List';
-export const layoutDescription = 'A slide featuring a title and description on the left with up to 3 icon-enhanced contact items on the right. Each item has an icon, label, and value.';
+export const layoutName = '제목 설명 연락처 목록';
+export const layoutDescription = '왼쪽에 제목과 설명, 오른쪽에 최대 3개의 아이콘이 있는 연락처 항목을 배치한 슬라이드입니다. 각 항목에는 아이콘, 라벨, 값이 있습니다.';
 
 const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = ({ data }) => {
     const { title, description, contactItems } = data;

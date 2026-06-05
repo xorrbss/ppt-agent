@@ -7,13 +7,13 @@ export const Schema = z.object({
     .string()
     .max(50)
     .describe("The main heading of the slide")
-    .default("Go-to-Market Strategy"),
+    .default("시장 진출 전략"),
   description: z
     .string()
     .max(400)
     .describe("Supporting description text for the slide")
     .default(
-      "Focus on companies with 500+ employees in Financial Services, Healthcare, and Technology sectors. Target $3.5M in new pipeline with sub-$150 CAC through account-based marketing and content-led strategies."
+      "금융 서비스, 헬스케어, 기술 분야의 임직원 500명 이상 기업에 집중합니다. 어카운트 기반 마케팅과 콘텐츠 중심 전략을 통해 $150 미만의 CAC로 $3.5M의 신규 파이프라인을 목표로 합니다."
     ),
   sections: z
     .array(
@@ -40,39 +40,39 @@ export const Schema = z.object({
     .describe("Column sections containing bullet points")
     .default([
       {
-        heading: "Paid Channels",
+        heading: "유료 채널",
         bulletPoints: [
-          { title: "LinkedIn Ads:", description: " ABM Retargeting" },
-          { title: "Google Ads:", description: " Intent Capture" },
-          { title: "Display:", description: " Brand Awareness" },
+          { title: "LinkedIn:", description: " ABM 리타겟팅" },
+          { title: "Google:", description: " 인텐트 확보" },
+          { title: "디스플레이:", description: " 브랜드 인지도" },
         ],
       },
       {
-        heading: "Organic Channels",
+        heading: "오가닉 채널",
         bulletPoints: [
-          { title: "SEO:", description: " Thought Leadership" },
-          { title: "Content:", description: " Education" },
-          { title: "Social:", description: " Community" },
+          { title: "SEO:", description: " 사고 리더십" },
+          { title: "콘텐츠:", description: " 교육" },
+          { title: "소셜:", description: " 커뮤니티" },
         ],
       },
       {
-        heading: "Partnerships",
+        heading: "파트너십",
         bulletPoints: [
-          { title: "Events:", description: " Network Building" },
-          { title: "Co-Marketing:", description: " Reach Extension" },
-          { title: "Referrals:", description: " Trust Building" },
-          { title: "Referrals:", description: " Trust Building" },
-          { title: "Referrals:", description: " Trust Building" },
-          { title: "Referrals:", description: " Trust Building" },
+          { title: "이벤트:", description: " 네트워크 구축" },
+          { title: "공동마케팅:", description: " 도달 범위 확대" },
+          { title: "추천:", description: " 신뢰 구축" },
+          { title: "추천:", description: " 신뢰 구축" },
+          { title: "추천:", description: " 신뢰 구축" },
+          { title: "추천:", description: " 신뢰 구축" },
         ],
       },
     ]),
 });
 
 export const layoutId = "title-description-three-columns-table";
-export const layoutName = "Title Description With Three Column Table";
+export const layoutName = "3열 표가 있는 제목 설명";
 export const layoutDescription =
-  "A layout featuring split title and description at the top, followed by a three-column table with colored headers and vertical bullet point sections below each.";
+  "상단에 분할된 제목과 설명을 배치하고, 그 아래에 색상 헤더가 있는 3열 표와 각 열 아래의 세로 글머리 섹션을 배치한 레이아웃입니다.";
 
 const dynamicSlideLayout: React.FC<{
   data: Partial<z.infer<typeof Schema>>;
@@ -113,7 +113,7 @@ const dynamicSlideLayout: React.FC<{
                     className="text-sm  font-semibold"
                     style={{ color: "var(--background-text, #111827)" }}
                   >
-                    {(data as any)?.__companyName__ || "Company Name"}
+                    {(data as any)?.__companyName__ || "회사명"}
                   </span>
                 )}
               </div>

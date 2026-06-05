@@ -862,7 +862,7 @@ function makeChartConfig({
       return {
         type: "bar",
         data: {
-          labels: ["Unsupported"],
+          labels: ["지원하지 않는 차트 유형"],
           datasets: [{ data: [0], backgroundColor: primaryText }],
         },
         options: {

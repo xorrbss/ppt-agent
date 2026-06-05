@@ -7,8 +7,8 @@ import { RemoteSvgIcon } from '@/app/hooks/useRemoteSvgIcon';
 import { GeneralChart } from "./GeneralChartPrimitives";
 
 export const layoutId = 'chart-with-bullets-slide'
-export const layoutName = 'Chart with Bullet Boxes'
-export const layoutDescription = 'A slide layout with title, description, chart on the left and colored bullet boxes with icons on the right. Only choose this if data is available.'
+export const layoutName = '글머리 박스가 있는 차트'
+export const layoutDescription = '제목, 설명, 왼쪽 차트와 오른쪽에 아이콘이 있는 색상 글머리 박스로 구성된 슬라이드 레이아웃입니다. 데이터가 있는 경우에만 선택하세요.'
 
 const barPieLineAreaChartDataSchema = z.object({
     type: z.union([z.literal('bar'), z.literal('pie'), z.literal('line'), z.literal('area')]),
@@ -27,10 +27,10 @@ const scatterChartDataSchema = z.object({
 })
 
 const chartWithBulletsSlideSchema = z.object({
-    title: z.string().min(3).max(40).default('Market Size').meta({
+    title: z.string().min(3).max(40).default('시장 규모').meta({
         description: "Main title of the slide",
     }),
-    description: z.string().min(10).max(150).default('Businesses face challenges with outdated technology and rising costs, limiting efficiency and growth in competitive markets.').meta({
+    description: z.string().min(10).max(150).default('기업은 노후화된 기술과 비용 상승이라는 과제에 직면하여, 경쟁 시장에서 효율성과 성장이 제한되고 있습니다.').meta({
         description: "Description text below the title",
     }),
     chartData: z.union([barPieLineAreaChartDataSchema, scatterChartDataSchema]).default({
@@ -59,24 +59,24 @@ const chartWithBulletsSlideSchema = z.object({
         icon: IconSchema,
     })).min(1).max(3).default([
         {
-            title: 'Total Addressable Market',
-            description: 'Companies can use TAM to plan future expansion and investment.',
+            title: '전체 시장 규모(TAM)',
+            description: '기업은 TAM을 활용하여 향후 확장과 투자를 계획할 수 있습니다.',
             icon: {
                 __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/chart-line-up-bold.svg',
                 __icon_query__: 'target market scope'
             }
         },
         {
-            title: 'Serviceable Available Market',
-            description: 'Indicates more measurable market segments for sales efforts.',
+            title: '유효 시장(SAM)',
+            description: '영업 활동을 위한 보다 측정 가능한 시장 세그먼트를 나타냅니다.',
             icon: {
                 __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/chart-line-up-bold.svg',
                 __icon_query__: 'pie chart analysis'
             }
         },
         {
-            title: 'Serviceable Obtainable Market',
-            description: 'Help companies plan development strategies according to the market.',
+            title: '수익 시장(SOM)',
+            description: '기업이 시장에 맞춰 개발 전략을 계획하도록 돕습니다.',
             icon: {
                 __icon_url__: 'https://presenton-public.s3.ap-southeast-1.amazonaws.com/static/icons/bold/chart-line-up-bold.svg',
                 __icon_query__: 'trending up growth'
@@ -126,7 +126,7 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
 
                                 {(slideData as any)?._logo_url__ && <img src={(slideData as any)?._logo_url__} alt="logo" className="w-6 h-6" />}
                                 {(slideData as any)?.__companyName__ && <span className="text-sm sm:text-base font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(slideData as any)?.__companyName__ || 'Company Name'}
+                                    {(slideData as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>
@@ -138,12 +138,12 @@ const ChartWithBulletsSlideLayout: React.FC<ChartWithBulletsSlideLayoutProps> = 
                     <div className="flex-1 flex flex-col pr-8">
                         {/* Title */}
                         <h1 style={{ color: "var(--background-text, #111827)" }} className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-4">
-                            {slideData?.title || 'Market Size'}
+                            {slideData?.title || '시장 규모'}
                         </h1>
 
                         {/* Description */}
                         <p style={{ color: "var(--background-text, #4b5563)" }} className="text-base text-gray-700 leading-relaxed mb-8">
-                            {slideData?.description || 'Businesses face challenges with outdated technology and rising costs, limiting efficiency and growth in competitive markets.'}
+                            {slideData?.description || '기업은 노후화된 기술과 비용 상승이라는 과제에 직면하여, 경쟁 시장에서 효율성과 성장이 제한되고 있습니다.'}
                         </p>
 
                         {/* Chart Container */}

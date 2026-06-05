@@ -5,29 +5,29 @@
 import * as z from 'zod';
 
 export const Schema = z.object({
-    title: z.string().max(30).describe('The main heading of the slide').default('Table of Content'),
+    title: z.string().max(30).describe('The main heading of the slide').default('목차'),
     items: z.array(z.object({
         number: z.string().max(5).describe('Sequence number or index').default('1'),
-        label: z.string().max(40).describe('Label text for the item').default('Introduction'),
+        label: z.string().max(40).describe('Label text for the item').default('소개'),
     })).describe('List of items displayed in two columns').default([
-        { number: '1', label: 'Introduction' },
-        { number: '2', label: 'Key Findings' },
-        { number: '3', label: 'Data Analysis' },
-        { number: '4', label: 'Recommendations' },
-        { number: '5', label: 'Conclusion' },
-        { number: '6', label: 'Introduction' },
-        { number: '7', label: 'Key Findings' },
-        { number: '8', label: 'Data Analysis' },
-        { number: '9', label: 'Recommendations' },
-        { number: '10', label: 'Conclusion' },
+        { number: '1', label: '소개' },
+        { number: '2', label: '주요 결과' },
+        { number: '3', label: '데이터 분석' },
+        { number: '4', label: '권장 사항' },
+        { number: '5', label: '결론' },
+        { number: '6', label: '소개' },
+        { number: '7', label: '주요 결과' },
+        { number: '8', label: '데이터 분석' },
+        { number: '9', label: '권장 사항' },
+        { number: '10', label: '결론' },
     ]),
 });
 
 type DataProps = z.infer<typeof Schema>;
 
 export const layoutId = 'title-two-column-numbered-list';
-export const layoutName = 'Split Title With Two Column Numbered List';
-export const layoutDescription = 'A split layout with large title on the left and two-column numbered list on the right. Each item displays a numbered circle badge and label.';
+export const layoutName = '2열 번호 목록이 있는 분할 제목';
+export const layoutDescription = '왼쪽에 큰 제목을 배치하고 오른쪽에 2열 번호 목록을 배치한 분할 레이아웃입니다. 각 항목은 번호가 매겨진 원형 배지와 라벨을 표시합니다.';
 
 /**
  * dynamicSlideLayout - A React component representing a Table of Content slide.
@@ -65,7 +65,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<DataProps> }> = ({ data }) =>
                                     style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                                     className=' w-[2px] h-4'></span>
                                 {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(data as any)?.__companyName__ || 'Company Name'}
+                                    {(data as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>

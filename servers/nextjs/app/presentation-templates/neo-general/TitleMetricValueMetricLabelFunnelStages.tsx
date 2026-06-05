@@ -2,24 +2,24 @@ import * as z from 'zod';
 import React from 'react';
 
 export const Schema = z.object({
-    title: z.string().max(30).describe('The main heading of the slide').default('Funnel Performance'),
+    title: z.string().max(30).describe('The main heading of the slide').default('퍼널 성과'),
     metricValue: z.string().max(10).describe('Primary metric value displayed').default('0.24%'),
-    metricLabel: z.string().max(100).describe('Label describing the metric').default('Overall\nVisit → Customer'),
+    metricLabel: z.string().max(100).describe('Label describing the metric').default('전체\n방문 → 고객'),
     funnelStages: z.array(z.object({
         label: z.string().max(30).describe('Label for the stage'),
         value: z.string().max(15).describe('Value displayed for this stage'),
         conversionRate: z.string().max(10).describe('Rate value shown for the stage').optional(),
     })).max(5).describe('Data points for the funnel visualization').default([
-        { label: 'Visitors', value: '124,500', conversionRate: '10%' },
-        { label: 'Leads', value: '12,450', conversionRate: '10%' },
-        { label: 'Marketing Qualified', value: '4,356', conversionRate: '35%' },
+        { label: '방문자', value: '124,500', conversionRate: '10%' },
+        { label: '리드', value: '12,450', conversionRate: '10%' },
+        { label: '마케팅 검증 리드', value: '4,356', conversionRate: '35%' },
 
     ]),
 });
 
 export const layoutId = 'title-metricValue-metricLabel-funnelStages';
-export const layoutName = 'Metric With Funnel Bars';
-export const layoutDescription = 'A layout featuring title with accent bar, left-side key metric with label, and horizontal funnel visualization on the right. Each funnel stage shows labeled pill, connector line, and colored bar with value and rate.';
+export const layoutName = '퍼널 바가 있는 지표';
+export const layoutDescription = '강조 바가 있는 제목, 왼쪽의 라벨이 붙은 핵심 지표, 그리고 오른쪽의 가로 퍼널 시각화로 구성된 레이아웃입니다. 각 퍼널 단계는 라벨 알약, 연결선, 값과 비율이 표시된 색상 바를 보여줍니다.';
 
 const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = ({ data }) => {
     const { title, metricValue, metricLabel, funnelStages } = data;
@@ -49,7 +49,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                                     style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                                     className=' w-[2px] h-4'></span>
                                 {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(data as any)?.__companyName__ || 'Company Name'}
+                                    {(data as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>
@@ -59,7 +59,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
 
                 <div>
                     <h1 className="text-[42.7px] font-bold leading-[1.1] tracking-[-2px] mb-4 whitespace-pre-line" style={{ color: 'var(--background-text,#101828)' }}>
-                        {title || 'Funnel Performance'}
+                        {title || '퍼널 성과'}
                     </h1>
                     <div className="w-[116px] h-[6px]" style={{ backgroundColor: 'var(--primary-color,#9234EB)' }} />
                 </div>
@@ -71,7 +71,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                                 {metricValue || '0.00%'}
                             </div>
                             <div className="text-[17.4px] font-normal mt-4 whitespace-pre-line leading-relaxed" style={{ color: 'var(--background-text,#4D5463)' }}>
-                                {metricLabel || 'Overall\nMetric Description'}
+                                {metricLabel || '전체\n방문 → 고객'}
                             </div>
                         </div>
                     </div>
@@ -111,7 +111,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
 
                                                 style={{ color: 'var(--primary-text,#FFFFFF)' }}
                                             >
-                                                Conversion
+                                                전환율
                                             </span>
                                             <span className="text-[22.5px]   font-bold mt-1 leading-none"
 

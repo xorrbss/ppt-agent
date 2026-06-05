@@ -2,9 +2,9 @@ import * as z from "zod";
 
 
 export const slideLayoutId = "title-description-with-image-block-slide";
-export const slideLayoutName = "Title Description with Image Block Slide";
+export const slideLayoutName = "제목·설명과 이미지 블록 슬라이드";
 export const slideLayoutDescription =
-  "A slide with a title on top and a description below, and a content section containing an image and a grid of cards of text.";
+  "상단에 제목과 그 아래 설명이 있고, 이미지와 텍스트 카드 그리드가 담긴 콘텐츠 섹션이 있는 슬라이드.";
 
 const CardSchema = z.object({
   heading: z.string().max(14).meta({
@@ -19,14 +19,14 @@ const CardSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().max(16).default("Our Services").meta({
+  title: z.string().max(16).default("서비스 소개").meta({
     description: "Main heading shown at the top-left.",
   }),
-  taglineLabel: z.string().max(16).default("TAGLINE").meta({
+  taglineLabel: z.string().max(16).default("태그라인").meta({
     description: "Small label above left paragraph.",
   }),
   taglineBody: z.string().max(30).default(
-    "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea."
+    "최소한의 노력으로 최고의 결과를 만듭니다."
   ).meta({
     description: "Supporting text shown beneath the tagline label.",
   }),
@@ -45,10 +45,10 @@ export const Schema = z.object({
 
     .max(4)
     .default([
-      { heading: "HEADING 1", body: "Lorem ipsum dolor sit amet, consectetur", isHighlighted: false },
-      { heading: "HEADING 2", body: "Lorem ipsum dolor sit amet, consectetur", isHighlighted: true },
-      { heading: "HEADING 3", body: "Lorem ipsum dolor sit amet, consectetur", isHighlighted: false },
-      { heading: "HEADING 4", body: "Lorem ipsum dolor sit amet, consectetur", isHighlighted: false },
+      { heading: "제목 1", body: "예시 서비스 설명입니다.", isHighlighted: false },
+      { heading: "제목 2", body: "예시 서비스 설명입니다.", isHighlighted: true },
+      { heading: "제목 3", body: "예시 서비스 설명입니다.", isHighlighted: false },
+      { heading: "제목 4", body: "예시 서비스 설명입니다.", isHighlighted: false },
     ])
     .meta({
       description: "Cards rendered on the right side.",

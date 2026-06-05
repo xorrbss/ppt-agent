@@ -4,16 +4,16 @@
 import * as z from 'zod';
 
 export const Schema = z.object({
-    title: z.string().max(40).describe('The main heading of the slide').default('Image with Description & Metrix'),
-    description: z.string().max(150).describe('The secondary description text below the title').default('Focus on companies with 500+ employees in Financial Services, Healthcare, and Technology sectors. Target $3.5M .'),
+    title: z.string().max(40).describe('The main heading of the slide').default('설명 및 지표가 있는 이미지'),
+    description: z.string().max(150).describe('The secondary description text below the title').default('금융 서비스, 헬스케어, 기술 분야의 직원 500명 이상 기업에 집중합니다. 신규 파이프라인 350만 달러를 목표로 합니다.'),
     metrics: z.array(z.object({
         value: z.string().max(5).describe('The percentage or numeric value of the metric'),
         label: z.string().max(40).describe('The description label for the metric')
     })).max(4).describe('A list of up to 4 metric cards').default([
-        { value: '85%', label: 'Main Challenge: Delayed Client' },
-        { value: '85%', label: 'Main Challenge: Delayed Client' },
-        { value: '85%', label: 'Main Challenge: Delayed Client' },
-        { value: '85%', label: 'Main Challenge: Delayed Client' },
+        { value: '85%', label: '주요 과제: 고객 지연' },
+        { value: '85%', label: '주요 과제: 고객 지연' },
+        { value: '85%', label: '주요 과제: 고객 지연' },
+        { value: '85%', label: '주요 과제: 고객 지연' },
     ]),
     mainImage: z.object({
         __image_url__: z.string(),
@@ -25,8 +25,8 @@ export const Schema = z.object({
 });
 
 export const layoutId = 'title-metrics-image';
-export const layoutName = 'Title Metrics Image';
-export const layoutDescription = 'A slide featuring a title, description, and a 2x2 grid of metric cards on the left, with a large image on the right.';
+export const layoutName = '제목 지표 이미지';
+export const layoutDescription = '왼쪽에 제목, 설명, 2x2 그리드의 지표 카드를 두고 오른쪽에 큰 이미지를 배치한 슬라이드입니다.';
 
 const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = ({ data }) => {
     const { title, description, metrics, mainImage } = data;
@@ -110,7 +110,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                         style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                         className=' w-[2px] h-4'></span>
                     {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                        {(data as any)?.__companyName__ || 'Company Name'}
+                        {(data as any)?.__companyName__ || '회사명'}
                     </span>}
                 </div>}
             </div>

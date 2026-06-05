@@ -1,9 +1,9 @@
 import * as z from "zod";
 
 export const slideLayoutId = "title-description-with-table-slide";
-export const slideLayoutName = "Title Description with Table Slide";
+export const slideLayoutName = "제목·설명과 표 슬라이드";
 export const slideLayoutDescription =
-  "A comparison table slide with a title, a subtitle, column headers, and rows of text content.";
+  "제목, 부제목, 열 헤더, 그리고 텍스트 내용 행으로 구성된 비교 표 슬라이드.";
 
 const TableCellSchema = z.string().max(40).meta({
   description: "Table cell text.",
@@ -24,43 +24,43 @@ const LegacyRowSchema = z.object({
 
 const RowSchema = z.union([GeneralRowSchema, LegacyRowSchema]);
 
-const DEFAULT_COLUMNS = ["HEADING 1", "HEADING 1", "HEADING 2", "HEADING 3"];
+const DEFAULT_COLUMNS = ["제목 1", "제목 1", "제목 2", "제목 3"];
 const DEFAULT_ROWS: z.infer<typeof GeneralRowSchema>[] = [
   {
     cells: [
-      "Lorem ipsum dolor sit.",
-      "Lorem ipsum dolor sit.",
-      "Lorem ipsum dolor sit.",
-      "Lorem ipsum dolor sit.",
+      "예시 내용입니다.",
+      "예시 내용입니다.",
+      "예시 내용입니다.",
+      "예시 내용입니다.",
     ],
   },
   {
     cells: [
-      "Lorem ipsum dolor sit.",
-      "Lorem ipsum dolor sit.",
-      "Lorem ipsum dolor sit.",
-      "Lorem ipsum dolor sit.",
+      "예시 내용입니다.",
+      "예시 내용입니다.",
+      "예시 내용입니다.",
+      "예시 내용입니다.",
     ],
   },
   {
     cells: [
-      "Lorem ipsum dolor sit.",
-      "Lorem ipsum dolor sit.",
-      "Lorem ipsum dolor sit.",
-      "Lorem ipsum dolor sit.",
+      "예시 내용입니다.",
+      "예시 내용입니다.",
+      "예시 내용입니다.",
+      "예시 내용입니다.",
     ],
   },
 ];
 
 export const Schema = z.object({
-  title: z.string().max(14).default("Comparison Chart").meta({
+  title: z.string().max(14).default("비교 차트").meta({
     description: "Main heading shown above the table.",
   }),
   subtitle: z
     .string()
     .max(80)
     .default(
-      "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt."
+      "예시 부제목입니다. 각 항목을 한눈에 비교할 수 있도록 도와주는 자리 표시 문구입니다."
     )
     .meta({
       description: "Short subtitle shown under the main heading.",

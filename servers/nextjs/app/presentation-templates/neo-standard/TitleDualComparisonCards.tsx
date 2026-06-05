@@ -1,7 +1,7 @@
 import * as z from 'zod';
 
 export const Schema = z.object({
-    title: z.string().describe('The main title of the slide').default('Text Comparison'),
+    title: z.string().describe('The main title of the slide').default('텍스트 비교'),
     comparisonSections: z.array(z.object({
         number: z.string().describe('The numeric index or step number').max(2),
         heading: z.string().describe('The heading or title of the section').max(15),
@@ -9,20 +9,20 @@ export const Schema = z.object({
     })).max(2).default([
         {
             number: '1',
-            heading: 'Problem',
-            description: 'Presentation are communication tools that can be used as demontrations, lectures, reports, and more. it is mostly presented before an audience.'
+            heading: '문제',
+            description: '프레젠테이션은 시연, 강연, 보고 등 다양한 용도로 사용되는 커뮤니케이션 도구이며, 주로 청중 앞에서 발표됩니다.'
         },
         {
             number: '2',
-            heading: 'Solution',
-            description: 'Presentation are communication tools that can be used as demontrations, lectures, reports, and more. it is mostly presented before an audience.'
+            heading: '해결책',
+            description: '프레젠테이션은 시연, 강연, 보고 등 다양한 용도로 사용되는 커뮤니케이션 도구이며, 주로 청중 앞에서 발표됩니다.'
         }
     ])
 });
 
 export const layoutId = 'title-dual-comparison-cards';
-export const layoutName = 'Title Dual Comparison Cards';
-export const layoutDescription = 'A comparison slide with a centered title and two side-by-side cards featuring numbered headings and descriptions, ideal for problem/solution or before/after comparisons.';
+export const layoutName = '제목 양면 비교 카드';
+export const layoutDescription = '중앙 정렬된 제목과 번호가 매겨진 헤딩 및 설명이 있는 두 개의 나란한 카드로 구성된 비교 슬라이드로, 문제/해결책 또는 전후 비교에 이상적입니다.';
 
 const SectionCard = ({
     number,
@@ -127,7 +127,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                         style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                         className=' w-[2px] h-4'></span>
                     {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                        {(data as any)?.__companyName__ || 'Company Name'}
+                        {(data as any)?.__companyName__ || '회사명'}
                     </span>}
                 </div>}
             </div>

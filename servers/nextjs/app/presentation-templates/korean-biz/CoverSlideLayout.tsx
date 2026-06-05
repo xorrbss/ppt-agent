@@ -4,7 +4,7 @@ import { ImageSchema } from '../defaultSchemes';
 
 export const layoutId = 'korean-biz-cover'
 export const layoutName = '표지'
-export const layoutDescription = 'Korean business cover/title slide with title, subtitle, presenter, date, and a supporting image'
+export const layoutDescription = '제목, 부제목, 발표자, 일자, 보조 이미지를 포함한 한국형 비즈니스 표지 슬라이드'
 
 export const Schema = z.object({
   title: z
@@ -60,7 +60,7 @@ const CoverSlideLayout: React.FC<{ data?: Partial<CoverSlideData> }> = ({ data: 
                 className="text-sm font-medium tracking-widest uppercase"
                 style={{ color: "var(--primary-color,#2563eb)" }}
               >
-                Presentation
+                프레젠테이션
               </span>
             </div>
 

@@ -13,22 +13,22 @@ const MetricSchema = z.object({
 });
 
 export const slideLayoutId = "description-and-metrics-slide";
-export const slideLayoutName = "Description and Metrics Slide";
+export const slideLayoutName = "설명 및 지표 슬라이드";
 export const slideLayoutDescription =
-  "A metrics slide with description text on the left and metric cards on the right.";
+  "왼쪽에 설명 텍스트, 오른쪽에 지표 카드가 있는 지표 슬라이드.";
 
 export const Schema = z.object({
-  title: z.string().min(6).max(18).default("Metrics").meta({
+  title: z.string().min(6).max(18).default("지표").meta({
     description: "Slide title shown at the top-left.",
   }),
-  explanationTitle: z.string().min(4).max(16).default("Explanation").meta({
+  explanationTitle: z.string().min(4).max(16).default("설명").meta({
     description: "Heading above the explanatory paragraph.",
   }),
   explanation: z
     .string()
     .max(320)
     .default(
-      "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."
+      "문장은 짧고 명확하게 작성하세요. 핵심 메시지를 먼저 제시하고 이를 뒷받침하는 근거와 예시를 덧붙이면 내용이 한층 설득력 있게 전달됩니다. 불필요한 수식어는 줄이고 핵심에 집중하세요."
     )
     .meta({
       description: "Body text for the narrative section.",
@@ -38,9 +38,9 @@ export const Schema = z.object({
     .min(0)
     .max(4)
     .default([
-      { value: "50k+", label: "Active Users", subtext: "Last 12 months" },
-      { value: "50k+", label: "Active Users", subtext: "Last 12 months" },
-      { value: "50k+", label: "Active Users", subtext: "Last 12 months" },
+      { value: "50k+", label: "활성 사용자", subtext: "최근 12개월" },
+      { value: "50k+", label: "활성 사용자", subtext: "최근 12개월" },
+      { value: "50k+", label: "활성 사용자", subtext: "최근 12개월" },
 
     ])
     .meta({

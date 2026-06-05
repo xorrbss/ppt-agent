@@ -1,25 +1,25 @@
 import { z } from "zod";
 
 export const Schema = z.object({
-    title: z.string().max(17).describe("The main heading of the slide").default("Executive Summary"),
-    label: z.string().max(5).describe("A short subtitle or category label").default("Leads"),
-    description: z.string().max(205).describe("The primary body text explaining the summary").default("Focus on companies with 500+ employees in Financial Services, Healthcare, and Technology sectors. Target $3.5M in new pipeline with sub-$150 CAC through account-based marketing and content-led strategies."),
+    title: z.string().max(17).describe("The main heading of the slide").default("경영 요약"),
+    label: z.string().max(5).describe("A short subtitle or category label").default("리드"),
+    description: z.string().max(205).describe("The primary body text explaining the summary").default("금융 서비스, 헬스케어, 기술 분야에서 직원 500명 이상 기업에 집중합니다. 어카운트 기반 마케팅과 콘텐츠 중심 전략을 통해 CAC를 150달러 미만으로 유지하며 350만 달러의 신규 파이프라인을 목표로 합니다."),
     stats: z.array(z.object({
         value: z.string().max(4).describe("The numerical or percentage value"),
         heading: z.string().max(21).describe("The title of the statistic"),
         content: z.string().max(45).describe("The descriptive text for the statistic")
     })).max(3).describe("A list of 3 statistics cards").default([
-        { value: "10K", heading: "USERS", content: "Active users across multiple industries" },
-        { value: "90%", heading: "REVENUE GROWTH", content: "Year-over-year revenue growth" },
-        { value: "150%", heading: "CUSTOMER SATISFACTION", content: "Retention rate with an average rating of 4.8/5" }
+        { value: "10K", heading: "사용자", content: "여러 산업에 걸친 활성 사용자" },
+        { value: "90%", heading: "매출 성장", content: "전년 대비 매출 성장" },
+        { value: "150%", heading: "고객 만족도", content: "평균 평점 4.8/5의 유지율" }
     ]),
 });
 
 type DataType = z.infer<typeof Schema>;
 
 export const layoutId = "title-label-description-cascading-stats";
-export const layoutName = "Title Label Description Cascading Stats";
-export const layoutDescription = "An executive summary slide featuring a bold title and descriptive paragraph on the left, paired with three cascading statistic cards on the right. The cards progressively decrease in width, creating a visually dynamic layout. Ideal for presenting key metrics, achievements, or highlights alongside context-setting narrative text.";
+export const layoutName = "제목 라벨 설명 계단식 통계";
+export const layoutDescription = "왼쪽에 굵은 제목과 설명 문단을, 오른쪽에 세 개의 계단식 통계 카드를 배치한 경영 요약 슬라이드입니다. 카드의 너비가 점진적으로 줄어들어 시각적으로 역동적인 레이아웃을 만듭니다. 핵심 지표, 성과 또는 주요 내용을 맥락을 설명하는 내러티브 텍스트와 함께 표현하는 데 적합합니다.";
 
 const dynamicSlideLayout: React.FC<{ data: Partial<DataType> }> = ({ data }) => {
     const { title, label, description, stats } = data;
@@ -131,7 +131,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<DataType> }> = ({ data }) => 
                             style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                             className=' w-[2px] h-4'></span>
                         {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                            {(data as any)?.__companyName__ || 'Company Name'}
+                            {(data as any)?.__companyName__ || '회사명'}
                         </span>}
                     </div>}
                     <div className="flex-1 h-[3.6px] bg-[#55626E]"

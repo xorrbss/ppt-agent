@@ -1,27 +1,27 @@
 import * as z from 'zod';
 export const Schema = z.object({
-    title: z.string().max(40).describe('The main title of the slide').default('Comparision Snapshot'),
+    title: z.string().max(40).describe('The main title of the slide').default('비교 스냅샷'),
     items: z.array(z.object({
         label: z.string().max(12).describe('The small label at the top of the card'),
         value: z.string().max(10).describe('The large central value or metric'),
         detail: z.string().max(25).describe('A short description or challenge detail'),
         isHighlighted: z.boolean().describe('Whether the card should be highlighted').default(false),
     })).max(9).describe('A list of 1-9 comparison metrics').default([
-        { label: 'Research', value: '8,450', detail: 'Main Challenge: Delayed Client', isHighlighted: false },
-        { label: 'Research', value: '8,450', detail: 'Main Challenge: Delayed Client', isHighlighted: false },
-        { label: 'Research', value: '8,450', detail: 'Main Challenge: Delayed Client', isHighlighted: false },
-        { label: 'Research', value: '8,450', detail: 'Main Challenge: Delayed Client', isHighlighted: false },
-        { label: 'Research', value: '8,450', detail: 'Main Challenge: Delayed Client', isHighlighted: true },
-        { label: 'Research', value: '8,450', detail: 'Main Challenge: Delayed Client', isHighlighted: false },
-        { label: 'Research', value: '8,450', detail: 'Main Challenge: Delayed Client', isHighlighted: false },
-        { label: 'Research', value: '8,450', detail: 'Main Challenge: Delayed Client', isHighlighted: false },
-        { label: 'Research', value: '8,450', detail: 'Main Challenge: Delayed Client', isHighlighted: false },
+        { label: '리서치', value: '8,450', detail: '주요 과제: 고객 지연', isHighlighted: false },
+        { label: '리서치', value: '8,450', detail: '주요 과제: 고객 지연', isHighlighted: false },
+        { label: '리서치', value: '8,450', detail: '주요 과제: 고객 지연', isHighlighted: false },
+        { label: '리서치', value: '8,450', detail: '주요 과제: 고객 지연', isHighlighted: false },
+        { label: '리서치', value: '8,450', detail: '주요 과제: 고객 지연', isHighlighted: true },
+        { label: '리서치', value: '8,450', detail: '주요 과제: 고객 지연', isHighlighted: false },
+        { label: '리서치', value: '8,450', detail: '주요 과제: 고객 지연', isHighlighted: false },
+        { label: '리서치', value: '8,450', detail: '주요 과제: 고객 지연', isHighlighted: false },
+        { label: '리서치', value: '8,450', detail: '주요 과제: 고객 지연', isHighlighted: false },
     ]),
 });
 
 export const layoutId = 'title-three-by-three-metrics-grid';
-export const layoutName = 'Title 3x3 Metrics Comparison Grid';
-export const layoutDescription = 'A comprehensive metrics slide featuring a main title and a responsive grid of metric cards (1-9 items) arranged in up to three columns with row dividers. Cards can be highlighted for emphasis. Each card displays a label, a prominent value, and a detail description. Ideal for comparing multiple KPIs, benchmark data, or performance metrics across categories.';
+export const layoutName = '제목 3x3 지표 비교 그리드';
+export const layoutDescription = '주요 제목과 행 구분선이 있는 최대 3열로 배열된 지표 카드(1~9개)의 반응형 그리드로 구성된 종합 지표 슬라이드입니다. 카드는 강조를 위해 하이라이트할 수 있습니다. 각 카드에는 라벨, 돋보이는 값, 세부 설명이 표시됩니다. 여러 KPI, 벤치마크 데이터 또는 카테고리별 성과 지표를 비교하는 데 적합합니다.';
 
 /**
  * Internal Card component for grid items.
@@ -140,7 +140,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                             style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                             className=' w-[2px] h-4'></span>
                         {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                            {(data as any)?.__companyName__ || 'Company Name'}
+                            {(data as any)?.__companyName__ || '회사명'}
                         </span>}
                     </div>}
                     <div className="flex-1 h-[3.6px] bg-[#55626E]"

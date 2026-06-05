@@ -42,7 +42,7 @@ const chartTypeEnum = z.enum([
 ]).default('pie');
 
 export const Schema = z.object({
-    title: z.string().max(20).describe("The main title of the slide").default("Spend & ROI"),
+    title: z.string().max(20).describe("The main title of the slide").default("지출 및 ROI"),
     chartType: chartTypeEnum.describe('Type of chart to display').default('horizontalBar'),
     graph: z.object({
         columns: z.array(z.string().max(10)).max(2).describe("Columns for the chart data"),
@@ -51,19 +51,19 @@ export const Schema = z.object({
             value: z.number().describe("Numerical value for the data segment"),
         })).max(5).describe("Rows of data for the chart")
     }).describe("Chart data").default({
-        columns: ["Label", "Value"],
+        columns: ["라벨", "값"],
         rows: [
-            { label: "Jan", value: 24 },
-            { label: "Feb", value: 30.9 },
-            { label: "Mar", value: 45.2 },
+            { label: "1월", value: 24 },
+            { label: "2월", value: 30.9 },
+            { label: "3월", value: 45.2 },
         ]
     }),
 
 });
 
 export const layoutId = "title-centered-chart";
-export const layoutName = "Title Centered Chart";
-export const layoutDescription = "A clean slide layout with a large centered title and a prominent chart (bar, grouped bar, stacked bar, clustered bar, diverging bar, horizontal bar, line, area, pie, donut, or scatter) within a grey container. Ideal for showcasing distribution data, single-metric trends, or category breakdowns in a visually impactful way.";
+export const layoutName = "제목 중앙 차트";
+export const layoutDescription = "크고 가운데 정렬된 제목과 회색 컨테이너 안의 돋보이는 차트(막대, 그룹 막대, 누적 막대, 클러스터 막대, 발산 막대, 가로 막대, 선, 영역, 파이, 도넛 또는 산점도)로 구성된 깔끔한 슬라이드 레이아웃입니다. 분포 데이터, 단일 지표 추세 또는 카테고리 분류를 시각적으로 임팩트 있게 보여주는 데 적합합니다.";
 
 const COLORS = ['#4169E1', '#1D8CF8', '#7B9FFF', '#4ECDC4', '#45B7D1', '#10B981', '#244CD9', '#6B89E6', '#4169E1', '#7B9FFF', '#EC4899', '#10B981'];
 
@@ -247,8 +247,8 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                             <ReferenceLine x={0} stroke="var(--background-text, #9CA3AF)" strokeWidth={1} />
                             <Tooltip content={<CustomTooltip />} cursor={{ fill: 'transparent' }} />
                             <Legend />
-                            <Bar dataKey="positive" name={graph?.columns?.[0] || 'Positive'} fill={graphColors(0)} stackId="stack" radius={[0, 4, 4, 0]} />
-                            <Bar dataKey="negative" name={graph?.columns?.[1] || 'Negative'} fill={graphColors(3)} stackId="stack" radius={[4, 0, 0, 4]} />
+                            <Bar dataKey="positive" name={graph?.columns?.[0] || '긍정'} fill={graphColors(0)} stackId="stack" radius={[0, 4, 4, 0]} />
+                            <Bar dataKey="negative" name={graph?.columns?.[1] || '부정'} fill={graphColors(3)} stackId="stack" radius={[4, 0, 0, 4]} />
                         </BarChart>
                     </ResponsiveContainer>
                 );
@@ -442,7 +442,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                             style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                             className=' w-[2px] h-4'></span>
                         {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                            {(data as any)?.__companyName__ || 'Company Name'}
+                            {(data as any)?.__companyName__ || '회사명'}
                         </span>}
                     </div>}
                     <div className="flex-1 h-[3.6px] bg-[#55626E]"

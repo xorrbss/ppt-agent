@@ -3,17 +3,17 @@ import * as z from "zod";
 import { ImageSchema } from '../defaultSchemes';
 
 export const layoutId = 'quote-slide'
-export const layoutName = 'Quote'
-export const layoutDescription = 'A slide layout with a heading, inspirational quote, and background image with overlay for text visibility.'
+export const layoutName = '인용구'
+export const layoutDescription = '제목, 영감을 주는 인용구, 그리고 텍스트 가독성을 위한 오버레이가 적용된 배경 이미지로 구성된 슬라이드 레이아웃입니다.'
 
 const quoteSlideSchema = z.object({
-    heading: z.string().min(3).max(60).default('Words of Wisdom').meta({
+    heading: z.string().min(3).max(60).default('지혜의 말').meta({
         description: "Main heading of the slide",
     }),
-    quote: z.string().min(10).max(200).default('Success is not final, failure is not fatal: it is the courage to continue that counts. The future belongs to those who believe in the beauty of their dreams.').meta({
+    quote: z.string().min(10).max(200).default('성공이 끝은 아니며 실패가 치명적인 것도 아니다. 중요한 것은 계속해 나가는 용기다. 미래는 자신의 꿈이 지닌 아름다움을 믿는 사람들의 것이다.').meta({
         description: "The main quote text content",
     }),
-    author: z.string().min(2).max(50).default('Winston Churchill').meta({
+    author: z.string().min(2).max(50).default('윈스턴 처칠').meta({
         description: "Author of the quote",
     }),
     backgroundImage: ImageSchema.default({
@@ -55,7 +55,7 @@ const QuoteSlideLayout: React.FC<QuoteSlideLayoutProps> = ({ data: slideData }) 
 
                                 {(slideData as any)?._logo_url__ && <img src={(slideData as any)?._logo_url__} alt="logo" className="w-6 h-6" />}
                                 {(slideData as any)?.__companyName__ && <span className="text-sm sm:text-base font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(slideData as any)?.__companyName__ || 'Company Name'}
+                                    {(slideData as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>
@@ -87,7 +87,7 @@ const QuoteSlideLayout: React.FC<QuoteSlideLayoutProps> = ({ data: slideData }) 
                         {/* Heading */}
                         <div className="space-y-4">
                             <h1 style={{ color: "var(--background-text,#ffffff)" }} className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white leading-tight">
-                                {slideData?.heading || 'Words of Wisdom'}
+                                {slideData?.heading || '지혜의 말'}
                             </h1>
                             {/* Purple accent line */}
                             <div style={{ background: "var(--primary-color,#9333ea)" }} className="w-20 h-1 bg-purple-400 mx-auto"></div>
@@ -108,7 +108,7 @@ const QuoteSlideLayout: React.FC<QuoteSlideLayoutProps> = ({ data: slideData }) 
 
                             {/* Quote Text */}
                             <blockquote style={{ color: "var(--background-text,#ffffff)" }} className="text-xl sm:text-2xl lg:text-3xl font-medium text-white leading-relaxed italic">
-                                "{slideData?.quote || 'Success is not final, failure is not fatal: it is the courage to continue that counts. The future belongs to those who believe in the beauty of their dreams.'}"
+                                "{slideData?.quote || '성공이 끝은 아니며 실패가 치명적인 것도 아니다. 중요한 것은 계속해 나가는 용기다. 미래는 자신의 꿈이 지닌 아름다움을 믿는 사람들의 것이다.'}"
                             </blockquote>
 
                             {/* Author */}
@@ -117,7 +117,7 @@ const QuoteSlideLayout: React.FC<QuoteSlideLayoutProps> = ({ data: slideData }) 
                                 <cite className="text-base sm:text-lg text-purple-200 font-semibold not-italic"
                                     style={{ color: "var(--background-text,#ffffff)" }}
                                 >
-                                    {slideData?.author || 'Winston Churchill'}
+                                    {slideData?.author || '윈스턴 처칠'}
                                 </cite>
                                 <div style={{ background: "var(--primary-color,#9333ea)" }} className="w-16 h-px bg-purple-300"></div>
                             </div>

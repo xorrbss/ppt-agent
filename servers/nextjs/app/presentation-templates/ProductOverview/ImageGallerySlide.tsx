@@ -2,16 +2,16 @@ import * as z from "zod";
 
 
 export const slideLayoutId = "title-description-with-image-gallery-slide";
-export const slideLayoutName = "Title Description with Image Gallery Slide";
+export const slideLayoutName = "제목·설명과 이미지 갤러리 슬라이드";
 export const slideLayoutDescription =
-  "A text slide with a title on top and a description below, and a section containing a gallery of images.";
+  "상단에 제목과 그 아래 설명이 있고, 이미지 갤러리가 담긴 섹션이 있는 텍스트 슬라이드.";
 
 export const Schema = z.object({
-  title: z.string().max(12).default("Image Gallery").meta({
+  title: z.string().max(12).default("이미지 갤러리").meta({
     description: "Main Title of the slide",
   }),
   description: z.string().max(120).default(
-    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore."
+    "예시 설명 문구입니다. 이미지 갤러리에 담길 내용을 간결하게 소개하기 위한 자리 표시 텍스트로, 실제 내용으로 자유롭게 교체해 사용하실 수 있습니다."
   ).meta({
     description: "Supporting paragraph shown under the title.",
   }),

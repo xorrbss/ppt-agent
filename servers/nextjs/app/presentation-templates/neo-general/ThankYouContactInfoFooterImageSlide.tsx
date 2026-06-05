@@ -2,9 +2,9 @@ import * as z from "zod";
 
 
 export const Schema = z.object({
-    title: z.string().max(10).describe('The main heading of the slide').default('Thank you'),
-    description: z.string().max(120).describe('Supporting description text').default('Thanks for supporting our small business! to show our love, please enjoy 20% off you next order with the code "CODE20"'),
-    contactTitle: z.string().max(15).describe('Heading for the contact section').default('Contact Us'),
+    title: z.string().max(10).describe('The main heading of the slide').default('감사합니다'),
+    description: z.string().max(120).describe('Supporting description text').default('저희 작은 비즈니스를 응원해 주셔서 감사합니다! 감사의 마음을 담아 다음 주문 시 코드 "CODE20"으로 20% 할인을 받으세요.'),
+    contactTitle: z.string().max(15).describe('Heading for the contact section').default('문의하기'),
     phone: z.string().max(20).describe('Phone number text').default('+977-98000000'),
     email: z.string().max(30).describe('Email address text').default('presenton@gmail.com'),
     website: z.string().max(30).describe('Website URL text').default('www.presenton.com'),
@@ -18,8 +18,8 @@ export const Schema = z.object({
 });
 
 export const layoutId = 'thank-you-contact-info-footer-image-slide-layout';
-export const layoutName = 'Centered Title With Contact And Footer Image';
-export const layoutDescription = 'A conclusion slide featuring centered title with accent bar, description text on the left, contact information (phone, email, website) aligned right, and a full-width footer image.';
+export const layoutName = '연락처와 하단 이미지가 있는 가운데 제목';
+export const layoutDescription = '강조 바가 있는 가운데 정렬 제목, 왼쪽의 설명 텍스트, 오른쪽 정렬된 연락처 정보(전화, 이메일, 웹사이트), 그리고 전체 너비의 하단 이미지로 구성된 마무리 슬라이드입니다.';
 
 const dynamicSlideLayout = ({ data }: { data: Partial<z.infer<typeof Schema>> }) => {
     const { title, description, contactTitle, phone, email, website, footerImage } = data;
@@ -47,7 +47,7 @@ const dynamicSlideLayout = ({ data }: { data: Partial<z.infer<typeof Schema>> })
                                     style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                                     className=' w-[2px] h-4'></span>
                                 {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(data as any)?.__companyName__ || 'Company Name'}
+                                    {(data as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>

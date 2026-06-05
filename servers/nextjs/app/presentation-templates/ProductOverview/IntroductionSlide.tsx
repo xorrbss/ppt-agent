@@ -3,9 +3,9 @@ import * as z from "zod";
 
 
 export const slideLayoutId = "introduction-slide";
-export const slideLayoutName = "Introduction Slide";
+export const slideLayoutName = "소개 슬라이드";
 export const slideLayoutDescription =
-  "A split slide with a large portrait image on the left and a structured introduction column on the right containing a title and two labeled body paragraphs.";
+  "왼쪽에 큰 인물 이미지가 있고, 오른쪽에 제목과 라벨이 붙은 두 개의 본문 문단으로 구성된 소개 열이 있는 분할 슬라이드.";
 
 const IntroBlockSchema = z.object({
   label: z.string().min(3).max(12).meta({
@@ -17,7 +17,7 @@ const IntroBlockSchema = z.object({
 });
 
 export const Schema = z.object({
-  title: z.string().max(15).default("Introduction").meta({
+  title: z.string().max(15).default("소개").meta({
     description: "Primary title in the right column.",
   }),
   portraitImage: z.object({
@@ -36,12 +36,12 @@ export const Schema = z.object({
     .max(2)
     .default([
       {
-        label: "TAGLINE",
-        body: "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea.",
+        label: "태그라인",
+        body: "예시 본문 내용입니다. 소개 섹션에 들어갈 핵심 메시지를 간결하게 전달하기 위한 자리 표시 문구이며, 실제 내용으로 자유롭게 교체해 사용하실 수 있습니다.",
       },
       {
-        label: "TAGLINE",
-        body: "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea.",
+        label: "태그라인",
+        body: "예시 본문 내용입니다. 소개 섹션에 들어갈 핵심 메시지를 간결하게 전달하기 위한 자리 표시 문구이며, 실제 내용으로 자유롭게 교체해 사용하실 수 있습니다.",
       },
     ])
     .meta({

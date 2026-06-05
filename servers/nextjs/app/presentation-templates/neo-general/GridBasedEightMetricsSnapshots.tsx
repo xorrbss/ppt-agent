@@ -1,7 +1,7 @@
 import * as z from "zod";
 import React from "react";
 export const Schema = z.object({
-    title: z.string().max(30).describe('The main heading of the slide').default('Campaign Performance Snapshot'),
+    title: z.string().max(30).describe('The main heading of the slide').default('캠페인 성과 스냅샷'),
 
     cards: z.array(z.object({
         metric: z.string().describe('Primary value or statistic displayed').max(20),
@@ -10,12 +10,12 @@ export const Schema = z.object({
         isHighlighted: z.boolean().describe('Whether the card uses highlighted styling').default(false),
     })).max(8).min(3)
         .describe('Array of metric cards for the grid').default([
-            { metric: '342 SQLs', label: 'Enterprise ABM Launch', subtext: '28% CONVERSION RATE', isHighlighted: false },
-            { metric: '$1.8M pipeline', label: 'Product Feature Release', subtext: '4.7X ROAS', isHighlighted: false },
-            { metric: '156 Deals', label: 'Industry Summit Sponsorship', subtext: '42% MEETING RATE', isHighlighted: true },
-            { metric: '156 Deals', label: 'Industry Summit Sponsorship', subtext: '42% MEETING RATE', isHighlighted: false },
-            { metric: '342 SQLs', label: 'Enterprise ABM Launch', subtext: '28% CONVERSION RATE', isHighlighted: false },
-            { metric: '$1.8M pipeline', label: 'Product Feature Release', subtext: '4.7X ROAS', isHighlighted: false },
+            { metric: '342 SQL', label: '엔터프라이즈 ABM 출시', subtext: '전환율 28%', isHighlighted: false },
+            { metric: '$1.8M 파이프라인', label: '제품 기능 출시', subtext: 'ROAS 4.7배', isHighlighted: false },
+            { metric: '156건 거래', label: '업계 서밋 후원', subtext: '미팅률 42%', isHighlighted: true },
+            { metric: '156건 거래', label: '업계 서밋 후원', subtext: '미팅률 42%', isHighlighted: false },
+            { metric: '342 SQL', label: '엔터프라이즈 ABM 출시', subtext: '전환율 28%', isHighlighted: false },
+            { metric: '$1.8M 파이프라인', label: '제품 기능 출시', subtext: 'ROAS 4.7배', isHighlighted: false },
             // { metric: '156 Deals', label: 'Industry Summit Sponsorship', subtext: '42% MEETING RATE', isHighlighted: false },
             // { metric: '156 Deals', label: 'Industry Summit Sponsorship', subtext: '42% MEETING RATE', isHighlighted: false },
         ]),
@@ -93,8 +93,8 @@ const Card: React.FC<CardProps> = ({ metric, label, subtext, isHighlighted }) =>
 };
 
 export const layoutId = 'performance-grid-snapshot-slide';
-export const layoutName = 'Metric Cards Grid';
-export const layoutDescription = 'A centered layout with bold title and accent bar, followed by a 4x2 grid of up to 8 metric cards. Each card displays a value, label, and subtext. Cards can optionally be highlighted with colored background.';
+export const layoutName = '지표 카드 그리드';
+export const layoutDescription = '굵은 제목과 강조 바를 중앙에 배치하고, 그 아래에 최대 8개의 지표 카드를 4x2 그리드로 배치한 레이아웃입니다. 각 카드는 값, 라벨, 보조 텍스트를 표시합니다. 카드는 선택적으로 색상 배경으로 강조할 수 있습니다.';
 
 const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = ({ data }) => {
 
@@ -122,7 +122,7 @@ const dynamicSlideLayout: React.FC<{ data: Partial<z.infer<typeof Schema>> }> = 
                                     style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                                     className=' w-[2px] h-4'></span>
                                 {(data as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(data as any)?.__companyName__ || 'Company Name'}
+                                    {(data as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>

@@ -2,12 +2,12 @@ import React from "react";
 import * as z from "zod";
 
 export const layoutId = "table-info-slide";
-export const layoutName = "Table with Info";
+export const layoutName = "정보가 있는 표";
 export const layoutDescription =
-  "A slide layout with a title at the top, structured table in the middle, and descriptive text at the bottom.";
+  "상단에 제목, 가운데에 구조화된 표, 하단에 설명 텍스트가 있는 슬라이드 레이아웃입니다.";
 
 const tableInfoSlideSchema = z.object({
-  title: z.string().min(3).max(40).default("Market Comparison").meta({
+  title: z.string().min(3).max(40).default("시장 비교").meta({
     description: "Main title of the slide",
   }),
   tableData: z
@@ -25,12 +25,12 @@ const tableInfoSlideSchema = z.object({
         }),
     })
     .default({
-      headers: ["Company", "Revenue", "Growth", "Market Share"],
+      headers: ["회사", "매출", "성장률", "시장 점유율"],
       rows: [
-        ["Company A", "$2.5M", "15%", "25%"],
-        ["Company B", "$1.8M", "12%", "18%"],
-        ["Company C", "$3.2M", "20%", "32%"],
-        ["Our Company", "$1.2M", "35%", "12%"],
+        ["A사", "$2.5M", "15%", "25%"],
+        ["B사", "$1.8M", "12%", "18%"],
+        ["C사", "$3.2M", "20%", "32%"],
+        ["자사", "$1.2M", "35%", "12%"],
       ],
     })
     .meta({
@@ -41,7 +41,7 @@ const tableInfoSlideSchema = z.object({
     .min(10)
     .max(200)
     .default(
-      "This comparison shows our competitive position in the market. While we currently have a smaller market share, our growth rate significantly exceeds competitors, indicating strong potential for future expansion."
+      "이 비교는 시장에서 자사의 경쟁적 위치를 보여줍니다. 현재 시장 점유율은 작지만, 성장률이 경쟁사를 크게 앞서고 있어 향후 확장 가능성이 높음을 나타냅니다."
     )
     .meta({
       description: "Descriptive text that appears below the table",
@@ -60,16 +60,16 @@ const TableInfoSlideLayout: React.FC<TableInfoSlideLayoutProps> = ({
   data: slideData,
 }) => {
   const tableHeaders = slideData?.tableData?.headers || [
-    "Company",
-    "Revenue",
-    "Growth",
-    "Market Share",
+    "회사",
+    "매출",
+    "성장률",
+    "시장 점유율",
   ];
   const tableRows = slideData?.tableData?.rows || [
-    ["Company A", "$2.5M", "15%", "25%"],
-    ["Company B", "$1.8M", "12%", "18%"],
-    ["Company C", "$3.2M", "20%", "32%"],
-    ["Our Company", "$1.2M", "35%", "12%"],
+    ["A사", "$2.5M", "15%", "25%"],
+    ["B사", "$1.8M", "12%", "18%"],
+    ["C사", "$3.2M", "20%", "32%"],
+    ["자사", "$1.2M", "35%", "12%"],
   ];
 
   return (
@@ -104,7 +104,7 @@ const TableInfoSlideLayout: React.FC<TableInfoSlideLayoutProps> = ({
                     className="text-sm sm:text-base font-semibold"
                     style={{ color: "var(--background-text, #111827)" }}
                   >
-                    {(slideData as any)?.__companyName__ || "Company Name"}
+                    {(slideData as any)?.__companyName__ || "회사명"}
                   </span>
                 )}
               </div>
@@ -160,7 +160,7 @@ const TableInfoSlideLayout: React.FC<TableInfoSlideLayoutProps> = ({
               style={{ color: "var(--background-text,#111827)" }}
               className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900"
             >
-              {slideData?.title || "Market Comparison"}
+              {slideData?.title || "시장 비교"}
             </h1>
             {/* Purple accent line */}
             <div
@@ -248,7 +248,7 @@ const TableInfoSlideLayout: React.FC<TableInfoSlideLayoutProps> = ({
                 className="text-sm sm:text-base text-gray-700 leading-relaxed"
               >
                 {slideData?.description ||
-                  "This comparison shows our competitive position in the market. While we currently have a smaller market share, our growth rate significantly exceeds competitors, indicating strong potential for future expansion."}
+                  "이 비교는 시장에서 자사의 경쟁적 위치를 보여줍니다. 현재 시장 점유율은 작지만, 성장률이 경쟁사를 크게 앞서고 있어 향후 확장 가능성이 높음을 나타냅니다."}
               </p>
             </div>
           </div>

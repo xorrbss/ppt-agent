@@ -49,22 +49,22 @@ export const Schema = z.object({
     .string()
     .max(8)
     .describe("The main heading of the slide")
-    .default("Barchart"),
+    .default("막대 차트"),
   subtitleLeft: z
     .string()
     .max(10)
     .describe("Left subtitle text")
-    .default("Campaign A"),
+    .default("캠페인 A"),
   subtitleRight: z
     .string()
     .max(12)
     .describe("Right subtitle text")
-    .default("Top Campaign"),
+    .default("인기 캠페인"),
   footerLabel: z
     .string()
     .max(15)
     .describe("Footer label text")
-    .default("Engangment Rate"),
+    .default("참여율"),
   chartType: chartTypeEnum.describe("Type of chart to display"),
   graphData: z
     .object({
@@ -93,10 +93,10 @@ export const Schema = z.object({
     })
     .describe("The data for the chart")
     .default({
-      columns: ["Planned Budget", "Actual Budget"],
+      columns: ["계획 예산", "실제 예산"],
       rows: [
-        { label: "Paid Social", value: 520, value2: 485 },
-        { label: "Content Marketing", value: 380, value2: 412 },
+        { label: "유료 소셜", value: 520, value2: 485 },
+        { label: "콘텐츠 마케팅", value: 380, value2: 412 },
         // { label: "Events & Sponsorships", value: 450, value2: 468 },
         // { label: "SEO & Organic", value: 280, value2: 276 },
       ],
@@ -104,9 +104,9 @@ export const Schema = z.object({
 });
 
 export const layoutId = "title-subtitles-chart";
-export const layoutName = "Title Subtitles Chart";
+export const layoutName = "제목 부제목 차트";
 export const layoutDescription =
-  "A slide with a centered title, two subtitles, and a chart within a bordered content area. Supports bar, grouped bar, stacked bar, clustered bar, diverging bar, horizontal bar, line, area, pie, donut, and scatter chart types.";
+  "가운데 정렬된 제목, 두 개의 부제목, 그리고 테두리가 있는 내용 영역 안의 차트로 구성된 슬라이드입니다. 막대, 그룹 막대, 누적 막대, 클러스터 막대, 발산형 막대, 가로 막대, 선, 영역, 파이, 도넛, 산점도 차트 유형을 지원합니다.";
 
 const CHART_COLORS = [
   "#244CD9",
@@ -267,7 +267,7 @@ const dynamicSlideLayout: React.FC<{
               />
               <Bar
                 dataKey="value"
-                name={graphData?.columns?.[0] || "Series 1"}
+                name={graphData?.columns?.[0] || "시리즈 1"}
                 stackId="a"
                 fill={graphColors(0)}
                 barSize={40}
@@ -287,7 +287,7 @@ const dynamicSlideLayout: React.FC<{
               {hasValue2 && (
                 <Bar
                   dataKey="value2"
-                  name={graphData?.columns?.[1] || "Series 2"}
+                  name={graphData?.columns?.[1] || "시리즈 2"}
                   stackId="a"
                   fill={graphColors(1)}
                   barSize={40}
@@ -415,7 +415,7 @@ const dynamicSlideLayout: React.FC<{
               />
               <Bar
                 dataKey="value"
-                name={graphData?.columns?.[0] || "Series 1"}
+                name={graphData?.columns?.[0] || "시리즈 1"}
                 stackId="stack"
                 fill={graphColors(0)}
                 barSize={80}
@@ -424,7 +424,7 @@ const dynamicSlideLayout: React.FC<{
               {hasValue2 && (
                 <Bar
                   dataKey="value2"
-                  name={graphData?.columns?.[1] || "Series 2"}
+                  name={graphData?.columns?.[1] || "시리즈 2"}
                   stackId="stack"
                   fill={graphColors(1)}
                   radius={[4, 4, 0, 0]}
@@ -472,7 +472,7 @@ const dynamicSlideLayout: React.FC<{
               />
               <Bar
                 dataKey="value"
-                name={graphData?.columns?.[0] || "Series 1"}
+                name={graphData?.columns?.[0] || "시리즈 1"}
                 stackId="stack"
                 fill={graphColors(0)}
                 barSize={35}
@@ -481,7 +481,7 @@ const dynamicSlideLayout: React.FC<{
               {hasValue2 && (
                 <Bar
                   dataKey="value2"
-                  name={graphData?.columns?.[1] || "Series 2"}
+                  name={graphData?.columns?.[1] || "시리즈 2"}
                   stackId="stack"
                   fill={graphColors(1)}
                   radius={[0, 4, 4, 0]}
@@ -582,7 +582,7 @@ const dynamicSlideLayout: React.FC<{
               />
               <Bar
                 dataKey="positive"
-                name={graphData?.columns?.[0] || "Positive"}
+                name={graphData?.columns?.[0] || "긍정"}
                 fill={graphColors(0)}
                 stackId="stack"
                 radius={hasValue2 ? [0, 4, 4, 0] : [4, 4, 4, 4]}
@@ -591,7 +591,7 @@ const dynamicSlideLayout: React.FC<{
               {hasValue2 && (
                 <Bar
                   dataKey="negative"
-                  name={graphData?.columns?.[1] || "Negative"}
+                  name={graphData?.columns?.[1] || "부정"}
                   fill={graphColors(1)}
                   stackId="stack"
                   radius={[4, 0, 0, 4]}
@@ -844,7 +844,7 @@ const dynamicSlideLayout: React.FC<{
               />
               <Bar
                 dataKey="value"
-                name={graphData?.columns?.[0] || "Series 1"}
+                name={graphData?.columns?.[0] || "시리즈 1"}
                 stackId="a"
                 fill={graphColors(0)}
                 barSize={180}
@@ -864,7 +864,7 @@ const dynamicSlideLayout: React.FC<{
               {hasValue2 && (
                 <Bar
                   dataKey="value2"
-                  name={graphData?.columns?.[1] || "Series 2"}
+                  name={graphData?.columns?.[1] || "시리즈 2"}
                   stackId="a"
                   fill={graphColors(1)}
                   radius={[4, 4, 0, 0]}
@@ -984,7 +984,7 @@ const dynamicSlideLayout: React.FC<{
                   className="text-sm  font-semibold"
                   style={{ color: "var(--background-text, #111827)" }}
                 >
-                  {(data as any)?.__companyName__ || "Company Name"}
+                  {(data as any)?.__companyName__ || "회사명"}
                 </span>
               )}
             </div>

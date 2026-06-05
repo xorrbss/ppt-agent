@@ -3,14 +3,14 @@ import * as z from "zod";
 import { ImageSchema } from '../defaultSchemes';
 
 export const layoutId = 'metrics-with-image-slide'
-export const layoutName = 'Image With Title And Metrics'
-export const layoutDescription = 'A two-column layout with a large supporting image on the left and content on the right including title, description, and a 2-column metrics grid displaying up to 3 statistics with labels and values.'
+export const layoutName = '제목과 지표가 있는 이미지'
+export const layoutDescription = '왼쪽에 큰 보조 이미지를 배치하고 오른쪽에 제목, 설명, 그리고 라벨과 값이 있는 최대 3개의 통계를 표시하는 2열 지표 그리드를 담은 2열 레이아웃입니다.'
 
 const metricsWithImageSlideSchema = z.object({
-    title: z.string().min(3).max(40).default('Competitive Advantage').meta({
+    title: z.string().min(3).max(40).default('경쟁 우위').meta({
         description: "Heading text of the slide",
     }),
-    description: z.string().min(10).max(150).default('Ginyard International Co. stands out by offering custom digital solutions tailored to client needs, alongside long-term support to ensure lasting relationships and continuous adaptation.').meta({
+    description: z.string().min(10).max(150).default('지냐드 인터내셔널은 고객 니즈에 맞춘 맞춤형 디지털 솔루션과 장기적인 지원을 제공하여 지속적인 관계와 끊임없는 적응을 보장하는 점에서 돋보입니다.').meta({
         description: "Supporting description text",
     }),
     image: ImageSchema.default({
@@ -28,11 +28,11 @@ const metricsWithImageSlideSchema = z.object({
         }),
     })).min(1).max(3).default([
         {
-            label: 'Satisfied Clients',
+            label: '만족한 고객',
             value: '200+'
         },
         {
-            label: 'Client Retention Rate',
+            label: '고객 유지율',
             value: '95%'
         },
 
@@ -76,7 +76,7 @@ const MetricsWithImageSlideLayout: React.FC<MetricsWithImageSlideLayoutProps> = 
                                     style={{ backgroundColor: 'var(--stroke, #F0F0F0)' }}
                                     className=' w-[2px] h-4'></span>
                                 {(slideData as any)?.__companyName__ && <span className="text-sm  font-semibold" style={{ color: 'var(--background-text, #111827)' }}>
-                                    {(slideData as any)?.__companyName__ || 'Company Name'}
+                                    {(slideData as any)?.__companyName__ || '회사명'}
                                 </span>}
                             </div>
                         </div>
@@ -113,12 +113,12 @@ const MetricsWithImageSlideLayout: React.FC<MetricsWithImageSlideLayoutProps> = 
                     <div className="flex-1 flex flex-col justify-center pl-8 space-y-6">
                         {/* Title */}
                         <h1 style={{ color: "var(--background-text,#111827)" }} className="text-[42.7px] font-bold text-gray-900 leading-tight">
-                            {slideData?.title || 'Competitive Advantage'}
+                            {slideData?.title || '경쟁 우위'}
                         </h1>
 
                         {/* Description */}
                         <p style={{ color: "var(--background-text,#4b5563)" }} className="text-base sm:text-lg text-gray-700 leading-relaxed">
-                            {slideData?.description || 'Ginyard International Co. stands out by offering custom digital solutions tailored to client needs, alongside long-term support to ensure lasting relationships and continuous adaptation.'}
+                            {slideData?.description || '지냐드 인터내셔널은 고객 니즈에 맞춘 맞춤형 디지털 솔루션과 장기적인 지원을 제공하여 지속적인 관계와 끊임없는 적응을 보장하는 점에서 돋보입니다.'}
                         </p>
 
                         {/* Metrics Grid */}

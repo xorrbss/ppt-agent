@@ -3,7 +3,7 @@ import * as z from "zod";
 
 export const layoutId = 'korean-biz-toc'
 export const layoutName = '목차'
-export const layoutDescription = 'Korean agenda / table of contents slide listing section titles'
+export const layoutDescription = '섹션 제목을 나열하는 한국형 목차 슬라이드'
 
 export const Schema = z.object({
   title: z
