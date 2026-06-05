@@ -234,6 +234,45 @@ class LiteParseService:
 
         return True, "ok"
 
+    def _resolve_tessdata_path(self) -> str:
+        """Locate a bundled `tessdata/` directory for offline OCR.
+
+        LiteParse/tesseract.js downloads `<lang>.traineddata` from a CDN when no
+        local path is given, so OCR silently needs network access. To support
+        offline / air-gapped runs (and to actually use the committed eng/kor
+        models) point it at a bundled `tessdata/` directory. Explicit env
+        overrides win; returns "" when nothing suitable is found so the runner
+        falls back to its own env/CDN handling.
+        """
+        env_path = (
+            os.getenv("LITEPARSE_TESSDATA_PATH") or os.getenv("TESSDATA_PREFIX") or ""
+        ).strip()
+        if env_path:
+            return env_path
+
+        service_dir = os.path.dirname(os.path.abspath(__file__))
+        app_root = (os.getenv("PRESENTON_APP_ROOT") or "").strip()
+        candidates = []
+        if app_root:
+            candidates.append(os.path.join(app_root, "tessdata"))
+        candidates.extend(
+            [
+                # Repo-root layout: servers/fastapi/services -> <repo>/tessdata
+                os.path.abspath(os.path.join(service_dir, "..", "..", "..", "tessdata")),
+                # Next to the LiteParse runner (Electron packaged bundle)
+                os.path.join(self.runner_dir, "tessdata"),
+                "/app/tessdata",
+            ]
+        )
+        for candidate in candidates:
+            if (
+                candidate
+                and os.path.isdir(candidate)
+                and any(name.endswith(".traineddata") for name in os.listdir(candidate))
+            ):
+                return candidate
+        return ""
+
     @staticmethod
     def _use_json_runner_output() -> bool:
         """If true, expect one JSON line on stdout (legacy). Default is plain UTF-8 text (better for large PDFs)."""
@@ -284,7 +323,7 @@ class LiteParseService:
         ocr_server = (os.getenv("LITEPARSE_OCR_SERVER_URL") or "").strip()
         if ocr_server:
             command.extend(["--ocr-server-url", ocr_server])
-        tessdata = (os.getenv("LITEPARSE_TESSDATA_PATH") or "").strip()
+        tessdata = self._resolve_tessdata_path()
         if tessdata:
             command.extend(["--tessdata-path", tessdata])
 

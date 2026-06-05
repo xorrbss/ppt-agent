@@ -301,10 +301,11 @@ Docker images install the default spaCy model (`en_core_web_sm`) during build so
 
 #### Document parsing (LiteParse)
 
-| Variable                  | Purpose                                   |
-| ------------------------- | ----------------------------------------- |
-| **LITEPARSE_DPI**         | OCR render DPI (compose default **120**). |
-| **LITEPARSE_NUM_WORKERS** | Worker count (compose default **1**).     |
+| Variable                    | Purpose                                                                                                                                                              |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **LITEPARSE_DPI**           | OCR render DPI (compose default **120**).                                                                                                                            |
+| **LITEPARSE_NUM_WORKERS**   | Worker count (compose default **1**).                                                                                                                               |
+| **LITEPARSE_TESSDATA_PATH** | Directory of Tesseract `<lang>.traineddata` models for OCR. Unset → the bundled `tessdata/` (eng + kor) is auto-detected; if that is missing too, models download from a CDN (needs network). Set this for fully offline / air-gapped OCR with extra languages. |
 
 #### Database
 

@@ -24,6 +24,18 @@ function main() {
     console.log(`[fastapi-assets] Copying ${name} -> ${dest}`);
     copyDir(src, dest);
   }
+
+  // OCR language data (eng/kor) for offline LiteParse/tesseract.js. Placed next
+  // to the runner so LiteParseService resolves <runner_dir>/tessdata at runtime.
+  // Optional: without it OCR falls back to downloading models from a CDN.
+  const tessdataSrc = path.join(__dirname, "..", "tessdata");
+  const tessdataDest = path.join(__dirname, "resources", "document-extraction", "tessdata");
+  if (fs.existsSync(tessdataSrc)) {
+    console.log(`[fastapi-assets] Copying tessdata -> ${tessdataDest}`);
+    copyDir(tessdataSrc, tessdataDest);
+  } else {
+    console.warn(`[fastapi-assets] tessdata not found at ${tessdataSrc}; OCR will fall back to CDN`);
+  }
 }
 
 try {
