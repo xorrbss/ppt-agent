@@ -94,7 +94,7 @@ export const useOutlineStreaming = (presentationId: string | null) => {
         } catch {
           if (!scheduleRetry("invalid SSE payload")) {
             resetStreamingState();
-            notify.error("Stream parse failed", "Failed to parse outline stream response.");
+            notify.error("스트림 파싱 실패", "개요 스트림 응답을 파싱하지 못했습니다.");
           }
           return;
         }
@@ -161,7 +161,7 @@ export const useOutlineStreaming = (presentationId: string | null) => {
             } catch (error) {
               if (!scheduleRetry("failed to parse complete payload")) {
                 resetStreamingState();
-                notify.error("Parse failed", "Failed to parse presentation data.");
+                notify.error("파싱 실패", "프레젠테이션 데이터를 파싱하지 못했습니다.");
               }
             }
             accumulatedChunks = "";
@@ -184,9 +184,9 @@ export const useOutlineStreaming = (presentationId: string | null) => {
               resetStreamingState();
               closeEventSource();
               notify.error(
-                "Outline streaming failed",
+                "개요 스트리밍 실패",
                 data.detail ||
-                  "Failed to connect to the server. Please try again."
+                  "서버에 연결하지 못했습니다. 다시 시도해 주세요."
               );
             }
             break;
@@ -197,7 +197,7 @@ export const useOutlineStreaming = (presentationId: string | null) => {
         if (!scheduleRetry("connection lost")) {
           resetStreamingState();
           closeEventSource();
-          notify.error("Connection failed", "Failed to connect to the server. Please try again.");
+          notify.error("연결 실패", "서버에 연결하지 못했습니다. 다시 시도해 주세요.");
         }
       };
     };

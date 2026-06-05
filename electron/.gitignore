@@ -25,6 +25,7 @@ resources/fastapi
 resources/nextjs
 dist
 eng.traineddata
+resources/document-extraction/tessdata/
 electron/.cache/
 electron/.cache/export-runtime/
 

@@ -148,7 +148,7 @@ const PresentationPage = ({ presentation_id, exportCookie }: PresentationPagePro
       }
     } catch (error) {
       setError(true);
-      notify.error("Failed to load presentation", "The presentation could not be loaded. Please try again.");
+      notify.error("프레젠테이션을 불러오지 못했습니다", "프레젠테이션을 불러올 수 없습니다. 다시 시도해 주세요.");
       console.error("Error fetching user slides:", error);
     } finally {
       setContentLoading(false);
@@ -169,7 +169,7 @@ const PresentationPage = ({ presentation_id, exportCookie }: PresentationPagePro
 
     return ApiResponseHandler.handleResponse(
       response,
-      "Presentation not found"
+      "프레젠테이션을 찾을 수 없습니다"
     );
   };
 
@@ -222,12 +222,12 @@ const PresentationPage = ({ presentation_id, exportCookie }: PresentationPagePro
             role="alert"
           >
             <AlertCircle className="w-16 h-16 mb-4 text-red-500" />
-            <strong className="font-bold text-4xl mb-2">Oops!</strong>
+            <strong className="font-bold text-4xl mb-2">이런!</strong>
             <p className="block text-2xl py-2">
-              We encountered an issue loading your presentation.
+              프레젠테이션을 불러오는 중 문제가 발생했습니다.
             </p>
             <p className="text-lg py-2">
-              Please check your internet connection or try again later.
+              인터넷 연결을 확인하거나 잠시 후 다시 시도해 주세요.
             </p>
             <Button
               className="mt-4 bg-red-500 text-white hover:bg-red-600 focus:ring-4 focus:ring-red-300"
@@ -236,7 +236,7 @@ const PresentationPage = ({ presentation_id, exportCookie }: PresentationPagePro
                 window.location.reload();
               }}
             >
-              Retry
+              다시 시도
             </Button>
           </div>
         </div>

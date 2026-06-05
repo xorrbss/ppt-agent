@@ -16,7 +16,6 @@ const MCP = { host: "127.0.0.1", port: Number(process.env.MCP_PORT || 8001) };
 function pickUpstream(url) {
   if (
     url.startsWith("/api/v1/") ||
-    url === "/docs" ||
     url.startsWith("/docs") ||
     url === "/openapi.json" ||
     url.startsWith("/static/") ||
@@ -24,7 +23,7 @@ function pickUpstream(url) {
   ) {
     return FASTAPI;
   }
-  if (url === "/mcp" || url.startsWith("/mcp/") || url.startsWith("/mcp")) {
+  if (url.startsWith("/mcp")) {
     return MCP;
   }
   return NEXT;
@@ -48,6 +47,10 @@ const server = http.createServer((req, res) => {
     if (!res.headersSent) res.writeHead(502, { "content-type": "text/plain" });
     res.end(`[local-proxy] upstream ${target.host}:${target.port} error: ${err.message}`);
   });
+  // If the client goes away (browser tab closed, navigation), tear down the
+  // upstream request so it doesn't leak. No timeout is imposed — generation
+  // requests are synchronous and legitimately take minutes.
+  res.on("close", () => upstream.destroy());
   req.pipe(upstream);
 });
 

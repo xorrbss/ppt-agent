@@ -32,16 +32,16 @@ export const usePresentationGeneration = (
   const validateInputs = useCallback(() => {
     if (!outlines || outlines.length === 0) {
       notify.warning(
-        "Outlines not ready",
-        "Please wait for your outlines to finish generating before continuing."
+        "개요가 준비되지 않았습니다",
+        "계속하기 전에 개요 생성이 완료될 때까지 기다려 주세요."
       );
       return false;
     }
 
     if (!selectedTemplate) {
       notify.warning(
-        "Layout not selected",
-        "Choose a layout group before generating your presentation."
+        "레이아웃이 선택되지 않았습니다",
+        "프레젠테이션을 생성하기 전에 레이아웃 그룹을 선택하세요."
       );
       return false;
     }
@@ -130,7 +130,7 @@ export const usePresentationGeneration = (
           !customTemplateDetail ||
           customTemplateDetail.layouts.length === 0
         ) {
-          notify.error("Template error", "Failed to load custom template layouts.");
+          notify.error("템플릿 오류", "커스텀 템플릿 레이아웃을 불러오지 못했습니다.");
           return;
         }
 
@@ -189,8 +189,8 @@ export const usePresentationGeneration = (
     } catch (error: any) {
       console.error("Error In Presentation Generation(prepare).", error);
       notify.error(
-        "Generation error",
-        error.message || "Error in presentation generation."
+        "생성 오류",
+        error.message || "프레젠테이션 생성 중 오류가 발생했습니다."
       );
     } finally {
       setLoadingState(DEFAULT_LOADING_STATE);

@@ -14,11 +14,18 @@ a few fixes needed to run the **web** and **Electron** versions natively on Wind
   onboarding, editor, toasts) translated to Korean. API values, provider/model IDs
   and logic literals are kept in English.
 - **Default presentation language = Korean** (`upload/components/UploadPage.tsx`).
+- **Offline Korean OCR** — bundled Tesseract models live in `tessdata/`
+  (`eng.traineddata`, `kor.traineddata`). `LiteParseService` auto-detects this
+  directory, so scanned-PDF OCR works without a CDN. Override with
+  `LITEPARSE_TESSDATA_PATH` to add languages.
 - **PPTX/PDF export fix** — `servers/fastapi/utils/export_utils.py` seeds the export
   session cookie via the Next.js proxy so the headless render authenticates (modern
   Chromium drops CDP-set `Cookie` headers).
 - **Electron dev fixes** (`electron/app/`) — use system Node for LiteParse, disable
   uvicorn `--reload`, raise server-readiness timeout to 300s.
+- **Cross-platform npm scripts** — `electron/package.json` `dev`/`build:*`/`clean:build`
+  use `node scripts/rmrf.cjs` instead of Unix `rm -rf`, so `npm run dev` runs natively
+  on Windows.
 
 ## Prerequisites
 Node LTS, Python 3.11, [uv](https://docs.astral.sh/uv/). For export/parsing:
@@ -48,9 +55,7 @@ Open http://localhost:5000. First boot shows a one-time admin login (`/api/v1/au
 ```powershell
 cd electron
 npm run setup:env      # electron deps + uv sync + nextjs npm install + export runtime
-# npm run dev uses `rm -rf` (Unix); on Windows run the steps directly:
-node_modules\.bin\tsc.cmd
-node_modules\.bin\electron.cmd . --no-sandbox
+npm run dev            # cleans app_dist, runs tsc, launches Electron (cross-platform)
 ```
 Electron runs with `DISABLE_AUTH=true` (no login). Provider keys are set in-app
 (Settings) or via env at launch (`LLM`, `OPENAI_API_KEY`, `OPENAI_MODEL`, …).

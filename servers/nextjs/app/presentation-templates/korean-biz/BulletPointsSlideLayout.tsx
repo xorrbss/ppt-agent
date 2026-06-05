@@ -6,6 +6,26 @@ export const layoutId = 'korean-biz-bullets'
 export const layoutName = '핵심 내용'
 export const layoutDescription = 'Korean key-points slide: a title and 3-4 bullet cards each with an icon, heading and description'
 
+// Single source of truth for the sample bullets: used both as the Zod schema
+// default and as the component's fallback when no data is provided.
+const DEFAULT_BULLETS = [
+  {
+    icon: { __icon_url__: '', __icon_query__: 'market growth' },
+    title: '시장 확대',
+    description: '신규 고객 세그먼트를 발굴하고 핵심 채널을 강화해 매출 기반을 넓힙니다.',
+  },
+  {
+    icon: { __icon_url__: '', __icon_query__: 'innovation idea' },
+    title: '제품 혁신',
+    description: '데이터 기반 의사결정으로 제품 경쟁력을 높이고 차별화를 실현합니다.',
+  },
+  {
+    icon: { __icon_url__: '', __icon_query__: 'team collaboration' },
+    title: '조직 역량',
+    description: '협업 문화를 정착시키고 인재를 육성하여 실행력을 끌어올립니다.',
+  },
+];
+
 export const Schema = z.object({
   title: z
     .string()
@@ -36,51 +56,17 @@ export const Schema = z.object({
     )
     .min(3)
     .max(4)
-    .default([
-      {
-        icon: { __icon_url__: '', __icon_query__: 'market growth' },
-        title: '시장 확대',
-        description: '신규 고객 세그먼트를 발굴하고 핵심 채널을 강화해 매출 기반을 넓힙니다.',
-      },
-      {
-        icon: { __icon_url__: '', __icon_query__: 'innovation idea' },
-        title: '제품 혁신',
-        description: '데이터 기반 의사결정으로 제품 경쟁력을 높이고 차별화를 실현합니다.',
-      },
-      {
-        icon: { __icon_url__: '', __icon_query__: 'team collaboration' },
-        title: '조직 역량',
-        description: '협업 문화를 정착시키고 인재를 육성하여 실행력을 끌어올립니다.',
-      },
-    ])
+    .default(DEFAULT_BULLETS)
     .meta({ description: "List of 3 to 4 key points, each with an icon, heading and description" }),
 });
 
 export type BulletPointsData = z.infer<typeof Schema>;
 
-const defaultBullets: BulletPointsData['bullets'] = [
-  {
-    icon: { __icon_url__: '', __icon_query__: 'market growth' },
-    title: '시장 확대',
-    description: '신규 고객 세그먼트를 발굴하고 핵심 채널을 강화해 매출 기반을 넓힙니다.',
-  },
-  {
-    icon: { __icon_url__: '', __icon_query__: 'innovation idea' },
-    title: '제품 혁신',
-    description: '데이터 기반 의사결정으로 제품 경쟁력을 높이고 차별화를 실현합니다.',
-  },
-  {
-    icon: { __icon_url__: '', __icon_query__: 'team collaboration' },
-    title: '조직 역량',
-    description: '협업 문화를 정착시키고 인재를 육성하여 실행력을 끌어올립니다.',
-  },
-];
-
 const BulletPointsSlideLayout: React.FC<{ data?: Partial<BulletPointsData> }> = ({ data: slideData }) => {
   const title = slideData?.title || '핵심 전략';
   const bullets = slideData?.bullets && slideData.bullets.length > 0
     ? slideData.bullets
-    : defaultBullets;
+    : DEFAULT_BULLETS;
 
   return (
     <div

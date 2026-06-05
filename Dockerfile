@@ -120,6 +120,10 @@ COPY --from=assets-builder /app/document-extraction-liteparse /app/document-extr
 COPY --from=assets-builder /app/presentation-export /app/presentation-export
 COPY --from=assets-builder /app/scripts/sync-presentation-export.cjs /app/scripts/sync-presentation-export.cjs
 
+# Bundle Tesseract language data so OCR (LiteParse/tesseract.js) works offline.
+# Resolved by LiteParseService via PRESENTON_APP_ROOT (=/app) -> /app/tessdata.
+COPY tessdata /app/tessdata
+
 COPY --from=nextjs-builder /app/servers/nextjs/.next-build/standalone/ /app/servers/nextjs/
 COPY --from=nextjs-builder /app/servers/nextjs/public /app/servers/nextjs/public
 COPY --from=nextjs-builder /app/servers/nextjs/.next-build/static /app/servers/nextjs/.next-build/static

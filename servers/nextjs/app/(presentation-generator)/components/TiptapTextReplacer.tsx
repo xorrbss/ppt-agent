@@ -156,7 +156,7 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
                 onContentChange(content, dataPath, slideIndex);
               }
             }}
-            placeholder="Enter text..."
+            placeholder="텍스트를 입력하세요..."
           />
         )
       );

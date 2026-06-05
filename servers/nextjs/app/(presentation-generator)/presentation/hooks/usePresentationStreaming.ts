@@ -149,7 +149,7 @@ export const usePresentationStreaming = (
       setLoading(false);
       dispatch(setStreaming(false));
       setError(true);
-      notify.error("Presentation streaming failed", description);
+      notify.error("프레젠테이션 스트리밍 실패", description);
     };
 
     const scheduleRetry = (reason: string): boolean => {

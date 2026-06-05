@@ -28,11 +28,11 @@
     "start": "electron . --no-sandbox",
     "dist": "electron-builder",
     "postinstall": "electron-builder install-app-deps",
-    "dev": "rm -rf app_dist && tsc && electron . --no-sandbox",
+    "dev": "node scripts/rmrf.cjs app_dist && tsc && electron . --no-sandbox",
     "setup:env": "npm install && cd ../servers/fastapi && uv sync && cd ../nextjs && npm install && cd ../../electron && npm run setup:export-runtime",
     "install:pyinstaller": "cd ../servers/fastapi && echo 'pyinstaller will be installed via uv run --with when building'",
     "typecheck": "tsc --noEmit",
-    "build:ts": "rm -rf app_dist && tsc",
+    "build:ts": "node scripts/rmrf.cjs app_dist && tsc",
     "check:main-no-undef": "node scripts/check-main-no-undef.cjs",
     "lint:main": "npm run build:ts && npm run check:main-no-undef",
     "build:css": "tailwindcss -i ./resources/ui/assets/css/tailwind.import.css -o ./resources/ui/assets/css/tailwind.css --watch",
@@ -42,12 +42,12 @@
     "fetch:export-runtime": "node sync_export_runtime.js --force",
     "fetch:export-runtime:latest": "EXPORT_RUNTIME_VERSION=latest node sync_export_runtime.js --force",
     "build:nextjs": "node build_nextjs_resources.js",
-    "build:fastapi": "rm -rf resources/fastapi && npm run build:vectorstore && cross-env MEM0_SPACY_STRICT=true node ensure_spacy_model.js && cd ../servers/fastapi && uv run --with pyinstaller python -m PyInstaller --distpath ../../electron/resources server.spec && cd ../../electron && node copy_fastapi_assets.js",
+    "build:fastapi": "node scripts/rmrf.cjs resources/fastapi && npm run build:vectorstore && cross-env MEM0_SPACY_STRICT=true node ensure_spacy_model.js && cd ../servers/fastapi && uv run --with pyinstaller python -m PyInstaller --distpath ../../electron/resources server.spec && cd ../../electron && node copy_fastapi_assets.js",
     "generate:version": "node generate_update.js",
     "upload:sourcemaps": "node scripts/upload-sourcemaps.cjs",
     "build:electron": "npm run generate:version && npm run build:export-runtime && npm run typecheck && npm run build:ts && npm run check:main-no-undef && node build.js",
     "build:all": "npm run clean:build && npm run setup:env && npm run build:ts && npm run install:pyinstaller && npm run build:nextjs && npm run build:fastapi && npm run build:electron",
-    "clean:build": "rm -rf resources/nextjs && rm -rf resources/fastapi && rm -rf app_dist"
+    "clean:build": "node scripts/rmrf.cjs resources/nextjs resources/fastapi app_dist"
   },
   "author": {
     "name": "Presenton",

@@ -137,7 +137,7 @@ const LayoutPreview = () => {
                             href="/custom-template"
                             onClick={() => trackEvent(MixpanelEvent.Templates_New_Template_Clicked)}
                             className="inline-flex items-center font-syne font-semibold gap-2 rounded-xl px-4 py-2.5 text-black text-sm  shadow-sm hover:shadow-md"
-                            aria-label="Create new template"
+                            aria-label="새 템플릿 만들기"
                             style={{
                                 borderRadius: "48px",
                                 background: "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
