@@ -1,0 +1,41 @@
+name: pytest (FastAPI backend)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  pytest:
+    name: pytest
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: servers/fastapi
+    env:
+      # Mirrors the CI env the suite is written for.
+      APP_DATA_DIRECTORY: /tmp/app_data
+      TEMP_DIRECTORY: /tmp/presenton
+      DATABASE_URL: sqlite+aiosqlite:///./test.db
+      DISABLE_ANONYMOUS_TRACKING: "true"
+      DISABLE_IMAGE_GENERATION: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv (with Python 3.11)
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+          working-directory: servers/fastapi
+          enable-cache: true
+
+      - name: Install dependencies (incl. dev/pytest)
+        run: uv sync --frozen
+
+      - name: Prepare runtime directories
+        run: mkdir -p /tmp/app_data /tmp/presenton
+
+      - name: Run pytest
+        run: uv run pytest -q --no-header
