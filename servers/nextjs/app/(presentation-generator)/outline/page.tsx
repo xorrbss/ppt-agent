@@ -21,11 +21,16 @@ export const metadata: Metadata = {
     "business presentations"
   ]
 }
-const page = () => {
+const page = async ({
+  searchParams,
+}: {
+  searchParams: Promise<{ auto?: string }>
+}) => {
+  const { auto } = await searchParams
   return (
     <div className='relative min-h-screen'>
       <Header />
-      <OutlinePage />
+      <OutlinePage auto={auto === '1'} />
     </div>
   )
 }

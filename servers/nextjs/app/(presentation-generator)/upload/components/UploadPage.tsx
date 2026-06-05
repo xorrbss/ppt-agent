@@ -10,7 +10,7 @@
  */
 
 "use client";
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import { clearOutlines, setPresentationId } from "@/store/slices/presentationGeneration";
@@ -30,6 +30,8 @@ import { RootState } from "@/store/store";
 import { ImagesApi } from "../../services/api/images";
 import CurrentConfig from "./CurrentConfig";
 import { LLMConfig } from "@/types/llm_config";
+import TemplateSelection from "../../outline/components/TemplateSelection";
+import { resolveTemplateSelection, templateSelectionToId } from "@/app/presentation-templates/select";
 
 const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
 const FILE_TYPE_WORD = new Set([".doc", ".docx", ".docm", ".odt", ".rtf"]);
@@ -115,6 +117,11 @@ const UploadPage = () => {
   const pathname = usePathname();
   const dispatch = useDispatch();
   const llmConfig = useSelector((state: RootState) => state.userConfig.llm_config);
+  const selectedTemplateId = useSelector((state: RootState) => state.pptGenUpload.selectedTemplate);
+  const selectedTemplate = useMemo(
+    () => resolveTemplateSelection(selectedTemplateId),
+    [selectedTemplateId]
+  );
 
   const [files, setFiles] = useState<File[]>([]);
   const [config, setConfig] = useState<PresentationConfig>({
@@ -303,14 +310,37 @@ const UploadPage = () => {
       files: responses,
     }));
     dispatch(clearOutlines())
+
+    // Silently create the presentation from the decomposed documents and go
+    // straight to the auto outline bridge (skip the /documents-preview step).
+    const documentPaths = responses
+      .flat()
+      .filter((item: any) => item && item.name && item.file_path)
+      .map((item: any) => item.file_path);
+
+    const createResponse = await PresentationGenerationApi.createPresentation({
+      content: config?.prompt ?? "",
+      n_slides: config?.slides ? parseInt(config.slides, 10) : null,
+      file_paths: documentPaths,
+      language: selectedLanguage,
+      tone: config?.tone,
+      verbosity: config?.verbosity,
+      instructions: config?.instructions || null,
+      include_table_of_contents: !!config?.includeTableOfContents,
+      include_title_slide: !!config?.includeTitleSlide,
+      web_search: !!config?.webSearch,
+    });
+
+    dispatch(setPresentationId(createResponse.id));
     trackEvent(MixpanelEvent.Upload_Documents_Processed, {
       ...getUploadSnapshotProps(),
       uploaded_documents_count: documents.length,
       decompose_job_count: responses.length,
-      destination: "/documents-preview",
+      presentation_id: createResponse.id,
+      destination: "/outline?auto=1",
     });
-    trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/documents-preview" });
-    router.push("/documents-preview");
+    trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/outline?auto=1" });
+    router.push("/outline?auto=1");
   };
 
   /**
@@ -346,10 +376,10 @@ const UploadPage = () => {
     trackEvent(MixpanelEvent.Upload_Outline_Generation_Requested, {
       ...getUploadSnapshotProps(),
       presentation_id: createResponse.id,
-      destination: "/outline",
+      destination: "/outline?auto=1",
     });
-    trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/outline" });
-    router.push("/outline");
+    trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/outline?auto=1" });
+    router.push("/outline?auto=1");
   };
 
   /**
@@ -370,7 +400,7 @@ const UploadPage = () => {
   };
 
   return (
-    <Wrapper className="pb-10 lg:max-w-[65%] xl:max-w-[60%]">
+    <Wrapper className="pb-28 lg:max-w-[60%] xl:max-w-[54%]">
       <OverlayLoader
         show={loadingState.isLoading}
         text={loadingState.message}
@@ -378,42 +408,56 @@ const UploadPage = () => {
         duration={loadingState.duration}
         extra_info={loadingState.extra_info}
       />
-      <div className="rounded-2xl " >
-        <div className="flex flex-col gap-4 md:items-center md:flex-row justify-between px-4 ">
-          <CurrentConfig />
-          <ConfigurationSelects
-            config={config}
-            onConfigChange={handleConfigChange}
+      <div className="flex flex-col items-center pt-6 md:pt-10">
+        <h1 className="text-center text-2xl md:text-[32px] font-semibold tracking-[-0.02em] text-[#101828] font-syne">
+          무엇을 만들어 드릴까요?
+        </h1>
+        <p className="mt-2 text-center text-sm text-[#667085] font-syne">
+          아이디어를 입력하고 필요하면 파일을 첨부하세요. 발표자료를 만들어 드립니다.
+        </p>
+
+        <div className="mt-7 w-full rounded-2xl border border-[#EAECF0] bg-white p-4 shadow-[0_4px_24px_rgba(16,24,40,0.06)]">
+          <PromptInput
+            value={config.prompt}
+            onChange={(value) => handleConfigChange("prompt", value)}
           />
-        </div>
 
-        <div className="p-4 ">
-
-          <div className="relative">
-            <PromptInput
-              value={config.prompt}
-              onChange={(value) => handleConfigChange("prompt", value)}
-
+          <div className="mt-3">
+            <SupportingDoc
+              files={[...files]}
+              onFilesChange={setFiles}
+              compact
             />
           </div>
+
+          <div className="mt-4 flex flex-col gap-3 border-t border-[#F2F4F7] pt-3 sm:flex-row sm:items-center sm:justify-between">
+            <ConfigurationSelects
+              config={config}
+              onConfigChange={handleConfigChange}
+            />
+            <CurrentConfig />
+          </div>
         </div>
-        <div className="p-4 ">
-          <h3 className="text-sm font-medium text-[#333333] mb-2">첨부파일 (선택)</h3>
-          <SupportingDoc
-            files={[...files]}
-            onFilesChange={setFiles}
+
+        <div className="mt-8 w-full">
+          <h2 className="mb-3 text-base font-semibold text-[#101828] font-syne">템플릿 선택</h2>
+          <TemplateSelection
+            selectedTemplate={selectedTemplate}
+            onSelectTemplate={(t) =>
+              dispatch(setPptGenUploadState({ selectedTemplate: templateSelectionToId(t) }))
+            }
           />
         </div>
 
-        <div className="p-4">
+        <div className="mt-6 flex w-full justify-center">
           <Button
             onClick={handleGeneratePresentation}
             style={{
               background: "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)"
             }}
-            className="w-fit mr-0 ml-auto rounded-[28px] flex items-center justify-center py-5 px-4  text-[#101323] font-syne font-semibold text-xs  "
+            className="rounded-[28px] flex items-center justify-center py-5 px-8 text-[#101323] font-syne font-semibold text-sm"
           >
-            <span>시작하기</span>
+            <span>생성하기</span>
             <ChevronRight className="!w-5 !h-5 " />
           </Button>
         </div>

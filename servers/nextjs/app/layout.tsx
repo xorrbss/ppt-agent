@@ -81,6 +81,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
+        suppressHydrationWarning
         className={`${inter.variable} ${syne.variable} ${unbounded.variable} antialiased`}
       >
         <Providers>
