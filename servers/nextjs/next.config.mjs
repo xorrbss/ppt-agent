@@ -23,6 +23,17 @@ const nextConfig = {
     ];
   },
 
+  // /compose is a friendly alias for the main compose screen (/upload).
+  async redirects() {
+    return [
+      {
+        source: '/compose',
+        destination: '/upload',
+        permanent: false,
+      },
+    ];
+  },
+
   images: {
     remotePatterns: [
       {
