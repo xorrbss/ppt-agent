@@ -250,7 +250,23 @@ function downloadFile(url, outputPath, redirects = 5) {
 
 function unzipArchive(zipPath, destDir) {
   ensureDir(destDir);
-  execFileSync("unzip", ["-o", zipPath, "-d", destDir], { stdio: "inherit" });
+  if (process.platform === "win32") {
+    // Windows has no `unzip`; use PowerShell's built-in Expand-Archive.
+    // Single quotes in paths are escaped by doubling for PowerShell.
+    const ps = (p) => p.replace(/'/g, "''");
+    execFileSync(
+      "powershell",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        `Expand-Archive -LiteralPath '${ps(zipPath)}' -DestinationPath '${ps(destDir)}' -Force`,
+      ],
+      { stdio: "inherit" }
+    );
+  } else {
+    execFileSync("unzip", ["-o", zipPath, "-d", destDir], { stdio: "inherit" });
+  }
 }
 
 function resolveExtractedRoot(extractDir) {

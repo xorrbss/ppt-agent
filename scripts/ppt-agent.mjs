@@ -183,6 +183,24 @@ function extractDetail(json, text) {
   return t.length ? t.slice(0, 500) : "(no response body)";
 }
 
+// One fetch with an AbortController timeout. Translates abort/network failures
+// into friendly Errors and returns the raw Response. `descr` names the operation
+// for error messages; `timeoutMs` bounds this single call.
+async function abortableFetch(url, init, timeoutMs, descr) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err) {
+    if (err && err.name === "AbortError") {
+      throw new Error(`${descr} timed out after ${Math.round(timeoutMs / 1000)}s (--timeout)`);
+    }
+    throw new Error(`network error reaching ${url}: ${err && err.message ? err.message : err}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // ---------- progress heartbeat ----------
 
 // Prints an elapsed-seconds line to stderr every ~15s while a long request is in
@@ -223,28 +241,18 @@ async function generateOne(content, opts) {
   };
   const body = buildBody(content, opts);
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
   const stopHeartbeat = startHeartbeat("generating");
-
   let res;
   try {
-    res = await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-  } catch (err) {
-    clearTimeout(timer);
+    res = await abortableFetch(
+      url,
+      { method: "POST", headers, body: JSON.stringify(body) },
+      opts.timeoutMs,
+      "generate request"
+    );
+  } finally {
     stopHeartbeat();
-    if (err && err.name === "AbortError") {
-      throw new Error(`request timed out after ${opts.timeoutMs / 1000}s (--timeout)`);
-    }
-    throw new Error(`network error reaching ${url}: ${err && err.message ? err.message : err}`);
   }
-  clearTimeout(timer);
-  stopHeartbeat();
 
   const { json, text } = await readJsonSafely(res);
 
@@ -272,19 +280,7 @@ async function generateOne(content, opts) {
 // One-shot fetch with a per-call timeout bounded by `remainingMs` (the overall
 // --timeout budget). Returns { res, json, text }.
 async function fetchWithTimeout(url, init, remainingMs, descr) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), remainingMs);
-  let res;
-  try {
-    res = await fetch(url, { ...init, signal: controller.signal });
-  } catch (err) {
-    clearTimeout(timer);
-    if (err && err.name === "AbortError") {
-      throw new Error(`${descr} timed out (--timeout budget exhausted)`);
-    }
-    throw new Error(`network error reaching ${url}: ${err && err.message ? err.message : err}`);
-  }
-  clearTimeout(timer);
+  const res = await abortableFetch(url, init, remainingMs, descr);
   const { json, text } = await readJsonSafely(res);
   return { res, json, text };
 }
@@ -406,24 +402,12 @@ async function downloadExport(result, opts) {
   const basename = baseName(result.path);
   const url = `${opts.base}/app_data/exports/${encodeURIComponent(basename)}`;
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
-
-  let res;
-  try {
-    res = await fetch(url, {
-      method: "GET",
-      headers: { ...authHeader(opts.user, opts.password) },
-      signal: controller.signal,
-    });
-  } catch (err) {
-    clearTimeout(timer);
-    if (err && err.name === "AbortError") {
-      throw new Error(`download timed out after ${opts.timeoutMs / 1000}s`);
-    }
-    throw new Error(`network error downloading ${url}: ${err && err.message ? err.message : err}`);
-  }
-  clearTimeout(timer);
+  const res = await abortableFetch(
+    url,
+    { method: "GET", headers: { ...authHeader(opts.user, opts.password) } },
+    opts.timeoutMs,
+    "download"
+  );
 
   if (!res.ok) {
     const { json, text } = await readJsonSafely(res);
