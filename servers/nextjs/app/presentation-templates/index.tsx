@@ -74,6 +74,14 @@ import PitchDeckPanelListWithMedia, { Schema as PitchDeckPanelListWithMediaSchem
 import PitchDeckHorizontalTimeline, { Schema as PitchDeckHorizontalTimelineSchema, slideLayoutId as PitchDeckHorizontalTimelineId, slideLayoutName as PitchDeckHorizontalTimelineName, slideLayoutDescription as PitchDeckHorizontalTimelineDesc } from "./pitch-deck/HorizontalTimeline";
 import PitchDeckOverlappingCircleCards, { Schema as PitchDeckOverlappingCircleCardsSchema, slideLayoutId as PitchDeckOverlappingCircleCardsId, slideLayoutName as PitchDeckOverlappingCircleCardsName, slideLayoutDescription as PitchDeckOverlappingCircleCardsDesc } from "./pitch-deck/OverlappingCircleCards";
 
+// Korean business templates
+import KoreanBizCover, { Schema as KoreanBizCoverSchema, layoutId as KoreanBizCoverId, layoutName as KoreanBizCoverName, layoutDescription as KoreanBizCoverDesc } from "./korean-biz/CoverSlideLayout";
+import KoreanBizToc, { Schema as KoreanBizTocSchema, layoutId as KoreanBizTocId, layoutName as KoreanBizTocName, layoutDescription as KoreanBizTocDesc } from "./korean-biz/TableOfContentsSlideLayout";
+import KoreanBizOverview, { Schema as KoreanBizOverviewSchema, layoutId as KoreanBizOverviewId, layoutName as KoreanBizOverviewName, layoutDescription as KoreanBizOverviewDesc } from "./korean-biz/SectionOverviewSlideLayout";
+import KoreanBizBullets, { Schema as KoreanBizBulletsSchema, layoutId as KoreanBizBulletsId, layoutName as KoreanBizBulletsName, layoutDescription as KoreanBizBulletsDesc } from "./korean-biz/BulletPointsSlideLayout";
+import KoreanBizMetrics, { Schema as KoreanBizMetricsSchema, layoutId as KoreanBizMetricsId, layoutName as KoreanBizMetricsName, layoutDescription as KoreanBizMetricsDesc } from "./korean-biz/MetricsSlideLayout";
+import KoreanBizClosing, { Schema as KoreanBizClosingSchema, layoutId as KoreanBizClosingId, layoutName as KoreanBizClosingName, layoutDescription as KoreanBizClosingDesc } from "./korean-biz/ClosingSlideLayout";
+
 // General templates
 import GeneralIntroSlideLayout, { Schema as GeneralIntroSchema, layoutId as GeneralIntroId, layoutName as GeneralIntroName, layoutDescription as GeneralIntroDesc } from "./general/IntroSlideLayout";
 import BasicInfoSlideLayout, { Schema as BasicInfoSchema, layoutId as BasicInfoId, layoutName as BasicInfoName, layoutDescription as BasicInfoDesc } from "./general/BasicInfoSlideLayout";
@@ -238,6 +246,7 @@ import TitleDescriptionFourChartsSixBulletsLayout, { Schema as TitleDescriptionF
 
 // TODO: Step 2: Import template settings Here (like the ones below)
 // Template template settings
+import koreanBizSettings from "./korean-biz/settings.json";
 import generalSettings from "./general/settings.json";
 import modernSettings from "./modern/settings.json";
 import standardSettings from "./standard/settings.json";
@@ -433,6 +442,16 @@ export const neoSwiftTemplates: TemplateWithData[] = [
     createTemplateEntry(TitleDescriptionFourChartsSixBulletsLayout, TitleDescriptionFourChartsSixBulletsSchema, TitleDescriptionFourChartsSixBulletsId, TitleDescriptionFourChartsSixBulletsName, TitleDescriptionFourChartsSixBulletsDesc, "neo-swift", "TitleDescriptionFourChartsSixBulletsLayout"),
 ]
 
+// Korean business templates array
+export const koreanBizTemplates: TemplateWithData[] = [
+    createTemplateEntry(KoreanBizCover, KoreanBizCoverSchema, KoreanBizCoverId, KoreanBizCoverName, KoreanBizCoverDesc, "korean-biz", "CoverSlideLayout"),
+    createTemplateEntry(KoreanBizToc, KoreanBizTocSchema, KoreanBizTocId, KoreanBizTocName, KoreanBizTocDesc, "korean-biz", "TableOfContentsSlideLayout"),
+    createTemplateEntry(KoreanBizOverview, KoreanBizOverviewSchema, KoreanBizOverviewId, KoreanBizOverviewName, KoreanBizOverviewDesc, "korean-biz", "SectionOverviewSlideLayout"),
+    createTemplateEntry(KoreanBizBullets, KoreanBizBulletsSchema, KoreanBizBulletsId, KoreanBizBulletsName, KoreanBizBulletsDesc, "korean-biz", "BulletPointsSlideLayout"),
+    createTemplateEntry(KoreanBizMetrics, KoreanBizMetricsSchema, KoreanBizMetricsId, KoreanBizMetricsName, KoreanBizMetricsDesc, "korean-biz", "MetricsSlideLayout"),
+    createTemplateEntry(KoreanBizClosing, KoreanBizClosingSchema, KoreanBizClosingId, KoreanBizClosingName, KoreanBizClosingDesc, "korean-biz", "ClosingSlideLayout"),
+];
+
 // General templates array
 export const generalTemplates: TemplateWithData[] = [
 
@@ -496,6 +515,7 @@ export const swiftTemplates: TemplateWithData[] = [
 // TODO: Step 4: Combine all templates into a single array For UseCases (like the ones below)
 // All templates combined
 export const allLayouts: TemplateWithData[] = [
+    ...koreanBizTemplates,
     ...neoGeneralTemplates,
     ...neoModernTemplates,
     ...neoStandardTemplates,
@@ -515,6 +535,13 @@ export const allLayouts: TemplateWithData[] = [
 // TODO: Step 5: Combine all templates into a single array For UseCases (like the ones below)
 // For UseCases we need to combine all templates into a single array with settings
 export const templates: TemplateLayoutsWithSettings[] = [
+    {
+        id: "korean-biz",
+        name: "한국형 비즈니스",
+        description: koreanBizSettings.description,
+        settings: koreanBizSettings as TemplateGroupSettings,
+        layouts: koreanBizTemplates,
+    },
     {
         id: "general",
         name: "General",
