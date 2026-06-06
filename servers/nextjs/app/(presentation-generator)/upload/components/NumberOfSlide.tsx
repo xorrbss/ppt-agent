@@ -31,7 +31,7 @@ const NumberOfSlide = ({ value, onValueChange }: { value: string, onValueChange:
             >
                 <SelectValue placeholder="슬라이드 선택" />
             </SelectTrigger>
-            <SelectContent className="font-instrument_sans">
+            <SelectContent className="font-instrument_sans min-w-[12rem]">
                 {/* Sticky custom input at the top */}
                 <div
                     className="sticky top-0 z-10 bg-white  p-2 border-b"
@@ -76,7 +76,7 @@ const NumberOfSlide = ({ value, onValueChange }: { value: string, onValueChange:
                     <SelectItem
                         key={option}
                         value={option}
-                        className="font-instrument_sans text-sm font-medium"
+                        className="font-instrument_sans text-sm font-medium whitespace-nowrap"
                         role="option"
                     >
                         슬라이드 {option}개

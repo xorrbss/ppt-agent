@@ -420,6 +420,7 @@ const UploadPage = () => {
           <PromptInput
             value={config.prompt}
             onChange={(value) => handleConfigChange("prompt", value)}
+            onSubmit={handleGeneratePresentation}
           />
 
           <div className="mt-3">

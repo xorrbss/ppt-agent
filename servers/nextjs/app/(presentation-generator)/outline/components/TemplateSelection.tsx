@@ -11,7 +11,6 @@ import CreateCustomTemplate from "../../(dashboard)/templates/components/CreateC
 import { CustomTemplateCard } from "./CustomTemplateCard";
 import {
   TemplatePreviewStage,
-  LayoutsBadge,
   InbuiltTemplatePreview,
 } from "../../components/TemplatePreviewComponents";
 
@@ -37,7 +36,6 @@ const BuiltInTemplateCard = memo(function BuiltInTemplateCard({
       onClick={handleClick}
     >
       <TemplatePreviewStage>
-        <LayoutsBadge count={template.layouts.length} />
         <InbuiltTemplatePreview layouts={template.layouts} templateId={template.id} isOutline={true} />
       </TemplatePreviewStage>
       <div className="flex items-center justify-between px-6 py-5 bg-white border-t border-[#EDEEEF] relative z-40">

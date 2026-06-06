@@ -15,7 +15,6 @@ import Link from "next/link";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import {
     TemplatePreviewStage,
-    LayoutsBadge,
     InbuiltTemplatePreview,
     CustomTemplatePreview,
 } from "../../../components/TemplatePreviewComponents";
@@ -38,7 +37,6 @@ export const CustomTemplateCard = React.memo(function CustomTemplateCard({ templ
             onClick={handleOpen}
         >
             <TemplatePreviewStage>
-                <LayoutsBadge count={template.layoutCount} />
                 <CustomTemplatePreview
                     previewLayouts={previewLayouts}
                     loading={loading}
@@ -75,7 +73,6 @@ const InbuiltTemplateCard = React.memo(function InbuiltTemplateCard({
             onClick={handleOpen}
         >
             <TemplatePreviewStage>
-                <LayoutsBadge count={template.layouts.length} />
                 <InbuiltTemplatePreview layouts={template.layouts} templateId={template.id} />
             </TemplatePreviewStage>
             <div className="relative z-40 flex items-center justify-between gap-4 border-t border-[#EDEEEF] bg-white px-6 py-5">
