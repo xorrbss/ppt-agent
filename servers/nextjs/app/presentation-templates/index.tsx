@@ -86,6 +86,10 @@ import ComparisonTableLayout, { Schema as ComparisonTableSchema, layoutId as Com
 import RoadmapLayout, { Schema as RoadmapSchema, layoutId as RoadmapId, layoutName as RoadmapName, layoutDescription as RoadmapDesc } from "./roadmap/RoadmapTimelineSlideLayout";
 import OrgChartLayout, { Schema as OrgChartSchema, layoutId as OrgChartId, layoutName as OrgChartName, layoutDescription as OrgChartDesc } from "./org-chart/OrgChartSlideLayout";
 
+// Adaptive layout group (single renderer + per-archetype schemas)
+import AdaptiveSlide from "./adaptive/AdaptiveSlide";
+import { CoverSpecSchema, OneColumnBulletsSpecSchema, StatHeroSpecSchema } from "./adaptive/spec";
+
 // General templates
 import GeneralIntroSlideLayout, { Schema as GeneralIntroSchema, layoutId as GeneralIntroId, layoutName as GeneralIntroName, layoutDescription as GeneralIntroDesc } from "./general/IntroSlideLayout";
 import BasicInfoSlideLayout, { Schema as BasicInfoSchema, layoutId as BasicInfoId, layoutName as BasicInfoName, layoutDescription as BasicInfoDesc } from "./general/BasicInfoSlideLayout";
@@ -255,6 +259,7 @@ import financialChartSettings from "./financial-chart/settings.json";
 import comparisonTableSettings from "./comparison-table/settings.json";
 import roadmapSettings from "./roadmap/settings.json";
 import orgChartSettings from "./org-chart/settings.json";
+import adaptiveSettings from "./adaptive/settings.json";
 import generalSettings from "./general/settings.json";
 import modernSettings from "./modern/settings.json";
 import standardSettings from "./standard/settings.json";
@@ -549,9 +554,17 @@ export const swiftTemplates: TemplateWithData[] = [
     createTemplateEntry(Timeline, TimelineSchema, TimelineId, TimelineName, TimelineDesc, "swift", "Timeline"),
 ];
 
+// Adaptive templates array (Phase 1: theme-only + AI-composed adaptive slides)
+export const adaptiveTemplates: TemplateWithData[] = [
+    createTemplateEntry(AdaptiveSlide, CoverSpecSchema, "cover", "표지", "덱 표지 — 제목·부제·구분선", "adaptive", "AdaptiveSlide"),
+    createTemplateEntry(AdaptiveSlide, OneColumnBulletsSpecSchema, "one-column-bullets", "핵심 요점", "제목·리드 문장·불릿 목록", "adaptive", "AdaptiveSlide"),
+    createTemplateEntry(AdaptiveSlide, StatHeroSpecSchema, "stat-hero", "핵심 지표", "제목·핵심 수치 카드", "adaptive", "AdaptiveSlide"),
+];
+
 // TODO: Step 4: Combine all templates into a single array For UseCases (like the ones below)
 // All templates combined
 export const allLayouts: TemplateWithData[] = [
+    ...adaptiveTemplates,
     ...koreanBizTemplates,
     ...financialChartTemplates,
     ...comparisonTableTemplates,
@@ -576,6 +589,13 @@ export const allLayouts: TemplateWithData[] = [
 // TODO: Step 5: Combine all templates into a single array For UseCases (like the ones below)
 // For UseCases we need to combine all templates into a single array with settings
 export const templates: TemplateLayoutsWithSettings[] = [
+    {
+        id: "adaptive",
+        name: "적응형 (베타)",
+        description: adaptiveSettings.description,
+        settings: adaptiveSettings as TemplateGroupSettings,
+        layouts: adaptiveTemplates,
+    },
     {
         id: "korean-biz",
         name: "한국형 비즈니스",
