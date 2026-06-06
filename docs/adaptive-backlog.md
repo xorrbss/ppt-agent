@@ -85,6 +85,60 @@ preserved). Design authority: `adaptive-layout-design.md` +
       (schema 1.0, n_match 1.0, mean variety ≥0.6, no-adjacent-dup ≥0.9).
 - [ ] **P6 / G4** — editable-PPTX byte round-trip in Docker/Linux/CI
       (Windows lacks `convert-win32.exe`). **External blocker — needs Docker.**
-- [ ] **DOCS / G10** — chart/table fidelity notes; one-shot adaptive skips TOC
-      (composer emits agenda/section-divider natively); `n_slides='auto'` adaptive
-      path; theme §3.4 preset values; Phase 1/2 file-list rebaseline; §13.
+- [x] **DOCS / G10** — design `§13` open questions reconciled with the build +
+      G10 minors (below). Source-of-truth design docs are unchanged (frozen);
+      this living doc records the implementation outcome.
+
+## §13 open-question resolution (post-build)
+
+Against `adaptive-layout-design.md §13`:
+
+1. **capacity walker / prefixItems** — RESOLVED. Adaptive capacity is the
+   DECLARED `ARCHETYPE_PROFILES` (revision R1); `compute_layout_capacity` is
+   never run on adaptive, so the union/prefixItems undercount never arises.
+2. **DOM-contract co-version (data-block-id harmless to v0.2.9)** — PARTIAL. The
+   converter maps by computed style and ignores `data-*`; headless render shows
+   canvas=0 + the full DOM scaffold + real text leaves. Byte-level shape-count
+   proof is the Docker/CI gate **G4** (Windows lacks `convert-win32.exe`).
+3. **bullets → shape unit** — to be confirmed by the G4 byte round-trip (each
+   `<li>`/leaf carries `data-block-id`; renderer emits one leaf per item).
+4. **chart edit fidelity** — chart is a Recharts **SVG** (not the canvas-based
+   GeneralChart); export-time native-vs-vector fidelity is a G4/CI check.
+5. **motif as SVG** — low-intensity decorative `<svg>` behind content; safe to
+   flatten.
+6. **fit synchronicity** — JS fit-to-box DEFERRED (KISS): fixed per-archetype
+   sizes + `overflow-hidden` + composer `maxLength`/`maxItems` bounds. No
+   transform. TODO in `adaptive/parts.tsx`.
+7. **split responsibility** — composer-native only. `validate_composition` /
+   `_split_content` are NOT used on adaptive (closed schema bounds enforce
+   capacity at generation; revision R1).
+8. **legacy migration** — permanent coexistence, no migration. All adaptive
+   logic is gated on `layout_group == "adaptive"`; legacy decks render via the
+   old TSX unchanged (verified: korean-biz deck renders identically).
+9. **composer strict/retry stability** — verified. `generate_structured_with_
+   schema_retries` over the closed discriminated union; G8 measured 100%
+   schema-valid + 100% n_slides match over 6 live decks.
+10. **asset deep-walk** — verified (revision R6). `get_dict_paths_with_key`
+    recurses dicts+lists; P5 test confirmed nested `__image_url__`/`__icon_url__`
+    markers (two-column image, card-grid icon) are found by the asset pipeline.
+
+## G10 minor notes
+
+- **chart/table fidelity**: chart = Recharts `<svg>` with animation disabled
+  (final geometry present at capture); table = real `<table><tr><td>`. Both
+  carry `data-block-id`. Editable-PPTX fidelity confirmed only at the DOM level
+  locally; shape-level fidelity is the G4 gate.
+- **one-shot adaptive + TOC**: the `/generate` adaptive branch skips legacy TOC
+  insertion (the composer emits `agenda` / `section-divider` natively). So
+  `include_table_of_contents` yields N content slides without a separate TOC
+  layout on the adaptive path.
+- **`n_slides='auto'`**: `get_composition_model_with_n_slides(None)` leaves the
+  count unconstrained (composer decides). The interactive `/prepare` branch
+  composes exactly one SlideSpec per provided outline slide.
+- **slides_markdown × composer**: the adaptive composer always works from the
+  outline (not the raw `slides_markdown` images path); markers flow normally.
+- **theme §3.4 preset values**: N/A until v2 theme generation lands (deferred).
+- **Phase 1/2 file-list rebaseline**: the renderer was split (P5 foundation) into
+  `adaptive/parts.tsx` (leaf primitives) + `adaptive/layouts.tsx` (14 archetype
+  layouts) + slim `AdaptiveSlide.tsx`; editor binding lives in
+  `lib/adaptiveBlockEdit.ts`; composer metrics in `utils/composer_metrics.py`.
