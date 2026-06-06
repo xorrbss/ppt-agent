@@ -1,5 +1,6 @@
 import { useFontLoader } from "../../hooks/useFontLoad";
 import type { Theme } from "../../services/api/types";
+import { applyPresentationThemeTokens } from "./presentationThemeTokens";
 
 const THEME_CSS_KEYS = [
   "--primary-color",
@@ -67,4 +68,6 @@ export function applyPresentationThemeToElement(
   element.style.setProperty("font-family", `"${theme.data.fonts.textFont.name}"`);
   element.style.setProperty("--heading-font-family", `"${theme.data.fonts.textFont.name}"`);
   element.style.setProperty("--body-font-family", `"${theme.data.fonts.textFont.name}"`);
+  // Additive tone & manner tokens (consumed only by the adaptive renderer).
+  applyPresentationThemeTokens(element, theme);
 }

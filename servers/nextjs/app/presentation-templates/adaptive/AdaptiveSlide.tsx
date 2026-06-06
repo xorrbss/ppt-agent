@@ -3,20 +3,35 @@ import React from "react";
 // Single adaptive renderer for the "adaptive" layout group.
 // Receives a SlideSpec as `data` and dispatches on `data.archetype`.
 // Emits clean semantic DOM leaves (real <h1>/<p>/<span>/<li>) at 1280x720 with
-// `data-block-id` so editable PPTX export maps each to a discrete shape and the
-// (future) generic block editor binds deterministically.
+// `data-block-id` so editable PPTX export maps each to a discrete shape.
+// Tone & manner (colours, typography scale, spacing, shape, motif) comes from
+// theme CSS-variable tokens set on #presentation-slides-wrapper (Phase 2).
 
 type AnyBlock = Record<string, any>;
 interface Spec {
   archetype?: string;
   variant?: string;
   blocks?: AnyBlock[];
+  _logo_url__?: string | null;
+  __companyName__?: string | null;
 }
 
 const HEADING_FONT = "var(--heading-font-family, inherit)";
+const FW_HEADING = "var(--fw-heading, 700)";
+const LS_HEADING = "var(--ls-heading, -0.01em)";
 const TEXT_COLOR = "var(--background-text, #111827)";
 const MUTED_COLOR = "var(--muted-color, #6b7280)";
 const PRIMARY = "var(--primary-color, #2563eb)";
+const ACCENT = "var(--accent-color, var(--primary-color, #2563eb))";
+
+const headingStyle = (fs: string): React.CSSProperties => ({
+  color: TEXT_COLOR,
+  fontFamily: HEADING_FONT,
+  fontWeight: FW_HEADING as any,
+  letterSpacing: LS_HEADING,
+  fontSize: fs,
+  lineHeight: "var(--lh-heading, 1.15)",
+});
 
 function byType(blocks: AnyBlock[], type: string): AnyBlock[] {
   return blocks.filter((b) => b && b.type === type);
@@ -24,6 +39,35 @@ function byType(blocks: AnyBlock[], type: string): AnyBlock[] {
 function first(blocks: AnyBlock[], type: string): AnyBlock | undefined {
   return byType(blocks, type)[0];
 }
+
+const Motif: React.FC = () => (
+  <div aria-hidden className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+    <svg
+      viewBox="0 0 200 200"
+      className="absolute -right-28 -top-28 h-[28rem] w-[28rem]"
+      style={{ color: "var(--motif-color, var(--accent-color, #2563eb))", opacity: "var(--motif-opacity, 0.07)" }}
+    >
+      <circle cx="100" cy="100" r="100" fill="currentColor" />
+    </svg>
+  </div>
+);
+
+const BrandSlot: React.FC<{ logoUrl?: string | null; companyName?: string | null }> = ({
+  logoUrl,
+  companyName,
+}) => {
+  if (!logoUrl && !companyName) return null;
+  return (
+    <div className="absolute top-6 z-10 flex items-center gap-2" style={{ left: "var(--slide-pad-x, 80px)" }}>
+      {logoUrl && <img src={logoUrl} alt="logo" className="h-6 w-auto" />}
+      {companyName && (
+        <span className="font-semibold" style={{ color: MUTED_COLOR, fontSize: "var(--fs-small, 0.95rem)" }}>
+          {companyName}
+        </span>
+      )}
+    </div>
+  );
+};
 
 const CoverLayout: React.FC<{ blocks: AnyBlock[] }> = ({ blocks }) => {
   const eyebrow = first(blocks, "eyebrow");
@@ -34,18 +78,14 @@ const CoverLayout: React.FC<{ blocks: AnyBlock[] }> = ({ blocks }) => {
       {eyebrow && (
         <span
           data-block-id={eyebrow.id}
-          className="text-base font-semibold tracking-[0.2em] uppercase"
-          style={{ color: PRIMARY }}
+          className="font-semibold tracking-[0.2em] uppercase"
+          style={{ color: ACCENT, fontSize: "var(--fs-small, 0.95rem)" }}
         >
           {eyebrow.text}
         </span>
       )}
       {title && (
-        <h1
-          data-block-id={title.id}
-          className="text-6xl font-bold leading-tight"
-          style={{ color: TEXT_COLOR, fontFamily: HEADING_FONT }}
-        >
+        <h1 data-block-id={title.id} style={headingStyle("var(--fs-display, 3.75rem)")}>
           {title.text}
         </h1>
       )}
@@ -65,13 +105,9 @@ const BulletsLayout: React.FC<{ blocks: AnyBlock[] }> = ({ blocks }) => {
   const bullets = first(blocks, "bullets");
   const items: AnyBlock[] = bullets && Array.isArray(bullets.items) ? bullets.items : [];
   return (
-    <div className="h-full w-full flex flex-col justify-center gap-8">
+    <div className="h-full w-full flex flex-col justify-center" style={{ gap: "var(--section-gap, 32px)" }}>
       {title && (
-        <h1
-          data-block-id={title.id}
-          className="text-5xl font-bold leading-tight"
-          style={{ color: TEXT_COLOR, fontFamily: HEADING_FONT }}
-        >
+        <h1 data-block-id={title.id} style={headingStyle("var(--fs-h1, 3rem)")}>
           {title.text}
         </h1>
       )}
@@ -81,7 +117,7 @@ const BulletsLayout: React.FC<{ blocks: AnyBlock[] }> = ({ blocks }) => {
         </p>
       )}
       {items.length > 0 && (
-        <ul className="flex flex-col gap-5">
+        <ul className="flex flex-col" style={{ gap: "var(--block-gap, 20px)" }}>
           {items.map((it) => (
             <li
               key={it.id}
@@ -89,10 +125,7 @@ const BulletsLayout: React.FC<{ blocks: AnyBlock[] }> = ({ blocks }) => {
               className="flex items-start gap-4 text-2xl leading-snug"
               style={{ color: TEXT_COLOR }}
             >
-              <span
-                className="mt-3 h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{ background: PRIMARY }}
-              />
+              <span className="mt-3 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: PRIMARY }} />
               <span>{it.text}</span>
             </li>
           ))}
@@ -107,34 +140,28 @@ const StatHeroLayout: React.FC<{ blocks: AnyBlock[] }> = ({ blocks }) => {
   const stats = byType(blocks, "stat");
   const cols = Math.min(Math.max(stats.length, 1), 4);
   return (
-    <div className="h-full w-full flex flex-col justify-center gap-12">
+    <div className="h-full w-full flex flex-col justify-center" style={{ gap: "var(--section-gap, 32px)" }}>
       {title && (
-        <h1
-          data-block-id={title.id}
-          className="text-5xl font-bold"
-          style={{ color: TEXT_COLOR, fontFamily: HEADING_FONT }}
-        >
+        <h1 data-block-id={title.id} style={headingStyle("var(--fs-h1, 3rem)")}>
           {title.text}
         </h1>
       )}
       <div
-        className="grid gap-8"
-        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+        className="grid"
+        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap: "var(--block-gap, 20px)" }}
       >
         {stats.map((s) => (
           <div
             key={s.id}
-            className="flex flex-col gap-2 rounded-2xl p-8"
+            className="flex flex-col gap-2 p-8"
             style={{
-              background: "var(--card-color, #f8fafc)",
-              border: "1px solid var(--stroke, #e5e7eb)",
+              background: "var(--surface-color, var(--card-color, #f8fafc))",
+              border: "var(--border-width, 1px) solid var(--border-color, var(--stroke, #e5e7eb))",
+              borderRadius: "var(--radius-lg, 20px)",
+              boxShadow: "var(--shadow-md, 0 4px 12px rgba(0,0,0,0.06))",
             }}
           >
-            <span
-              data-block-id={`${s.id}.value`}
-              className="text-6xl font-extrabold leading-none"
-              style={{ color: PRIMARY }}
-            >
+            <span data-block-id={`${s.id}.value`} style={headingStyle("var(--fs-display, 3.75rem)")}>
               {s.value}
             </span>
             <span
@@ -154,11 +181,7 @@ const StatHeroLayout: React.FC<{ blocks: AnyBlock[] }> = ({ blocks }) => {
               </span>
             )}
             {s.caption && (
-              <span
-                data-block-id={`${s.id}.caption`}
-                className="text-sm"
-                style={{ color: MUTED_COLOR }}
-              >
+              <span data-block-id={`${s.id}.caption`} className="text-sm" style={{ color: MUTED_COLOR }}>
                 {s.caption}
               </span>
             )}
@@ -186,19 +209,20 @@ const AdaptiveSlide: React.FC<AdaptiveSlideProps> = ({ data }) => {
         background: "var(--background-color, #ffffff)",
         color: TEXT_COLOR,
         fontFamily: "var(--body-font-family, var(--heading-font-family, inherit))",
-        paddingLeft: "var(--slide-pad-x, 80px)",
-        paddingRight: "var(--slide-pad-x, 80px)",
-        paddingTop: "var(--slide-pad-y, 64px)",
-        paddingBottom: "var(--slide-pad-y, 64px)",
+        padding: "var(--slide-pad-y, 64px) var(--slide-pad-x, 80px)",
       }}
     >
-      {archetype === "cover" ? (
-        <CoverLayout blocks={blocks} />
-      ) : archetype === "stat-hero" ? (
-        <StatHeroLayout blocks={blocks} />
-      ) : (
-        <BulletsLayout blocks={blocks} />
-      )}
+      <Motif />
+      <BrandSlot logoUrl={spec._logo_url__} companyName={spec.__companyName__} />
+      <div className="relative z-10 h-full w-full">
+        {archetype === "cover" ? (
+          <CoverLayout blocks={blocks} />
+        ) : archetype === "stat-hero" ? (
+          <StatHeroLayout blocks={blocks} />
+        ) : (
+          <BulletsLayout blocks={blocks} />
+        )}
+      </div>
     </div>
   );
 };

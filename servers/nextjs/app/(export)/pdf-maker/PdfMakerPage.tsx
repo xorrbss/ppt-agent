@@ -14,6 +14,7 @@ import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashbo
 import { ApiResponseHandler } from "@/app/(presentation-generator)/services/api/api-error-handler";
 import { useFontLoader } from "@/app/(presentation-generator)/hooks/useFontLoad";
 import { Theme } from "@/app/(presentation-generator)/services/api/types";
+import { applyPresentationThemeTokens } from "@/app/(presentation-generator)/presentation/utils/presentationThemeTokens";
 import SlideScale from "@/app/(presentation-generator)/components/PresentationRender";
 import { normalizeBackendAssetUrls } from "@/utils/api";
 
@@ -208,6 +209,8 @@ const PresentationPage = ({ presentation_id, exportCookie }: PresentationPagePro
     element.style.setProperty("font-family", `"${textFontName}"`);
     element.style.setProperty("--heading-font-family", `"${textFontName}"`);
     element.style.setProperty("--body-font-family", `"${textFontName}"`);
+    // Additive tone & manner tokens (consumed only by the adaptive renderer).
+    applyPresentationThemeTokens(element, theme);
   };
 
   const slides = presentationData?.slides ?? [];
