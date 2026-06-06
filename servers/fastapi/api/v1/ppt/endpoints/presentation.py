@@ -38,8 +38,8 @@ from services.mem0_presentation_memory_service import (
 from utils.dict_utils import deep_update
 from utils.export_utils import export_presentation
 from utils.layout_capacity import apply_capacity_fit
-from utils.llm_calls.compose_slides import compose_slides
-from models.slide_spec_model import spec_to_blocks, archetype_to_layout_id
+from utils.llm_calls.compose_slides import compose_and_project
+from models.slide_spec_model import spec_to_blocks
 from utils.llm_calls.generate_content_brief import generate_content_brief
 from utils.llm_calls.generate_presentation_outlines import (
     generate_ppt_outline,
@@ -315,26 +315,18 @@ async def prepare_presentation(
         # Adaptive path: compose one SlideSpec per outline slide (archetype chosen
         # for content + variety). Persist the composition to deck_plan and project
         # to outlines/structure so /stream + editor read it unchanged.
-        composition = await compose_slides(
-            presentation_outline_model,
-            language=presentation.language,
-            tone=presentation.tone,
-            verbosity=presentation.verbosity,
-            instructions=presentation.instructions,
+        composition, presentation_outline_model, presentation_structure = (
+            await compose_and_project(
+                presentation_outline_model,
+                layout,
+                language=presentation.language,
+                tone=presentation.tone,
+                verbosity=presentation.verbosity,
+                instructions=presentation.instructions,
+            )
         )
         presentation.set_deck_plan(composition)
-        proj_outlines: List[SlideOutlineModel] = []
-        proj_indices: List[int] = []
-        for spec in composition.slides:
-            proj_outlines.append(
-                SlideOutlineModel(content=json.dumps(spec_to_blocks(spec), ensure_ascii=False))
-            )
-            proj_indices.append(
-                layout.get_slide_layout_index(archetype_to_layout_id(spec.archetype))
-            )
-        presentation_outline_model = PresentationOutlineModel(slides=proj_outlines)
-        presentation_structure = PresentationStructureModel(slides=proj_indices)
-        presentation.n_slides = len(proj_indices)
+        presentation.n_slides = len(presentation_structure.slides)
     else:
         if layout.ordered:
             presentation_structure = layout.to_presentation_structure()
@@ -859,56 +851,76 @@ async def generate_presentation_handler(
         )
         total_slide_layouts = len(layout_model.slides)
 
-        # Generate Structure
-        if layout_model.ordered:
-            presentation_structure = layout_model.to_presentation_structure()
-        else:
-            presentation_structure: PresentationStructureModel = (
-                await generate_presentation_structure(
+        # Adaptive path: compose one SlideSpec per outline slide and project to the
+        # (outline, structure) pair the rest of the handler consumes — mirrors the
+        # interactive /prepare branch. No per-slide content LLM call, no TOC/fit.
+        adaptive_composition = None
+        if layout_model.name == "adaptive":
+            adaptive_composition, presentation_outlines, presentation_structure = (
+                await compose_and_project(
                     presentation_outlines,
                     layout_model,
-                    request.instructions,
-                    using_slides_markdown,
+                    language=language_to_use,
+                    tone=request.tone.value,
+                    verbosity=request.verbosity.value,
+                    instructions=request.instructions,
                 )
             )
+        else:
+            # Generate Structure
+            if layout_model.ordered:
+                presentation_structure = layout_model.to_presentation_structure()
+            else:
+                presentation_structure: PresentationStructureModel = (
+                    await generate_presentation_structure(
+                        presentation_outlines,
+                        layout_model,
+                        request.instructions,
+                        using_slides_markdown,
+                    )
+                )
 
-        presentation_structure.slides = presentation_structure.slides[:total_outlines]
-        for index in range(total_outlines):
-            random_slide_index = random.randint(0, total_slide_layouts - 1)
-            if index >= total_outlines:
-                presentation_structure.slides.append(random_slide_index)
-                continue
-            if presentation_structure.slides[index] >= total_slide_layouts:
-                presentation_structure.slides[index] = random_slide_index
+            presentation_structure.slides = presentation_structure.slides[
+                :total_outlines
+            ]
+            for index in range(total_outlines):
+                random_slide_index = random.randint(0, total_slide_layouts - 1)
+                if index >= total_outlines:
+                    presentation_structure.slides.append(random_slide_index)
+                    continue
+                if presentation_structure.slides[index] >= total_slide_layouts:
+                    presentation_structure.slides[index] = random_slide_index
 
-        should_include_toc = (
-            request.include_table_of_contents and not using_slides_markdown
-        )
-        if should_include_toc:
-            n_toc_slides = get_no_of_toc_required_for_n_outlines(
-                n_outlines=total_outlines,
-                title_slide=request.include_title_slide,
-                target_total_slides=request.n_slides,
+            should_include_toc = (
+                request.include_table_of_contents and not using_slides_markdown
             )
-            toc_slide_layout_index = select_toc_or_list_slide_layout_index(layout_model)
-            _insert_toc_layouts(
-                presentation_structure,
-                n_toc_slides,
-                request.include_title_slide,
-                toc_slide_layout_index,
-            )
-            if toc_slide_layout_index != -1 and n_toc_slides > 0:
-                presentation_outlines = get_presentation_outline_model_with_toc(
-                    outline=presentation_outlines,
-                    n_toc_slides=n_toc_slides,
+            if should_include_toc:
+                n_toc_slides = get_no_of_toc_required_for_n_outlines(
+                    n_outlines=total_outlines,
                     title_slide=request.include_title_slide,
+                    target_total_slides=request.n_slides,
                 )
+                toc_slide_layout_index = select_toc_or_list_slide_layout_index(
+                    layout_model
+                )
+                _insert_toc_layouts(
+                    presentation_structure,
+                    n_toc_slides,
+                    request.include_title_slide,
+                    toc_slide_layout_index,
+                )
+                if toc_slide_layout_index != -1 and n_toc_slides > 0:
+                    presentation_outlines = get_presentation_outline_model_with_toc(
+                        outline=presentation_outlines,
+                        n_toc_slides=n_toc_slides,
+                        title_slide=request.include_title_slide,
+                    )
 
-        # Content-volume-aware fitting (skip for user-provided slides_markdown).
-        if not using_slides_markdown:
-            presentation_outlines, presentation_structure = apply_capacity_fit(
-                presentation_outlines, presentation_structure, layout_model
-            )
+            # Content-volume-aware fitting (skip for user-provided slides_markdown).
+            if not using_slides_markdown:
+                presentation_outlines, presentation_structure = apply_capacity_fit(
+                    presentation_outlines, presentation_structure, layout_model
+                )
 
         final_n_slides = len(presentation_outlines.slides)
 
@@ -927,6 +939,11 @@ async def generate_presentation_handler(
             tone=request.tone.value,
             verbosity=request.verbosity.value,
             instructions=request.instructions,
+            deck_plan=(
+                adaptive_composition.model_dump(mode="json")
+                if adaptive_composition
+                else None
+            ),
         )
 
         # Updating async status
@@ -939,69 +956,93 @@ async def generate_presentation_handler(
         image_generation_service = ImageGenerationService(get_images_directory())
         async_assets_generation_tasks = []
 
-        # 7. Generate slide content concurrently (batched), then build slides and fetch assets
+        # 7. Build slides (adaptive: directly from the composition; legacy: batched
+        # per-slide content generation), then fetch assets.
         slides: List[SlideModel] = []
+        slide_layouts = [layout_model.slides[idx] for idx in presentation_structure.slides]
 
-        slide_layout_indices = presentation_structure.slides
-        slide_layouts = [layout_model.slides[idx] for idx in slide_layout_indices]
-
-        # Schedule slide content generation and asset fetching in batches of 10
-        batch_size = 10
-        for start in range(0, len(slide_layouts), batch_size):
-            end = min(start + batch_size, len(slide_layouts))
-
-            print(f"Generating slides from {start} to {end}")
-
-            # Generate contents for this batch concurrently
-            content_tasks = [
-                get_slide_content_from_type_and_outline(
-                    slide_layouts[i],
-                    presentation_outlines.slides[i],
-                    language_to_use,
-                    request.tone.value,
-                    request.verbosity.value,
-                    request.instructions,
-                )
-                for i in range(start, end)
-            ]
-            batch_contents: List[dict] = await asyncio.gather(*content_tasks)
-
-            # Build slides for this batch
-            batch_slides: List[SlideModel] = []
-            for offset, slide_content in enumerate(batch_contents):
-                i = start + offset
-                slide_layout = slide_layouts[i]
+        if adaptive_composition is not None:
+            # Adaptive: use the persisted SlideSpec directly (no per-slide LLM call).
+            # spec_to_blocks → SlideModel.content, speaker_note from the spec; still
+            # fetch image/icon assets per slide (markers handled depth-agnostically).
+            for i, spec in enumerate(adaptive_composition.slides):
                 slide = SlideModel(
                     presentation=presentation_id,
                     layout_group=layout_model.name,
-                    layout=slide_layout.id,
+                    layout=slide_layouts[i].id,
                     index=i,
-                    speaker_note=slide_content.get("__speaker_note__"),
-                    content=slide_content,
+                    speaker_note=spec.speaker_note or "",
+                    content=spec_to_blocks(spec),
                 )
                 slides.append(slide)
-                batch_slides.append(slide)
-
-            if using_slides_markdown:
-                image_urls_for_batch = get_images_for_slides_from_outline(
-                    presentation_outlines.slides[start:end]
-                )
-            else:
-                image_urls_for_batch = [[] for _ in batch_slides]
-
-            # Start asset fetch tasks immediately so they run in parallel with next batch's LLM calls
-            asset_tasks = [
-                asyncio.create_task(
-                    process_slide_and_fetch_assets(
-                        image_generation_service,
-                        slide,
-                        outline_image_urls=image_urls_for_batch[offset],
-                        icon_weight=layout_model.icon_weight,
+                async_assets_generation_tasks.append(
+                    asyncio.create_task(
+                        process_slide_and_fetch_assets(
+                            image_generation_service,
+                            slide,
+                            outline_image_urls=None,
+                            icon_weight=layout_model.icon_weight,
+                        )
                     )
                 )
-                for offset, slide in enumerate(batch_slides)
-            ]
-            async_assets_generation_tasks.extend(asset_tasks)
+        else:
+            # Schedule slide content generation and asset fetching in batches of 10
+            batch_size = 10
+            for start in range(0, len(slide_layouts), batch_size):
+                end = min(start + batch_size, len(slide_layouts))
+
+                print(f"Generating slides from {start} to {end}")
+
+                # Generate contents for this batch concurrently
+                content_tasks = [
+                    get_slide_content_from_type_and_outline(
+                        slide_layouts[i],
+                        presentation_outlines.slides[i],
+                        language_to_use,
+                        request.tone.value,
+                        request.verbosity.value,
+                        request.instructions,
+                    )
+                    for i in range(start, end)
+                ]
+                batch_contents: List[dict] = await asyncio.gather(*content_tasks)
+
+                # Build slides for this batch
+                batch_slides: List[SlideModel] = []
+                for offset, slide_content in enumerate(batch_contents):
+                    i = start + offset
+                    slide_layout = slide_layouts[i]
+                    slide = SlideModel(
+                        presentation=presentation_id,
+                        layout_group=layout_model.name,
+                        layout=slide_layout.id,
+                        index=i,
+                        speaker_note=slide_content.get("__speaker_note__"),
+                        content=slide_content,
+                    )
+                    slides.append(slide)
+                    batch_slides.append(slide)
+
+                if using_slides_markdown:
+                    image_urls_for_batch = get_images_for_slides_from_outline(
+                        presentation_outlines.slides[start:end]
+                    )
+                else:
+                    image_urls_for_batch = [[] for _ in batch_slides]
+
+                # Start asset fetch tasks immediately so they run in parallel with next batch's LLM calls
+                asset_tasks = [
+                    asyncio.create_task(
+                        process_slide_and_fetch_assets(
+                            image_generation_service,
+                            slide,
+                            outline_image_urls=image_urls_for_batch[offset],
+                            icon_weight=layout_model.icon_weight,
+                        )
+                    )
+                    for offset, slide in enumerate(batch_slides)
+                ]
+                async_assets_generation_tasks.extend(asset_tasks)
 
         if async_status:
             async_status.message = "Fetching assets for slides"

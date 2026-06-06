@@ -1,10 +1,20 @@
-from typing import Optional
+import json
+from typing import Optional, Tuple
 
 from llmai import get_client
 from llmai.shared import JSONSchemaResponse, Message, SystemMessage, UserMessage
 
-from models.presentation_outline_model import PresentationOutlineModel
-from models.slide_spec_model import PresentationComposition
+from models.presentation_layout import PresentationLayoutModel
+from models.presentation_outline_model import (
+    PresentationOutlineModel,
+    SlideOutlineModel,
+)
+from models.presentation_structure_model import PresentationStructureModel
+from models.slide_spec_model import (
+    PresentationComposition,
+    archetype_to_layout_id,
+    spec_to_blocks,
+)
 from utils.archetype_profiles import capacity_menu_text
 from utils.get_dynamic_models import get_composition_model_with_n_slides
 from utils.llm_client_error_handler import handle_llm_client_exceptions
@@ -101,3 +111,46 @@ async def compose_slides(
         return PresentationComposition(**content)
     except Exception as e:
         raise handle_llm_client_exceptions(e)
+
+
+async def compose_and_project(
+    outline: PresentationOutlineModel,
+    layout: PresentationLayoutModel,
+    language: Optional[str] = None,
+    tone: Optional[str] = None,
+    verbosity: Optional[str] = None,
+    instructions: Optional[str] = None,
+) -> Tuple[
+    PresentationComposition, PresentationOutlineModel, PresentationStructureModel
+]:
+    """Compose an adaptive deck and project it to the (outline, structure) pair
+    the existing readers / stream loop / editor consume unchanged.
+
+    Shared by the interactive /prepare branch and the one-shot /generate handler.
+    Returns the authoritative composition (persist to deck_plan) plus a projection
+    where each outline holds the rendered blocks dict and each structure index
+    points at the archetype's slot in the adaptive layout.
+    """
+    composition = await compose_slides(
+        outline,
+        language=language,
+        tone=tone,
+        verbosity=verbosity,
+        instructions=instructions,
+    )
+    proj_outlines = []
+    proj_indices = []
+    for spec in composition.slides:
+        proj_outlines.append(
+            SlideOutlineModel(
+                content=json.dumps(spec_to_blocks(spec), ensure_ascii=False)
+            )
+        )
+        proj_indices.append(
+            layout.get_slide_layout_index(archetype_to_layout_id(spec.archetype))
+        )
+    return (
+        composition,
+        PresentationOutlineModel(slides=proj_outlines),
+        PresentationStructureModel(slides=proj_indices),
+    )

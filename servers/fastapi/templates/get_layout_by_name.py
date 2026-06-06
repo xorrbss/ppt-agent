@@ -7,9 +7,11 @@ from typing import Any
 
 from fastapi import HTTPException
 
+from models.slide_spec_model import archetype_to_layout_id
 from services.export_task_service import EXPORT_TASK_SERVICE
 from templates.custom_layout_from_db import load_custom_presentation_layout
 from templates.presentation_layout import PresentationLayoutModel
+from utils.archetype_profiles import ARCHETYPE_PROFILES
 from utils.icon_weights import extract_icon_weight_from_settings
 from utils.internal_http import internal_request_headers
 
@@ -126,9 +128,38 @@ async def _fetch_template_fallback_payload(
         return None, error
 
 
+def _build_adaptive_layout() -> PresentationLayoutModel:
+    """Build the adaptive group's layout directly from ARCHETYPE_PROFILES.
+
+    The adaptive group has no per-file Schema TSX templates — its "layout" is
+    just the declared archetype list (single source of truth: ARCHETYPE_PROFILES).
+    Resolving it from the backend needs neither the export runtime (extract-schema)
+    nor the /api/template route (both only understand per-file Schema templates),
+    so the one-shot /generate path works on every platform. The composer fills
+    closed per-archetype Pydantic models, so each slide's json_schema is unused.
+    """
+    settings = _read_builtin_template_settings("adaptive")
+    icon_weight = extract_icon_weight_from_settings(settings)
+    slides = [
+        {
+            "id": archetype_to_layout_id(archetype),
+            "name": archetype,
+            "description": profile.get("desc", ""),
+            "json_schema": {},
+        }
+        for archetype, profile in ARCHETYPE_PROFILES.items()
+    ]
+    return PresentationLayoutModel(
+        name="adaptive", ordered=False, icon_weight=icon_weight, slides=slides
+    )
+
+
 async def get_layout_by_name(layout_name: str) -> PresentationLayoutModel:
     if layout_name.startswith("custom-"):
         return await load_custom_presentation_layout(layout_name)
+
+    if layout_name == "adaptive":
+        return _build_adaptive_layout()
 
     query = urlencode({"group": layout_name})
     url = f"http://localhost/schema?{query}"
