@@ -22,6 +22,23 @@ preserved). Design authority: `adaptive-layout-design.md` +
       block-id grafting + `updateAdaptiveBlock` reducer + caller routing + node
       regression test (8 checks incl. no-misbind). commit `9959fc11`.
 
+## Rollout — adaptive is now the DEFAULT (decided)
+
+The content-first adaptive composer is the **default** for new decks (option 1 of
+the rollout fork — flip now, accept that byte-PPTX export is DOM-verified only
+until G4). Changed defaults `"korean-biz"`/`"general"` → `"adaptive"` in:
+`store/slices/presentationGenUpload.ts` (UI initial selection),
+`presentation-templates/select.ts` (`DEFAULT_TEMPLATE_ID`), and
+`scripts/ppt-agent.mjs` (CLI). Legacy template groups remain fully selectable
+(coexistence; legacy decks unchanged). The "(베타)" label is kept until G4.
+
+**Risk accepted:** new decks default to adaptive whose PPTX export is verified at
+the DOM-contract level (canvas=0, real leaves, 1280×720) but NOT yet at byte level
+on Windows (G4 needs Docker/Linux + `convert-win32.exe`). Recommended follow-up:
+build + run the G4 byte-PPTX round-trip gate in Docker/CI, then it is fully
+de-risked. ADAPTIVE auto-routing (ignore template) and legacy removal were NOT
+done (kept coexistence + user choice).
+
 ## Deferred / re-sequenced
 
 - [ ] **P4b — block CRUD (add/del/reorder) + schema-driven property panel.**

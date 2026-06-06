@@ -13,7 +13,7 @@ interface PresentationGenUploadState {
 const initialState: PresentationGenUploadState = {
   config: null,
   files: [],
-  selectedTemplate: "korean-biz", // Korean fork default; see presentation-templates/select.ts
+  selectedTemplate: "adaptive", // default = content-first adaptive composer; see presentation-templates/select.ts
 };
 
 export const presentationGenUploadSlice = createSlice({

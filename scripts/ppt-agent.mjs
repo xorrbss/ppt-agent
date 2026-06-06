@@ -21,7 +21,7 @@
 //   --batch <file>           File with one topic per line; each line becomes one deck
 //   --slides <n>             n_slides (default 8, max 50). Use --slides auto to let the model decide
 //   --language <str>         language (default "Korean (한국어)")
-//   --template <name>        template id (default "general")
+//   --template <name>        template id (default "adaptive")
 //   --export <pptx|pdf>      export_as (default pptx)
 //   --instructions <str>     extra generation instructions
 //   --tone <str>             default|casual|professional|funny|educational|sales_pitch
@@ -115,7 +115,7 @@ function printHelpAndExit() {
       "  --batch <file>          one topic per line",
       "  --slides <n|auto>       n_slides (default 8, max 50)",
       '  --language <str>        default "Korean (한국어)"',
-      "  --template <name>       default general",
+      "  --template <name>       default adaptive",
       "  --export <pptx|pdf>     default pptx",
       "  --instructions <str>    extra instructions",
       "  --tone <str>            " + TONES.join("|"),
@@ -514,7 +514,7 @@ async function main() {
     nSlides,
     slidesProvided,
     language: args.language !== undefined ? args.language : "Korean (한국어)",
-    template: args.template || "general",
+    template: args.template || "adaptive",
     instructions: args.instructions || null,
     tone: args.tone || null,
     verbosity: args.verbosity || null,

@@ -1,8 +1,10 @@
 import { templates } from "@/app/presentation-templates";
 import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
 
-/** Default template for the Korean fork's compose screen. */
-export const DEFAULT_TEMPLATE_ID = "korean-biz";
+/** Default template for the compose screen — the content-first adaptive composer
+ * (NotebookLM/Gamma-style; AI composes a fresh archetype per slide). Legacy
+ * template groups remain selectable. */
+export const DEFAULT_TEMPLATE_ID = "adaptive";
 
 /**
  * Resolve a stored template id into the value that TemplateSelection and
