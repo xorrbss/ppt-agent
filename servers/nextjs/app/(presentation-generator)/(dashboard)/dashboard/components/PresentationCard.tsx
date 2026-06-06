@@ -12,7 +12,7 @@ import {
 import { usePathname, useRouter } from "next/navigation";
 import { notify } from "@/components/ui/sonner";
 
-import { useFontLoader } from "@/app/(presentation-generator)/hooks/useFontLoad";
+import { applyPresentationThemeToElement } from "@/app/(presentation-generator)/presentation/utils/applyPresentationThemeDom";
 import SlideScale from "@/app/(presentation-generator)/components/PresentationRender";
 import MarkdownRenderer from "@/components/MarkDownRender";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
@@ -47,42 +47,12 @@ export const PresentationCard = ({
     applyTheme(presentation.theme)
   }, [])
   const applyTheme = async (theme: any) => {
+    // Unified theme application (base 16 vars + fonts + adaptive tone & manner
+    // tokens) so adaptive-deck thumbnails match the editor/export render. Legacy
+    // thumbnails are unaffected — base vars are identical, extended tokens are
+    // consumed only by the adaptive renderer.
     const element = document.getElementById(`dashboard-presentation-card-${id}`)
-    if (!element) return;
-
-    if (!theme || !theme.data || !theme.data.colors['graph_0']) { return; }
-    const cssVariables = {
-      '--primary-color': theme.data.colors['primary'],
-      '--background-color': theme.data.colors['background'],
-      '--card-color': theme.data.colors['card'],
-      '--stroke': theme.data.colors['stroke'],
-      '--primary-text': theme.data.colors['primary_text'],
-      '--background-text': theme.data.colors['background_text'],
-      '--graph-0': theme.data.colors['graph_0'],
-      '--graph-1': theme.data.colors['graph_1'],
-      '--graph-2': theme.data.colors['graph_2'],
-      '--graph-3': theme.data.colors['graph_3'],
-      '--graph-4': theme.data.colors['graph_4'],
-      '--graph-5': theme.data.colors['graph_5'],
-      '--graph-6': theme.data.colors['graph_6'],
-      '--graph-7': theme.data.colors['graph_7'],
-      '--graph-8': theme.data.colors['graph_8'],
-      '--graph-9': theme.data.colors['graph_9'],
-    }
-    Object.entries(cssVariables).forEach(([key, value]) => {
-      element.style.setProperty(key, value)
-    })
-    // 
-    if (theme.data.fonts.textFont.url && theme.data.fonts.textFont.name) {
-      useFontLoader({ [theme.data.fonts.textFont.name]: theme.data.fonts.textFont.url })
-    }
-
-    // Apply fonts to preview container
-    element.style.setProperty('font-family', `"${theme.data.fonts.textFont.name}"`)
-    element.style.setProperty('--heading-font-family', `"${theme.data.fonts.textFont.name}"`)
-    element.style.setProperty('--body-font-family', `"${theme.data.fonts.textFont.name}"`)
-
-
+    applyPresentationThemeToElement(element, theme)
   }
 
   const handleDelete = async () => {
