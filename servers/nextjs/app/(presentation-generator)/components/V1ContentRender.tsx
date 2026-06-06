@@ -3,11 +3,11 @@
 import React, { useMemo, useRef } from "react";
 import EditableLayoutWrapper from "../components/EditableLayoutWrapper";
 import SlideErrorBoundary from "../components/SlideErrorBoundary";
-import TiptapTextReplacer from "../components/TiptapTextReplacer";
+import TiptapTextReplacer, { EditBinding } from "../components/TiptapTextReplacer";
 import { validate as uuidValidate } from 'uuid';
 import { getLayoutByLayoutId } from "@/app/presentation-templates";
 import { useCustomTemplateDetails } from "@/app/hooks/useCustomTemplates";
-import { updateSlideContent } from "@/store/slices/presentationGeneration";
+import { updateSlideContent, updateAdaptiveBlock } from "@/store/slices/presentationGeneration";
 import { useDispatch } from "react-redux";
 import { Loader2 } from "lucide-react";
 
@@ -95,17 +95,27 @@ export const V1ContentRender = ({ slide, isEditMode, theme }: { slide: any, isEd
                             key={slide.id}
                             slideData={slide.content}
                             slideIndex={slide.index}
+                            useBlockId={slide.layout_group === "adaptive"}
                             onContentChange={(
                                 content: string,
-                                dataPath: string,
+                                binding: EditBinding,
                                 slideIndex?: number
                             ) => {
-                                if (dataPath && slideIndex !== undefined) {
+                                if (!binding.key || slideIndex === undefined) return;
+                                if (binding.kind === "blockId") {
+                                    dispatch(
+                                        updateAdaptiveBlock({
+                                            slideIndex,
+                                            blockId: binding.key,
+                                            content,
+                                        })
+                                    );
+                                } else {
                                     dispatch(
                                         updateSlideContent({
-                                            slideIndex: slideIndex,
-                                            dataPath: dataPath,
-                                            content: content,
+                                            slideIndex,
+                                            dataPath: binding.key,
+                                            content,
                                         })
                                     );
                                 }
@@ -133,6 +143,7 @@ export const V1ContentRender = ({ slide, isEditMode, theme }: { slide: any, isEd
                     key={slide.id}
                     slideData={slide.content}
                     slideIndex={slide.index}
+                    useBlockId={slide.layout_group === "adaptive"}
                     readOnly
                 >
                     <LayoutComp data={{

@@ -8,17 +8,28 @@ import { useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
 import Underline from "@tiptap/extension-underline";
+import { getAdaptiveBlockText } from "@/lib/adaptiveBlockEdit";
 
 const extensions = [StarterKit, Markdown, Underline];
+
+// How an editable text leaf is addressed back to slide content. Adaptive slides
+// bind by the leaf's data-block-id (deterministic — survives duplicate text /
+// reorder); legacy templates keep the original string-match path binding.
+export type EditBinding =
+  | { kind: "blockId"; key: string }
+  | { kind: "path"; key: string };
 
 interface TiptapTextReplacerProps {
   children: ReactNode;
   slideData?: any;
   slideIndex?: number;
   readOnly?: boolean;
+  // When true (adaptive group), graft the source leaf's data-block-id onto the
+  // replacement container and bind edits by block id instead of string match.
+  useBlockId?: boolean;
   onContentChange?: (
     content: string,
-    path: string,
+    binding: EditBinding,
     slideIndex?: number
   ) => void;
 }
@@ -28,6 +39,7 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
   slideData,
   slideIndex,
   readOnly = false,
+  useBlockId = false,
   onContentChange = () => {},
 }) => {
 
@@ -39,7 +51,7 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
   );
   // Track created React roots to update content when slideData changes
   const rootsRef = useRef<
-    Map<HTMLElement, { root: any; dataPath: string;  fallbackText: string }>
+    Map<HTMLElement, { root: any; binding: EditBinding; fallbackText: string }>
   >(new Map());
   useEffect(() => {
     if (!containerRef.current) return;
@@ -84,13 +96,25 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
         const allClasses = Array.from(htmlElement.classList);
         const allStyles = htmlElement.getAttribute("style");
 
-        const dataPath = findDataPath(slideData, trimmedText);
+        // Adaptive binding: the editable leaf's id lives on itself or (for
+        // bullets/column items) on the nearest [data-block-id] ancestor.
+        const bid = useBlockId
+          ? htmlElement.getAttribute("data-block-id") ||
+            htmlElement.closest("[data-block-id]")?.getAttribute("data-block-id") ||
+            null
+          : null;
+        const binding: EditBinding = bid
+          ? { kind: "blockId", key: bid }
+          : { kind: "path", key: findDataPath(slideData, trimmedText).path };
 
         // Create a container for the TiptapText
         const tiptapContainer = document.createElement("div");
         tiptapContainer.style.cssText = allStyles || "";
         tiptapContainer.className = Array.from(allClasses).join(" ");
-    
+        // Carry the block id onto the replacement so the editor can bind to it
+        // (harmless in readOnly; the export converter ignores data-* attributes).
+        if (bid) tiptapContainer.setAttribute("data-block-id", bid);
+
         // Replace the element
         if(htmlElement.parentNode) {
         htmlElement.parentNode.replaceChild(tiptapContainer, htmlElement);
@@ -100,13 +124,12 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
         setProcessedElements((prev) => new Set(prev).add(htmlElement));
         // Render TiptapText
         const root = ReactDOM.createRoot(tiptapContainer);
-        const initialContent = dataPath.path
-          ? getValueByPath(slideData, dataPath.path) ?? trimmedText
+        const initialContent = binding.key
+          ? readBindingValue(slideData, binding) ?? trimmedText
           : trimmedText;
         rootsRef.current.set(tiptapContainer, {
           root,
-          dataPath: dataPath.path,
-        
+          binding,
           fallbackText: trimmedText,
         });
         root.render(
@@ -116,8 +139,8 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
             <TiptapText
               content={initialContent}
               onContentChange={(content: string) => {
-                if (dataPath && onContentChange) {
-                  onContentChange(content, dataPath.path, slideIndex);
+                if (binding.key && onContentChange) {
+                  onContentChange(content, binding, slideIndex);
                 }
               }}
               placeholder="텍스트를 입력하세요..."
@@ -140,11 +163,13 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
     };
   }, [slideData, slideIndex, readOnly]);
   
-  // When slideData changes, update existing editors' content using the stored dataPath
+  // When slideData changes, update existing editors' content using the stored binding
   useEffect(() => {
     if (!rootsRef.current || rootsRef.current.size === 0) return;
-    rootsRef.current.forEach(({ root, dataPath,  fallbackText }) => {
-      const newContent = dataPath ? getValueByPath(slideData, dataPath) ?? fallbackText : fallbackText;
+    rootsRef.current.forEach(({ root, binding, fallbackText }) => {
+      const newContent = binding.key
+        ? readBindingValue(slideData, binding) ?? fallbackText
+        : fallbackText;
       root.render(
         readOnly ? (
           <MarkdownInlineText content={newContent} />
@@ -152,8 +177,8 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
           <TiptapText
             content={newContent}
             onContentChange={(content: string) => {
-              if (dataPath && onContentChange) {
-                onContentChange(content, dataPath, slideIndex);
+              if (binding.key && onContentChange) {
+                onContentChange(content, binding, slideIndex);
               }
             }}
             placeholder="텍스트를 입력하세요..."
@@ -264,6 +289,14 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
       }
       return current;
     };
+
+    // Read the current value for a binding. Block-id resolution is the shared
+    // util (lock-step with the updateAdaptiveBlock reducer); path is the legacy
+    // string-match address.
+    const readBindingValue = (data: any, binding: EditBinding): any =>
+      binding.kind === "blockId"
+        ? getAdaptiveBlockText(data, binding.key)
+        : getValueByPath(data, binding.key);
 
     // Helper function to get only direct text content (not from children)
     const getDirectTextContent = (element: HTMLElement): string => {

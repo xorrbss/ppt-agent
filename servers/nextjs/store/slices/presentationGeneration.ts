@@ -1,6 +1,7 @@
 import { Theme } from "@/app/(presentation-generator)/services/api/types";
 import { Slide } from "@/app/(presentation-generator)/types/slide";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import { setAdaptiveBlockText } from "@/lib/adaptiveBlockEdit";
 
 export interface PresentationData {
   id: string;
@@ -195,6 +196,23 @@ const presentationGenerationSlice = createSlice({
           setNestedValue(slide.content, dataPath, content);
         }
       }
+    },
+
+    // Deterministic text edit for adaptive slides, keyed by data-block-id (no
+    // fragile string matching). blockId is one of: a top-level block id (e.g.
+    // "title"), a nested item id (bullets/column items, e.g. "b1"/"col1.1"), or
+    // a dotted block field (e.g. "s1.value", "card1.title", "step1.label").
+    updateAdaptiveBlock: (
+      state,
+      action: PayloadAction<{
+        slideIndex: number;
+        blockId: string;
+        content: string;
+      }>
+    ) => {
+      const { slideIndex, blockId, content } = action.payload;
+      const slide = state.presentationData?.slides?.[slideIndex];
+      setAdaptiveBlockText(slide?.content?.blocks, blockId, content);
     },
 
     addNewSlide: (state, action: PayloadAction<{ slideData: any; index: number }>) => {
@@ -411,6 +429,7 @@ export const {
   updateSlide,
   deletePresentationSlide,
   updateSlideContent,
+  updateAdaptiveBlock,
   updateSlideImage,
   updateImageProperties,
   updateSlideIcon,
