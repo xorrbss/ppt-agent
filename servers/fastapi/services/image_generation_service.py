@@ -2,12 +2,13 @@ import asyncio
 import base64
 import json
 import os
+import re
 import secrets
 import aiohttp
 from fastapi import HTTPException
 from google import genai
 from google.genai import types
-from openai import NOT_GIVEN, AsyncOpenAI
+from openai import NOT_GIVEN, AsyncOpenAI, RateLimitError
 from models.image_prompt import ImagePrompt
 from models.sql.image_asset import ImageAsset
 from utils.get_env import (
@@ -41,6 +42,23 @@ import uuid
 
 COMFYUI_MAX_SEED = 0xFFFFFFFFFFFFFFFF
 COMFYUI_SEED_SOURCE_VALUE_KEYS = {"value", "int", "integer", "number"}
+
+# OpenAI image models (gpt-image-1.5 / dall-e-3) enforce a per-minute rate limit.
+# On 429 we back off and retry instead of falling back to a placeholder.
+OPENAI_IMAGE_MAX_ATTEMPTS = 6
+OPENAI_IMAGE_MAX_WAIT_SECONDS = 30.0
+
+
+def _parse_retry_after_seconds(error: Exception) -> float | None:
+    """Extract the suggested wait from an OpenAI rate-limit error, if present."""
+    message = str(error)
+    match = re.search(r"try again in ([\d.]+)\s*s", message, re.IGNORECASE)
+    if match:
+        try:
+            return float(match.group(1)) + 1.0  # small buffer past the window
+        except ValueError:
+            return None
+    return None
 
 
 class ImageGenerationService:
@@ -130,14 +148,30 @@ class ImageGenerationService:
         self, prompt: str, output_directory: str, model: str, quality: str
     ) -> str:
         client = AsyncOpenAI()
-        result = await client.images.generate(
-            model=model,
-            prompt=prompt,
-            n=1,
-            quality=quality,
-            response_format="b64_json" if model == "dall-e-3" else NOT_GIVEN,
-            size="1024x1024",
-        )
+        result = None
+        for attempt in range(OPENAI_IMAGE_MAX_ATTEMPTS):
+            try:
+                result = await client.images.generate(
+                    model=model,
+                    prompt=prompt,
+                    n=1,
+                    quality=quality,
+                    response_format="b64_json" if model == "dall-e-3" else NOT_GIVEN,
+                    size="1024x1024",
+                )
+                break
+            except RateLimitError as e:
+                if attempt == OPENAI_IMAGE_MAX_ATTEMPTS - 1:
+                    raise
+                wait = _parse_retry_after_seconds(e)
+                if wait is None:
+                    wait = min(8.0 * (attempt + 1), OPENAI_IMAGE_MAX_WAIT_SECONDS)
+                wait = min(wait, OPENAI_IMAGE_MAX_WAIT_SECONDS)
+                print(
+                    f"Image rate-limited (attempt {attempt + 1}/"
+                    f"{OPENAI_IMAGE_MAX_ATTEMPTS}); retrying in {wait:.0f}s"
+                )
+                await asyncio.sleep(wait)
         image_path = os.path.join(output_directory, f"{uuid.uuid4()}.png")
         with open(image_path, "wb") as f:
             f.write(base64.b64decode(result.data[0].b64_json))

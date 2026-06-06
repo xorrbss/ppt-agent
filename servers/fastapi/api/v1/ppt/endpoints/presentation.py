@@ -37,6 +37,8 @@ from services.mem0_presentation_memory_service import (
 )
 from utils.dict_utils import deep_update
 from utils.export_utils import export_presentation
+from utils.layout_capacity import apply_capacity_fit
+from utils.llm_calls.generate_content_brief import generate_content_brief
 from utils.llm_calls.generate_presentation_outlines import (
     generate_ppt_outline,
     get_messages as get_outline_messages,
@@ -346,6 +348,13 @@ async def prepare_presentation(
                 n_toc_slides=n_toc_slides,
                 title_slide=presentation.include_title_slide,
             )
+
+    # Content-volume-aware fitting: upgrade overflowing slides to a bigger
+    # same-kind layout, or split them. No-op for ordered templates.
+    presentation_outline_model, presentation_structure = apply_capacity_fit(
+        presentation_outline_model, presentation_structure, layout
+    )
+    presentation.n_slides = len(presentation_structure.slides)
 
     sql_session.add(presentation)
     presentation.outlines = presentation_outline_model.model_dump(mode="json")
@@ -659,6 +668,27 @@ async def generate_presentation_handler(
                 if documents:
                     additional_context = "\n\n".join(documents)
 
+            # Stage A - Knowledge Brief: research rich, grounded substance first,
+            # then ground the outline in it. Falls back to documents-only on failure.
+            outline_context = additional_context
+            try:
+                content_brief = await generate_content_brief(
+                    request.content,
+                    language_to_use,
+                    additional_context,
+                    request.tone.value,
+                    request.verbosity.value,
+                    request.instructions,
+                )
+                brief_context = content_brief.to_prompt_context()
+                outline_context = (
+                    f"{additional_context}\n\n{brief_context}".strip()
+                    if additional_context
+                    else brief_context
+                )
+            except Exception:
+                traceback.print_exc()
+
             # Finding number of slides to generate by considering table of contents
             n_slides_to_generate = request.n_slides
             if request.include_table_of_contents and request.n_slides is not None:
@@ -674,7 +704,7 @@ async def generate_presentation_handler(
                 request.content,
                 n_slides_to_generate,
                 language_to_use,
-                additional_context,
+                outline_context,
                 request.tone.value,
                 request.verbosity.value,
                 request.instructions,
@@ -703,7 +733,7 @@ async def generate_presentation_handler(
                 request.content,
                 n_slides_to_generate,
                 language_to_use,
-                additional_context,
+                outline_context,
                 request.tone.value,
                 request.verbosity.value,
                 request.instructions,
@@ -839,9 +869,13 @@ async def generate_presentation_handler(
                     title_slide=request.include_title_slide,
                 )
 
-        final_n_slides = request.n_slides
-        if final_n_slides is None:
-            final_n_slides = len(presentation_outlines.slides)
+        # Content-volume-aware fitting (skip for user-provided slides_markdown).
+        if not using_slides_markdown:
+            presentation_outlines, presentation_structure = apply_capacity_fit(
+                presentation_outlines, presentation_structure, layout_model
+            )
+
+        final_n_slides = len(presentation_outlines.slides)
 
         # Create PresentationModel
         presentation = PresentationModel(

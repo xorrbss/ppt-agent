@@ -26,6 +26,7 @@ from utils.outline_utils import (
     get_no_of_outlines_to_generate_for_n_slides,
     get_presentation_title_from_presentation_outline,
 )
+from utils.llm_calls.generate_content_brief import generate_content_brief
 from utils.llm_calls.generate_presentation_outlines import (
     generate_ppt_outline,
     get_messages as get_outline_messages,
@@ -61,6 +62,30 @@ async def stream_outlines(
             if documents:
                 additional_context = "\n\n".join(documents)
 
+        # Stage A - Knowledge Brief: research rich, grounded substance first,
+        # then ground the outline in it. Falls back to documents-only on failure.
+        yield SSEStatusResponse(
+            status="Researching and organizing content..."
+        ).to_string()
+        outline_context = additional_context
+        try:
+            content_brief = await generate_content_brief(
+                presentation.content,
+                presentation.language,
+                additional_context,
+                presentation.tone,
+                presentation.verbosity,
+                presentation.instructions,
+            )
+            brief_context = content_brief.to_prompt_context()
+            outline_context = (
+                f"{additional_context}\n\n{brief_context}".strip()
+                if additional_context
+                else brief_context
+            )
+        except Exception:
+            traceback.print_exc()
+
         presentation_outlines_text = ""
 
         if presentation.n_slides > 0:
@@ -76,7 +101,7 @@ async def stream_outlines(
             presentation.content,
             n_slides_to_generate,
             presentation.language,
-            additional_context,
+            outline_context,
             presentation.tone,
             presentation.verbosity,
             presentation.instructions,
@@ -104,7 +129,7 @@ async def stream_outlines(
             presentation.content,
             n_slides_to_generate,
             presentation.language,
-            additional_context,
+            outline_context,
             presentation.tone,
             presentation.verbosity,
             presentation.instructions,

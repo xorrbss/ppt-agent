@@ -30,12 +30,12 @@ def get_system_prompt(
     include_table_of_contents: bool = False,
 ):
     verbosity_instruction = (
-        "Slide content should be around 20 words but detailed enough to generate a good slide."
+        "Each slide's content should be at least ~80 words: substantive but tight, covering the key points with at least one concrete fact, figure, or example."
         if verbosity == "concise"
         else (
-            "Slide content should be around 60 words but detailed enough to generate a good slide."
+            "Each slide's content should be at least ~250 words: rich and information-dense, packed with specific facts, figures, named examples, dates, and cause-effect detail — never a short summary."
             if verbosity == "text-heavy"
-            else "Slide content should be around 40 words but detailed enough to generate a good slide."
+            else "Each slide's content should be at least ~150 words: specific and substantive (not a high-level summary), with concrete facts, figures, or examples supporting each point."
         )
     )
 
@@ -62,7 +62,8 @@ def get_system_prompt(
     )
 
     system = (
-        "Generate presentation title and content for slides.\n"
+        "You are an expert content strategist and subject-matter writer creating substantive, insight-dense presentation slides.\n"
+        "Generate a presentation title and rich, specific content for each slide.\n"
         "Generate flow based on user **content** and use **context** just for reference.\n"
         "Presentation title should be plain text, not markdown. It should be a concise title for the presentation.\n"
         "Each slide content should contain the content for that slide.\n"
@@ -74,8 +75,8 @@ def get_system_prompt(
         "Follow the user's specified tone across all slides. "
         "Maintain clarity, readability, and factual accuracy. "
         "If no tone is provided, use a clear and professional style. "
-        "Ensure logical flow between slides and avoid repetition or generic filler content.\n"
-        "Include numerical data, tables or code if required or asked by the user.\n"
+        "Ensure logical flow between slides and avoid repetition, vague statements, or generic filler content.\n"
+        "Proactively include relevant figures, statistics, dates, named examples, and concrete evidence for each slide; prefer specific detail over generic claims.\n"
         "If 'auto-detect' is used, figure it out from the content/context.\n"
         f"{title_slide_instruction}\n"
         f"{toc_block}"
@@ -83,7 +84,8 @@ def get_system_prompt(
         "Slide content must not contain any presentation branding/styling information.\n"
         "Title slide must only contain title, presenter name, date and overview.\n"
         "Only include URLs if they appear in the provided content/context.\n"
-        "Make sure data used is strictly from the provided content/context.\n"
+        "When source content/context is provided, ground your facts in it and do not contradict or go beyond it. "
+        "When only a topic is given without source material, draw on your own well-established domain knowledge to add specific, accurate facts, figures, and examples — but never fabricate precise statistics, quotes, or sources you are not confident about.\n"
         "Make sure data is consistent across all slides."
         "Use the web search tool when the user request requires current, factual, or external information.\n"
         "If the answer may be outdated or uncertain, prefer using the web search tool.\n"

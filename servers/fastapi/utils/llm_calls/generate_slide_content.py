@@ -38,6 +38,12 @@ You need to generate structured content json based on the schema.
 - Do not apply patterns across multiple slides unless explicitly requested.
 - If instructions are ambiguous, use the most direct interpretation without extending scope.
 
+# Content Depth
+- Be specific and concrete: prefer named examples, figures, dates, percentages, and cause-effect detail over generic statements.
+- Genuinely expand each outline point into substantive prose — do not merely restate or summarize the outline.
+- Fill each text field toward its maximum length budget, and populate the MAXIMUM number of list items the schema allows. Do not leave fields near their minimum or ship under-filled lists.
+- Every bullet or point must carry real, distinct information; never use filler such as "various aspects", "many benefits", or vague placeholders.
+
 {markdown_emphasis_rules}
 
 {user_instructions}
@@ -103,15 +109,20 @@ def get_system_prompt(
         f"# Tone Instructions:\nMake slide as {tone} as possible." if tone else ""
     )
 
-    verbosity_instructions = ""
-    if verbosity:
-        verbosity_instructions = "# Verbosity Instructions:\n"
-        if verbosity == "concise":
-            verbosity_instructions += "Make slide as concise as possible."
-        elif verbosity == "standard":
-            verbosity_instructions += "Make slide as standard as possible."
-        elif verbosity == "text-heavy":
-            verbosity_instructions += "Make slide as text-heavy as possible."
+    verbosity_instructions = "# Verbosity Instructions:\n"
+    if verbosity == "concise":
+        verbosity_instructions += (
+            "Aim for roughly 50-60% of each text field's maximum length and include most allowed list items. Keep it tight but still concrete and specific."
+        )
+    elif verbosity == "text-heavy":
+        verbosity_instructions += (
+            "Use roughly 90-100% of each text field's maximum length and populate the MAXIMUM number of list items the schema allows. Maximize substantive, specific detail."
+        )
+    else:
+        # standard / default: still apply real density pressure (this is the common path)
+        verbosity_instructions += (
+            "Use roughly 75-90% of each text field's maximum length and populate most or all allowed list items. Favor substance over brevity."
+        )
 
     output_fields_instructions = "# Output Fields:\n" + _get_schema_markdown(
         response_schema
