@@ -41,26 +41,20 @@ done (kept coexistence + user choice).
 
 ## Deferred / re-sequenced
 
-- [ ] **P4b — block CRUD (add/del/reorder) + schema-driven property panel.**
-      **DEFERRED** behind THEME (reasonable-default decision, recorded here).
-      Rationale:
-      1. **Verifiability**: this is interactive UI; the click→edit→reorder
-         round-trip cannot be verified in the headless autonomous loop
-         (no click simulation in `--dump-dom`). Building unverified interactive
-         UI conflicts with the project's "verification mandatory" guardrail.
-         A clean validation needs Cypress component tests or a human in the loop.
-      2. **Lower marginal value**: P4a already gives deterministic text editing;
-         image/icon editing already works (EditableLayoutWrapper's recursive
-         marker search finds nested adaptive markers); and **the export is
-         fully-editable PPTX**, so structural edits can be done in PowerPoint.
-      3. **Non-uniform model**: bullets / comparison use nested `items[]` while
-         card-grid / stat-hero / timeline use repeated top-level blocks, so a
-         generic CRUD UI is a sizable, careful effort.
-      4. **Structure pressure**: `EditableLayoutWrapper` is already 472/500 lines;
-         affordances would need a new overlay component.
-      When picked up: add `lib/adaptiveBlockEdit.ts` CRUD helpers (item-level for
-      `items[]`, block-level for repeated top-level blocks) + node tests, then a
-      minimal always-visible-in-edit affordance, validated via Cypress.
+- [x] **P4b — block CRUD (add/del/reorder).** DONE (user-requested after the
+      initial deferral). `lib/adaptiveBlockEdit.ts` CRUD helpers (locateUnit /
+      delete / move / addAdaptiveUnit) handle the non-uniform model uniformly
+      (top-level card/stat/step blocks AND nested bullets/column `items[]`), with
+      16/16 node tests; `presentationGeneration` slice reducers delegate to them;
+      a new edit-only `AdaptiveBlockControls` panel (mounted in
+      `EditableLayoutWrapper` for adaptive content) lists repeatable units with
+      move/delete/add controls. Verified: tsc=0; node tests 16/16; editor render
+      shows the `블록 편집` panel with correct unit labels (불릿/카드/지표/단계);
+      **export-clean** (absent from the readOnly `/pdf-maker` DOM); legacy decks
+      unaffected (panel gated on `archetype`). The **click round-trip**
+      (dispatch→state→re-render) is validated manually / via Cypress, not the
+      headless loop. **Schema-driven property panel: deferred YAGNI** — inline
+      text editing (P4a) + image/icon pickers + item CRUD cover the common cases.
 - [ ] **Text auto-fit (JS fit-to-box)** — deferred in P5 (TODO in `parts.tsx`).
       Fixed sizes + `overflow-hidden` + composer maxLength bounds suffice for now;
       revisit if overflow is observed at max density.

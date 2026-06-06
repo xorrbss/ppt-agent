@@ -5,6 +5,7 @@ import { useDispatch } from 'react-redux';
 import { updateSlideImage, updateSlideIcon, updateImageProperties } from '@/store/slices/presentationGeneration';
 import ImageEditor from './ImageEditor';
 import IconsEditor from './IconsEditor';
+import AdaptiveBlockControls from './AdaptiveBlockControls';
 
 interface EditableLayoutWrapperProps {
     children: ReactNode;
@@ -436,8 +437,14 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
     };
 
     return (
-        <div ref={containerRef} className="editable-layout-wrapper w-full ">
+        <div ref={containerRef} className="editable-layout-wrapper w-full relative">
             {children}
+
+            {/* Adaptive structural-editing controls (edit-mode only; adaptive content
+                is detected by archetype + blocks[]). Never rendered in readOnly export. */}
+            {slideData?.archetype && Array.isArray(slideData?.blocks) && (
+                <AdaptiveBlockControls slideIndex={slideIndex} blocks={slideData.blocks} />
+            )}
 
             {/* Render ImageEditor when an image is being edited */}
             {activeEditor && activeEditor.type === 'image' && (
