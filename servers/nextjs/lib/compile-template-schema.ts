@@ -58,6 +58,72 @@ function unwrapExpression(node: t.Expression): t.Expression {
   return node;
 }
 
+/**
+ * Returns the source for `node` with TypeScript-only expression syntax removed,
+ * so the reconstructed declaration is valid JavaScript for `new Function`.
+ *
+ * The runtime source is assembled from raw source slices (preserving zod call
+ * chains and default values). Raw slices can still contain TS-only syntax such
+ * as `'bar' as const`, `x satisfies T`, `x!`, or `<T>x` — all of which are
+ * SyntaxErrors under plain-JS evaluation. The security validator already
+ * tolerates these via `unwrapExpression`; here we strip them by character range.
+ */
+function stripTsExpressionSyntax(source: string, node: t.Node): string {
+  const start = node.start ?? 0;
+  const end = node.end ?? 0;
+  const removals: Array<[number, number]> = [];
+
+  const walk = (value: unknown): void => {
+    if (!value || typeof value !== "object") {
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach(walk);
+      return;
+    }
+    const current = value as t.Node;
+    if (typeof current.type !== "string") {
+      return;
+    }
+
+    if (
+      (t.isTSAsExpression(current) ||
+        t.isTSSatisfiesExpression(current) ||
+        t.isTSNonNullExpression(current)) &&
+      typeof current.expression.end === "number" &&
+      typeof current.end === "number"
+    ) {
+      // Drop the trailing ` as T` / ` satisfies T` / `!`.
+      removals.push([current.expression.end, current.end]);
+    } else if (
+      t.isTSTypeAssertion(current) &&
+      typeof current.start === "number" &&
+      typeof current.expression.start === "number"
+    ) {
+      // Drop the leading `<T>`.
+      removals.push([current.start, current.expression.start]);
+    }
+
+    for (const key of Object.keys(current)) {
+      if (key === "loc" || key === "start" || key === "end" || key === "range") {
+        continue;
+      }
+      walk((current as unknown as Record<string, unknown>)[key]);
+    }
+  };
+
+  walk(node);
+
+  let result = source.slice(start, end);
+  // Apply removals right-to-left so earlier offsets remain valid.
+  removals
+    .sort((left, right) => right[0] - left[0])
+    .forEach(([from, to]) => {
+      result = result.slice(0, from - start) + result.slice(to - start);
+    });
+  return result;
+}
+
 function getRootIdentifier(node: t.Expression): string | null {
   const expression = unwrapExpression(node);
 
@@ -121,7 +187,7 @@ function extractTopLevelDeclarations(source: string): Map<string, ExtractedDecla
 
       declarations.set(declarator.id.name, {
         init: unwrapExpression(declarator.init as t.Expression),
-        initSource: source.slice(declarator.init.start ?? 0, declarator.init.end ?? 0),
+        initSource: stripTsExpressionSyntax(source, declarator.init as t.Node),
         name: declarator.id.name,
         order: order++,
       });
