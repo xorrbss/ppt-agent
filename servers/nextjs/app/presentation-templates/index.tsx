@@ -88,7 +88,15 @@ import OrgChartLayout, { Schema as OrgChartSchema, layoutId as OrgChartId, layou
 
 // Adaptive layout group (single renderer + per-archetype schemas)
 import AdaptiveSlide from "./adaptive/AdaptiveSlide";
-import { CoverSpecSchema, OneColumnBulletsSpecSchema, StatHeroSpecSchema } from "./adaptive/spec";
+import {
+  AgendaSpecSchema,
+  BigStatementSpecSchema,
+  ClosingSpecSchema,
+  CoverSpecSchema,
+  OneColumnBulletsSpecSchema,
+  SectionDividerSpecSchema,
+  StatHeroSpecSchema,
+} from "./adaptive/spec";
 
 // General templates
 import GeneralIntroSlideLayout, { Schema as GeneralIntroSchema, layoutId as GeneralIntroId, layoutName as GeneralIntroName, layoutDescription as GeneralIntroDesc } from "./general/IntroSlideLayout";
@@ -559,6 +567,10 @@ export const adaptiveTemplates: TemplateWithData[] = [
     createTemplateEntry(AdaptiveSlide, CoverSpecSchema, "cover", "표지", "덱 표지 — 제목·부제·구분선", "adaptive", "AdaptiveSlide"),
     createTemplateEntry(AdaptiveSlide, OneColumnBulletsSpecSchema, "one-column-bullets", "핵심 요점", "제목·리드 문장·불릿 목록", "adaptive", "AdaptiveSlide"),
     createTemplateEntry(AdaptiveSlide, StatHeroSpecSchema, "stat-hero", "핵심 지표", "제목·핵심 수치 카드", "adaptive", "AdaptiveSlide"),
+    createTemplateEntry(AdaptiveSlide, SectionDividerSpecSchema, "section-divider", "섹션 구분", "섹션 전환 — 번호·구분 제목", "adaptive", "AdaptiveSlide"),
+    createTemplateEntry(AdaptiveSlide, BigStatementSpecSchema, "big-statement", "핵심 메시지", "큰 한 줄 메시지 또는 인용", "adaptive", "AdaptiveSlide"),
+    createTemplateEntry(AdaptiveSlide, AgendaSpecSchema, "agenda", "목차", "제목 + 2~8개 목차 항목", "adaptive", "AdaptiveSlide"),
+    createTemplateEntry(AdaptiveSlide, ClosingSpecSchema, "closing", "마무리", "마무리 — 제목·부제·연락/CTA", "adaptive", "AdaptiveSlide"),
 ];
 
 // TODO: Step 4: Combine all templates into a single array For UseCases (like the ones below)

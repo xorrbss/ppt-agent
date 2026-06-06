@@ -44,8 +44,45 @@ class StatHeroSpec(BaseModel):
     speaker_note: str = Field(default="", max_length=500)
 
 
+class SectionDividerSpec(BaseModel):
+    archetype: Literal["section-divider"]
+    eyebrow: Optional[str] = Field(default=None, max_length=40)
+    title: str = Field(max_length=80)
+    speaker_note: str = Field(default="", max_length=500)
+
+
+class BigStatementSpec(BaseModel):
+    archetype: Literal["big-statement"]
+    text: str = Field(max_length=240)
+    attribution: Optional[str] = Field(default=None, max_length=60)
+    speaker_note: str = Field(default="", max_length=500)
+
+
+class AgendaSpec(BaseModel):
+    archetype: Literal["agenda"]
+    title: str = Field(max_length=80)
+    items: List[BulletItem] = Field(min_length=2, max_length=8)
+    speaker_note: str = Field(default="", max_length=500)
+
+
+class ClosingSpec(BaseModel):
+    archetype: Literal["closing"]
+    title: str = Field(max_length=80)
+    subtitle: Optional[str] = Field(default=None, max_length=140)
+    items: Optional[List[BulletItem]] = Field(default=None, max_length=4)
+    speaker_note: str = Field(default="", max_length=500)
+
+
 SlideSpecUnion = Annotated[
-    Union[CoverSpec, OneColumnBulletsSpec, StatHeroSpec],
+    Union[
+        CoverSpec,
+        OneColumnBulletsSpec,
+        StatHeroSpec,
+        SectionDividerSpec,
+        BigStatementSpec,
+        AgendaSpec,
+        ClosingSpec,
+    ],
     Field(discriminator="archetype"),
 ]
 
@@ -89,4 +126,34 @@ def spec_to_blocks(spec) -> dict:
             if st.caption:
                 block["caption"] = st.caption
             blocks.append(block)
+    elif a == "section-divider":
+        if spec.eyebrow:
+            blocks.append({"id": "eyebrow", "type": "eyebrow", "text": spec.eyebrow})
+        blocks.append({"id": "title", "type": "title", "text": spec.title})
+    elif a == "big-statement":
+        block = {"id": "statement", "type": "quote", "text": spec.text}
+        if spec.attribution:
+            block["attribution"] = spec.attribution
+        blocks.append(block)
+    elif a == "agenda":
+        blocks.append({"id": "title", "type": "title", "text": spec.title})
+        blocks.append({
+            "id": "bullets",
+            "type": "bullets",
+            "items": [
+                {"id": f"a{i + 1}", "text": it.text} for i, it in enumerate(spec.items)
+            ],
+        })
+    elif a == "closing":
+        blocks.append({"id": "title", "type": "title", "text": spec.title})
+        if spec.subtitle:
+            blocks.append({"id": "subtitle", "type": "subtitle", "text": spec.subtitle})
+        if spec.items:
+            blocks.append({
+                "id": "bullets",
+                "type": "bullets",
+                "items": [
+                    {"id": f"c{i + 1}", "text": it.text} for i, it in enumerate(spec.items)
+                ],
+            })
     return {"archetype": a, "blocks": blocks}

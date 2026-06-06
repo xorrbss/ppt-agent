@@ -24,6 +24,30 @@ ARCHETYPE_PROFILES = {
         "list_items": 4,
         "desc": "title + 1-4 stat cards (value, label, optional delta, optional caption)",
     },
+    "section-divider": {
+        "kind": "divider",
+        "text_chars": 120,
+        "list_items": 0,
+        "desc": "section transition (use every 3-5 content slides) — optional eyebrow/number + a short section title",
+    },
+    "big-statement": {
+        "kind": "statement",
+        "text_chars": 240,
+        "list_items": 0,
+        "desc": "one bold message or pull-quote (optional attribution) — a rhythm breather, no bullets",
+    },
+    "agenda": {
+        "kind": "list",
+        "text_chars": 700,
+        "list_items": 8,
+        "desc": "agenda / table of contents right after the cover — title + 2-8 short items",
+    },
+    "closing": {
+        "kind": "closing",
+        "text_chars": 400,
+        "list_items": 4,
+        "desc": "closing slide — title, optional subtitle, optional 1-4 call-to-action / contact items",
+    },
 }
 
 ALLOWED_ARCHETYPES = list(ARCHETYPE_PROFILES.keys())

@@ -58,6 +58,12 @@ export const ImageBlockSchema = z.object({
   type: z.literal("image"),
   image: ImageRefSchema,
 });
+export const QuoteBlockSchema = z.object({
+  id: z.string(),
+  type: z.literal("quote"),
+  text: z.string().max(240),
+  attribution: z.string().max(60).optional(),
+});
 
 export const BlockSchema = z.union([
   TitleBlockSchema,
@@ -67,6 +73,7 @@ export const BlockSchema = z.union([
   BulletsBlockSchema,
   StatBlockSchema,
   ImageBlockSchema,
+  QuoteBlockSchema,
 ]);
 export type Block = z.infer<typeof BlockSchema>;
 
@@ -116,5 +123,62 @@ export const StatHeroSpecSchema = z.object({
     { id: "s1", type: "stat", value: "37%", label: "연평균 성장률", delta: "+5%p" },
     { id: "s2", type: "stat", value: "4.2조", label: "시장 규모", caption: "2025년 기준" },
     { id: "s3", type: "stat", value: "1위", label: "국내 점유율" },
+  ] as any),
+});
+
+export const SectionDividerSpecSchema = z.object({
+  archetype: z.literal("section-divider").default("section-divider"),
+  variant: z.string().optional(),
+  blocks: z.array(BlockSchema).default([
+    { id: "eyebrow", type: "eyebrow", text: "01" },
+    { id: "title", type: "title", text: "시장 분석" },
+  ] as any),
+});
+
+export const BigStatementSpecSchema = z.object({
+  archetype: z.literal("big-statement").default("big-statement"),
+  variant: z.string().optional(),
+  blocks: z.array(BlockSchema).default([
+    {
+      id: "statement",
+      type: "quote",
+      text: "고객 경험의 혁신이 곧 시장 지배력입니다.",
+      attribution: "대표이사 김OO",
+    },
+  ] as any),
+});
+
+export const AgendaSpecSchema = z.object({
+  archetype: z.literal("agenda").default("agenda"),
+  variant: z.string().optional(),
+  blocks: z.array(BlockSchema).default([
+    { id: "title", type: "title", text: "목차" },
+    {
+      id: "bullets",
+      type: "bullets",
+      items: [
+        { id: "a1", text: "시장 현황과 기회" },
+        { id: "a2", text: "핵심 전략 방향" },
+        { id: "a3", text: "실행 로드맵" },
+        { id: "a4", text: "기대 효과" },
+      ],
+    },
+  ] as any),
+});
+
+export const ClosingSpecSchema = z.object({
+  archetype: z.literal("closing").default("closing"),
+  variant: z.string().optional(),
+  blocks: z.array(BlockSchema).default([
+    { id: "title", type: "title", text: "감사합니다" },
+    { id: "subtitle", type: "subtitle", text: "함께 만들어갈 다음 단계를 논의하겠습니다" },
+    {
+      id: "bullets",
+      type: "bullets",
+      items: [
+        { id: "c1", text: "contact@company.com" },
+        { id: "c2", text: "www.company.com" },
+      ],
+    },
   ] as any),
 });
