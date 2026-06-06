@@ -6,10 +6,14 @@ import {
   AgendaLayout,
   BigStatementLayout,
   BulletsLayout,
+  CardGridLayout,
   ClosingLayout,
+  ComparisonLayout,
   CoverLayout,
   SectionDividerLayout,
   StatHeroLayout,
+  TimelineLayout,
+  TwoColumnLayout,
 } from "./layouts";
 
 // Single adaptive renderer for the "adaptive" layout group. Receives a SlideSpec
@@ -45,6 +49,14 @@ function renderArchetype(archetype: string, blocks: AnyBlock[]): React.ReactNode
       return <AgendaLayout blocks={blocks} />;
     case "closing":
       return <ClosingLayout blocks={blocks} />;
+    case "card-grid":
+      return <CardGridLayout blocks={blocks} />;
+    case "comparison":
+      return <ComparisonLayout blocks={blocks} />;
+    case "timeline":
+      return <TimelineLayout blocks={blocks} />;
+    case "two-column":
+      return <TwoColumnLayout blocks={blocks} />;
     default:
       return <BulletsLayout blocks={blocks} />;
   }

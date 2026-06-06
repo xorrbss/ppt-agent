@@ -64,6 +64,26 @@ export const QuoteBlockSchema = z.object({
   text: z.string().max(240),
   attribution: z.string().max(60).optional(),
 });
+export const CardBlockSchema = z.object({
+  id: z.string(),
+  type: z.literal("card"),
+  title: z.string().max(40),
+  text: z.string().max(140),
+  icon: IconRefSchema.optional(),
+});
+export const ColumnBlockSchema = z.object({
+  id: z.string(),
+  type: z.literal("column"),
+  heading: z.string().max(40),
+  items: z.array(z.object({ id: z.string(), text: z.string().max(120) })).max(6),
+});
+export const StepBlockSchema = z.object({
+  id: z.string(),
+  type: z.literal("step"),
+  label: z.string().max(20),
+  title: z.string().max(40),
+  text: z.string().max(120),
+});
 
 export const BlockSchema = z.union([
   TitleBlockSchema,
@@ -74,6 +94,9 @@ export const BlockSchema = z.union([
   StatBlockSchema,
   ImageBlockSchema,
   QuoteBlockSchema,
+  CardBlockSchema,
+  ColumnBlockSchema,
+  StepBlockSchema,
 ]);
 export type Block = z.infer<typeof BlockSchema>;
 
@@ -180,5 +203,60 @@ export const ClosingSpecSchema = z.object({
         { id: "c2", text: "www.company.com" },
       ],
     },
+  ] as any),
+});
+
+export const CardGridSpecSchema = z.object({
+  archetype: z.literal("card-grid").default("card-grid"),
+  variant: z.string().optional(),
+  blocks: z.array(BlockSchema).default([
+    { id: "title", type: "title", text: "핵심 역량" },
+    { id: "card1", type: "card", title: "빠른 배포", text: "CI/CD로 출시 주기를 단축합니다." },
+    { id: "card2", type: "card", title: "강력한 보안", text: "금융권 인증 체계를 충족합니다." },
+    { id: "card3", type: "card", title: "무중단 확장", text: "트래픽 급증에도 안정적으로 확장합니다." },
+  ] as any),
+});
+
+export const ComparisonSpecSchema = z.object({
+  archetype: z.literal("comparison").default("comparison"),
+  variant: z.string().optional(),
+  blocks: z.array(BlockSchema).default([
+    { id: "title", type: "title", text: "도입 전후 비교" },
+    { id: "col1", type: "column", heading: "기존 방식", items: [
+      { id: "col1.1", text: "수작업 운영" }, { id: "col1.2", text: "높은 장애율" },
+    ] },
+    { id: "col2", type: "column", heading: "신규 방식", items: [
+      { id: "col2.1", text: "운영 자동화" }, { id: "col2.2", text: "장애 60% 감소" },
+    ] },
+  ] as any),
+});
+
+export const TimelineSpecSchema = z.object({
+  archetype: z.literal("timeline").default("timeline"),
+  variant: z.string().optional(),
+  blocks: z.array(BlockSchema).default([
+    { id: "title", type: "title", text: "추진 로드맵" },
+    { id: "step1", type: "step", label: "1단계", title: "설계", text: "아키텍처와 표준을 확정합니다." },
+    { id: "step2", type: "step", label: "2단계", title: "구축", text: "핵심 기능 MVP를 개발합니다." },
+    { id: "step3", type: "step", label: "3단계", title: "확산", text: "전사 적용 및 안정화를 진행합니다." },
+  ] as any),
+});
+
+export const TwoColumnSpecSchema = z.object({
+  archetype: z.literal("two-column").default("two-column"),
+  variant: z.string().optional(),
+  blocks: z.array(BlockSchema).default([
+    { id: "title", type: "title", text: "시장 기회" },
+    { id: "lead", type: "text", text: "디지털 전환 수요가 빠르게 확대되고 있습니다." },
+    {
+      id: "bullets",
+      type: "bullets",
+      items: [
+        { id: "b1", text: "연 20% 성장하는 클라우드 시장" },
+        { id: "b2", text: "규제 완화로 진입 장벽 하락" },
+        { id: "b3", text: "대기업 수요 본격화" },
+      ],
+    },
+    { id: "image", type: "image", image: { __image_url__: "", __image_prompt__: "modern city skyline at dusk, blue tones" } },
   ] as any),
 });

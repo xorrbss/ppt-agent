@@ -91,11 +91,15 @@ import AdaptiveSlide from "./adaptive/AdaptiveSlide";
 import {
   AgendaSpecSchema,
   BigStatementSpecSchema,
+  CardGridSpecSchema,
   ClosingSpecSchema,
+  ComparisonSpecSchema,
   CoverSpecSchema,
   OneColumnBulletsSpecSchema,
   SectionDividerSpecSchema,
   StatHeroSpecSchema,
+  TimelineSpecSchema,
+  TwoColumnSpecSchema,
 } from "./adaptive/spec";
 
 // General templates
@@ -571,6 +575,10 @@ export const adaptiveTemplates: TemplateWithData[] = [
     createTemplateEntry(AdaptiveSlide, BigStatementSpecSchema, "big-statement", "핵심 메시지", "큰 한 줄 메시지 또는 인용", "adaptive", "AdaptiveSlide"),
     createTemplateEntry(AdaptiveSlide, AgendaSpecSchema, "agenda", "목차", "제목 + 2~8개 목차 항목", "adaptive", "AdaptiveSlide"),
     createTemplateEntry(AdaptiveSlide, ClosingSpecSchema, "closing", "마무리", "마무리 — 제목·부제·연락/CTA", "adaptive", "AdaptiveSlide"),
+    createTemplateEntry(AdaptiveSlide, CardGridSpecSchema, "card-grid", "카드 그리드", "동등 항목 3~8개 카드(아이콘·제목·설명)", "adaptive", "AdaptiveSlide"),
+    createTemplateEntry(AdaptiveSlide, ComparisonSpecSchema, "comparison", "비교", "2~3개 열 비교(헤딩·체크 항목)", "adaptive", "AdaptiveSlide"),
+    createTemplateEntry(AdaptiveSlide, TimelineSpecSchema, "timeline", "타임라인", "순서 단계 3~6개(라벨·제목·설명)", "adaptive", "AdaptiveSlide"),
+    createTemplateEntry(AdaptiveSlide, TwoColumnSpecSchema, "two-column", "2단 구성", "좌측 텍스트/불릿 + 우측 이미지", "adaptive", "AdaptiveSlide"),
 ];
 
 // TODO: Step 4: Combine all templates into a single array For UseCases (like the ones below)

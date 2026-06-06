@@ -48,6 +48,30 @@ ARCHETYPE_PROFILES = {
         "list_items": 4,
         "desc": "closing slide — title, optional subtitle, optional 1-4 call-to-action / contact items",
     },
+    "card-grid": {
+        "kind": "grid",
+        "text_chars": 900,
+        "list_items": 8,
+        "desc": "equal-weight parallel items — title + 3-8 cards (each: short title, ~1 sentence, optional icon)",
+    },
+    "comparison": {
+        "kind": "comparison",
+        "text_chars": 700,
+        "list_items": 12,
+        "desc": "vs / before-after / option tiers — title + 2-3 columns, each a heading + 1-6 short check items",
+    },
+    "timeline": {
+        "kind": "sequence",
+        "text_chars": 700,
+        "list_items": 6,
+        "desc": "ordered steps/phases — title + 3-6 steps (each: short label, title, ~1 sentence)",
+    },
+    "two-column": {
+        "kind": "split",
+        "text_chars": 600,
+        "list_items": 6,
+        "desc": "narrative + visual — title, optional lead, 2-6 bullets on the left, one supporting image on the right",
+    },
 }
 
 ALLOWED_ARCHETYPES = list(ARCHETYPE_PROFILES.keys())

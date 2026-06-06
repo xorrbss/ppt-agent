@@ -1,6 +1,36 @@
 from typing import Annotated, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+
+# Asset markers — the composer fills the *_prompt/_query (description) and leaves
+# *_url empty; process_slide_and_fetch_assets fills the URL afterwards. Pydantic
+# field names can't be dunders, so the magic keys are aliases (populate_by_name
+# lets the LLM emit the alias form). spec_to_blocks re-emits the dunder dict.
+class IconRef(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    icon_url: str = Field(default="", alias="__icon_url__")
+    icon_query: str = Field(default="", alias="__icon_query__", max_length=60)
+
+
+class ImageRef(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    image_url: str = Field(default="", alias="__image_url__")
+    image_prompt: str = Field(default="", alias="__image_prompt__", max_length=300)
+    alt: Optional[str] = Field(default=None, max_length=120)
+
+
+def _icon_dict(icon: Optional[IconRef]) -> Optional[dict]:
+    if not icon:
+        return None
+    return {"__icon_url__": icon.icon_url, "__icon_query__": icon.icon_query}
+
+
+def _image_dict(image: ImageRef) -> dict:
+    d = {"__image_url__": image.image_url, "__image_prompt__": image.image_prompt}
+    if image.alt:
+        d["alt"] = image.alt
+    return d
 
 # Per-archetype composer output: named slots / bounded homogeneous arrays.
 # Phase 3 ships 3 text-only archetypes. Capacity is DECLARED in
@@ -73,6 +103,53 @@ class ClosingSpec(BaseModel):
     speaker_note: str = Field(default="", max_length=500)
 
 
+class CardItem(BaseModel):
+    title: str = Field(max_length=40)
+    text: str = Field(max_length=140)
+    icon: Optional[IconRef] = None
+
+
+class CardGridSpec(BaseModel):
+    archetype: Literal["card-grid"]
+    title: str = Field(max_length=80)
+    cards: List[CardItem] = Field(min_length=3, max_length=8)
+    speaker_note: str = Field(default="", max_length=500)
+
+
+class ComparisonColumn(BaseModel):
+    heading: str = Field(max_length=40)
+    items: List[str] = Field(min_length=1, max_length=6)
+
+
+class ComparisonSpec(BaseModel):
+    archetype: Literal["comparison"]
+    title: str = Field(max_length=80)
+    columns: List[ComparisonColumn] = Field(min_length=2, max_length=3)
+    speaker_note: str = Field(default="", max_length=500)
+
+
+class TimelineStep(BaseModel):
+    label: str = Field(max_length=20)
+    title: str = Field(max_length=40)
+    text: str = Field(max_length=120)
+
+
+class TimelineSpec(BaseModel):
+    archetype: Literal["timeline"]
+    title: str = Field(max_length=80)
+    steps: List[TimelineStep] = Field(min_length=3, max_length=6)
+    speaker_note: str = Field(default="", max_length=500)
+
+
+class TwoColumnSpec(BaseModel):
+    archetype: Literal["two-column"]
+    title: str = Field(max_length=80)
+    lead: Optional[str] = Field(default=None, max_length=300)
+    bullets: List[BulletItem] = Field(min_length=2, max_length=6)
+    image: ImageRef
+    speaker_note: str = Field(default="", max_length=500)
+
+
 SlideSpecUnion = Annotated[
     Union[
         CoverSpec,
@@ -82,6 +159,10 @@ SlideSpecUnion = Annotated[
         BigStatementSpec,
         AgendaSpec,
         ClosingSpec,
+        CardGridSpec,
+        ComparisonSpec,
+        TimelineSpec,
+        TwoColumnSpec,
     ],
     Field(discriminator="archetype"),
 ]
@@ -156,4 +237,40 @@ def spec_to_blocks(spec) -> dict:
                     {"id": f"c{i + 1}", "text": it.text} for i, it in enumerate(spec.items)
                 ],
             })
+    elif a == "card-grid":
+        blocks.append({"id": "title", "type": "title", "text": spec.title})
+        for i, c in enumerate(spec.cards):
+            blk = {"id": f"card{i + 1}", "type": "card", "title": c.title, "text": c.text}
+            icon = _icon_dict(c.icon)
+            if icon:
+                blk["icon"] = icon
+            blocks.append(blk)
+    elif a == "comparison":
+        blocks.append({"id": "title", "type": "title", "text": spec.title})
+        for ci, col in enumerate(spec.columns):
+            blocks.append({
+                "id": f"col{ci + 1}",
+                "type": "column",
+                "heading": col.heading,
+                "items": [
+                    {"id": f"col{ci + 1}.{j + 1}", "text": it}
+                    for j, it in enumerate(col.items)
+                ],
+            })
+    elif a == "timeline":
+        blocks.append({"id": "title", "type": "title", "text": spec.title})
+        for i, st in enumerate(spec.steps):
+            blocks.append({
+                "id": f"step{i + 1}", "type": "step",
+                "label": st.label, "title": st.title, "text": st.text,
+            })
+    elif a == "two-column":
+        blocks.append({"id": "title", "type": "title", "text": spec.title})
+        if spec.lead:
+            blocks.append({"id": "lead", "type": "text", "text": spec.lead})
+        blocks.append({
+            "id": "bullets", "type": "bullets",
+            "items": [{"id": f"b{i + 1}", "text": it.text} for i, it in enumerate(spec.bullets)],
+        })
+        blocks.append({"id": "image", "type": "image", "image": _image_dict(spec.image)})
     return {"archetype": a, "blocks": blocks}

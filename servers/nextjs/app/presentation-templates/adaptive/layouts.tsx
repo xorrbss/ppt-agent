@@ -6,6 +6,8 @@ import {
   AnyBlock,
   BLOCK_GAP,
   BORDER,
+  IconLeaf,
+  ImageLeaf,
   MUTED_COLOR,
   PRIMARY,
   QuoteLeaf,
@@ -19,6 +21,8 @@ import {
   first,
   headingStyle,
 } from "./parts";
+
+const ON_PRIMARY = "var(--primary-text, #ffffff)";
 
 // One layout component per archetype. Each reads its blocks by type and emits
 // clean DOM leaves with data-block-id. Dispatched by AdaptiveSlide on archetype.
@@ -239,6 +243,184 @@ export const ClosingLayout: React.FC<{ blocks: AnyBlock[] }> = ({ blocks }) => {
           ))}
         </ul>
       )}
+    </div>
+  );
+};
+
+export const CardGridLayout: React.FC<{ blocks: AnyBlock[] }> = ({ blocks }) => {
+  const title = first(blocks, "title");
+  const cards = byType(blocks, "card");
+  const n = cards.length;
+  const cols = n <= 3 ? Math.max(n, 1) : n <= 6 ? 3 : 4;
+  return (
+    <div className="h-full w-full flex flex-col justify-center" style={{ gap: SECTION_GAP }}>
+      {title && (
+        <h1 data-block-id={title.id} style={headingStyle("var(--fs-h1, 3rem)")}>
+          {title.text}
+        </h1>
+      )}
+      <div className="grid" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap: BLOCK_GAP }}>
+        {cards.map((c) => (
+          <div
+            key={c.id}
+            className="flex flex-col gap-3 p-6"
+            style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: RADIUS_LG, boxShadow: SHADOW_MD }}
+          >
+            {c.icon && <IconLeaf icon={c.icon} color={PRIMARY} className="w-8 h-8" />}
+            <h3 data-block-id={`${c.id}.title`} style={{ ...headingStyle("var(--fs-h4, 1.375rem)"), fontWeight: 600 }}>
+              {c.title}
+            </h3>
+            <p data-block-id={`${c.id}.text`} style={{ color: MUTED_COLOR, fontSize: "var(--fs-body, 1.125rem)", lineHeight: "var(--lh-body, 1.55)" }}>
+              {c.text}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export const ComparisonLayout: React.FC<{ blocks: AnyBlock[] }> = ({ blocks }) => {
+  const title = first(blocks, "title");
+  const cols = byType(blocks, "column");
+  return (
+    <div className="h-full w-full flex flex-col justify-center" style={{ gap: SECTION_GAP }}>
+      {title && (
+        <h1 data-block-id={title.id} style={headingStyle("var(--fs-h1, 3rem)")}>
+          {title.text}
+        </h1>
+      )}
+      <div className="grid flex-1 min-h-0" style={{ gridTemplateColumns: `repeat(${Math.max(cols.length, 1)}, minmax(0, 1fr))`, gap: BLOCK_GAP }}>
+        {cols.map((col) => {
+          const items: AnyBlock[] = Array.isArray(col.items) ? col.items : [];
+          return (
+            <div
+              key={col.id}
+              className="flex flex-col"
+              style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: RADIUS_LG, overflow: "hidden" }}
+            >
+              <div
+                data-block-id={`${col.id}.heading`}
+                className="px-6 py-4 font-bold"
+                style={{ background: PRIMARY, color: ON_PRIMARY, fontSize: "var(--fs-h4, 1.375rem)" }}
+              >
+                {col.heading}
+              </div>
+              <ul className="flex flex-col gap-3 p-6">
+                {items.map((it) => (
+                  <li key={it.id} data-block-id={it.id} className="flex items-start gap-3" style={{ color: TEXT_COLOR, fontSize: "var(--fs-body, 1.125rem)" }}>
+                    <span className="shrink-0 font-bold" style={{ color: PRIMARY }}>
+                      ✓
+                    </span>
+                    <span>{it.text}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const StepBadge: React.FC<{ n: number }> = ({ n }) => (
+  <span
+    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-bold"
+    style={{ background: PRIMARY, color: ON_PRIMARY, fontSize: "var(--fs-small, 0.95rem)" }}
+  >
+    {n}
+  </span>
+);
+
+export const TimelineLayout: React.FC<{ blocks: AnyBlock[] }> = ({ blocks }) => {
+  const title = first(blocks, "title");
+  const steps = byType(blocks, "step");
+  const horizontal = steps.length <= 4;
+  return (
+    <div className="h-full w-full flex flex-col justify-center" style={{ gap: SECTION_GAP }}>
+      {title && (
+        <h1 data-block-id={title.id} style={headingStyle("var(--fs-h1, 3rem)")}>
+          {title.text}
+        </h1>
+      )}
+      {horizontal ? (
+        <div className="grid" style={{ gridTemplateColumns: `repeat(${Math.max(steps.length, 1)}, minmax(0, 1fr))`, gap: BLOCK_GAP }}>
+          {steps.map((st, i) => (
+            <div key={st.id} className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <StepBadge n={i + 1} />
+                {i < steps.length - 1 && <span className="h-0.5 flex-1" style={{ background: BORDER }} />}
+              </div>
+              <span data-block-id={`${st.id}.label`} className="font-semibold" style={{ color: ACCENT, fontSize: "var(--fs-small, 0.95rem)" }}>
+                {st.label}
+              </span>
+              <h3 data-block-id={`${st.id}.title`} style={{ ...headingStyle("var(--fs-h4, 1.375rem)"), fontWeight: 600 }}>
+                {st.title}
+              </h3>
+              <p data-block-id={`${st.id}.text`} style={{ color: MUTED_COLOR, fontSize: "var(--fs-body, 1.125rem)" }}>
+                {st.text}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <ol className="flex flex-col" style={{ gap: BLOCK_GAP }}>
+          {steps.map((st, i) => (
+            <li key={st.id} className="flex items-start gap-4">
+              <StepBadge n={i + 1} />
+              <div className="flex flex-col gap-1">
+                <span data-block-id={`${st.id}.label`} className="font-semibold" style={{ color: ACCENT, fontSize: "var(--fs-small, 0.95rem)" }}>
+                  {st.label}
+                </span>
+                <h3 data-block-id={`${st.id}.title`} className="text-2xl font-semibold" style={{ color: TEXT_COLOR }}>
+                  {st.title}
+                </h3>
+                <p data-block-id={`${st.id}.text`} style={{ color: MUTED_COLOR, fontSize: "var(--fs-body, 1.125rem)" }}>
+                  {st.text}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+};
+
+export const TwoColumnLayout: React.FC<{ blocks: AnyBlock[] }> = ({ blocks }) => {
+  const title = first(blocks, "title");
+  const lead = first(blocks, "text");
+  const bullets = first(blocks, "bullets");
+  const image = first(blocks, "image");
+  const items: AnyBlock[] = bullets && Array.isArray(bullets.items) ? bullets.items : [];
+  return (
+    <div className="h-full w-full flex flex-col" style={{ gap: SECTION_GAP }}>
+      {title && (
+        <h1 data-block-id={title.id} style={headingStyle("var(--fs-h1, 3rem)")}>
+          {title.text}
+        </h1>
+      )}
+      <div className="grid flex-1 min-h-0 items-center" style={{ gridTemplateColumns: "1fr 1fr", gap: SECTION_GAP }}>
+        <div className="flex flex-col" style={{ gap: BLOCK_GAP }}>
+          {lead && (
+            <p data-block-id={lead.id} className="text-xl leading-relaxed" style={{ color: MUTED_COLOR }}>
+              {lead.text}
+            </p>
+          )}
+          <ul className="flex flex-col" style={{ gap: BLOCK_GAP }}>
+            {items.map((it) => (
+              <li key={it.id} data-block-id={it.id} className="flex items-start gap-3 text-xl leading-snug" style={{ color: TEXT_COLOR }}>
+                <span className="mt-2.5 h-2 w-2 shrink-0 rounded-full" style={{ background: PRIMARY }} />
+                <span>{it.text}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        {image && (
+          <ImageLeaf block={image} className="h-full w-full" style={{ borderRadius: RADIUS_LG, maxHeight: "460px" }} />
+        )}
+      </div>
     </div>
   );
 };
