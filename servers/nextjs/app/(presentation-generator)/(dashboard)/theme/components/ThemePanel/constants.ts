@@ -63,7 +63,8 @@ export const DEFAULT_THEMES: any[] = [
           name: "Inter",
           url: "https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap"
         }
-      }
+      },
+      density: "spacious"
     }
   },
   {
@@ -211,7 +212,8 @@ export const DEFAULT_THEMES: any[] = [
           name: "Space Grotesk",
           url: "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap"
         }
-      }
+      },
+      density: "compact"
     }
   }
 ]

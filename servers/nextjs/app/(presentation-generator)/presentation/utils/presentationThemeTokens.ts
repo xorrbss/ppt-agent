@@ -15,6 +15,15 @@ export function deriveThemeTokens(theme: Theme | null | undefined): Record<strin
   const secondary = c["graph_1"] || primary;
   const accent = c["graph_2"] || c["graph_1"] || primary;
 
+  // Tone & manner density (v2). v1 themes carry no `density` → "comfortable" =
+  // the current look (unchanged). Only the spacing tokens vary by density.
+  const SPACING: Record<string, { padX: number; padY: number; section: number; block: number; inline: number }> = {
+    compact: { padX: 56, padY: 44, section: 22, block: 14, inline: 10 },
+    comfortable: { padX: 80, padY: 64, section: 32, block: 20, inline: 12 },
+    spacious: { padX: 112, padY: 84, section: 44, block: 28, inline: 16 },
+  };
+  const sp = SPACING[((theme?.data as any)?.density as string) ?? ""] ?? SPACING.comfortable;
+
   return {
     // extended colour roles (light/dark-adaptive via color-mix)
     "--secondary-color": secondary,
@@ -43,12 +52,12 @@ export function deriveThemeTokens(theme: Theme | null | undefined): Record<strin
     "--lh-heading": "1.15",
     "--lh-body": "1.55",
     "--ls-heading": "-0.01em",
-    // spacing / density
-    "--slide-pad-x": "80px",
-    "--slide-pad-y": "64px",
-    "--section-gap": "32px",
-    "--block-gap": "20px",
-    "--inline-gap": "12px",
+    // spacing / density (driven by theme.data.density; default = comfortable)
+    "--slide-pad-x": `${sp.padX}px`,
+    "--slide-pad-y": `${sp.padY}px`,
+    "--section-gap": `${sp.section}px`,
+    "--block-gap": `${sp.block}px`,
+    "--inline-gap": `${sp.inline}px`,
     // shape
     "--radius-sm": "6px",
     "--radius-md": "12px",

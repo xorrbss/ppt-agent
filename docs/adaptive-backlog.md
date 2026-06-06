@@ -76,13 +76,18 @@ done (kept coexistence + user choice).
         readability); professional-blue / professional-dark = Space Grotesk
         heading. Verified: v2-theme deck renders heading=Playfair ≠ body=Inter
         (both fonts loaded, canvas=0); legacy v1 deck unchanged.
-  - [~] **v2 theme generation** (per-theme nested typography scale / spacing /
-        shape / motif via `theme_data.py` + `theme_generate.py`) — the font-pair
-        part of v2 is done (above). The rest is DEFERRED as YAGNI: `theme_generate`
-        is colors-only by design (fonts/typography are frontend defaults), and
-        `deriveThemeTokens` already provides good typography/spacing/shape defaults
-        that work across themes. If richer per-theme typography is wanted later, do
-        it additive+versioned (keep flat colors; add nested fields; normalizeTheme).
+  - [x] **v2 per-theme density** — DONE. `deriveThemeTokens` reads optional
+        `theme.data.density` (compact / comfortable / spacious) → drives the
+        spacing tokens (slide-pad, section/block/inline gap). v1 themes carry no
+        `density` → "comfortable" = the current look (unchanged, legacy-safe).
+        Default themes: editorial = spacious, professional-dark = compact, rest
+        comfortable. Verified: spacious deck renders pad-x 112 / section-gap 44
+        (vs 80/32), canvas=0; v1 deck unchanged. With the font-pair (above), v2
+        themes now vary color + fonts + density.
+  - [ ] **v2 per-theme typography scale / shape** — DEFERRED YAGNI: `theme_generate`
+        is colors-only by design; `deriveThemeTokens` defaults for fs-scale / radius
+        / shadow work across themes. Add additive+versioned if richer per-theme
+        typography is wanted.
   - [ ] tailwind token binding — **YAGNI** (the adaptive renderer already uses
         inline `var(--…)` tokens; tailwind class binding adds no behavior).
   - [ ] tailwind token binding — **YAGNI** (the adaptive renderer already uses
