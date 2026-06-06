@@ -38,6 +38,8 @@ from services.mem0_presentation_memory_service import (
 from utils.dict_utils import deep_update
 from utils.export_utils import export_presentation
 from utils.layout_capacity import apply_capacity_fit
+from utils.llm_calls.compose_slides import compose_slides
+from models.slide_spec_model import spec_to_blocks, archetype_to_layout_id
 from utils.llm_calls.generate_content_brief import generate_content_brief
 from utils.llm_calls.generate_presentation_outlines import (
     generate_ppt_outline,
@@ -309,52 +311,77 @@ async def prepare_presentation(
     total_slide_layouts = len(layout.slides)
     total_outlines = len(outlines)
 
-    if layout.ordered:
-        presentation_structure = layout.to_presentation_structure()
+    if layout.name == "adaptive":
+        # Adaptive path: compose one SlideSpec per outline slide (archetype chosen
+        # for content + variety). Persist the composition to deck_plan and project
+        # to outlines/structure so /stream + editor read it unchanged.
+        composition = await compose_slides(
+            presentation_outline_model,
+            language=presentation.language,
+            tone=presentation.tone,
+            verbosity=presentation.verbosity,
+            instructions=presentation.instructions,
+        )
+        presentation.set_deck_plan(composition)
+        proj_outlines: List[SlideOutlineModel] = []
+        proj_indices: List[int] = []
+        for spec in composition.slides:
+            proj_outlines.append(
+                SlideOutlineModel(content=json.dumps(spec_to_blocks(spec), ensure_ascii=False))
+            )
+            proj_indices.append(
+                layout.get_slide_layout_index(archetype_to_layout_id(spec.archetype))
+            )
+        presentation_outline_model = PresentationOutlineModel(slides=proj_outlines)
+        presentation_structure = PresentationStructureModel(slides=proj_indices)
+        presentation.n_slides = len(proj_indices)
     else:
-        presentation_structure: PresentationStructureModel = (
-            await generate_presentation_structure(
-                presentation_outline=presentation_outline_model,
-                presentation_layout=layout,
-                instructions=presentation.instructions,
+        if layout.ordered:
+            presentation_structure = layout.to_presentation_structure()
+        else:
+            presentation_structure: PresentationStructureModel = (
+                await generate_presentation_structure(
+                    presentation_outline=presentation_outline_model,
+                    presentation_layout=layout,
+                    instructions=presentation.instructions,
+                )
             )
-        )
 
-    presentation_structure.slides = presentation_structure.slides[: len(outlines)]
-    for index in range(total_outlines):
-        random_slide_index = random.randint(0, total_slide_layouts - 1)
-        if index >= total_outlines:
-            presentation_structure.slides.append(random_slide_index)
-            continue
-        if presentation_structure.slides[index] >= total_slide_layouts:
-            presentation_structure.slides[index] = random_slide_index
+        presentation_structure.slides = presentation_structure.slides[: len(outlines)]
+        for index in range(total_outlines):
+            random_slide_index = random.randint(0, total_slide_layouts - 1)
+            if index >= total_outlines:
+                presentation_structure.slides.append(random_slide_index)
+                continue
+            if presentation_structure.slides[index] >= total_slide_layouts:
+                presentation_structure.slides[index] = random_slide_index
 
-    if presentation.include_table_of_contents:
-        n_toc_slides = get_no_of_toc_required_for_n_outlines(
-            n_outlines=total_outlines,
-            title_slide=presentation.include_title_slide,
-            target_total_slides=(presentation.n_slides if presentation.n_slides > 0 else None),
-        )
-        toc_slide_layout_index = select_toc_or_list_slide_layout_index(layout)
-        _insert_toc_layouts(
-            presentation_structure,
-            n_toc_slides,
-            presentation.include_title_slide,
-            toc_slide_layout_index,
-        )
-        if toc_slide_layout_index != -1 and n_toc_slides > 0:
-            presentation_outline_model = get_presentation_outline_model_with_toc(
-                outline=presentation_outline_model,
-                n_toc_slides=n_toc_slides,
+        if presentation.include_table_of_contents:
+            n_toc_slides = get_no_of_toc_required_for_n_outlines(
+                n_outlines=total_outlines,
                 title_slide=presentation.include_title_slide,
+                target_total_slides=(presentation.n_slides if presentation.n_slides > 0 else None),
             )
+            toc_slide_layout_index = select_toc_or_list_slide_layout_index(layout)
+            _insert_toc_layouts(
+                presentation_structure,
+                n_toc_slides,
+                presentation.include_title_slide,
+                toc_slide_layout_index,
+            )
+            if toc_slide_layout_index != -1 and n_toc_slides > 0:
+                presentation_outline_model = get_presentation_outline_model_with_toc(
+                    outline=presentation_outline_model,
+                    n_toc_slides=n_toc_slides,
+                    title_slide=presentation.include_title_slide,
+                )
 
-    # Content-volume-aware fitting: upgrade overflowing slides to a bigger
-    # same-kind layout, or split them. No-op for ordered templates.
-    presentation_outline_model, presentation_structure = apply_capacity_fit(
-        presentation_outline_model, presentation_structure, layout
-    )
-    presentation.n_slides = len(presentation_structure.slides)
+        # Content-volume-aware fitting: upgrade overflowing slides to a bigger
+        # same-kind layout, or split them. No-op for ordered templates.
+        presentation_outline_model, presentation_structure = apply_capacity_fit(
+            presentation_outline_model, presentation_structure, layout
+        )
+        presentation.n_slides = len(presentation_structure.slides)
 
     sql_session.add(presentation)
     presentation.outlines = presentation_outline_model.model_dump(mode="json")
@@ -396,6 +423,7 @@ async def stream_presentation(
         layout = presentation.get_layout()
         icon_weight = layout.icon_weight
         outline = presentation.get_presentation_outline()
+        deck_plan = presentation.get_deck_plan()
         image_urls_for_slides = get_images_for_slides_from_outline(outline.slides)
 
         async_assets_generation_tasks: List[asyncio.Task] = []
@@ -416,14 +444,21 @@ async def stream_presentation(
             slide_layout = layout.slides[slide_layout_index]
 
             try:
-                slide_content = await get_slide_content_from_type_and_outline(
-                    slide_layout,
-                    outline.slides[i],
-                    presentation.language,
-                    presentation.tone,
-                    presentation.verbosity,
-                    presentation.instructions,
-                )
+                if layout.name == "adaptive" and deck_plan and i < len(deck_plan.slides):
+                    # Adaptive: use the persisted SlideSpec directly (no LLM call).
+                    spec = deck_plan.slides[i]
+                    slide_content = spec_to_blocks(spec)
+                    slide_speaker_note = spec.speaker_note or ""
+                else:
+                    slide_content = await get_slide_content_from_type_and_outline(
+                        slide_layout,
+                        outline.slides[i],
+                        presentation.language,
+                        presentation.tone,
+                        presentation.verbosity,
+                        presentation.instructions,
+                    )
+                    slide_speaker_note = slide_content.get("__speaker_note__", "")
             except HTTPException as e:
                 yield SSEErrorResponse(detail=e.detail).to_string()
                 return
@@ -433,7 +468,7 @@ async def stream_presentation(
                 layout_group=layout.name,
                 layout=slide_layout.id,
                 index=i,
-                speaker_note=slide_content.get("__speaker_note__", ""),
+                speaker_note=slide_speaker_note,
                 content=slide_content,
             )
             slides.append(slide)
