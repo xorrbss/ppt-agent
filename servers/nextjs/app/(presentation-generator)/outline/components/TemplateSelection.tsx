@@ -6,7 +6,6 @@ import { templates } from "@/app/presentation-templates";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { CustomTemplates, useCustomTemplateSummaries } from "@/app/hooks/useCustomTemplates";
-import { Loader2 } from "lucide-react";
 
 import CreateCustomTemplate from "../../(dashboard)/templates/components/CreateCustomTemplate";
 import { CustomTemplateCard } from "./CustomTemplateCard";
@@ -98,35 +97,23 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = memo(function Templa
     [selectedTemplate]
   );
 
-  const customTemplateCards = useMemo(() => {
-    if (customLoading) {
-      return (
-        <div className="flex items-center justify-center py-12 font-syne">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-          <span className="ml-3 text-gray-600">사용자 정의 템플릿을 불러오는 중…</span>
-        </div>
-      );
-    }
-    if (customTemplates.length === 0) {
-      return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          <CreateCustomTemplate />
-        </div>
-      );
-    }
-    return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {customTemplates.map((template: CustomTemplates) => (
-          <CustomTemplateCard
-            key={template.id}
-            template={template}
-            onSelectTemplate={handleCustomSelect}
-            selectedTemplate={selectedCustomId}
-          />
-        ))}
-      </div>
-    );
-  }, [customLoading, customTemplates, handleCustomSelect, selectedCustomId]);
+  // Custom template cards as a flat list so they can flow inline in the unified
+  // grid (after the "create" card, before the built-in templates). Empty while
+  // loading — built-in templates and the create card render immediately.
+  const customTemplateCards = useMemo(
+    () =>
+      customLoading
+        ? []
+        : customTemplates.map((template: CustomTemplates) => (
+            <CustomTemplateCard
+              key={template.id}
+              template={template}
+              onSelectTemplate={handleCustomSelect}
+              selectedTemplate={selectedCustomId}
+            />
+          )),
+    [customLoading, customTemplates, handleCustomSelect, selectedCustomId]
+  );
 
   const builtInTemplateCards = useMemo(
     () =>
@@ -142,18 +129,12 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = memo(function Templa
   );
 
   return (
-    <div className="space-y-[30px] mb-4">
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-base font-semibold text-gray-900 font-syne">사용자 정의</h3>
-        </div>
+    <div className="mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {/* Create-custom-template card first, then custom templates, then built-ins */}
+        <CreateCustomTemplate />
         {customTemplateCards}
-      </div>
-      <div>
-        <h3 className="text-base font-semibold text-gray-900 mb-3 font-syne">기본 제공</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {builtInTemplateCards}
-        </div>
+        {builtInTemplateCards}
       </div>
     </div>
   );

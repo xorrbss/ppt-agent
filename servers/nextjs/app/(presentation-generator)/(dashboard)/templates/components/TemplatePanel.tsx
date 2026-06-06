@@ -1,8 +1,8 @@
 "use client";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
-import { ArrowUpRight, ChevronRight, Loader2 } from "lucide-react";
+import { ArrowUpRight, ChevronRight } from "lucide-react";
 import { templates } from "@/app/presentation-templates";
 import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
 import {
@@ -90,7 +90,6 @@ const InbuiltTemplateCard = React.memo(function InbuiltTemplateCard({
 });
 
 const LayoutPreview = () => {
-    const [tab, setTab] = useState<'custom' | 'default'>('default');
     const router = useRouter();
     const { templates: customTemplates, loading: customLoading } = useCustomTemplateSummaries();
 
@@ -121,8 +120,8 @@ const LayoutPreview = () => {
     }, []);
 
     const customTemplateCards = useMemo(
-        () => customTemplates.map((template: CustomTemplates) => <CustomTemplateCard key={template.id} template={template} />),
-        [customTemplates],
+        () => (customLoading ? [] : customTemplates.map((template: CustomTemplates) => <CustomTemplateCard key={template.id} template={template} />)),
+        [customLoading, customTemplates],
     );
 
     return (
@@ -153,71 +152,36 @@ const LayoutPreview = () => {
             </div>
 
             <div className="l mx-auto px-6 py-8">
-                <div className='p-1 rounded-[40px] bg-[#ffffff] w-fit border border-[#EDEEEF] flex items-center justify-center '>
-                    <button className='px-5  py-2 text-xs font-medium text-[#3A3A3A] rounded-[70px]'
-                        onClick={() => { trackEvent(MixpanelEvent.Templates_Tab_Switched, { tab: 'custom' }); setTab('custom'); }}
-                        style={{
-                            background: tab === 'custom' ? '#F4F3FF' : 'transparent',
-                            color: tab === 'custom' ? '#5146E5' : '#3A3A3A'
-                        }}
-                    >Custom</button>
-                    <svg xmlns="http://www.w3.org/2000/svg" className='mx-1' width="2" height="17" viewBox="0 0 2 17" fill="none">
-                        <path d="M1 0V16.5" stroke="#EDECEC" strokeWidth="2" />
-                    </svg>
-                    <button className='px-5  py-2 text-xs font-medium text-[#3A3A3A] rounded-[70px]'
-                        onClick={() => { trackEvent(MixpanelEvent.Templates_Tab_Switched, { tab: 'default' }); setTab('default'); }}
-                        style={{
-                            background: tab === 'default' ? '#F4F3FF' : 'transparent',
-                            color: tab === 'default' ? '#5146E5' : '#3A3A3A'
-                        }}
-                    >Built-in</button>
-                </div>
-
-                {/* Inbuilt Templates Section: non-neo first, then Report (neo) */}
-                {tab === 'default' && (
-                    <section className="my-12 space-y-12">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                            {nonNeoInbuilt.map((template) => (
-                                <InbuiltTemplateCard
-                                    key={template.id}
-                                    template={template}
-                                    onOpen={handleOpenPreview}
-                                />
-                            ))}
-                        </div>
-                        {neoInbuilt.length > 0 && (
-                            <div>
-                                <h4 className="text-base font-semibold text-[#101828] mb-6 font-syne tracking-tight">
-                                    Report
-                                </h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                                    {neoInbuilt.map((template) => (
-                                        <InbuiltTemplateCard
-                                            key={template.id}
-                                            template={template}
-                                            onOpen={handleOpenPreview}
-                                        />
-                                    ))}
-                                </div>
+                <section className="my-12 space-y-12">
+                    {/* Unified grid: create-custom card first, then custom templates, then built-in */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        <CreateCustomTemplate />
+                        {customTemplateCards}
+                        {nonNeoInbuilt.map((template) => (
+                            <InbuiltTemplateCard
+                                key={template.id}
+                                template={template}
+                                onOpen={handleOpenPreview}
+                            />
+                        ))}
+                    </div>
+                    {neoInbuilt.length > 0 && (
+                        <div>
+                            <h4 className="text-base font-semibold text-[#101828] mb-6 font-syne tracking-tight">
+                                Report
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                {neoInbuilt.map((template) => (
+                                    <InbuiltTemplateCard
+                                        key={template.id}
+                                        template={template}
+                                        onOpen={handleOpenPreview}
+                                    />
+                                ))}
                             </div>
-                        )}
-                    </section>
-                )}
-
-
-                {tab === 'custom' && <section className="my-12">
-                    {customLoading ? (
-                        <div className="flex items-center justify-center py-12">
-                            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-                            <span className="ml-3 text-gray-600">Loading custom templates...</span>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 items-center lg:grid-cols-4 gap-6">
-                            <CreateCustomTemplate />
-                            {customTemplateCards}
                         </div>
                     )}
-                </section>}
+                </section>
             </div>
         </div>
     );
