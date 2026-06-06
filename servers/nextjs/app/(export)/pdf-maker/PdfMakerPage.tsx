@@ -203,12 +203,19 @@ const PresentationPage = ({ presentation_id, exportCookie }: PresentationPagePro
     Object.entries(cssVariables).forEach(([key, value]) => {
       element.style.setProperty(key, value);
     });
-    const textFontName = theme.data.fonts.textFont.name;
-    const textFontUrl = theme.data.fonts.textFont.url;
-    useFontLoader({ [textFontName]: textFontUrl });
-    element.style.setProperty("font-family", `"${textFontName}"`);
-    element.style.setProperty("--heading-font-family", `"${textFontName}"`);
-    element.style.setProperty("--body-font-family", `"${textFontName}"`);
+    // Heading/body font split (v2 themes): optional headingFont/bodyFont; v1
+    // themes carry only textFont, so heading=body=textFont (unchanged).
+    const fonts = theme.data.fonts;
+    const headingFont = fonts.headingFont ?? fonts.textFont;
+    const bodyFont = fonts.bodyFont ?? fonts.textFont;
+    useFontLoader({
+      [fonts.textFont.name]: fonts.textFont.url,
+      [headingFont.name]: headingFont.url,
+      [bodyFont.name]: bodyFont.url,
+    });
+    element.style.setProperty("font-family", `"${bodyFont.name}"`);
+    element.style.setProperty("--heading-font-family", `"${headingFont.name}"`);
+    element.style.setProperty("--body-font-family", `"${bodyFont.name}"`);
     // Additive tone & manner tokens (consumed only by the adaptive renderer).
     applyPresentationThemeTokens(element, theme);
   };

@@ -73,19 +73,24 @@ done (kept coexistence + user choice).
         adaptive tokens), so adaptive-deck thumbnails match the editor/export
         render. Legacy base vars unchanged. (`ThemePanel` previews a legacy
         `neo-general` template, so it needs no adaptive tokens — left as-is.)
-  - [ ] **v2 theme generation** (`theme_data.py` nested + `theme_generate.py`
-        style preset) — DEFERRED. It is a sizable backend+frontend change that
-        touches the shared theme-generation path (legacy reads flat 16-color), so
-        it must be strictly additive + versioned to keep "legacy 100% unaffected";
-        marginal value over the already-good derived defaults (Phase 2). Best done
-        as a focused, workflow-designed sub-project with adversarial legacy
-        regression checks. Recommended scope when picked up: keep flat colors,
-        ADD nested typography/spacing/shape/motif/brand + a heading/body font
-        pair, versioned `normalizeTheme(v1→v2)`.
-  - [ ] **heading≠body font split** — DEFERRED, coupled to v2: the theme today
-        carries one font; picking a heading font heuristically would be a guess
-        ("가정 금지"). Do it once v2 theme data specifies the pair (adaptive-only
-        var so legacy headings are unaffected).
+  - [x] **heading≠body font split** — DONE. The apply sites
+        (`applyPresentationThemeDom.ts`, `PdfMakerPage.tsx`) now read optional
+        `fonts.headingFont` / `fonts.bodyFont` → `--heading-font-family` /
+        `--body-font-family` (v1 themes carry only `textFont`, so heading=body=
+        textFont — unchanged, legacy-safe). Curated pairs added to default themes:
+        editorial = Playfair heading + Inter body (fixes display-font body
+        readability); professional-blue / professional-dark = Space Grotesk
+        heading. Verified: v2-theme deck renders heading=Playfair ≠ body=Inter
+        (both fonts loaded, canvas=0); legacy v1 deck unchanged.
+  - [~] **v2 theme generation** (per-theme nested typography scale / spacing /
+        shape / motif via `theme_data.py` + `theme_generate.py`) — the font-pair
+        part of v2 is done (above). The rest is DEFERRED as YAGNI: `theme_generate`
+        is colors-only by design (fonts/typography are frontend defaults), and
+        `deriveThemeTokens` already provides good typography/spacing/shape defaults
+        that work across themes. If richer per-theme typography is wanted later, do
+        it additive+versioned (keep flat colors; add nested fields; normalizeTheme).
+  - [ ] tailwind token binding — **YAGNI** (the adaptive renderer already uses
+        inline `var(--…)` tokens; tailwind class binding adds no behavior).
   - [ ] tailwind token binding — **YAGNI** (the adaptive renderer already uses
         inline `var(--…)` tokens; tailwind class binding adds no behavior).
 - [x] **P6 / G8** — composer-stability acceptance metric. `utils/composer_metrics.py`
