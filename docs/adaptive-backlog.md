@@ -99,8 +99,21 @@ done (kept coexistence + user choice).
       big-statement→closing). **FINAL pass/fail thresholds are a product decision
       (escalation)** — proposed defaults in `composer_metrics.DEFAULT_THRESHOLDS`
       (schema 1.0, n_match 1.0, mean variety ≥0.6, no-adjacent-dup ≥0.9).
-- [ ] **P6 / G4** — editable-PPTX byte round-trip in Docker/Linux/CI
-      (Windows lacks `convert-win32.exe`). **External blocker — needs Docker.**
+- [~] **P6 / G4** — editable-PPTX byte round-trip. **Harness written**:
+      `scripts/check_adaptive_pptx_roundtrip.py` seeds an adaptive deck (cover /
+      stat-hero / bullets / comparison / table / chart-insight), exports it to
+      PPTX via the real runtime, reopens with python-pptx, and asserts editable
+      shapes per archetype (title text frames, ≥3 stat text boxes, bullet text,
+      comparison headings, a real PPTX table, a chart/graphic shape). It is
+      guarded on the converter binary: on Windows it **skips cleanly** (verified,
+      exit 0); the actual round-trip runs only in Docker/Linux/CI where
+      `convert-linux-x64` exists. **To run** (Docker dev stack up):
+      `RUN_PPTX_ROUNDTRIP=1 NEXT_PUBLIC_FAST_API=http://127.0.0.1:8000 \
+      APP_DATA_DIRECTORY=/app_data uv run python scripts/check_adaptive_pptx_roundtrip.py`.
+      First Docker run may need assertion tuning (the script prints a per-slide
+      shape inventory for that). Running green is the remaining **external** step
+      (needs Docker) before retiring legacy / full confidence in default-adaptive
+      PPTX export.
 - [x] **DOCS / G10** — design `§13` open questions reconciled with the build +
       G10 minors (below). Source-of-truth design docs are unchanged (frozen);
       this living doc records the implementation outcome.
