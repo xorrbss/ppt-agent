@@ -1,7 +1,12 @@
 import { Theme } from "@/app/(presentation-generator)/services/api/types";
 import { Slide } from "@/app/(presentation-generator)/types/slide";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import { setAdaptiveBlockText } from "@/lib/adaptiveBlockEdit";
+import {
+  setAdaptiveBlockText,
+  deleteAdaptiveUnit as crudDeleteUnit,
+  moveAdaptiveUnit as crudMoveUnit,
+  addAdaptiveUnit as crudAddUnit,
+} from "@/lib/adaptiveBlockEdit";
 
 export interface PresentationData {
   id: string;
@@ -213,6 +218,30 @@ const presentationGenerationSlice = createSlice({
       const { slideIndex, blockId, content } = action.payload;
       const slide = state.presentationData?.slides?.[slideIndex];
       setAdaptiveBlockText(slide?.content?.blocks, blockId, content);
+    },
+
+    // Adaptive block/item CRUD (P4b) — unitId is a top-level block id or a
+    // nested item id; helpers locate the owning array (blocks[] or items[]).
+    deleteAdaptiveUnit: (
+      state,
+      action: PayloadAction<{ slideIndex: number; unitId: string }>
+    ) => {
+      const slide = state.presentationData?.slides?.[action.payload.slideIndex];
+      crudDeleteUnit(slide?.content?.blocks, action.payload.unitId);
+    },
+    moveAdaptiveUnit: (
+      state,
+      action: PayloadAction<{ slideIndex: number; unitId: string; delta: number }>
+    ) => {
+      const slide = state.presentationData?.slides?.[action.payload.slideIndex];
+      crudMoveUnit(slide?.content?.blocks, action.payload.unitId, action.payload.delta);
+    },
+    addAdaptiveUnit: (
+      state,
+      action: PayloadAction<{ slideIndex: number; afterUnitId: string }>
+    ) => {
+      const slide = state.presentationData?.slides?.[action.payload.slideIndex];
+      crudAddUnit(slide?.content?.blocks, action.payload.afterUnitId);
     },
 
     addNewSlide: (state, action: PayloadAction<{ slideData: any; index: number }>) => {
@@ -430,6 +459,9 @@ export const {
   deletePresentationSlide,
   updateSlideContent,
   updateAdaptiveBlock,
+  deleteAdaptiveUnit,
+  moveAdaptiveUnit,
+  addAdaptiveUnit,
   updateSlideImage,
   updateImageProperties,
   updateSlideIcon,

@@ -1,7 +1,14 @@
 // Regression test for the adaptive block-id edit binding (P4 / R2).
 // Run: node lib/adaptiveBlockEdit.test.mjs   (Node >=23 strips TS types natively)
 import assert from "node:assert/strict";
-import { setAdaptiveBlockText, getAdaptiveBlockText } from "./adaptiveBlockEdit.ts";
+import {
+  setAdaptiveBlockText,
+  getAdaptiveBlockText,
+  locateUnit,
+  deleteAdaptiveUnit,
+  moveAdaptiveUnit,
+  addAdaptiveUnit,
+} from "./adaptiveBlockEdit.ts";
 
 const deck = () => ({
   archetype: "x",
@@ -79,6 +86,74 @@ check("unknown id is a safe no-op", () => {
   assert.equal(setAdaptiveBlockText(d.blocks, "nope", "x"), false);
   assert.equal(getAdaptiveBlockText(d, "nope"), undefined);
   assert.equal(setAdaptiveBlockText(undefined, "title", "x"), false);
+});
+
+// --- P4b CRUD --- //
+
+check("locateUnit finds top-level block and nested item", () => {
+  const d = deck();
+  assert.equal(locateUnit(d.blocks, "s1").array, d.blocks); // top-level
+  assert.equal(locateUnit(d.blocks, "b1").array, d.blocks[1].items); // nested item
+  assert.equal(locateUnit(d.blocks, "nope"), null);
+});
+
+check("deleteAdaptiveUnit removes a nested item only", () => {
+  const d = deck();
+  assert.equal(deleteAdaptiveUnit(d.blocks, "b2"), true);
+  assert.equal(d.blocks[1].items.length, 1);
+  assert.equal(d.blocks[1].items[0].id, "b1");
+});
+
+check("deleteAdaptiveUnit removes a top-level block (stat)", () => {
+  const d = deck();
+  const before = d.blocks.length;
+  assert.equal(deleteAdaptiveUnit(d.blocks, "s2"), true);
+  assert.equal(d.blocks.length, before - 1);
+  assert.ok(!d.blocks.some((b) => b.id === "s2"));
+});
+
+check("deleteAdaptiveUnit keeps the last sibling in an array", () => {
+  const d = { blocks: [{ id: "bl", type: "bullets", items: [{ id: "x1", text: "only" }] }] };
+  assert.equal(deleteAdaptiveUnit(d.blocks, "x1"), false);
+  assert.equal(d.blocks[0].items.length, 1);
+});
+
+check("moveAdaptiveUnit swaps within items[] and within blocks[]", () => {
+  const d = deck();
+  assert.equal(moveAdaptiveUnit(d.blocks, "b1", 1), true);
+  assert.equal(d.blocks[1].items.map((i) => i.id).join(","), "b2,b1");
+  const s1Idx = d.blocks.findIndex((b) => b.id === "s1");
+  assert.equal(moveAdaptiveUnit(d.blocks, "s1", 1), true);
+  assert.equal(d.blocks[s1Idx].id, "s2"); // s1 moved past s2
+  assert.equal(moveAdaptiveUnit(d.blocks, "title", -1), false); // out of bounds
+});
+
+check("addAdaptiveUnit inserts a blank sibling with a fresh unique id", () => {
+  const d = deck();
+  const id = addAdaptiveUnit(d.blocks, "b1");
+  assert.ok(id && id !== "b1" && id !== "b2");
+  const items = d.blocks[1].items;
+  assert.equal(items.length, 3);
+  assert.equal(items[1].id, id); // inserted after b1
+  assert.equal(items[1].text, ""); // blank
+});
+
+check("addAdaptiveUnit clones a card shape blank (type kept, fields blank, no icon)", () => {
+  const d = { blocks: [{ id: "card1", type: "card", title: "T", text: "X", icon: { __icon_url__: "u", __icon_query__: "q" } }] };
+  const id = addAdaptiveUnit(d.blocks, "card1");
+  const nu = d.blocks[1];
+  assert.equal(nu.id, id);
+  assert.equal(nu.type, "card");
+  assert.equal(nu.title, "");
+  assert.equal(nu.text, "");
+  assert.ok(!("icon" in nu)); // object field dropped
+});
+
+check("CRUD on unknown id is a safe no-op", () => {
+  const d = deck();
+  assert.equal(deleteAdaptiveUnit(d.blocks, "nope"), false);
+  assert.equal(moveAdaptiveUnit(d.blocks, "nope", 1), false);
+  assert.equal(addAdaptiveUnit(d.blocks, "nope"), null);
 });
 
 console.log(`\n${passed} checks passed`);
