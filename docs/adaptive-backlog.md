@@ -71,8 +71,18 @@ preserved). Design authority: `adaptive-layout-design.md` +
         var so legacy headings are unaffected).
   - [ ] tailwind token binding — **YAGNI** (the adaptive renderer already uses
         inline `var(--…)` tokens; tailwind class binding adds no behavior).
-- [ ] **P6 / G8** — composer-stability acceptance metric (schema-valid · variety ·
-      n_slides) + thresholds.
+- [x] **P6 / G8** — composer-stability acceptance metric. `utils/composer_metrics.py`
+      (`evaluate_archetypes` / `summarize` / `passes` + proposed thresholds) with a
+      CI unit test (`tests/unit/test_composer_metrics.py`, 6 passing) and a real-codex
+      harness (`scripts/measure_composer_stability.py`). **Measured (6 decks = 2
+      varied golden outlines × 3 reps, live Codex gpt-5.5):** schema-valid 100% ·
+      n_slides match 100% · mean variety-ratio 0.95 · no-adjacent-dup rate 100% ·
+      total adjacent dups 0 → PASSES the proposed thresholds with margin. Deck 1
+      composed an identical 9-distinct archetype sequence across all 3 reps
+      (cover→agenda→stat-hero→timeline→comparison→card-grid→chart-insight→
+      big-statement→closing). **FINAL pass/fail thresholds are a product decision
+      (escalation)** — proposed defaults in `composer_metrics.DEFAULT_THRESHOLDS`
+      (schema 1.0, n_match 1.0, mean variety ≥0.6, no-adjacent-dup ≥0.9).
 - [ ] **P6 / G4** — editable-PPTX byte round-trip in Docker/Linux/CI
       (Windows lacks `convert-win32.exe`). **External blocker — needs Docker.**
 - [ ] **DOCS / G10** — chart/table fidelity notes; one-shot adaptive skips TOC
