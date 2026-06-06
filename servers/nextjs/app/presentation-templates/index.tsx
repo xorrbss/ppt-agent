@@ -92,12 +92,15 @@ import {
   AgendaSpecSchema,
   BigStatementSpecSchema,
   CardGridSpecSchema,
+  ChartInsightSpecSchema,
   ClosingSpecSchema,
   ComparisonSpecSchema,
   CoverSpecSchema,
+  ImageLedSpecSchema,
   OneColumnBulletsSpecSchema,
   SectionDividerSpecSchema,
   StatHeroSpecSchema,
+  TableSpecSchema,
   TimelineSpecSchema,
   TwoColumnSpecSchema,
 } from "./adaptive/spec";
@@ -579,6 +582,9 @@ export const adaptiveTemplates: TemplateWithData[] = [
     createTemplateEntry(AdaptiveSlide, ComparisonSpecSchema, "comparison", "비교", "2~3개 열 비교(헤딩·체크 항목)", "adaptive", "AdaptiveSlide"),
     createTemplateEntry(AdaptiveSlide, TimelineSpecSchema, "timeline", "타임라인", "순서 단계 3~6개(라벨·제목·설명)", "adaptive", "AdaptiveSlide"),
     createTemplateEntry(AdaptiveSlide, TwoColumnSpecSchema, "two-column", "2단 구성", "좌측 텍스트/불릿 + 우측 이미지", "adaptive", "AdaptiveSlide"),
+    createTemplateEntry(AdaptiveSlide, ImageLedSpecSchema, "image-led", "이미지 중심", "큰 이미지 + 제목·캡션", "adaptive", "AdaptiveSlide"),
+    createTemplateEntry(AdaptiveSlide, ChartInsightSpecSchema, "chart-insight", "차트 인사이트", "차트 + 핵심 시사점 불릿", "adaptive", "AdaptiveSlide"),
+    createTemplateEntry(AdaptiveSlide, TableSpecSchema, "table", "표", "제목 + 표(헤더·행)", "adaptive", "AdaptiveSlide"),
 ];
 
 // TODO: Step 4: Combine all templates into a single array For UseCases (like the ones below)

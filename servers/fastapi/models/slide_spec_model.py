@@ -150,6 +150,36 @@ class TwoColumnSpec(BaseModel):
     speaker_note: str = Field(default="", max_length=500)
 
 
+class ImageLedSpec(BaseModel):
+    archetype: Literal["image-led"]
+    image: ImageRef
+    title: Optional[str] = Field(default=None, max_length=80)
+    caption: Optional[str] = Field(default=None, max_length=180)
+    speaker_note: str = Field(default="", max_length=500)
+
+
+class ChartPoint(BaseModel):
+    name: str = Field(max_length=24)
+    value: float
+
+
+class ChartInsightSpec(BaseModel):
+    archetype: Literal["chart-insight"]
+    title: str = Field(max_length=80)
+    chart_type: Literal["bar", "line", "area", "pie", "donut"] = "bar"
+    data: List[ChartPoint] = Field(min_length=2, max_length=8)
+    takeaways: List[BulletItem] = Field(min_length=1, max_length=3)
+    speaker_note: str = Field(default="", max_length=500)
+
+
+class TableSpec(BaseModel):
+    archetype: Literal["table"]
+    title: str = Field(max_length=80)
+    headers: List[str] = Field(min_length=2, max_length=6)
+    rows: List[List[str]] = Field(min_length=1, max_length=8)
+    speaker_note: str = Field(default="", max_length=500)
+
+
 SlideSpecUnion = Annotated[
     Union[
         CoverSpec,
@@ -163,6 +193,9 @@ SlideSpecUnion = Annotated[
         ComparisonSpec,
         TimelineSpec,
         TwoColumnSpec,
+        ImageLedSpec,
+        ChartInsightSpec,
+        TableSpec,
     ],
     Field(discriminator="archetype"),
 ]
@@ -273,4 +306,23 @@ def spec_to_blocks(spec) -> dict:
             "items": [{"id": f"b{i + 1}", "text": it.text} for i, it in enumerate(spec.bullets)],
         })
         blocks.append({"id": "image", "type": "image", "image": _image_dict(spec.image)})
+    elif a == "image-led":
+        blocks.append({"id": "image", "type": "image", "image": _image_dict(spec.image)})
+        if spec.title:
+            blocks.append({"id": "title", "type": "title", "text": spec.title})
+        if spec.caption:
+            blocks.append({"id": "caption", "type": "text", "text": spec.caption})
+    elif a == "chart-insight":
+        blocks.append({"id": "title", "type": "title", "text": spec.title})
+        blocks.append({
+            "id": "chart", "type": "chart", "chartType": spec.chart_type,
+            "data": [{"name": p.name, "value": p.value} for p in spec.data],
+        })
+        blocks.append({
+            "id": "bullets", "type": "bullets",
+            "items": [{"id": f"t{i + 1}", "text": it.text} for i, it in enumerate(spec.takeaways)],
+        })
+    elif a == "table":
+        blocks.append({"id": "title", "type": "title", "text": spec.title})
+        blocks.append({"id": "table", "type": "table", "headers": spec.headers, "rows": spec.rows})
     return {"archetype": a, "blocks": blocks}

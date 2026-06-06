@@ -6,6 +6,7 @@ import {
   AnyBlock,
   BLOCK_GAP,
   BORDER,
+  ChartLeaf,
   IconLeaf,
   ImageLeaf,
   MUTED_COLOR,
@@ -15,6 +16,7 @@ import {
   SECTION_GAP,
   SHADOW_MD,
   SURFACE,
+  TableLeaf,
   TEXT_COLOR,
   byType,
   colsFor,
@@ -421,6 +423,73 @@ export const TwoColumnLayout: React.FC<{ blocks: AnyBlock[] }> = ({ blocks }) =>
           <ImageLeaf block={image} className="h-full w-full" style={{ borderRadius: RADIUS_LG, maxHeight: "460px" }} />
         )}
       </div>
+    </div>
+  );
+};
+
+export const ImageLedLayout: React.FC<{ blocks: AnyBlock[] }> = ({ blocks }) => {
+  const image = first(blocks, "image");
+  const title = first(blocks, "title");
+  const caption = first(blocks, "text");
+  return (
+    <div className="grid h-full w-full items-center" style={{ gridTemplateColumns: "3fr 2fr", gap: SECTION_GAP }}>
+      {image && (
+        <ImageLeaf block={image} className="h-full w-full" style={{ borderRadius: RADIUS_LG, maxHeight: "600px" }} />
+      )}
+      <div className="flex flex-col" style={{ gap: BLOCK_GAP }}>
+        {title && (
+          <h1 data-block-id={title.id} style={headingStyle("var(--fs-h1, 3rem)")}>
+            {title.text}
+          </h1>
+        )}
+        {caption && (
+          <p data-block-id={caption.id} className="text-xl leading-relaxed" style={{ color: MUTED_COLOR }}>
+            {caption.text}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export const ChartInsightLayout: React.FC<{ blocks: AnyBlock[] }> = ({ blocks }) => {
+  const title = first(blocks, "title");
+  const chart = first(blocks, "chart");
+  const bullets = first(blocks, "bullets");
+  const items: AnyBlock[] = bullets && Array.isArray(bullets.items) ? bullets.items : [];
+  return (
+    <div className="h-full w-full flex flex-col" style={{ gap: SECTION_GAP }}>
+      {title && (
+        <h1 data-block-id={title.id} style={headingStyle("var(--fs-h1, 3rem)")}>
+          {title.text}
+        </h1>
+      )}
+      <div className="grid flex-1 min-h-0 items-center" style={{ gridTemplateColumns: "3fr 2fr", gap: SECTION_GAP }}>
+        <div className="h-full w-full min-h-0">{chart && <ChartLeaf block={chart} />}</div>
+        <ul className="flex flex-col" style={{ gap: BLOCK_GAP }}>
+          {items.map((it) => (
+            <li key={it.id} data-block-id={it.id} className="flex items-start gap-3 text-xl leading-snug" style={{ color: TEXT_COLOR }}>
+              <span className="mt-2.5 h-2 w-2 shrink-0 rounded-full" style={{ background: PRIMARY }} />
+              <span>{it.text}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+};
+
+export const TableLayout: React.FC<{ blocks: AnyBlock[] }> = ({ blocks }) => {
+  const title = first(blocks, "title");
+  const table = first(blocks, "table");
+  return (
+    <div className="h-full w-full flex flex-col justify-center" style={{ gap: SECTION_GAP }}>
+      {title && (
+        <h1 data-block-id={title.id} style={headingStyle("var(--fs-h1, 3rem)")}>
+          {title.text}
+        </h1>
+      )}
+      {table && <TableLeaf block={table} />}
     </div>
   );
 };

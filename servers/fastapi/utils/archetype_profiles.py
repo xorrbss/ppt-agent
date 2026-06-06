@@ -72,6 +72,24 @@ ARCHETYPE_PROFILES = {
         "list_items": 6,
         "desc": "narrative + visual — title, optional lead, 2-6 bullets on the left, one supporting image on the right",
     },
+    "image-led": {
+        "kind": "visual",
+        "text_chars": 280,
+        "list_items": 0,
+        "desc": "visual impact / rhythm break — one dominant image + optional short title and caption",
+    },
+    "chart-insight": {
+        "kind": "chart",
+        "text_chars": 500,
+        "list_items": 3,
+        "desc": "data with a narrative — title + one chart (bar/line/area/pie, 2-8 points) + 1-3 takeaway bullets",
+    },
+    "table": {
+        "kind": "table",
+        "text_chars": 800,
+        "list_items": 0,
+        "desc": "real tabular data — title + a table (2-6 columns, up to 8 rows)",
+    },
 }
 
 ALLOWED_ARCHETYPES = list(ARCHETYPE_PROFILES.keys())

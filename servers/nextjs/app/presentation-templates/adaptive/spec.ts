@@ -84,6 +84,18 @@ export const StepBlockSchema = z.object({
   title: z.string().max(40),
   text: z.string().max(120),
 });
+export const ChartBlockSchema = z.object({
+  id: z.string(),
+  type: z.literal("chart"),
+  chartType: z.enum(["bar", "line", "area", "pie", "donut"]),
+  data: z.array(z.object({ name: z.string().max(24), value: z.number() })).max(8),
+});
+export const TableBlockSchema = z.object({
+  id: z.string(),
+  type: z.literal("table"),
+  headers: z.array(z.string()).max(6),
+  rows: z.array(z.array(z.string())).max(8),
+});
 
 export const BlockSchema = z.union([
   TitleBlockSchema,
@@ -97,6 +109,8 @@ export const BlockSchema = z.union([
   CardBlockSchema,
   ColumnBlockSchema,
   StepBlockSchema,
+  ChartBlockSchema,
+  TableBlockSchema,
 ]);
 export type Block = z.infer<typeof BlockSchema>;
 
@@ -258,5 +272,59 @@ export const TwoColumnSpecSchema = z.object({
       ],
     },
     { id: "image", type: "image", image: { __image_url__: "", __image_prompt__: "modern city skyline at dusk, blue tones" } },
+  ] as any),
+});
+
+export const ImageLedSpecSchema = z.object({
+  archetype: z.literal("image-led").default("image-led"),
+  variant: z.string().optional(),
+  blocks: z.array(BlockSchema).default([
+    { id: "image", type: "image", image: { __image_url__: "", __image_prompt__: "wind turbines on a green hill, clear sky" } },
+    { id: "title", type: "title", text: "친환경 에너지 전환" },
+    { id: "caption", type: "text", text: "재생에너지 비중을 2030년까지 50%로 확대합니다." },
+  ] as any),
+});
+
+export const ChartInsightSpecSchema = z.object({
+  archetype: z.literal("chart-insight").default("chart-insight"),
+  variant: z.string().optional(),
+  blocks: z.array(BlockSchema).default([
+    { id: "title", type: "title", text: "매출 성장 추이" },
+    {
+      id: "chart",
+      type: "chart",
+      chartType: "line",
+      data: [
+        { name: "2022", value: 100 },
+        { name: "2023", value: 124 },
+        { name: "2024", value: 170 },
+      ],
+    },
+    {
+      id: "bullets",
+      type: "bullets",
+      items: [
+        { id: "t1", text: "3년 연속 두 자릿수 성장" },
+        { id: "t2", text: "신규 사업이 성장 견인" },
+      ],
+    },
+  ] as any),
+});
+
+export const TableSpecSchema = z.object({
+  archetype: z.literal("table").default("table"),
+  variant: z.string().optional(),
+  blocks: z.array(BlockSchema).default([
+    { id: "title", type: "title", text: "요금제 비교" },
+    {
+      id: "table",
+      type: "table",
+      headers: ["구분", "베이직", "프로", "엔터프라이즈"],
+      rows: [
+        ["월 요금", "1만원", "3만원", "문의"],
+        ["지원", "이메일", "우선 지원", "전담 매니저"],
+        ["사용자", "5명", "50명", "무제한"],
+      ],
+    },
   ] as any),
 });

@@ -7,11 +7,14 @@ import {
   BigStatementLayout,
   BulletsLayout,
   CardGridLayout,
+  ChartInsightLayout,
   ClosingLayout,
   ComparisonLayout,
   CoverLayout,
+  ImageLedLayout,
   SectionDividerLayout,
   StatHeroLayout,
+  TableLayout,
   TimelineLayout,
   TwoColumnLayout,
 } from "./layouts";
@@ -57,6 +60,12 @@ function renderArchetype(archetype: string, blocks: AnyBlock[]): React.ReactNode
       return <TimelineLayout blocks={blocks} />;
     case "two-column":
       return <TwoColumnLayout blocks={blocks} />;
+    case "image-led":
+      return <ImageLedLayout blocks={blocks} />;
+    case "chart-insight":
+      return <ChartInsightLayout blocks={blocks} />;
+    case "table":
+      return <TableLayout blocks={blocks} />;
     default:
       return <BulletsLayout blocks={blocks} />;
   }
