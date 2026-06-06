@@ -118,7 +118,7 @@ class CardGridSpec(BaseModel):
 
 class ComparisonColumn(BaseModel):
     heading: str = Field(max_length=40)
-    items: List[str] = Field(min_length=1, max_length=6)
+    items: List[Annotated[str, Field(max_length=120)]] = Field(min_length=1, max_length=6)
 
 
 class ComparisonSpec(BaseModel):

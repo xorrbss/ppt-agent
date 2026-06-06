@@ -43,7 +43,7 @@ export const BulletItemSchema = z.object({
 export const BulletsBlockSchema = z.object({
   id: z.string(),
   type: z.literal("bullets"),
-  items: z.array(BulletItemSchema).max(6),
+  items: z.array(BulletItemSchema).max(8),
 });
 export const StatBlockSchema = z.object({
   id: z.string(),

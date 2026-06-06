@@ -46,13 +46,6 @@ export const RADIUS_LG = "var(--radius-lg, 20px)";
 export const RADIUS_MD = "var(--radius-md, 12px)";
 export const SHADOW_MD = "var(--shadow-md, 0 4px 12px rgba(0,0,0,0.06))";
 
-const TONE_COLOR: Record<string, string> = {
-  info: "var(--info, var(--primary-color, #2563eb))",
-  success: "var(--success, #16a34a)",
-  warning: "var(--warning, #d97706)",
-  danger: "var(--danger, #dc2626)",
-};
-
 export const headingStyle = (fs: string): React.CSSProperties => ({
   color: TEXT_COLOR,
   fontFamily: HEADING_FONT,
@@ -269,26 +262,6 @@ export const QuoteLeaf: React.FC<{ block: AnyBlock; large?: boolean }> = ({ bloc
     )}
   </blockquote>
 );
-
-export const CalloutLeaf: React.FC<{ block: AnyBlock }> = ({ block }) => {
-  const tone = TONE_COLOR[block?.tone as string] || TONE_COLOR.info;
-  return (
-    <div
-      className="flex items-start gap-4 p-6"
-      style={{
-        background: SURFACE,
-        borderLeft: `4px solid ${tone}`,
-        borderRadius: RADIUS_MD,
-        boxShadow: SHADOW_MD,
-      }}
-    >
-      {block.icon && <IconLeaf icon={block.icon} color={tone} className="w-7 h-7 shrink-0" />}
-      <p data-block-id={block.id} style={{ color: TEXT_COLOR, fontSize: "var(--fs-body, 1.125rem)", lineHeight: "var(--lh-body, 1.55)" }}>
-        {block.text}
-      </p>
-    </div>
-  );
-};
 
 // --- Frame decorations (shared) --- //
 
