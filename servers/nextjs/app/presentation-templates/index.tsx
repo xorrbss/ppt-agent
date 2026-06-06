@@ -81,6 +81,10 @@ import KoreanBizOverview, { Schema as KoreanBizOverviewSchema, layoutId as Korea
 import KoreanBizBullets, { Schema as KoreanBizBulletsSchema, layoutId as KoreanBizBulletsId, layoutName as KoreanBizBulletsName, layoutDescription as KoreanBizBulletsDesc } from "./korean-biz/BulletPointsSlideLayout";
 import KoreanBizMetrics, { Schema as KoreanBizMetricsSchema, layoutId as KoreanBizMetricsId, layoutName as KoreanBizMetricsName, layoutDescription as KoreanBizMetricsDesc } from "./korean-biz/MetricsSlideLayout";
 import KoreanBizClosing, { Schema as KoreanBizClosingSchema, layoutId as KoreanBizClosingId, layoutName as KoreanBizClosingName, layoutDescription as KoreanBizClosingDesc } from "./korean-biz/ClosingSlideLayout";
+import FinancialChartLayout, { Schema as FinancialChartSchema, layoutId as FinancialChartId, layoutName as FinancialChartName, layoutDescription as FinancialChartDesc } from "./financial-chart/FinancialChartSlideLayout";
+import ComparisonTableLayout, { Schema as ComparisonTableSchema, layoutId as ComparisonTableId, layoutName as ComparisonTableName, layoutDescription as ComparisonTableDesc } from "./comparison-table/ComparisonTableSlideLayout";
+import RoadmapLayout, { Schema as RoadmapSchema, layoutId as RoadmapId, layoutName as RoadmapName, layoutDescription as RoadmapDesc } from "./roadmap/RoadmapTimelineSlideLayout";
+import OrgChartLayout, { Schema as OrgChartSchema, layoutId as OrgChartId, layoutName as OrgChartName, layoutDescription as OrgChartDesc } from "./org-chart/OrgChartSlideLayout";
 
 // General templates
 import GeneralIntroSlideLayout, { Schema as GeneralIntroSchema, layoutId as GeneralIntroId, layoutName as GeneralIntroName, layoutDescription as GeneralIntroDesc } from "./general/IntroSlideLayout";
@@ -247,6 +251,10 @@ import TitleDescriptionFourChartsSixBulletsLayout, { Schema as TitleDescriptionF
 // TODO: Step 2: Import template settings Here (like the ones below)
 // Template template settings
 import koreanBizSettings from "./korean-biz/settings.json";
+import financialChartSettings from "./financial-chart/settings.json";
+import comparisonTableSettings from "./comparison-table/settings.json";
+import roadmapSettings from "./roadmap/settings.json";
+import orgChartSettings from "./org-chart/settings.json";
 import generalSettings from "./general/settings.json";
 import modernSettings from "./modern/settings.json";
 import standardSettings from "./standard/settings.json";
@@ -452,6 +460,35 @@ export const koreanBizTemplates: TemplateWithData[] = [
     createTemplateEntry(KoreanBizClosing, KoreanBizClosingSchema, KoreanBizClosingId, KoreanBizClosingName, KoreanBizClosingDesc, "korean-biz", "ClosingSlideLayout"),
 ];
 
+// Enterprise single-layout templates (each selectable as its own template)
+export const financialChartTemplates: TemplateWithData[] = [
+    createTemplateEntry(FinancialChartLayout, FinancialChartSchema, FinancialChartId, FinancialChartName, FinancialChartDesc, "financial-chart", "FinancialChartSlideLayout"),
+    createTemplateEntry(KoreanBizCover, KoreanBizCoverSchema, KoreanBizCoverId, KoreanBizCoverName, KoreanBizCoverDesc, "financial-chart", "CoverSlideLayout"),
+    createTemplateEntry(KoreanBizToc, KoreanBizTocSchema, KoreanBizTocId, KoreanBizTocName, KoreanBizTocDesc, "financial-chart", "TableOfContentsSlideLayout"),
+    createTemplateEntry(KoreanBizClosing, KoreanBizClosingSchema, KoreanBizClosingId, KoreanBizClosingName, KoreanBizClosingDesc, "financial-chart", "ClosingSlideLayout"),
+];
+
+export const comparisonTableTemplates: TemplateWithData[] = [
+    createTemplateEntry(ComparisonTableLayout, ComparisonTableSchema, ComparisonTableId, ComparisonTableName, ComparisonTableDesc, "comparison-table", "ComparisonTableSlideLayout"),
+    createTemplateEntry(KoreanBizCover, KoreanBizCoverSchema, KoreanBizCoverId, KoreanBizCoverName, KoreanBizCoverDesc, "comparison-table", "CoverSlideLayout"),
+    createTemplateEntry(KoreanBizToc, KoreanBizTocSchema, KoreanBizTocId, KoreanBizTocName, KoreanBizTocDesc, "comparison-table", "TableOfContentsSlideLayout"),
+    createTemplateEntry(KoreanBizClosing, KoreanBizClosingSchema, KoreanBizClosingId, KoreanBizClosingName, KoreanBizClosingDesc, "comparison-table", "ClosingSlideLayout"),
+];
+
+export const roadmapTemplates: TemplateWithData[] = [
+    createTemplateEntry(RoadmapLayout, RoadmapSchema, RoadmapId, RoadmapName, RoadmapDesc, "roadmap", "RoadmapTimelineSlideLayout"),
+    createTemplateEntry(KoreanBizCover, KoreanBizCoverSchema, KoreanBizCoverId, KoreanBizCoverName, KoreanBizCoverDesc, "roadmap", "CoverSlideLayout"),
+    createTemplateEntry(KoreanBizToc, KoreanBizTocSchema, KoreanBizTocId, KoreanBizTocName, KoreanBizTocDesc, "roadmap", "TableOfContentsSlideLayout"),
+    createTemplateEntry(KoreanBizClosing, KoreanBizClosingSchema, KoreanBizClosingId, KoreanBizClosingName, KoreanBizClosingDesc, "roadmap", "ClosingSlideLayout"),
+];
+
+export const orgChartTemplates: TemplateWithData[] = [
+    createTemplateEntry(OrgChartLayout, OrgChartSchema, OrgChartId, OrgChartName, OrgChartDesc, "org-chart", "OrgChartSlideLayout"),
+    createTemplateEntry(KoreanBizCover, KoreanBizCoverSchema, KoreanBizCoverId, KoreanBizCoverName, KoreanBizCoverDesc, "org-chart", "CoverSlideLayout"),
+    createTemplateEntry(KoreanBizToc, KoreanBizTocSchema, KoreanBizTocId, KoreanBizTocName, KoreanBizTocDesc, "org-chart", "TableOfContentsSlideLayout"),
+    createTemplateEntry(KoreanBizClosing, KoreanBizClosingSchema, KoreanBizClosingId, KoreanBizClosingName, KoreanBizClosingDesc, "org-chart", "ClosingSlideLayout"),
+];
+
 // General templates array
 export const generalTemplates: TemplateWithData[] = [
 
@@ -516,6 +553,10 @@ export const swiftTemplates: TemplateWithData[] = [
 // All templates combined
 export const allLayouts: TemplateWithData[] = [
     ...koreanBizTemplates,
+    ...financialChartTemplates,
+    ...comparisonTableTemplates,
+    ...roadmapTemplates,
+    ...orgChartTemplates,
     ...neoGeneralTemplates,
     ...neoModernTemplates,
     ...neoStandardTemplates,
@@ -541,6 +582,34 @@ export const templates: TemplateLayoutsWithSettings[] = [
         description: koreanBizSettings.description,
         settings: koreanBizSettings as TemplateGroupSettings,
         layouts: koreanBizTemplates,
+    },
+    {
+        id: "financial-chart",
+        name: "재무·실적 차트",
+        description: financialChartSettings.description,
+        settings: financialChartSettings as TemplateGroupSettings,
+        layouts: financialChartTemplates,
+    },
+    {
+        id: "comparison-table",
+        name: "데이터 비교표",
+        description: comparisonTableSettings.description,
+        settings: comparisonTableSettings as TemplateGroupSettings,
+        layouts: comparisonTableTemplates,
+    },
+    {
+        id: "roadmap",
+        name: "로드맵·연혁",
+        description: roadmapSettings.description,
+        settings: roadmapSettings as TemplateGroupSettings,
+        layouts: roadmapTemplates,
+    },
+    {
+        id: "org-chart",
+        name: "조직도",
+        description: orgChartSettings.description,
+        settings: orgChartSettings as TemplateGroupSettings,
+        layouts: orgChartTemplates,
     },
     {
         id: "general",

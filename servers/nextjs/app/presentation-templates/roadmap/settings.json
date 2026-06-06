@@ -1,0 +1,6 @@
+{
+  "description": "시기별 마일스톤을 가로로 배치한 로드맵·연혁 타임라인 슬라이드",
+  "ordered": false,
+  "default": false,
+  "icon_weight": "regular"
+}
