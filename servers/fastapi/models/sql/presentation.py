@@ -7,6 +7,7 @@ from sqlmodel import Boolean, Field, SQLModel
 from models.presentation_outline_model import PresentationOutlineModel
 from models.presentation_structure_model import PresentationStructureModel
 from models.presentation_layout import PresentationLayoutModel
+from models.slide_spec_model import PresentationComposition
 from utils.datetime_utils import get_current_utc_datetime
 
 
@@ -42,6 +43,10 @@ class PresentationModel(SQLModel, table=True):
     include_title_slide: bool = Field(sa_column=Column(Boolean), default=True)
     web_search: bool = Field(sa_column=Column(Boolean), default=False)
     theme: Optional[dict] = Field(sa_column=Column(JSON), default=None)
+    # Adaptive composer output (PresentationComposition: SlideSpec[]). NEW column
+    # (additive, nullable) — holds the authoritative adaptive composition; legacy
+    # decks leave it NULL. See docs/adaptive-layout-design-revision.md R3.
+    deck_plan: Optional[dict] = Field(sa_column=Column(JSON), default=None)
 
     def get_new_presentation(self):
         return PresentationModel(
@@ -59,6 +64,7 @@ class PresentationModel(SQLModel, table=True):
             verbosity=self.verbosity,
             include_table_of_contents=self.include_table_of_contents,
             include_title_slide=self.include_title_slide,
+            deck_plan=self.deck_plan,
         )
 
     def get_presentation_outline(self):
@@ -79,3 +85,11 @@ class PresentationModel(SQLModel, table=True):
 
     def set_structure(self, structure: PresentationStructureModel):
         self.structure = structure.model_dump()
+
+    def get_deck_plan(self):
+        if not self.deck_plan:
+            return None
+        return PresentationComposition(**self.deck_plan)
+
+    def set_deck_plan(self, composition: PresentationComposition):
+        self.deck_plan = composition.model_dump(mode="json")
