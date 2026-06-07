@@ -8,15 +8,18 @@
 // `test-all` cypress step / once the binary is available.
 import React from 'react'
 import AdaptiveBlockControls from './AdaptiveBlockControls'
-import { mount } from 'cypress/react'
 import { store } from '@/store/store'
 import { setPresentationData } from '@/store/slices/presentationGeneration'
 import { Provider } from 'react-redux'
-import '@/app/globals.css'
 
-Cypress.Commands.add('mount', (component: React.ReactNode, options = {}) =>
-  mount(<Provider store={store}>{component}</Provider>, options)
-)
+// cy.mount is registered globally (cypress/support/component.ts). Wrap the panel
+// in the real Redux Provider so clicks dispatch into the actual slice reducers.
+const mountControls = (blocks: any[]) =>
+  cy.mount(
+    <Provider store={store}>
+      <AdaptiveBlockControls slideIndex={0} blocks={blocks} />
+    </Provider>
+  )
 
 const makeBlocks = () => [
   { id: 'title', type: 'title', text: 'T' },
@@ -44,7 +47,7 @@ const cards = () => slideBlocks().filter((b: any) => b.type === 'card')
 describe('AdaptiveBlockControls (P4b)', () => {
   it('lists the slide\'s repeatable units', () => {
     const blocks = seed()
-    cy.mount(<AdaptiveBlockControls slideIndex={0} blocks={blocks} />)
+    mountControls(blocks)
     cy.contains('블록 편집')
     cy.contains('불릿 1')
     cy.contains('카드')
@@ -52,7 +55,7 @@ describe('AdaptiveBlockControls (P4b)', () => {
 
   it('delete removes only that unit from the store', () => {
     const blocks = seed()
-    cy.mount(<AdaptiveBlockControls slideIndex={0} blocks={blocks} />)
+    mountControls(blocks)
     cy.get('[title="삭제"]').first().click()
     cy.then(() => {
       expect(bulletItems().map((i: any) => i.id)).to.deep.equal(['b2', 'b3'])
@@ -61,7 +64,7 @@ describe('AdaptiveBlockControls (P4b)', () => {
 
   it('add inserts a blank sibling after the unit', () => {
     const blocks = seed()
-    cy.mount(<AdaptiveBlockControls slideIndex={0} blocks={blocks} />)
+    mountControls(blocks)
     cy.get('[title="아래에 추가"]').first().click()
     cy.then(() => {
       const items = bulletItems()
@@ -72,7 +75,7 @@ describe('AdaptiveBlockControls (P4b)', () => {
 
   it('move reorders within the array', () => {
     const blocks = seed()
-    cy.mount(<AdaptiveBlockControls slideIndex={0} blocks={blocks} />)
+    mountControls(blocks)
     cy.get('[title="아래로"]').first().click() // move b1 down
     cy.then(() => {
       expect(bulletItems().map((i: any) => i.id)).to.deep.equal(['b2', 'b1', 'b3'])
@@ -81,7 +84,7 @@ describe('AdaptiveBlockControls (P4b)', () => {
 
   it('delete works on a top-level card block', () => {
     const blocks = seed()
-    cy.mount(<AdaptiveBlockControls slideIndex={0} blocks={blocks} />)
+    mountControls(blocks)
     cy.contains('li', '카드').first().find('[title="삭제"]').click()
     cy.then(() => {
       expect(cards()).to.have.length(1)

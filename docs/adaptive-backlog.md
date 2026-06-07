@@ -64,9 +64,20 @@ done (kept coexistence + user choice).
       shows the `블록 편집` panel with correct unit labels (불릿/카드/지표/단계);
       **export-clean** (absent from the readOnly `/pdf-maker` DOM); legacy decks
       unaffected (panel gated on `archetype`). The **click round-trip**
-      (dispatch→state→re-render) is validated manually / via Cypress, not the
-      headless loop. **Schema-driven property panel: deferred YAGNI** — inline
-      text editing (P4a) + image/icon pickers + item CRUD cover the common cases.
+      (click→dispatch→store) is **verified via Cypress**:
+      `AdaptiveBlockControls.cy.tsx` mounts the panel with the real store and
+      asserts delete/add/move/card-delete mutate `slide.content.blocks` — **5/5
+      passing**. **Schema-driven property panel: deferred YAGNI** — inline text
+      editing (P4a) + image/icon pickers + item CRUD cover the common cases.
+
+      **Cypress infra fix (Next 16):** the cypress binary install hangs on its
+      default downloader, and cypress 14's `framework: "next"` devServer expects
+      Next's compiled webpack (`.init`), which Next 16 (Turbopack) no longer ships.
+      Fixed both: install the binary from the CDN directly
+      (`CYPRESS_INSTALL_BINARY=<cdn zip>`, extracted via Python since cypress's
+      unzipper also stalls on Windows), and switch `cypress.config.ts` to
+      `framework: "react"` + a minimal webpack pipeline (babel-loader + `@` alias).
+      So component tests run again.
 - [ ] **Text auto-fit (JS fit-to-box)** — deferred in P5 (TODO in `parts.tsx`).
       Fixed sizes + `overflow-hidden` + composer maxLength bounds suffice for now;
       revisit if overflow is observed at max density.
