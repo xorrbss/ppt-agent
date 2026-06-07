@@ -215,5 +215,117 @@ export const DEFAULT_THEMES: any[] = [
       },
       density: "compact"
     }
+  },
+  // v2 tone-&-manner presets: these exercise the per-theme typography / shape /
+  // elevation tokens (deriveThemeTokens) so the adaptive renderer produces
+  // genuinely distinct "templates" — no new layout code. Colours+fonts also apply
+  // to legacy decks; the typography/shape/elevation keys are adaptive-only.
+  {
+    id: "carbon",
+    name: "Carbon",
+    description: "Dark, sharp, flat — a tight technical look (no rounding, no shadows).",
+    logo: null,
+    logo_url: null,
+    company_name: null,
+    data: {
+      colors: {
+        primary: "#1f6feb",
+        background: "#0d1117",
+        card: "#161b22",
+        stroke: "#30363d",
+        primary_text: "#ffffff",
+        background_text: "#e6edf3",
+        graph_0: "#79c0ff",
+        graph_1: "#58a6ff",
+        graph_2: "#4493f8",
+        graph_3: "#3081f0",
+        graph_4: "#1f6feb",
+        graph_5: "#1158c7",
+        graph_6: "#0d419d",
+        graph_7: "#0a3069",
+        graph_8: "#082145",
+        graph_9: "#051026"
+      },
+      fonts: {
+        textFont: { name: "Inter", url: "https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" },
+        headingFont: { name: "Space Grotesk", url: "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap" }
+      },
+      density: "compact",
+      typography: { scale: 0.98, headingWeight: 700, headingLetterSpacing: "-0.02em" },
+      shape: { radiusScale: 0, borderWidth: "1px" },
+      elevation: { flat: true }
+    }
+  },
+  {
+    id: "pebble",
+    name: "Pebble",
+    description: "Warm, rounded, softly elevated — an airy, friendly look.",
+    logo: null,
+    logo_url: null,
+    company_name: null,
+    data: {
+      colors: {
+        primary: "#c0613a",
+        background: "#faf6f0",
+        card: "#ffffff",
+        stroke: "#ece3d8",
+        primary_text: "#ffffff",
+        background_text: "#2f2a26",
+        graph_0: "#e8a87c",
+        graph_1: "#e0976a",
+        graph_2: "#d98559",
+        graph_3: "#cf7347",
+        graph_4: "#c0613a",
+        graph_5: "#a8512e",
+        graph_6: "#8f4327",
+        graph_7: "#743620",
+        graph_8: "#5a2a19",
+        graph_9: "#3f1e12"
+      },
+      fonts: {
+        textFont: { name: "Nunito", url: "https://fonts.googleapis.com/css2?family=Nunito:wght@200..1000&display=swap" },
+        headingFont: { name: "Poppins", url: "https://fonts.googleapis.com/css2?family=Poppins:wght@100..900&display=swap" }
+      },
+      density: "spacious",
+      typography: { scale: 1.04, headingWeight: 700 },
+      shape: { radiusScale: 1.8, borderWidth: "1px" },
+      elevation: { shadowSm: "0 2px 6px rgba(0,0,0,0.05)", shadowMd: "0 10px 28px rgba(0,0,0,0.08)", shadowLg: "0 20px 48px rgba(0,0,0,0.10)" }
+    }
+  },
+  {
+    id: "broadsheet",
+    name: "Broadsheet",
+    description: "Editorial serif on paper — large display type, spacious, flat.",
+    logo: null,
+    logo_url: null,
+    company_name: null,
+    data: {
+      colors: {
+        primary: "#1a1a1a",
+        background: "#fffdf8",
+        card: "#f6f1e7",
+        stroke: "#e3dccb",
+        primary_text: "#fffdf8",
+        background_text: "#1a1a1a",
+        graph_0: "#2b2926",
+        graph_1: "#454039",
+        graph_2: "#5f594f",
+        graph_3: "#797166",
+        graph_4: "#938b7e",
+        graph_5: "#ada595",
+        graph_6: "#c7beac",
+        graph_7: "#e1d8c4",
+        graph_8: "#efe7d6",
+        graph_9: "#f7f1e6"
+      },
+      fonts: {
+        textFont: { name: "Source Sans Pro", url: "https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@200..900&display=swap" },
+        headingFont: { name: "Fraunces", url: "https://fonts.googleapis.com/css2?family=Fraunces:wght@300..900&display=swap" }
+      },
+      density: "spacious",
+      typography: { scale: 1.06, headingWeight: 600, headingLineHeight: "1.1", headingLetterSpacing: "-0.02em" },
+      shape: { radiusScale: 0.4 },
+      elevation: { flat: true }
+    }
   }
 ]
