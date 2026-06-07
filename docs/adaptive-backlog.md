@@ -180,9 +180,14 @@ done (kept coexistence + user choice).
       total adjacent dups 0 → PASSES the proposed thresholds with margin. Deck 1
       composed an identical 9-distinct archetype sequence across all 3 reps
       (cover→agenda→stat-hero→timeline→comparison→card-grid→chart-insight→
-      big-statement→closing). **FINAL pass/fail thresholds are a product decision
-      (escalation)** — proposed defaults in `composer_metrics.DEFAULT_THRESHOLDS`
-      (schema 1.0, n_match 1.0, mean variety ≥0.6, no-adjacent-dup ≥0.9).
+      big-statement→closing). **Thresholds FINALIZED (#6, product decision 2026-06):**
+      `composer_metrics.DEFAULT_THRESHOLDS` (schema 1.0, n_match 1.0, mean variety
+      ≥0.6, no-adjacent-dup ≥0.9) — adopted as the official G8 gate (variety/no-dup
+      keep headroom below the measured 0.95/1.0 so normal drift doesn't flap). The
+      "proposed/escalation" language is removed from the code. **Policy:** adaptive
+      stays the **default with opt-out** (users can still pick curated templates
+      korean-biz/financial-chart/etc.); **not** forced — KISS + user choice. To
+      force adaptive later, drop the non-adaptive groups from `selectableTemplates`.
 - [x] **P6 / G4** — editable-PPTX byte round-trip. **RUN in Docker and PASSES**
       (`scripts/check_adaptive_pptx_roundtrip.py`): a 7-archetype adaptive deck
       (cover / stat-hero / bullets / comparison / table / chart-insight / image-led)
@@ -323,7 +328,8 @@ scratch removed. An adversarial-review workflow over the two code commits return
   codex one once auth is provided.
 - **#5 legacy fixed-template hard delete** — ESCALATION (existing decks break →
   needs a migration/deprecation product decision; no solo deletion).
-- **#6 G8 acceptance thresholds / adaptive-forced vs opt-out policy** — ESCALATION
-  (product decision; proposed defaults live in `composer_metrics.DEFAULT_THRESHOLDS`).
+- **#6 G8 acceptance thresholds / adaptive policy** — **DECIDED** (2026-06):
+  thresholds finalized at `DEFAULT_THRESHOLDS`; adaptive = default **with opt-out**
+  (not forced). See the P6/G8 entry above.
 - **#9 Windows native desktop export** (`convert-win32.exe` absent; web/Docker OK)
   — ESCALATION (Electron build scope).

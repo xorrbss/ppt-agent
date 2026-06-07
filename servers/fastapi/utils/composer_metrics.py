@@ -32,11 +32,15 @@ def evaluate_archetypes(
     }
 
 
-# Proposed acceptance thresholds for the G8 gate. FINAL values are a product
-# decision (escalation) — these are the defaults the harness reports against.
+# FINALIZED acceptance thresholds for the G8 gate (product decision, 2026-06).
+# Adopted from the measured run (6 live-Codex decks: schema 1.0 / n_match 1.0 /
+# mean variety 0.95 / no-adjacent-dup 1.0 — all clear these with margin). Schema
+# and n_match are held to 100% (the closed discriminated union + retries and the
+# dynamic n_slides schema guarantee it); variety/no-dup keep headroom below the
+# observed values so normal composer drift doesn't flap the gate.
 DEFAULT_THRESHOLDS = {
-    "min_schema_valid_rate": 1.0,   # closed discriminated schema + retries → ~100%
-    "min_n_match_rate": 1.0,        # n_slides pinned by the dynamic schema → ~100%
+    "min_schema_valid_rate": 1.0,   # closed discriminated schema + retries → 100%
+    "min_n_match_rate": 1.0,        # n_slides pinned by the dynamic schema → 100%
     "min_mean_variety_ratio": 0.6,  # >=60% distinct archetypes on average
     "min_no_adjacent_dup_rate": 0.9,  # >=90% of decks have zero adjacent duplicates
 }
@@ -72,7 +76,7 @@ def summarize(
 
 
 def passes(summary: dict, thresholds: dict = DEFAULT_THRESHOLDS) -> bool:
-    """Whether a stability summary meets the (proposed) acceptance thresholds."""
+    """Whether a stability summary meets the finalized G8 acceptance thresholds."""
     return (
         summary.get("schema_valid_rate", 0.0) >= thresholds["min_schema_valid_rate"]
         and summary.get("n_match_rate", 0.0) >= thresholds["min_n_match_rate"]
