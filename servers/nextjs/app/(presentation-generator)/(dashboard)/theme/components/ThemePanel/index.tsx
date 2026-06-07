@@ -447,6 +447,7 @@ const ThemePanel: React.FC = () => {
             logo_url: customBrandLogo || null,
             company_name: themeCompanyName || null,
             data: {
+              ...selectedTheme.data,
               colors: customColors,
               fonts: customFonts,
             }
@@ -488,6 +489,7 @@ const ThemePanel: React.FC = () => {
         logo_url: customBrandLogo || null,
         company_name: themeCompanyName || null,
         data: {
+          ...selectedTheme.data,
           colors: customColors,
           fonts: customFonts,
         }

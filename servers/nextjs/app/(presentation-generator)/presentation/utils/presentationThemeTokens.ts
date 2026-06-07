@@ -44,6 +44,12 @@ export function deriveThemeTokens(theme: Theme | null | undefined): Record<strin
 
   const mo = ((theme?.data as any)?.motif ?? {}) as Record<string, any>;
 
+  // Length tokens must carry a unit; a bare number (e.g. borderWidth: 2) would
+  // emit unitless "2" → invalid CSS length → the property silently breaks. Coerce
+  // numbers to px; strings (e.g. "2px", "-0.02em") and the default pass through.
+  const len = (v: any, def: string) =>
+    v == null ? def : typeof v === "number" ? `${v}px` : String(v);
+
   return {
     // extended colour roles (light/dark-adaptive via color-mix)
     "--secondary-color": secondary,
@@ -71,7 +77,7 @@ export function deriveThemeTokens(theme: Theme | null | undefined): Record<strin
     "--fw-emphasis": String(ty.emphasisWeight ?? "600"),
     "--lh-heading": String(ty.headingLineHeight ?? "1.15"),
     "--lh-body": String(ty.bodyLineHeight ?? "1.55"),
-    "--ls-heading": String(ty.headingLetterSpacing ?? "-0.01em"),
+    "--ls-heading": len(ty.headingLetterSpacing, "-0.01em"),
     // spacing / density (driven by theme.data.density; default = comfortable)
     "--slide-pad-x": `${sp.padX}px`,
     "--slide-pad-y": `${sp.padY}px`,
@@ -83,7 +89,7 @@ export function deriveThemeTokens(theme: Theme | null | undefined): Record<strin
     "--radius-md": rad(12),
     "--radius-lg": rad(20),
     "--radius-pill": "999px",
-    "--border-width": String(sh.borderWidth ?? "1px"),
+    "--border-width": len(sh.borderWidth, "1px"),
     // elevation (theme.data.elevation; flat:true drops all shadows)
     "--shadow-sm": shadow("shadowSm", "0 1px 2px rgba(0,0,0,0.04)"),
     "--shadow-md": shadow("shadowMd", "0 4px 12px rgba(0,0,0,0.06)"),

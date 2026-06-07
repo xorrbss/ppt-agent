@@ -265,7 +265,7 @@ export const DEFAULT_THEMES: any[] = [
     company_name: null,
     data: {
       colors: {
-        primary: "#c0613a",
+        primary: "#ad5230",
         background: "#faf6f0",
         card: "#ffffff",
         stroke: "#ece3d8",
@@ -275,7 +275,7 @@ export const DEFAULT_THEMES: any[] = [
         graph_1: "#e0976a",
         graph_2: "#d98559",
         graph_3: "#cf7347",
-        graph_4: "#c0613a",
+        graph_4: "#ad5230",
         graph_5: "#a8512e",
         graph_6: "#8f4327",
         graph_7: "#743620",
