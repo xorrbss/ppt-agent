@@ -326,8 +326,16 @@ scratch removed. An adversarial-review workflow over the two code commits return
   is configured** (only an OPENAI key is set); a full browser e2e also needs the
   dev stack + an e2e harness. Skipped + recorded; can run an OPENAI-based e2e, or a
   codex one once auth is provided.
-- **#5 legacy fixed-template hard delete** — ESCALATION (existing decks break →
-  needs a migration/deprecation product decision; no solo deletion).
+- **#5 legacy fixed-template hard delete** — **DONE (user-authorized, `434d560e`).**
+  Removed all 13 retired groups (general/modern/standard/swift/code/education/
+  product-overview/report/pitch-deck/neo-*) — 192 files, ~51k LOC. Prereqs:
+  decoupled `financial-chart` from `general/GeneralChartPrimitives` (moved into
+  financial-chart/); repointed ThemePanel's theme-preview from `neo-general` →
+  `korean-biz`. `index.tsx` now registers only the 6 kept groups; RETIRED_GROUP_IDS
+  is empty. **BREAKING:** existing decks referencing a removed group render the
+  "layout not found" placeholder (accepted, no migration). Verified tsc/build/
+  cypress 15·no stray refs. (Supersedes the "Legacy retirement (post-G4)" picker-
+  hide note above — code is now deleted, not just hidden.)
 - **#6 G8 acceptance thresholds / adaptive policy** — **DECIDED** (2026-06):
   thresholds finalized at `DEFAULT_THRESHOLDS`; adaptive = default **with opt-out**
   (not forced). See the P6/G8 entry above.
