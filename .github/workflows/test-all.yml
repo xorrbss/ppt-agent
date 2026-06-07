@@ -99,7 +99,7 @@ jobs:
     # The official action handles Xvfb + Linux Electron deps; npm ci already
     # installed the binary, so install: false.
     - name: Cypress component test (gate — AdaptiveBlockControls)
-      uses: cypress-io/github-action@v6
+      uses: cypress-io/github-action@v7
       with:
         working-directory: servers/nextjs
         component: true
