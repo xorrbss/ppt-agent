@@ -9,6 +9,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Legend,
   Line,
   LineChart,
   Pie,
@@ -138,6 +139,15 @@ export const ChartLeaf: React.FC<{ block: AnyBlock }> = ({ block }) => {
   const data: AnyBlock[] = Array.isArray(block?.data) ? block.data : [];
   if (data.length === 0) return null;
   const axisStyle = { fontSize: 12, fill: MUTED_COLOR } as const;
+  // Multi-series: block.series lists 2+ series names; each data point carries a
+  // `values[]` aligned to series. Single-series (the default) uses point.value —
+  // so existing single-series decks render exactly as before.
+  const series: string[] = Array.isArray(block?.series) ? block.series : [];
+  const multi = series.length > 1;
+  const color = (i: number) => CHART_PALETTE[i % CHART_PALETTE.length];
+  const seriesKey = (i: number) => (d: AnyBlock) =>
+    Array.isArray(d?.values) ? d.values[i] : i === 0 ? d?.value : undefined;
+  const legend = multi ? <Legend wrapperStyle={{ fontSize: 12 }} /> : null;
   const inner = (() => {
     switch (type) {
       case "line":
@@ -147,7 +157,12 @@ export const ChartLeaf: React.FC<{ block: AnyBlock }> = ({ block }) => {
             <XAxis dataKey="name" tick={axisStyle} />
             <YAxis tick={axisStyle} />
             <Tooltip />
-            <Line type="monotone" dataKey="value" stroke={PRIMARY} strokeWidth={2} isAnimationActive={false} dot={{ r: 3 }} />
+            {legend}
+            {multi
+              ? series.map((s, i) => (
+                  <Line key={i} type="monotone" dataKey={seriesKey(i)} name={s} stroke={color(i)} strokeWidth={2} isAnimationActive={false} dot={{ r: 3 }} />
+                ))
+              : <Line type="monotone" dataKey="value" stroke={PRIMARY} strokeWidth={2} isAnimationActive={false} dot={{ r: 3 }} />}
           </LineChart>
         );
       case "area":
@@ -157,17 +172,23 @@ export const ChartLeaf: React.FC<{ block: AnyBlock }> = ({ block }) => {
             <XAxis dataKey="name" tick={axisStyle} />
             <YAxis tick={axisStyle} />
             <Tooltip />
-            <Area type="monotone" dataKey="value" stroke={PRIMARY} fill={PRIMARY} fillOpacity={0.18} isAnimationActive={false} />
+            {legend}
+            {multi
+              ? series.map((s, i) => (
+                  <Area key={i} type="monotone" dataKey={seriesKey(i)} name={s} stroke={color(i)} fill={color(i)} fillOpacity={0.18} isAnimationActive={false} />
+                ))
+              : <Area type="monotone" dataKey="value" stroke={PRIMARY} fill={PRIMARY} fillOpacity={0.18} isAnimationActive={false} />}
           </AreaChart>
         );
       case "pie":
       case "donut":
+        // Pie/donut show a single series; multi-series falls back to the first.
         return (
           <PieChart>
             <Tooltip />
             <Pie
               data={data}
-              dataKey="value"
+              dataKey={multi ? seriesKey(0) : "value"}
               nameKey="name"
               innerRadius={type === "donut" ? "55%" : 0}
               outerRadius="80%"
@@ -187,11 +208,18 @@ export const ChartLeaf: React.FC<{ block: AnyBlock }> = ({ block }) => {
             <XAxis dataKey="name" tick={axisStyle} />
             <YAxis tick={axisStyle} />
             <Tooltip />
-            <Bar dataKey="value" radius={[4, 4, 0, 0]} isAnimationActive={false}>
-              {data.map((_, i) => (
-                <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
-              ))}
-            </Bar>
+            {legend}
+            {multi ? (
+              series.map((s, i) => (
+                <Bar key={i} dataKey={seriesKey(i)} name={s} fill={color(i)} radius={[4, 4, 0, 0]} isAnimationActive={false} />
+              ))
+            ) : (
+              <Bar dataKey="value" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                {data.map((_, i) => (
+                  <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
+                ))}
+              </Bar>
+            )}
           </BarChart>
         );
     }

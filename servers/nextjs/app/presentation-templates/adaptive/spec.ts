@@ -88,7 +88,14 @@ export const ChartBlockSchema = z.object({
   id: z.string(),
   type: z.literal("chart"),
   chartType: z.enum(["bar", "line", "area", "pie", "donut"]),
-  data: z.array(z.object({ name: z.string().max(24), value: z.number() })).max(8),
+  // Each point has `value` (single series). For MULTI-series, set `series` to 2+
+  // names and give each point a `values[]` aligned to `series` (bar/line/area).
+  data: z.array(z.object({
+    name: z.string().max(24),
+    value: z.number(),
+    values: z.array(z.number()).max(4).optional(),
+  })).max(8),
+  series: z.array(z.string().max(24)).min(2).max(4).optional(),
 });
 export const TableBlockSchema = z.object({
   id: z.string(),

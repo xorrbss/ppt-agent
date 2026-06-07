@@ -161,6 +161,9 @@ class ImageLedSpec(BaseModel):
 class ChartPoint(BaseModel):
     name: str = Field(max_length=24)
     value: float
+    # Multi-series: per-series values aligned to ChartInsightSpec.series. Single
+    # series uses `value` only (existing behaviour).
+    values: Optional[List[float]] = Field(default=None, max_length=4)
 
 
 class ChartInsightSpec(BaseModel):
@@ -168,6 +171,9 @@ class ChartInsightSpec(BaseModel):
     title: str = Field(max_length=80)
     chart_type: Literal["bar", "line", "area", "pie", "donut"] = "bar"
     data: List[ChartPoint] = Field(min_length=2, max_length=8)
+    # Optional 2-4 series names for a multi-series chart (bar/line/area); when set,
+    # each ChartPoint should provide `values` aligned to these. Omit for a single series.
+    series: Optional[List[str]] = Field(default=None, min_length=2, max_length=4)
     takeaways: List[BulletItem] = Field(min_length=1, max_length=3)
     speaker_note: str = Field(default="", max_length=500)
 
@@ -314,10 +320,17 @@ def spec_to_blocks(spec) -> dict:
             blocks.append({"id": "caption", "type": "text", "text": spec.caption})
     elif a == "chart-insight":
         blocks.append({"id": "title", "type": "title", "text": spec.title})
-        blocks.append({
+        chart_block = {
             "id": "chart", "type": "chart", "chartType": spec.chart_type,
-            "data": [{"name": p.name, "value": p.value} for p in spec.data],
-        })
+            "data": [
+                {"name": p.name, "value": p.value,
+                 **({"values": p.values} if p.values is not None else {})}
+                for p in spec.data
+            ],
+        }
+        if spec.series:
+            chart_block["series"] = spec.series
+        blocks.append(chart_block)
         blocks.append({
             "id": "bullets", "type": "bullets",
             "items": [{"id": f"t{i + 1}", "text": it.text} for i, it in enumerate(spec.takeaways)],
