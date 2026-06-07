@@ -130,6 +130,13 @@ done (kept coexistence + user choice).
       lockfile on the Windows FS bridge), and `CYPRESS_INSTALL_BINARY=0` is needed
       (cypress's postinstall binary download hangs). Run with `DISABLE_AUTH=true`
       so the export can read `/pdf-maker` without a session.
+
+      **CI:** `.github/workflows/g4-pptx-roundtrip.yml` runs this gate in Docker on
+      a Linux runner (`workflow_dispatch` for now — promote to `pull_request` once a
+      manual run is confirmed green; Linux runner avoids the `/mnt/c` issue). The
+      P4b adaptive block-edit node tests now run in `test-all.yml` (Node 22, TS
+      type-stripping). A legacy-export smoke (generate + export a non-adaptive deck)
+      should be added to the G4 job for full coverage.
 - [x] **DOCS / G10** — design `§13` open questions reconciled with the build +
       G10 minors (below). Source-of-truth design docs are unchanged (frozen);
       this living doc records the implementation outcome.

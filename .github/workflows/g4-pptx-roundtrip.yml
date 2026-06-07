@@ -1,0 +1,67 @@
+# G4 — editable-PPTX byte round-trip for adaptive decks.
+# Runs the full stack (FastAPI + Next + export converter) in Docker on a Linux
+# runner and asserts a 6-archetype adaptive deck exports to editable PPTX shapes
+# (scripts/check_adaptive_pptx_roundtrip.py). Mirrors the verified local procedure.
+#
+# workflow_dispatch only for now (heavy: builds the dev image + boots the stack).
+# Promote to pull_request once a manual run is confirmed green.
+name: G4 byte-PPTX round-trip (adaptive)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  g4:
+    name: adaptive PPTX round-trip
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # presentation-export is gitignored; sync it (v0.3.x via presentationExportVersion)
+      # so the dev compose bind-mount (./ -> /app) exposes the converter in-container.
+      - name: Sync export runtime
+        run: node scripts/sync-presentation-export.cjs --force
+
+      - name: Start dev stack (auth/mem0/image off, cypress binary skipped)
+        run: |
+          cat > g4-ci-override.yml <<'YML'
+          services:
+            development:
+              environment:
+                - DISABLE_AUTH=true
+                - MEM0_ENABLED=false
+                - DISABLE_IMAGE_GENERATION=true
+                - CYPRESS_INSTALL_BINARY=0
+          YML
+          docker compose -f docker-compose.yml -f g4-ci-override.yml up -d development
+
+      - name: Wait for app readiness
+        run: |
+          for i in $(seq 1 120); do
+            fa=$(docker compose exec -T development bash -lc 'curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/openapi.json' 2>/dev/null || true)
+            ng=$(docker compose exec -T development bash -lc 'curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:80/' 2>/dev/null || true)
+            echo "try $i fastapi=$fa nginx=$ng"
+            if [ -n "$fa" ] && [ "$fa" != "000" ] && [ -n "$ng" ] && [ "$ng" != "000" ] && [ "$ng" != "502" ] && [ "$ng" != "504" ]; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "readiness timeout — logs:"; docker compose logs --tail=60 development
+          exit 1
+
+      - name: Run G4 round-trip
+        run: |
+          docker compose exec -T \
+            -e RUN_PPTX_ROUNDTRIP=1 \
+            -e APP_DATA_DIRECTORY=/app_data \
+            -e NEXT_PUBLIC_FAST_API=http://127.0.0.1:8000 \
+            development bash -lc 'export PATH=$PATH:/root/.local/bin; cd /app/servers/fastapi && uv run python ../../scripts/check_adaptive_pptx_roundtrip.py'
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.yml -f g4-ci-override.yml down -v || true
