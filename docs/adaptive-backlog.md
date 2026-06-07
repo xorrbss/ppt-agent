@@ -320,7 +320,12 @@ scratch removed. An adversarial-review workflow over the two code commits return
   user asked to offer new "templates" via adaptive → this is the enabler).
   Per-theme typography/shape/elevation/motif tokens + 3 presets (carbon/pebble/
   broadsheet) + review fixes. commits `acaaff0a`, `6da12058`, `4065ff55`.
-  Optional follow-up: theme-gallery UI · AI style+colour generation · saved themes.
+  **Step C — adaptive "templates" UX: DONE.** C1 theme-preset gallery in the
+  new-deck flow (`ThemeGallery`, applied to the deck post-create, `b6d143f8`);
+  C3 saved custom themes shown in that gallery + resolved on apply (`54abfabf`);
+  C2 standalone `ThemeComposer` (style preset + brand-colour palette → composed
+  theme, `e1bdad8f`) — built standalone, NOT bolted onto the 1202-line ThemePanel
+  (size invariant). All cypress-gated (gate now 16/16).
 - **#4 chart multi-series / block drag-and-drop** — niche; build only if needed.
 - **#10 live LLM e2e** — `userConfig` provider is `codex` but **no CODEX key/auth
   is configured** (only an OPENAI key is set); a full browser e2e also needs the
@@ -336,6 +341,13 @@ scratch removed. An adversarial-review workflow over the two code commits return
   "layout not found" placeholder (accepted, no migration). Verified tsc/build/
   cypress 15·no stray refs. (Supersedes the "Legacy retirement (post-G4)" picker-
   hide note above — code is now deleted, not just hidden.)
+  **Adversarial review fix-forward (`efadc623`):** the review caught backend/CI
+  refs to the deleted `general` that tsc/build/cypress/grep missed — fixed
+  `DEFAULT_TEMPLATES` (now the 6 kept groups; the old list rejected kept groups
+  incl. the adaptive CLI default and accepted deleted ids), the `/generate`
+  template default `general`→`adaptive` (model + `openai_spec.json`), the G4
+  legacy-smoke script (`general`→`korean-biz`, schema-matched), and test refs;
+  removed an orphan `MarketOpportunitySlide.tsx`. Verified 12 affected pytest pass.
 - **#6 G8 acceptance thresholds / adaptive policy** — **DECIDED** (2026-06):
   thresholds finalized at `DEFAULT_THRESHOLDS`; adaptive = default **with opt-out**
   (not forced). See the P6/G8 entry above.

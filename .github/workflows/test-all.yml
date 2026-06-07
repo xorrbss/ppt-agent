@@ -87,6 +87,9 @@ jobs:
     - name: Run adaptive block-edit unit tests
       run: node --experimental-strip-types lib/adaptiveBlockEdit.test.mjs
 
+    - name: Run composeStyledTheme unit test
+      run: node --experimental-strip-types "app/(presentation-generator)/presentation/utils/composeStyledTheme.test.mjs"
+
     - name: Build application
       env:
         NEXT_PUBLIC_FAST_API: http://localhost:8000
