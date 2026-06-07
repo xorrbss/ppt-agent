@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { tableDensity } from "./density";
 import {
   Area,
   AreaChart,
@@ -207,14 +208,12 @@ export const ChartLeaf: React.FC<{ block: AnyBlock }> = ({ block }) => {
 export const TableLeaf: React.FC<{ block: AnyBlock }> = ({ block }) => {
   const headers: string[] = Array.isArray(block?.headers) ? block.headers : [];
   const rows: string[][] = Array.isArray(block?.rows) ? block.rows : [];
-  // Density step-down: 7-8 rows overflow the fixed box, so shrink type + cell
-  // padding (deterministic, no transform — export DOM stays clean).
-  const dense = rows.length >= 7;
+  const d = tableDensity(rows.length);
   return (
     <table
       data-block-id={block.id}
       className="w-full border-collapse text-left"
-      style={{ fontSize: dense ? "var(--fs-small, 0.95rem)" : "var(--fs-body, 1.125rem)", color: TEXT_COLOR }}
+      style={{ fontSize: d.fontSize, color: TEXT_COLOR }}
     >
       {headers.length > 0 && (
         <thead>
@@ -222,7 +221,7 @@ export const TableLeaf: React.FC<{ block: AnyBlock }> = ({ block }) => {
             {headers.map((h, i) => (
               <th
                 key={i}
-                className={`px-4 ${dense ? "py-2" : "py-3"} font-semibold`}
+                className={`${d.thPad} font-semibold`}
                 style={{ background: SURFACE, borderBottom: `2px solid ${PRIMARY}`, color: TEXT_COLOR }}
               >
                 {h}
@@ -235,7 +234,7 @@ export const TableLeaf: React.FC<{ block: AnyBlock }> = ({ block }) => {
         {rows.map((row, ri) => (
           <tr key={ri} style={{ background: ri % 2 ? SURFACE_VARIANT : "transparent" }}>
             {row.map((cell, ci) => (
-              <td key={ci} className={`px-4 ${dense ? "py-1.5" : "py-2.5"}`} style={{ borderBottom: `1px solid ${BORDER}` }}>
+              <td key={ci} className={d.tdPad} style={{ borderBottom: `1px solid ${BORDER}` }}>
                 {cell}
               </td>
             ))}

@@ -23,6 +23,7 @@ import {
   first,
   headingStyle,
 } from "./parts";
+import { cardGridDensity, comparisonDensity } from "./density";
 
 const ON_PRIMARY = "var(--primary-text, #ffffff)";
 
@@ -254,11 +255,7 @@ export const CardGridLayout: React.FC<{ blocks: AnyBlock[] }> = ({ blocks }) => 
   const cards = byType(blocks, "card");
   const n = cards.length;
   const cols = n <= 3 ? Math.max(n, 1) : n <= 6 ? 3 : 4;
-  // Density step-down: 7-8 cards (4 cols) overflow the fixed 1280x720 box, so
-  // shrink type + padding (deterministic, no transform — export DOM stays clean).
-  const dense = n >= 7;
-  const titleFs = dense ? "var(--fs-body, 1.125rem)" : "var(--fs-h4, 1.375rem)";
-  const textFs = dense ? "var(--fs-small, 0.95rem)" : "var(--fs-body, 1.125rem)";
+  const d = cardGridDensity(n);
   return (
     <div className="h-full w-full flex flex-col justify-center" style={{ gap: SECTION_GAP }}>
       {title && (
@@ -270,14 +267,14 @@ export const CardGridLayout: React.FC<{ blocks: AnyBlock[] }> = ({ blocks }) => 
         {cards.map((c) => (
           <div
             key={c.id}
-            className={`flex flex-col ${dense ? "gap-2 p-4" : "gap-3 p-6"}`}
+            className={`flex flex-col ${d.cardClass}`}
             style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: RADIUS_LG, boxShadow: SHADOW_MD }}
           >
-            {c.icon && <IconLeaf icon={c.icon} color={PRIMARY} className={dense ? "w-6 h-6" : "w-8 h-8"} />}
-            <h3 data-block-id={`${c.id}.title`} style={{ ...headingStyle(titleFs), fontWeight: 600 }}>
+            {c.icon && <IconLeaf icon={c.icon} color={PRIMARY} className={d.iconClass} />}
+            <h3 data-block-id={`${c.id}.title`} style={{ ...headingStyle(d.titleFs), fontWeight: 600 }}>
               {c.title}
             </h3>
-            <p data-block-id={`${c.id}.text`} style={{ color: MUTED_COLOR, fontSize: textFs, lineHeight: "var(--lh-body, 1.55)" }}>
+            <p data-block-id={`${c.id}.text`} style={{ color: MUTED_COLOR, fontSize: d.textFs, lineHeight: "var(--lh-body, 1.55)" }}>
               {c.text}
             </p>
           </div>
@@ -290,15 +287,7 @@ export const CardGridLayout: React.FC<{ blocks: AnyBlock[] }> = ({ blocks }) => 
 export const ComparisonLayout: React.FC<{ blocks: AnyBlock[] }> = ({ blocks }) => {
   const title = first(blocks, "title");
   const cols = byType(blocks, "column");
-  // Density step-down by the busiest column: 5-6 items/col overflow the box.
-  // Two levels (>=5, >=6) keep the worst case readable while fitting 1280x720.
-  const maxItems = cols.reduce((m, c) => Math.max(m, Array.isArray(c.items) ? c.items.length : 0), 0);
-  const dense = maxItems >= 5;
-  const veryDense = maxItems >= 6;
-  const headFs = dense ? "var(--fs-body, 1.125rem)" : "var(--fs-h4, 1.375rem)";
-  const itemFs = veryDense ? "var(--fs-caption, 0.8rem)" : dense ? "var(--fs-small, 0.95rem)" : "var(--fs-body, 1.125rem)";
-  const headPad = dense ? "px-5 py-2.5" : "px-6 py-4";
-  const listPad = veryDense ? "gap-1.5 p-3" : dense ? "gap-2 p-4" : "gap-3 p-6";
+  const d = comparisonDensity(cols);
   return (
     <div className="h-full w-full flex flex-col justify-center" style={{ gap: SECTION_GAP }}>
       {title && (
@@ -317,14 +306,14 @@ export const ComparisonLayout: React.FC<{ blocks: AnyBlock[] }> = ({ blocks }) =
             >
               <div
                 data-block-id={`${col.id}.heading`}
-                className={`${headPad} font-bold`}
-                style={{ background: PRIMARY, color: ON_PRIMARY, fontSize: headFs }}
+                className={`${d.headPad} font-bold`}
+                style={{ background: PRIMARY, color: ON_PRIMARY, fontSize: d.headFs }}
               >
                 {col.heading}
               </div>
-              <ul className={`flex flex-col ${listPad}`}>
+              <ul className={`flex flex-col ${d.listClass}`}>
                 {items.map((it) => (
-                  <li key={it.id} data-block-id={it.id} className={`flex items-start ${veryDense ? "gap-2" : "gap-3"}`} style={{ color: TEXT_COLOR, fontSize: itemFs }}>
+                  <li key={it.id} data-block-id={it.id} className={`flex items-start ${d.itemGap}`} style={{ color: TEXT_COLOR, fontSize: d.itemFs }}>
                     <span className="shrink-0 font-bold" style={{ color: PRIMARY }}>
                       ✓
                     </span>
