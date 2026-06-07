@@ -282,3 +282,33 @@ Against `adaptive-layout-design.md §13`:
   `adaptive/parts.tsx` (leaf primitives) + `adaptive/layouts.tsx` (14 archetype
   layouts) + slim `AdaptiveSlide.tsx`; editor binding lives in
   `lib/adaptiveBlockEdit.ts`; composer metrics in `utils/composer_metrics.py`.
+
+## Autonomous backlog sweep — 2026-06-08
+
+Worked the residual backlog (items 1–11) as an autonomous loop. **Done this sweep
+(all pushed):** #7 UploadPage cypress spec rewritten to the fork surface + gated in
+CI (9/9; combined gate 14/14); #1 high-density overflow measured (clips at max item
+counts) → deterministic density step-down (`density.ts`, extends the count-based
+pattern; no transform/effect; export-clean; review-confirmed `<500`-line cleanup);
+#8 TOC-on-adaptive behavior documented (honored via outline→native agenda, no
+double/dropped TOC); #11 local WSL dev container + `presentation-export.v033`
+scratch removed. An adversarial-review workflow over the two code commits returned
+8 findings dismissed (refuted) + 1 confirmed (the line-count breach, since fixed).
+
+**Remaining = decision-gated (not done autonomously, by design):**
+- **#2 schema-driven property panel** — backlog-marked **YAGNI** (inline text +
+  image/icon pickers + item CRUD cover common cases). Build only on request.
+- **#3 v2 per-theme typography scale/shape** — backlog-marked **YAGNI**
+  (`theme_generate` is colors-only; token defaults work across themes). Additive
+  if richer per-theme typography is wanted.
+- **#4 chart multi-series / block drag-and-drop** — niche; build only if needed.
+- **#10 live LLM e2e** — `userConfig` provider is `codex` but **no CODEX key/auth
+  is configured** (only an OPENAI key is set); a full browser e2e also needs the
+  dev stack + an e2e harness. Skipped + recorded; can run an OPENAI-based e2e, or a
+  codex one once auth is provided.
+- **#5 legacy fixed-template hard delete** — ESCALATION (existing decks break →
+  needs a migration/deprecation product decision; no solo deletion).
+- **#6 G8 acceptance thresholds / adaptive-forced vs opt-out policy** — ESCALATION
+  (product decision; proposed defaults live in `composer_metrics.DEFAULT_THRESHOLDS`).
+- **#9 Windows native desktop export** (`convert-win32.exe` absent; web/Docker OK)
+  — ESCALATION (Electron build scope).
