@@ -33,7 +33,7 @@ import { LLMConfig } from "@/types/llm_config";
 import TemplateSelection from "../../outline/components/TemplateSelection";
 import { resolveTemplateSelection, templateSelectionToId } from "@/app/presentation-templates/select";
 import ThemeGallery from "./ThemeGallery";
-import { DEFAULT_THEMES } from "@/app/(presentation-generator)/(dashboard)/theme/components/ThemePanel/constants";
+import { applyDeckTheme } from "./applyDeckTheme";
 
 const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
 const FILE_TYPE_WORD = new Set([".doc", ".docx", ".docm", ".odt", ".rtf"]);
@@ -193,19 +193,6 @@ const UploadPage = () => {
     setConfig((prev) => ({ ...prev, [key]: value } as PresentationConfig));
   };
 
-  // Best-effort: theme is presentation-level (applied at render), so a PATCH after
-  // create is enough for the editor/export to render with it. No preset → no-op.
-  const applySelectedTheme = async (presentationId: string) => {
-    if (!selectedThemeId) return;
-    const preset = DEFAULT_THEMES.find((t: any) => t.id === selectedThemeId);
-    if (!preset) return;
-    try {
-      await PresentationGenerationApi.updatePresentationContent({ id: presentationId, theme: preset });
-    } catch (error) {
-      console.error("Failed to apply selected theme preset", error);
-    }
-  };
-
   const ensureStockImageProviderReady = async (): Promise<boolean> => {
     if (llmConfig?.DISABLE_IMAGE_GENERATION) {
       return true;
@@ -347,7 +334,7 @@ const UploadPage = () => {
       web_search: !!config?.webSearch,
     });
 
-    await applySelectedTheme(createResponse.id);
+    await applyDeckTheme(createResponse.id, selectedThemeId);
     dispatch(setPresentationId(createResponse.id));
     trackEvent(MixpanelEvent.Upload_Documents_Processed, {
       ...getUploadSnapshotProps(),
@@ -388,7 +375,7 @@ const UploadPage = () => {
     });
 
 
-    await applySelectedTheme(createResponse.id);
+    await applyDeckTheme(createResponse.id, selectedThemeId);
     dispatch(setPresentationId(createResponse.id));
     dispatch(clearOutlines())
     trackEvent(MixpanelEvent.Upload_Outline_Generation_Requested, {
