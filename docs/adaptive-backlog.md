@@ -232,9 +232,12 @@ Against `adaptive-layout-design.md §13`:
    GeneralChart); export-time native-vs-vector fidelity is a G4/CI check.
 5. **motif as SVG** — low-intensity decorative `<svg>` behind content; safe to
    flatten.
-6. **fit synchronicity** — JS fit-to-box DEFERRED (KISS): fixed per-archetype
-   sizes + `overflow-hidden` + composer `maxLength`/`maxItems` bounds. No
-   transform. TODO in `adaptive/parts.tsx`.
+6. **fit synchronicity** — measured (backlog #1): max item counts clip, so high
+   density now triggers a **deterministic density step-down** (type + padding) in
+   `card-grid`/`comparison`/`table` — no transform, no useLayoutEffect (SSR/
+   headless-deterministic, export-clean). Realistic max-count decks fit; the
+   absolute schema-max-char ceiling still degrades gracefully via
+   `overflow-hidden`. JS measure-and-shrink fit-to-box remains unneeded.
 7. **split responsibility** — composer-native only. `validate_composition` /
    `_split_content` are NOT used on adaptive (closed schema bounds enforce
    capacity at generation; revision R1).
@@ -254,10 +257,21 @@ Against `adaptive-layout-design.md §13`:
   (final geometry present at capture); table = real `<table><tr><td>`. Both
   carry `data-block-id`. Editable-PPTX fidelity confirmed only at the DOM level
   locally; shape-level fidelity is the G4 gate.
-- **one-shot adaptive + TOC**: the `/generate` adaptive branch skips legacy TOC
-  insertion (the composer emits `agenda` / `section-divider` natively). So
-  `include_table_of_contents` yields N content slides without a separate TOC
-  layout on the adaptive path.
+- **one-shot adaptive + TOC (backlog #8, RESOLVED — documented):**
+  `include_table_of_contents=true` **is honored** on the adaptive `/generate`
+  path, just not via the legacy template TOC layout. The flag flows into outline
+  generation (`get_outline_messages` + `generate_ppt_outline` both receive it,
+  `presentation.py` ~739/769 → system prompt "Include a table of contents slide
+  in the outline sequence"), and `n_slides_to_generate` reserves a slot for it
+  (~721). So the generated **outline contains a TOC slide**, which
+  `compose_and_project` composes into a **native `agenda` archetype** (archetype
+  profiles define agenda as "agenda / table of contents", so the composer's
+  kind-matching maps it). The legacy `_insert_toc_layouts` is intentionally
+  confined to the non-adaptive `else` branch (~894) — so there is **no double
+  TOC** and **no dropped TOC**: adaptive gets exactly one TOC, rendered natively
+  as an editable agenda slide (not a fixed template TOC layout). This is the
+  intended design; verified by code trace. Empirical confirmation belongs to the
+  live e2e (backlog #10). No code change — wiring is already correct.
 - **`n_slides='auto'`**: `get_composition_model_with_n_slides(None)` leaves the
   count unconstrained (composer decides). The interactive `/prepare` branch
   composes exactly one SlideSpec per provided outline slide.
