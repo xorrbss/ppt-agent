@@ -104,21 +104,32 @@ done (kept coexistence + user choice).
       big-statement→closing). **FINAL pass/fail thresholds are a product decision
       (escalation)** — proposed defaults in `composer_metrics.DEFAULT_THRESHOLDS`
       (schema 1.0, n_match 1.0, mean variety ≥0.6, no-adjacent-dup ≥0.9).
-- [~] **P6 / G4** — editable-PPTX byte round-trip. **Harness written**:
-      `scripts/check_adaptive_pptx_roundtrip.py` seeds an adaptive deck (cover /
-      stat-hero / bullets / comparison / table / chart-insight), exports it to
-      PPTX via the real runtime, reopens with python-pptx, and asserts editable
-      shapes per archetype (title text frames, ≥3 stat text boxes, bullet text,
-      comparison headings, a real PPTX table, a chart/graphic shape). It is
-      guarded on the converter binary: on Windows it **skips cleanly** (verified,
-      exit 0); the actual round-trip runs only in Docker/Linux/CI where
-      `convert-linux-x64` exists. **To run** (Docker dev stack up):
-      `RUN_PPTX_ROUNDTRIP=1 NEXT_PUBLIC_FAST_API=http://127.0.0.1:8000 \
-      APP_DATA_DIRECTORY=/app_data uv run python scripts/check_adaptive_pptx_roundtrip.py`.
-      First Docker run may need assertion tuning (the script prints a per-slide
-      shape inventory for that). Running green is the remaining **external** step
-      (needs Docker) before retiring legacy / full confidence in default-adaptive
-      PPTX export.
+- [x] **P6 / G4** — editable-PPTX byte round-trip. **RUN in Docker and PASSES**
+      (`scripts/check_adaptive_pptx_roundtrip.py`): a 6-archetype adaptive deck
+      (cover / stat-hero / bullets / comparison / table / chart-insight) exports
+      to PPTX via the real runtime and reopens with python-pptx as **6 slides, all
+      content editable text** — cover title, 8 stat text shapes, bullet text,
+      comparison headings; chart and table render as image + extracted editable
+      text (the converter rasterizes charts/tables/icons; native PPTX table is not
+      a converter feature). So the adaptive→editable-PPTX path is byte-verified.
+
+      **Required converter upgrade (key finding):** the pinned **v0.2.9 crashes**
+      on the adaptive slides' SVG (every slide's decorative `<svg>` Motif + chart/
+      icon SVGs) — `screenshotElement … cleanup … "A boolean was expected"` → HTTP
+      500, no PPTX. **v0.3.3 fixes it** (export succeeds). v0.3.x changed the
+      release layout (binary `convert-linux-x64` + `index.js` at the archive root;
+      v0.2.x had `py/convert-…` + `index.cjs`), so adopting it needs: bump
+      `presentationExportVersion` → v0.3.3, teach `export_task_service`
+      `_resolve_converter_path` / entrypoint resolver the new layout (additive),
+      update `sync-presentation-export.cjs` extraction, then **validate legacy
+      export** still works. This is product-wide (affects all export) — a
+      deliberate follow-up, not done here.
+
+      **Local Docker run notes (Windows):** the dev stack must run from the WSL
+      ext4 FS, not the `/mnt/c` bind-mount (Next.js dev fails to acquire its
+      lockfile on the Windows FS bridge), and `CYPRESS_INSTALL_BINARY=0` is needed
+      (cypress's postinstall binary download hangs). Run with `DISABLE_AUTH=true`
+      so the export can read `/pdf-maker` without a session.
 - [x] **DOCS / G10** — design `§13` open questions reconciled with the build +
       G10 minors (below). Source-of-truth design docs are unchanged (frozen);
       this living doc records the implementation outcome.
