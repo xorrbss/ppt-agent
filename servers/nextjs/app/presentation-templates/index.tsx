@@ -617,7 +617,7 @@ export const allLayouts: TemplateWithData[] = [
 export const templates: TemplateLayoutsWithSettings[] = [
     {
         id: "adaptive",
-        name: "적응형 (베타)",
+        name: "적응형",
         description: adaptiveSettings.description,
         settings: adaptiveSettings as TemplateGroupSettings,
         layouts: adaptiveTemplates,
@@ -751,6 +751,24 @@ export const templates: TemplateLayoutsWithSettings[] = [
 
 
 ];
+
+// Legacy retirement: the content-first `adaptive` group is the default, and these
+// upstream fixed-template groups are retired from the NEW-deck pickers. They stay
+// registered in `templates` (above) so EXISTING decks that reference them still
+// render — only the picker surface is trimmed. The fork's curated groups
+// (korean-biz / financial-chart / comparison-table / roadmap / org-chart) are kept.
+// To un-retire a group, remove its id here.
+export const RETIRED_GROUP_IDS = new Set<string>([
+    "general", "modern", "standard", "swift", "code", "education",
+    "product-overview", "report", "pitch-deck",
+    "neo-general", "neo-standard", "neo-modern", "neo-swift",
+]);
+
+// Built-in groups offered for NEW decks. Rendering of existing decks still uses
+// `templates` (and getLayoutByLayoutId), which is intentionally left complete.
+export const selectableTemplates: TemplateLayoutsWithSettings[] = templates.filter(
+    (t) => !RETIRED_GROUP_IDS.has(t.id)
+);
 
 // Helper to get templates by group ID
 export function getTemplatesByTemplateName(templateId: string): TemplateWithData[] {

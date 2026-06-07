@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useCallback, memo } from "react";
 
 import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
-import { templates } from "@/app/presentation-templates";
+import { selectableTemplates } from "@/app/presentation-templates";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { CustomTemplates, useCustomTemplateSummaries } from "@/app/hooks/useCustomTemplates";
@@ -115,7 +115,7 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = memo(function Templa
 
   const builtInTemplateCards = useMemo(
     () =>
-      templates.map((template: TemplateLayoutsWithSettings) => (
+      selectableTemplates.map((template: TemplateLayoutsWithSettings) => (
         <BuiltInTemplateCard
           key={template.id}
           template={template}

@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { ArrowUpRight, ChevronRight } from "lucide-react";
-import { templates } from "@/app/presentation-templates";
+import { selectableTemplates } from "@/app/presentation-templates";
 import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
 import {
     useCustomTemplateSummaries,
@@ -109,7 +109,7 @@ const LayoutPreview = () => {
     const { nonNeoInbuilt, neoInbuilt } = useMemo(() => {
         const nonNeo: TemplateLayoutsWithSettings[] = [];
         const neo: TemplateLayoutsWithSettings[] = [];
-        for (const t of templates) {
+        for (const t of selectableTemplates) {
             if (t.id.startsWith("neo")) neo.push(t);
             else nonNeo.push(t);
         }

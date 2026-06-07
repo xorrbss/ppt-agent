@@ -29,8 +29,20 @@ the rollout fork — flip now, accept that byte-PPTX export is DOM-verified only
 until G4). Changed defaults `"korean-biz"`/`"general"` → `"adaptive"` in:
 `store/slices/presentationGenUpload.ts` (UI initial selection),
 `presentation-templates/select.ts` (`DEFAULT_TEMPLATE_ID`), and
-`scripts/ppt-agent.mjs` (CLI). Legacy template groups remain fully selectable
-(coexistence; legacy decks unchanged). The "(베타)" label is kept until G4.
+`scripts/ppt-agent.mjs` (CLI).
+
+**Legacy retirement (post-G4).** Now that G4 is green, the upstream generic
+fixed-template groups (general / modern / standard / swift / code / education /
+product-overview / report / pitch-deck / neo-*) are **retired from the NEW-deck
+pickers** via `RETIRED_GROUP_IDS` + `selectableTemplates` in
+`presentation-templates/index.tsx` (consumed by `outline/TemplateSelection.tsx`
+and dashboard `TemplatePanel.tsx`). The fork's curated groups (korean-biz /
+financial-chart / comparison-table / roadmap / org-chart) are kept alongside
+`adaptive`. **Rendering is untouched** — `templates` + `getLayoutByLayoutId` keep
+ALL groups registered, so EXISTING decks (incl. retired groups) still render
+(verified: an existing `general` deck renders main-slide=2; adaptive renders 7;
+build healthy, tsc=0). The "(베타)" label is removed (적응형). To un-retire a
+group, drop its id from `RETIRED_GROUP_IDS`.
 
 **Risk accepted:** new decks default to adaptive whose PPTX export is verified at
 the DOM-contract level (canvas=0, real leaves, 1280×720) but NOT yet at byte level
