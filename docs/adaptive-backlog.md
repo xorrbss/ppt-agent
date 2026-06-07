@@ -95,9 +95,35 @@ done (kept coexistence + user choice).
       cypress step, combined
       `**/AdaptiveBlockControls.cy.tsx,**/UploadPage.cy.tsx` spec —
       validated green together locally, 14/14).
-- [ ] **Text auto-fit (JS fit-to-box)** — deferred in P5 (TODO in `parts.tsx`).
-      Fixed sizes + `overflow-hidden` + composer maxLength bounds suffice for now;
-      revisit if overflow is observed at max density.
+- [x] **High-density overflow — measured + density-aware sizing (backlog #1).**
+      DONE. anti-YAGNI "measure first": mounted each high-risk archetype at its
+      schema-MAX item count at a real 1280×720 box (Korean text — the product
+      default and ~full-width, the realistic worst case for wrap height) and
+      flagged any leaf whose rect escaped the `overflow-hidden` root.
+      **Measurement method** (re-creatable): cypress component mount of
+      `AdaptiveSlide`; the cypress webpack config loads CSS as a string, so inject
+      the app's real compiled utilities (`tailwindcss -c tailwind.config.ts -i
+      app/globals.css -o <tmp> --minify`) so `aspect-video`/`overflow-hidden`
+      actually constrain the box; measure leaf `getBoundingClientRect` vs root.
+      **Result (max item counts):** at realistic text lengths, `comparison` (3×6)
+      clipped −211px, `table` (6×8) −65px, `card-grid` (8) −57px; `agenda` (8)
+      fit (+80px). At absolute schema-max char lengths everything clipped badly
+      (comparison −1109px). → clipping IS observed at the named max densities.
+      **Fix:** deterministic density step-down (extends the existing count-based
+      pattern, e.g. `AgendaLayout`'s `twoCol = items.length > 4`) — when an
+      archetype is at high item count, shrink type + padding one/two notches via
+      the existing `--fs-*` tokens + tighter Tailwind spacing.
+      `CardGridLayout` (n≥7), `ComparisonLayout` (maxItems≥5, ≥6), `TableLeaf`
+      (rows≥7). **No transform, no useLayoutEffect** → SSR/headless-deterministic,
+      export DOM stays clean (same `data-block-id` leaves, just smaller CSS
+      values); legacy untouched (adaptive-only); `agenda` left as-is (fits).
+      **Verified:** re-measured — all realistic max-count profiles now fit;
+      `[max]` absolute-ceiling improved (comparison −1109→−316, table −214→−21)
+      and still degrades gracefully via `overflow-hidden`. tsc=0. The pathological
+      all-fields-at-max-char ceiling is rare composer output; the lever for it is
+      tightening composer bounds (a #6-style product decision), not the renderer.
+      Measurement harness removed after recording (temp); byte-PPTX export safety
+      is the CI G4 gate.
 
 ## Next (priority order)
 
