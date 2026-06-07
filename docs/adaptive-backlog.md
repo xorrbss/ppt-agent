@@ -150,10 +150,23 @@ done (kept coexistence + user choice).
         comfortable. Verified: spacious deck renders pad-x 112 / section-gap 44
         (vs 80/32), canvas=0; v1 deck unchanged. With the font-pair (above), v2
         themes now vary color + fonts + density.
-  - [ ] **v2 per-theme typography scale / shape** — DEFERRED YAGNI: `theme_generate`
-        is colors-only by design; `deriveThemeTokens` defaults for fs-scale / radius
-        / shadow work across themes. Add additive+versioned if richer per-theme
-        typography is wanted.
+  - [x] **v2 per-theme typography / shape / elevation (#3)** — DONE (user asked
+        for a way to offer "new templates" via adaptive → this is the enabler).
+        `deriveThemeTokens` now reads optional `theme.data.typography` (scale +
+        weights/line-heights/letter-spacing), `.shape` (radiusScale + borderWidth),
+        `.elevation` (flat → no shadows, or explicit), `.motif` (colour/opacity) —
+        additive + versioned, **byte-identical to v1** when absent (verified), and
+        a length-coercion helper (`len()`) guards numeric inputs. Export-clean
+        (token values only); legacy decks ignore the extended tokens. commit
+        `acaaff0a`. **Adaptive "templates" = theme presets:** 3 packs added that
+        exercise the new dims — `carbon` (dark/sharp/flat/tight), `pebble`
+        (warm/rounded/elevated/airy), `broadsheet` (editorial serif/spacious) —
+        in `ThemePanel/constants.ts`, commit `6da12058`. Adversarially reviewed
+        (9 findings → 3 fixed: `saveAsCustom` now spreads `theme.data` so the new
+        keys + density round-trip; numeric length coercion; pebble contrast
+        #c0613a→#ad5230 for WCAG AA), commit `4065ff55`. **Follow-ups (Step C,
+        optional):** theme-gallery picker UI for adaptive · `theme_generate` =
+        style-preset + AI colours · surface saved user themes as "my templates".
   - [ ] tailwind token binding — **YAGNI** (the adaptive renderer already uses
         inline `var(--…)` tokens; tailwind class binding adds no behavior).
   - [ ] tailwind token binding — **YAGNI** (the adaptive renderer already uses
@@ -298,9 +311,11 @@ scratch removed. An adversarial-review workflow over the two code commits return
 **Remaining = decision-gated (not done autonomously, by design):**
 - **#2 schema-driven property panel** — backlog-marked **YAGNI** (inline text +
   image/icon pickers + item CRUD cover common cases). Build only on request.
-- **#3 v2 per-theme typography scale/shape** — backlog-marked **YAGNI**
-  (`theme_generate` is colors-only; token defaults work across themes). Additive
-  if richer per-theme typography is wanted.
+- **#3 v2 per-theme typography/shape/elevation** — **DONE** (no longer YAGNI:
+  user asked to offer new "templates" via adaptive → this is the enabler).
+  Per-theme typography/shape/elevation/motif tokens + 3 presets (carbon/pebble/
+  broadsheet) + review fixes. commits `acaaff0a`, `6da12058`, `4065ff55`.
+  Optional follow-up: theme-gallery UI · AI style+colour generation · saved themes.
 - **#4 chart multi-series / block drag-and-drop** — niche; build only if needed.
 - **#10 live LLM e2e** — `userConfig` provider is `codex` but **no CODEX key/auth
   is configured** (only an OPENAI key is set); a full browser e2e also needs the
