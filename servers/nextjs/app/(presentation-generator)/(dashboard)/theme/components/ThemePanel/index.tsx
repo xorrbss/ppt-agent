@@ -221,7 +221,9 @@ const ThemePanel: React.FC = () => {
 
 
 
-  const template = getTemplatesByTemplateName('neo-general')
+  // Theme preview slides. neo-general was removed (#5); use a kept group's concrete
+  // layouts (they render with the theme's colour vars, same as before).
+  const template = getTemplatesByTemplateName('korean-biz')
   const applyTheme = (theme: Theme) => {
     const cssVariables = {
       '--primary-color': theme.data.colors['primary'],

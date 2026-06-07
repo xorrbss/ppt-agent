@@ -2,7 +2,7 @@
 
 import React from 'react'
 import * as z from "zod";
-import { GeneralChart } from '../general/GeneralChartPrimitives';
+import { GeneralChart } from './GeneralChartPrimitives';
 
 export const layoutId = 'financial-chart-slide'
 export const layoutName = '재무·실적 차트'
