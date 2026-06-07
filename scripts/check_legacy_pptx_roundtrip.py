@@ -40,24 +40,27 @@ from templates.get_layout_by_name import get_layout_by_name  # noqa: E402
 from utils.export_utils import export_presentation  # noqa: E402
 
 PID = uuid.UUID("1e6ac111-0000-4000-8000-000000000011")
-GROUP = "general"
-LAYOUT = "general:general-intro-slide"  # registry layoutId is group-prefixed
+GROUP = "korean-biz"
+LAYOUT = "korean-biz:korean-biz-cover"  # registry layoutId is group-prefixed
 # 1x1 transparent PNG so the legacy <img> has a valid src (no network fetch).
 _PNG = (
     "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwC"
     "AAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
 )
+# Non-adaptive (concrete-TSX) regression guard: a korean-biz deck must still
+# round-trip to editable PPTX via the converter. (Was the now-deleted `general`
+# group; repointed to a kept curated group after the #5 legacy purge.)
 SLIDES = [
     {
-        "title": "레거시 회귀 스모크",
-        "description": "적응형이 아니라 일반(legacy) 템플릿으로 만든 덱이 컨버터 v0.3.x에서도 편집가능 PPTX로 정상 export되는지 확인합니다.",
+        "title": "비적응형 회귀 스모크",
+        "subtitle": "한국형 비즈니스(비적응형) 템플릿 덱이 컨버터에서 편집가능 PPTX로 export되는지 확인",
         "presenterName": "테스트",
         "presentationDate": "2026년 6월",
         "image": {"__image_url__": _PNG, "__image_prompt__": "abstract cover"},
     },
     {
         "title": "두 번째 슬라이드",
-        "description": "멀티 슬라이드 레거시 export 동작을 확인하는 두 번째 일반 템플릿 슬라이드입니다. 텍스트가 편집가능 텍스트프레임으로 나와야 합니다.",
+        "subtitle": "멀티 슬라이드 비적응형 export 동작 확인 — 텍스트가 편집가능 텍스트프레임으로 나와야 함",
         "presenterName": "테스트",
         "presentationDate": "2026년 6월",
         "image": {"__image_url__": _PNG, "__image_prompt__": "abstract"},

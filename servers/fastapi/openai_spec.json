@@ -97,7 +97,7 @@
           "template": {
             "type": "string",
             "title": "Template",
-            "default": "general"
+            "default": "adaptive"
           },
           "files": {
             "anyOf": [

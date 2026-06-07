@@ -20,7 +20,7 @@ def test_empty_input_is_rejected_during_request_validation(fake_async_session):
         n_slides=3,
         language="English",
         export_as="pptx",
-        template="general",
+        template="korean-biz",
     )
 
     with pytest.raises(HTTPException) as exc:
@@ -58,7 +58,7 @@ def test_invalid_llm_payload_raises_structured_http_error(fake_async_session):
         n_slides=2,
         language="English",
         export_as="pdf",
-        template="general",
+        template="korean-biz",
     )
 
     async def failing_outline_stream(*_args, **_kwargs):

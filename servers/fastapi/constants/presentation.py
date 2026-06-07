@@ -1,2 +1,2 @@
-DEFAULT_TEMPLATES = ["general", "modern", "standard", "swift", "korean-biz"]
+DEFAULT_TEMPLATES = ["adaptive", "korean-biz", "financial-chart", "comparison-table", "roadmap", "org-chart"]
 MAX_NUMBER_OF_SLIDES = 50

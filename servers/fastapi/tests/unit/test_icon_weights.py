@@ -18,7 +18,7 @@ def test_icon_weight_settings_uses_only_icon_weight_and_fallback():
 
 def test_presentation_layout_reads_template_icon_weight():
     layout = PresentationLayoutModel(
-        name="general",
+        name="korean-biz",
         ordered=False,
         icon_weight="duotone",
         slides=[SlideLayoutModel(id="intro", json_schema={"title": "Intro"})],
@@ -64,7 +64,7 @@ def test_process_slide_fetches_icons_with_template_weight(monkeypatch):
 
     slide = SlideModel(
         presentation=uuid.uuid4(),
-        layout_group="general",
+        layout_group="korean-biz",
         layout="layout-1",
         index=0,
         content={

@@ -32,7 +32,7 @@ def _fake_request() -> types.SimpleNamespace:
 
 def _mock_layout() -> PresentationLayoutModel:
     return PresentationLayoutModel(
-        name="general",
+        name="korean-biz",
         ordered=False,
         slides=[
             SlideLayoutModel(id="layout-1", name="Title", json_schema={"title": "title"}),
@@ -47,7 +47,7 @@ def test_generate_presentation_handler_full_flow_uses_mocked_dependencies(fake_a
         n_slides=2,
         language="English",
         export_as="pptx",
-        template="general",
+        template="korean-biz",
     )
     presentation_id = uuid.uuid4()
 
@@ -184,7 +184,7 @@ def test_generate_presentation_sync_rejects_invalid_slide_count(fake_async_sessi
         n_slides=0,
         language="English",
         export_as="pdf",
-        template="general",
+        template="korean-biz",
     )
 
     with pytest.raises(HTTPException) as exc:
@@ -206,7 +206,7 @@ def test_generate_presentation_handler_rejects_invalid_llm_json(fake_async_sessi
         n_slides=2,
         language="English",
         export_as="pdf",
-        template="general",
+        template="korean-biz",
     )
 
     async def fake_outline_stream(*_args, **_kwargs):
