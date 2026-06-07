@@ -312,7 +312,7 @@ def test_get_selected_image_provider_invalid_env_raises(monkeypatch):
 
 
 def test_dynamic_outline_and_structure_factories_validate():
-    long_text = "x" * 100
+    long_text = "x" * 400  # SlideOutlineModelWithNSlides.content requires min_length=300
     OutlineCls = get_presentation_outline_model_with_n_slides(1)
     outline = OutlineCls(slides=[{"content": long_text}])
 

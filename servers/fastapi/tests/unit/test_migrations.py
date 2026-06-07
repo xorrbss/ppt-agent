@@ -2,6 +2,7 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, text
 
 import migrations
@@ -14,6 +15,12 @@ def _alembic_config(database_url: str) -> Config:
     )
     config.set_main_option("sqlalchemy.url", database_url)
     return config
+
+
+def _script_head(database_url: str) -> str:
+    # The current alembic head, resolved from the migration scripts — so these
+    # "upgrade to head" assertions don't go stale each time a migration is added.
+    return ScriptDirectory.from_config(_alembic_config(database_url)).get_current_head()
 
 
 def test_legacy_database_with_theme_is_stamped_past_theme_migration(
@@ -70,7 +77,7 @@ def test_upgrade_from_baseline_stamp_skips_existing_theme_column(tmp_path):
                 for row in connection.execute(text("PRAGMA table_info(presentations)"))
             }
 
-        assert version == "c7b70d0f31b1"
+        assert version == _script_head(database_url)
         assert "theme" in columns
     finally:
         engine.dispose()
@@ -120,7 +127,7 @@ def test_upgrade_from_theme_stamp_skips_existing_template_create_infos_table(tmp
                 )
             }
 
-        assert version == "c7b70d0f31b1"
+        assert version == _script_head(database_url)
         assert "template_create_infos" in tables
     finally:
         engine.dispose()
@@ -170,7 +177,7 @@ def test_upgrade_from_template_stamp_skips_existing_chat_history_table(tmp_path)
                 )
             }
 
-        assert version == "c7b70d0f31b1"
+        assert version == _script_head(database_url)
         assert {
             "ix_chat_history_messages_conversation_id",
             "ix_chat_history_messages_position",
