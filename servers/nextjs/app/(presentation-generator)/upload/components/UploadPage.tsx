@@ -32,6 +32,8 @@ import CurrentConfig from "./CurrentConfig";
 import { LLMConfig } from "@/types/llm_config";
 import TemplateSelection from "../../outline/components/TemplateSelection";
 import { resolveTemplateSelection, templateSelectionToId } from "@/app/presentation-templates/select";
+import ThemeGallery from "./ThemeGallery";
+import { DEFAULT_THEMES } from "@/app/(presentation-generator)/(dashboard)/theme/components/ThemePanel/constants";
 
 const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
 const FILE_TYPE_WORD = new Set([".doc", ".docx", ".docm", ".odt", ".rtf"]);
@@ -118,6 +120,7 @@ const UploadPage = () => {
   const dispatch = useDispatch();
   const llmConfig = useSelector((state: RootState) => state.userConfig.llm_config);
   const selectedTemplateId = useSelector((state: RootState) => state.pptGenUpload.selectedTemplate);
+  const selectedThemeId = useSelector((state: RootState) => state.pptGenUpload.selectedTheme);
   const selectedTemplate = useMemo(
     () => resolveTemplateSelection(selectedTemplateId),
     [selectedTemplateId]
@@ -188,6 +191,19 @@ const UploadPage = () => {
 
   const handleConfigChange = (key: keyof PresentationConfig, value: unknown) => {
     setConfig((prev) => ({ ...prev, [key]: value } as PresentationConfig));
+  };
+
+  // Best-effort: theme is presentation-level (applied at render), so a PATCH after
+  // create is enough for the editor/export to render with it. No preset → no-op.
+  const applySelectedTheme = async (presentationId: string) => {
+    if (!selectedThemeId) return;
+    const preset = DEFAULT_THEMES.find((t: any) => t.id === selectedThemeId);
+    if (!preset) return;
+    try {
+      await PresentationGenerationApi.updatePresentationContent({ id: presentationId, theme: preset });
+    } catch (error) {
+      console.error("Failed to apply selected theme preset", error);
+    }
   };
 
   const ensureStockImageProviderReady = async (): Promise<boolean> => {
@@ -331,6 +347,7 @@ const UploadPage = () => {
       web_search: !!config?.webSearch,
     });
 
+    await applySelectedTheme(createResponse.id);
     dispatch(setPresentationId(createResponse.id));
     trackEvent(MixpanelEvent.Upload_Documents_Processed, {
       ...getUploadSnapshotProps(),
@@ -371,6 +388,7 @@ const UploadPage = () => {
     });
 
 
+    await applySelectedTheme(createResponse.id);
     dispatch(setPresentationId(createResponse.id));
     dispatch(clearOutlines())
     trackEvent(MixpanelEvent.Upload_Outline_Generation_Requested, {
@@ -447,6 +465,16 @@ const UploadPage = () => {
             onSelectTemplate={(t) =>
               dispatch(setPptGenUploadState({ selectedTemplate: templateSelectionToId(t) }))
             }
+          />
+        </div>
+
+        <div className="mt-8 w-full">
+          <h2 className="mb-3 text-base font-semibold text-[#101828] font-syne">
+            테마 프리셋 <span className="text-sm font-normal text-[#667085]">(선택)</span>
+          </h2>
+          <ThemeGallery
+            selectedTheme={selectedThemeId}
+            onSelectTheme={(id) => dispatch(setPptGenUploadState({ selectedTheme: id }))}
           />
         </div>
 

@@ -140,4 +140,15 @@ describe('<UploadPage />', () => {
       checkToast('입력이 필요합니다')
     })
   })
+
+  describe('Theme gallery', () => {
+    it('lists presets and selecting one marks it active', () => {
+      cy.get('[data-testid="theme-gallery"]').should('exist')
+      cy.get('[data-testid="theme-option-carbon"]').should('exist')
+      cy.get('[data-testid="theme-option-broadsheet"]').should('exist')
+      cy.get('[data-testid="theme-option-carbon"]').click()
+      cy.get('[data-testid="theme-option-carbon"]').should('have.attr', 'aria-checked', 'true')
+      cy.get('[data-testid="theme-option-none"]').should('have.attr', 'aria-checked', 'false')
+    })
+  })
 })
