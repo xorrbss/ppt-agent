@@ -99,11 +99,11 @@ jobs:
     # validation). Both avoid cypress 14's next-adapter, which is broken on Next 16.
     # The official action handles Xvfb + Linux Electron deps; npm ci already
     # installed the binary, so install: false.
-    - name: Cypress component tests (gate — AdaptiveBlockControls, UploadPage)
+    - name: Cypress component tests (gate — AdaptiveBlockControls, UploadPage, ThemeComposer)
       uses: cypress-io/github-action@v7
       with:
         working-directory: servers/nextjs
         component: true
-        spec: "**/AdaptiveBlockControls.cy.tsx,**/UploadPage.cy.tsx"
+        spec: "**/AdaptiveBlockControls.cy.tsx,**/UploadPage.cy.tsx,**/ThemeComposer.cy.tsx"
         install: false
 
