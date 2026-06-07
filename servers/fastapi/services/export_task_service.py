@@ -127,16 +127,21 @@ class ExportTaskService:
         extension = ".exe" if os.name == "nt" else ""
         platform_name = sys_platform()
         arch_name = sys_arch()
-        candidates = [
-            os.path.join(py_dir, f"convert-{platform_name}-{arch_name}{extension}"),
-            os.path.join(py_dir, f"convert-{platform_name}{extension}"),
-            os.path.join(py_dir, f"convert{extension}"),
-            os.path.join(py_dir, "convert"),
+        names = [
+            f"convert-{platform_name}-{arch_name}{extension}",
+            f"convert-{platform_name}{extension}",
+            f"convert{extension}",
+            "convert",
+        ]
+        # The converter location moved between releases: v0.2.x ships it under
+        # `py/`, v0.3.x at the archive root. Check both (matches the sync script).
+        candidates = [os.path.join(py_dir, n) for n in names] + [
+            os.path.join(export_dir, n) for n in names
         ]
         for candidate in candidates:
             if candidate and os.path.isfile(candidate):
                 return candidate
-        return candidates[1]
+        return candidates[0]
 
     def _build_node_env(self) -> Mapping[str, str]:
         env = os.environ.copy()
