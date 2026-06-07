@@ -327,10 +327,18 @@ scratch removed. An adversarial-review workflow over the two code commits return
   theme, `e1bdad8f`) — built standalone, NOT bolted onto the 1202-line ThemePanel
   (size invariant). All cypress-gated (gate now 16/16).
 - **#4 chart multi-series / block drag-and-drop** — niche; build only if needed.
-- **#10 live LLM e2e** — `userConfig` provider is `codex` but **no CODEX key/auth
-  is configured** (only an OPENAI key is set); a full browser e2e also needs the
-  dev stack + an e2e harness. Skipped + recorded; can run an OPENAI-based e2e, or a
-  codex one once auth is provided.
+- **#10 live LLM e2e** — **GENERATE path verified with REAL codex.** (Correction:
+  codex IS configured — it uses OAuth tokens `CODEX_ACCESS_TOKEN/REFRESH_TOKEN/
+  ACCOUNT_ID` in userConfig, not `CODEX_API_KEY`.) Ran a native backend
+  (DISABLE_AUTH, real userConfig) + `POST /generate` (content + 3 slides, adaptive):
+  real codex produced 3 outlines + an adaptive composition (cover + 6-card
+  card-grid), one schema-retry (normal G8 behaviour), and **persisted a 3-slide
+  adaptive deck** (layout_group `adaptive`, cover archetype, real blocks). So the
+  live LLM → outline → composer → editable adaptive deck chain works end-to-end.
+  **Export step not run natively** (Windows lacks the converter — #9; the editor
+  also wasn't up), but byte-PPTX export is the G4 gate and edit is the cypress
+  gate, so the remaining links are independently verified. A single in-browser
+  pass through all four steps would need a cypress-e2e harness (not set up).
 - **#5 legacy fixed-template hard delete** — **DONE (user-authorized, `434d560e`).**
   Removed all 13 retired groups (general/modern/standard/swift/code/education/
   product-overview/report/pitch-deck/neo-*) — 192 files, ~51k LOC. Prereqs:
