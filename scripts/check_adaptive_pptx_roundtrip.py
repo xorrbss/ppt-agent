@@ -46,10 +46,34 @@ from models.slide_spec_model import (  # noqa: E402
     StatItem, TableSpec, archetype_to_layout_id, spec_to_blocks,
 )
 
-# 1x1 transparent PNG so the image-led <img> has a valid src (no network fetch).
-_PNG = (
-    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwC"
-    "AAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+import struct  # noqa: E402
+import zlib  # noqa: E402
+
+
+def _make_png(w: int = 96, h: int = 96, rgb=(80, 120, 200)) -> bytes:
+    """Minimal valid RGB PNG (stdlib only) — a real, fetchable image fixture."""
+    raw = b"".join(b"\x00" + bytes(rgb) * w for _ in range(h))
+
+    def _chunk(typ: bytes, data: bytes) -> bytes:
+        body = typ + data
+        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + _chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+        + _chunk(b"IDAT", zlib.compress(raw))
+        + _chunk(b"IEND", b"")
+    )
+
+
+# image-led uses a REAL served image (the production path): FastAPI mounts
+# /app_data, so a file written under it is fetchable and the converter embeds it
+# as a PPTX picture. (A data-uri does not embed.)
+_APP_DATA = os.environ.get("APP_DATA_DIRECTORY", "/app_data")
+_IMG_REL = "images/g4-roundtrip.png"
+_IMG_URL = (
+    os.environ.get("NEXT_PUBLIC_FAST_API", "http://127.0.0.1:8000").rstrip("/")
+    + "/app_data/" + _IMG_REL
 )
 from models.sql.presentation import PresentationModel  # noqa: E402
 from models.sql.slide import SlideModel  # noqa: E402
@@ -79,13 +103,18 @@ SPECS = [
         data=[ChartPoint(name="2022", value=100), ChartPoint(name="2023", value=137)],
         takeaways=[BulletItem(text="성장 지속")]),
     ImageLedSpec(archetype="image-led", title="제품 미리보기",
-        image=ImageRef(image_url=_PNG, image_prompt="product preview"),
+        image=ImageRef(image_url=_IMG_URL, image_prompt="product preview"),
         caption="이미지 중심 슬라이드 캡션"),
 ]
 
 
 async def seed():
     layout = await get_layout_by_name("adaptive")
+    # Write the real image fixture under the FastAPI-served app_data dir.
+    img_path = os.path.join(_APP_DATA, _IMG_REL)
+    os.makedirs(os.path.dirname(img_path), exist_ok=True)
+    with open(img_path, "wb") as f:
+        f.write(_make_png())
     async with async_session_maker() as s:
         # Explicitly delete old slides (FK is not cascade-deleted) + presentation,
         # so repeated runs don't accumulate orphaned slides.
@@ -156,12 +185,10 @@ async def main():
             check(f"[{idx}] chart-insight title + a chart/graphic shape",
                   sp.title in text and (has_chart or non_text), failures)
         elif a == "image-led":
-            # Title/caption are the editable guarantee + confirm the archetype
-            # exports without error. Picture embedding needs a real fetchable image
-            # URL (the production path); the 1x1 data-uri fixture does not embed, so
-            # pic is reported but not asserted here.
-            check(f"[{idx}] image-led caption/title text editable (pic={has_pic})",
-                  (sp.caption or "") in text or (sp.title or "") in text,
+            # Real served image (production path) embeds as a PPTX picture, plus
+            # editable caption/title text.
+            check(f"[{idx}] image-led embeds a picture + caption/title text editable",
+                  has_pic and ((sp.caption or "") in text or (sp.title or "") in text),
                   failures)
 
     if failures:

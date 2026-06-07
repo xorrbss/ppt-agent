@@ -111,10 +111,11 @@ done (kept coexistence + user choice).
       slides, all content editable text** — cover title, 8 stat text shapes, bullet
       text, comparison headings, image-led title+caption; chart and table render as
       image + extracted editable text (the converter rasterizes charts/tables/icons;
-      native PPTX table is not a converter feature). image→picture embedding needs
-      a real fetchable image URL (production path; the test's 1x1 data-uri does not
-      embed, so pic is reported not asserted). So the adaptive→editable-PPTX path is
-      byte-verified across text, table, chart, and image archetypes.
+      native PPTX table is not a converter feature). **image→picture embedding is
+      verified** — the harness writes a real PNG under the FastAPI-served `/app_data`
+      and the image-led slide embeds it as a PPTX picture (`pic` asserted; a data-uri
+      does not embed, a real fetchable URL does). So the adaptive→editable-PPTX path
+      is byte-verified across text, table, chart, and image archetypes.
 
       **Required converter upgrade (key finding):** the pinned **v0.2.9 crashes**
       on the adaptive slides' SVG (every slide's decorative `<svg>` Motif + chart/
