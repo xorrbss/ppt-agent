@@ -106,7 +106,7 @@ async def main():
         sh.text_frame.text for sl in prs.slides for sh in sl.shapes if sh.has_text_frame
     )
     check("slide count == n", len(prs.slides) == len(SLIDES))
-    check("legacy title text editable", "레거시 회귀 스모크" in all_text)
+    check("legacy title text editable", "비적응형 회귀 스모크" in all_text)
     check("legacy multi-slide text present", "두 번째 슬라이드" in all_text)
 
     if failures:
