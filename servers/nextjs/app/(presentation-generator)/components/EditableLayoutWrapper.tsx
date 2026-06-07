@@ -6,6 +6,7 @@ import { updateSlideImage, updateSlideIcon, updateImageProperties } from '@/stor
 import ImageEditor from './ImageEditor';
 import IconsEditor from './IconsEditor';
 import AdaptiveBlockControls from './AdaptiveBlockControls';
+import AdaptivePropertyControls from './AdaptivePropertyControls';
 
 interface EditableLayoutWrapperProps {
     children: ReactNode;
@@ -444,6 +445,9 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                 is detected by archetype + blocks[]). Never rendered in readOnly export. */}
             {slideData?.archetype && Array.isArray(slideData?.blocks) && (
                 <AdaptiveBlockControls slideIndex={slideIndex} blocks={slideData.blocks} />
+            )}
+            {slideData?.archetype && Array.isArray(slideData?.blocks) && (
+                <AdaptivePropertyControls slideIndex={slideIndex} blocks={slideData.blocks} />
             )}
 
             {/* Render ImageEditor when an image is being edited */}
