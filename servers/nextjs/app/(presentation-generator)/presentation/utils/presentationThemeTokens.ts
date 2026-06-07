@@ -24,6 +24,26 @@ export function deriveThemeTokens(theme: Theme | null | undefined): Record<strin
   };
   const sp = SPACING[((theme?.data as any)?.density as string) ?? ""] ?? SPACING.comfortable;
 
+  // Tone & manner typography / shape / elevation (v2 — backlog #3). All OPTIONAL
+  // and ADDITIVE: a theme that omits these renders byte-identically to v1 (the
+  // multipliers default to 1 and the explicit values to the current hardcoded
+  // look). This is what lets curated presets feel like distinct "templates"
+  // (tight editorial type + sharp/flat vs. airy rounded/elevated) without any new
+  // layout code. Only the adaptive renderer reads these tokens.
+  const ty = ((theme?.data as any)?.typography ?? {}) as Record<string, any>;
+  const tScale = Number(ty.scale) > 0 ? Number(ty.scale) : 1;
+  const fs = (rem: number) => `${Math.round(rem * tScale * 1000) / 1000}rem`;
+
+  const sh = ((theme?.data as any)?.shape ?? {}) as Record<string, any>;
+  const rScale = Number(sh.radiusScale) >= 0 ? Number(sh.radiusScale) : 1;
+  const rad = (px: number) => `${Math.round(px * rScale)}px`;
+
+  const el = ((theme?.data as any)?.elevation ?? {}) as Record<string, any>;
+  const flat = el.flat === true;
+  const shadow = (key: string, def: string) => el[key] ?? (flat ? "none" : def);
+
+  const mo = ((theme?.data as any)?.motif ?? {}) as Record<string, any>;
+
   return {
     // extended colour roles (light/dark-adaptive via color-mix)
     "--secondary-color": secondary,
@@ -37,39 +57,40 @@ export function deriveThemeTokens(theme: Theme | null | undefined): Record<strin
     "--warning": "#d97706",
     "--danger": "#dc2626",
     "--info": primary,
-    // typography scale (defaults match the current adaptive look; theme can vary later)
-    "--fs-display": "3.75rem",
-    "--fs-h1": "3rem",
-    "--fs-h2": "2.25rem",
-    "--fs-h3": "1.75rem",
-    "--fs-h4": "1.375rem",
-    "--fs-body": "1.125rem",
-    "--fs-small": "0.95rem",
-    "--fs-caption": "0.8rem",
-    "--fw-heading": "700",
-    "--fw-body": "400",
-    "--fw-emphasis": "600",
-    "--lh-heading": "1.15",
-    "--lh-body": "1.55",
-    "--ls-heading": "-0.01em",
+    // typography scale (theme.data.typography; scale multiplies the ramp, default 1)
+    "--fs-display": fs(3.75),
+    "--fs-h1": fs(3),
+    "--fs-h2": fs(2.25),
+    "--fs-h3": fs(1.75),
+    "--fs-h4": fs(1.375),
+    "--fs-body": fs(1.125),
+    "--fs-small": fs(0.95),
+    "--fs-caption": fs(0.8),
+    "--fw-heading": String(ty.headingWeight ?? "700"),
+    "--fw-body": String(ty.bodyWeight ?? "400"),
+    "--fw-emphasis": String(ty.emphasisWeight ?? "600"),
+    "--lh-heading": String(ty.headingLineHeight ?? "1.15"),
+    "--lh-body": String(ty.bodyLineHeight ?? "1.55"),
+    "--ls-heading": String(ty.headingLetterSpacing ?? "-0.01em"),
     // spacing / density (driven by theme.data.density; default = comfortable)
     "--slide-pad-x": `${sp.padX}px`,
     "--slide-pad-y": `${sp.padY}px`,
     "--section-gap": `${sp.section}px`,
     "--block-gap": `${sp.block}px`,
     "--inline-gap": `${sp.inline}px`,
-    // shape
-    "--radius-sm": "6px",
-    "--radius-md": "12px",
-    "--radius-lg": "20px",
+    // shape (theme.data.shape; radiusScale multiplies the ramp, default 1)
+    "--radius-sm": rad(6),
+    "--radius-md": rad(12),
+    "--radius-lg": rad(20),
     "--radius-pill": "999px",
-    "--border-width": "1px",
-    "--shadow-sm": "0 1px 2px rgba(0,0,0,0.04)",
-    "--shadow-md": "0 4px 12px rgba(0,0,0,0.06)",
-    "--shadow-lg": "0 12px 32px rgba(0,0,0,0.08)",
-    // motif (subtle decoration)
-    "--motif-color": accent,
-    "--motif-opacity": "0.07",
+    "--border-width": String(sh.borderWidth ?? "1px"),
+    // elevation (theme.data.elevation; flat:true drops all shadows)
+    "--shadow-sm": shadow("shadowSm", "0 1px 2px rgba(0,0,0,0.04)"),
+    "--shadow-md": shadow("shadowMd", "0 4px 12px rgba(0,0,0,0.06)"),
+    "--shadow-lg": shadow("shadowLg", "0 12px 32px rgba(0,0,0,0.08)"),
+    // motif (subtle decoration; theme.data.motif can override colour/opacity)
+    "--motif-color": mo.color || accent,
+    "--motif-opacity": mo.opacity != null ? String(mo.opacity) : "0.07",
   };
 }
 
