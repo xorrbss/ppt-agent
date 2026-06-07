@@ -326,7 +326,12 @@ scratch removed. An adversarial-review workflow over the two code commits return
   C2 standalone `ThemeComposer` (style preset + brand-colour palette → composed
   theme, `e1bdad8f`) — built standalone, NOT bolted onto the 1202-line ThemePanel
   (size invariant). All cypress-gated (gate now 16/16).
-- **#4 chart multi-series / block drag-and-drop** — niche; build only if needed.
+- **#4 chart multi-series / block DnD** — **multi-series DONE** (`8d2a7932`):
+  optional `series` (2-4 names) + per-point `values[]`, backward-compatible
+  (single-series unchanged); ChartLeaf renders one bar/line/area per series +
+  legend; both schema sides + spec_to_blocks updated; cypress ChartLeaf 3/3 (CI
+  gate 22/22). **Block-add DnD skipped** (anti-YAGNI): AdaptiveBlockControls
+  already has move/add/delete buttons → DnD is redundant polish.
 - **#10 live LLM e2e** — **GENERATE path verified with REAL codex.** (Correction:
   codex IS configured — it uses OAuth tokens `CODEX_ACCESS_TOKEN/REFRESH_TOKEN/
   ACCOUNT_ID` in userConfig, not `CODEX_API_KEY`.) Ran a native backend
