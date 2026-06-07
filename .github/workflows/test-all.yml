@@ -93,16 +93,17 @@ jobs:
         NEXT_PUBLIC_URL: http://localhost:3000
       run: npm run build
     
-    # Gate on the adaptive editor component test only (AdaptiveBlockControls —
-    # the P4b click->store round-trip). Other .cy specs (e.g. the legacy
-    # UploadPage) are not gated: cypress 14's next-adapter is broken on Next 16.
+    # Gate on the component tests that run under the framework:react+webpack
+    # config: AdaptiveBlockControls (P4b click->store round-trip) and UploadPage
+    # (fork upload surface: controls, slides select, file attach + toasts,
+    # validation). Both avoid cypress 14's next-adapter, which is broken on Next 16.
     # The official action handles Xvfb + Linux Electron deps; npm ci already
     # installed the binary, so install: false.
-    - name: Cypress component test (gate — AdaptiveBlockControls)
+    - name: Cypress component tests (gate — AdaptiveBlockControls, UploadPage)
       uses: cypress-io/github-action@v7
       with:
         working-directory: servers/nextjs
         component: true
-        spec: "**/AdaptiveBlockControls.cy.tsx"
+        spec: "**/AdaptiveBlockControls.cy.tsx,**/UploadPage.cy.tsx"
         install: false
 

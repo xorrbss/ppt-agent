@@ -79,8 +79,22 @@ done (kept coexistence + user choice).
       `framework: "react"` + a minimal webpack pipeline (babel-loader + `@` alias).
       So component tests run again. **Gated in CI**: the `test-all` workflow runs
       this spec via `cypress-io/github-action` (scoped to AdaptiveBlockControls, no
-      `continue-on-error`) — verified green in CI (run 27094181261). Other `.cy`
-      specs stay ungated (next-adapter broken on Next 16).
+      `continue-on-error`) — verified green in CI (run 27094181261).
+- [x] **Upload-page component test (backlog #7)** — DONE. The upstream
+      `UploadPage.cy.tsx` tested behavior this fork removed (English "Next"
+      button, `/theme` + `/documents-preview` navigation, a `research-mode-switch`,
+      titles/report endpoints) and broke under Next 16's next-adapter. Rewritten
+      against the fork's actual surface (`framework: react`+webpack config): the
+      Korean upload page mounts with all controls, slide-count select, file
+      attach + sonner toasts, advanced-settings modal opens, and empty-input
+      validation — **9/9 passing locally**. Mount wrapper adds `AppRouterContext`
+      + `<Toaster/>` (sonner only renders with a Toaster in-tree). The dead
+      language-picker test was dropped: the fork has **no language UI** (defaults
+      to Korean; `LanguageSelector` is unused dead code — left untouched, separate
+      cleanup). Now **gated in CI** alongside AdaptiveBlockControls (`test-all.yml`
+      cypress step, combined
+      `**/AdaptiveBlockControls.cy.tsx,**/UploadPage.cy.tsx` spec —
+      validated green together locally, 14/14).
 - [ ] **Text auto-fit (JS fit-to-box)** — deferred in P5 (TODO in `parts.tsx`).
       Fixed sizes + `overflow-hidden` + composer maxLength bounds suffice for now;
       revisit if overflow is observed at max density.
