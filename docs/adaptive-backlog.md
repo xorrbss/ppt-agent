@@ -331,5 +331,16 @@ scratch removed. An adversarial-review workflow over the two code commits return
 - **#6 G8 acceptance thresholds / adaptive policy** — **DECIDED** (2026-06):
   thresholds finalized at `DEFAULT_THRESHOLDS`; adaptive = default **with opt-out**
   (not forced). See the P6/G8 entry above.
-- **#9 Windows native desktop export** (`convert-win32.exe` absent; web/Docker OK)
-  — ESCALATION (Electron build scope).
+- **#9 Windows native desktop export** — **BLOCKED (external dependency).**
+  - violated: 검증 필수 / cannot build without the artifact.
+  - reason: the export runtime is an **external versioned package** (`presentationExportVersion`
+    v0.3.3) whose release ships only a **linux** converter — `sync-presentation-export.cjs`
+    `getConverterCandidates` resolves `convert-linux-x64` / `-amd64` / `convert`, and there is
+    **no `convert-win32`/`.exe`**. `export_task_service` looks for a `.exe` on Windows (os.name
+    == "nt") but none exists, so native Windows desktop export can't run. Web/Docker work because
+    they execute the **Linux** converter. The converter's source is NOT in this repo, so the
+    win32 binary cannot be produced here.
+  - required_change: (1) upstream publishes a win32 build of the export-runtime converter (a
+    `convert-win32-x64.exe` release asset), OR build that converter project for win32 separately;
+    (2) add the win32 candidate to `getConverterCandidates` + the sync extraction; (3) bundle it
+    in the Electron packaging. (1) is the gating step and is outside this repo.
