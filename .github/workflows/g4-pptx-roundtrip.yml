@@ -54,13 +54,21 @@ jobs:
           echo "readiness timeout — logs:"; docker compose logs --tail=60 development
           exit 1
 
-      - name: Run G4 round-trip
+      - name: Run G4 round-trip (adaptive)
         run: |
           docker compose exec -T \
             -e RUN_PPTX_ROUNDTRIP=1 \
             -e APP_DATA_DIRECTORY=/app_data \
             -e NEXT_PUBLIC_FAST_API=http://127.0.0.1:8000 \
             development bash -lc 'export PATH=$PATH:/root/.local/bin; cd /app/servers/fastapi && uv run python ../../scripts/check_adaptive_pptx_roundtrip.py'
+
+      - name: Run legacy export smoke (regression guard)
+        run: |
+          docker compose exec -T \
+            -e RUN_PPTX_ROUNDTRIP=1 \
+            -e APP_DATA_DIRECTORY=/app_data \
+            -e NEXT_PUBLIC_FAST_API=http://127.0.0.1:8000 \
+            development bash -lc 'export PATH=$PATH:/root/.local/bin; cd /app/servers/fastapi && uv run python ../../scripts/check_legacy_pptx_roundtrip.py'
 
       - name: Tear down
         if: always()

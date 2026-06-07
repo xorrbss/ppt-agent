@@ -135,8 +135,10 @@ done (kept coexistence + user choice).
       a Linux runner (`workflow_dispatch` for now — promote to `pull_request` once a
       manual run is confirmed green; Linux runner avoids the `/mnt/c` issue). The
       P4b adaptive block-edit node tests now run in `test-all.yml` (Node 22, TS
-      type-stripping). A legacy-export smoke (generate + export a non-adaptive deck)
-      should be added to the G4 job for full coverage.
+      type-stripping). A **legacy-export smoke** (`scripts/check_legacy_pptx_roundtrip.py`)
+      runs in the same G4 workflow and **PASSES** — a 2-slide `general`-template
+      (non-adaptive) deck round-trips to editable PPTX with v0.3.3, so the converter
+      bump leaves legacy export empirically unaffected.
 - [x] **DOCS / G10** — design `§13` open questions reconciled with the build +
       G10 minors (below). Source-of-truth design docs are unchanged (frozen);
       this living doc records the implementation outcome.
