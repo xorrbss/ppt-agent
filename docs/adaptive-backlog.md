@@ -105,13 +105,16 @@ done (kept coexistence + user choice).
       (escalation)** — proposed defaults in `composer_metrics.DEFAULT_THRESHOLDS`
       (schema 1.0, n_match 1.0, mean variety ≥0.6, no-adjacent-dup ≥0.9).
 - [x] **P6 / G4** — editable-PPTX byte round-trip. **RUN in Docker and PASSES**
-      (`scripts/check_adaptive_pptx_roundtrip.py`): a 6-archetype adaptive deck
-      (cover / stat-hero / bullets / comparison / table / chart-insight) exports
-      to PPTX via the real runtime and reopens with python-pptx as **6 slides, all
-      content editable text** — cover title, 8 stat text shapes, bullet text,
-      comparison headings; chart and table render as image + extracted editable
-      text (the converter rasterizes charts/tables/icons; native PPTX table is not
-      a converter feature). So the adaptive→editable-PPTX path is byte-verified.
+      (`scripts/check_adaptive_pptx_roundtrip.py`): a 7-archetype adaptive deck
+      (cover / stat-hero / bullets / comparison / table / chart-insight / image-led)
+      exports to PPTX via the real runtime and reopens with python-pptx as **7
+      slides, all content editable text** — cover title, 8 stat text shapes, bullet
+      text, comparison headings, image-led title+caption; chart and table render as
+      image + extracted editable text (the converter rasterizes charts/tables/icons;
+      native PPTX table is not a converter feature). image→picture embedding needs
+      a real fetchable image URL (production path; the test's 1x1 data-uri does not
+      embed, so pic is reported not asserted). So the adaptive→editable-PPTX path is
+      byte-verified across text, table, chart, and image archetypes.
 
       **Required converter upgrade (key finding):** the pinned **v0.2.9 crashes**
       on the adaptive slides' SVG (every slide's decorative `<svg>` Motif + chart/

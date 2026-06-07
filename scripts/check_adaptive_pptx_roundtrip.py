@@ -42,8 +42,14 @@ from pptx.enum.shapes import MSO_SHAPE_TYPE  # noqa: E402
 
 from models.slide_spec_model import (  # noqa: E402
     BulletItem, ChartInsightSpec, ChartPoint, ComparisonColumn, ComparisonSpec,
-    CoverSpec, OneColumnBulletsSpec, StatHeroSpec, StatItem, TableSpec,
-    archetype_to_layout_id, spec_to_blocks,
+    CoverSpec, ImageLedSpec, ImageRef, OneColumnBulletsSpec, StatHeroSpec,
+    StatItem, TableSpec, archetype_to_layout_id, spec_to_blocks,
+)
+
+# 1x1 transparent PNG so the image-led <img> has a valid src (no network fetch).
+_PNG = (
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwC"
+    "AAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
 )
 from models.sql.presentation import PresentationModel  # noqa: E402
 from models.sql.slide import SlideModel  # noqa: E402
@@ -72,6 +78,9 @@ SPECS = [
     ChartInsightSpec(archetype="chart-insight", title="매출 추이", chart_type="bar",
         data=[ChartPoint(name="2022", value=100), ChartPoint(name="2023", value=137)],
         takeaways=[BulletItem(text="성장 지속")]),
+    ImageLedSpec(archetype="image-led", title="제품 미리보기",
+        image=ImageRef(image_url=_PNG, image_prompt="product preview"),
+        caption="이미지 중심 슬라이드 캡션"),
 ]
 
 
@@ -146,6 +155,14 @@ async def main():
             non_text = any(not sh.has_text_frame for sh in slide.shapes)
             check(f"[{idx}] chart-insight title + a chart/graphic shape",
                   sp.title in text and (has_chart or non_text), failures)
+        elif a == "image-led":
+            # Title/caption are the editable guarantee + confirm the archetype
+            # exports without error. Picture embedding needs a real fetchable image
+            # URL (the production path); the 1x1 data-uri fixture does not embed, so
+            # pic is reported but not asserted here.
+            check(f"[{idx}] image-led caption/title text editable (pic={has_pic})",
+                  (sp.caption or "") in text or (sp.title or "") in text,
+                  failures)
 
     if failures:
         print(f"\nG4 FAIL: {len(failures)} assertion(s) failed: {failures}")
