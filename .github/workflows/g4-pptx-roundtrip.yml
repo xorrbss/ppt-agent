@@ -1,13 +1,17 @@
 # G4 — editable-PPTX byte round-trip for adaptive decks.
 # Runs the full stack (FastAPI + Next + export converter) in Docker on a Linux
-# runner and asserts a 6-archetype adaptive deck exports to editable PPTX shapes
-# (scripts/check_adaptive_pptx_roundtrip.py). Mirrors the verified local procedure.
+# runner and asserts a 7-archetype adaptive deck (+ a legacy regression smoke)
+# exports to editable PPTX shapes (scripts/check_adaptive_pptx_roundtrip.py +
+# check_legacy_pptx_roundtrip.py).
 #
-# workflow_dispatch only for now (heavy: builds the dev image + boots the stack).
-# Promote to pull_request once a manual run is confirmed green.
+# PR-gate: validated green in real CI (run 27089398688, 4m52s) before promotion.
 name: G4 byte-PPTX round-trip (adaptive)
 
 on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:

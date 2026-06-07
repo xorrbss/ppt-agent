@@ -135,8 +135,10 @@ done (kept coexistence + user choice).
       so the export can read `/pdf-maker` without a session.
 
       **CI:** `.github/workflows/g4-pptx-roundtrip.yml` runs this gate in Docker on
-      a Linux runner (`workflow_dispatch` for now — promote to `pull_request` once a
-      manual run is confirmed green; Linux runner avoids the `/mnt/c` issue). The
+      a Linux runner. **Validated green in real CI** (run 27089398688, 4m52s — both
+      adaptive G4 and the legacy smoke passed) and **promoted to a PR-gate** (`push`
+      + `pull_request` to `main`, plus `workflow_dispatch`; Linux runner avoids the
+      `/mnt/c` issue). The
       P4b adaptive block-edit node tests now run in `test-all.yml` (Node 22, TS
       type-stripping). A **legacy-export smoke** (`scripts/check_legacy_pptx_roundtrip.py`)
       runs in the same G4 workflow and **PASSES** — a 2-slide `general`-template
