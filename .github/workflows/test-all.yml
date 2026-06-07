@@ -93,14 +93,16 @@ jobs:
         NEXT_PUBLIC_URL: http://localhost:3000
       run: npm run build
     
-    - name: Run Cypress component tests
-      continue-on-error: true
-      run: |
-        # Check if Cypress tests exist
-        if [ -d "cypress" ] || [ -n "$(find . -name '*.cy.*' -type f 2>/dev/null)" ]; then
-          echo "Running Cypress component tests..."
-          npx cypress run --component
-        else
-          echo "No Cypress tests found, skipping component tests"
-        fi
+    # Gate on the adaptive editor component test only (AdaptiveBlockControls —
+    # the P4b click->store round-trip). Other .cy specs (e.g. the legacy
+    # UploadPage) are not gated: cypress 14's next-adapter is broken on Next 16.
+    # The official action handles Xvfb + Linux Electron deps; npm ci already
+    # installed the binary, so install: false.
+    - name: Cypress component test (gate — AdaptiveBlockControls)
+      uses: cypress-io/github-action@v6
+      with:
+        working-directory: servers/nextjs
+        component: true
+        spec: "**/AdaptiveBlockControls.cy.tsx"
+        install: false
 
