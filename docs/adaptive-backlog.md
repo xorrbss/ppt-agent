@@ -77,7 +77,10 @@ done (kept coexistence + user choice).
       (`CYPRESS_INSTALL_BINARY=<cdn zip>`, extracted via Python since cypress's
       unzipper also stalls on Windows), and switch `cypress.config.ts` to
       `framework: "react"` + a minimal webpack pipeline (babel-loader + `@` alias).
-      So component tests run again.
+      So component tests run again. **Gated in CI**: the `test-all` workflow runs
+      this spec via `cypress-io/github-action` (scoped to AdaptiveBlockControls, no
+      `continue-on-error`) — verified green in CI (run 27094181261). Other `.cy`
+      specs stay ungated (next-adapter broken on Next 16).
 - [ ] **Text auto-fit (JS fit-to-box)** — deferred in P5 (TODO in `parts.tsx`).
       Fixed sizes + `overflow-hidden` + composer maxLength bounds suffice for now;
       revisit if overflow is observed at max density.
