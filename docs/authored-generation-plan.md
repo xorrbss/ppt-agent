@@ -4,6 +4,34 @@
 > verifiable. This is the agreed FUNDAMENTAL fix for "quality is still much lower than
 > Genspark / Manus / Claude". Repo: `C:\project\PPT-agent\ppt-agent` (git, origin/main).
 
+## STATUS — COMPLETE (2026-06-08, all 5 phases shipped & pushed to origin/main)
+
+Authored mode is live as an opt-in `template:"authored"` (CLI `--mode authored`). The
+default adaptive/template path is untouched (288 pytest tests pass). Commits:
+`cbebe71a` P1 authoring core · `84fe77a7` P2 deck+image-PPTX · `7a5cf8d8` P3 vision-QA ·
+`afb50ff8` P4 wiring (handler branch + service + CLI).
+
+- **Open decision #1 (Anthropic key): RESOLVED → shipped codex-quality.** No Anthropic
+  key is configured; the selected provider is **codex / gpt-5.5**. Authoring is
+  provider-agnostic (one `client.generate` text call), so it runs on whatever provider
+  is configured — add an Anthropic key + select `anthropic` to switch with zero code
+  changes. Verified output on codex is frontier-grade (see below), so this was not a
+  blocker.
+- **Verified by rendering REAL decks** (not just unit tests): three coherent,
+  consulting-grade decks — Korean "2026 생성형 AI" (6 slides), Korean "클라우드 전환" (4,
+  through the real handler), English "Edge Computing" (6, real handler + vision-QA on).
+  All open in PowerPoint (valid OOXML). Vision-QA caught injected overflow/placeholder/
+  low-contrast flaws and re-authored them clean.
+- **Bonus:** because assembly is pure-Python (python-pptx / PIL), authored export works
+  on Windows even though the byte-PPTX converter runtime is Linux-only.
+- **Files (all ≤500):** `utils/llm_calls/author_slide.py` (133),
+  `utils/llm_calls/author_deck.py` (85), `utils/llm_calls/author_vision_qa.py` (94),
+  `services/authored_presentation_service.py` (172), `utils/slide_capture.py` render
+  helper (127). Handler gained only a thin routing branch.
+- **Optional follow-ups (not blockers):** expose a brand/primary-colour + wordmark knob
+  in the request/UI (today defaults to a brand blue + title-derived topic); granular
+  per-shape PPTX editability (currently image-per-slide, user-accepted).
+
 ## Why (decision, settled)
 
 - The quality gap is **paradigm**, not polish. Today: the model FILLS one of ~14 fixed
