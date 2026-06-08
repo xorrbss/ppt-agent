@@ -56,12 +56,12 @@ class OneColumnBulletsSpec(BaseModel):
     archetype: Literal["one-column-bullets"]
     title: str = Field(max_length=80)
     lead: Optional[str] = Field(default=None, max_length=420)
-    bullets: List[BulletItem] = Field(min_length=1, max_length=6)
+    bullets: List[BulletItem] = Field(min_length=3, max_length=6)
     speaker_note: str = Field(default="", max_length=500)
 
 
 class StatItem(BaseModel):
-    value: str = Field(max_length=8)
+    value: str = Field(max_length=12)
     label: str = Field(max_length=28)
     delta: Optional[str] = Field(default=None, max_length=16)
     caption: Optional[str] = Field(default=None, max_length=60)
@@ -70,7 +70,7 @@ class StatItem(BaseModel):
 class StatHeroSpec(BaseModel):
     archetype: Literal["stat-hero"]
     title: str = Field(max_length=80)
-    stats: List[StatItem] = Field(min_length=1, max_length=4)
+    stats: List[StatItem] = Field(min_length=2, max_length=4)
     speaker_note: str = Field(default="", max_length=500)
 
 
@@ -91,7 +91,7 @@ class BigStatementSpec(BaseModel):
 class AgendaSpec(BaseModel):
     archetype: Literal["agenda"]
     title: str = Field(max_length=80)
-    items: List[BulletItem] = Field(min_length=2, max_length=8)
+    items: List[BulletItem] = Field(min_length=3, max_length=8)
     speaker_note: str = Field(default="", max_length=500)
 
 
@@ -118,7 +118,7 @@ class CardGridSpec(BaseModel):
 
 class ComparisonColumn(BaseModel):
     heading: str = Field(max_length=40)
-    items: List[Annotated[str, Field(max_length=120)]] = Field(min_length=1, max_length=6)
+    items: List[Annotated[str, Field(max_length=120)]] = Field(min_length=3, max_length=6)
 
 
 class ComparisonSpec(BaseModel):
@@ -145,7 +145,7 @@ class TwoColumnSpec(BaseModel):
     archetype: Literal["two-column"]
     title: str = Field(max_length=80)
     lead: Optional[str] = Field(default=None, max_length=300)
-    bullets: List[BulletItem] = Field(min_length=2, max_length=6)
+    bullets: List[BulletItem] = Field(min_length=3, max_length=6)
     image: ImageRef
     speaker_note: str = Field(default="", max_length=500)
 
@@ -174,7 +174,7 @@ class ChartInsightSpec(BaseModel):
     # Optional 2-4 series names for a multi-series chart (bar/line/area); when set,
     # each ChartPoint should provide `values` aligned to these. Omit for a single series.
     series: Optional[List[str]] = Field(default=None, min_length=2, max_length=4)
-    takeaways: List[BulletItem] = Field(min_length=1, max_length=3)
+    takeaways: List[BulletItem] = Field(min_length=2, max_length=3)
     speaker_note: str = Field(default="", max_length=500)
 
 

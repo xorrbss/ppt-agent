@@ -82,6 +82,71 @@ def structured_validation_feedback_user_message(
     )
 
 
+def _resolve_ref(schema: Any, root: dict) -> Any:
+    """Resolve a local $ref ('#/$defs/X') against the root schema; passthrough otherwise."""
+    if isinstance(schema, dict) and isinstance(schema.get("$ref"), str):
+        ref = schema["$ref"]
+        if ref.startswith("#/"):
+            node: Any = root
+            for part in ref[2:].split("/"):
+                if isinstance(node, dict):
+                    node = node.get(part, {})
+                else:
+                    return {}
+            return node if isinstance(node, dict) else {}
+    return schema
+
+
+def clamp_to_schema(value: Any, schema: Any, root: dict) -> Any:
+    """Best-effort make `value` satisfy the schema's upper bounds: truncate strings
+    past maxLength and arrays past maxItems (recursively, resolving $ref and the
+    discriminated union by archetype/type). Last-resort salvage so a slightly
+    over-long LLM response degrades to a valid (trimmed) deck instead of crashing.
+    Cannot fix under-fill (min bounds); those are left for the retry loop."""
+    schema = _resolve_ref(schema, root)
+    if not isinstance(schema, dict):
+        return value
+
+    for combiner in ("oneOf", "anyOf"):
+        if combiner in schema:
+            variants = [_resolve_ref(v, root) for v in schema[combiner]]
+            chosen = None
+            if isinstance(value, dict):
+                for var in variants:
+                    props = var.get("properties", {}) if isinstance(var, dict) else {}
+                    for disc in ("archetype", "type"):
+                        spec = props.get(disc, {})
+                        allowed = (
+                            [spec["const"]] if "const" in spec else spec.get("enum", [])
+                        )
+                        if allowed and value.get(disc) in allowed:
+                            chosen = var
+                            break
+                    if chosen:
+                        break
+            chosen = chosen or (variants[0] if variants else None)
+            return clamp_to_schema(value, chosen, root) if chosen else value
+
+    stype = schema.get("type")
+    if stype == "object" and isinstance(value, dict):
+        for key, sub in schema.get("properties", {}).items():
+            if key in value:
+                value[key] = clamp_to_schema(value[key], sub, root)
+        return value
+    if stype == "array" and isinstance(value, list):
+        items = schema.get("items", {})
+        out = [clamp_to_schema(v, items, root) for v in value]
+        max_items = schema.get("maxItems")
+        if isinstance(max_items, int) and len(out) > max_items:
+            out = out[:max_items]
+        return out
+    if stype == "string" and isinstance(value, str):
+        max_len = schema.get("maxLength")
+        if isinstance(max_len, int) and len(value) > max_len:
+            return value[:max_len].rstrip()
+    return value
+
+
 async def generate_structured_with_schema_retries(
     client: Any,
     model: str,
@@ -137,11 +202,21 @@ async def generate_structured_with_schema_retries(
 
         formatted_validation_errors = " | ".join(validation_errors)
         if validation_attempt == max_validation_loops - 1:
-            LOGGER.warning(
-                "Validation error after max fixes, returning last response: %s",
-                formatted_validation_errors,
-            )
-            return content
+            # Last resort: clamp over-length strings / over-count arrays to the schema
+            # so the response is valid (trimmed) rather than crashing the caller.
+            clamped = clamp_to_schema(content, json_schema, json_schema)
+            remaining = get_schema_validation_errors(json_schema, clamped, strict=strict)
+            if remaining:
+                LOGGER.warning(
+                    "Validation errors after max fixes + clamp (returning clamped): %s",
+                    " | ".join(remaining),
+                )
+            else:
+                LOGGER.warning(
+                    "Validation errors fixed by clamping after max fixes: %s",
+                    formatted_validation_errors,
+                )
+            return clamped
 
         LOGGER.warning(
             "Validation error, attempting fix %s/%s: %s",

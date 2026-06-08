@@ -48,7 +48,7 @@ export const BulletsBlockSchema = z.object({
 export const StatBlockSchema = z.object({
   id: z.string(),
   type: z.literal("stat"),
-  value: z.string().max(8),
+  value: z.string().max(12),
   label: z.string().max(28),
   delta: z.string().max(16).optional(),
   caption: z.string().max(60).optional(),

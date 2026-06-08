@@ -33,8 +33,32 @@ def _resolve_prompt_language(language: Optional[str]) -> str:
     return s
 
 
+def _verbosity_instructions(verbosity: Optional[str]) -> str:
+    """Density target per field, mirroring generate_slide_content's verbosity scale
+    so the adaptive composer respects the same concise/standard/text-heavy signal."""
+    if verbosity == "concise":
+        return (
+            "Keep body text tight (roughly 50-60% of each body field's budget) while "
+            "still including most allowed list items. Be concrete and specific."
+        )
+    if verbosity == "text-heavy":
+        return (
+            "Make body text rich and detailed and populate the MAXIMUM number of list "
+            "items each archetype allows. Always stay within every field's max-length; "
+            "keep titles, eyebrows, labels and stat values short."
+        )
+    # standard / default: still apply real density pressure (the common path)
+    return (
+        "Give body text real substance and populate most or all allowed list items, "
+        "while staying within every field's max-length. Favor substance over brevity; "
+        "keep titles, eyebrows, labels and stat values short."
+    )
+
+
 def get_system_prompt(
-    instructions: Optional[str] = None, tone: Optional[str] = None
+    instructions: Optional[str] = None,
+    tone: Optional[str] = None,
+    verbosity: Optional[str] = None,
 ) -> str:
     return (
         "You are an expert presentation slide composer (NotebookLM / Gamma style).\n"
@@ -51,9 +75,13 @@ def get_system_prompt(
         "   - the opening/title slide → cover; a table-of-contents → agenda;\n"
         "   - a single bold message/quote → big-statement; a section transition → section-divider;\n"
         "   - the final thank-you/contact slide → closing.\n"
-        "2. Fill that archetype's fields from the slide's content, staying within EVERY "
-        "max-length and max-item limit. For image slides, write a vivid English __image_prompt__ "
-        "and leave __image_url__ empty.\n"
+        "2. Fill that archetype's fields from the slide's content. Expand the BODY fields "
+        "(leads, bullets, card text, takeaways, captions, speaker notes) with substantive "
+        "detail and populate the MAXIMUM number of list items the archetype allows — never "
+        "ship under-filled lists. Keep SHORT fields (titles, eyebrows, labels, stat values, "
+        "step labels, attributions) tight. NEVER exceed any field's max-length or max-item "
+        "limit — over-long output is rejected. For image slides, write a vivid English "
+        "__image_prompt__ and leave __image_url__ empty.\n"
         "3. VARIETY & RHYTHM (compose the deck as a whole, not slide-by-slide):\n"
         "   - NEVER use the same archetype on two adjacent slides; avoid 3 of the same kind in a row.\n"
         "   - Insert a breather (section-divider, big-statement, or image-led) roughly every "
@@ -64,6 +92,14 @@ def get_system_prompt(
         f"{capacity_menu_text()}\n"
         "Be specific and concrete; never invent facts beyond the provided content. "
         "Output one composed slide per input outline slide, in the same order.\n"
+        "\n# Content Depth\n"
+        "- Be specific and concrete: prefer named examples, figures, dates, percentages, "
+        "and cause-effect detail over generic statements.\n"
+        "- Genuinely expand each outline point into substantive prose — do not merely "
+        "restate or summarize the outline.\n"
+        "- Every bullet, card, stat, or point must carry real, distinct information; never "
+        'use filler such as "various aspects" or vague placeholders.\n'
+        f"\n# Verbosity\n{_verbosity_instructions(verbosity)}\n"
         + (f"\n# Tone\nMake the slides {tone}.\n" if tone else "")
         + (f"\n# User Instructions\n{instructions}\n" if instructions else "")
     )
@@ -81,9 +117,10 @@ def get_messages(
     language: Optional[str],
     instructions: Optional[str] = None,
     tone: Optional[str] = None,
+    verbosity: Optional[str] = None,
 ) -> list[Message]:
     return [
-        SystemMessage(content=get_system_prompt(instructions, tone)),
+        SystemMessage(content=get_system_prompt(instructions, tone, verbosity)),
         UserMessage(content=get_user_prompt(outline_text, language)),
     ]
 
@@ -116,7 +153,9 @@ async def compose_slides(
         content = await generate_structured_with_schema_retries(
             client,
             model,
-            messages=get_messages(outline.to_string(), language, instructions, tone),
+            messages=get_messages(
+                outline.to_string(), language, instructions, tone, verbosity
+            ),
             response_format=response_format,
             json_schema=schema,
             strict=False,
