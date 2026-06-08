@@ -6,6 +6,8 @@ import {
   AnyBlock,
   BLOCK_GAP,
   BORDER,
+  IconLeaf,
+  ImageLeaf,
   MUTED_COLOR,
   PRIMARY,
   RADIUS_LG,
@@ -17,6 +19,7 @@ import {
   first,
   headingStyle,
 } from "./parts";
+import { cardGridDensity } from "./density";
 
 // Composition variants for the adaptive renderer (the `variant` field). The default
 // compositions live in layouts.tsx; AdaptiveSlide.renderArchetype dispatches here on
@@ -140,6 +143,81 @@ export const SectionDividerBoldLayout: React.FC<{ blocks: AnyBlock[] }> = ({ blo
             {title.text}
           </h2>
         )}
+      </div>
+    </div>
+  );
+};
+
+// card-grid / "accent" — a solid primary accent bar (colour top-border, a supported
+// fill) on each card; stronger brand structure than the plain default.
+export const CardGridAccentLayout: React.FC<{ blocks: AnyBlock[] }> = ({ blocks }) => {
+  const title = first(blocks, "title");
+  const cards = byType(blocks, "card");
+  const n = cards.length;
+  const cols = n <= 3 ? Math.max(n, 1) : n <= 6 ? 3 : 4;
+  const d = cardGridDensity(n);
+  return (
+    <div className="h-full w-full flex flex-col justify-center" style={{ gap: SECTION_GAP }}>
+      {title && (
+        <h1 data-block-id={title.id} style={headingStyle("var(--fs-h1, 3rem)")}>
+          {title.text}
+        </h1>
+      )}
+      <div className="grid" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap: BLOCK_GAP }}>
+        {cards.map((c) => (
+          <div
+            key={c.id}
+            className={`flex flex-col ${d.cardClass}`}
+            style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderTop: `3px solid ${PRIMARY}`, borderRadius: RADIUS_LG, boxShadow: SHADOW_MD }}
+          >
+            {c.icon && <IconLeaf icon={c.icon} color={PRIMARY} className={d.iconClass} />}
+            <h3 data-block-id={`${c.id}.title`} style={{ ...headingStyle(d.titleFs), fontWeight: 600 }}>
+              {c.title}
+            </h3>
+            <p data-block-id={`${c.id}.text`} style={{ color: MUTED_COLOR, fontSize: d.textFs, lineHeight: "var(--lh-body, 1.55)" }}>
+              {c.text}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// two-column / "image-left" — mirror of the default with the editable image anchored
+// on the left (the image stays a real <img data-block-id> → picture on export).
+export const TwoColumnImageLeftLayout: React.FC<{ blocks: AnyBlock[] }> = ({ blocks }) => {
+  const title = first(blocks, "title");
+  const lead = first(blocks, "text");
+  const bullets = first(blocks, "bullets");
+  const image = first(blocks, "image");
+  const items: AnyBlock[] = bullets && Array.isArray(bullets.items) ? bullets.items : [];
+  return (
+    <div className="h-full w-full flex flex-col" style={{ gap: SECTION_GAP }}>
+      {title && (
+        <h1 data-block-id={title.id} style={headingStyle("var(--fs-h1, 3rem)")}>
+          {title.text}
+        </h1>
+      )}
+      <div className="grid flex-1 min-h-0 items-center" style={{ gridTemplateColumns: "1fr 1fr", gap: SECTION_GAP }}>
+        {image && (
+          <ImageLeaf block={image} className="h-full w-full" style={{ borderRadius: RADIUS_LG, maxHeight: "460px" }} />
+        )}
+        <div className="flex flex-col" style={{ gap: BLOCK_GAP }}>
+          {lead && (
+            <p data-block-id={lead.id} className="text-xl leading-relaxed" style={{ color: MUTED_COLOR }}>
+              {lead.text}
+            </p>
+          )}
+          <ul className="flex flex-col" style={{ gap: BLOCK_GAP }}>
+            {items.map((it) => (
+              <li key={it.id} data-block-id={it.id} className="flex items-start gap-3 text-xl leading-snug" style={{ color: TEXT_COLOR }}>
+                <span className="mt-2.5 h-2 w-2 shrink-0 rounded-full" style={{ background: PRIMARY }} />
+                <span>{it.text}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
     </div>
   );

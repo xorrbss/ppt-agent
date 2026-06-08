@@ -33,6 +33,26 @@ const statHero = (variant?: string) => ({
     { id: 's2', type: 'stat', value: '-30%', label: 'Downtime' },
   ],
 })
+const cardGrid = (variant?: string) => ({
+  archetype: 'card-grid',
+  ...(variant ? { variant } : {}),
+  blocks: [
+    { id: 'title', type: 'title', text: 'Pillars' },
+    { id: 'c1', type: 'card', title: 'A', text: 'aa' },
+    { id: 'c2', type: 'card', title: 'B', text: 'bb' },
+    { id: 'c3', type: 'card', title: 'C', text: 'cc' },
+  ],
+})
+const twoCol = (variant?: string) => ({
+  archetype: 'two-column',
+  ...(variant ? { variant } : {}),
+  blocks: [
+    { id: 'title', type: 'title', text: 'Overview' },
+    { id: 'lead', type: 'text', text: 'lead' },
+    { id: 'bullets', type: 'bullets', items: [{ id: 'b1', text: 'one' }, { id: 'b2', text: 'two' }] },
+    { id: 'image', type: 'image', image: { __image_url__: 'https://example.com/x.png', __image_prompt__: 'x' } },
+  ],
+})
 
 describe('Adaptive composition variants (B-3)', () => {
   it('cover "left" dispatches + keeps editable leaves', () => {
@@ -54,6 +74,20 @@ describe('Adaptive composition variants (B-3)', () => {
     cy.get('[data-variant="featured"]').should('exist')
     cy.get('[data-block-id="s1.value"]').should('exist')
     cy.get('[data-block-id="s2.value"]').should('exist')
+  })
+
+  it('card-grid "accent" dispatches + keeps card leaves', () => {
+    mount(<AdaptiveSlide data={cardGrid('accent') as any} />)
+    cy.get('[data-variant="accent"]').should('exist')
+    cy.get('[data-block-id="c1.title"]').should('exist')
+    cy.get('[data-block-id="c1.text"]').should('exist')
+  })
+
+  it('two-column "image-left" dispatches + keeps image + bullet leaves', () => {
+    mount(<AdaptiveSlide data={twoCol('image-left') as any} />)
+    cy.get('[data-variant="image-left"]').should('exist')
+    cy.get('img[data-block-id="image"]').should('exist')
+    cy.get('[data-block-id="b1"]').should('exist')
   })
 
   it('variant-less deck renders the default (no data-variant) — backward compat', () => {

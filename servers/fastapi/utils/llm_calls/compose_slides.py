@@ -100,6 +100,8 @@ def get_system_prompt(
         "use \"bold\" as an occasional strong breather between major sections.\n"
         "   - stat-hero: \"even\" (default) or \"featured\" (oversize the single most "
         "important number) — use \"featured\" when one metric clearly leads.\n"
+        "   - card-grid: \"uniform\" (default) or \"accent\" (primary accent bar per card).\n"
+        "   - two-column: \"image-right\" (default) or \"image-left\" (mirror the layout).\n"
         "Omit `variant` to use the default. Only set the values listed above.\n"
         "\n# Content Depth\n"
         "- Be specific and concrete: prefer named examples, figures, dates, percentages, "

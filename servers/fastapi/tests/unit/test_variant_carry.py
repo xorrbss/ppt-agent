@@ -39,6 +39,35 @@ def test_stat_hero_featured_variant_carried():
     assert out["variant"] == "featured"
 
 
+def test_card_grid_accent_variant_carried():
+    from models.slide_spec_model import CardGridSpec, CardItem
+
+    out = spec_to_blocks(
+        CardGridSpec(
+            archetype="card-grid",
+            variant="accent",
+            title="Pillars",
+            cards=[CardItem(title="A", text="a"), CardItem(title="B", text="b"), CardItem(title="C", text="c")],
+        )
+    )
+    assert out["variant"] == "accent"
+
+
+def test_two_column_image_left_variant_carried():
+    from models.slide_spec_model import TwoColumnSpec, BulletItem, ImageRef
+
+    out = spec_to_blocks(
+        TwoColumnSpec(
+            archetype="two-column",
+            variant="image-left",
+            title="Overview",
+            bullets=[BulletItem(text="a"), BulletItem(text="b"), BulletItem(text="c")],
+            image=ImageRef(),
+        )
+    )
+    assert out["variant"] == "image-left"
+
+
 def test_invalid_variant_rejected():
     with pytest.raises(ValidationError):
         SectionDividerSpec(archetype="section-divider", variant="rainbow", title="x")
@@ -49,4 +78,5 @@ def test_composer_prompt_lists_variant_menu():
 
     prompt = get_system_prompt()
     assert "Composition Variants" in prompt
-    assert '"left"' in prompt and '"bold"' in prompt and '"featured"' in prompt
+    for value in ('"left"', '"bold"', '"featured"', '"accent"', '"image-left"'):
+        assert value in prompt

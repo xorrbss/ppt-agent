@@ -117,6 +117,8 @@ class CardItem(BaseModel):
 
 class CardGridSpec(BaseModel):
     archetype: Literal["card-grid"]
+    # "uniform" (default) or "accent" (primary accent bar on each card).
+    variant: Optional[Literal["uniform", "accent"]] = None
     title: str = Field(max_length=80)
     cards: List[CardItem] = Field(min_length=3, max_length=8)
     speaker_note: str = Field(default="", max_length=500)
@@ -149,6 +151,8 @@ class TimelineSpec(BaseModel):
 
 class TwoColumnSpec(BaseModel):
     archetype: Literal["two-column"]
+    # "image-right" (default) or "image-left" (image-anchored, mirrored).
+    variant: Optional[Literal["image-right", "image-left"]] = None
     title: str = Field(max_length=80)
     lead: Optional[str] = Field(default=None, max_length=300)
     bullets: List[BulletItem] = Field(min_length=3, max_length=6)

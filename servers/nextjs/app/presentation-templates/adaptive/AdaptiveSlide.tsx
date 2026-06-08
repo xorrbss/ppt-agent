@@ -19,9 +19,11 @@ import {
   TwoColumnLayout,
 } from "./layouts";
 import {
+  CardGridAccentLayout,
   CoverLeftLayout,
   SectionDividerBoldLayout,
   StatHeroFeaturedLayout,
+  TwoColumnImageLeftLayout,
 } from "./variants";
 
 // Single adaptive renderer for the "adaptive" layout group. Receives a SlideSpec
@@ -74,13 +76,21 @@ function renderArchetype(
     case "closing":
       return <ClosingLayout blocks={blocks} />;
     case "card-grid":
-      return <CardGridLayout blocks={blocks} />;
+      return variant === "accent" ? (
+        <CardGridAccentLayout blocks={blocks} />
+      ) : (
+        <CardGridLayout blocks={blocks} />
+      );
     case "comparison":
       return <ComparisonLayout blocks={blocks} />;
     case "timeline":
       return <TimelineLayout blocks={blocks} />;
     case "two-column":
-      return <TwoColumnLayout blocks={blocks} />;
+      return variant === "image-left" ? (
+        <TwoColumnImageLeftLayout blocks={blocks} />
+      ) : (
+        <TwoColumnLayout blocks={blocks} />
+      );
     case "image-led":
       return <ImageLedLayout blocks={blocks} />;
     case "chart-insight":
