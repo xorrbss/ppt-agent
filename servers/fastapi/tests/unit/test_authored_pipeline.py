@@ -196,3 +196,37 @@ def test_resolve_brand_language_fonts():
     req_en = GeneratePresentationRequest(content="t", language="English", template="authored")
     en = resolve_brand(req_en, _outline(2), "English")
     assert en.fonts == "Inter"
+
+
+def test_resolve_brand_honours_custom_request_fields():
+    req = GeneratePresentationRequest(
+        content="제조업 스마트팩토리 전환 전략 2026",
+        language="Korean",
+        template="authored",
+        primary_color="#FF6600",
+        fonts="Pretendard",
+        wordmark="ACME",
+    )
+    brand = resolve_brand(req, _outline(3), "Korean")
+    assert brand.primary == "#FF6600"
+    assert brand.fonts == "Pretendard"
+    assert brand.wordmark == "ACME"
+
+
+def test_authored_title_prefers_clean_content_over_verbose_outline():
+    from services.authored_presentation_service import authored_title
+
+    outline = PresentationOutlineModel(
+        slides=[
+            SlideOutlineModel(
+                content="# 표지\n발표자 [발표자 이름]  날짜 2026-06-08  개요 매우 긴 생성 텍스트"
+            ),
+            SlideOutlineModel(content="본문"),
+        ]
+    )
+    req = GeneratePresentationRequest(
+        content="제조업 스마트팩토리 전환 전략 2026", template="authored"
+    )
+    title = authored_title(req, outline)
+    assert title == "제조업 스마트팩토리 전환 전략 2026"
+    assert "발표자" not in title

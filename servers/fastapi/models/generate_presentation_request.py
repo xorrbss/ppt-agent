@@ -47,8 +47,19 @@ class GeneratePresentationRequest(BaseModel):
     vision_qa: bool = Field(
         default=False,
         description=(
-            "Opt-in high-quality pass (adaptive only): after composing, render and "
-            "vision-critique each slide and re-compose any flagged as broken. Slower "
+            "Opt-in high-quality pass: after composing/authoring, render and "
+            "vision-critique each slide and re-do any flagged as broken. Slower "
             "and token-heavier; off by default."
         ),
+    )
+    # Authored-mode brand tokens (ignored by the template path). When omitted, authored
+    # mode uses a brand-blue primary + language-aware fonts and no wordmark.
+    primary_color: Optional[str] = Field(
+        default=None, description="Authored mode: brand primary colour (hex, e.g. #2563EB)"
+    )
+    fonts: Optional[str] = Field(
+        default=None, description="Authored mode: brand font family (e.g. 'Noto Sans KR')"
+    )
+    wordmark: Optional[str] = Field(
+        default=None, description="Authored mode: small footer wordmark text"
     )

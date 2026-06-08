@@ -118,6 +118,9 @@ function printHelpAndExit() {
       "  --template <name>       default adaptive",
       "  --mode authored         model-authored bespoke-HTML deck (image PPTX/PDF)",
       "  --vision-qa             authored mode: self-correct flagged slides (slower)",
+      "  --primary-color <hex>   authored mode: brand primary colour (e.g. #2563EB)",
+      "  --fonts <family>        authored mode: brand font family (e.g. 'Noto Sans KR')",
+      "  --wordmark <text>       authored mode: footer wordmark",
       "  --export <pptx|pdf>     default pptx",
       "  --instructions <str>    extra instructions",
       "  --tone <str>            " + TONES.join("|"),
@@ -155,6 +158,10 @@ function buildBody(content, opts) {
   if (opts.noTitle) body.include_title_slide = false;
   if (opts.toc) body.include_table_of_contents = true;
   if (opts.visionQa) body.vision_qa = true;
+  // Authored-mode brand tokens (ignored by the template path).
+  if (opts.primaryColor) body.primary_color = opts.primaryColor;
+  if (opts.fonts) body.fonts = opts.fonts;
+  if (opts.wordmark) body.wordmark = opts.wordmark;
 
   return body;
 }
@@ -524,6 +531,9 @@ async function main() {
     tone: args.tone || null,
     verbosity: args.verbosity || null,
     visionQa: Boolean(args["vision-qa"]),
+    primaryColor: args["primary-color"] || null,
+    fonts: args["fonts"] || null,
+    wordmark: args["wordmark"] || null,
     webSearch: Boolean(args["web-search"]),
     noTitle: Boolean(args["no-title"]),
     toc: Boolean(args.toc),
