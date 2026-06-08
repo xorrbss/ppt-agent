@@ -155,9 +155,29 @@ async def render_html_to_png(html: str, timeout: int = 60) -> bytes:
         return buf.getvalue()
 
 
-# Bound concurrent headless-chrome subprocesses so a large deck does not spawn dozens
-# of browsers at once (memory/CPU). Each render is a separate chrome process.
-RENDER_CONCURRENCY = 4
+# Bound concurrent headless-chrome subprocesses PROCESS-WIDE (not per deck): each render
+# is a separate chrome process, and M concurrent decks would otherwise spawn M×N browsers
+# and exhaust memory/CPU (the observed hang cascade). One shared semaphore caps total
+# chrome across all authored generations in this process. Tune per deploy via
+# AUTHORED_RENDER_CONCURRENCY (low-RAM hosts: 2; beefy: 8).
+def _env_int(name: str, default: int) -> int:
+    try:
+        v = int(os.getenv(name, "").strip())
+        return v if v > 0 else default
+    except (TypeError, ValueError):
+        return default
+
+
+RENDER_CONCURRENCY = _env_int("AUTHORED_RENDER_CONCURRENCY", 4)
+_render_sem: Optional[asyncio.Semaphore] = None
+
+
+def _get_render_sem() -> asyncio.Semaphore:
+    # Created lazily inside the running loop (first use is always within an async call).
+    global _render_sem
+    if _render_sem is None:
+        _render_sem = asyncio.Semaphore(RENDER_CONCURRENCY)
+    return _render_sem
 
 
 def _placeholder_png() -> bytes:
@@ -175,7 +195,7 @@ async def render_html_list_to_pngs(htmls: List[str], timeout: int = 60) -> List[
     """Render many authored HTML slides to PNG bytes (order preserved), with bounded
     concurrency and per-slide resilience: a slide that fails to render becomes a neutral
     placeholder so one failure can't abort the whole deck."""
-    sem = asyncio.Semaphore(RENDER_CONCURRENCY)
+    sem = _get_render_sem()
 
     async def render_one(html: str) -> bytes:
         async with sem:

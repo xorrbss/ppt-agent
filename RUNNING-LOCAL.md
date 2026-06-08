@@ -92,7 +92,37 @@ Key flags: `--content` / `--batch`, `--slides <n|auto>` (default 8), `--language
 `--user`/`--password`, `--out <dir>`, `--timeout <sec>`. `--flag=value` also works.
 Verified end-to-end: a 3-slide Korean PPTX (valid OOXML) generated and downloaded.
 
+## AI 저작(authored) 고품질 모드
+
+A high-quality generation mode where the **model authors a bespoke HTML layout per
+slide** (instead of filling a fixed React template), which is rendered to images and
+assembled into an **image-per-slide PPTX/PDF**. Decks are **view-only in-app** — edit
+the exported PPTX in PowerPoint. The default adaptive/template path is unchanged.
+
+- **Web UI:** on the upload or outline screen, pick the **"AI 저작 (고품질)"** template
+  card, then generate. Generation runs async (minutes) with a progress overlay and opens
+  the viewer when done.
+- **CLI / API:** add `--mode authored` (maps to `template:"authored"`). Use `--async`
+  for long decks (the synchronous path can hit a ~5-min client header timeout).
+  Optional: `--vision-qa` (self-correct flagged slides), and brand tokens
+  `--primary-color <hex>` / `--fonts <family>` / `--wordmark <text>`.
+  ```powershell
+  node scripts/ppt-agent.mjs --content "2026 AI 도입 전략" --mode authored --slides 6 --async --out ./out
+  ```
+- **Rendering needs a headless Chrome.** Local Windows uses installed Chrome
+  (auto-detected; override with `CHROME_PATH`). The **Docker images already bundle
+  `chromium`** and set `PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium`, which the renderer
+  uses — so authored mode works in the standard Docker deploy out of the box. If no
+  Chrome is found, slides render as blank placeholders and a warning is logged.
+- **Provider:** runs on the configured LLM provider (any). Quality is strongest with a
+  design-capable model (e.g. `anthropic` + key); `codex` also produces frontier-grade
+  output. Switching is config-only (no code change).
+- **Concurrency knobs (per deploy):** `AUTHORED_RENDER_CONCURRENCY` (default 4) bounds
+  total concurrent headless-chrome processes process-wide; `AUTHORED_AUTHOR_CONCURRENCY`
+  (default 5) bounds concurrent authoring calls. Lower them (e.g. 2) on low-RAM hosts.
+
 ## Notes
 - API keys live in `app_data/userConfig.json` (gitignored) — never committed.
 - Next.js build output is `.next-build` (not `.next`).
-- Generation+export is synchronous and can take minutes per deck (LLM + headless render).
+- Generation+export is synchronous and can take minutes per deck (LLM + headless render);
+  authored mode is even longer — use the async endpoint / CLI `--async`.

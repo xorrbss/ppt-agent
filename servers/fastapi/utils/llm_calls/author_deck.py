@@ -6,7 +6,8 @@ fast default template path is untouched."""
 
 import asyncio
 import io
-from typing import List
+import os
+from typing import List, Optional
 
 from models.presentation_outline_model import PresentationOutlineModel
 from utils.llm_calls.author_slide import (
@@ -17,10 +18,27 @@ from utils.llm_calls.author_slide import (
     is_valid_slide_html,
 )
 
-# Bound concurrent per-slide model calls so a large deck does not fire dozens of
-# requests at once (provider rate limits). Authored slides are independent, so a
-# small pool keeps throughput high without bursting.
-AUTHOR_CONCURRENCY = 5
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        v = int(os.getenv(name, "").strip())
+        return v if v > 0 else default
+    except (TypeError, ValueError):
+        return default
+
+
+# Bound concurrent per-slide model calls PROCESS-WIDE so that many concurrent decks do
+# not fan out to hundreds of provider requests at once (rate limits). One shared
+# semaphore; tune per deploy via AUTHORED_AUTHOR_CONCURRENCY.
+AUTHOR_CONCURRENCY = _env_int("AUTHORED_AUTHOR_CONCURRENCY", 5)
+_author_sem: Optional[asyncio.Semaphore] = None
+
+
+def _get_author_sem() -> asyncio.Semaphore:
+    global _author_sem
+    if _author_sem is None:
+        _author_sem = asyncio.Semaphore(AUTHOR_CONCURRENCY)
+    return _author_sem
 
 # A light deck-plan: a slide's ROLE nudges the model toward a fitting bespoke layout
 # (cover hero / editorial problem / numbered pillars / phased roadmap / hero metric /
@@ -92,7 +110,7 @@ async def author_deck(outline: PresentationOutlineModel, brand: Brand) -> List[s
     n = len(slides)
     design_system = build_design_system(brand)
     roles = plan_deck_roles(outline)
-    sem = asyncio.Semaphore(AUTHOR_CONCURRENCY)
+    sem = _get_author_sem()
     htmls = await asyncio.gather(
         *[
             _author_one_resilient(
