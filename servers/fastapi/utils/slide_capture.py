@@ -6,6 +6,7 @@ binary) + a deterministic PIL crop: the /pdf-maker page stacks slides at exactly
 import asyncio
 import io
 import os
+import pathlib
 import subprocess
 import tempfile
 from typing import List, Optional
@@ -77,3 +78,50 @@ async def capture_slides(
             crop.save(buf, format="PNG")
             slides.append(buf.getvalue())
         return slides
+
+
+async def render_html_to_png(html: str, timeout: int = 60) -> bytes:
+    """Render a self-contained HTML document to an exact 1280x720 PNG via headless
+    chrome. Used by the authored-mode pipeline (the HTML is authored in-memory, not
+    served from /pdf-maker). Raises RuntimeError if no chrome is found or the
+    screenshot fails."""
+    from PIL import Image
+
+    chrome = find_chrome()
+    if not chrome:
+        raise RuntimeError(
+            "No chrome/chromium found for slide capture (set CHROME_PATH)."
+        )
+    with tempfile.TemporaryDirectory() as td:
+        html_path = os.path.join(td, "slide.html")
+        out = os.path.join(td, "slide.png")
+        with open(html_path, "w", encoding="utf-8") as f:
+            f.write(html)
+        args = [
+            chrome,
+            "--headless=new",
+            "--disable-gpu",
+            "--no-sandbox",
+            "--hide-scrollbars",
+            "--force-device-scale-factor=1",
+            f"--window-size={SLIDE_W},{SLIDE_H}",
+            f"--screenshot={out}",
+            "--virtual-time-budget=20000",
+            pathlib.Path(html_path).as_uri(),
+        ]
+        await asyncio.to_thread(
+            subprocess.run, args, timeout=timeout, capture_output=True
+        )
+        if not os.path.isfile(out):
+            raise RuntimeError("chrome screenshot produced no output file")
+        img = Image.open(out).convert("RGB").crop((0, 0, SLIDE_W, SLIDE_H))
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue()
+
+
+async def render_html_list_to_pngs(htmls: List[str], timeout: int = 60) -> List[bytes]:
+    """Render many authored HTML slides to PNG bytes concurrently (order preserved)."""
+    return list(
+        await asyncio.gather(*[render_html_to_png(h, timeout=timeout) for h in htmls])
+    )
