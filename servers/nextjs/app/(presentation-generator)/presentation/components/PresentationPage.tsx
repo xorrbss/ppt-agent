@@ -54,6 +54,13 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   const { presentationData, isStreaming } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
+  // Authored decks are model-authored images with no React layout (layout is null;
+  // theme.mode === "authored"). They are view-only in-app — editing happens in
+  // PowerPoint via the exported image PPTX.
+  const isAuthoredDeck =
+    !!presentationData &&
+    (((presentationData as any).theme?.mode === "authored") ||
+      !presentationData.layout);
   const slidesLength = presentationData?.slides?.length ?? 0;
   const lastStreamingSlideIndex =
     slidesLength > 0
@@ -296,6 +303,11 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
         className="relative flex h-full flex-col overflow-hidden"
       >
         <PresentationHeader presentation_id={presentation_id} isPresentationSaving={isSaving} currentSlide={selectedSlide} />
+        {isAuthoredDeck && (
+          <div className="shrink-0 bg-[#EFF4FF] border-y border-[#C7D7FE] px-6 py-2 text-center text-xs text-[#2D4E9A] font-medium">
+            이 발표자료는 <span className="font-bold">AI 저작(고품질)</span> 모드입니다 — 인앱은 보기 전용입니다. 내보낸 PPTX를 PowerPoint에서 편집하세요.
+          </div>
+        )}
         <div className="flex flex-1 min-h-0 gap-6 overflow-hidden">
           <div className="w-[120px] h-full shrink-0 self-start sticky top-0 pt-[18px]">
             <SidePanel

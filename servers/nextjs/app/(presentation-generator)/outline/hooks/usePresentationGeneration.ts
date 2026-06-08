@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { notify } from "@/components/ui/sonner";
 import { clearPresentationData } from "@/store/slices/presentationGeneration";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
+import { DashboardApi } from "../../services/api/dashboard";
 import { LoadingState, TABS } from "../types/index";
 import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
 import { getCustomTemplateDetails } from "@/app/hooks/useCustomTemplates";
@@ -119,6 +120,15 @@ export const usePresentationGeneration = (
           if (task?.status === "completed") {
             const newId = task?.data?.presentation_id;
             if (!newId) throw new Error("생성 결과를 찾을 수 없습니다.");
+            // The authored deck is a fresh presentation; delete the upload-created
+            // outline shell so it doesn't linger as an orphan (best-effort).
+            if (presentationId && presentationId !== newId) {
+              try {
+                await DashboardApi.deletePresentation(presentationId);
+              } catch (e) {
+                console.warn("Failed to clean up outline shell presentation", e);
+              }
+            }
             dispatch(clearPresentationData());
             clearTheme();
             router.replace(`/presentation?id=${newId}`);
