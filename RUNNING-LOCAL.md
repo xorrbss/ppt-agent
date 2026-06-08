@@ -42,14 +42,24 @@ cd servers/fastapi; uv sync
 $env:APP_DATA_DIRECTORY="..\..\app_data"; $env:USER_CONFIG_PATH="..\..\app_data\userConfig.json"
 uv run python server.py --port 8000 --reload false
 
-# frontend
+# frontend (USER_CONFIG_PATH is required here too — see note below)
 cd servers/nextjs; npm install
-$env:FAST_API_INTERNAL_URL="http://127.0.0.1:8000"; npm run build; npm run start -- -p 3000
+$env:FAST_API_INTERNAL_URL="http://127.0.0.1:8000"; $env:USER_CONFIG_PATH="..\..\app_data\userConfig.json"; npm run build; npm run start -- -p 3000
 
 # single-origin proxy (serves http://localhost:5000 -> next:3000 / fastapi:8000 / mcp:8001)
 node scripts/presenton-local-proxy.mjs
 ```
 Open http://localhost:5000. First boot shows a one-time admin login (`/api/v1/auth/setup`).
+
+> **`USER_CONFIG_PATH` must be set on the Next.js process too, not only the backend.**
+> The route handlers `/api/user-config` and `/api/can-change-keys` read
+> `process.env.USER_CONFIG_PATH` directly from the Next process. Omit it and the
+> frontend gets an empty config → `hasValidLLMConfig` fails (no `LLM` / no image
+> provider) → `ConfigurationInitializer` treats the config as invalid and pushes
+> dashboard routes to `/`, where `AuthGate` then `replace()`s to `/upload`.
+> Symptom: deep-linking a dashboard route (e.g. `/theme`) bounces to `/upload` and
+> never renders. The same applies to `npm run dev` and to headless verification
+> (Chromium/CDP screenshots) — start Next with `USER_CONFIG_PATH` set.
 
 ## Electron version
 ```powershell
