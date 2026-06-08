@@ -7,12 +7,51 @@ import asyncio
 import io
 import os
 import pathlib
+import signal
 import subprocess
 import tempfile
 from typing import List, Optional
 
 SLIDE_W = 1280
 SLIDE_H = 720
+
+
+def _kill_process_tree(proc: "subprocess.Popen") -> None:
+    """Kill a chrome process AND its renderer/gpu children. `subprocess` timeout only
+    kills the direct child, orphaning chrome's helper processes — and leaked chromes
+    starve later launches (every subsequent render then hangs). Tree-kill prevents the
+    cascade."""
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+            capture_output=True,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    else:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except Exception:
+            proc.kill()
+
+
+def _run_chrome_screenshot(args: List[str], timeout: int) -> None:
+    """Run a headless-chrome screenshot to completion, killing the whole process tree
+    on timeout so a hung render leaks nothing. Callers check for the output file to
+    decide success/failure — a timed-out render simply leaves no file."""
+    popen_kwargs: dict = {"stdout": subprocess.PIPE, "stderr": subprocess.PIPE}
+    if os.name == "nt":
+        popen_kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    else:
+        popen_kwargs["start_new_session"] = True
+    proc = subprocess.Popen(args, **popen_kwargs)
+    try:
+        proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        _kill_process_tree(proc)
+        try:
+            proc.communicate(timeout=5)
+        except Exception:
+            pass
 
 
 def find_chrome() -> Optional[str]:
@@ -64,9 +103,7 @@ async def capture_slides(
             "--virtual-time-budget=20000",
             url,
         ]
-        await asyncio.to_thread(
-            subprocess.run, args, timeout=timeout, capture_output=True
-        )
+        await asyncio.to_thread(_run_chrome_screenshot, args, timeout)
         if not os.path.isfile(out):
             raise RuntimeError("chrome screenshot produced no output file")
         img = Image.open(out).convert("RGB")
@@ -109,9 +146,7 @@ async def render_html_to_png(html: str, timeout: int = 60) -> bytes:
             "--virtual-time-budget=20000",
             pathlib.Path(html_path).as_uri(),
         ]
-        await asyncio.to_thread(
-            subprocess.run, args, timeout=timeout, capture_output=True
-        )
+        await asyncio.to_thread(_run_chrome_screenshot, args, timeout)
         if not os.path.isfile(out):
             raise RuntimeError("chrome screenshot produced no output file")
         img = Image.open(out).convert("RGB").crop((0, 0, SLIDE_W, SLIDE_H))
@@ -120,8 +155,33 @@ async def render_html_to_png(html: str, timeout: int = 60) -> bytes:
         return buf.getvalue()
 
 
+# Bound concurrent headless-chrome subprocesses so a large deck does not spawn dozens
+# of browsers at once (memory/CPU). Each render is a separate chrome process.
+RENDER_CONCURRENCY = 4
+
+
+def _placeholder_png() -> bytes:
+    """A plain neutral 1280x720 PNG used when a single slide fails to render, so the
+    deck still assembles (N valid images) instead of aborting on one bad slide."""
+    from PIL import Image
+
+    img = Image.new("RGB", (SLIDE_W, SLIDE_H), (248, 250, 252))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 async def render_html_list_to_pngs(htmls: List[str], timeout: int = 60) -> List[bytes]:
-    """Render many authored HTML slides to PNG bytes concurrently (order preserved)."""
-    return list(
-        await asyncio.gather(*[render_html_to_png(h, timeout=timeout) for h in htmls])
-    )
+    """Render many authored HTML slides to PNG bytes (order preserved), with bounded
+    concurrency and per-slide resilience: a slide that fails to render becomes a neutral
+    placeholder so one failure can't abort the whole deck."""
+    sem = asyncio.Semaphore(RENDER_CONCURRENCY)
+
+    async def render_one(html: str) -> bytes:
+        async with sem:
+            try:
+                return await render_html_to_png(html, timeout=timeout)
+            except Exception:
+                return _placeholder_png()
+
+    return list(await asyncio.gather(*[render_one(h) for h in htmls]))

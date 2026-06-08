@@ -86,6 +86,15 @@ class PresentationModel(SQLModel, table=True):
     def set_structure(self, structure: PresentationStructureModel):
         self.structure = structure.model_dump()
 
+    def is_authored(self) -> bool:
+        """True for authored-mode decks: the model authored bespoke HTML per slide,
+        rendered to full-bleed images (no React layout/structure — both are None).
+        Such decks are view-only in-app and exported as an image PPTX; callers must
+        not drive them through the template stream/edit/layout paths."""
+        if isinstance(self.theme, dict) and self.theme.get("mode") == "authored":
+            return True
+        return self.layout is None
+
     def get_deck_plan(self):
         if not self.deck_plan:
             return None

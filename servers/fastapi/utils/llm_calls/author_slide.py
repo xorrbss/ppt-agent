@@ -6,6 +6,7 @@ one plain `client.generate` text call against the selected provider (codex /
 anthropic / ...). Opt-in — never on the fast deterministic default path."""
 
 import asyncio
+import html as _html
 import re
 from dataclasses import dataclass
 from typing import Optional
@@ -103,6 +104,45 @@ def extract_html_document(text: str) -> str:
     if end != -1:
         s = s[: end + len("</html>")]
     return s.strip()
+
+
+def is_valid_slide_html(html: str) -> bool:
+    """A usable authored slide must be a non-trivial HTML document with a body. Guards
+    against empty/truncated/garbage model output before it reaches the renderer."""
+    if not html:
+        return False
+    low = html.lower()
+    return len(html) >= 80 and ("<html" in low or "<!doctype" in low) and "<body" in low
+
+
+def fallback_slide_html(
+    content: str, brand: Brand, role: str, index: int, n: int
+) -> str:
+    """A clean, on-brand placeholder slide used when authoring a slide fails or returns
+    invalid HTML — so one bad slide degrades to a simple branded slide instead of
+    aborting the whole deck. System-font stack (no network dependency) for resilience."""
+    primary = brand.primary or "#2563EB"
+    fonts = brand.fonts or "Noto Sans KR"
+    text = _html.escape((content or "").strip())
+    if len(text) > 420:
+        text = text[:420].rstrip() + "…"
+    eyebrow = _html.escape(role or "")
+    marker = f"{index + 1:02d} / {n:02d}"
+    return (
+        "<!DOCTYPE html><html lang=\"ko\"><head><meta charset=\"utf-8\"><style>"
+        f"body{{margin:0;width:1280px;height:720px;overflow:hidden;background:#F8FAFC;"
+        f"font-family:'{fonts}',system-ui,-apple-system,'Malgun Gothic',sans-serif;"
+        "box-sizing:border-box;padding:64px;display:flex;flex-direction:column;}"
+        f".bar{{width:56px;height:6px;background:{primary};margin-bottom:24px;}}"
+        f".eyebrow{{font-size:13px;letter-spacing:.15em;text-transform:uppercase;color:{primary};"
+        "font-weight:700;margin-bottom:18px;}"
+        ".body{font-size:30px;line-height:1.5;color:#0F172A;font-weight:500;max-width:1000px;}"
+        ".foot{margin-top:auto;font-size:13px;color:#64748B;}"
+        "</style></head><body>"
+        f"<div class=\"bar\"></div><div class=\"eyebrow\">{eyebrow}</div>"
+        f"<div class=\"body\">{text}</div><div class=\"foot\">{marker}</div>"
+        "</body></html>"
+    )
 
 
 async def author_slide_html(

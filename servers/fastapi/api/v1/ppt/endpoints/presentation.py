@@ -401,6 +401,14 @@ async def stream_presentation(
     presentation = await sql_session.get(PresentationModel, id)
     if not presentation:
         raise HTTPException(status_code=404, detail="Presentation not found")
+    if presentation.is_authored():
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "AI 저작(authored) 프레젠테이션은 스트리밍 편집기를 사용하지 않습니다. "
+                "뷰어로 열거나 내보낸 PPTX를 사용하세요."
+            ),
+        )
     if not presentation.structure:
         raise HTTPException(
             status_code=400,

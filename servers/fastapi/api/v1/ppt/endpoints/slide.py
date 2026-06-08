@@ -19,6 +19,13 @@ from utils.process_slides import process_old_and_new_slides_and_fetch_assets
 
 SLIDE_ROUTER = APIRouter(prefix="/slide", tags=["Slide"])
 
+# Authored decks are model-authored images (no React layout), so per-slide LLM editing
+# does not apply — the deck is view-only in-app and edited in PowerPoint via the PPTX.
+_AUTHORED_NOT_EDITABLE = (
+    "이 슬라이드는 AI 저작(authored) 모드로 생성되어 인앱 편집을 지원하지 않습니다. "
+    "내보낸 PPTX를 PowerPoint에서 편집하세요."
+)
+
 
 @SLIDE_ROUTER.post("/edit")
 async def edit_slide(
@@ -32,6 +39,11 @@ async def edit_slide(
     presentation = await sql_session.get(PresentationModel, slide.presentation)
     if not presentation:
         raise HTTPException(status_code=404, detail="Presentation not found")
+    if presentation.is_authored():
+        raise HTTPException(
+            status_code=400,
+            detail=_AUTHORED_NOT_EDITABLE,
+        )
 
     memory_context = await MEM0_PRESENTATION_MEMORY_SERVICE.retrieve_context(
         presentation.id,
@@ -101,6 +113,11 @@ async def edit_slide_html(
     presentation = await sql_session.get(PresentationModel, slide.presentation)
     if not presentation:
         raise HTTPException(status_code=404, detail="Presentation not found")
+    if presentation.is_authored():
+        raise HTTPException(
+            status_code=400,
+            detail=_AUTHORED_NOT_EDITABLE,
+        )
 
     html_to_edit = html or slide.html_content
     if not html_to_edit:
