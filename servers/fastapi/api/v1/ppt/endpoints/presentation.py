@@ -1082,6 +1082,10 @@ async def generate_presentation_handler(
                     base_url=vqa_base,
                     instructions=request.instructions,
                 )
+                print(
+                    f"Vision-QA pass complete: re-composed {len(fixed_idx)} slide(s): "
+                    f"{fixed_idx}"
+                )
                 if fixed_idx:
                     by_index = {s.index: s for s in slides}
                     for i in fixed_idx:
