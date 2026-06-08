@@ -39,7 +39,7 @@ from utils.dict_utils import deep_update
 from utils.export_utils import export_presentation
 from utils.layout_capacity import apply_capacity_fit
 from utils.llm_calls.compose_slides import compose_and_project
-from models.slide_spec_model import spec_to_blocks
+from models.slide_spec_model import archetype_to_layout_id, spec_to_blocks
 from utils.llm_calls.generate_content_brief import generate_content_brief
 from utils.llm_calls.generate_presentation_outlines import (
     generate_ppt_outline,
@@ -855,6 +855,7 @@ async def generate_presentation_handler(
         # (outline, structure) pair the rest of the handler consumes — mirrors the
         # interactive /prepare branch. No per-slide content LLM call, no TOC/fit.
         adaptive_composition = None
+        vqa_source_outline = presentation_outlines  # descriptive outline, before projection
         if layout_model.name == "adaptive":
             adaptive_composition, presentation_outlines, presentation_structure = (
                 await compose_and_project(
@@ -1061,6 +1062,40 @@ async def generate_presentation_handler(
         sql_session.add_all(slides)
         sql_session.add_all(generated_assets)
         await sql_session.commit()
+
+        # 8b. Optional vision-QA pass (opt-in via request.vision_qa, adaptive only):
+        # render + critique each slide and re-compose any the model flags as broken.
+        # Best-effort and bounded — wrapped so it can never break or slow the default
+        # (vision_qa=false) path.
+        if getattr(request, "vision_qa", False) and adaptive_composition is not None:
+            try:
+                from utils.llm_calls.vision_qa import run_vision_qa_pass
+
+                vqa_base = (os.getenv("NEXT_PUBLIC_URL") or "http://127.0.0.1").strip()
+                adaptive_composition, fixed_idx = await run_vision_qa_pass(
+                    str(presentation_id),
+                    vqa_source_outline,
+                    adaptive_composition,
+                    language=language_to_use,
+                    tone=request.tone.value,
+                    verbosity=request.verbosity.value,
+                    base_url=vqa_base,
+                    instructions=request.instructions,
+                )
+                if fixed_idx:
+                    by_index = {s.index: s for s in slides}
+                    for i in fixed_idx:
+                        spec = adaptive_composition.slides[i]
+                        sm = by_index.get(i)
+                        if sm is not None:
+                            sm.content = spec_to_blocks(spec)
+                            sm.layout = archetype_to_layout_id(spec.archetype)
+                            sm.speaker_note = spec.speaker_note or ""
+                    sql_session.add_all(slides)
+                    await sql_session.commit()
+                    print(f"Vision-QA fixed slides: {fixed_idx}")
+            except Exception:
+                traceback.print_exc()
 
         if async_status:
             async_status.message = "Exporting presentation"

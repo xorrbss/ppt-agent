@@ -44,3 +44,11 @@ class GeneratePresentationRequest(BaseModel):
     trigger_webhook: bool = Field(
         default=False, description="Whether to trigger subscribed webhooks"
     )
+    vision_qa: bool = Field(
+        default=False,
+        description=(
+            "Opt-in high-quality pass (adaptive only): after composing, render and "
+            "vision-critique each slide and re-compose any flagged as broken. Slower "
+            "and token-heavier; off by default."
+        ),
+    )
