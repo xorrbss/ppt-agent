@@ -62,7 +62,7 @@ const MAX_SLIDES = 50;
 
 function parseArgs(argv) {
   // Flags that take no value.
-  const booleans = new Set(["web-search", "no-title", "toc", "async", "help", "h"]);
+  const booleans = new Set(["web-search", "no-title", "toc", "async", "vision-qa", "help", "h"]);
   const out = { _: [] };
   for (let i = 0; i < argv.length; i++) {
     const tok = argv[i];
@@ -116,6 +116,8 @@ function printHelpAndExit() {
       "  --slides <n|auto>       n_slides (default 8, max 50)",
       '  --language <str>        default "Korean (한국어)"',
       "  --template <name>       default adaptive",
+      "  --mode authored         model-authored bespoke-HTML deck (image PPTX/PDF)",
+      "  --vision-qa             authored mode: self-correct flagged slides (slower)",
       "  --export <pptx|pdf>     default pptx",
       "  --instructions <str>    extra instructions",
       "  --tone <str>            " + TONES.join("|"),
@@ -152,6 +154,7 @@ function buildBody(content, opts) {
   // include_title_slide defaults true server-side; only send when toggled off.
   if (opts.noTitle) body.include_title_slide = false;
   if (opts.toc) body.include_table_of_contents = true;
+  if (opts.visionQa) body.vision_qa = true;
 
   return body;
 }
@@ -514,10 +517,13 @@ async function main() {
     nSlides,
     slidesProvided,
     language: args.language !== undefined ? args.language : "Korean (한국어)",
-    template: args.template || "adaptive",
+    // --mode authored selects the model-authored bespoke-HTML pipeline (maps to
+    // template="authored"); otherwise --template (default adaptive) applies.
+    template: args.mode === "authored" ? "authored" : args.template || "adaptive",
     instructions: args.instructions || null,
     tone: args.tone || null,
     verbosity: args.verbosity || null,
+    visionQa: Boolean(args["vision-qa"]),
     webSearch: Boolean(args["web-search"]),
     noTitle: Boolean(args["no-title"]),
     toc: Boolean(args.toc),

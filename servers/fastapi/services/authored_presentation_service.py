@@ -1,0 +1,172 @@
+"""Authored generation mode pipeline (opt-in, request.template == "authored").
+
+The model AUTHORS bespoke HTML per slide (author_deck), the slides are rendered to
+PNGs, optionally self-corrected via vision-QA, assembled into an image-per-slide
+PPTX (or PDF), and persisted. This bypasses the React-template
+compose/structure/content/export path entirely — so it also works where the
+byte-PPTX export runtime is unavailable (the converter is Linux-only). The fast
+default adaptive/template path is completely untouched."""
+
+import io
+import os
+import traceback
+import uuid
+from typing import List, Optional
+
+from pathvalidate import sanitize_filename
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from models.generate_presentation_request import GeneratePresentationRequest
+from models.presentation_and_path import PresentationPathAndEditPath
+from models.presentation_outline_model import PresentationOutlineModel
+from models.sql.presentation import PresentationModel
+from models.sql.slide import SlideModel
+from utils.asset_directory_utils import get_exports_directory, get_images_directory
+from utils.filename_utils import safe_export_basename
+from utils.llm_calls.author_deck import author_deck, build_image_pptx, plan_deck_roles
+from utils.llm_calls.author_slide import Brand
+from utils.llm_calls.author_vision_qa import revise_authored_deck
+from utils.outline_utils import get_presentation_title_from_presentation_outline
+from utils.slide_capture import render_html_list_to_pngs
+
+AUTHORED_TEMPLATE = "authored"
+_DEFAULT_PRIMARY = "#2563EB"
+
+
+def _is_korean(*candidates: Optional[str]) -> bool:
+    for c in candidates:
+        s = (c or "").lower()
+        if "korea" in s or "한국" in s or s.startswith("ko"):
+            return True
+    return False
+
+
+def resolve_brand(
+    request: GeneratePresentationRequest,
+    outline: PresentationOutlineModel,
+    language: Optional[str],
+) -> Brand:
+    """Build the shared design tokens for the deck. Theme injection point: primary
+    colour + fonts go into every slide's design-system brief. Korean decks default to
+    Noto Sans KR; otherwise a clean sans."""
+    title = get_presentation_title_from_presentation_outline(outline)
+    korean = _is_korean(language, request.language)
+    return Brand(
+        topic=(title or request.content[:120]).strip(),
+        language=language or ("Korean" if korean else "the deck's language"),
+        primary=_DEFAULT_PRIMARY,
+        fonts="Noto Sans KR" if korean else "Inter",
+        wordmark="",
+    )
+
+
+def _save_slide_pngs(presentation_id: uuid.UUID, pngs: List[bytes]) -> List[str]:
+    """Persist slide PNGs under the images dir; return paths relative to it (the form
+    resolve_app_path_to_filesystem / the /app_data static mount understand)."""
+    rel_dir = os.path.join("authored", str(presentation_id))
+    abs_dir = os.path.join(get_images_directory(), rel_dir)
+    os.makedirs(abs_dir, exist_ok=True)
+    refs: List[str] = []
+    for i, png in enumerate(pngs):
+        fname = f"slide_{i}.png"
+        with open(os.path.join(abs_dir, fname), "wb") as f:
+            f.write(png)
+        refs.append(f"{rel_dir.replace(os.sep, '/')}/{fname}")
+    return refs
+
+
+def _build_image_pdf(pngs: List[bytes], out_path: str) -> str:
+    from PIL import Image
+
+    imgs = [Image.open(io.BytesIO(p)).convert("RGB") for p in pngs]
+    imgs[0].save(out_path, save_all=True, append_images=imgs[1:])
+    return out_path
+
+
+def _build_authored_export(
+    request: GeneratePresentationRequest,
+    presentation_id: uuid.UUID,
+    pngs: List[bytes],
+    title: str,
+) -> str:
+    """Assemble the rendered slides into the requested export format (pure Python:
+    python-pptx / PIL — no external converter). Returns the absolute file path."""
+    base = safe_export_basename(
+        sanitize_filename((title or str(presentation_id)).strip() or str(presentation_id))
+    )
+    stem = f"{base}-{presentation_id.hex[:8]}"
+    exports = get_exports_directory()
+    if request.export_as == "pdf":
+        return _build_image_pdf(pngs, os.path.join(exports, f"{stem}.pdf"))
+    return build_image_pptx(pngs, os.path.join(exports, f"{stem}.pptx"))
+
+
+async def generate_authored_presentation(
+    request: GeneratePresentationRequest,
+    presentation_id: uuid.UUID,
+    outline: PresentationOutlineModel,
+    language: Optional[str],
+    sql_session: AsyncSession,
+) -> PresentationPathAndEditPath:
+    """Author -> render -> (optional vision-QA) -> assemble image PPTX/PDF -> persist.
+    Returns the path to the produced file plus the editor path."""
+    title = get_presentation_title_from_presentation_outline(outline)
+    brand = resolve_brand(request, outline, language)
+    roles = plan_deck_roles(outline)
+
+    htmls = await author_deck(outline, brand)
+    pngs = await render_html_list_to_pngs(htmls)
+
+    if getattr(request, "vision_qa", False):
+        try:
+            contents = [s.content for s in outline.slides]
+            htmls, pngs, fixed = await revise_authored_deck(
+                htmls, pngs, contents, roles, brand, max_cycles=1
+            )
+            print(f"[authored] vision-QA revised {len(fixed)} slide(s): {fixed}")
+        except Exception:
+            traceback.print_exc()
+
+    image_refs = _save_slide_pngs(presentation_id, pngs)
+
+    presentation = PresentationModel(
+        id=presentation_id,
+        content=request.content,
+        n_slides=len(htmls),
+        language=language or brand.language,
+        title=title,
+        outlines=outline.model_dump(),
+        layout=None,
+        structure=None,
+        tone=request.tone.value,
+        verbosity=request.verbosity.value,
+        instructions=request.instructions,
+        theme={
+            "mode": AUTHORED_TEMPLATE,
+            "primary": brand.primary,
+            "fonts": brand.fonts,
+            "language": brand.language,
+        },
+    )
+    slides = [
+        SlideModel(
+            presentation=presentation_id,
+            layout_group=AUTHORED_TEMPLATE,
+            layout=f"{AUTHORED_TEMPLATE}:{roles[i]}",
+            index=i,
+            content={"__authored__": True, "image": image_refs[i], "role": roles[i]},
+            html_content=htmls[i],
+            properties={"image": image_refs[i]},
+        )
+        for i in range(len(htmls))
+    ]
+    sql_session.add(presentation)
+    sql_session.add_all(slides)
+    await sql_session.commit()
+
+    out_path = _build_authored_export(request, presentation_id, pngs, title)
+    return PresentationPathAndEditPath(
+        presentation_id=presentation_id,
+        path=out_path,
+        edit_path=f"/presentation?id={presentation_id}",
+    )

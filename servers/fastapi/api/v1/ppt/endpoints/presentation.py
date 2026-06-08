@@ -32,6 +32,10 @@ from models.sql.template import TemplateModel
 from services.documents_loader import DocumentsLoader
 from services.webhook_service import WebhookService
 from services.image_generation_service import ImageGenerationService
+from services.authored_presentation_service import (
+    AUTHORED_TEMPLATE,
+    generate_authored_presentation,
+)
 from services.mem0_presentation_memory_service import (
     MEM0_PRESENTATION_MEMORY_SERVICE,
 )
@@ -825,6 +829,38 @@ async def generate_presentation_handler(
             presentation_id,
             presentation_outlines.model_dump(mode="json"),
         )
+
+        # Authored mode (opt-in via template="authored"): the model AUTHORS bespoke
+        # HTML per slide instead of filling a React archetype. Self-contained pipeline
+        # (author -> render -> optional vision-QA -> image PPTX/PDF -> persist) that
+        # bypasses the compose/structure/content/export path. Default path untouched.
+        if request.template == AUTHORED_TEMPLATE:
+            if async_status:
+                async_status.message = "Authoring bespoke slides"
+                async_status.updated_at = datetime.now()
+                sql_session.add(async_status)
+                await sql_session.commit()
+            response = await generate_authored_presentation(
+                request,
+                presentation_id,
+                presentation_outlines,
+                language_to_use,
+                sql_session,
+            )
+            if async_status:
+                async_status.message = "Presentation generation completed"
+                async_status.status = "completed"
+                async_status.data = response.model_dump(mode="json")
+                async_status.updated_at = datetime.now()
+                sql_session.add(async_status)
+                await sql_session.commit()
+            CONCURRENT_SERVICE.run_task(
+                None,
+                WebhookService.send_webhook,
+                WebhookEvent.PRESENTATION_GENERATION_COMPLETED,
+                response.model_dump(mode="json"),
+            )
+            return response
 
         # Updating async status
         if async_status:
