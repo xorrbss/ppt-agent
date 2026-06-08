@@ -107,6 +107,6 @@ jobs:
       with:
         working-directory: servers/nextjs
         component: true
-        spec: "**/AdaptiveBlockControls.cy.tsx,**/AdaptivePropertyControls.cy.tsx,**/ChartLeaf.cy.tsx,**/UploadPage.cy.tsx,**/ThemeComposer.cy.tsx"
+        spec: "**/AdaptiveBlockControls.cy.tsx,**/AdaptivePropertyControls.cy.tsx,**/ChartLeaf.cy.tsx,**/Variants.cy.tsx,**/UploadPage.cy.tsx,**/ThemeComposer.cy.tsx"
         install: false
 

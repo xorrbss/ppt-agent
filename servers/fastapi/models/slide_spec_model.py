@@ -42,6 +42,8 @@ def _image_dict(image: ImageRef) -> dict:
 
 class CoverSpec(BaseModel):
     archetype: Literal["cover"]
+    # Composition variant (optional): "centered" (default) or "left" (left-anchored).
+    variant: Optional[Literal["centered", "left"]] = None
     eyebrow: Optional[str] = Field(default=None, max_length=40)
     title: str = Field(max_length=80)
     subtitle: Optional[str] = Field(default=None, max_length=140)
@@ -69,6 +71,8 @@ class StatItem(BaseModel):
 
 class StatHeroSpec(BaseModel):
     archetype: Literal["stat-hero"]
+    # "even" (default, equal stats) or "featured" (oversize the first stat).
+    variant: Optional[Literal["even", "featured"]] = None
     title: str = Field(max_length=80)
     stats: List[StatItem] = Field(min_length=2, max_length=4)
     speaker_note: str = Field(default="", max_length=500)
@@ -76,6 +80,8 @@ class StatHeroSpec(BaseModel):
 
 class SectionDividerSpec(BaseModel):
     archetype: Literal["section-divider"]
+    # "plain" (default) or "bold" (full-bleed primary-filled section break).
+    variant: Optional[Literal["plain", "bold"]] = None
     eyebrow: Optional[str] = Field(default=None, max_length=40)
     title: str = Field(max_length=80)
     speaker_note: str = Field(default="", max_length=500)
@@ -338,4 +344,8 @@ def spec_to_blocks(spec) -> dict:
     elif a == "table":
         blocks.append({"id": "title", "type": "title", "text": spec.title})
         blocks.append({"id": "table", "type": "table", "headers": spec.headers, "rows": spec.rows})
-    return {"archetype": a, "blocks": blocks}
+    result = {"archetype": a, "blocks": blocks}
+    variant = getattr(spec, "variant", None)
+    if variant:
+        result["variant"] = variant
+    return result

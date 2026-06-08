@@ -18,6 +18,11 @@ import {
   TimelineLayout,
   TwoColumnLayout,
 } from "./layouts";
+import {
+  CoverLeftLayout,
+  SectionDividerBoldLayout,
+  StatHeroFeaturedLayout,
+} from "./variants";
 
 // Single adaptive renderer for the "adaptive" layout group. Receives a SlideSpec
 // as `data` and dispatches on `data.archetype` to one layout component. Emits
@@ -38,14 +43,30 @@ interface AdaptiveSlideProps {
   data?: Spec;
 }
 
-function renderArchetype(archetype: string, blocks: AnyBlock[]): React.ReactNode {
+function renderArchetype(
+  archetype: string,
+  blocks: AnyBlock[],
+  variant?: string
+): React.ReactNode {
   switch (archetype) {
     case "cover":
-      return <CoverLayout blocks={blocks} />;
+      return variant === "left" ? (
+        <CoverLeftLayout blocks={blocks} />
+      ) : (
+        <CoverLayout blocks={blocks} />
+      );
     case "stat-hero":
-      return <StatHeroLayout blocks={blocks} />;
+      return variant === "featured" ? (
+        <StatHeroFeaturedLayout blocks={blocks} />
+      ) : (
+        <StatHeroLayout blocks={blocks} />
+      );
     case "section-divider":
-      return <SectionDividerLayout blocks={blocks} />;
+      return variant === "bold" ? (
+        <SectionDividerBoldLayout blocks={blocks} />
+      ) : (
+        <SectionDividerLayout blocks={blocks} />
+      );
     case "big-statement":
       return <BigStatementLayout blocks={blocks} />;
     case "agenda":
@@ -80,6 +101,7 @@ const AdaptiveSlide: React.FC<AdaptiveSlideProps> = ({ data }) => {
     <div
       className="adaptive-root w-full max-w-[1280px] max-h-[720px] aspect-video relative z-20 mx-auto overflow-hidden"
       data-archetype={archetype}
+      data-variant={spec.variant || undefined}
       style={{
         background: "var(--background-color, #ffffff)",
         color: TEXT_COLOR,
@@ -89,7 +111,7 @@ const AdaptiveSlide: React.FC<AdaptiveSlideProps> = ({ data }) => {
     >
       <Motif />
       <BrandSlot logoUrl={spec._logo_url__} companyName={spec.__companyName__} />
-      <div className="relative z-10 h-full w-full">{renderArchetype(archetype, blocks)}</div>
+      <div className="relative z-10 h-full w-full">{renderArchetype(archetype, blocks, spec.variant)}</div>
     </div>
   );
 };
