@@ -35,6 +35,30 @@ def test_empty_input_is_rejected_during_request_validation(fake_async_session):
     assert "Either content or slides markdown or files is required" in exc.value.detail
 
 
+@pytest.mark.parametrize("template", ["authored", "Authored", "AUTHORED"])
+def test_authored_mode_passes_template_validation(fake_async_session, template):
+    """The authored generation mode reuses the template field as a MODE selector; it
+    must pass validation (case-insensitively) and normalize to "authored" — it is not
+    a layout template, so it must never be rejected as "Template not found"."""
+    request = GeneratePresentationRequest(
+        content="Some topic",
+        n_slides=5,
+        language="English",
+        export_as="pptx",
+        template=template,
+    )
+
+    (presentation_id,) = _run(
+        presentation_endpoint.check_if_api_request_is_valid(
+            request=request,
+            sql_session=fake_async_session,
+        )
+    )
+
+    assert isinstance(presentation_id, uuid.UUID)
+    assert request.template == "authored"
+
+
 def test_large_input_generates_prompt_without_randomness():
     large_content = "Revenue growth trend. " * 5000
     prompt = get_user_prompt(

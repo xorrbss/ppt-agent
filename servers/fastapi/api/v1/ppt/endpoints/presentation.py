@@ -643,8 +643,11 @@ async def check_if_api_request_is_valid(
             detail="Number of slides cannot be less than 3 if table of contents is included",
         )
 
-    # Checking if template is valid
-    if request.template not in DEFAULT_TEMPLATES:
+    # Checking if template is valid. The authored mode reuses the template field as a
+    # MODE selector (not a real layout template), so it bypasses layout validation.
+    if request.template.lower() == AUTHORED_TEMPLATE:
+        request.template = AUTHORED_TEMPLATE
+    elif request.template not in DEFAULT_TEMPLATES:
         request.template = request.template.lower()
         if not request.template.startswith("custom-"):
             raise HTTPException(
