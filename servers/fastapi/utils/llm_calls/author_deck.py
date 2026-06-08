@@ -40,21 +40,25 @@ def derive_role(index: int, n: int, content: str) -> str:
     return "PILLARS"
 
 
+def plan_deck_roles(outline: PresentationOutlineModel) -> List[str]:
+    """The deck-plan: one ROLE per slide. Single source of role derivation, shared by
+    the authoring pass and the vision-QA re-author pass."""
+    slides = list(outline.slides)
+    n = len(slides)
+    return [derive_role(i, n, slides[i].content) for i in range(n)]
+
+
 async def author_deck(outline: PresentationOutlineModel, brand: Brand) -> List[str]:
     """Author every outline slide concurrently against the shared design system.
     Returns one complete HTML document per slide (order preserved)."""
     slides = list(outline.slides)
     n = len(slides)
     design_system = build_design_system(brand)
+    roles = plan_deck_roles(outline)
     htmls = await asyncio.gather(
         *[
             author_slide_html(
-                slides[i].content,
-                design_system,
-                brand,
-                derive_role(i, n, slides[i].content),
-                i,
-                n,
+                slides[i].content, design_system, brand, roles[i], i, n
             )
             for i in range(n)
         ]
