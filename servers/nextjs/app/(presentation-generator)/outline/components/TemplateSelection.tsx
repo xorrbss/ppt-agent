@@ -52,6 +52,46 @@ const BuiltInTemplateCard = memo(function BuiltInTemplateCard({
   );
 });
 
+// Sentinel id for the authored (high-quality) mode — not a real layout template.
+export const AUTHORED_TEMPLATE_ID = "authored";
+
+const AuthoredModeCard = memo(function AuthoredModeCard({
+  isSelected,
+  onSelect,
+}: {
+  isSelected: boolean;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <Card
+      className={cn(
+        "cursor-pointer relative hover:shadow-sm transition-all duration-200 overflow-hidden rounded-[22px] border",
+        isSelected
+          ? " border-blue-500 ring-2 ring-blue-500/25 shadow-sm"
+          : " border-[#E8E9EC]"
+      )}
+      onClick={() => onSelect(AUTHORED_TEMPLATE_ID)}
+    >
+      <div className="flex h-[150px] items-center justify-center bg-gradient-to-br from-[#1e3a8a] via-[#2563EB] to-[#3b82f6] text-white">
+        <div className="text-center px-4">
+          <div className="text-[11px] tracking-[0.15em] font-semibold opacity-90">
+            AI AUTHORED
+          </div>
+          <div className="text-2xl font-extrabold font-syne mt-1">고품질 AI 저작</div>
+        </div>
+      </div>
+      <div className="flex items-center justify-between px-6 py-5 bg-white border-t border-[#EDEEEF]">
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-bold text-gray-900 font-syne">AI 저작 (고품질)</h3>
+          <p className="text-xs text-gray-600 line-clamp-2 font-syne">
+            모델이 슬라이드별 디자인을 직접 저작 · 이미지 PPTX로 내보내기 · 인앱은 보기 전용(편집은 PowerPoint)
+          </p>
+        </div>
+      </div>
+    </Card>
+  );
+});
+
 interface TemplateSelectionProps {
   selectedTemplate: (TemplateLayoutsWithSettings | string) | null;
   onSelectTemplate: (template: TemplateLayoutsWithSettings | string) => void;
@@ -129,7 +169,11 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = memo(function Templa
   return (
     <div className="mb-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {/* Create-custom-template card first, then custom templates, then built-ins */}
+        {/* Authored (high-quality) mode first, then create-custom, custom, built-ins */}
+        <AuthoredModeCard
+          isSelected={selectedTemplate === AUTHORED_TEMPLATE_ID}
+          onSelect={handleCustomSelect}
+        />
         <CreateCustomTemplate />
         {customTemplateCards}
         {builtInTemplateCards}

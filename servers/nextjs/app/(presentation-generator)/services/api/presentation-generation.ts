@@ -151,6 +151,64 @@ export class PresentationGenerationApi {
     }
   }
 
+  // Authored (high-quality) mode: the model authors bespoke HTML per slide, rendered
+  // to images and assembled into an image PPTX. It bypasses the layout/stream path, so
+  // it runs through the async generate endpoint (minutes-long) and is polled to
+  // completion. The reviewed outline is passed as slides_markdown so the user's edits
+  // are honoured. Returns the async task ({ id, status, ... }).
+  static async generateAuthoredAsync(body: {
+    content: string;
+    slides_markdown: string[];
+    language?: string | null;
+  }) {
+    try {
+      const response = await fetch(
+        getApiUrl(`/api/v1/ppt/presentation/generate/async`),
+        {
+          method: "POST",
+          headers: getHeader(),
+          body: JSON.stringify({
+            content: body.content,
+            slides_markdown: body.slides_markdown,
+            language: body.language ?? null,
+            template: "authored",
+            export_as: "pptx",
+          }),
+          cache: "no-cache",
+        }
+      );
+
+      return await ApiResponseHandler.handleResponse(
+        response,
+        "Failed to start authored generation"
+      );
+    } catch (error) {
+      console.error("error starting authored generation", error);
+      throw error;
+    }
+  }
+
+  static async getGenerationStatus(taskId: string) {
+    try {
+      const response = await fetch(
+        getApiUrl(`/api/v1/ppt/presentation/status/${taskId}`),
+        {
+          method: "GET",
+          headers: getHeader(),
+          cache: "no-cache",
+        }
+      );
+
+      return await ApiResponseHandler.handleResponse(
+        response,
+        "Failed to get generation status"
+      );
+    } catch (error) {
+      console.error("error polling generation status", error);
+      throw error;
+    }
+  }
+
   static async presentationPrepare(presentationData: any) {
     try {
       const response = await fetch(

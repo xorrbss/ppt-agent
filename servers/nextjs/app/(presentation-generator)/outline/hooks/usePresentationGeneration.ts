@@ -16,6 +16,13 @@ const DEFAULT_LOADING_STATE: LoadingState = {
   duration: 0,
 };
 
+// Sentinel template id for the authored (high-quality) generation mode. It is not a
+// real layout template, so it routes through the async generate endpoint + polling
+// rather than the layout prepare/stream path.
+const AUTHORED_TEMPLATE = "authored";
+const AUTHORED_POLL_MS = 4000;
+const AUTHORED_TIMEOUT_MS = 20 * 60 * 1000;
+
 export const usePresentationGeneration = (
   presentationId: string | null,
   outlines: { content: string }[] | null,
@@ -76,6 +83,62 @@ export const usePresentationGeneration = (
       return;
     }
     if (!validateInputs()) return;
+
+    // Authored mode: bypass the layout prepare/stream path. Generate via the async
+    // endpoint (minutes-long), passing the reviewed outline as slides_markdown so the
+    // user's edits are honoured, then poll to completion and open the viewer.
+    if (selectedTemplate === AUTHORED_TEMPLATE) {
+      setLoadingState({
+        message: "AI가 슬라이드를 저작하는 중입니다… (수 분 소요)",
+        isLoading: true,
+        showProgress: true,
+        duration: 300,
+      });
+      try {
+        const slides_markdown = (outlines || [])
+          .map((o) => o.content)
+          .filter((c) => c && c.trim().length > 0);
+        if (slides_markdown.length === 0) {
+          notify.warning("개요가 비어 있습니다", "먼저 개요를 생성하세요.");
+          return;
+        }
+        const started = await PresentationGenerationApi.generateAuthoredAsync({
+          content: slides_markdown[0].slice(0, 200),
+          slides_markdown,
+        });
+        const taskId = started?.id;
+        if (!taskId) throw new Error("생성 작업을 시작하지 못했습니다.");
+
+        const deadlineMs = Date.now() + AUTHORED_TIMEOUT_MS;
+        while (true) {
+          if (Date.now() > deadlineMs) {
+            throw new Error("생성 시간이 초과되었습니다. 잠시 후 다시 시도하세요.");
+          }
+          await new Promise((r) => setTimeout(r, AUTHORED_POLL_MS));
+          const task = await PresentationGenerationApi.getGenerationStatus(taskId);
+          if (task?.status === "completed") {
+            const newId = task?.data?.presentation_id;
+            if (!newId) throw new Error("생성 결과를 찾을 수 없습니다.");
+            dispatch(clearPresentationData());
+            clearTheme();
+            router.replace(`/presentation?id=${newId}`);
+            return;
+          }
+          if (task?.status === "error") {
+            throw new Error(task?.message || "프레젠테이션 생성에 실패했습니다.");
+          }
+        }
+      } catch (error: any) {
+        console.error("Error in authored generation.", error);
+        notify.error(
+          "생성 오류",
+          error.message || "AI 저작 생성 중 오류가 발생했습니다."
+        );
+      } finally {
+        setLoadingState(DEFAULT_LOADING_STATE);
+      }
+      return;
+    }
 
     const selectedTemplateId =
       typeof selectedTemplate === "string"
