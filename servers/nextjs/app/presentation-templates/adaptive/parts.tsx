@@ -9,13 +9,13 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   Legend,
   Line,
   LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
-  Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
@@ -147,37 +147,48 @@ export const ChartLeaf: React.FC<{ block: AnyBlock }> = ({ block }) => {
   const color = (i: number) => CHART_PALETTE[i % CHART_PALETTE.length];
   const seriesKey = (i: number) => (d: AnyBlock) =>
     Array.isArray(d?.values) ? d.values[i] : i === 0 ? d?.value : undefined;
+  // De-cluttered for a static presentation (not a BI dashboard): no tooltips
+  // (never visible in export), faint horizontal-only grid, axis lines/ticks
+  // removed, and DIRECT value labels on single-series charts so numbers read
+  // without a hover. Charts rasterize on export, so this restyle is export-safe.
   const legend = multi ? <Legend wrapperStyle={{ fontSize: 12 }} /> : null;
+  const grid = <CartesianGrid vertical={false} stroke={BORDER} strokeOpacity={0.5} />;
+  const xAxis = <XAxis dataKey="name" tick={axisStyle} axisLine={false} tickLine={false} />;
+  const yAxis = <YAxis tick={axisStyle} axisLine={false} tickLine={false} width={36} />;
+  const valueLabel = (key: string) => (
+    <LabelList dataKey={key} position="top" fill={MUTED_COLOR} style={{ fontSize: 11, fontWeight: 600 }} />
+  );
+  const margin = { top: 18, right: 12, left: 0, bottom: 0 } as const;
   const inner = (() => {
     switch (type) {
       case "line":
         return (
-          <LineChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
-            <XAxis dataKey="name" tick={axisStyle} />
-            <YAxis tick={axisStyle} />
-            <Tooltip />
-            {legend}
+          <LineChart data={data} margin={margin}>
+            {grid}{xAxis}{yAxis}{legend}
             {multi
               ? series.map((s, i) => (
-                  <Line key={i} type="monotone" dataKey={seriesKey(i)} name={s} stroke={color(i)} strokeWidth={2} isAnimationActive={false} dot={{ r: 3 }} />
+                  <Line key={i} type="monotone" dataKey={seriesKey(i)} name={s} stroke={color(i)} strokeWidth={2.5} isAnimationActive={false} dot={{ r: 3 }} />
                 ))
-              : <Line type="monotone" dataKey="value" stroke={PRIMARY} strokeWidth={2} isAnimationActive={false} dot={{ r: 3 }} />}
+              : (
+                <Line type="monotone" dataKey="value" stroke={PRIMARY} strokeWidth={2.5} isAnimationActive={false} dot={{ r: 3 }}>
+                  {valueLabel("value")}
+                </Line>
+              )}
           </LineChart>
         );
       case "area":
         return (
-          <AreaChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
-            <XAxis dataKey="name" tick={axisStyle} />
-            <YAxis tick={axisStyle} />
-            <Tooltip />
-            {legend}
+          <AreaChart data={data} margin={margin}>
+            {grid}{xAxis}{yAxis}{legend}
             {multi
               ? series.map((s, i) => (
                   <Area key={i} type="monotone" dataKey={seriesKey(i)} name={s} stroke={color(i)} fill={color(i)} fillOpacity={0.18} isAnimationActive={false} />
                 ))
-              : <Area type="monotone" dataKey="value" stroke={PRIMARY} fill={PRIMARY} fillOpacity={0.18} isAnimationActive={false} />}
+              : (
+                <Area type="monotone" dataKey="value" stroke={PRIMARY} strokeWidth={2.5} fill={PRIMARY} fillOpacity={0.2} isAnimationActive={false}>
+                  {valueLabel("value")}
+                </Area>
+              )}
           </AreaChart>
         );
       case "pie":
@@ -185,15 +196,17 @@ export const ChartLeaf: React.FC<{ block: AnyBlock }> = ({ block }) => {
         // Pie/donut show a single series; multi-series falls back to the first.
         return (
           <PieChart>
-            <Tooltip />
             <Pie
               data={data}
               dataKey={multi ? seriesKey(0) : "value"}
               nameKey="name"
               innerRadius={type === "donut" ? "55%" : 0}
-              outerRadius="80%"
+              outerRadius="82%"
               isAnimationActive={false}
-              label
+              label={(e: AnyBlock) => e.name}
+              labelLine={false}
+              stroke="var(--card-color, #ffffff)"
+              strokeWidth={2}
             >
               {data.map((_, i) => (
                 <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
@@ -203,21 +216,18 @@ export const ChartLeaf: React.FC<{ block: AnyBlock }> = ({ block }) => {
         );
       default:
         return (
-          <BarChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
-            <XAxis dataKey="name" tick={axisStyle} />
-            <YAxis tick={axisStyle} />
-            <Tooltip />
-            {legend}
+          <BarChart data={data} margin={margin}>
+            {grid}{xAxis}{yAxis}{legend}
             {multi ? (
               series.map((s, i) => (
                 <Bar key={i} dataKey={seriesKey(i)} name={s} fill={color(i)} radius={[4, 4, 0, 0]} isAnimationActive={false} />
               ))
             ) : (
-              <Bar dataKey="value" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+              <Bar dataKey="value" radius={[6, 6, 0, 0]} isAnimationActive={false}>
                 {data.map((_, i) => (
                   <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
                 ))}
+                {valueLabel("value")}
               </Bar>
             )}
           </BarChart>
