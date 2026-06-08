@@ -164,6 +164,19 @@ def test_build_image_pptx_one_fullbleed_picture_per_slide(tmp_path):
         assert len(pics) == 1
 
 
+def test_build_image_pdf_is_valid_multipage(tmp_path):
+    from services.authored_presentation_service import _build_image_pdf
+
+    pngs = [_png_1280x720((0, i * 20, 0)) for i in range(4)]
+    out = str(tmp_path / "deck.pdf")
+    _build_image_pdf(pngs, out)
+    with open(out, "rb") as f:
+        data = f.read()
+    assert data[:5] == b"%PDF-"  # valid PDF magic (PIL can write but not read PDFs)
+    assert b"/Count 4" in data  # four pages, one per slide image
+    assert len(data) > 4000
+
+
 # --- authored predicate + roles + brand --------------------------------------
 
 

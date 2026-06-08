@@ -4,6 +4,53 @@
 > verifiable. This is the agreed FUNDAMENTAL fix for "quality is still much lower than
 > Genspark / Manus / Claude". Repo: `C:\project\PPT-agent\ppt-agent` (git, origin/main).
 
+## LAUNCH HARDENING — done (2026-06-08, second loop; pushed to origin/main)
+
+After the core feature shipped, a launch-readiness pass closed the gaps that blocked
+opening authored mode to real (non-CLI) users. All on origin/main; suite 304+ passing.
+
+**P0 — blockers (done):**
+- **Crash guards** (`88f882b9`): `PresentationModel.is_authored()`; `/slide/edit`,
+  `/slide/edit-html`, `/stream` return a clear 400 ("edit in PowerPoint") on authored
+  decks (layout/structure are None) instead of crashing on `get_layout()`. Verified in
+  prod against a real authored slide/deck.
+- **Web UI entry point + async flow** (`623bbe7d`): an "AI 저작 (고품질)" card in the
+  template picker (sentinel id `authored`); selecting it routes `handleSubmit` to
+  `/generate/async` with the reviewed outline as `slides_markdown`, polls `/status`,
+  then opens the viewer (`/presentation?id=`), which renders authored slides as images
+  (`87444b81`). Card renders (verified screenshot); works in both the upload auto-flow
+  and the outline manual-flow (`resolveTemplateSelection` passes the sentinel through).
+
+**P1 — robustness (done):**
+- **Concurrency caps + per-slide resilience** (`88f882b9`): authoring `Semaphore(5)`,
+  render `Semaphore(4)`; each slide authors with one retry + an HTML-validity gate and
+  degrades to a branded fallback slide on failure; a slide that fails to render becomes
+  a placeholder PNG. One bad slide can't sink a deck.
+- **Render leak fix** (`88f882b9`): headless chrome is killed as a **process tree** on
+  timeout (subprocess timeout orphaned chrome's children → leaked chromes starved later
+  launches into a hang cascade). LESSON: do NOT add a per-launch `--user-data-dir` — a
+  fresh profile causes first-run contention and times out under concurrency; the
+  no-profile invocation renders 4/4 concurrent slides to real ~265KB PNGs.
+- **Tests** (`88f882b9`,`48dce0bf`): `tests/unit/test_authored_pipeline.py` (16) —
+  validity/fallback, author retry+fallback (mocked LLM), render placeholder (mocked
+  chrome), image-PPTX + image-PDF assembly, `is_authored`, brand/title.
+
+**P2 — product (done):** brand tokens (`primary_color`/`fonts`/`wordmark`) on the
+request + CLI, wired into `resolve_brand`; clean `authored_title()` (from the topic, not
+the verbose outline) for title/filename (`48dce0bf`). vision-QA stays opt-in.
+
+**P3 — remaining OPS items (out of repo-code scope; track before public launch):**
+- **Chrome runtime** must be present in the deploy image/host (rendering needs it).
+  Authored export itself is pure-Python (python-pptx / PIL → works on Windows where the
+  byte-PPTX converter is Linux-only). PDF export verified (valid `%PDF`, page/slide).
+- **Auth / multi-user / quotas**: local runs use `DISABLE_AUTH`; a public service needs
+  real auth, per-user isolation, and rate/usage limits (authored = N+ LLM calls/deck).
+- **Cost / observability**: log token spend, bound retries/timeouts, alert on failures.
+- **Orphan cleanup** (minor): the web async flow creates a fresh presentation and leaves
+  the upload-created outline shell orphaned — a future cleanup can delete it.
+- **Optional**: an in-editor "view-only (edit in PowerPoint)" banner for authored decks
+  (already messaged on the card + the /slide/edit guard).
+
 ## STATUS — COMPLETE (2026-06-08, all 5 phases shipped & pushed to origin/main)
 
 Authored mode is live as an opt-in `template:"authored"` (CLI `--mode authored`). The
