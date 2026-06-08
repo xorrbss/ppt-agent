@@ -8,7 +8,9 @@ byte-PPTX export runtime is unavailable (the converter is Linux-only). The fast
 default adaptive/template path is completely untouched."""
 
 import io
+import logging
 import os
+import time
 import traceback
 import uuid
 from typing import List, Optional
@@ -27,10 +29,12 @@ from utils.llm_calls.author_deck import author_deck, build_image_pptx, plan_deck
 from utils.llm_calls.author_slide import Brand
 from utils.llm_calls.author_vision_qa import revise_authored_deck
 from utils.outline_utils import get_presentation_title_from_presentation_outline
-from utils.slide_capture import render_html_list_to_pngs
+from utils.slide_capture import _placeholder_png, find_chrome, render_html_list_to_pngs
 
 AUTHORED_TEMPLATE = "authored"
 _DEFAULT_PRIMARY = "#2563EB"
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _is_korean(*candidates: Optional[str]) -> bool:
@@ -124,22 +128,51 @@ async def generate_authored_presentation(
 ) -> PresentationPathAndEditPath:
     """Author -> render -> (optional vision-QA) -> assemble image PPTX/PDF -> persist.
     Returns the path to the produced file plus the editor path."""
+    started = time.monotonic()
     title = authored_title(request, outline)
     brand = resolve_brand(request, outline, language)
     roles = plan_deck_roles(outline)
 
+    # Render needs a headless Chrome. Without it every slide silently degrades to a
+    # blank placeholder (resilience by design) — so warn loudly to surface deploy
+    # misconfiguration instead of shipping a deck of blank slides. (No secrets logged.)
+    if not find_chrome():
+        LOGGER.warning(
+            "[authored] No Chrome/Chromium found for rendering (set CHROME_PATH); "
+            "authored slides will render as blank placeholders."
+        )
+
     htmls = await author_deck(outline, brand)
     pngs = await render_html_list_to_pngs(htmls)
 
+    fixed_count = 0
     if getattr(request, "vision_qa", False):
         try:
             contents = [s.content for s in outline.slides]
             htmls, pngs, fixed = await revise_authored_deck(
                 htmls, pngs, contents, roles, brand, max_cycles=1
             )
-            print(f"[authored] vision-QA revised {len(fixed)} slide(s): {fixed}")
+            fixed_count = len(fixed)
         except Exception:
             traceback.print_exc()
+
+    # Observability: one structured summary (counts/timing/model only — no secrets).
+    placeholder = _placeholder_png()
+    blank_renders = sum(1 for p in pngs if p == placeholder)
+    from utils.llm_provider import get_llm_provider, get_model
+
+    LOGGER.info(
+        "[authored] done id=%s slides=%d provider=%s model=%s vision_qa=%s "
+        "vqa_fixed=%d blank_renders=%d elapsed=%.1fs",
+        presentation_id,
+        len(htmls),
+        get_llm_provider().value,
+        get_model(),
+        bool(getattr(request, "vision_qa", False)),
+        fixed_count,
+        blank_renders,
+        time.monotonic() - started,
+    )
 
     image_refs = _save_slide_pngs(presentation_id, pngs)
 
