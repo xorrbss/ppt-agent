@@ -89,23 +89,27 @@ export const usePresentationGeneration = (
     // endpoint (minutes-long), passing the reviewed outline as slides_markdown so the
     // user's edits are honoured, then poll to completion and open the viewer.
     if (selectedTemplate === AUTHORED_TEMPLATE) {
+      const slides_markdown = (outlines || [])
+        .map((o) => o.content)
+        .filter((c) => c && c.trim().length > 0);
+      if (slides_markdown.length === 0) {
+        notify.warning("개요가 비어 있습니다", "먼저 개요를 생성하세요.");
+        return;
+      }
+      // Progress estimate scales with slide count (each slide = authoring + render +
+      // vision-QA self-correction), so the bar doesn't appear stuck near the end.
+      const estSeconds = Math.min(1200, Math.max(240, slides_markdown.length * 70));
       setLoadingState({
-        message: "AI가 슬라이드를 저작하는 중입니다… (수 분 소요)",
+        message: "AI가 슬라이드를 저작·검수하는 중입니다… (수 분 소요)",
         isLoading: true,
         showProgress: true,
-        duration: 300,
+        duration: estSeconds,
       });
       try {
-        const slides_markdown = (outlines || [])
-          .map((o) => o.content)
-          .filter((c) => c && c.trim().length > 0);
-        if (slides_markdown.length === 0) {
-          notify.warning("개요가 비어 있습니다", "먼저 개요를 생성하세요.");
-          return;
-        }
         const started = await PresentationGenerationApi.generateAuthoredAsync({
           content: slides_markdown[0].slice(0, 200),
           slides_markdown,
+          vision_qa: true,
         });
         const taskId = started?.id;
         if (!taskId) throw new Error("생성 작업을 시작하지 못했습니다.");

@@ -42,6 +42,21 @@ DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
   sidebar, oversized numerals, thin rules, subtle tints of the primary, inline-SVG icons/charts.
 - FORBIDDEN: default round bullet dots; identical heavy-shadow boxed cards on every item;
   clutter; lorem/placeholder; text overflowing/clipping the frame; low contrast; off-palette hues.
+- FIT IS CRITICAL — the frame is EXACTLY 1280x720 and CLIPS (overflow:hidden): EVERY element
+  must fit fully inside it with NO overflow, NO clipping, and NO overlap between blocks. This is
+  the single most common failure — prioritise it over visual ambition. Use less/shorter text and
+  generous spacing rather than cramming.
+- Heading sizing: size headings to the ACTUAL text length so they never exceed their area. For a
+  long heading, REDUCE the font-size (e.g. `clamp()` or a smaller fixed size) instead of letting
+  it grow extra lines that collide with the block below. Budget vertical space for the real number
+  of wrapped lines.
+- No fragile positioning: do NOT hard-pin a block to a fixed top/absolute offset that a longer
+  heading could overlap. Prefer normal document flow (flex/grid column with gaps); reserve
+  absolute positioning for decorative layers only, and keep clear gaps between text blocks.
+- Korean/CJK: set `word-break: keep-all` AND `overflow-wrap: anywhere` on text containers so
+  words are never split mid-word across lines.
+- Boxes/cards/labels: each one's text must fit ENTIRELY inside it with padding — never let text
+  touch or clip an edge. Size the box to its content (or shrink the content to the box).
 - All visible text in {language}.
 Return ONLY the complete HTML document."""
 

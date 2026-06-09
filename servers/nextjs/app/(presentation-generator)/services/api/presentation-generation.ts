@@ -160,6 +160,7 @@ export class PresentationGenerationApi {
     content: string;
     slides_markdown: string[];
     language?: string | null;
+    vision_qa?: boolean;
   }) {
     try {
       const response = await fetch(
@@ -173,6 +174,9 @@ export class PresentationGenerationApi {
             language: body.language ?? null,
             template: "authored",
             export_as: "pptx",
+            // Self-correction pass: render + vision-critique each slide and re-author any
+            // with overflow/overlap/clipping. On by default for the high-quality card.
+            vision_qa: body.vision_qa ?? true,
           }),
           cache: "no-cache",
         }
