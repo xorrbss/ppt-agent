@@ -174,9 +174,11 @@ export class PresentationGenerationApi {
             language: body.language ?? null,
             template: "authored",
             export_as: "pptx",
-            // Self-correction pass: render + vision-critique each slide and re-author any
-            // with overflow/overlap/clipping. On by default for the high-quality card.
-            vision_qa: body.vision_qa ?? true,
+            // Optional self-correction pass (render + vision-critique + re-author flagged).
+            // OFF by default — it adds a second authoring round (~doubles time); the
+            // design-system hardening already prevents most overflow/overlap. Opt in for
+            // a max-quality, slower pass.
+            vision_qa: body.vision_qa ?? false,
           }),
           cache: "no-cache",
         }

@@ -96,11 +96,11 @@ export const usePresentationGeneration = (
         notify.warning("개요가 비어 있습니다", "먼저 개요를 생성하세요.");
         return;
       }
-      // Progress estimate scales with slide count (each slide = authoring + render +
-      // vision-QA self-correction), so the bar doesn't appear stuck near the end.
-      const estSeconds = Math.min(1200, Math.max(240, slides_markdown.length * 70));
+      // Progress estimate: slides author concurrently (≈ one round), so time grows
+      // slowly with count. Keeps the bar from finishing early without overshooting.
+      const estSeconds = Math.min(600, Math.max(120, slides_markdown.length * 25));
       setLoadingState({
-        message: "AI가 슬라이드를 저작·검수하는 중입니다… (수 분 소요)",
+        message: "AI가 슬라이드를 저작하는 중입니다… (1~3분 소요)",
         isLoading: true,
         showProgress: true,
         duration: estSeconds,
@@ -109,7 +109,6 @@ export const usePresentationGeneration = (
         const started = await PresentationGenerationApi.generateAuthoredAsync({
           content: slides_markdown[0].slice(0, 200),
           slides_markdown,
-          vision_qa: true,
         });
         const taskId = started?.id;
         if (!taskId) throw new Error("생성 작업을 시작하지 못했습니다.");

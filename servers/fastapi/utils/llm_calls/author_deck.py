@@ -27,10 +27,12 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-# Bound concurrent per-slide model calls PROCESS-WIDE so that many concurrent decks do
-# not fan out to hundreds of provider requests at once (rate limits). One shared
-# semaphore; tune per deploy via AUTHORED_AUTHOR_CONCURRENCY.
-AUTHOR_CONCURRENCY = _env_int("AUTHORED_AUTHOR_CONCURRENCY", 5)
+# Bound concurrent per-slide model calls PROCESS-WIDE. Authoring is the pipeline's
+# dominant cost (~75s/slide of model reasoning) and slides are independent, so the
+# provider parallelizes them well (measured: 6 slides finish in ~one slide's latency).
+# Default high enough to author a typical deck in ONE round; tune per deploy /
+# provider rate limits via AUTHORED_AUTHOR_CONCURRENCY.
+AUTHOR_CONCURRENCY = _env_int("AUTHORED_AUTHOR_CONCURRENCY", 12)
 _author_sem: Optional[asyncio.Semaphore] = None
 
 
