@@ -138,6 +138,12 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = memo(function Templa
     (s: RootState) => s.pptGenUpload.authoredVisionQa
   );
 
+  // Stable identity so memo(AuthoredModeCard) isn't defeated on every parent render.
+  const handleToggleVisionQa = useCallback(
+    (next: boolean) => dispatch(setPptGenUploadState({ authoredVisionQa: next })),
+    [dispatch]
+  );
+
   const handleCustomSelect = useCallback(
     (template: TemplateLayoutsWithSettings | string) => onSelectTemplate(template),
     [onSelectTemplate]
@@ -197,9 +203,7 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = memo(function Templa
           isSelected={selectedTemplate === AUTHORED_TEMPLATE_ID}
           onSelect={handleCustomSelect}
           visionQa={authoredVisionQa}
-          onToggleVisionQa={(next) =>
-            dispatch(setPptGenUploadState({ authoredVisionQa: next }))
-          }
+          onToggleVisionQa={handleToggleVisionQa}
         />
         <CreateCustomTemplate />
         {customTemplateCards}

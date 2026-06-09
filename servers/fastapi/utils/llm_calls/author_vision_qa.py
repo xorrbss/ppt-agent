@@ -74,8 +74,12 @@ async def revise_authored_deck(
         async def fix(i: int) -> Tuple[int, Optional[str], Optional[bytes]]:
             try:
                 content = f"{contents[i]}\n\n{_feedback(critiques[i])}"
+                # Correction-under-critique is the quality-critical step: re-author at
+                # the provider's full default reasoning effort ('off' = no 'low'
+                # override) instead of the fast authoring effort used on the first pass.
                 new_html = await author_slide_html(
-                    content, design_system, brand, roles[i], i, n
+                    content, design_system, brand, roles[i], i, n,
+                    reasoning_effort="off",
                 )
                 new_png = await render_html_to_png(new_html)
                 return i, new_html, new_png

@@ -10,6 +10,7 @@ import { LoadingState, TABS } from "../types/index";
 import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
 import { getCustomTemplateDetails } from "@/app/hooks/useCustomTemplates";
 import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
+import { AUTHORED_TEMPLATE_ID } from "../components/TemplateSelection";
 
 const DEFAULT_LOADING_STATE: LoadingState = {
   message: "",
@@ -18,10 +19,10 @@ const DEFAULT_LOADING_STATE: LoadingState = {
   duration: 0,
 };
 
-// Sentinel template id for the authored (high-quality) generation mode. It is not a
-// real layout template, so it routes through the async generate endpoint + polling
-// rather than the layout prepare/stream path.
-const AUTHORED_TEMPLATE = "authored";
+// The authored (high-quality) mode is not a real layout template, so it routes
+// through the async generate endpoint + polling rather than the layout
+// prepare/stream path. Sentinel id shared with the selection card
+// (AUTHORED_TEMPLATE_ID) so the card and this branch can never disagree.
 const AUTHORED_POLL_MS = 4000;
 const AUTHORED_TIMEOUT_MS = 20 * 60 * 1000;
 
@@ -36,6 +37,12 @@ export const usePresentationGeneration = (
   const pathname = usePathname();
   const authoredVisionQa = useSelector(
     (s: RootState) => s.pptGenUpload.authoredVisionQa
+  );
+  // The deck language chosen in the upload flow; threaded into the authored request
+  // so the backend picks language-aware fonts (e.g. Noto Sans KR) instead of falling
+  // back to its non-Korean default.
+  const language = useSelector(
+    (s: RootState) => s.pptGenUpload.config?.language ?? null
   );
   const [loadingState, setLoadingState] = useState<LoadingState>(
     DEFAULT_LOADING_STATE
@@ -92,7 +99,7 @@ export const usePresentationGeneration = (
     // Authored mode: bypass the layout prepare/stream path. Generate via the async
     // endpoint (minutes-long), passing the reviewed outline as slides_markdown so the
     // user's edits are honoured, then poll to completion and open the viewer.
-    if (selectedTemplate === AUTHORED_TEMPLATE) {
+    if (selectedTemplate === AUTHORED_TEMPLATE_ID) {
       const slides_markdown = (outlines || [])
         .map((o) => o.content)
         .filter((c) => c && c.trim().length > 0);
@@ -101,9 +108,13 @@ export const usePresentationGeneration = (
         return;
       }
       // Progress estimate: slides author concurrently (≈ one round), so time grows
-      // slowly with count. vision-QA adds a second authoring round (~2x).
+      // slowly with count. vision-QA adds a second authoring round (~2x); cap it at
+      // the poll deadline so the bar can't reach full before generation finishes. The
+      // default (non-vision) path keeps its original 10-min cap.
       const base = Math.max(120, slides_markdown.length * 25);
-      const estSeconds = Math.min(900, authoredVisionQa ? base * 2 : base);
+      const estSeconds = authoredVisionQa
+        ? Math.min(AUTHORED_TIMEOUT_MS / 1000, base * 2)
+        : Math.min(600, base);
       setLoadingState({
         message: authoredVisionQa
           ? "AI가 슬라이드를 저작·검수하는 중입니다… (수 분 소요)"
@@ -116,6 +127,7 @@ export const usePresentationGeneration = (
         const started = await PresentationGenerationApi.generateAuthoredAsync({
           content: slides_markdown[0].slice(0, 200),
           slides_markdown,
+          language,
           vision_qa: authoredVisionQa,
         });
         const taskId = started?.id;
@@ -287,6 +299,7 @@ export const usePresentationGeneration = (
     router,
     selectedTemplate,
     authoredVisionQa,
+    language,
     pathname,
   ]);
 

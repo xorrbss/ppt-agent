@@ -7,6 +7,7 @@ anthropic / ...). Opt-in — never on the fast deterministic default path."""
 
 import asyncio
 import html as _html
+import logging
 import os
 import re
 from dataclasses import dataclass
@@ -15,11 +16,12 @@ from typing import Optional
 from llmai import get_client
 from llmai.shared import SystemMessage, UserMessage
 
-from enums.llm_provider import LLMProvider
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_config import get_llm_config
-from utils.llm_provider import get_llm_provider, get_model
+from utils.llm_provider import get_model, is_codex_selected
 from utils.llm_utils import extract_text, get_generate_kwargs
+
+logger = logging.getLogger(__name__)
 
 # A bespoke full-bleed HTML slide with inline CSS is large; give the model room so
 # the document is never truncated mid-markup (truncation => broken render).
@@ -162,17 +164,39 @@ def fallback_slide_html(
     )
 
 
-def _authoring_extra_body() -> Optional[dict]:
-    """codex (gpt-5.x) is a reasoning model — the per-slide latency is reasoning time.
-    Authoring bespoke HTML needs little reasoning, so request a LOWER effort: measured
-    ~25% faster per slide with no quality loss. codex-only (the param 400s on providers
-    that don't support it). Tune/disable via AUTHORED_REASONING_EFFORT (low|medium|high,
-    or 'off')."""
-    if get_llm_provider() != LLMProvider.CODEX:
+# Recognized codex reasoning-effort levels; the disable words send NO override, so
+# the provider applies its own default effort. (Unset/empty falls back to 'low'.)
+_REASONING_EFFORTS = ("low", "medium", "high")
+_REASONING_DISABLE = ("off", "default", "none")
+
+
+def _authoring_extra_body(effort: Optional[str] = None) -> Optional[dict]:
+    """Per-slide codex reasoning-effort override (codex-only — the param 400s on
+    providers that don't support it).
+
+    codex (gpt-5.x) is a reasoning model and per-slide latency is reasoning time;
+    authoring bespoke HTML needs little reasoning, so the default is a LOWER effort
+    ('low' — measured ~25% faster per slide with no quality loss on first-pass
+    authoring). `effort` overrides the AUTHORED_REASONING_EFFORT env (the vision-QA
+    re-author pass passes 'off' to get the provider default for max quality).
+
+    Returns {"reasoning": {"effort": ...}} for low|medium|high; returns None (no
+    override → provider default effort) for 'off'/'default'/unset. An UNRECOGNIZED
+    value (e.g. a typo) is logged and also falls through to the provider default,
+    so a misconfiguration is no longer silent."""
+    if not is_codex_selected():
         return None
-    effort = (os.getenv("AUTHORED_REASONING_EFFORT", "low") or "low").strip().lower()
-    if effort in ("low", "medium", "high"):
-        return {"reasoning": {"effort": effort}}
+    raw = effort if effort is not None else os.getenv("AUTHORED_REASONING_EFFORT", "low")
+    level = (raw or "low").strip().lower()
+    if level in _REASONING_EFFORTS:
+        return {"reasoning": {"effort": level}}
+    if level not in _REASONING_DISABLE:
+        logger.warning(
+            "AUTHORED_REASONING_EFFORT=%r is not one of %s or 'off'; "
+            "authoring at the provider default reasoning effort.",
+            raw,
+            _REASONING_EFFORTS,
+        )
     return None
 
 
@@ -183,9 +207,14 @@ async def author_slide_html(
     role: str,
     index: int,
     n: int,
+    reasoning_effort: Optional[str] = None,
 ) -> str:
     """Author one bespoke, self-contained 1280x720 HTML slide. Single text-generation
-    call against the configured provider; returns the cleaned HTML document."""
+    call against the configured provider; returns the cleaned HTML document.
+
+    `reasoning_effort` overrides the codex reasoning effort for this call (see
+    _authoring_extra_body); the vision-QA re-author pass passes 'off' so corrections
+    run at the provider's full default effort rather than the fast authoring 'low'."""
     client = get_client(config=get_llm_config())
     model = get_model()
     messages = [
@@ -195,9 +224,11 @@ async def author_slide_html(
     kwargs = get_generate_kwargs(
         model=model, messages=messages, max_tokens=AUTHOR_MAX_TOKENS
     )
-    reasoning = _authoring_extra_body()
+    reasoning = _authoring_extra_body(reasoning_effort)
     if reasoning:
-        kwargs["extra_body"] = {**(kwargs.get("extra_body") or {}), **reasoning}
+        # codex-only; get_extra_body() populates extra_body only for the (mutually
+        # exclusive) CUSTOM provider, so this reasoning dict is the sole source here.
+        kwargs["extra_body"] = reasoning
     try:
         response = await asyncio.to_thread(client.generate, **kwargs)
     except Exception as e:
