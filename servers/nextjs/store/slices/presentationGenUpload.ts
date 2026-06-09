@@ -11,6 +11,10 @@ interface PresentationGenUploadState {
 
   /** Selected theme-preset id (a DEFAULT_THEMES id) applied to the deck after generation; null = none. */
   selectedTheme: string | null;
+
+  /** Authored mode only: opt into the vision-QA self-correction pass (higher quality,
+   * slower — it adds a second authoring round). Off by default for speed. */
+  authoredVisionQa: boolean;
 }
 
 const initialState: PresentationGenUploadState = {
@@ -18,6 +22,7 @@ const initialState: PresentationGenUploadState = {
   files: [],
   selectedTemplate: "adaptive", // default = content-first adaptive composer; see presentation-templates/select.ts
   selectedTheme: null, // null = no preset; deck keeps the default (theme picked later in the editor)
+  authoredVisionQa: false,
 };
 
 export const presentationGenUploadSlice = createSlice({
@@ -30,11 +35,13 @@ export const presentationGenUploadSlice = createSlice({
     ) => {
       // Partial merge: only assign keys present in the payload so callers can
       // update a single field (e.g. selectedTemplate) without wiping the rest.
-      const { config, files, selectedTemplate, selectedTheme } = action.payload;
+      const { config, files, selectedTemplate, selectedTheme, authoredVisionQa } =
+        action.payload;
       if (config !== undefined) state.config = config;
       if (files !== undefined) state.files = files;
       if (selectedTemplate !== undefined) state.selectedTemplate = selectedTemplate;
       if (selectedTheme !== undefined) state.selectedTheme = selectedTheme;
+      if (authoredVisionQa !== undefined) state.authoredVisionQa = authoredVisionQa;
     },
 
   },

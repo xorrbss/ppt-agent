@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
+import { RootState } from "@/store/store";
 import { usePathname, useRouter } from "next/navigation";
 import { notify } from "@/components/ui/sonner";
 import { clearPresentationData } from "@/store/slices/presentationGeneration";
@@ -33,6 +34,9 @@ export const usePresentationGeneration = (
   const dispatch = useDispatch();
   const router = useRouter();
   const pathname = usePathname();
+  const authoredVisionQa = useSelector(
+    (s: RootState) => s.pptGenUpload.authoredVisionQa
+  );
   const [loadingState, setLoadingState] = useState<LoadingState>(
     DEFAULT_LOADING_STATE
   );
@@ -97,10 +101,13 @@ export const usePresentationGeneration = (
         return;
       }
       // Progress estimate: slides author concurrently (≈ one round), so time grows
-      // slowly with count. Keeps the bar from finishing early without overshooting.
-      const estSeconds = Math.min(600, Math.max(120, slides_markdown.length * 25));
+      // slowly with count. vision-QA adds a second authoring round (~2x).
+      const base = Math.max(120, slides_markdown.length * 25);
+      const estSeconds = Math.min(900, authoredVisionQa ? base * 2 : base);
       setLoadingState({
-        message: "AI가 슬라이드를 저작하는 중입니다… (1~3분 소요)",
+        message: authoredVisionQa
+          ? "AI가 슬라이드를 저작·검수하는 중입니다… (수 분 소요)"
+          : "AI가 슬라이드를 저작하는 중입니다… (1~3분 소요)",
         isLoading: true,
         showProgress: true,
         duration: estSeconds,
@@ -109,6 +116,7 @@ export const usePresentationGeneration = (
         const started = await PresentationGenerationApi.generateAuthoredAsync({
           content: slides_markdown[0].slice(0, 200),
           slides_markdown,
+          vision_qa: authoredVisionQa,
         });
         const taskId = started?.id;
         if (!taskId) throw new Error("생성 작업을 시작하지 못했습니다.");
@@ -278,6 +286,7 @@ export const usePresentationGeneration = (
     dispatch,
     router,
     selectedTemplate,
+    authoredVisionQa,
     pathname,
   ]);
 

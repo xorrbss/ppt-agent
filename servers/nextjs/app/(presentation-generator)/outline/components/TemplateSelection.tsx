@@ -1,6 +1,9 @@
 "use client";
 import React, { useEffect, useMemo, useCallback, memo } from "react";
 
+import { useDispatch, useSelector } from "react-redux";
+import { RootState } from "@/store/store";
+import { setPptGenUploadState } from "@/store/slices/presentationGenUpload";
 import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
 import { selectableTemplates } from "@/app/presentation-templates";
 import { Card } from "@/components/ui/card";
@@ -58,9 +61,13 @@ export const AUTHORED_TEMPLATE_ID = "authored";
 const AuthoredModeCard = memo(function AuthoredModeCard({
   isSelected,
   onSelect,
+  visionQa,
+  onToggleVisionQa,
 }: {
   isSelected: boolean;
   onSelect: (id: string) => void;
+  visionQa: boolean;
+  onToggleVisionQa: (next: boolean) => void;
 }) {
   return (
     <Card
@@ -80,13 +87,25 @@ const AuthoredModeCard = memo(function AuthoredModeCard({
           <div className="text-2xl font-extrabold font-syne mt-1">고품질 AI 저작</div>
         </div>
       </div>
-      <div className="flex items-center justify-between px-6 py-5 bg-white border-t border-[#EDEEEF]">
-        <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-bold text-gray-900 font-syne">AI 저작 (고품질)</h3>
-          <p className="text-xs text-gray-600 line-clamp-2 font-syne">
-            모델이 슬라이드별 디자인을 직접 저작 · 이미지 PPTX로 내보내기 · 인앱은 보기 전용(편집은 PowerPoint)
-          </p>
-        </div>
+      <div className="px-6 py-5 bg-white border-t border-[#EDEEEF]">
+        <h3 className="text-sm font-bold text-gray-900 font-syne">AI 저작 (고품질)</h3>
+        <p className="text-xs text-gray-600 line-clamp-2 font-syne">
+          모델이 슬라이드별 디자인을 직접 저작 · 이미지 PPTX로 내보내기 · 인앱은 보기 전용(편집은 PowerPoint)
+        </p>
+        {isSelected && (
+          <label
+            className="mt-3 flex items-center gap-2 text-xs text-gray-700 cursor-pointer select-none"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <input
+              type="checkbox"
+              checked={visionQa}
+              onChange={(e) => onToggleVisionQa(e.target.checked)}
+              className="h-3.5 w-3.5 accent-blue-600"
+            />
+            고품질 검수 (vision-QA · 더 느림)
+          </label>
+        )}
       </div>
     </Card>
   );
@@ -114,6 +133,10 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = memo(function Templa
   }, []);
 
   const { templates: customTemplates, loading: customLoading } = useCustomTemplateSummaries();
+  const dispatch = useDispatch();
+  const authoredVisionQa = useSelector(
+    (s: RootState) => s.pptGenUpload.authoredVisionQa
+  );
 
   const handleCustomSelect = useCallback(
     (template: TemplateLayoutsWithSettings | string) => onSelectTemplate(template),
@@ -173,6 +196,10 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = memo(function Templa
         <AuthoredModeCard
           isSelected={selectedTemplate === AUTHORED_TEMPLATE_ID}
           onSelect={handleCustomSelect}
+          visionQa={authoredVisionQa}
+          onToggleVisionQa={(next) =>
+            dispatch(setPptGenUploadState({ authoredVisionQa: next }))
+          }
         />
         <CreateCustomTemplate />
         {customTemplateCards}
