@@ -11,6 +11,7 @@ import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils"
 import { getCustomTemplateDetails } from "@/app/hooks/useCustomTemplates";
 import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
 import { AUTHORED_TEMPLATE_ID } from "../components/TemplateSelection";
+import { LanguageType } from "../../upload/type";
 
 const DEFAULT_LOADING_STATE: LoadingState = {
   message: "",
@@ -25,6 +26,9 @@ const DEFAULT_LOADING_STATE: LoadingState = {
 // (AUTHORED_TEMPLATE_ID) so the card and this branch can never disagree.
 const AUTHORED_POLL_MS = 4000;
 const AUTHORED_TIMEOUT_MS = 20 * 60 * 1000;
+// Tolerate a few consecutive transient status-poll failures (a 502/network blip during
+// the minutes-long poll) before aborting — the backend task keeps running regardless.
+const AUTHORED_MAX_POLL_ERRORS = 3;
 
 export const usePresentationGeneration = (
   presentationId: string | null,
@@ -107,18 +111,22 @@ export const usePresentationGeneration = (
         notify.warning("개요가 비어 있습니다", "먼저 개요를 생성하세요.");
         return;
       }
-      // Progress estimate: slides author concurrently (≈ one round), so time grows
-      // slowly with count. vision-QA adds a second authoring round (~2x); cap it at
-      // the poll deadline so the bar can't reach full before generation finishes. The
-      // default (non-vision) path keeps its original 10-min cap.
+      // Progress estimate that PACES the bar. Authored slides are generated concurrently
+      // (≈ one round) so wall-time grows slowly with count; vision-QA adds a second
+      // authoring round (~2x). Clamped to the poll deadline so we never pace longer than
+      // we will wait. This does NOT prevent the bar finishing early — ProgressBar parks
+      // at 95% until generation actually completes, so an under-estimate just stalls there.
       const base = Math.max(120, slides_markdown.length * 25);
       const estSeconds = authoredVisionQa
         ? Math.min(AUTHORED_TIMEOUT_MS / 1000, base * 2)
         : Math.min(600, base);
+      // Derive the headline from the same estimate so it can't contradict the bar's pacing
+      // (no fixed "1~3분" that lies for larger decks).
+      const estMinutes = Math.max(1, Math.round(estSeconds / 60));
       setLoadingState({
         message: authoredVisionQa
-          ? "AI가 슬라이드를 저작·검수하는 중입니다… (수 분 소요)"
-          : "AI가 슬라이드를 저작하는 중입니다… (1~3분 소요)",
+          ? `AI가 슬라이드를 저작·검수하는 중입니다… (약 ${estMinutes}분 소요)`
+          : `AI가 슬라이드를 저작하는 중입니다… (약 ${estMinutes}분 소요)`,
         isLoading: true,
         showProgress: true,
         duration: estSeconds,
@@ -127,19 +135,36 @@ export const usePresentationGeneration = (
         const started = await PresentationGenerationApi.generateAuthoredAsync({
           content: slides_markdown[0].slice(0, 200),
           slides_markdown,
-          language,
+          // "Auto" is a sentinel, not a real language: send null so the backend applies
+          // its language-aware fallback instead of authoring with a literal "Auto".
+          language: language && language !== LanguageType.Auto ? language : null,
           vision_qa: authoredVisionQa,
         });
         const taskId = started?.id;
         if (!taskId) throw new Error("생성 작업을 시작하지 못했습니다.");
 
         const deadlineMs = Date.now() + AUTHORED_TIMEOUT_MS;
+        let pollErrors = 0;
         while (true) {
           if (Date.now() > deadlineMs) {
             throw new Error("생성 시간이 초과되었습니다. 잠시 후 다시 시도하세요.");
           }
           await new Promise((r) => setTimeout(r, AUTHORED_POLL_MS));
-          const task = await PresentationGenerationApi.getGenerationStatus(taskId);
+          let task;
+          try {
+            task = await PresentationGenerationApi.getGenerationStatus(taskId);
+            pollErrors = 0;
+          } catch (pollErr) {
+            // A single transient blip must not abort a generation still running on the
+            // backend. Tolerate a few consecutive failures, then surface the error.
+            pollErrors += 1;
+            if (pollErrors >= AUTHORED_MAX_POLL_ERRORS) throw pollErr;
+            console.warn(
+              `authored status poll failed (${pollErrors}/${AUTHORED_MAX_POLL_ERRORS}); retrying`,
+              pollErr
+            );
+            continue;
+          }
           if (task?.status === "completed") {
             const newId = task?.data?.presentation_id;
             if (!newId) throw new Error("생성 결과를 찾을 수 없습니다.");

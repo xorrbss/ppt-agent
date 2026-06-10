@@ -121,7 +121,11 @@ async def render_html_to_png(html: str, timeout: int = 60) -> bytes:
     """Render a self-contained HTML document to an exact 1280x720 PNG via headless
     chrome. Used by the authored-mode pipeline (the HTML is authored in-memory, not
     served from /pdf-maker). Raises RuntimeError if no chrome is found or the
-    screenshot fails."""
+    screenshot fails.
+
+    Bounded by the process-wide render semaphore (AUTHORED_RENDER_CONCURRENCY) so EVERY
+    caller — the deck render AND the vision-QA re-render — shares one cap on concurrent
+    headless-chrome subprocesses (the M×N hang cascade guard)."""
     from PIL import Image
 
     chrome = find_chrome()
@@ -129,37 +133,39 @@ async def render_html_to_png(html: str, timeout: int = 60) -> bytes:
         raise RuntimeError(
             "No chrome/chromium found for slide capture (set CHROME_PATH)."
         )
-    with tempfile.TemporaryDirectory() as td:
-        html_path = os.path.join(td, "slide.html")
-        out = os.path.join(td, "slide.png")
-        with open(html_path, "w", encoding="utf-8") as f:
-            f.write(html)
-        args = [
-            chrome,
-            "--headless=new",
-            "--disable-gpu",
-            "--no-sandbox",
-            "--hide-scrollbars",
-            "--force-device-scale-factor=1",
-            f"--window-size={SLIDE_W},{SLIDE_H}",
-            f"--screenshot={out}",
-            "--virtual-time-budget=20000",
-            pathlib.Path(html_path).as_uri(),
-        ]
-        await asyncio.to_thread(_run_chrome_screenshot, args, timeout)
-        if not os.path.isfile(out):
-            raise RuntimeError("chrome screenshot produced no output file")
-        img = Image.open(out).convert("RGB").crop((0, 0, SLIDE_W, SLIDE_H))
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        return buf.getvalue()
+    async with _get_render_sem():
+        with tempfile.TemporaryDirectory() as td:
+            html_path = os.path.join(td, "slide.html")
+            out = os.path.join(td, "slide.png")
+            with open(html_path, "w", encoding="utf-8") as f:
+                f.write(html)
+            args = [
+                chrome,
+                "--headless=new",
+                "--disable-gpu",
+                "--no-sandbox",
+                "--hide-scrollbars",
+                "--force-device-scale-factor=1",
+                f"--window-size={SLIDE_W},{SLIDE_H}",
+                f"--screenshot={out}",
+                "--virtual-time-budget=20000",
+                pathlib.Path(html_path).as_uri(),
+            ]
+            await asyncio.to_thread(_run_chrome_screenshot, args, timeout)
+            if not os.path.isfile(out):
+                raise RuntimeError("chrome screenshot produced no output file")
+            img = Image.open(out).convert("RGB").crop((0, 0, SLIDE_W, SLIDE_H))
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            return buf.getvalue()
 
 
 # Bound concurrent headless-chrome subprocesses PROCESS-WIDE (not per deck): each render
 # is a separate chrome process, and M concurrent decks would otherwise spawn M×N browsers
-# and exhaust memory/CPU (the observed hang cascade). One shared semaphore caps total
-# chrome across all authored generations in this process. Tune per deploy via
-# AUTHORED_RENDER_CONCURRENCY (low-RAM hosts: 2; beefy: 8).
+# and exhaust memory/CPU (the observed hang cascade). One shared semaphore, acquired at the
+# single chokepoint (render_html_to_png), caps total chrome across all authored generations
+# and all callers in this process. Tune per deploy via AUTHORED_RENDER_CONCURRENCY
+# (low-RAM hosts: 2; beefy: 8).
 def _env_int(name: str, default: int) -> int:
     try:
         v = int(os.getenv(name, "").strip())
@@ -192,16 +198,14 @@ def _placeholder_png() -> bytes:
 
 
 async def render_html_list_to_pngs(htmls: List[str], timeout: int = 60) -> List[bytes]:
-    """Render many authored HTML slides to PNG bytes (order preserved), with bounded
-    concurrency and per-slide resilience: a slide that fails to render becomes a neutral
-    placeholder so one failure can't abort the whole deck."""
-    sem = _get_render_sem()
+    """Render many authored HTML slides to PNG bytes (order preserved), with per-slide
+    resilience: a slide that fails to render becomes a neutral placeholder so one failure
+    can't abort the whole deck. Concurrency is bounded inside render_html_to_png."""
 
     async def render_one(html: str) -> bytes:
-        async with sem:
-            try:
-                return await render_html_to_png(html, timeout=timeout)
-            except Exception:
-                return _placeholder_png()
+        try:
+            return await render_html_to_png(html, timeout=timeout)
+        except Exception:
+            return _placeholder_png()
 
     return list(await asyncio.gather(*[render_one(h) for h in htmls]))

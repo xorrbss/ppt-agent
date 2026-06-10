@@ -6,8 +6,8 @@ fast default template path is untouched."""
 
 import asyncio
 import io
-import os
-from typing import List, Optional
+import logging
+from typing import List
 
 from models.presentation_outline_model import PresentationOutlineModel
 from utils.llm_calls.author_slide import (
@@ -18,29 +18,11 @@ from utils.llm_calls.author_slide import (
     is_valid_slide_html,
 )
 
+logger = logging.getLogger(__name__)
 
-def _env_int(name: str, default: int) -> int:
-    try:
-        v = int(os.getenv(name, "").strip())
-        return v if v > 0 else default
-    except (TypeError, ValueError):
-        return default
-
-
-# Bound concurrent per-slide model calls PROCESS-WIDE. Authoring is the pipeline's
-# dominant cost (~75s/slide of model reasoning) and slides are independent, so the
-# provider parallelizes them well (measured: 6 slides finish in ~one slide's latency).
-# Default high enough to author a typical deck in ONE round; tune per deploy /
-# provider rate limits via AUTHORED_AUTHOR_CONCURRENCY.
-AUTHOR_CONCURRENCY = _env_int("AUTHORED_AUTHOR_CONCURRENCY", 12)
-_author_sem: Optional[asyncio.Semaphore] = None
-
-
-def _get_author_sem() -> asyncio.Semaphore:
-    global _author_sem
-    if _author_sem is None:
-        _author_sem = asyncio.Semaphore(AUTHOR_CONCURRENCY)
-    return _author_sem
+# Concurrency is bounded PROCESS-WIDE inside author_slide_html (the AUTHOR_CONCURRENCY-sized
+# dedicated executor), so the per-slide fan-out here doesn't need its own semaphore — excess
+# calls queue at that single chokepoint shared with the vision-QA re-author pass.
 
 # A light deck-plan: a slide's ROLE nudges the model toward a fitting bespoke layout
 # (cover hero / editorial problem / numbered pillars / phased roadmap / hero metric /
@@ -80,7 +62,6 @@ def plan_deck_roles(outline: PresentationOutlineModel) -> List[str]:
 
 
 async def _author_one_resilient(
-    sem: asyncio.Semaphore,
     content: str,
     design_system: str,
     brand: Brand,
@@ -88,19 +69,27 @@ async def _author_one_resilient(
     index: int,
     n: int,
 ) -> str:
-    """Author one slide with bounded concurrency, one retry, and a branded fallback.
-    Never raises and never returns invalid HTML — so one bad slide degrades to a clean
-    placeholder instead of aborting the whole deck."""
-    async with sem:
-        for _ in range(2):
-            try:
-                html = await author_slide_html(
-                    content, design_system, brand, role, index, n
-                )
-                if is_valid_slide_html(html):
-                    return html
-            except Exception:
-                pass
+    """Author one slide with one retry and a branded fallback. Never raises and never
+    returns invalid HTML — so one bad slide degrades to a clean placeholder instead of
+    aborting the whole deck. (Concurrency is bounded inside author_slide_html.) A
+    fallback is logged at WARNING so a silently-degraded deck is visible to operators."""
+    last_error: object = "invalid HTML"
+    for _ in range(2):
+        try:
+            html = await author_slide_html(
+                content, design_system, brand, role, index, n
+            )
+            if is_valid_slide_html(html):
+                return html
+        except Exception as e:  # noqa: BLE001 — resilience boundary, recorded below
+            last_error = e
+    logger.warning(
+        "[authored] slide %d/%d fell back to a branded placeholder after 2 attempts "
+        "(last error: %s)",
+        index + 1,
+        n,
+        last_error,
+    )
     return fallback_slide_html(content, brand, role, index, n)
 
 
@@ -112,11 +101,10 @@ async def author_deck(outline: PresentationOutlineModel, brand: Brand) -> List[s
     n = len(slides)
     design_system = build_design_system(brand)
     roles = plan_deck_roles(outline)
-    sem = _get_author_sem()
     htmls = await asyncio.gather(
         *[
             _author_one_resilient(
-                sem, slides[i].content, design_system, brand, roles[i], i, n
+                slides[i].content, design_system, brand, roles[i], i, n
             )
             for i in range(n)
         ]

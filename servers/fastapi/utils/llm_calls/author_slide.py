@@ -6,10 +6,12 @@ one plain `client.generate` text call against the selected provider (codex /
 anthropic / ...). Opt-in — never on the fast deterministic default path."""
 
 import asyncio
+import functools
 import html as _html
 import logging
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Optional
 
@@ -26,6 +28,28 @@ logger = logging.getLogger(__name__)
 # A bespoke full-bleed HTML slide with inline CSS is large; give the model room so
 # the document is never truncated mid-markup (truncation => broken render).
 AUTHOR_MAX_TOKENS = 16000
+
+
+def _env_int(name: str, default: int) -> int:
+    """Positive-int env override, falling back to `default` on unset/blank/invalid."""
+    try:
+        v = int(os.getenv(name, "").strip())
+        return v if v > 0 else default
+    except (TypeError, ValueError):
+        return default
+
+
+# Per-slide authoring makes a blocking provider call (~75s of model reasoning). Run it
+# in a DEDICATED thread pool — NOT asyncio's shared default executor — so a deck's dozen
+# concurrent authoring threads can't starve unrelated blocking work (other LLM calls,
+# exports) that also relies on the default executor. The pool size IS the process-wide
+# authoring concurrency cap: every caller (author_deck's first pass AND the vision-QA
+# re-author) funnels through author_slide_html, so excess calls queue here instead of
+# fanning out to hundreds of provider requests at once. Tune via AUTHORED_AUTHOR_CONCURRENCY.
+AUTHOR_CONCURRENCY = _env_int("AUTHORED_AUTHOR_CONCURRENCY", 12)
+_AUTHOR_EXECUTOR = ThreadPoolExecutor(
+    max_workers=AUTHOR_CONCURRENCY, thread_name_prefix="author-slide"
+)
 
 # Appendix A — design-system brief (the crux IP; rules kept verbatim). The brand
 # specifics (primary colour / fonts / language) are injected per deck so EVERY
@@ -164,39 +188,50 @@ def fallback_slide_html(
     )
 
 
-# Recognized codex reasoning-effort levels; the disable words send NO override, so
-# the provider applies its own default effort. (Unset/empty falls back to 'low'.)
-_REASONING_EFFORTS = ("low", "medium", "high")
-_REASONING_DISABLE = ("off", "default", "none")
+# codex (gpt-5.x) reasoning-effort levels we forward verbatim. 'off'/'default' are OUR
+# sentinels meaning "send no override, let the provider apply its own default effort" —
+# they are NOT codex levels. ('none' and 'minimal' ARE real codex levels, so they belong
+# in the forward list, not the disable list.)
+_REASONING_EFFORTS = ("minimal", "none", "low", "medium", "high")
+_REASONING_DISABLE = ("off", "default")
 
 
 def _authoring_extra_body(effort: Optional[str] = None) -> Optional[dict]:
     """Per-slide codex reasoning-effort override (codex-only — the param 400s on
     providers that don't support it).
 
-    codex (gpt-5.x) is a reasoning model and per-slide latency is reasoning time;
-    authoring bespoke HTML needs little reasoning, so the default is a LOWER effort
-    ('low' — measured ~25% faster per slide with no quality loss on first-pass
-    authoring). `effort` overrides the AUTHORED_REASONING_EFFORT env (the vision-QA
-    re-author pass passes 'off' to get the provider default for max quality).
+    Resolution: a non-blank `effort` argument wins; otherwise the AUTHORED_REASONING_EFFORT
+    env; if neither is meaningfully set the authoring default is the fast 'low' effort
+    (~25% faster per slide with no first-pass quality loss). codex (gpt-5.x) is a reasoning
+    model and per-slide latency is reasoning time, so authoring bespoke HTML — which needs
+    little reasoning — defaults low.
 
-    Returns {"reasoning": {"effort": ...}} for low|medium|high; returns None (no
-    override → provider default effort) for 'off'/'default'/unset. An UNRECOGNIZED
-    value (e.g. a typo) is logged and also falls through to the provider default,
-    so a misconfiguration is no longer silent."""
+    Returns {"reasoning": {"effort": L}} for any L in _REASONING_EFFORTS. Returns None (no
+    override → the provider's own default effort) for the 'off'/'default' sentinels. An
+    UNRECOGNIZED value is logged (attributing the env vs the argument as its source) and
+    also returns None, so a misconfiguration is never silent."""
     if not is_codex_selected():
         return None
-    raw = effort if effort is not None else os.getenv("AUTHORED_REASONING_EFFORT", "low")
-    level = (raw or "low").strip().lower()
+    override = (effort or "").strip()
+    if override:
+        raw, source = override, "reasoning_effort argument"
+    else:
+        raw, source = os.getenv("AUTHORED_REASONING_EFFORT", ""), "AUTHORED_REASONING_EFFORT"
+    level = raw.strip().lower()
+    if not level:
+        level = "low"  # unset / blank / whitespace-only -> fast authoring default
+    if level in _REASONING_DISABLE:
+        return None
     if level in _REASONING_EFFORTS:
         return {"reasoning": {"effort": level}}
-    if level not in _REASONING_DISABLE:
-        logger.warning(
-            "AUTHORED_REASONING_EFFORT=%r is not one of %s or 'off'; "
-            "authoring at the provider default reasoning effort.",
-            raw,
-            _REASONING_EFFORTS,
-        )
+    logger.warning(
+        "%s=%r is not a recognized reasoning effort %s or a disable word %s; "
+        "authoring at the provider default reasoning effort.",
+        source,
+        raw,
+        _REASONING_EFFORTS,
+        _REASONING_DISABLE,
+    )
     return None
 
 
@@ -230,7 +265,13 @@ async def author_slide_html(
         # exclusive) CUSTOM provider, so this reasoning dict is the sole source here.
         kwargs["extra_body"] = reasoning
     try:
-        response = await asyncio.to_thread(client.generate, **kwargs)
+        # Run the blocking call on the dedicated authoring pool (bounds concurrency to
+        # AUTHOR_CONCURRENCY and keeps long authoring threads off the shared default
+        # executor used by other LLM calls / exports).
+        loop = asyncio.get_running_loop()
+        response = await loop.run_in_executor(
+            _AUTHOR_EXECUTOR, functools.partial(client.generate, **kwargs)
+        )
     except Exception as e:
         raise handle_llm_client_exceptions(e)
     return extract_html_document(extract_text(response.content) or "")
