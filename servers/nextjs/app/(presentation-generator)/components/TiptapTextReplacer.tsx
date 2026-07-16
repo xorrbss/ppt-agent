@@ -12,6 +12,18 @@ import { getAdaptiveBlockText } from "@/lib/adaptiveBlockEdit";
 
 const extensions = [StarterKit, Markdown, Underline];
 
+// Hangul (jamo + syllables), CJK ideographs, Kana. A 1-2 char Latin leaf is
+// usually UI noise, but a 1-2 char CJK leaf is a real word (목표 / 성과 / 결론 /
+// 개요), so it must stay editable in this Korean-first fork.
+const CJK_TEXT_RE =
+  /[ᄀ-ᇿ぀-ヿ㄰-㆏㐀-鿿가-힣]/;
+
+function isTrivialLeafText(text: string): boolean {
+  const t = (text || "").trim();
+  if (!t) return true;
+  return t.length <= 2 && !CJK_TEXT_RE.test(t);
+}
+
 // How an editable text leaf is addressed back to slide content. Adaptive slides
 // bind by the leaf's data-block-id (deterministic — survives duplicate text /
 // reorder); legacy templates keep the original string-match path binding.
@@ -84,7 +96,7 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
         const trimmedText = directTextContent.trim();
 
         // Check if element has meaningful text content
-        if (!trimmedText || trimmedText.length <= 2) return;
+        if (isTrivialLeafText(trimmedText)) return;
         
         // Skip elements that contain other elements with text (to avoid double processing)
         if (hasTextChildren(htmlElement)) return;
@@ -358,13 +370,10 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
       );
       if (hasContainerClass) return true;
 
-      // Skip very short text that might be UI elements
+      // Skip very short text that might be UI elements — but keep short CJK words
+      // (목표 / 성과 / 개요) editable.
       const text = getDirectTextContent(element).trim();
-      if (text.length < 2) return true;
-
-      // Skip elements that look like numbers or single characters (might be icons/UI)
-      // if (/^[0-9]+$/.test(text) || text.length === 1) return true;
-      if (text.length <3) return true;
+      if (isTrivialLeafText(text)) return true;
 
       return false;
     };

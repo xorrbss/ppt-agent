@@ -50,6 +50,14 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
 
   // Auto-bridge: once the outline stream completes, submit exactly once.
   const autoSubmittedRef = useRef(false);
+  // Track whether generation actually started, so we can tell the brief bridge
+  // window (submitted, loading not yet on) apart from a FAILED generation
+  // (loading turned on then off while still on this page). handleSubmit handles
+  // its own errors and resets loadingState, so there is no throw to catch.
+  const hasStartedGeneratingRef = useRef(false);
+  useEffect(() => {
+    if (loadingState.isLoading) hasStartedGeneratingRef.current = true;
+  }, [loadingState.isLoading]);
   useEffect(() => {
     if (!auto || autoSubmittedRef.current) return;
     if (!presentation_id || streamState.isStreaming) return;
@@ -63,18 +71,33 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
     return <EmptyStateView />;
   }
 
-  // Auto mode shows only a progress view; if the stream ends with no outlines
-  // (error), fall through to the normal UI so the user isn't stuck on a loader.
-  const showAutoProgress =
-    auto && (streamState.isStreaming || (outlines?.length ?? 0) > 0);
-  if (showAutoProgress) {
+  // Auto mode shows a progress-only view WHILE actively working: streaming the
+  // outline, generating, or the one-tick bridge between them. If generation
+  // fails (loading ended without navigating away), this goes false and we fall
+  // through to the normal outline UI so the user can read the error and retry
+  // via 생성하기 — instead of being stuck on a frozen loader forever.
+  const autoWorking =
+    auto &&
+    (streamState.isStreaming ||
+      loadingState.isLoading ||
+      (autoSubmittedRef.current && !hasStartedGeneratingRef.current));
+  if (autoWorking) {
+    const generating = loadingState.isLoading;
     return (
       <div className="font-syne pb-9">
         <OverlayLoader
           show={true}
-          text={streamState.isStreaming ? "개요를 생성하는 중…" : "발표자료를 만드는 중…"}
+          // Use the real generation message + ETA (authored decks can take many
+          // minutes) instead of a fixed 60s bar that parks at 95%.
+          text={
+            streamState.isStreaming
+              ? "개요를 생성하는 중…"
+              : generating
+                ? loadingState.message
+                : "발표자료를 준비하는 중…"
+          }
           showProgress={true}
-          duration={60}
+          duration={generating ? loadingState.duration : 60}
         />
       </div>
     );
