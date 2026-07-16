@@ -1,3 +1,5 @@
+import time
+
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from starlette.responses import JSONResponse
@@ -16,6 +18,35 @@ from utils.simple_auth import (
 from utils.get_env import is_disable_auth_enabled
 
 API_V1_AUTH_ROUTER = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
+
+# In-memory login throttle: without it a single known-admin account can be
+# brute-forced online (PBKDF2 only slows OFFLINE cracking). Per-client sliding
+# window; sufficient for this single-instance self-hosted tool.
+_LOGIN_MAX_FAILURES = 5
+_LOGIN_WINDOW_SECONDS = 300
+_login_failures: dict[str, list[float]] = {}
+
+
+def _login_client_key(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _assert_login_allowed(key: str) -> None:
+    now = time.monotonic()
+    recent = [t for t in _login_failures.get(key, []) if now - t < _LOGIN_WINDOW_SECONDS]
+    _login_failures[key] = recent
+    if len(recent) >= _LOGIN_MAX_FAILURES:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many failed login attempts. Please wait a few minutes.",
+        )
+
+
+def _record_login_failure(key: str) -> None:
+    _login_failures.setdefault(key, []).append(time.monotonic())
 
 
 class AuthCredentialsRequest(BaseModel):
@@ -82,9 +113,14 @@ async def login(body: AuthCredentialsRequest, request: Request):
     if not is_auth_configured():
         raise HTTPException(status_code=428, detail="Login setup is required")
 
+    client_key = _login_client_key(request)
+    _assert_login_allowed(client_key)
+
     if not verify_credentials(body.username, body.password):
+        _record_login_failure(client_key)
         raise HTTPException(status_code=401, detail="Unauthorized")
 
+    _login_failures.pop(client_key, None)
     username = body.username.strip()
     token = create_session_token(username)
     response = JSONResponse(

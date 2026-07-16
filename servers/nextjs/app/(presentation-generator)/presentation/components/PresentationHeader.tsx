@@ -335,7 +335,9 @@ const PresentationHeader = ({
       presentation_id,
       slide_count: presentationData?.slides?.length || 0,
     });
-    router.push(`/presentation?id=${presentation_id}&stream=true`);
+    // regenerate=true forces the stream to re-run generation; without it the
+    // stream now replays existing slides idempotently (so a refresh can't wipe edits).
+    router.push(`/presentation?id=${presentation_id}&stream=true&regenerate=true`);
   };
   const downloadLink = (path: string, fileName: string) => {
     const link = document.createElement("a");
