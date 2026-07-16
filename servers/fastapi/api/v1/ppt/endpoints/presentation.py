@@ -155,6 +155,24 @@ def _insert_toc_layouts(
         structure.slides.insert(insertion_index + i, toc_slide_layout_index)
 
 
+def _clamp_and_backfill_structure(
+    structure: PresentationStructureModel,
+    total_outlines: int,
+    total_slide_layouts: int,
+) -> None:
+    """Trim the model-chosen layout indices to the outline count and replace any
+    out-of-range index with a random valid layout (mutates in place).
+
+    Shared by the interactive /prepare and one-shot /generate template paths, which
+    carried this verbatim — including a dead `if index >= total_outlines` branch
+    inside `range(total_outlines)` that can never run. Removed here.
+    """
+    structure.slides = structure.slides[:total_outlines]
+    for index in range(total_outlines):
+        if structure.slides[index] >= total_slide_layouts:
+            structure.slides[index] = random.randint(0, total_slide_layouts - 1)
+
+
 def _build_export_cookie_header(request: Request) -> Optional[str]:
     cookie_header = (request.headers.get("cookie") or "").strip()
     if cookie_header:
@@ -343,14 +361,9 @@ async def prepare_presentation(
                 )
             )
 
-        presentation_structure.slides = presentation_structure.slides[: len(outlines)]
-        for index in range(total_outlines):
-            random_slide_index = random.randint(0, total_slide_layouts - 1)
-            if index >= total_outlines:
-                presentation_structure.slides.append(random_slide_index)
-                continue
-            if presentation_structure.slides[index] >= total_slide_layouts:
-                presentation_structure.slides[index] = random_slide_index
+        _clamp_and_backfill_structure(
+            presentation_structure, total_outlines, total_slide_layouts
+        )
 
         if presentation.include_table_of_contents:
             n_toc_slides = get_no_of_toc_required_for_n_outlines(
@@ -976,16 +989,9 @@ async def generate_presentation_handler(
                     )
                 )
 
-            presentation_structure.slides = presentation_structure.slides[
-                :total_outlines
-            ]
-            for index in range(total_outlines):
-                random_slide_index = random.randint(0, total_slide_layouts - 1)
-                if index >= total_outlines:
-                    presentation_structure.slides.append(random_slide_index)
-                    continue
-                if presentation_structure.slides[index] >= total_slide_layouts:
-                    presentation_structure.slides[index] = random_slide_index
+            _clamp_and_backfill_structure(
+                presentation_structure, total_outlines, total_slide_layouts
+            )
 
             should_include_toc = (
                 request.include_table_of_contents and not using_slides_markdown
