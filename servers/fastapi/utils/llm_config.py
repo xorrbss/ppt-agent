@@ -40,6 +40,7 @@ from utils.get_env import (
     get_cerebras_base_url_env,
     get_codex_access_token_env,
     get_codex_account_id_env,
+    get_codex_reasoning_effort_env,
     get_codex_refresh_token_env,
     get_codex_token_expires_env,
     get_custom_llm_api_key_env,
@@ -346,6 +347,12 @@ def get_llm_config() -> ClientConfig:
 
 
 def get_extra_body() -> Optional[dict]:
-    if get_llm_provider() == LLMProvider.CUSTOM and disable_thinking():
+    provider = get_llm_provider()
+    if provider == LLMProvider.CUSTOM and disable_thinking():
         return {"enable_thinking": False}
+    if provider == LLMProvider.CODEX:
+        effort = (get_codex_reasoning_effort_env() or "").strip().lower()
+        # codex (gpt-5.x) reasoning-effort levels; other providers 400 on this param.
+        if effort in ("minimal", "none", "low", "medium", "high", "xhigh"):
+            return {"reasoning": {"effort": effort}}
     return None

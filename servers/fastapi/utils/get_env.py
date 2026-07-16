@@ -317,6 +317,10 @@ def get_codex_model_env():
     return os.getenv("CODEX_MODEL")
 
 
+def get_codex_reasoning_effort_env():
+    return os.getenv("CODEX_REASONING_EFFORT")
+
+
 def get_migrate_database_on_startup_env():
     return os.getenv("MIGRATE_DATABASE_ON_STARTUP")
 
