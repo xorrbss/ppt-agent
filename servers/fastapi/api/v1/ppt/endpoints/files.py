@@ -1,16 +1,35 @@
-from http.client import HTTPException
 import os
 from typing import Annotated, List, Optional
-from fastapi import APIRouter, Body, File, UploadFile
+from fastapi import APIRouter, Body, UploadFile, HTTPException
 
 from constants.documents import UPLOAD_ACCEPTED_FILE_TYPES
 from models.decomposed_file_info import DecomposedFileInfo
 from services.temp_file_service import TEMP_FILE_SERVICE
 from services.documents_loader import DocumentsLoader
 import uuid
+from utils.get_env import get_app_data_directory_env
 from utils.validators import validate_files
 
 FILES_ROUTER = APIRouter(prefix="/files", tags=["Files"])
+
+
+def _ensure_within_allowed(path: str) -> str:
+    """Reject a client-supplied path that escapes the temp / app-data roots.
+
+    /files/decompose reads whatever paths the client sends; without this an
+    authenticated caller (or anyone in DISABLE_AUTH mode) could read arbitrary
+    files. Legit paths come from /files/upload (under the temp base dir); uploads
+    may also live under app_data. Compared via realpath so symlinks/.. can't escape.
+    """
+    roots = [os.path.realpath(TEMP_FILE_SERVICE.base_dir)]
+    app_data = get_app_data_directory_env()
+    if app_data:
+        roots.append(os.path.realpath(app_data))
+    real = os.path.realpath(path)
+    for root in roots:
+        if real == root or real.startswith(root + os.sep):
+            return real
+    raise HTTPException(400, "file_path is outside the allowed directories")
 
 
 @FILES_ROUTER.post("/upload", response_model=List[str])
@@ -42,6 +61,7 @@ async def decompose_files(
     file_paths: Annotated[List[str], Body(embed=True)],
     language: Annotated[Optional[str], Body()] = None,
 ):
+    file_paths = [_ensure_within_allowed(p) for p in file_paths]
     temp_dir = TEMP_FILE_SERVICE.create_temp_dir(str(uuid.uuid4()))
 
     txt_files = []
@@ -77,14 +97,3 @@ async def decompose_files(
         )
 
     return response
-
-
-@FILES_ROUTER.post("/update")
-async def update_files(
-    file_path: Annotated[str, Body()],
-    file: Annotated[UploadFile, File()],
-):
-    with open(file_path, "wb") as f:
-        f.write(await file.read())
-
-    return {"message": "File updated successfully"}
