@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -23,6 +24,15 @@ LOGGER = logging.getLogger(__name__)
 
 EXPORT_DIRECTORY_MODE = 0o755
 EXPORT_FILE_MODE = 0o644
+
+
+def _redact_export_url(url: str) -> str:
+    """Mask the admin session token in an export URL before it hits the logs.
+
+    The /pdf-maker export URL carries ?exportSession=<session-token>; logging it
+    verbatim let anyone with log access recover a valid 30-day admin token.
+    """
+    return re.sub(r"(exportSession=)[^&]*", r"\1***", url)
 
 
 def _windows_hidden_subprocess_kwargs() -> dict[str, object]:
@@ -371,7 +381,7 @@ class ExportTaskService:
     ) -> PresentationExportTaskResult:
         LOGGER.info(
             "[export_runtime] export_from_url url=%s format=%s cookie_header=%s",
-            url,
+            _redact_export_url(url),
             export_as,
             "set" if cookie_header else "empty",
         )

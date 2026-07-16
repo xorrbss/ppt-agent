@@ -73,10 +73,26 @@ if os.path.isdir(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # Middlewares
-origins = ["*"]
+# CORS was allow_origins=["*"] WITH allow_credentials=True — Starlette then reflects
+# any caller's Origin and returns Access-Control-Allow-Credentials:true, so any site
+# could make credentialed calls. The UI is same-origin (nginx / the local proxy), so
+# CORS is only needed for local dev cross-origin; use a tight allowlist (extend via
+# CORS_ALLOWED_ORIGINS, comma-separated) instead of a credentialed wildcard.
+def _cors_origins() -> list[str]:
+    raw = (os.getenv("CORS_ALLOWED_ORIGINS") or "").strip()
+    if raw:
+        return [o.strip() for o in raw.split(",") if o.strip()]
+    return [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5000",
+        "http://127.0.0.1:5000",
+    ]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
