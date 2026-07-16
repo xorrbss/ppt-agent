@@ -179,9 +179,15 @@ export const usePresentationStreaming = (
 
     const openStream = () => {
       closeEventSource();
-      eventSource = new EventSource(
-        getApiUrl(`/api/v1/ppt/presentation/stream/${presentationId}`)
-      );
+      // Forward the page's regenerate flag so the "재생성" action re-runs
+      // generation; a plain refresh/prefetch (no flag) replays existing slides.
+      const forceRegenerate =
+        typeof window !== "undefined" &&
+        new URLSearchParams(window.location.search).get("regenerate") === "true";
+      const streamPath = `/api/v1/ppt/presentation/stream/${presentationId}${
+        forceRegenerate ? "?regenerate=true" : ""
+      }`;
+      eventSource = new EventSource(getApiUrl(streamPath));
 
       eventSource.addEventListener("response", (event) => {
         let data: any;
@@ -259,6 +265,7 @@ export const usePresentationStreaming = (
               // Remove stream parameter from URL
               const newUrl = new URL(window.location.href);
               newUrl.searchParams.delete("stream");
+              newUrl.searchParams.delete("regenerate");
               window.history.replaceState({}, "", newUrl.toString());
             } catch (error) {
               if (!scheduleRetry("failed to parse complete payload")) {
@@ -280,6 +287,7 @@ export const usePresentationStreaming = (
             // Remove stream parameter from URL
             const newUrl = new URL(window.location.href);
             newUrl.searchParams.delete("stream");
+              newUrl.searchParams.delete("regenerate");
             window.history.replaceState({}, "", newUrl.toString());
             break;
           case "error":

@@ -396,7 +396,9 @@ async def prepare_presentation(
 
 @PRESENTATION_ROUTER.get("/stream/{id}", response_model=PresentationWithSlides)
 async def stream_presentation(
-    id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session)
+    id: uuid.UUID,
+    regenerate: bool = False,
+    sql_session: AsyncSession = Depends(get_async_session),
 ):
     presentation = await sql_session.get(PresentationModel, id)
     if not presentation:
@@ -423,6 +425,44 @@ async def stream_presentation(
     image_generation_service = ImageGenerationService(get_images_directory())
 
     async def inner():
+        # Idempotent stream: if this deck was already generated, REPLAY the
+        # persisted slides through the SSE envelope instead of re-running the LLM
+        # and delete-replacing slides. A browser refresh / link prefetch of the
+        # stream URL must not silently wipe edits made since generation. The
+        # explicit "재생성" (regenerate) action passes regenerate=true to force a
+        # fresh generation.
+        existing_slides = (
+            []
+            if regenerate
+            else
+            (
+                await sql_session.execute(
+                    select(SlideModel)
+                    .where(SlideModel.presentation == id)
+                    .order_by(SlideModel.index)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if existing_slides:
+            yield SSEResponse(
+                event="response",
+                data=json.dumps({"type": "chunk", "chunk": '{ "slides": [ '}),
+            ).to_string()
+            for existing_slide in existing_slides:
+                yield SSEResponse(
+                    event="response",
+                    data=json.dumps(
+                        {"type": "chunk", "chunk": existing_slide.model_dump_json()}
+                    ),
+                ).to_string()
+            yield SSEResponse(
+                event="response",
+                data=json.dumps({"type": "chunk", "chunk": " ] }"}),
+            ).to_string()
+            return
+
         structure = presentation.get_structure()
         layout = presentation.get_layout()
         icon_weight = layout.icon_weight
@@ -585,11 +625,19 @@ async def update_presentation(
         presentation_update_dict["n_slides"] = n_slides
     if title:
         presentation_update_dict["title"] = title
-    if theme or theme is None:
+    # Only overwrite the theme when a theme object is actually sent. The previous
+    # `if theme or theme is None` was ALWAYS true, so any partial update that
+    # omitted theme (e.g. a title-only call from an MCP tool) silently nulled the
+    # stored theme. Send an empty object to intentionally clear it.
+    if theme is not None:
         presentation_update_dict["theme"] = theme
 
     if presentation_update_dict:
         presentation.sqlmodel_update(presentation_update_dict)
+    # NOTE: `slides` is a FULL REPLACE of the deck's slides (the editor autosave
+    # always sends the complete set, and expresses deletions by omission). Callers
+    # that only want to change one slide must use /slide/edit, not a partial list
+    # here, or the omitted slides are dropped.
     if slides:
         # Just to make sure id is UUID
         for slide in slides:
