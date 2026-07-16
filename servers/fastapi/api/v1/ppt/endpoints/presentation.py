@@ -978,8 +978,13 @@ async def generate_presentation_handler(
             content=request.content,
             n_slides=final_n_slides,
             language=language_to_use or "",
+            # Use the descriptive outline (pre-projection): on the adaptive path
+            # presentation_outlines was replaced with the projected SlideSpec outline
+            # whose first slide's content is the composition JSON, which would leak
+            # into the title. vqa_source_outline is the descriptive outline (== the
+            # same object on the template path, so this is correct for both).
             title=get_presentation_title_from_presentation_outline(
-                presentation_outlines
+                vqa_source_outline
             ),
             outlines=presentation_outlines.model_dump(),
             layout=layout_model.model_dump(),

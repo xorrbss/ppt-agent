@@ -192,7 +192,7 @@ def fallback_slide_html(
 # sentinels meaning "send no override, let the provider apply its own default effort" —
 # they are NOT codex levels. ('none' and 'minimal' ARE real codex levels, so they belong
 # in the forward list, not the disable list.)
-_REASONING_EFFORTS = ("minimal", "none", "low", "medium", "high")
+_REASONING_EFFORTS = ("minimal", "none", "low", "medium", "high", "xhigh")
 _REASONING_DISABLE = ("off", "default")
 
 

@@ -12,6 +12,7 @@ from services.export_task_service import EXPORT_TASK_SERVICE
 from templates.custom_layout_from_db import load_custom_presentation_layout
 from templates.presentation_layout import PresentationLayoutModel
 from utils.archetype_profiles import ARCHETYPE_PROFILES
+from utils.get_env import get_next_internal_base_url
 from utils.icon_weights import extract_icon_weight_from_settings
 from utils.internal_http import internal_request_headers
 
@@ -82,7 +83,7 @@ def _read_builtin_template_settings(layout_name: str) -> dict[str, Any] | None:
 async def _fetch_template_fallback_payload(
     layout_name: str,
 ) -> tuple[dict[str, Any] | None, str | None]:
-    fallback_url = f"http://localhost/api/template?group={layout_name}"
+    fallback_url = f"{get_next_internal_base_url()}/api/template?group={layout_name}"
     LOGGER.info(
         "[template_layout] trying HTTP fallback template=%r url=%s",
         layout_name,

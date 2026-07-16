@@ -30,6 +30,18 @@ def get_fastapi_public_base_url() -> str | None:
     return v or None
 
 
+def get_next_internal_base_url() -> str:
+    """Base origin for trusted backend -> Next.js loopback calls (e.g. /api/template,
+    which serves built-in template schemas) — no trailing slash.
+
+    Defaults to http://localhost (nginx :80 fronts Next.js in Docker). Setups without
+    nginx must set NEXT_INTERNAL_URL, e.g. local Windows dev where the single-origin
+    proxy runs on :5000 (or Next.js directly on :3000).
+    """
+    v = (os.getenv("NEXT_INTERNAL_URL") or "").strip().rstrip("/")
+    return v or "http://localhost"
+
+
 def get_temp_directory_env():
     return os.getenv("TEMP_DIRECTORY")
 
@@ -315,6 +327,10 @@ def get_codex_is_pro_env():
 
 def get_codex_model_env():
     return os.getenv("CODEX_MODEL")
+
+
+def get_codex_reasoning_effort_env():
+    return os.getenv("CODEX_REASONING_EFFORT")
 
 
 def get_migrate_database_on_startup_env():
