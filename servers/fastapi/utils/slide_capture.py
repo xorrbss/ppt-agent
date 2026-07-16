@@ -10,6 +10,7 @@ import pathlib
 import signal
 import subprocess
 import tempfile
+import time
 from typing import List, Optional
 
 SLIDE_W = 1280
@@ -54,6 +55,20 @@ def _run_chrome_screenshot(args: List[str], timeout: int) -> None:
             pass
 
 
+async def _wait_for_output(out: str, timeout: float = 15.0) -> bool:
+    """Poll for the --screenshot file after the chrome process we waited on exits.
+    On Windows chrome.exe is a thin launcher: it spawns the real browser child and
+    returns, so `communicate()` can complete BEFORE the detached child finishes
+    writing the screenshot. Checking once immediately races that write and spuriously
+    reports 'no output file' (→ blank placeholder). Poll briefly instead."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if os.path.isfile(out) and os.path.getsize(out) > 0:
+            return True
+        await asyncio.sleep(0.25)
+    return os.path.isfile(out) and os.path.getsize(out) > 0
+
+
 def find_chrome() -> Optional[str]:
     for env in ("CHROME_PATH", "PUPPETEER_EXECUTABLE_PATH", "CHROMIUM_PATH"):
         p = os.getenv(env)
@@ -89,13 +104,26 @@ async def capture_slides(
     n = max(1, int(n_slides))
     height = n * SLIDE_H
     url = f"{base_url}/pdf-maker?id={presentation_id}"
-    with tempfile.TemporaryDirectory() as td:
+    # ignore_cleanup_errors: the detached headless-chrome child can outlive the
+    # screenshot and keep the --user-data-dir profile locked; on Windows that turns
+    # temp-dir teardown into a PermissionError. The PNG is already captured by then,
+    # so leave the locked profile files for the OS to reap instead of crashing.
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         out = os.path.join(td, "deck.png")
         args = [
             chrome,
             "--headless=new",
             "--disable-gpu",
             "--no-sandbox",
+            # Isolated profile so the invocation always spawns its OWN headless
+            # instance. Without it, on a desktop where the user already has Chrome
+            # open, chrome.exe hands the request to the running instance and returns
+            # immediately (exit 0, NO screenshot) → every slide degrades to a blank
+            # placeholder. --no-first-run/--no-default-browser-check keep the fresh
+            # profile from doing first-run setup that stalls under concurrency.
+            f"--user-data-dir={os.path.join(td, 'profile')}",
+            "--no-first-run",
+            "--no-default-browser-check",
             "--hide-scrollbars",
             "--force-device-scale-factor=1",
             f"--window-size={SLIDE_W},{height}",
@@ -104,7 +132,7 @@ async def capture_slides(
             url,
         ]
         await asyncio.to_thread(_run_chrome_screenshot, args, timeout)
-        if not os.path.isfile(out):
+        if not await _wait_for_output(out):
             raise RuntimeError("chrome screenshot produced no output file")
         img = Image.open(out).convert("RGB")
         slides: List[bytes] = []
@@ -134,7 +162,10 @@ async def render_html_to_png(html: str, timeout: int = 60) -> bytes:
             "No chrome/chromium found for slide capture (set CHROME_PATH)."
         )
     async with _get_render_sem():
-        with tempfile.TemporaryDirectory() as td:
+        # ignore_cleanup_errors: see capture_slides — the detached chrome child can
+        # hold the profile lock past screenshot capture, which would otherwise fail
+        # temp-dir teardown on Windows after the PNG is already read.
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             html_path = os.path.join(td, "slide.html")
             out = os.path.join(td, "slide.png")
             with open(html_path, "w", encoding="utf-8") as f:
@@ -144,6 +175,12 @@ async def render_html_to_png(html: str, timeout: int = 60) -> bytes:
                 "--headless=new",
                 "--disable-gpu",
                 "--no-sandbox",
+                # Isolated profile — see capture_slides: without it chrome.exe hands
+                # off to a user's already-running Chrome and writes no screenshot,
+                # silently blanking every authored slide.
+                f"--user-data-dir={os.path.join(td, 'profile')}",
+                "--no-first-run",
+                "--no-default-browser-check",
                 "--hide-scrollbars",
                 "--force-device-scale-factor=1",
                 f"--window-size={SLIDE_W},{SLIDE_H}",
@@ -152,7 +189,7 @@ async def render_html_to_png(html: str, timeout: int = 60) -> bytes:
                 pathlib.Path(html_path).as_uri(),
             ]
             await asyncio.to_thread(_run_chrome_screenshot, args, timeout)
-            if not os.path.isfile(out):
+            if not await _wait_for_output(out):
                 raise RuntimeError("chrome screenshot produced no output file")
             img = Image.open(out).convert("RGB").crop((0, 0, SLIDE_W, SLIDE_H))
             buf = io.BytesIO()
