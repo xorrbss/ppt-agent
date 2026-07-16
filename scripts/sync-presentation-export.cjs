@@ -329,6 +329,54 @@ async function downloadAndInstallRuntime() {
   return { tag, downloadUrl };
 }
 
+// The prebuilt runtime bundles sharp's JS but not its libvips native addon, and a
+// fresh install wipes any previously-installed node_modules. On Windows/macOS the
+// sync is the only provisioner, so (re)install sharp next to the runtime; Linux is
+// left to the Docker image, which provisions it itself.
+function detectBundledSharpVersion() {
+  const fallback = "0.34.4";
+  try {
+    const bundle = fs.readFileSync(targetIndexJs, "utf8");
+    const m = bundle.match(/@img\/sharp-[a-z0-9-]+"\s*:\s*"(\d+\.\d+\.\d+)"/);
+    return (m && m[1]) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function ensureRuntimeSharp() {
+  if (process.platform === "linux") {
+    return;
+  }
+  try {
+    execFileSync(process.execPath, ["-e", "require('sharp')"], {
+      cwd: targetRoot,
+      stdio: "ignore",
+    });
+    return; // already resolvable
+  } catch {
+    // fall through to install
+  }
+  const version = detectBundledSharpVersion();
+  const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
+  console.log(
+    `[presentation-export] Installing sharp@${version} for byte-PPTX export (${process.platform}/${process.arch})`
+  );
+  try {
+    execFileSync(
+      npmCmd,
+      ["install", "--prefix", targetRoot, "--no-save", "--no-audit", "--no-fund", `sharp@${version}`],
+      { stdio: "inherit" }
+    );
+  } catch (err) {
+    console.warn(
+      `[presentation-export] WARNING: could not install sharp (${err.message}). ` +
+        `Editable PPTX/PDF export may fail; install it manually with:\n` +
+        `  npm install --prefix presentation-export --no-save sharp@${version}`
+    );
+  }
+}
+
 async function main() {
   const existing = validateExistingRuntime();
 
@@ -346,6 +394,7 @@ async function main() {
     console.log("[presentation-export] Using existing runtime:");
     console.log(`  - ${existing.entrypointPath}`);
     console.log(`  - ${existing.converterPath}`);
+    ensureRuntimeSharp();
     return;
   }
 
@@ -354,6 +403,7 @@ async function main() {
   if (!installed.ok) {
     throw new Error(installed.reason);
   }
+  ensureRuntimeSharp();
 
   console.log("[presentation-export] Synced successfully:");
   console.log(`  - release: ${tag}`);

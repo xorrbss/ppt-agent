@@ -137,11 +137,9 @@ it assembles an image PPTX in pure Python):
   the current OS/arch (`export-Windows-X64.zip` → `presentation-export/py/convert-win32-x64.exe`).
   If you synced before this fix, re-run with `--force`.
 - **`sharp` native binary** — the runtime bundles sharp's JS but not its libvips native
-  addon. Install it once next to the runtime, matching the runtime's bundled sharp version
-  (0.34.4 for export runtime v0.3.3):
-  ```powershell
-  npm install --prefix presentation-export --no-save sharp@0.34.4
-  ```
+  addon. `npm run sync:presentation-export` now installs it automatically on Windows/macOS
+  (matching the bundle's sharp version). If that step is skipped (e.g. offline), install it
+  manually: `npm install --prefix presentation-export --no-save sharp@0.34.4`.
 - **Chrome** — the runtime renders via puppeteer. The backend now auto-points it at the
   detected system Chrome (same as authored mode; override with `CHROME_PATH`/
   `PUPPETEER_EXECUTABLE_PATH`), so puppeteer won't try to download its own.
