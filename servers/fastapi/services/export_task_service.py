@@ -169,6 +169,18 @@ class ExportTaskService:
         env["ASSETS_BASE_URL"] = f"{fastapi_base.rstrip('/')}/app_data"
         env["BUILT_PYTHON_MODULE_PATH"] = self.converter_path
 
+        # The export runtime renders /pdf-maker via puppeteer. When the deploy hasn't
+        # pinned a browser (Docker sets PUPPETEER_EXECUTABLE_PATH to its bundled
+        # chromium), fall back to the same Chrome the authored renderer auto-detects,
+        # so byte-PPTX export works on a desktop instead of puppeteer trying to
+        # download its own Chrome (which also fails offline / behind a proxy).
+        if not env.get("PUPPETEER_EXECUTABLE_PATH"):
+            from utils.slide_capture import find_chrome
+
+            chrome = find_chrome()
+            if chrome:
+                env["PUPPETEER_EXECUTABLE_PATH"] = chrome
+
         return env
 
     def _ensure_runtime_ready(self) -> None:

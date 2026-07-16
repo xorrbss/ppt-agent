@@ -126,6 +126,29 @@ the exported PPTX in PowerPoint. The default adaptive/template path is unchanged
   total concurrent headless-chrome processes process-wide; `AUTHORED_AUTHOR_CONCURRENCY`
   (default 5) bounds concurrent authoring calls. Lower them (e.g. 2) on low-RAM hosts.
 
+## Editable (byte) PPTX/PDF export on Windows
+
+The `adaptive`/template paths export a fully-editable PPTX by DOM-walking the rendered
+`/pdf-maker` page through the external `presentation-export` runtime. On Windows this
+needs two things the prebuilt runtime doesn't fully ship (authored mode is unaffected —
+it assembles an image PPTX in pure Python):
+
+- **Converter binary** — `npm run sync:presentation-export` now downloads the archive for
+  the current OS/arch (`export-Windows-X64.zip` → `presentation-export/py/convert-win32-x64.exe`).
+  If you synced before this fix, re-run with `--force`.
+- **`sharp` native binary** — the runtime bundles sharp's JS but not its libvips native
+  addon. Install it once next to the runtime, matching the runtime's bundled sharp version
+  (0.34.4 for export runtime v0.3.3):
+  ```powershell
+  npm install --prefix presentation-export --no-save sharp@0.34.4
+  ```
+- **Chrome** — the runtime renders via puppeteer. The backend now auto-points it at the
+  detected system Chrome (same as authored mode; override with `CHROME_PATH`/
+  `PUPPETEER_EXECUTABLE_PATH`), so puppeteer won't try to download its own.
+
+Verified end-to-end on Windows: adaptive and korean-biz decks export to valid multi-slide
+editable `.pptx` (opens in PowerPoint).
+
 ## Notes
 - API keys live in `app_data/userConfig.json` (gitignored) — never committed.
 - Next.js build output is `.next-build` (not `.next`).

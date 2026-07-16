@@ -27,7 +27,19 @@ const packageJsonFile = path.join(repoRoot, "package.json");
 const cacheDir = path.join(repoRoot, ".cache", "presentation-export");
 const exportRepoBase =
   "https://github.com/presenton/presenton-export/releases/download";
-const linuxAssetName = "export-Linux-X64.zip";
+// The export runtime publishes one archive per OS/arch. Pick the one matching the
+// current platform instead of always fetching Linux — otherwise Windows/macOS get a
+// Linux converter binary they can't execute (export then 404s "converter not found").
+// Docker/Linux resolves to the same export-Linux-X64.zip as before (no change there).
+function getExportAssetName() {
+  const osName =
+    { win32: "Windows", darwin: "macOS", linux: "Linux" }[process.platform] ||
+    "Linux";
+  const archName =
+    { x64: "X64", arm64: "ARM64", ia32: "ia32" }[process.arch] || "X64";
+  return `export-${osName}-${archName}.zip`;
+}
+const exportAssetName = getExportAssetName();
 
 const cliArgs = new Set(process.argv.slice(2));
 const forceDownload = cliArgs.has("--force");
@@ -124,11 +136,19 @@ function chmodIfPossible(filePath) {
 }
 
 function getConverterCandidates(baseDir = targetPyDir) {
-  return [
-    path.join(baseDir, "convert-linux-x64"),
-    path.join(baseDir, "convert-linux-amd64"),
-    path.join(baseDir, "convert"),
+  const ext = process.platform === "win32" ? ".exe" : "";
+  // Match the backend's _resolve_converter_path naming (convert-<platform>-<arch>),
+  // e.g. convert-win32-x64.exe on Windows, convert-linux-x64 on Linux. Legacy Linux
+  // names are kept so an already-synced older runtime still validates.
+  const names = [
+    `convert-${process.platform}-${process.arch}${ext}`,
+    `convert-${process.platform}${ext}`,
+    `convert${ext}`,
+    "convert",
+    "convert-linux-x64",
+    "convert-linux-amd64",
   ];
+  return names.map((name) => path.join(baseDir, name));
 }
 
 function hasRuntimeBundle(baseDir) {
@@ -202,7 +222,7 @@ function validateExistingRuntime() {
   if (!converterPath) {
     return {
       ok: false,
-      reason: `No Linux converter binary under ${targetPyDir} or ${targetRoot}.`,
+      reason: `No converter binary under ${targetPyDir} or ${targetRoot}.`,
     };
   }
   chmodIfPossible(converterPath);
@@ -287,10 +307,10 @@ function resolveExtractedRoot(extractDir) {
 
 async function downloadAndInstallRuntime() {
   const tag = await getTargetVersion();
-  const downloadUrl = `${exportRepoBase}/${tag}/${linuxAssetName}`;
+  const downloadUrl = `${exportRepoBase}/${tag}/${exportAssetName}`;
 
   ensureDir(cacheDir);
-  const zipPath = path.join(cacheDir, linuxAssetName);
+  const zipPath = path.join(cacheDir, exportAssetName);
   const extractDir = path.join(cacheDir, `extract-${Date.now()}`);
 
   console.log(`[presentation-export] Downloading ${downloadUrl}`);
