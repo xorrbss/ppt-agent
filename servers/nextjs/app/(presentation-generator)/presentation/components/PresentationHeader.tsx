@@ -43,6 +43,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import ThemeSelector from "./ThemeSelector";
+import VersionHistoryPopover from "./VersionHistoryPopover";
 import { DEFAULT_THEMES } from "../../(dashboard)/theme/components/ThemePanel/constants";
 import ThemeApi from "../../services/api/theme";
 import { Theme } from "../../services/api/types";
@@ -89,10 +90,12 @@ const PresentationHeader = ({
   presentation_id,
   isPresentationSaving,
   currentSlide,
+  onReload,
 }: {
   presentation_id: string;
   isPresentationSaving: boolean;
   currentSlide?: number;
+  onReload?: () => void;
 }) => {
   const [open, setOpen] = useState(false);
   const router = useRouter();
@@ -562,6 +565,12 @@ const PresentationHeader = ({
                 <Play className="w-3.5 h-3.5 text-[#101323] group-hover:text-[#5141e5] duration-300" />
               </button>
             </ToolTip>
+            <Separator orientation="vertical" className="h-4" />
+            <VersionHistoryPopover
+              presentationId={presentation_id}
+              disabled={isStreaming === true}
+              onRestored={() => onReload?.()}
+            />
           </div>
 
           <Popover open={open} onOpenChange={setOpen}>
