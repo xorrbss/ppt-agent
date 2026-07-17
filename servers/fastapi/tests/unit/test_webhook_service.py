@@ -1,5 +1,6 @@
-"""Webhook delivery signs the exact posted bytes with HMAC-SHA256 and never
-puts the shared secret on the wire (the old code sent it as a Bearer token)."""
+"""Webhook delivery: HMAC-SHA256 signs the exact posted bytes (never the shared
+secret), and a failed delivery (connection error OR non-2xx) is retried with
+backoff before giving up."""
 import asyncio
 import hashlib
 import hmac
@@ -11,6 +12,9 @@ from services.webhook_service import WebhookService
 
 
 class _FakeResponse:
+    def __init__(self, status: int = 200):
+        self.status = status
+
     async def __aenter__(self):
         return self
 
@@ -19,10 +23,12 @@ class _FakeResponse:
 
 
 class _FakeSession:
-    """Captures the single post() the service makes."""
+    """Captures posts; each post() consumes the next behaviour — a status int for
+    a response, or an Exception instance to raise (simulating a connection error)."""
 
-    def __init__(self, captured: dict):
+    def __init__(self, captured: dict, behaviors: list):
         self._captured = captured
+        self._behaviors = list(behaviors)
 
     async def __aenter__(self):
         return self
@@ -32,17 +38,28 @@ class _FakeSession:
 
     def post(self, url, data=None, headers=None):
         self._captured.update(url=url, data=data, headers=headers)
-        return _FakeResponse()
+        self._captured["attempts"] = self._captured.get("attempts", 0) + 1
+        behavior = self._behaviors.pop(0) if self._behaviors else 200
+        if isinstance(behavior, Exception):
+            raise behavior
+        return _FakeResponse(status=behavior)
 
 
-def _send(sub: WebhookSubscription, data: dict) -> dict:
+async def _no_sleep(_seconds):
+    return None
+
+
+def _send(sub: WebhookSubscription, data: dict, behaviors=(200,)) -> dict:
     captured: dict = {}
-    original = webhook_module.aiohttp.ClientSession
-    webhook_module.aiohttp.ClientSession = lambda: _FakeSession(captured)
+    original_session = webhook_module.aiohttp.ClientSession
+    original_sleep = webhook_module.asyncio.sleep
+    webhook_module.aiohttp.ClientSession = lambda: _FakeSession(captured, behaviors)
+    webhook_module.asyncio.sleep = _no_sleep  # don't actually wait out the backoff
     try:
         asyncio.run(WebhookService.send_request_to_webhook(sub, data))
     finally:
-        webhook_module.aiohttp.ClientSession = original
+        webhook_module.aiohttp.ClientSession = original_session
+        webhook_module.asyncio.sleep = original_sleep
     return captured
 
 
@@ -75,3 +92,31 @@ def test_webhook_without_secret_sends_no_signature():
     assert "X-Presenton-Signature" not in captured["headers"]
     assert "Authorization" not in captured["headers"]
     assert json.loads(captured["data"]) == {"x": 1}
+
+
+def test_webhook_retries_failures_then_succeeds():
+    sub = WebhookSubscription(
+        url="https://example.test/hook", secret=None, event="ppt.done"
+    )
+    # 1st: non-2xx, 2nd: connection error, 3rd: success.
+    captured = _send(
+        sub, {"x": 1}, behaviors=[500, ConnectionError("boom"), 200]
+    )
+    assert captured["attempts"] == 3
+
+
+def test_webhook_gives_up_after_max_attempts():
+    sub = WebhookSubscription(
+        url="https://example.test/hook", secret=None, event="ppt.done"
+    )
+    # Every attempt fails — the service stops after _MAX_ATTEMPTS and never raises.
+    captured = _send(sub, {"x": 1}, behaviors=[500, 500, 500])
+    assert captured["attempts"] == webhook_module._MAX_ATTEMPTS
+
+
+def test_webhook_succeeds_first_try_makes_one_attempt():
+    sub = WebhookSubscription(
+        url="https://example.test/hook", secret=None, event="ppt.done"
+    )
+    captured = _send(sub, {"x": 1}, behaviors=[200])
+    assert captured["attempts"] == 1
