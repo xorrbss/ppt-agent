@@ -9,7 +9,7 @@ drift and dead code); it lives here once so a fix lands in a single place.
 The adaptive path (compose_and_project) and the authored path have their own
 self-contained pipelines and do NOT use this module.
 """
-import random
+import logging
 from typing import Optional, Tuple
 
 from models.presentation_layout import PresentationLayoutModel
@@ -25,6 +25,8 @@ from utils.outline_utils import (
 )
 from utils.ppt_utils import select_toc_or_list_slide_layout_index
 
+LOGGER = logging.getLogger(__name__)
+
 
 def _clamp_and_backfill_structure(
     structure: PresentationStructureModel,
@@ -32,11 +34,33 @@ def _clamp_and_backfill_structure(
     total_slide_layouts: int,
 ) -> None:
     """Trim the model-chosen layout indices to the outline count and replace any
-    out-of-range index with a random valid layout (mutates in place)."""
+    out-of-range index with a deterministic valid one (mutates in place).
+
+    Every fix is logged: an out-of-range index means the model picked a layout that
+    doesn't exist, and the previous behaviour (silently swap in a RANDOM layout)
+    masked that error and made generation non-reproducible. Now the fallback is
+    deterministic (layout 0) and the model error is surfaced in the logs.
+    """
     structure.slides = structure.slides[:total_outlines]
-    for index in range(total_outlines):
-        if structure.slides[index] >= total_slide_layouts:
-            structure.slides[index] = random.randint(0, total_slide_layouts - 1)
+    if len(structure.slides) < total_outlines:
+        LOGGER.warning(
+            "[structure] model returned %d layout picks for %d outline slides; "
+            "%d slide(s) will be missing a layout",
+            len(structure.slides),
+            total_outlines,
+            total_outlines - len(structure.slides),
+        )
+    for index in range(len(structure.slides)):
+        picked = structure.slides[index]
+        if picked < 0 or picked >= total_slide_layouts:
+            LOGGER.warning(
+                "[structure] slide %d: model chose out-of-range layout index %d "
+                "(valid 0..%d) — falling back to 0",
+                index,
+                picked,
+                total_slide_layouts - 1,
+            )
+            structure.slides[index] = 0
 
 
 def _insert_toc_layouts(

@@ -111,10 +111,6 @@ def test_generate_presentation_handler_full_flow_uses_mocked_dependencies(fake_a
         presentation_endpoint.CONCURRENT_SERVICE,
         "run_task",
         new=Mock(),
-    ), patch.object(
-        generation_pipeline,
-        "random",
-        new=Mock(randint=Mock(return_value=0)),
     ):
         response = _run(
             presentation_endpoint.generate_presentation_handler(
