@@ -1,5 +1,6 @@
 import React from 'react'
 import * as z from "zod";
+import EditableText from '@/app/(presentation-generator)/components/EditableText';
 
 export const layoutId = 'org-chart-slide'
 export const layoutName = '조직도'
@@ -67,21 +68,33 @@ const OrgChartSlideLayout: React.FC<{ data?: Partial<OrgChartData> }> = ({ data:
           {/* Title */}
           <div className="flex items-center gap-4 mb-10">
             <div className="w-2 h-12 rounded-full" style={{ background: "var(--primary-color,#2563eb)" }} />
-            <h1 className="text-4xl font-black tracking-tight" style={{ color: "var(--background-text,#1a1a2e)" }}>
-              {title}
-            </h1>
+            <EditableText
+              as="h1"
+              path="title"
+              value={title}
+              className="text-4xl font-black tracking-tight"
+              style={{ color: "var(--background-text,#1a1a2e)" }}
+            />
           </div>
 
           {/* Org chart */}
           <div className="flex-1 flex flex-col items-center justify-center min-h-0">
             {/* Top node */}
             <div className="rounded-2xl px-12 py-5 text-center" style={{ background: "var(--primary-color,#2563eb)" }}>
-              <div className="text-xl font-black" style={{ color: "var(--primary-text,#ffffff)" }}>
-                {top?.name || '대표이사'}
-              </div>
-              <div className="text-sm font-medium opacity-80" style={{ color: "var(--primary-text,#ffffff)" }}>
-                {top?.role || 'CEO'}
-              </div>
+              <EditableText
+                as="div"
+                path="top.name"
+                value={top?.name || '대표이사'}
+                className="text-xl font-black"
+                style={{ color: "var(--primary-text,#ffffff)" }}
+              />
+              <EditableText
+                as="div"
+                path="top.role"
+                value={top?.role || 'CEO'}
+                className="text-sm font-medium opacity-80"
+                style={{ color: "var(--primary-text,#ffffff)" }}
+              />
             </div>
 
             {/* Vertical connector */}
@@ -101,22 +114,31 @@ const OrgChartSlideLayout: React.FC<{ data?: Partial<OrgChartData> }> = ({ data:
                       className="w-full rounded-2xl border px-5 py-5 text-center"
                       style={{ backgroundColor: "var(--card-color,#ffffff)", borderColor: "var(--stroke,#e5e7eb)" }}
                     >
-                      <div className="text-lg font-bold mb-1" style={{ color: "var(--background-text,#1a1a2e)" }}>
-                        {d?.name || '부문'}
-                      </div>
-                      <div className="text-xs font-medium opacity-55 mb-4" style={{ color: "var(--background-text,#1a1a2e)" }}>
-                        {d?.lead || ''}
-                      </div>
+                      <EditableText
+                        as="div"
+                        path={`departments[${i}].name`}
+                        value={d?.name || '부문'}
+                        className="text-lg font-bold mb-1"
+                        style={{ color: "var(--background-text,#1a1a2e)" }}
+                      />
+                      <EditableText
+                        as="div"
+                        path={`departments[${i}].lead`}
+                        value={d?.lead || ''}
+                        className="text-xs font-medium opacity-55 mb-4"
+                        style={{ color: "var(--background-text,#1a1a2e)" }}
+                      />
                       {d?.members && d.members.length > 0 && (
                         <div className="flex flex-col gap-2">
                           {d.members.map((mem, mi) => (
-                            <div
+                            <EditableText
                               key={mi}
+                              as="div"
+                              path={`departments[${i}].members[${mi}]`}
+                              value={mem}
                               className="rounded-lg py-2 text-sm font-medium"
                               style={{ background: "color-mix(in srgb, var(--primary-color,#2563eb) 8%, transparent)", color: "var(--background-text,#1a1a2e)" }}
-                            >
-                              {mem}
-                            </div>
+                            />
                           ))}
                         </div>
                       )}

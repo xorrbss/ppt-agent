@@ -3,6 +3,7 @@
 import React from 'react'
 import * as z from "zod";
 import { GeneralChart } from './GeneralChartPrimitives';
+import EditableText from '@/app/(presentation-generator)/components/EditableText';
 
 export const layoutId = 'financial-chart-slide'
 export const layoutName = '재무·실적 차트'
@@ -116,9 +117,13 @@ const FinancialChartSlideLayout: React.FC<{ data?: Partial<FinancialChartData> }
           {/* Title */}
           <div className="flex items-center gap-4 mb-10">
             <div className="w-2 h-12 rounded-full" style={{ background: "var(--primary-color,#2563eb)" }} />
-            <h1 className="text-4xl font-black tracking-tight" style={{ color: "var(--background-text,#1a1a2e)" }}>
-              {title}
-            </h1>
+            <EditableText
+              as="h1"
+              path="title"
+              value={title}
+              className="text-4xl font-black tracking-tight"
+              style={{ color: "var(--background-text,#1a1a2e)" }}
+            />
           </div>
 
           {/* Chart + highlights */}
@@ -141,15 +146,27 @@ const FinancialChartSlideLayout: React.FC<{ data?: Partial<FinancialChartData> }
                   className="rounded-2xl border px-7 py-6"
                   style={{ backgroundColor: "var(--card-color,#ffffff)", borderColor: "var(--stroke,#e5e7eb)" }}
                 >
-                  <div className="text-3xl font-black leading-none tracking-tight mb-3" style={{ color: "var(--primary-color,#2563eb)" }}>
-                    {h?.value || '₩690억'}
-                  </div>
-                  <div className="text-base font-bold mb-1" style={{ color: "var(--background-text,#1a1a2e)" }}>
-                    {h?.label || '연간 매출'}
-                  </div>
-                  <div className="text-sm opacity-60" style={{ color: "var(--background-text,#1a1a2e)" }}>
-                    {h?.caption || '전년 대비 +23%'}
-                  </div>
+                  <EditableText
+                    as="div"
+                    path={`highlights[${i}].value`}
+                    value={h?.value || '₩690억'}
+                    className="text-3xl font-black leading-none tracking-tight mb-3"
+                    style={{ color: "var(--primary-color,#2563eb)" }}
+                  />
+                  <EditableText
+                    as="div"
+                    path={`highlights[${i}].label`}
+                    value={h?.label || '연간 매출'}
+                    className="text-base font-bold mb-1"
+                    style={{ color: "var(--background-text,#1a1a2e)" }}
+                  />
+                  <EditableText
+                    as="div"
+                    path={`highlights[${i}].caption`}
+                    value={h?.caption || '전년 대비 +23%'}
+                    className="text-sm opacity-60"
+                    style={{ color: "var(--background-text,#1a1a2e)" }}
+                  />
                 </div>
               ))}
             </div>
