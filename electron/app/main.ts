@@ -199,7 +199,15 @@ const createWindow = () => {
     backgroundColor: "#f3f5ff",
     icon: path.join(baseDir, "resources/ui/assets/images/presenton_short_filled.png"),
     webPreferences: {
-        webSecurity: false,
+        // The main window loads the bundled Next.js app over http (same origin),
+        // and backend assets resolve same-origin through the Next proxy
+        // (resolveBackendAssetUrl), so the secure default can be restored here.
+        // NOTE: the hidden utility windows (slide_metadata / libreoffice-check /
+        // setup-dependencies) load file:// content and intentionally keep
+        // webSecurity:false. RUNTIME-VERIFY before shipping — a deck referencing a
+        // raw file:// asset (not under /app_data|/static) would need it served
+        // same-origin instead.
+        webSecurity: true,
         // Ensure a known preload path and explicit isolation settings so
         // the `contextBridge` API is exposed reliably to renderer pages.
         contextIsolation: true,
