@@ -189,6 +189,47 @@ export class PresentationGenerationApi {
     }
   }
 
+  static async getShareStatus(presentationId: string) {
+    try {
+      const response = await fetch(
+        getApiUrl(`/api/v1/ppt/presentation/${presentationId}/share`),
+        { method: "GET", headers: getHeader(), cache: "no-cache" }
+      );
+      return await ApiResponseHandler.handleResponse(response, "Failed to load share status");
+    } catch (error) {
+      console.error("error loading share status", error);
+      throw error;
+    }
+  }
+
+  static async enableShare(presentationId: string, regenerate = false) {
+    try {
+      const response = await fetch(
+        getApiUrl(
+          `/api/v1/ppt/presentation/${presentationId}/share${regenerate ? "?regenerate=true" : ""}`
+        ),
+        { method: "POST", headers: getHeader(), cache: "no-cache" }
+      );
+      return await ApiResponseHandler.handleResponse(response, "Failed to enable sharing");
+    } catch (error) {
+      console.error("error enabling share", error);
+      throw error;
+    }
+  }
+
+  static async disableShare(presentationId: string) {
+    try {
+      const response = await fetch(
+        getApiUrl(`/api/v1/ppt/presentation/${presentationId}/share`),
+        { method: "DELETE", headers: getHeader(), cache: "no-cache" }
+      );
+      return await ApiResponseHandler.handleResponse(response, "Failed to disable sharing");
+    } catch (error) {
+      console.error("error disabling share", error);
+      throw error;
+    }
+  }
+
   // Authored (high-quality) mode: the model authors bespoke HTML per slide, rendered
   // to images and assembled into an image PPTX. It bypasses the layout/stream path, so
   // it runs through the async generate endpoint (minutes-long) and is polled to

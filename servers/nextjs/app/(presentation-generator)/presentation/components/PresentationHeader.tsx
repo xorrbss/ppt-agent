@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/dialog";
 import ThemeSelector from "./ThemeSelector";
 import VersionHistoryPopover from "./VersionHistoryPopover";
+import SharePopover from "./SharePopover";
 import { DEFAULT_THEMES } from "../../(dashboard)/theme/components/ThemePanel/constants";
 import ThemeApi from "../../services/api/theme";
 import { Theme } from "../../services/api/types";
@@ -572,6 +573,11 @@ const PresentationHeader = ({
               onRestored={() => onReload?.()}
             />
           </div>
+
+          <SharePopover
+            presentationId={presentation_id}
+            disabled={isStreaming === true}
+          />
 
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>

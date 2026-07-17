@@ -62,7 +62,10 @@ function isApiAuthExempt(pathname: string): boolean {
     /** FastAPI `get_layout_by_name` fallback (no browser cookie in Docker). */
     pathname === "/api/template" ||
     pathname === "/api/template/custom" ||
-    pathname.startsWith("/api/export-presentation-data/")
+    pathname.startsWith("/api/export-presentation-data/") ||
+    /** Read-only public share view (token-scoped; FastAPI re-checks on the
+     * normalized path, so a traversal here still fails auth there). */
+    pathname.startsWith("/api/v1/ppt/presentation/public/")
   );
 }
 
