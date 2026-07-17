@@ -4,6 +4,7 @@ import React, { useMemo, useRef } from "react";
 import EditableLayoutWrapper from "../components/EditableLayoutWrapper";
 import SlideErrorBoundary from "../components/SlideErrorBoundary";
 import TiptapTextReplacer, { EditBinding } from "../components/TiptapTextReplacer";
+import { EditableTextProvider } from "../components/EditableTextContext";
 import { validate as uuidValidate } from 'uuid';
 import { getLayoutByLayoutId } from "@/app/presentation-templates";
 import { useCustomTemplateDetails } from "@/app/hooks/useCustomTemplates";
@@ -18,6 +19,21 @@ import { Loader2 } from "lucide-react";
 export const V1ContentRender = ({ slide, isEditMode, theme }: { slide: any, isEditMode: boolean, theme?: any, enableEditMode?: boolean }) => {
     const dispatch = useDispatch();
     const containerRef = useRef<HTMLDivElement | null>(null);
+
+    // Context consumed by in-tree <EditableText> in migrated templates. Binds edits
+    // by explicit path (no DOM surgery / text matching). Templates still wrapped in
+    // TiptapTextReplacer for any text not yet migrated (the two coexist).
+    const editableCtx = useMemo(
+        () => ({
+            slideIndex: slide.index,
+            isEditMode: Boolean(isEditMode),
+            onEdit: (path: string, content: string) =>
+                dispatch(
+                    updateSlideContent({ slideIndex: slide.index, dataPath: path, content })
+                ),
+        }),
+        [slide.index, isEditMode, dispatch]
+    );
 
 
     const customTemplateId = slide.layout_group.startsWith("custom-") ? slide.layout_group.split("custom-")[1] : slide.layout_group;
@@ -156,11 +172,13 @@ export const V1ContentRender = ({ slide, isEditMode, theme }: { slide: any, isEd
                                 }
                             }}
                         >
-                            <LayoutComp data={{
-                                ...slide.content,
-                                _logo_url__: theme ? theme.logo_url : null,
-                                __companyName__: (theme && theme.company_name) ? theme.company_name : null,
-                            }} />
+                            <EditableTextProvider value={editableCtx}>
+                                <LayoutComp data={{
+                                    ...slide.content,
+                                    _logo_url__: theme ? theme.logo_url : null,
+                                    __companyName__: (theme && theme.company_name) ? theme.company_name : null,
+                                }} />
+                            </EditableTextProvider>
                         </TiptapTextReplacer>
                     </EditableLayoutWrapper>
 
@@ -181,11 +199,13 @@ export const V1ContentRender = ({ slide, isEditMode, theme }: { slide: any, isEd
                     useBlockId={slide.layout_group === "adaptive"}
                     readOnly
                 >
-                    <LayoutComp data={{
-                        ...slide.content,
-                        _logo_url__: theme ? theme.logo_url : null,
-                        __companyName__: (theme && theme.company_name) ? theme.company_name : null,
-                    }} />
+                    <EditableTextProvider value={editableCtx}>
+                        <LayoutComp data={{
+                            ...slide.content,
+                            _logo_url__: theme ? theme.logo_url : null,
+                            __companyName__: (theme && theme.company_name) ? theme.company_name : null,
+                        }} />
+                    </EditableTextProvider>
                 </TiptapTextReplacer>
             </div>
         </SlideErrorBoundary>
