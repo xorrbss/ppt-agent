@@ -194,6 +194,34 @@ def test_is_authored_predicate():
     assert templated.is_authored() is False
 
 
+def test_mode_column_is_authoritative_over_sentinels():
+    # An explicit mode wins over the legacy theme/layout sentinels.
+    authored_with_layout = PresentationModel(
+        content="x", n_slides=1, language="ko",
+        mode="authored", layout={"name": "korean-biz"},
+    )
+    template_without_layout = PresentationModel(
+        content="x", n_slides=1, language="ko",
+        mode="template", layout=None,
+    )
+    assert authored_with_layout.is_authored() is True
+    assert template_without_layout.is_authored() is False
+
+
+def test_get_new_presentation_preserves_mode_and_theme():
+    # /derive previously dropped theme (losing authored brand colours + the legacy
+    # sentinel); mode + theme must carry to the copy.
+    original = PresentationModel(
+        content="x", n_slides=1, language="ko",
+        mode="authored", theme={"mode": "authored", "primary": "#123456"},
+    )
+    clone = original.get_new_presentation()
+    assert clone.id != original.id
+    assert clone.mode == "authored"
+    assert clone.theme == {"mode": "authored", "primary": "#123456"}
+    assert clone.is_authored() is True
+
+
 def test_plan_deck_roles_cover_and_closing():
     roles = plan_deck_roles(_outline(5))
     assert roles[0] == "COVER"

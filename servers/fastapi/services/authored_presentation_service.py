@@ -188,6 +188,7 @@ async def generate_authored_presentation(
         tone=request.tone.value,
         verbosity=request.verbosity.value,
         instructions=request.instructions,
+        mode=AUTHORED_TEMPLATE,
         theme={
             "mode": AUTHORED_TEMPLATE,
             "primary": brand.primary,

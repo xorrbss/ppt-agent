@@ -326,6 +326,7 @@ async def prepare_presentation(
         presentation.n_slides = len(presentation_structure.slides)
 
     sql_session.add(presentation)
+    presentation.mode = "adaptive" if layout.name == "adaptive" else "template"
     presentation.outlines = presentation_outline_model.model_dump(mode="json")
     presentation.title = title or presentation.title
     presentation.set_layout(layout)
@@ -944,6 +945,9 @@ async def generate_presentation_handler(
             tone=request.tone.value,
             verbosity=request.verbosity.value,
             instructions=request.instructions,
+            # Authored decks return before this point, so this handler only ever
+            # persists adaptive (composition present) or template decks.
+            mode="adaptive" if adaptive_composition else "template",
             deck_plan=(
                 adaptive_composition.model_dump(mode="json")
                 if adaptive_composition
