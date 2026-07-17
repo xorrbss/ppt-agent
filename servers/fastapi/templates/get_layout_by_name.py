@@ -2,13 +2,11 @@ import logging
 import json
 import os
 import aiohttp
-from urllib.parse import urlencode
 from typing import Any
 
 from fastapi import HTTPException
 
 from models.slide_spec_model import archetype_to_layout_id
-from services.export_task_service import EXPORT_TASK_SERVICE
 from templates.custom_layout_from_db import load_custom_presentation_layout
 from templates.presentation_layout import PresentationLayoutModel
 from utils.archetype_profiles import ARCHETYPE_PROFILES
@@ -76,6 +74,57 @@ def _read_builtin_template_settings(layout_name: str) -> dict[str, Any] | None:
                 _preview_detail(str(exc)),
             )
             return None
+
+    return None
+
+
+def _read_builtin_layout_artifact(layout_name: str) -> dict[str, Any] | None:
+    """Return the build-time compiled layout payload for a built-in group.
+
+    `scripts/generate-layout-schemas.mjs` compiles every built-in template's Zod
+    Schema into `layouts.generated.json` at build time; reading it here removes the
+    per-request headless scrape / runtime compile. Returns None when the artifact is
+    absent (e.g. dev before a build) so the caller falls back to the Next.js route.
+    """
+    if not layout_name or layout_name.startswith("custom-"):
+        return None
+    if "/" in layout_name or "\\" in layout_name or layout_name in {".", ".."}:
+        return None
+
+    service_dir = os.path.dirname(__file__)
+    candidates = [
+        os.path.abspath(
+            os.path.join(
+                service_dir, "..", "..", "nextjs", "app",
+                "presentation-templates", "layouts.generated.json",
+            )
+        ),
+        os.path.abspath(
+            os.path.join(
+                os.getcwd(), "..", "nextjs", "app",
+                "presentation-templates", "layouts.generated.json",
+            )
+        ),
+    ]
+
+    for artifact_path in candidates:
+        if not os.path.isfile(artifact_path):
+            continue
+        try:
+            with open(artifact_path, "r", encoding="utf-8") as artifact_file:
+                data = json.load(artifact_file)
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.warning(
+                "[template_layout] failed reading layout artifact path=%s error=%s",
+                artifact_path,
+                _preview_detail(str(exc)),
+            )
+            return None
+        payload = data.get(layout_name) if isinstance(data, dict) else None
+        if isinstance(payload, dict) and payload.get("slides"):
+            # Copy: the caller mutates icon_weight from live settings.json.
+            return dict(payload)
+        return None
 
     return None
 
@@ -162,60 +211,25 @@ async def get_layout_by_name(layout_name: str) -> PresentationLayoutModel:
     if layout_name == "adaptive":
         return _build_adaptive_layout()
 
-    query = urlencode({"group": layout_name})
-    url = f"http://localhost/schema?{query}"
-
-    LOGGER.info(
-        "[template_layout] resolving template=%r primary_schema_url=%s",
-        layout_name,
-        url,
-    )
-
-    schema_payload: dict[str, Any] | None = None
-    runtime_error: str | None = None
-
-    try:
-        schema = await EXPORT_TASK_SERVICE.extract_schema(url)
-        schema_payload = schema.model_dump()
-        slide_ids = [s.get("id") for s in schema_payload.get("slides") or []][:12]
+    # 1) Build-time artifact (deterministic; no running frontend required).
+    schema_payload = _read_builtin_layout_artifact(layout_name)
+    if schema_payload is not None:
         LOGGER.info(
-            "[template_layout] extract-schema succeeded template=%r "
-            "payload_name=%r ordered=%s icon_weight=%s slide_count=%d slide_ids(sample)=%s",
+            "[template_layout] resolved from build artifact template=%r slides=%d",
             layout_name,
-            schema_payload.get("name"),
-            schema_payload.get("ordered"),
-            schema_payload.get("icon_weight"),
             len(schema_payload.get("slides") or []),
-            slide_ids,
         )
-    except HTTPException as exc:
-        # Backward compatibility: older export runtimes do not implement
-        # extract-schema and return "Invalid task type".
-        runtime_error = str(exc.detail)
-    except Exception as exc:  # noqa: BLE001
-        runtime_error = str(exc)
 
+    # 2) Fall back to the Next.js JSON route (honours NEXT_INTERNAL_URL) — the dev
+    #    path before a build has produced the artifact.
     if schema_payload is None:
         schema_payload, fallback_error = await _fetch_template_fallback_payload(
             layout_name
         )
-        if schema_payload and runtime_error:
-            LOGGER.info(
-                "[template_layout] primary extract-schema failed template=%r detail=%s",
-                layout_name,
-                _preview_detail(runtime_error),
-            )
-
         if schema_payload is None:
-            error_detail = runtime_error or fallback_error or "unknown error"
-            if runtime_error:
-                LOGGER.warning(
-                    "[template_layout] extract-schema HTTP error template=%r detail=%s",
-                    layout_name,
-                    _preview_detail(runtime_error),
-                )
+            error_detail = fallback_error or "unknown error"
             LOGGER.error(
-                "[template_layout] no schema payload template=%r combined_detail=%s",
+                "[template_layout] no schema payload template=%r detail=%s",
                 layout_name,
                 _preview_detail(error_detail),
             )
@@ -223,15 +237,9 @@ async def get_layout_by_name(layout_name: str) -> PresentationLayoutModel:
                 status_code=404,
                 detail=f"Template '{layout_name}' not found: {error_detail}",
             )
-    elif not layout_name.startswith("custom-"):
-        # The bundled export runtime can read the schema page but currently keeps
-        # only name/order/slides from settings. The JSON fallback is cheaper and
-        # preserves template-level settings such as icon weight.
-        fallback_payload, _ = await _fetch_template_fallback_payload(layout_name)
-        if fallback_payload:
-            fallback_icon_weight = extract_icon_weight_from_settings(fallback_payload)
-            schema_payload["icon_weight"] = fallback_icon_weight
 
+    # Live settings.json wins for icon weight: the artifact already carries it, but a
+    # dev edit to settings.json should still take effect without a rebuild.
     local_settings = _read_builtin_template_settings(layout_name)
     if local_settings:
         local_icon_weight = extract_icon_weight_from_settings(local_settings)
