@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import {
   setAdaptiveBlockText,
+  setAdaptiveChartBlock,
   getAdaptiveBlockText,
   locateUnit,
   deleteAdaptiveUnit,
@@ -154,6 +155,34 @@ check("CRUD on unknown id is a safe no-op", () => {
   assert.equal(deleteAdaptiveUnit(d.blocks, "nope"), false);
   assert.equal(moveAdaptiveUnit(d.blocks, "nope", 1), false);
   assert.equal(addAdaptiveUnit(d.blocks, "nope"), null);
+});
+
+check("setAdaptiveChartBlock merges chart type/data/series by id", () => {
+  const blocks = [
+    { id: "c", type: "chart", chartType: "bar", data: [{ name: "a", value: 1 }] },
+  ];
+  const ok = setAdaptiveChartBlock(blocks, "c", {
+    chartType: "line",
+    data: [{ name: "x", value: 9 }],
+    series: ["A", "B"],
+  });
+  assert.equal(ok, true);
+  assert.equal(blocks[0].chartType, "line");
+  assert.deepEqual(blocks[0].data, [{ name: "x", value: 9 }]);
+  assert.deepEqual(blocks[0].series, ["A", "B"]);
+});
+
+check("setAdaptiveChartBlock applies only the provided fields", () => {
+  const blocks = [{ id: "c", type: "chart", chartType: "bar", data: [{ name: "a", value: 1 }] }];
+  setAdaptiveChartBlock(blocks, "c", { chartType: "area" });
+  assert.equal(blocks[0].chartType, "area");
+  assert.deepEqual(blocks[0].data, [{ name: "a", value: 1 }]); // untouched
+});
+
+check("setAdaptiveChartBlock on unknown id is a safe no-op", () => {
+  const blocks = [{ id: "c", type: "chart", chartType: "bar", data: [] }];
+  assert.equal(setAdaptiveChartBlock(blocks, "nope", { chartType: "line" }), false);
+  assert.equal(blocks[0].chartType, "bar");
 });
 
 console.log(`\n${passed} checks passed`);

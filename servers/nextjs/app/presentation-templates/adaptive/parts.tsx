@@ -2,6 +2,7 @@
 
 import React from "react";
 import { tableDensity } from "./density";
+import AdaptiveChartControls from "@/app/(presentation-generator)/components/AdaptiveChartControls";
 import {
   Area,
   AreaChart,
@@ -235,10 +236,11 @@ export const ChartLeaf: React.FC<{ block: AnyBlock }> = ({ block }) => {
     }
   })();
   return (
-    <div data-block-id={block.id} className="h-full w-full min-h-0">
+    <div data-block-id={block.id} className="relative h-full w-full min-h-0">
       <ResponsiveContainer width="100%" height="100%">
         {inner}
       </ResponsiveContainer>
+      <AdaptiveChartControls block={block} />
     </div>
   );
 };
