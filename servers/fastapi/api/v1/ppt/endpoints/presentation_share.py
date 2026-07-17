@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from api.v1.ppt.endpoints.presentation import _resolve_presentation_fonts
+from api.v1.ppt.endpoints.presentation_helpers import resolve_presentation_fonts
 from models.presentation_with_slides import PresentationWithSlides
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
@@ -102,7 +102,7 @@ async def get_shared_presentation(
             .order_by(SlideModel.index)
         )
     )
-    fonts = await _resolve_presentation_fonts(presentation, slides, sql_session)
+    fonts = await resolve_presentation_fonts(presentation, slides, sql_session)
     return PresentationWithSlides(
         **presentation.model_dump(), slides=slides, fonts=fonts
     )

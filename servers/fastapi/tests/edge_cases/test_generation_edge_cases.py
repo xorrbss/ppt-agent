@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from fastapi import HTTPException
 
-from api.v1.ppt.endpoints import presentation as presentation_endpoint
+from api.v1.ppt.endpoints import presentation_generate as presentation_endpoint
 from models.generate_presentation_request import GeneratePresentationRequest
 from utils.llm_calls.generate_presentation_outlines import get_user_prompt
 

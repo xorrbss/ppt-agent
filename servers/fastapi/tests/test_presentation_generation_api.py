@@ -7,14 +7,14 @@ import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-from api.v1.ppt.endpoints.presentation import generate_presentation_sync
+from api.v1.ppt.endpoints.presentation_generate import generate_presentation_sync
 from models.generate_presentation_request import GeneratePresentationRequest
 from models.presentation_and_path import PresentationPathAndEditPath
 
 
 def _fake_request() -> types.SimpleNamespace:
     # Minimal stand-in for the FastAPI Request passed as request_http.
-    # _build_export_cookie_header only reads headers.get("cookie"),
+    # build_export_cookie_header only reads headers.get("cookie"),
     # cookies.get(...), and request.state.auth_username.
     return types.SimpleNamespace(
         headers={},
@@ -53,7 +53,7 @@ class TestPresentationGenerationAPI:
         )
 
         with patch(
-            "api.v1.ppt.endpoints.presentation.generate_presentation_handler",
+            "api.v1.ppt.endpoints.presentation_generate.generate_presentation_handler",
             new=AsyncMock(return_value=response_payload),
         ) as mock_handler:
             response = asyncio.run(
@@ -80,7 +80,7 @@ class TestPresentationGenerationAPI:
         )
 
         with patch(
-            "api.v1.ppt.endpoints.presentation.generate_presentation_handler",
+            "api.v1.ppt.endpoints.presentation_generate.generate_presentation_handler",
             new=AsyncMock(return_value=response_payload),
         ) as mock_handler:
             response = asyncio.run(
