@@ -20,3 +20,6 @@ class PresentationWithSlides(BaseModel):
     slides: List[SlideModel]
     theme: Optional[dict] = None
     fonts: Optional[Any] = None
+    # "template" | "adaptive" | "authored" — lets the editor read the deck's mode
+    # explicitly instead of inferring it from theme/layout sentinels.
+    mode: Optional[str] = None

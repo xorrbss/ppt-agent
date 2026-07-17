@@ -47,6 +47,11 @@ class PresentationModel(SQLModel, table=True):
     # (additive, nullable) — holds the authoritative adaptive composition; legacy
     # decks leave it NULL. See docs/adaptive-layout-design-revision.md R3.
     deck_plan: Optional[dict] = Field(sa_column=Column(JSON), default=None)
+    # Explicit generation mode: "template" | "adaptive" | "authored". Authoritative
+    # replacement for the older sentinels (deck_plan non-null → adaptive; theme.mode
+    # / layout is None → authored). Additive, nullable; legacy rows are backfilled by
+    # migration and still read correctly via the is_authored() fallback below.
+    mode: Optional[str] = Field(sa_column=Column(String), default=None)
 
     def get_new_presentation(self):
         return PresentationModel(
@@ -65,6 +70,11 @@ class PresentationModel(SQLModel, table=True):
             include_table_of_contents=self.include_table_of_contents,
             include_title_slide=self.include_title_slide,
             deck_plan=self.deck_plan,
+            # Carry mode + theme so a derived deck keeps its identity. theme was
+            # previously dropped here, which lost authored brand colours (and the
+            # legacy authored sentinel) on /derive.
+            mode=self.mode,
+            theme=self.theme,
         )
 
     def get_presentation_outline(self):
@@ -91,6 +101,10 @@ class PresentationModel(SQLModel, table=True):
         rendered to full-bleed images (no React layout/structure — both are None).
         Such decks are view-only in-app and exported as an image PPTX; callers must
         not drive them through the template stream/edit/layout paths."""
+        if self.mode is not None:
+            return self.mode == "authored"
+        # Legacy rows written before the mode column existed: fall back to the
+        # original sentinels (theme.mode == "authored", or no React layout).
         if isinstance(self.theme, dict) and self.theme.get("mode") == "authored":
             return True
         return self.layout is None

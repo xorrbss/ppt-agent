@@ -56,10 +56,12 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   );
   // Authored decks are model-authored images with no React layout (layout is null;
   // theme.mode === "authored"). They are view-only in-app — editing happens in
-  // PowerPoint via the exported image PPTX.
+  // PowerPoint via the exported image PPTX. Prefer the explicit `mode` field; the
+  // theme/layout sentinels remain as fallbacks for decks generated before it.
   const isAuthoredDeck =
     !!presentationData &&
-    (((presentationData as any).theme?.mode === "authored") ||
+    ((presentationData as any).mode === "authored" ||
+      (presentationData as any).theme?.mode === "authored" ||
       !presentationData.layout);
   const slidesLength = presentationData?.slides?.length ?? 0;
   const lastStreamingSlideIndex =
