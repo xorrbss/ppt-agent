@@ -82,7 +82,10 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
         if (
           processedElements.has(htmlElement) ||
           htmlElement.classList.contains("tiptap-text-editor") ||
-          htmlElement.closest(".tiptap-text-editor")
+          htmlElement.closest(".tiptap-text-editor") ||
+          // Text migrated to the in-tree <EditableText> owns its own editing; the
+          // DOM-surgery path must not also process it (would double-bind/leak).
+          htmlElement.closest("[data-editable-native]")
         ) {
           return;
         }
