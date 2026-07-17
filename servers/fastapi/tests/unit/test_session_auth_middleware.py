@@ -17,6 +17,11 @@ def _requires_auth(raw_path: str) -> bool:
     return mw._requires_auth(mw._normalize(raw_path))
 
 
+def _is_exempt(raw_path: str) -> bool:
+    mw = _mw()
+    return mw._is_exempt(mw._normalize(raw_path))
+
+
 def test_traversal_out_of_images_requires_auth():
     # The core bypass: escape the image exemption up to the auth secret / keys.
     assert _requires_auth("/app_data/images/../userConfig.json") is True
@@ -47,3 +52,22 @@ def test_normalize_keeps_leading_slash():
     mw = _mw()
     assert mw._normalize("/app_data/images/x.png") == "/app_data/images/x.png"
     assert mw._normalize("/app_data/images/../userConfig.json") == "/app_data/userConfig.json"
+
+
+def test_public_share_link_is_exempt():
+    # The read-only public share view is reachable without the admin session.
+    assert _is_exempt("/api/v1/ppt/presentation/public/abcDEF123456xyz") is True
+
+
+def test_public_share_traversal_cannot_ride_exemption():
+    # A traversal from the public prefix must not ride the exemption to a
+    # protected path: it normalizes off the prefix and still requires auth.
+    raw = "/api/v1/ppt/presentation/public/../../../app_data/userConfig.json"
+    assert _is_exempt(raw) is False
+    assert _requires_auth(raw) is True
+
+
+def test_admin_share_management_requires_auth():
+    # Only GET-by-token is public; enabling/rotating/disabling a link is admin-only.
+    assert _is_exempt("/api/v1/ppt/presentation/1234/share") is False
+    assert _requires_auth("/api/v1/ppt/presentation/1234/share") is True

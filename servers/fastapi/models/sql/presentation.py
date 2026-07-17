@@ -52,6 +52,12 @@ class PresentationModel(SQLModel, table=True):
     # / layout is None → authored). Additive, nullable; legacy rows are backfilled by
     # migration and still read correctly via the is_authored() fallback below.
     mode: Optional[str] = Field(sa_column=Column(String), default=None)
+    # Read-only public share link. NULL = not shared. When set, the unguessable
+    # token serves this deck (only) via GET /presentation/public/{share_token}
+    # without the admin session (see SessionAuthMiddleware exemption).
+    share_token: Optional[str] = Field(
+        sa_column=Column(String, unique=True, index=True), default=None
+    )
 
     def get_new_presentation(self):
         return PresentationModel(

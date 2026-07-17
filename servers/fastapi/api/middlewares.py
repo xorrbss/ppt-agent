@@ -22,8 +22,13 @@ class UserConfigEnvUpdateMiddleware(BaseHTTPMiddleware):
 
 
 class SessionAuthMiddleware(BaseHTTPMiddleware):
+    # Public, unauthenticated endpoints. The share endpoint is read-only and
+    # reachable ONLY by an unguessable token (never a presentation id); the check
+    # runs on the NORMALIZED path so a traversal segment can't ride this prefix to
+    # a protected route. Only GET-by-token lives under this prefix.
     _EXEMPT_PREFIXES = (
         "/api/v1/auth/",
+        "/api/v1/ppt/presentation/public/",
     )
     _PROTECTED_NON_API_PATHS = {
         "/docs",
