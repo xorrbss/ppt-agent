@@ -1,6 +1,7 @@
 import React from 'react'
 import * as z from "zod";
 import { ImageSchema } from '../defaultSchemes';
+import EditableText from '@/app/(presentation-generator)/components/EditableText';
 
 export const layoutId = 'korean-biz-cover'
 export const layoutName = '표지'
@@ -65,21 +66,23 @@ const CoverSlideLayout: React.FC<{ data?: Partial<CoverSlideData> }> = ({ data: 
             </div>
 
             {/* Title */}
-            <h1
+            <EditableText
+              as="h1"
+              path="title"
+              value={slideData?.title || '2025 사업 전략 발표'}
               className="text-6xl font-black leading-tight tracking-tight"
               style={{ color: "var(--background-text,#1a1a2e)" }}
-            >
-              {slideData?.title || '2025 사업 전략 발표'}
-            </h1>
+            />
 
             {/* Subtitle with accent underline */}
             <div className="flex flex-col gap-4">
-              <p
+              <EditableText
+                as="p"
+                path="subtitle"
+                value={slideData?.subtitle || '지속 가능한 성장을 위한 핵심 과제'}
                 className="text-2xl font-medium leading-snug max-w-xl"
                 style={{ color: "var(--background-text,#1a1a2e)", opacity: 0.78 }}
-              >
-                {slideData?.subtitle || '지속 가능한 성장을 위한 핵심 과제'}
-              </p>
+              />
               <div
                 className="h-1.5 w-24 rounded-full"
                 style={{ background: "var(--primary-color,#2563eb)" }}
@@ -99,12 +102,13 @@ const CoverSlideLayout: React.FC<{ data?: Partial<CoverSlideData> }> = ({ data: 
               >
                 발표자
               </span>
-              <span
+              <EditableText
+                as="span"
+                path="presenterName"
+                value={slideData?.presenterName || '김민준'}
                 className="text-lg font-bold"
                 style={{ color: "var(--background-text,#1a1a2e)" }}
-              >
-                {slideData?.presenterName || '김민준'}
-              </span>
+              />
             </div>
             <div
               className="h-10 w-px"
@@ -117,12 +121,13 @@ const CoverSlideLayout: React.FC<{ data?: Partial<CoverSlideData> }> = ({ data: 
               >
                 일자
               </span>
-              <span
+              <EditableText
+                as="span"
+                path="presentationDate"
+                value={slideData?.presentationDate || '2025년 6월'}
                 className="text-lg font-bold"
                 style={{ color: "var(--background-text,#1a1a2e)" }}
-              >
-                {slideData?.presentationDate || '2025년 6월'}
-              </span>
+              />
             </div>
           </div>
         </div>

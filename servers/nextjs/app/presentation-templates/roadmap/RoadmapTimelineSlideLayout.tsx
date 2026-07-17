@@ -1,5 +1,6 @@
 import React from 'react'
 import * as z from "zod";
+import EditableText from '@/app/(presentation-generator)/components/EditableText';
 
 export const layoutId = 'roadmap-timeline-slide'
 export const layoutName = '로드맵·연혁'
@@ -68,9 +69,13 @@ const RoadmapTimelineSlideLayout: React.FC<{ data?: Partial<RoadmapTimelineData>
           {/* Title */}
           <div className="flex items-center gap-4 mb-16">
             <div className="w-2 h-12 rounded-full" style={{ background: "var(--primary-color,#2563eb)" }} />
-            <h1 className="text-4xl font-black tracking-tight" style={{ color: "var(--background-text,#1a1a2e)" }}>
-              {title}
-            </h1>
+            <EditableText
+              as="h1"
+              path="title"
+              value={title}
+              className="text-4xl font-black tracking-tight"
+              style={{ color: "var(--background-text,#1a1a2e)" }}
+            />
           </div>
 
           {/* Timeline */}
@@ -78,9 +83,14 @@ const RoadmapTimelineSlideLayout: React.FC<{ data?: Partial<RoadmapTimelineData>
             {/* Periods */}
             <div className="grid" style={cols}>
               {milestones.map((m, i) => (
-                <div key={i} className="text-center text-xl font-black tracking-tight" style={{ color: "var(--primary-color,#2563eb)" }}>
-                  {m?.period || '2025'}
-                </div>
+                <EditableText
+                  key={i}
+                  as="div"
+                  path={`milestones[${i}].period`}
+                  value={m?.period || '2025'}
+                  className="text-center text-xl font-black tracking-tight"
+                  style={{ color: "var(--primary-color,#2563eb)" }}
+                />
               ))}
             </div>
 
@@ -106,12 +116,20 @@ const RoadmapTimelineSlideLayout: React.FC<{ data?: Partial<RoadmapTimelineData>
             <div className="grid items-start" style={cols}>
               {milestones.map((m, i) => (
                 <div key={i} className="px-4 text-center">
-                  <h3 className="text-lg font-bold mb-2" style={{ color: "var(--background-text,#1a1a2e)" }}>
-                    {m?.title || '마일스톤'}
-                  </h3>
-                  <p className="text-sm leading-relaxed opacity-70" style={{ color: "var(--background-text,#1a1a2e)" }}>
-                    {m?.description || '설명'}
-                  </p>
+                  <EditableText
+                    as="h3"
+                    path={`milestones[${i}].title`}
+                    value={m?.title || '마일스톤'}
+                    className="text-lg font-bold mb-2"
+                    style={{ color: "var(--background-text,#1a1a2e)" }}
+                  />
+                  <EditableText
+                    as="p"
+                    path={`milestones[${i}].description`}
+                    value={m?.description || '설명'}
+                    className="text-sm leading-relaxed opacity-70"
+                    style={{ color: "var(--background-text,#1a1a2e)" }}
+                  />
                 </div>
               ))}
             </div>

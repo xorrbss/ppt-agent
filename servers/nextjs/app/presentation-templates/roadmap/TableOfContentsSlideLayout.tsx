@@ -1,5 +1,6 @@
 import React from 'react'
 import * as z from "zod";
+import EditableText from '@/app/(presentation-generator)/components/EditableText';
 
 export const layoutId = 'korean-biz-toc'
 export const layoutName = '목차'
@@ -60,12 +61,13 @@ const TableOfContentsSlideLayout: React.FC<{ data?: Partial<TableOfContentsData>
               className="w-16 h-1.5 rounded-full mb-6"
               style={{ background: "var(--primary-color,#2563eb)" }}
             />
-            <h1
+            <EditableText
+              as="h1"
+              path="title"
+              value={slideData?.title || '목차'}
               className="text-5xl font-black tracking-tight"
               style={{ color: "var(--background-text,#1a1a2e)" }}
-            >
-              {slideData?.title || '목차'}
-            </h1>
+            />
           </div>
 
           {/* Agenda grid */}
@@ -82,12 +84,13 @@ const TableOfContentsSlideLayout: React.FC<{ data?: Partial<TableOfContentsData>
                   {String(index + 1).padStart(2, '0')}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p
+                  <EditableText
+                    as="p"
+                    path={`items[${index}].title`}
+                    value={item?.title || '항목'}
                     className="text-2xl font-bold truncate"
                     style={{ color: "var(--background-text,#1a1a2e)" }}
-                  >
-                    {item?.title || '항목'}
-                  </p>
+                  />
                   <div
                     className="mt-3 h-px w-full"
                     style={{ background: "var(--stroke,#e5e7eb)" }}

@@ -1,5 +1,6 @@
 import React from 'react'
 import * as z from "zod";
+import EditableText from '@/app/(presentation-generator)/components/EditableText';
 
 export const layoutId = 'comparison-table-slide'
 export const layoutName = '데이터 비교표'
@@ -80,9 +81,13 @@ const ComparisonTableSlideLayout: React.FC<{ data?: Partial<ComparisonTableData>
           {/* Title */}
           <div className="flex items-center gap-4 mb-10">
             <div className="w-2 h-12 rounded-full" style={{ background: "var(--primary-color,#2563eb)" }} />
-            <h1 className="text-4xl font-black tracking-tight" style={{ color: "var(--background-text,#1a1a2e)" }}>
-              {title}
-            </h1>
+            <EditableText
+              as="h1"
+              path="title"
+              value={title}
+              className="text-4xl font-black tracking-tight"
+              style={{ color: "var(--background-text,#1a1a2e)" }}
+            />
           </div>
 
           {/* Table */}
@@ -94,13 +99,14 @@ const ComparisonTableSlideLayout: React.FC<{ data?: Partial<ComparisonTableData>
               <thead>
                 <tr style={{ background: "var(--primary-color,#2563eb)" }}>
                   {columns.map((col, i) => (
-                    <th
+                    <EditableText
                       key={i}
+                      as="th"
+                      path={`columns[${i}]`}
+                      value={col}
                       className={`px-6 py-4 text-sm font-bold tracking-wide ${i === 0 ? 'text-left' : 'text-right'}`}
                       style={{ color: "var(--primary-text,#ffffff)", width: i === 0 ? '28%' : `${72 / dataColCount}%` }}
-                    >
-                      {col}
-                    </th>
+                    />
                   ))}
                 </tr>
               </thead>
@@ -115,17 +121,22 @@ const ComparisonTableSlideLayout: React.FC<{ data?: Partial<ComparisonTableData>
                         : "var(--card-color,#ffffff)",
                     }}
                   >
-                    <td className="px-6 py-4 text-left text-base font-bold" style={{ color: "var(--background-text,#1a1a2e)" }}>
-                      {row?.label || '항목'}
-                    </td>
+                    <EditableText
+                      as="td"
+                      path={`rows[${ri}].label`}
+                      value={row?.label || '항목'}
+                      className="px-6 py-4 text-left text-base font-bold"
+                      style={{ color: "var(--background-text,#1a1a2e)" }}
+                    />
                     {Array.from({ length: dataColCount }).map((_, ci) => (
-                      <td
+                      <EditableText
                         key={ci}
+                        as="td"
+                        path={`rows[${ri}].values[${ci}]`}
+                        value={row?.values?.[ci] ?? '-'}
                         className="px-6 py-4 text-right text-base"
                         style={{ color: "var(--background-text,#1a1a2e)", opacity: row?.highlight ? 1 : 0.82, fontWeight: row?.highlight ? 700 : 500 }}
-                      >
-                        {row?.values?.[ci] ?? '-'}
-                      </td>
+                      />
                     ))}
                   </tr>
                 ))}
@@ -135,9 +146,13 @@ const ComparisonTableSlideLayout: React.FC<{ data?: Partial<ComparisonTableData>
 
           {/* Note */}
           {note && (
-            <p className="mt-5 text-sm opacity-50" style={{ color: "var(--background-text,#1a1a2e)" }}>
-              {note}
-            </p>
+            <EditableText
+              as="p"
+              path="note"
+              value={note}
+              className="mt-5 text-sm opacity-50"
+              style={{ color: "var(--background-text,#1a1a2e)" }}
+            />
           )}
         </div>
       </div>
