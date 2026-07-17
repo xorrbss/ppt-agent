@@ -7,6 +7,7 @@ import pytest
 from fastapi import HTTPException
 
 from api.v1.ppt.endpoints import presentation as presentation_endpoint
+from services import generation_pipeline
 from models.generate_presentation_request import GeneratePresentationRequest
 from models.presentation_and_path import PresentationAndPath
 from models.presentation_outline_model import SlideOutlineModel
@@ -78,7 +79,7 @@ def test_generate_presentation_handler_full_flow_uses_mocked_dependencies(fake_a
         "get_layout_by_name",
         new=AsyncMock(return_value=_mock_layout()),
     ), patch.object(
-        presentation_endpoint,
+        generation_pipeline,
         "generate_presentation_structure",
         new=AsyncMock(return_value=PresentationStructureModel(slides=[0, 1])),
     ), patch.object(
@@ -111,7 +112,7 @@ def test_generate_presentation_handler_full_flow_uses_mocked_dependencies(fake_a
         "run_task",
         new=Mock(),
     ), patch.object(
-        presentation_endpoint,
+        generation_pipeline,
         "random",
         new=Mock(randint=Mock(return_value=0)),
     ):
@@ -157,7 +158,7 @@ def test_prepare_presentation_preserves_payload_icon_weight():
     )
 
     with patch.object(
-        presentation_endpoint,
+        generation_pipeline,
         "generate_presentation_structure",
         new=AsyncMock(return_value=PresentationStructureModel(slides=[0])),
     ), patch.object(

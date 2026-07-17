@@ -3,7 +3,6 @@ from datetime import datetime
 import json
 import logging
 import os
-import random
 import traceback
 from typing import Annotated, List, Literal, Optional, Tuple
 import dirtyjson
@@ -41,7 +40,6 @@ from services.mem0_presentation_memory_service import (
 )
 from utils.dict_utils import deep_update
 from utils.export_utils import export_presentation
-from utils.layout_capacity import apply_capacity_fit
 from utils.llm_calls.compose_slides import compose_and_project
 from models.slide_spec_model import archetype_to_layout_id, spec_to_blocks
 from utils.llm_calls.generate_content_brief import generate_content_brief
@@ -55,25 +53,18 @@ from models.sse_response import SSECompleteResponse, SSEErrorResponse, SSERespon
 
 from services.database import get_async_session
 from services.concurrent_service import CONCURRENT_SERVICE
+from services.generation_pipeline import build_template_structure
 from models.sql.presentation import PresentationModel
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
 from utils.asset_directory_utils import get_images_directory
-from utils.llm_calls.generate_presentation_structure import (
-    generate_presentation_structure,
-)
 from utils.llm_calls.generate_slide_content import (
     get_slide_content_from_type_and_outline,
-)
-from utils.ppt_utils import (
-    select_toc_or_list_slide_layout_index,
 )
 from utils.outline_utils import (
     get_images_for_slides_from_outline,
     get_no_of_outlines_to_generate_for_n_slides,
-    get_no_of_toc_required_for_n_outlines,
-    get_presentation_outline_model_with_toc,
     get_presentation_title_from_presentation_outline,
 )
 from utils.process_slides import (
@@ -139,38 +130,6 @@ async def _resolve_presentation_fonts(
                 return fonts
 
     return None
-
-
-def _insert_toc_layouts(
-    structure: PresentationStructureModel,
-    n_toc_slides: int,
-    include_title_slide: bool,
-    toc_slide_layout_index: int,
-):
-    if n_toc_slides <= 0 or toc_slide_layout_index == -1:
-        return
-
-    insertion_index = 1 if include_title_slide else 0
-    for i in range(n_toc_slides):
-        structure.slides.insert(insertion_index + i, toc_slide_layout_index)
-
-
-def _clamp_and_backfill_structure(
-    structure: PresentationStructureModel,
-    total_outlines: int,
-    total_slide_layouts: int,
-) -> None:
-    """Trim the model-chosen layout indices to the outline count and replace any
-    out-of-range index with a random valid layout (mutates in place).
-
-    Shared by the interactive /prepare and one-shot /generate template paths, which
-    carried this verbatim — including a dead `if index >= total_outlines` branch
-    inside `range(total_outlines)` that can never run. Removed here.
-    """
-    structure.slides = structure.slides[:total_outlines]
-    for index in range(total_outlines):
-        if structure.slides[index] >= total_slide_layouts:
-            structure.slides[index] = random.randint(0, total_slide_layouts - 1)
 
 
 def _build_export_cookie_header(request: Request) -> Optional[str]:
@@ -350,45 +309,18 @@ async def prepare_presentation(
         presentation.set_deck_plan(composition)
         presentation.n_slides = len(presentation_structure.slides)
     else:
-        if layout.ordered:
-            presentation_structure = layout.to_presentation_structure()
-        else:
-            presentation_structure: PresentationStructureModel = (
-                await generate_presentation_structure(
-                    presentation_outline=presentation_outline_model,
-                    presentation_layout=layout,
-                    instructions=presentation.instructions,
-                )
+        presentation_outline_model, presentation_structure = (
+            await build_template_structure(
+                presentation_outline_model,
+                layout,
+                instructions=presentation.instructions,
+                using_slides_markdown=False,
+                include_table_of_contents=presentation.include_table_of_contents,
+                include_title_slide=presentation.include_title_slide,
+                target_n_slides=(
+                    presentation.n_slides if presentation.n_slides > 0 else None
+                ),
             )
-
-        _clamp_and_backfill_structure(
-            presentation_structure, total_outlines, total_slide_layouts
-        )
-
-        if presentation.include_table_of_contents:
-            n_toc_slides = get_no_of_toc_required_for_n_outlines(
-                n_outlines=total_outlines,
-                title_slide=presentation.include_title_slide,
-                target_total_slides=(presentation.n_slides if presentation.n_slides > 0 else None),
-            )
-            toc_slide_layout_index = select_toc_or_list_slide_layout_index(layout)
-            _insert_toc_layouts(
-                presentation_structure,
-                n_toc_slides,
-                presentation.include_title_slide,
-                toc_slide_layout_index,
-            )
-            if toc_slide_layout_index != -1 and n_toc_slides > 0:
-                presentation_outline_model = get_presentation_outline_model_with_toc(
-                    outline=presentation_outline_model,
-                    n_toc_slides=n_toc_slides,
-                    title_slide=presentation.include_title_slide,
-                )
-
-        # Content-volume-aware fitting: upgrade overflowing slides to a bigger
-        # same-kind layout, or split them. No-op for ordered templates.
-        presentation_outline_model, presentation_structure = apply_capacity_fit(
-            presentation_outline_model, presentation_structure, layout
         )
         presentation.n_slides = len(presentation_structure.slides)
 
@@ -976,53 +908,17 @@ async def generate_presentation_handler(
                 )
             )
         else:
-            # Generate Structure
-            if layout_model.ordered:
-                presentation_structure = layout_model.to_presentation_structure()
-            else:
-                presentation_structure: PresentationStructureModel = (
-                    await generate_presentation_structure(
-                        presentation_outlines,
-                        layout_model,
-                        request.instructions,
-                        using_slides_markdown,
-                    )
+            presentation_outlines, presentation_structure = (
+                await build_template_structure(
+                    presentation_outlines,
+                    layout_model,
+                    instructions=request.instructions,
+                    using_slides_markdown=using_slides_markdown,
+                    include_table_of_contents=request.include_table_of_contents,
+                    include_title_slide=request.include_title_slide,
+                    target_n_slides=request.n_slides,
                 )
-
-            _clamp_and_backfill_structure(
-                presentation_structure, total_outlines, total_slide_layouts
             )
-
-            should_include_toc = (
-                request.include_table_of_contents and not using_slides_markdown
-            )
-            if should_include_toc:
-                n_toc_slides = get_no_of_toc_required_for_n_outlines(
-                    n_outlines=total_outlines,
-                    title_slide=request.include_title_slide,
-                    target_total_slides=request.n_slides,
-                )
-                toc_slide_layout_index = select_toc_or_list_slide_layout_index(
-                    layout_model
-                )
-                _insert_toc_layouts(
-                    presentation_structure,
-                    n_toc_slides,
-                    request.include_title_slide,
-                    toc_slide_layout_index,
-                )
-                if toc_slide_layout_index != -1 and n_toc_slides > 0:
-                    presentation_outlines = get_presentation_outline_model_with_toc(
-                        outline=presentation_outlines,
-                        n_toc_slides=n_toc_slides,
-                        title_slide=request.include_title_slide,
-                    )
-
-            # Content-volume-aware fitting (skip for user-provided slides_markdown).
-            if not using_slides_markdown:
-                presentation_outlines, presentation_structure = apply_capacity_fit(
-                    presentation_outlines, presentation_structure, layout_model
-                )
 
         final_n_slides = len(presentation_outlines.slides)
 
