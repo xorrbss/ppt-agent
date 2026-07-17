@@ -1,5 +1,6 @@
 import React from 'react'
 import * as z from "zod";
+import EditableText from '@/app/(presentation-generator)/components/EditableText';
 
 export const layoutId = 'korean-biz-closing'
 export const layoutName = '마무리'
@@ -48,18 +49,20 @@ const ClosingSlideLayout: React.FC<{ data?: Partial<ClosingSlideData> }> = ({ da
             className="w-20 h-1.5 rounded-full mb-10"
             style={{ background: "var(--primary-color,#2563eb)" }}
           />
-          <h1
+          <EditableText
+            as="h1"
+            path="title"
+            value={slideData?.title || '감사합니다'}
             className="font-black tracking-tight leading-none"
             style={{ color: "var(--background-text,#1a1a2e)", fontSize: "84px" }}
-          >
-            {slideData?.title || '감사합니다'}
-          </h1>
-          <p
+          />
+          <EditableText
+            as="p"
+            path="message"
+            value={slideData?.message || '여러분의 관심에 진심으로 감사드립니다.'}
             className="mt-8 text-2xl font-medium max-w-3xl leading-relaxed"
             style={{ color: "var(--background-text,#1a1a2e)", opacity: 0.78 }}
-          >
-            {slideData?.message || '여러분의 관심에 진심으로 감사드립니다.'}
-          </p>
+          />
         </div>
 
         {/* Footer contact row */}
@@ -72,19 +75,21 @@ const ClosingSlideLayout: React.FC<{ data?: Partial<ClosingSlideData> }> = ({ da
               className="w-1 h-10 rounded-full"
               style={{ background: "var(--primary-color,#2563eb)" }}
             />
-            <span
+            <EditableText
+              as="span"
+              path="contactName"
+              value={slideData?.contactName || '김민준 | 전략기획팀'}
               className="text-lg font-bold"
               style={{ color: "var(--background-text,#1a1a2e)" }}
-            >
-              {slideData?.contactName || '김민준 | 전략기획팀'}
-            </span>
+            />
           </div>
-          <span
+          <EditableText
+            as="span"
+            path="contactEmail"
+            value={slideData?.contactEmail || 'contact@company.co.kr'}
             className="text-lg font-medium tracking-wide"
             style={{ color: "var(--primary-color,#2563eb)" }}
-          >
-            {slideData?.contactEmail || 'contact@company.co.kr'}
-          </span>
+          />
         </div>
       </div>
     </div>

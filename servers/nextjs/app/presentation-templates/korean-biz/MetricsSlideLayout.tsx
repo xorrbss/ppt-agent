@@ -1,5 +1,6 @@
 import React from 'react'
 import * as z from "zod";
+import EditableText from '@/app/(presentation-generator)/components/EditableText';
 
 export const layoutId = 'korean-biz-metrics'
 export const layoutName = '주요 지표'
@@ -64,12 +65,13 @@ const MetricsSlideLayout: React.FC<{ data?: Partial<MetricsData> }> = ({ data: s
               className="w-16 h-1.5 rounded-full mb-6"
               style={{ background: "var(--primary-color,#2563eb)" }}
             />
-            <h1
+            <EditableText
+              as="h1"
+              path="title"
+              value={slideData?.title || '주요 성과 지표'}
               className="text-4xl font-black tracking-tight leading-tight"
               style={{ color: "var(--background-text,#1a1a2e)" }}
-            >
-              {slideData?.title || '주요 성과 지표'}
-            </h1>
+            />
           </div>
 
           {/* Metric cards */}
@@ -80,22 +82,24 @@ const MetricsSlideLayout: React.FC<{ data?: Partial<MetricsData> }> = ({ data: s
                 className="flex flex-col justify-center items-start rounded-2xl border px-10 py-12"
                 style={{ backgroundColor: "var(--card-color,#ffffff)", borderColor: "var(--stroke,#e5e7eb)" }}
               >
-                <div
+                <EditableText
+                  as="div"
+                  path={`metrics[${index}].value`}
+                  value={metric?.value || '120%'}
                   className="text-6xl font-black leading-none tracking-tight mb-5"
                   style={{ color: "var(--primary-color,#2563eb)" }}
-                >
-                  {metric?.value || '120%'}
-                </div>
+                />
                 <div
                   className="w-10 h-0.5 rounded-full mb-5 opacity-40"
                   style={{ background: "var(--background-text,#1a1a2e)" }}
                 />
-                <div
+                <EditableText
+                  as="div"
+                  path={`metrics[${index}].label`}
+                  value={metric?.label || '매출 성장률'}
                   className="text-lg font-medium opacity-70"
                   style={{ color: "var(--background-text,#1a1a2e)" }}
-                >
-                  {metric?.label || '매출 성장률'}
-                </div>
+                />
               </div>
             ))}
           </div>
