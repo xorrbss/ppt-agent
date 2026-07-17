@@ -404,7 +404,6 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
      * Handles icon change from IconsEditor
      */
     const handleIconChange = (newIconUrl: string, query?: string) => {
-        console.log('newIconUrl', newIconUrl);
         if (activeEditor && activeEditor.element) {
             // Update Redux store
             dispatch(updateSlideIcon({

@@ -462,9 +462,6 @@ const presentationGenerationSlice = createSlice({
           } else {
             current[Number(finalKey)] = updatedValue;
           }
-
-          // Add debugging
-          console.log('Redux: Updated slide icon at path:', path, 'with URL:', url);
         };
 
         // Update the slide icon
