@@ -161,6 +161,24 @@ const presentationGenerationSlice = createSlice({
       }
     },
 
+    // Replace a slide's chart object (type + data points) wholesale. Used by the
+    // in-tree chart editor: type switches and adding/removing points change the
+    // array shape, which the path-based updateSlideContent can't express, and the
+    // values must stay numbers (not the strings updateSlideContent stores).
+    updateSlideChart: (
+      state,
+      action: PayloadAction<{ slideIndex: number; chart: any }>
+    ) => {
+      if (
+        state.presentationData &&
+        state.presentationData.slides &&
+        state.presentationData.slides[action.payload.slideIndex]
+      ) {
+        const slide = state.presentationData.slides[action.payload.slideIndex];
+        slide.content = { ...slide.content, chart: action.payload.chart };
+      }
+    },
+
     // Update slide content at specific data path (for Tiptap text editing)
     updateSlideContent: (
       state,
@@ -474,6 +492,7 @@ export const {
   deletePresentationSlide,
   updateSlideContent,
   updateSlideSpeakerNote,
+  updateSlideChart,
   updateAdaptiveBlock,
   deleteAdaptiveUnit,
   moveAdaptiveUnit,

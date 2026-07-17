@@ -2,8 +2,8 @@
 
 import React from 'react'
 import * as z from "zod";
-import { GeneralChart } from './GeneralChartPrimitives';
 import EditableText from '@/app/(presentation-generator)/components/EditableText';
+import EditableChart from '@/app/(presentation-generator)/components/EditableChart';
 
 export const layoutId = 'financial-chart-slide'
 export const layoutName = '재무·실적 차트'
@@ -134,7 +134,7 @@ const FinancialChartSlideLayout: React.FC<{ data?: Partial<FinancialChartData> }
               style={{ backgroundColor: "var(--card-color,#ffffff)", borderColor: "var(--stroke,#e5e7eb)" }}
             >
               <div className="h-full w-full min-h-0 overflow-hidden" style={monoChartVars}>
-                <GeneralChart type={chart.type} data={chart.data} showLegend={false} showTooltip={false} />
+                <EditableChart chart={chart} showLegend={false} showTooltip={false} />
               </div>
             </div>
 
