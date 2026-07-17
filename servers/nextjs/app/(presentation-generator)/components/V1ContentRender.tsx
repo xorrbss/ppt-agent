@@ -132,6 +132,23 @@ export const V1ContentRender = ({ slide, isEditMode, theme }: { slide: any, isEd
     }
     const LayoutComp = Layout as React.ComponentType<{ data: any }>;
 
+    const layoutTree = (
+        <EditableTextProvider value={editableCtx}>
+            <LayoutComp data={{
+                ...slide.content,
+                _logo_url__: theme ? theme.logo_url : null,
+                __companyName__: (theme && theme.company_name) ? theme.company_name : null,
+            }} />
+        </EditableTextProvider>
+    );
+
+    // Built-in templates now edit entirely via in-tree <EditableText>, so they no
+    // longer need the DOM-surgery replacer (which leaked React roots and bound
+    // non-adaptive text by fragile string matching). Only adaptive (sound
+    // data-block-id binding) and custom DB templates (legacy string-match) still
+    // use it.
+    const usesReplacer = slide.layout_group === "adaptive" || isCustomTemplate;
+
     if (isEditMode) {
         return (
             <SlideErrorBoundary label={`Slide ${slide.index + 1}`}>
@@ -142,44 +159,42 @@ export const V1ContentRender = ({ slide, isEditMode, theme }: { slide: any, isEd
                         slideData={slide.content}
                         properties={slide.properties}
                     >
-                        <TiptapTextReplacer
-                            key={slide.id}
-                            slideData={slide.content}
-                            slideIndex={slide.index}
-                            useBlockId={slide.layout_group === "adaptive"}
-                            onContentChange={(
-                                content: string,
-                                binding: EditBinding,
-                                slideIndex?: number
-                            ) => {
-                                if (!binding.key || slideIndex === undefined) return;
-                                if (binding.kind === "blockId") {
-                                    dispatch(
-                                        updateAdaptiveBlock({
-                                            slideIndex,
-                                            blockId: binding.key,
-                                            content,
-                                        })
-                                    );
-                                } else {
-                                    dispatch(
-                                        updateSlideContent({
-                                            slideIndex,
-                                            dataPath: binding.key,
-                                            content,
-                                        })
-                                    );
-                                }
-                            }}
-                        >
-                            <EditableTextProvider value={editableCtx}>
-                                <LayoutComp data={{
-                                    ...slide.content,
-                                    _logo_url__: theme ? theme.logo_url : null,
-                                    __companyName__: (theme && theme.company_name) ? theme.company_name : null,
-                                }} />
-                            </EditableTextProvider>
-                        </TiptapTextReplacer>
+                        {usesReplacer ? (
+                            <TiptapTextReplacer
+                                key={slide.id}
+                                slideData={slide.content}
+                                slideIndex={slide.index}
+                                useBlockId={slide.layout_group === "adaptive"}
+                                onContentChange={(
+                                    content: string,
+                                    binding: EditBinding,
+                                    slideIndex?: number
+                                ) => {
+                                    if (!binding.key || slideIndex === undefined) return;
+                                    if (binding.kind === "blockId") {
+                                        dispatch(
+                                            updateAdaptiveBlock({
+                                                slideIndex,
+                                                blockId: binding.key,
+                                                content,
+                                            })
+                                        );
+                                    } else {
+                                        dispatch(
+                                            updateSlideContent({
+                                                slideIndex,
+                                                dataPath: binding.key,
+                                                content,
+                                            })
+                                        );
+                                    }
+                                }}
+                            >
+                                {layoutTree}
+                            </TiptapTextReplacer>
+                        ) : (
+                            layoutTree
+                        )}
                     </EditableLayoutWrapper>
 
 
@@ -192,21 +207,19 @@ export const V1ContentRender = ({ slide, isEditMode, theme }: { slide: any, isEd
     return (
         <SlideErrorBoundary label={`Slide ${slide.index + 1}`}>
             <div ref={containerRef}>
-                <TiptapTextReplacer
-                    key={slide.id}
-                    slideData={slide.content}
-                    slideIndex={slide.index}
-                    useBlockId={slide.layout_group === "adaptive"}
-                    readOnly
-                >
-                    <EditableTextProvider value={editableCtx}>
-                        <LayoutComp data={{
-                            ...slide.content,
-                            _logo_url__: theme ? theme.logo_url : null,
-                            __companyName__: (theme && theme.company_name) ? theme.company_name : null,
-                        }} />
-                    </EditableTextProvider>
-                </TiptapTextReplacer>
+                {usesReplacer ? (
+                    <TiptapTextReplacer
+                        key={slide.id}
+                        slideData={slide.content}
+                        slideIndex={slide.index}
+                        useBlockId={slide.layout_group === "adaptive"}
+                        readOnly
+                    >
+                        {layoutTree}
+                    </TiptapTextReplacer>
+                ) : (
+                    layoutTree
+                )}
             </div>
         </SlideErrorBoundary>
     );
