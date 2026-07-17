@@ -124,9 +124,20 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
             htmlElement.closest("[data-block-id]")?.getAttribute("data-block-id") ||
             null
           : null;
+        // An explicit data-edit-path (on the leaf or nearest ancestor) is the
+        // robust opt-in for custom templates: it binds by author-declared path
+        // instead of matching rendered text. Preferred over the string-match
+        // fallback below.
+        const explicitPath = useBlockId
+          ? null
+          : htmlElement.getAttribute("data-edit-path") ||
+            htmlElement.closest("[data-edit-path]")?.getAttribute("data-edit-path") ||
+            null;
         let binding: EditBinding;
         if (bid) {
           binding = { kind: "blockId", key: bid };
+        } else if (explicitPath) {
+          binding = { kind: "path", key: explicitPath };
         } else {
           // Occurrence-based path binding: pick the Nth matching field for the Nth
           // leaf of this text, so duplicate text no longer all binds to the first.
