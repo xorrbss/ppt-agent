@@ -9,6 +9,7 @@ import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
 import Underline from "@tiptap/extension-underline";
 import { getAdaptiveBlockText } from "@/lib/adaptiveBlockEdit";
+import { collectMatchingPaths } from "@/lib/findDataPaths";
 
 const extensions = [StarterKit, Markdown, Underline];
 
@@ -74,6 +75,11 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
       // Get all elements in the container
       const allElements = container.querySelectorAll("*");
 
+      // How many editable leaves with a given text we've already bound, so the Nth
+      // duplicate on screen binds to the Nth matching content field (not always the
+      // first). Reset per full walk.
+      const pathOccurrence = new Map<string, number>();
+
       allElements.forEach((element) => {
         const htmlElement = element as HTMLElement;
 
@@ -118,9 +124,17 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
             htmlElement.closest("[data-block-id]")?.getAttribute("data-block-id") ||
             null
           : null;
-        const binding: EditBinding = bid
-          ? { kind: "blockId", key: bid }
-          : { kind: "path", key: findDataPath(slideData, trimmedText).path };
+        let binding: EditBinding;
+        if (bid) {
+          binding = { kind: "blockId", key: bid };
+        } else {
+          // Occurrence-based path binding: pick the Nth matching field for the Nth
+          // leaf of this text, so duplicate text no longer all binds to the first.
+          const matches = collectMatchingPaths(slideData, trimmedText);
+          const occ = pathOccurrence.get(trimmedText) ?? 0;
+          pathOccurrence.set(trimmedText, occ + 1);
+          binding = { kind: "path", key: matches[occ] ?? matches[0] ?? "" };
+        }
 
         // Create a container for the TiptapText
         const tiptapContainer = document.createElement("div");
@@ -380,43 +394,6 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
 
       return false;
     };
-
-    // Helper function to find data path for text content
-    const findDataPath = (
-      data: any,
-      targetText: string,
-      path = ""
-    ): {
-      path: string;
-      originalText: string;
-    } => {
-      if (!data || typeof data !== "object")
-        return { path: "", originalText: "" };
-
-      for (const [key, value] of Object.entries(data)) {
-        const currentPath = path ? `${path}.${key}` : key;
-
-        if (typeof value === "string" && value.trim() === targetText.trim()) {
-          return { path: currentPath, originalText: value };
-        }
-
-        if (Array.isArray(value)) {
-          for (let i = 0; i < value.length; i++) {
-            const result = findDataPath(
-              value[i],
-              targetText,
-              `${currentPath}[${i}]`
-            );
-            if (result.path) return result;
-          }
-        } else if (typeof value === "object" && value !== null) {
-          const result = findDataPath(value, targetText, currentPath);
-          if (result.path) return result;
-        }
-      }
-      return { path: "", originalText: "" };
-    };
-
 
   return (
     <div ref={containerRef} className="tiptap-text-replacer">
