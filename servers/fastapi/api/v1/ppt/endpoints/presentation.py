@@ -51,7 +51,7 @@ from models.sql.slide import SlideModel
 from models.sql.presentation_layout_code import PresentationLayoutCodeModel
 from models.sse_response import SSECompleteResponse, SSEErrorResponse, SSEResponse
 
-from services.database import get_async_session
+from services.database import async_session_maker, get_async_session
 from services.concurrent_service import CONCURRENT_SERVICE
 from services.generation_pipeline import build_template_structure
 from models.sql.presentation import PresentationModel
@@ -78,6 +78,7 @@ from utils.simple_auth import (
     create_session_token,
     get_session_token_from_request,
 )
+from utils.get_env import get_next_internal_base_url
 from models.presentation_layout import PresentationLayoutModel
 import uuid
 
@@ -858,12 +859,13 @@ async def generate_presentation_handler(
                 async_status.updated_at = datetime.now()
                 sql_session.add(async_status)
                 await sql_session.commit()
-            CONCURRENT_SERVICE.run_task(
-                None,
-                WebhookService.send_webhook,
-                WebhookEvent.PRESENTATION_GENERATION_COMPLETED,
-                response.model_dump(mode="json"),
-            )
+            if request.trigger_webhook:
+                CONCURRENT_SERVICE.run_task(
+                    None,
+                    WebhookService.send_webhook,
+                    WebhookEvent.PRESENTATION_GENERATION_COMPLETED,
+                    response.model_dump(mode="json"),
+                )
             return response
 
         # Updating async status
@@ -1073,7 +1075,13 @@ async def generate_presentation_handler(
             try:
                 from utils.llm_calls.vision_qa import run_vision_qa_pass
 
-                vqa_base = (os.getenv("NEXT_PUBLIC_URL") or "http://127.0.0.1").strip()
+                # Vision-QA renders /pdf-maker to critique slides. Fall back to the
+                # same NEXT_INTERNAL_URL used for template layout resolution (honours
+                # the local single-origin proxy) instead of a bare :80, so the
+                # opt-in QA pass doesn't silently no-op on setups without nginx.
+                vqa_base = (
+                    os.getenv("NEXT_PUBLIC_URL") or ""
+                ).strip() or get_next_internal_base_url()
                 adaptive_composition, fixed_idx = await run_vision_qa_pass(
                     str(presentation_id),
                     vqa_source_outline,
@@ -1129,13 +1137,14 @@ async def generate_presentation_handler(
             sql_session.add(async_status)
             await sql_session.commit()
 
-        # Triggering webhook on success
-        CONCURRENT_SERVICE.run_task(
-            None,
-            WebhookService.send_webhook,
-            WebhookEvent.PRESENTATION_GENERATION_COMPLETED,
-            response.model_dump(mode="json"),
-        )
+        # Triggering webhook on success (opt-in via request.trigger_webhook)
+        if request.trigger_webhook:
+            CONCURRENT_SERVICE.run_task(
+                None,
+                WebhookService.send_webhook,
+                WebhookEvent.PRESENTATION_GENERATION_COMPLETED,
+                response.model_dump(mode="json"),
+            )
 
         return response
 
@@ -1146,13 +1155,14 @@ async def generate_presentation_handler(
 
         api_error_model = APIErrorModel.from_exception(e)
 
-        # Triggering webhook on failure
-        CONCURRENT_SERVICE.run_task(
-            None,
-            WebhookService.send_webhook,
-            WebhookEvent.PRESENTATION_GENERATION_FAILED,
-            api_error_model.model_dump(mode="json"),
-        )
+        # Triggering webhook on failure (opt-in via request.trigger_webhook)
+        if request.trigger_webhook:
+            CONCURRENT_SERVICE.run_task(
+                None,
+                WebhookService.send_webhook,
+                WebhookEvent.PRESENTATION_GENERATION_FAILED,
+                api_error_model.model_dump(mode="json"),
+            )
 
         if async_status:
             async_status.status = "error"
@@ -1188,6 +1198,28 @@ async def generate_presentation_sync(
         raise HTTPException(status_code=500, detail="Presentation generation failed")
 
 
+async def _run_async_generation(
+    request: GeneratePresentationRequest,
+    presentation_id: uuid.UUID,
+    async_status_id: str,
+    export_cookie_header: Optional[str],
+):
+    """Background entry for /generate/async. A FastAPI BackgroundTask runs AFTER
+    the request's yield-dependency session is torn down, so generation must not
+    borrow that session — open a fresh one and re-fetch the status row by id."""
+    async with async_session_maker() as session:
+        async_status = await session.get(
+            AsyncPresentationGenerationTaskModel, async_status_id
+        )
+        await generate_presentation_handler(
+            request,
+            presentation_id,
+            async_status=async_status,
+            export_cookie_header=export_cookie_header,
+            sql_session=session,
+        )
+
+
 @PRESENTATION_ROUTER.post(
     "/generate/async", response_model=AsyncPresentationGenerationTaskModel
 )
@@ -1209,12 +1241,11 @@ async def generate_presentation_async(
         await sql_session.commit()
 
         background_tasks.add_task(
-            generate_presentation_handler,
+            _run_async_generation,
             request,
             presentation_id,
-            async_status=async_status,
-            export_cookie_header=_build_export_cookie_header(request_http),
-            sql_session=sql_session,
+            async_status.id,
+            _build_export_cookie_header(request_http),
         )
         return async_status
 

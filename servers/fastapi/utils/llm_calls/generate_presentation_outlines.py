@@ -191,7 +191,9 @@ async def generate_ppt_outline(
     )
 
     client = get_client(config=get_llm_config())
-    use_search_tool = web_search
+    # Per-request web_search, OR the instance-wide WEB_GROUNDING knob (previously
+    # imported but never consulted — enabling it had no effect).
+    use_search_tool = web_search or enable_web_grounding()
 
     try:
         outline_schema = prepare_schema_for_validation(
