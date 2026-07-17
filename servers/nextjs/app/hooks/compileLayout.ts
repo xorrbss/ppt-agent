@@ -124,7 +124,6 @@ function normalizeHardcodedBackendUrlsInCode(layoutCode: string): string {
  * Compiles a layout code string into a usable React component
  */
 export function compileCustomLayout(layoutCode: string): CompiledLayout | null {
-    console.log('compileCustomLayout called');
     try {
         const normalizedLayoutCode = normalizeHardcodedBackendUrlsInCode(layoutCode);
 
