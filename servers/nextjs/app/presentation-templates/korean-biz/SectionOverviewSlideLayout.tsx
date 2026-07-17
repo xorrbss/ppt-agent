@@ -1,6 +1,7 @@
 import React from 'react'
 import * as z from "zod";
 import { ImageSchema } from '../defaultSchemes';
+import EditableText from '@/app/(presentation-generator)/components/EditableText';
 
 export const layoutId = 'korean-biz-overview'
 export const layoutName = '개요'
@@ -37,22 +38,24 @@ const SectionOverviewSlideLayout: React.FC<{ data?: Partial<SectionOverviewData>
             <div className="w-full h-full flex">
                 {/* Text column */}
                 <div className="w-1/2 h-full flex flex-col justify-center px-16 py-20">
-                    <h1
+                    <EditableText
+                        as="h1"
+                        path="title"
+                        value={slideData?.title || '시장 현황'}
                         className="text-5xl font-black leading-tight tracking-tight"
                         style={{ color: "var(--background-text,#1a1a2e)" }}
-                    >
-                        {slideData?.title || '시장 현황'}
-                    </h1>
+                    />
                     <div
                         className="mt-6 mb-8 h-1.5 w-20 rounded-full"
                         style={{ background: "var(--primary-color,#2563eb)" }}
                     />
-                    <p
+                    <EditableText
+                        as="p"
+                        path="description"
+                        value={slideData?.description || '국내 시장은 디지털 전환 가속화로 빠르게 성장하고 있습니다. 주요 산업 전반에서 자동화 수요가 확대되며 신규 사업 기회가 늘어나고 있습니다. 변화하는 고객 요구에 맞춰 시장 구조 또한 빠르게 재편되는 추세입니다.'}
                         className="text-lg leading-relaxed font-normal"
                         style={{ color: "var(--background-text,#1a1a2e)" }}
-                    >
-                        {slideData?.description || '국내 시장은 디지털 전환 가속화로 빠르게 성장하고 있습니다. 주요 산업 전반에서 자동화 수요가 확대되며 신규 사업 기회가 늘어나고 있습니다. 변화하는 고객 요구에 맞춰 시장 구조 또한 빠르게 재편되는 추세입니다.'}
-                    </p>
+                    />
                 </div>
 
                 {/* Image column */}

@@ -1,6 +1,7 @@
 import React from 'react'
 import * as z from "zod";
 import { IconSchema } from '../defaultSchemes';
+import EditableText from '@/app/(presentation-generator)/components/EditableText';
 
 export const layoutId = 'korean-biz-bullets'
 export const layoutName = '핵심 내용'
@@ -83,12 +84,13 @@ const BulletPointsSlideLayout: React.FC<{ data?: Partial<BulletPointsData> }> = 
               className="w-2 h-12 rounded-full"
               style={{ background: "var(--primary-color,#2563eb)" }}
             />
-            <h1
+            <EditableText
+              as="h1"
+              path="title"
+              value={title}
               className="text-4xl font-black tracking-tight"
               style={{ color: "var(--background-text,#1a1a2e)" }}
-            >
-              {title}
-            </h1>
+            />
           </div>
 
           {/* Bullet cards */}
@@ -121,20 +123,22 @@ const BulletPointsSlideLayout: React.FC<{ data?: Partial<BulletPointsData> }> = 
                 </div>
 
                 {/* Heading */}
-                <h2
+                <EditableText
+                  as="h2"
+                  path={`bullets[${i}].title`}
+                  value={b?.title || '전략'}
                   className="text-xl font-bold mb-3"
                   style={{ color: "var(--background-text,#1a1a2e)" }}
-                >
-                  {b?.title || '전략'}
-                </h2>
+                />
 
                 {/* Description */}
-                <p
+                <EditableText
+                  as="p"
+                  path={`bullets[${i}].description`}
+                  value={b?.description || '설명'}
                   className="text-sm leading-relaxed opacity-80"
                   style={{ color: "var(--background-text,#1a1a2e)" }}
-                >
-                  {b?.description || '설명'}
-                </p>
+                />
               </div>
             ))}
           </div>
