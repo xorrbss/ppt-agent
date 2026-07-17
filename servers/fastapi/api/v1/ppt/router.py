@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from api.v1.ppt.endpoints.slide_to_html import LAYOUT_MANAGEMENT_ROUTER
 from api.v1.ppt.endpoints.presentation import PRESENTATION_ROUTER
+from api.v1.ppt.endpoints.presentation_versions import PRESENTATION_VERSION_ROUTER
 from api.v1.ppt.endpoints.anthropic import ANTHROPIC_ROUTER
 from api.v1.ppt.endpoints.codex_auth import CODEX_AUTH_ROUTER
 from api.v1.ppt.endpoints.google import GOOGLE_ROUTER
@@ -28,6 +29,7 @@ API_V1_PPT_ROUTER.include_router(FILES_ROUTER)
 API_V1_PPT_ROUTER.include_router(FONTS_ROUTER)
 API_V1_PPT_ROUTER.include_router(OUTLINES_ROUTER)
 API_V1_PPT_ROUTER.include_router(PRESENTATION_ROUTER)
+API_V1_PPT_ROUTER.include_router(PRESENTATION_VERSION_ROUTER)
 API_V1_PPT_ROUTER.include_router(PPTX_SLIDES_ROUTER)
 API_V1_PPT_ROUTER.include_router(SLIDE_ROUTER)
 API_V1_PPT_ROUTER.include_router(CHAT_ROUTER)
