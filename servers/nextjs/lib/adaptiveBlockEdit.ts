@@ -54,6 +54,29 @@ export function setAdaptiveBlockText(
   return false;
 }
 
+export interface AdaptiveChartPatch {
+  chartType?: string;
+  data?: any[];
+  series?: string[];
+}
+
+/** Merge chart fields (type / data / series) onto the top-level block `blockId`.
+ * Returns true if the block was found. Charts are top-level blocks, so no nested
+ * lookup is needed. */
+export function setAdaptiveChartBlock(
+  blocks: AdaptiveBlock[] | undefined,
+  blockId: string,
+  patch: AdaptiveChartPatch
+): boolean {
+  if (!Array.isArray(blocks) || !blockId) return false;
+  const b = blocks.find((x) => x && x.id === blockId);
+  if (!b) return false;
+  if (patch.chartType !== undefined) b.chartType = patch.chartType;
+  if (patch.data !== undefined) b.data = patch.data;
+  if (patch.series !== undefined) b.series = patch.series;
+  return true;
+}
+
 /** Read the current value for `blockId` from a slide content object. */
 export function getAdaptiveBlockText(
   content: any,

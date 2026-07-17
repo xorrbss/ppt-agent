@@ -3,6 +3,7 @@ import { Slide } from "@/app/(presentation-generator)/types/slide";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import {
   setAdaptiveBlockText,
+  setAdaptiveChartBlock,
   deleteAdaptiveUnit as crudDeleteUnit,
   moveAdaptiveUnit as crudMoveUnit,
   addAdaptiveUnit as crudAddUnit,
@@ -253,6 +254,22 @@ const presentationGenerationSlice = createSlice({
       setAdaptiveBlockText(slide?.content?.blocks, blockId, content);
     },
 
+    // Update an adaptive chart block's type / data / series by block id. Chart
+    // shape changes (add/remove rows or series, type switch) can't go through the
+    // text-only updateAdaptiveBlock.
+    updateAdaptiveBlockChart: (
+      state,
+      action: PayloadAction<{
+        slideIndex: number;
+        blockId: string;
+        patch: { chartType?: string; data?: any[]; series?: string[] };
+      }>
+    ) => {
+      const { slideIndex, blockId, patch } = action.payload;
+      const slide = state.presentationData?.slides?.[slideIndex];
+      setAdaptiveChartBlock(slide?.content?.blocks, blockId, patch);
+    },
+
     // Adaptive block/item CRUD (P4b) — unitId is a top-level block id or a
     // nested item id; helpers locate the owning array (blocks[] or items[]).
     deleteAdaptiveUnit: (
@@ -494,6 +511,7 @@ export const {
   updateSlideSpeakerNote,
   updateSlideChart,
   updateAdaptiveBlock,
+  updateAdaptiveBlockChart,
   deleteAdaptiveUnit,
   moveAdaptiveUnit,
   addAdaptiveUnit,
