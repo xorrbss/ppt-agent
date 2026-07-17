@@ -6,7 +6,8 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from fastapi import HTTPException
 
-from api.v1.ppt.endpoints import presentation as presentation_endpoint
+from api.v1.ppt.endpoints import presentation as presentation_core
+from api.v1.ppt.endpoints import presentation_generate as presentation_endpoint
 from services import generation_pipeline
 from models.generate_presentation_request import GeneratePresentationRequest
 from models.presentation_and_path import PresentationAndPath
@@ -23,7 +24,7 @@ def _run(coro):
 
 def _fake_request() -> types.SimpleNamespace:
     # Minimal stand-in for the FastAPI Request passed as request_http;
-    # _build_export_cookie_header only reads headers/cookies/state.
+    # build_export_cookie_header only reads headers/cookies/state.
     return types.SimpleNamespace(
         headers={},
         cookies={},
@@ -163,7 +164,7 @@ def test_prepare_presentation_preserves_payload_icon_weight():
         new=AsyncMock(),
     ):
         response = _run(
-            presentation_endpoint.prepare_presentation(
+            presentation_core.prepare_presentation(
                 presentation_id=presentation_id,
                 outlines=[SlideOutlineModel(content="## Causes")],
                 layout=layout,
