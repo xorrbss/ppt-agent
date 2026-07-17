@@ -151,6 +151,44 @@ export class PresentationGenerationApi {
     }
   }
 
+  static async getPresentationVersions(presentationId: string) {
+    try {
+      const response = await fetch(
+        getApiUrl(`/api/v1/ppt/presentation/${presentationId}/versions`),
+        {
+          method: "GET",
+          headers: getHeader(),
+          cache: "no-cache",
+        }
+      );
+
+      return await ApiResponseHandler.handleResponse(response, "Failed to load version history");
+    } catch (error) {
+      console.error("error loading presentation versions", error);
+      throw error;
+    }
+  }
+
+  static async restorePresentationVersion(presentationId: string, versionId: string) {
+    try {
+      const response = await fetch(
+        getApiUrl(
+          `/api/v1/ppt/presentation/${presentationId}/versions/${versionId}/restore`
+        ),
+        {
+          method: "POST",
+          headers: getHeader(),
+          cache: "no-cache",
+        }
+      );
+
+      return await ApiResponseHandler.handleResponse(response, "Failed to restore version");
+    } catch (error) {
+      console.error("error restoring presentation version", error);
+      throw error;
+    }
+  }
+
   // Authored (high-quality) mode: the model authors bespoke HTML per slide, rendered
   // to images and assembled into an image PPTX. It bypasses the layout/stream path, so
   // it runs through the async generate endpoint (minutes-long) and is polled to
