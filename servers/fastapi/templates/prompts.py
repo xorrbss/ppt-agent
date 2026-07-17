@@ -115,6 +115,8 @@ Provide reusable TSX code which can be used as template to generate new slides w
 - Schema.parse must not be used in the code.
 - Use 'const {field1, field2, ...} = data;' to access the data.
 - field1 or field2 or ... can be undefined, so use optional chaining to access them.
+- Every leaf element that renders an editable TEXT field from the schema MUST carry a `data-edit-path` attribute whose value is that field's exact schema path, so the in-app editor binds edits reliably (by declared path, not by matching visible text). Example: `<h1 data-edit-path="title">{title}</h1>`. For array items, use a template literal with the loop index: `{items.map((item, i) => (<p key={i} data-edit-path={`items[${i}].text`}>{item?.text}</p>))}`.
+- Only put data-edit-path on the leaf text element bound to a schema text field — never on containers, images, icons, or static/non-schema labels.
 - Don't use "min-height" on cards and instead make its height grow/shrink to fit the content.
 - Make sure cards/items are centered vertically and horizontally in the available space.
 - Make sure no element is scrollable.
