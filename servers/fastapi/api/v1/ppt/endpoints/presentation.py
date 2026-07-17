@@ -52,6 +52,7 @@ from models.sql.presentation_layout_code import PresentationLayoutCodeModel
 from models.sse_response import SSECompleteResponse, SSEErrorResponse, SSEResponse
 
 from services.database import async_session_maker, get_async_session
+from services import presentation_version_service as version_service
 from services.concurrent_service import CONCURRENT_SERVICE
 from services.generation_pipeline import build_template_structure
 from models.sql.presentation import PresentationModel
@@ -590,6 +591,14 @@ async def update_presentation(
         for slide in slides:
             slide.presentation = uuid.UUID(slide.presentation)
             slide.id = uuid.UUID(slide.id)
+
+        # Snapshot this saved state into durable history (throttled + capped) so the
+        # editor's undo survives reloads. Runs before the full-replace below.
+        await version_service.snapshot_slides(
+            sql_session,
+            presentation.id,
+            [slide.model_dump(mode="json") for slide in slides],
+        )
 
         await sql_session.execute(
             delete(SlideModel).where(SlideModel.presentation == presentation.id)
