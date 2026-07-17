@@ -146,6 +146,21 @@ const presentationGenerationSlice = createSlice({
       }
     },
 
+    // Update a slide's speaker note (presenter-only text; persisted by autosave).
+    updateSlideSpeakerNote: (
+      state,
+      action: PayloadAction<{ slideIndex: number; speakerNote: string }>
+    ) => {
+      if (
+        state.presentationData &&
+        state.presentationData.slides &&
+        state.presentationData.slides[action.payload.slideIndex]
+      ) {
+        state.presentationData.slides[action.payload.slideIndex].speaker_note =
+          action.payload.speakerNote;
+      }
+    },
+
     // Update slide content at specific data path (for Tiptap text editing)
     updateSlideContent: (
       state,
@@ -458,6 +473,7 @@ export const {
   updateSlide,
   deletePresentationSlide,
   updateSlideContent,
+  updateSlideSpeakerNote,
   updateAdaptiveBlock,
   deleteAdaptiveUnit,
   moveAdaptiveUnit,

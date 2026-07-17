@@ -15,6 +15,7 @@ import { useDispatch, useSelector } from "react-redux";
 import {
   deletePresentationSlide,
   updateSlide,
+  updateSlideSpeakerNote,
 } from "@/store/slices/presentationGeneration";
 import { usePathname } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
@@ -273,11 +274,10 @@ const SlideContent = ({
                 </PopoverContent>
               </Popover>
 
-              {slide?.speaker_note && (
-                <Popover
-                  open={isSpeakerPopoverOpen}
-                  onOpenChange={setIsSpeakerPopoverOpen}
-                >
+              <Popover
+                open={isSpeakerPopoverOpen}
+                onOpenChange={setIsSpeakerPopoverOpen}
+              >
                   <PopoverTrigger asChild>
                     <button
                       type="button"
@@ -291,7 +291,7 @@ const SlideContent = ({
                           : "border-gray-200 bg-white text-gray-600"
                       }`}
                     >
-                      <ToolTip content="발표자 노트 편집">
+                      <ToolTip content={slide?.speaker_note ? "발표자 노트 편집" : "발표자 노트 추가"}>
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
                           width="14"
@@ -334,15 +334,27 @@ const SlideContent = ({
                       <p className="text-sm font-semibold text-gray-900">
                         발표자 노트
                       </p>
+                      <p className="mt-0.5 text-xs text-gray-500">
+                        발표 모드에서 발표자에게만 보입니다.
+                      </p>
                     </div>
                     <div className="space-y-3 p-4">
-                      <div className="max-h-[220px] min-h-[100px] overflow-auto whitespace-pre-wrap rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-800">
-                        {slide?.speaker_note?.trim()}
-                      </div>
+                      <textarea
+                        value={slide?.speaker_note ?? ""}
+                        onChange={(e) =>
+                          dispatch(
+                            updateSlideSpeakerNote({
+                              slideIndex: slide.index,
+                              speakerNote: e.target.value,
+                            })
+                          )
+                        }
+                        placeholder="이 슬라이드의 발표자 노트를 입력하세요."
+                        className="max-h-[220px] min-h-[120px] w-full resize-y overflow-auto whitespace-pre-wrap rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-800 outline-none focus:border-violet-300 focus:bg-white"
+                      />
                     </div>
                   </PopoverContent>
                 </Popover>
-              )}
 
               <button
                 type="button"
