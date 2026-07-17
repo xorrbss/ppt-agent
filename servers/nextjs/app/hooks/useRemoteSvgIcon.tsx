@@ -16,12 +16,40 @@ function isEmptyPaint(value: string | null): boolean {
   return normalized === "none" || normalized === "transparent";
 }
 
+// Remote SVG markup is fetched from a URL that can come from slide/icon data
+// (model- or import-influenced) and is then injected via dangerouslySetInnerHTML.
+// SVG can carry <script>, <foreignObject> (arbitrary HTML), inline on* handlers,
+// and javascript: hrefs — all of which would run in the app's origin. Strip them
+// on the parsed tree before serialization (dependency-free; no DOMPurify needed).
+function sanitizeSvgTree(root: Element): void {
+  root.querySelectorAll("script, foreignObject").forEach((el) => el.remove());
+  const walk = (el: Element) => {
+    for (const attr of Array.from(el.attributes)) {
+      const name = attr.name.toLowerCase();
+      const value = attr.value.replace(/\s+/g, "").toLowerCase();
+      if (name.startsWith("on")) {
+        el.removeAttribute(attr.name);
+      } else if (
+        (name === "href" || name === "xlink:href" || name === "src") &&
+        (value.startsWith("javascript:") || value.startsWith("data:text/html"))
+      ) {
+        el.removeAttribute(attr.name);
+      }
+    }
+    for (const child of Array.from(el.children)) walk(child);
+  };
+  walk(root);
+}
+
 function transformSvg(svgText: string, options: RemoteSvgOptions): string {
   try {
     const parser = new DOMParser();
     const doc = parser.parseFromString(svgText, "image/svg+xml");
     const svgEl = doc.querySelector("svg");
-    if (!svgEl) return svgText;
+    // Never fall back to the RAW fetched text (it would bypass sanitization and
+    // could inject HTML/script via dangerouslySetInnerHTML); drop the icon instead.
+    if (!svgEl) return "";
+    sanitizeSvgTree(svgEl);
     svgEl.style.outline = "none";
     svgEl.style.border = "none";
     svgEl.style.margin = "0";
@@ -107,7 +135,8 @@ function transformSvg(svgText: string, options: RemoteSvgOptions): string {
 
     return svgEl.outerHTML;
   } catch {
-    return svgText;
+    // Same reason as the no-svg case: don't emit the unsanitized raw input.
+    return "";
   }
 }
 
