@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "next dev ",
+    "generate:layout-schemas": "node scripts/generate-layout-schemas.mjs",
+    "prebuild": "node scripts/generate-layout-schemas.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint ."

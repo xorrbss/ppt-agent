@@ -607,6 +607,42 @@ def test_get_layout_by_name_attach_auth_cookie(monkeypatch):
     assert "sess=tok123" in cookie
 
 
+def test_get_layout_by_name_prefers_build_artifact(monkeypatch):
+    # When the build-time artifact carries the group, resolution uses it and must
+    # never touch the network (the headless scrape / JSON route are both skipped).
+    payload = {
+        "name": "korean-biz",
+        "ordered": False,
+        "icon_weight": "thin",
+        "slides": [
+            {
+                "id": "korean-biz:cover",
+                "name": "Cover",
+                "description": "",
+                "json_schema": {"title": "t"},
+            }
+        ],
+    }
+    monkeypatch.setattr(
+        tpl_layout_fetcher,
+        "_read_builtin_layout_artifact",
+        lambda name: dict(payload),
+    )
+
+    def _boom(*_a, **_k):
+        raise AssertionError("HTTP fallback must not run when the artifact resolves")
+
+    monkeypatch.setattr(tpl_layout_fetcher.aiohttp, "ClientSession", _boom)
+
+    async def runner():
+        layout = await tpl_layout_fetcher.get_layout_by_name("korean-biz")
+        assert isinstance(layout, PresentationLayoutModel)
+        assert layout.name == "korean-biz"
+        assert [s.id for s in layout.slides] == ["korean-biz:cover"]
+
+    asyncio.run(runner())
+
+
 @pytest.mark.parametrize(
     "raw",
     ["true", "TRUE", "TrUe"],
