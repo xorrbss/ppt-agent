@@ -1,4 +1,8 @@
 import asyncio
+import hashlib
+import hmac
+import json
+
 import aiohttp
 from sqlmodel import select
 from enums.webhook_event import WebhookEvent
@@ -35,17 +39,25 @@ class WebhookService:
         cls, subscription: WebhookSubscription, data: dict
     ):
 
+        # Sign the exact bytes we send. HMAC-SHA256 lets the receiver verify
+        # authenticity/integrity without the shared secret ever crossing the
+        # wire (the old code posted the raw secret in an Authorization header,
+        # so any interception leaked it).
+        body = json.dumps(data, separators=(",", ":")).encode("utf-8")
         headers = {
             "Content-Type": "application/json",
         }
         if subscription.secret:
-            headers["Authorization"] = f"Bearer {subscription.secret}"
+            signature = hmac.new(
+                subscription.secret.encode("utf-8"), body, hashlib.sha256
+            ).hexdigest()
+            headers["X-Presenton-Signature"] = f"sha256={signature}"
 
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     subscription.url,
-                    json=data,
+                    data=body,
                     headers=headers,
                 ) as _:
                     pass
