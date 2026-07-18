@@ -1,5 +1,6 @@
 import { defineConfig } from "cypress";
 import path from "path";
+import webpack from "webpack";
 
 // framework "react" + a manual webpack pipeline. Cypress 14's framework:"next"
 // devServer expects Next's compiled webpack (`webpackModule.init`), which Next 16
@@ -18,6 +19,15 @@ export default defineConfig({
           extensions: [".tsx", ".ts", ".jsx", ".js", ".json"],
           alias: { "@": path.resolve(process.cwd()) },
         },
+        plugins: [
+          // next/link and next/navigation read process.env.* at module load;
+          // the isolated component-test bundle has no Node process, so importing
+          // any next-dependent component otherwise fails with "process is not
+          // defined" before a test can run. Shim process.env for the browser.
+          new webpack.DefinePlugin({
+            "process.env": JSON.stringify({ NODE_ENV: "development" }),
+          }),
+        ],
         module: {
           rules: [
             {
