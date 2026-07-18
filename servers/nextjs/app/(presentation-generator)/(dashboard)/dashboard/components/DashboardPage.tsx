@@ -76,9 +76,12 @@ const DashboardPage: React.FC = () => {
       );
       setPresentations(data);
     } catch (err) {
+      // A real fetch failure (500, timeout, backend unreachable) — NOT an empty
+      // list. getPresentations() already returns [] for a genuine 404. Surface a
+      // recoverable error so the grid shows its retry UI instead of the
+      // "no presentations yet" empty state, which reads as account-wide data loss.
       hasError = true;
-      setError(null);
-      setPresentations([]);
+      setError("발표자료를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
       trackEvent(MixpanelEvent.Dashboard_Page_Viewed, {
         pathname,
