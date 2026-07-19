@@ -29,7 +29,12 @@ describe("EditableText", () => {
       </EditableTextProvider>
     );
 
-    cy.get("h1[data-editable-native]").should("exist");
+    // The Tiptap editor is a block <div>, and an inline-only tag (h1/p/span…)
+    // cannot legally contain it — so in edit mode the wrapper is swapped to a
+    // <div> to avoid an invalid-nesting hydration error. The semantic tag is
+    // still used in read-only/export mode.
+    cy.get("div[data-editable-native]").should("exist");
+    cy.get("h1[data-editable-native]").should("not.exist");
     cy.get(".tiptap-text-editor [contenteditable='true']")
       .should("exist")
       .click()
@@ -37,6 +42,21 @@ describe("EditableText", () => {
       .blur();
 
     cy.get("@onEdit").should("have.been.calledWith", "title");
+  });
+
+  it("edit: keeps a block-capable tag (list item) as-is", () => {
+    mount(
+      <EditableTextProvider
+        value={{ slideIndex: 0, isEditMode: true, onEdit: cy.stub() }}
+      >
+        <ul>
+          <EditableText as="li" path="items[0]" value="One" />
+        </ul>
+      </EditableTextProvider>
+    );
+
+    // <li> can legally contain a <div>, so it is NOT swapped.
+    cy.get("li[data-editable-native]").should("exist");
   });
 
   it("read-only default (no provider): still renders, no editor", () => {
