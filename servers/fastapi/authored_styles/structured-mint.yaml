@@ -1,0 +1,60 @@
+id: structured-mint
+name: 스트럭처드 민트
+description: 산뜻한 민트 프레임과 정돈된 번호 체계로 복잡한 업무 내용을 명료하게 정리하는 스타일
+category: business
+tags:
+  - corporate
+  - structured
+  - process
+use_cases:
+  - 운영 계획
+  - 방법론 설명
+  - 조직 소개
+preview:
+  bg: "#FFFFFF"
+  accent: "#9FE3D1"
+  palette:
+    - "#FFFFFF"
+    - "#263238"
+    - "#557A68"
+    - "#9FE3D1"
+    - "#E8F5F2"
+  variant: tiered-mint
+brief: >-
+  MOOD: Create a fresh, orderly corporate presentation that makes complex work feel
+  manageable. The tone should be optimistic and methodical, with enough visual
+  warmth to support teams, processes, and implementation stories.
+
+  PALETTE: Use white (#FFFFFF) for the main canvas, charcoal teal (#263238) for body
+  text, muted deep teal (#557A68) for structure, clear mint (#9FE3D1) for active
+  accents, and pale mint (#E8F5F2) for quiet grouping surfaces.
+
+  TYPOGRAPHY: Use a bold geometric sans-serif with restrained uppercase tracking for
+  primary headings and a highly legible neutral sans-serif for body text. Keep labels
+  compact, numbered steps prominent, and paragraphs comfortably spaced.
+
+  LAYOUT SYSTEM: Use framed margins, tiered corner geometry, numbered modules, clean
+  split layouts, and consistent vertical alignment. Organize information in a clear
+  reading order without turning every idea into a separate card.
+
+  SIGNATURE ELEMENTS: Use nested mint-and-teal corner frames, slim vertical accent
+  bars, compact category capsules, dark-teal number blocks, and fine full-slide
+  borders that reinforce structure.
+
+  DATA VISUALIZATION: Use direct-labeled bars, process measures, simple proportional
+  comparisons, and orderly tables in teal and mint. Maintain strong contrast, show
+  targets explicitly, and use the darkest teal for the most important result.
+
+  IMAGE DIRECTION: Choose bright natural-light photography of teams, workshops,
+  operations, and organized professional environments. Favor clean backgrounds,
+  candid collaboration, and restrained mint-toned graphic overlays.
+
+  SLIDE ARCHETYPES: cover: a centered title held by opposing tiered corner frames;
+  content: a numbered sequence or clean image-text split with one mint accent bar;
+  data: an orderly comparison chart inside a pale-mint analysis zone; timeline: a
+  vertical implementation rail with numbered phases and accountable outcomes;
+  closing: a framed recap of priorities, owners, and the next working session.
+
+  AVOID: Avoid low-contrast mint text, decorative pill overload, rounded pastel card
+  walls, playful wellness styling, arbitrary numbering, heavy gradients, crowded
+  process diagrams, and corner ornaments that compete with the content.

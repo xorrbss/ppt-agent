@@ -1,9 +1,64 @@
 id: exec-report
 name: 임원 보고서
-description: 핵심 수치와 의사결정 포인트를 빠르게 읽히게 하는 경영 보고 스타일
+description: 딥 네이비와 권위 있는 세리프, 명확한 수치 위계로 의사결정을 이끄는 경영 보고 스타일
+category: business
+tags:
+  - executive
+  - finance
+  - data
+use_cases:
+  - 경영 실적 보고
+  - 이사회 보고
+  - 투자 검토
 preview:
-  bg: "#FFFFFF"
-  accent: "#0F766E"
+  bg: "#051C2C"
+  accent: "#00A3E0"
+  palette:
+    - "#051C2C"
+    - "#FFFFFF"
+    - "#2E3338"
+    - "#00A3E0"
+    - "#A7B0B7"
+  variant: executive-ledger
 brief: >-
-  Design for executive scanning: concise headlines, dominant KPI numerals, precise
-  rules, quiet tables, and a confident teal accent on a crisp white canvas.
+  MOOD: Create an authoritative executive report with sober confidence, disciplined
+  density, and a clear point of view. Every slide should help a senior audience scan
+  evidence quickly and reach a decision.
+
+  PALETTE: Use deep navy (#051C2C) for commanding fields and headers, white (#FFFFFF)
+  for primary report surfaces, charcoal (#2E3338) for body text, bright blue
+  (#00A3E0) for the decisive signal, and cool gray (#A7B0B7) for rules and sources.
+  Reserve bright blue for the finding that matters most.
+
+  TYPOGRAPHY: Pair an authoritative editorial serif for action titles and major
+  numerals with a neutral professional sans-serif for labels, notes, and dense
+  reading. Keep titles declarative, compact, and visually dominant.
+
+  LAYOUT SYSTEM: Build on a strict column grid with consistent title, evidence, and
+  source zones. Favor one primary analysis frame, disciplined alignment, and compact
+  supporting annotations over decorative cards.
+
+  SIGNATURE ELEMENTS: Use full-width navy title bands, fine gray rules, restrained
+  blue finding markers, serif KPI numerals, precise footnotes, and compact source
+  lines that make the report feel audited and complete.
+
+  DATA VISUALIZATION: Prioritize waterfalls, variance bars, bridge charts, trend
+  lines, and comparison tables. Direct-label key values, show units and periods,
+  distinguish actuals from targets, and annotate the business implication beside
+  the relevant mark.
+
+  IMAGE DIRECTION: Use imagery only when it adds evidence or context: tightly cropped
+  leadership, operations, infrastructure, or market scenes with neutral lighting and
+  deep-blue tonal control. Prefer charts and structured evidence to generic business
+  photography.
+
+  SLIDE ARCHETYPES: cover: a deep-navy field with a concise serif title, reporting
+  period, and one restrained blue rule; content: a declarative action title above a
+  two-column argument with evidence and implications; data: one dominant chart with
+  a finding callout and compact source line; timeline: a horizontal milestone rail
+  that separates completed, current, and next decisions; closing: a decision summary
+  with three prioritized actions, owners, and the immediate next checkpoint.
+
+  AVOID: Avoid vague topic titles, ornamental dashboards, excessive card grids,
+  unexplained metrics, decorative gradients, low-contrast navy text, generic stock
+  imagery, and conclusions that merely repeat the data.
