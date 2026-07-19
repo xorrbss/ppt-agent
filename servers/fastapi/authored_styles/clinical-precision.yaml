@@ -1,0 +1,60 @@
+id: clinical-precision
+name: 클리니컬 프리시전
+description: 임상 근거와 환자 안전 정보를 높은 가독성으로 우선하는 정밀 의료 발표 스타일
+category: healthcare
+tags:
+  - clinical
+  - medical
+  - evidence-based
+use_cases:
+  - 임상 연구 발표
+  - 의료 교육
+  - 치료 경로 검토
+preview:
+  bg: "#F8FBFC"
+  accent: "#007C91"
+  palette:
+    - "#F8FBFC"
+    - "#102A43"
+    - "#007C91"
+    - "#CFE9ED"
+    - "#B42318"
+  variant: clinical-brief
+brief: >-
+  MOOD: Design with clinical calm, precision, and patient-safety awareness. Every
+  slide must support fast, accurate reading in a professional medical setting and
+  clearly separate evidence, interpretation, and recommendation.
+
+  PALETTE: Use sterile white-blue (#F8FBFC), deep clinical navy (#102A43), teal
+  (#007C91), pale aqua panels (#CFE9ED), and safety red (#B42318) only for warnings,
+  contraindications, or critical thresholds.
+
+  TYPOGRAPHY: Use a highly legible sans-serif with generous line spacing, strong
+  heading levels, and tabular numerals. Keep abbreviations expanded on first use and
+  ensure tables, references, and labels remain readable from the back of a room.
+
+  LAYOUT SYSTEM: Use a disciplined grid with a prominent takeaway band, then evidence
+  and details below. Limit each slide to one clinical question, and place population,
+  endpoint, comparator, and evidence level in consistent locations.
+
+  SIGNATURE ELEMENTS: Use evidence-grade chips, patient-pathway steps, dosage or
+  protocol callout boxes, monitored parameter rows, and clearly bordered safety notes.
+
+  DATA VISUALIZATION: Prefer forest plots, survival curves, treatment pathways,
+  adverse-event tables, and carefully annotated outcomes charts. State denominator,
+  timeframe, endpoint definition, confidence interval, and source; never imply
+  causality beyond the evidence.
+
+  IMAGE DIRECTION: Use ethically appropriate clinical environments, diagnostic imagery,
+  or simplified anatomical illustrations only when they improve comprehension. Protect
+  privacy and keep explanatory labels clear and non-obstructive.
+
+  SLIDE ARCHETYPES: cover: clinical topic, population, and evidence date on a clean
+  field; content: a question-to-evidence-to-implication sequence; data: one fully
+  labeled outcome visual with a safety or limitation note; timeline: screening,
+  intervention, follow-up, and assessment stages; closing: practical takeaway,
+  evidence limitation, and referral to full guidance.
+
+  AVOID: Avoid sensational red, unreadable dense tables, unlabeled medical imagery,
+  unsupported treatment claims, patient-identifying details, decorative vital signs,
+  and conclusions that omit safety, limitations, or evidence quality.

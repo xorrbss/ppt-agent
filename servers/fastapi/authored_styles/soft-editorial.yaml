@@ -1,0 +1,58 @@
+id: soft-editorial
+name: 소프트 에디토리얼
+description: 라일락 계열의 부드러운 여백과 편집 리듬으로 사려 깊은 이야기와 인사이트를 전달하는 스타일
+category: editorial
+tags:
+  - editorial
+  - narrative
+  - lifestyle
+use_cases:
+  - 브랜드 스토리
+  - 문화 인사이트
+  - 크리에이티브 리뷰
+preview:
+  bg: "#F5F1F7"
+  accent: "#7289A5"
+  palette:
+    - "#F5F1F7"
+    - "#33293E"
+    - "#7289A5"
+    - "#CBA9AD"
+    - "#D9D1E8"
+  variant: soft-margin
+brief: >-
+  MOOD: Create a warm, contemplative editorial atmosphere with tactile softness and
+  confident restraint. This is a quiet long-form story, distinct from bright coral
+  magazine energy or high-contrast tritone compositions.
+
+  PALETTE: Use lilac paper (#F5F1F7), deep plum text (#33293E), muted slate-blue
+  (#7289A5), dusty rose (#CBA9AD), and pale lavender (#D9D1E8). Use large fields of
+  paper and keep accent colors subdued.
+
+  TYPOGRAPHY: Use a soft editorial serif for headlines and a clean humanist sans-serif
+  for body copy. Maintain comfortable measure, relaxed leading, and clear contrast;
+  use italic emphasis sparingly for short reflective phrases.
+
+  LAYOUT SYSTEM: Favor asymmetric but balanced compositions, broad margins, one large
+  image or quotation per slide, and small supporting text blocks aligned to a simple
+  invisible grid. Let the narrative pause between ideas.
+
+  SIGNATURE ELEMENTS: Use softly rounded image crops, understated caption tabs, thin
+  lavender rules, low-contrast photo washes, and quiet numbered chapter markers.
+
+  DATA VISUALIZATION: Use soft but accessible bars, proportional dots, annotated
+  comparisons, and compact editorial tables. Preserve sufficient contrast, label
+  values directly, and use slate-blue only to identify the focal series.
+
+  IMAGE DIRECTION: Choose tactile still lifes, thoughtful portraits, interiors,
+  materials, and documentary details with natural light. Favor calm crops and gentle
+  grain; captions should add context rather than decoration.
+
+  SLIDE ARCHETYPES: cover: spacious title with one quiet image detail; content: a
+  reflective statement beside a captioned image or quote; data: a minimal chart with
+  a human interpretation; timeline: softly spaced chapters with a single thread;
+  closing: a calm final line, optional next action, and visual echo of the opening.
+
+  AVOID: Avoid coral-and-black tritone, newspaper mastheads, aggressive contrast,
+  neon accents, busy collage layouts, low-contrast pastel text, and overused paper
+  textures that reduce legibility.

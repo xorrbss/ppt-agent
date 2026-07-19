@@ -1,0 +1,58 @@
+id: academic-edge
+name: 아카데믹 엣지
+description: 논문과 연구 결과를 또렷한 근거 계층과 절제된 블루 포인트로 정리하는 학술 발표 스타일
+category: research
+tags:
+  - academic
+  - evidence
+  - research
+use_cases:
+  - 학회 발표
+  - 연구 제안서
+  - 문헌 검토
+preview:
+  bg: "#F7F8FA"
+  accent: "#1D4ED8"
+  palette:
+    - "#F7F8FA"
+    - "#111827"
+    - "#1D4ED8"
+    - "#DCE8FF"
+    - "#64748B"
+  variant: crisp-research
+brief: >-
+  MOOD: Build a rigorous, contemporary research deck with calm confidence and clear
+  evidence hierarchy. It should feel like a well-edited university research report,
+  never like a corporate pitch.
+
+  PALETTE: Use a soft off-white background (#F7F8FA), ink black (#111827), scholarly
+  blue (#1D4ED8), pale blue evidence panels (#DCE8FF), and slate secondary text
+  (#64748B). Reserve blue for findings, links, and precise emphasis.
+
+  TYPOGRAPHY: Use a restrained sans-serif hierarchy: large, compact bold titles;
+  highly legible body copy; tabular numerals for metrics. Keep citations and source
+  notes readable at a smaller but still practical size.
+
+  LAYOUT SYSTEM: Use a 12-column research grid, generous margins, aligned evidence
+  cards, and thin rules. Put the claim first, then the supporting result, method, or
+  citation directly beneath it. One primary finding per slide.
+
+  SIGNATURE ELEMENTS: Add section numbers, blue marginal rules, compact source keys,
+  and small study-design badges such as SAMPLE, METHOD, or CONFIDENCE.
+
+  DATA VISUALIZATION: Prefer annotated dot plots, confidence intervals, simple bars,
+  and compact comparison tables. Label axes, units, sample sizes, and uncertainty;
+  use direct labels instead of legends whenever possible.
+
+  IMAGE DIRECTION: Use high-resolution research photography, archival documents, or
+  restrained abstract scientific textures with one focal point. Pair every image with
+  a concise, visible source line when relevant.
+
+  SLIDE ARCHETYPES: cover: an understated title, discipline label, and one narrow blue
+  rule; content: a claim-led two-column explanation with citations; data: a single
+  fully labeled chart plus a takeaway sentence; timeline: a horizontal study or
+  project sequence with dated milestones; closing: a concise implication, next step,
+  and reference cue.
+
+  AVOID: Avoid decorative gradients, oversized unsourced quotations, dense paragraphs,
+  ambiguous icons, tiny footnotes, and charts without units, sources, or uncertainty.
