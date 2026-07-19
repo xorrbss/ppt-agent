@@ -7,10 +7,12 @@ fast default template path is untouched."""
 import asyncio
 import io
 import logging
-from typing import List
+from dataclasses import dataclass
+from typing import List, Optional
 
 from models.presentation_outline_model import PresentationOutlineModel
 from utils.llm_calls.author_slide import (
+    AuthoredStyleLike,
     Brand,
     author_slide_html,
     build_design_system,
@@ -19,6 +21,15 @@ from utils.llm_calls.author_slide import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class AuthoredDeckResult:
+    """First-pass slides plus the exact design system reused by vision-QA."""
+
+    htmls: List[str]
+    design_system: str
+
 
 # Concurrency is bounded PROCESS-WIDE inside author_slide_html (the AUTHOR_CONCURRENCY-sized
 # dedicated executor), so the per-slide fan-out here doesn't need its own semaphore — excess
@@ -93,13 +104,18 @@ async def _author_one_resilient(
     return fallback_slide_html(content, brand, role, index, n)
 
 
-async def author_deck(outline: PresentationOutlineModel, brand: Brand) -> List[str]:
+async def author_deck(
+    outline: PresentationOutlineModel,
+    brand: Brand,
+    style: Optional[AuthoredStyleLike] = None,
+) -> AuthoredDeckResult:
     """Author every outline slide against the shared design system, with bounded
-    concurrency and per-slide resilience. Returns one valid HTML document per slide
-    (order preserved); failed slides fall back to a clean branded placeholder."""
+    concurrency and per-slide resilience. Returns the valid HTML documents (order
+    preserved) plus the exact prompt shared with vision-QA; failed slides fall back
+    to a clean branded placeholder."""
     slides = list(outline.slides)
     n = len(slides)
-    design_system = build_design_system(brand)
+    design_system = build_design_system(brand, style)
     roles = plan_deck_roles(outline)
     htmls = await asyncio.gather(
         *[
@@ -109,7 +125,7 @@ async def author_deck(outline: PresentationOutlineModel, brand: Brand) -> List[s
             for i in range(n)
         ]
     )
-    return list(htmls)
+    return AuthoredDeckResult(htmls=list(htmls), design_system=design_system)
 
 
 def build_image_pptx(images: List[bytes], out_path: str) -> str:

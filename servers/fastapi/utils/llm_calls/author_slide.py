@@ -13,7 +13,7 @@ import os
 import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Protocol
 
 from llmai import get_client
 from llmai.shared import SystemMessage, UserMessage
@@ -51,23 +51,16 @@ _AUTHOR_EXECUTOR = ThreadPoolExecutor(
     max_workers=AUTHOR_CONCURRENCY, thread_name_prefix="author-slide"
 )
 
-# Appendix A — design-system brief (the crux IP; rules kept verbatim). The brand
-# specifics (primary colour / fonts / language) are injected per deck so EVERY
-# slide shares one palette, type system and language => a cohesive deck.
+# Appendix A — design-system brief (the crux IP). The non-negotiable rendering,
+# fit, language and output constraints stay in this common template. The visual
+# direction lives in a replaceable style brief so authored presets can vary the
+# deck without weakening those constraints.
 _DESIGN_SYSTEM_RULES = """\
 DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
 - Brand primary colour: {primary}. Brand fonts: {fonts}. Deck language: {language}.
 - Canvas: a single 16:9 slide that renders at EXACTLY 1280x720px. Inline <style> only, no
   external JS. Body 1280x720, margin 0, overflow hidden.
-- Fonts: load the brand fonts ({fonts}) from Google Fonts; headings 800-900 weight, body 400-500.
-- Palette: build everything from the brand primary ({primary}) + neutrals (ink #0F172A, muted
-  #64748B, hairline #E2E8F0, surface #F8FAFC, white). The primary is the ONE accent; no other hues.
-- Margins ~64px (except intentional full-bleed colour zones).
-- Consistent eyebrow: UPPERCASE, letter-spaced 0.15em, ~13px, primary, with a short tick/line.
-- Consistent footer on content slides: small muted slide marker left + a small wordmark right.
-- Strong, confident type hierarchy; make the single most important element dominant.
-- Allowed (vary per slide): full-bleed/partial colour-blocked zones, asymmetric grids, a left
-  sidebar, oversized numerals, thin rules, subtle tints of the primary, inline-SVG icons/charts.
+{style_brief}
 - FORBIDDEN: default round bullet dots; identical heavy-shadow boxed cards on every item;
   clutter; lorem/placeholder; text overflowing/clipping the frame; low contrast; off-palette hues.
 - FIT IS CRITICAL — the frame is EXACTLY 1280x720 and CLIPS (overflow:hidden): EVERY element
@@ -88,6 +81,17 @@ DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
 - All visible text in {language}.
 Return ONLY the complete HTML document."""
 
+_DEFAULT_STYLE_BRIEF = """\
+- Fonts: load the brand fonts ({fonts}) from Google Fonts; headings 800-900 weight, body 400-500.
+- Palette: build everything from the brand primary ({primary}) + neutrals (ink #0F172A, muted
+  #64748B, hairline #E2E8F0, surface #F8FAFC, white). The primary is the ONE accent; no other hues.
+- Margins ~64px (except intentional full-bleed colour zones).
+- Consistent eyebrow: UPPERCASE, letter-spaced 0.15em, ~13px, primary, with a short tick/line.
+- Consistent footer on content slides: small muted slide marker left + a small wordmark right.
+- Strong, confident type hierarchy; make the single most important element dominant.
+- Allowed (vary per slide): full-bleed/partial colour-blocked zones, asymmetric grids, a left
+  sidebar, oversized numerals, thin rules, subtle tints of the primary, inline-SVG icons/charts."""
+
 
 @dataclass
 class Brand:
@@ -100,12 +104,35 @@ class Brand:
     wordmark: str = ""
 
 
-def build_design_system(brand: Brand) -> str:
-    """Concrete design-system brief for `brand`, shared verbatim across the deck."""
+class AuthoredStyleLike(Protocol):
+    """The intentionally small interface supplied by ``utils.authored_styles``."""
+
+    id: str
+    brief: str
+
+
+def build_design_system(
+    brand: Brand, style: Optional[AuthoredStyleLike] = None
+) -> str:
+    """Build the concrete shared brief for a brand and optional authored style.
+
+    ``None`` and the canonical ``default`` style deliberately use the built-in
+    legacy brief so the generated prompt remains byte-for-byte compatible.
+    Custom style briefs are already validated plain text from the A1 loader and
+    are inserted verbatim apart from surrounding whitespace.
+    """
+    if style is None or style.id == "default":
+        style_brief = _DEFAULT_STYLE_BRIEF.format(
+            primary=brand.primary or "#2563EB",
+            fonts=brand.fonts or "Noto Sans KR",
+        )
+    else:
+        style_brief = style.brief.strip()
     return _DESIGN_SYSTEM_RULES.format(
         primary=brand.primary or "#2563EB",
         fonts=brand.fonts or "Noto Sans KR",
         language=brand.language or "Korean",
+        style_brief=style_brief,
     )
 
 

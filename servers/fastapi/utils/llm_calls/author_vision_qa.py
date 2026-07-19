@@ -13,7 +13,6 @@ from utils.llm_calls.author_slide import (
     AUTHOR_CONCURRENCY,
     Brand,
     author_slide_html,
-    build_design_system,
     is_valid_slide_html,
 )
 from utils.llm_calls.critique_slide import SlideCritique, critique_slide_image
@@ -73,11 +72,11 @@ async def revise_authored_deck(
     contents: List[str],
     roles: List[str],
     brand: Brand,
+    design_system: str,
     max_cycles: int = 1,
 ) -> Tuple[List[str], List[bytes], List[int]]:
     """Bounded critique -> re-author -> re-render loop over an authored deck. Returns
     the (possibly revised) htmls + pngs and the indices that changed."""
-    design_system = build_design_system(brand)
     n = len(htmls)
     htmls = list(htmls)
     pngs = list(pngs)

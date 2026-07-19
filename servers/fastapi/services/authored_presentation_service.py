@@ -26,7 +26,7 @@ from models.sql.slide import SlideModel
 from utils.asset_directory_utils import get_exports_directory, get_images_directory
 from utils.filename_utils import safe_export_basename
 from utils.llm_calls.author_deck import author_deck, build_image_pptx, plan_deck_roles
-from utils.llm_calls.author_slide import Brand
+from utils.llm_calls.author_slide import AuthoredStyleLike, Brand
 from utils.llm_calls.author_vision_qa import revise_authored_deck
 from utils.outline_utils import get_presentation_title_from_presentation_outline
 from utils.slide_capture import _placeholder_png, find_chrome, render_html_list_to_pngs
@@ -35,6 +35,13 @@ AUTHORED_TEMPLATE = "authored"
 _DEFAULT_PRIMARY = "#2563EB"
 
 LOGGER = logging.getLogger(__name__)
+
+
+def resolve_authored_style(style_id: Optional[str]) -> AuthoredStyleLike:
+    """Resolve through A1's catalog while keeping this dependent branch importable."""
+    from utils.authored_styles import resolve_authored_style as resolve
+
+    return resolve(style_id)
 
 
 def _is_korean(*candidates: Optional[str]) -> bool:
@@ -131,6 +138,7 @@ async def generate_authored_presentation(
     started = time.monotonic()
     title = authored_title(request, outline)
     brand = resolve_brand(request, outline, language)
+    style = resolve_authored_style(request.authored_style)
     roles = plan_deck_roles(outline)
 
     # Render needs a headless Chrome. Without it every slide silently degrades to a
@@ -142,7 +150,8 @@ async def generate_authored_presentation(
             "authored slides will render as blank placeholders."
         )
 
-    htmls = await author_deck(outline, brand)
+    authored_deck = await author_deck(outline, brand, style)
+    htmls = authored_deck.htmls
     pngs = await render_html_list_to_pngs(htmls)
 
     fixed_count = 0
@@ -150,7 +159,13 @@ async def generate_authored_presentation(
         try:
             contents = [s.content for s in outline.slides]
             htmls, pngs, fixed = await revise_authored_deck(
-                htmls, pngs, contents, roles, brand, max_cycles=1
+                htmls,
+                pngs,
+                contents,
+                roles,
+                brand,
+                authored_deck.design_system,
+                max_cycles=1,
             )
             fixed_count = len(fixed)
         except Exception:
@@ -191,6 +206,7 @@ async def generate_authored_presentation(
         mode=AUTHORED_TEMPLATE,
         theme={
             "mode": AUTHORED_TEMPLATE,
+            "style": style.id,
             "primary": brand.primary,
             "fonts": brand.fonts,
             "language": brand.language,
