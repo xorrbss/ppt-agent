@@ -13,7 +13,7 @@ interface SupportingDocProps {
     compact?: boolean
 }
 
-const MAX_SUPPORTED_FILES = 8
+export const MAX_SUPPORTED_FILES = 8
 
 const PDF_TYPES = ['.pdf']
 const TEXT_TYPES = ['.txt']
@@ -281,7 +281,7 @@ const formatFileSize = (bytes: number): string => {
     return `${(bytes / 1024).toFixed(1)} KB`
 }
 
-function isAllowedFile(file: File): boolean {
+export function isAllowedFile(file: File): boolean {
     const type = (file.type || '').toLowerCase()
     const name = (file.name || '').toLowerCase()
     const typeAllowed = ALLOWED_MIME_TYPES.includes(type) || ALLOWED_MIME_PREFIXES.some((prefix) => type.startsWith(prefix))
