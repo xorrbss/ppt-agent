@@ -134,6 +134,35 @@ describe('<UploadPage />', () => {
     })
   })
 
+  describe('Drag and drop', () => {
+    it('adds a file dropped onto the compose card', () => {
+      const file = new File(['pdf content'], 'dropped.pdf', {
+        type: 'application/pdf',
+      })
+      cy.get('[data-testid="compose-card"]').selectFile(
+        { contents: file, fileName: 'dropped.pdf', mimeType: 'application/pdf' },
+        { action: 'drag-drop', force: true }
+      )
+      cy.get('[data-testid="file-list"]').should('contain', 'dropped.pdf')
+      checkToast('파일 선택 완료')
+    })
+
+    it('rejects an unsupported file dropped onto the card', () => {
+      const file = new File(['x'], 'malware.exe', {
+        type: 'application/octet-stream',
+      })
+      cy.get('[data-testid="compose-card"]').selectFile(
+        {
+          contents: file,
+          fileName: 'malware.exe',
+          mimeType: 'application/octet-stream',
+        },
+        { action: 'drag-drop', force: true }
+      )
+      checkToast('지원하지 않는 파일이 있습니다')
+    })
+  })
+
   describe('Validation', () => {
     it('warns when no prompt or document is provided', () => {
       cy.contains('button', '생성하기').click()

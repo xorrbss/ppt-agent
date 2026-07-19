@@ -16,7 +16,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { clearOutlines, setPresentationId } from "@/store/slices/presentationGeneration";
 import { PromptInput } from "./PromptInput";
 import { LanguageType, PresentationConfig, ToneType, VerbosityType } from "../type";
-import SupportingDoc from "./SupportingDoc";
+import SupportingDoc, { isAllowedFile, MAX_SUPPORTED_FILES } from "./SupportingDoc";
 import { Button } from "@/components/ui/button";
 import { ChevronRight } from "lucide-react";
 import { notify } from "@/components/ui/sonner";
@@ -127,6 +127,53 @@ const UploadPage = () => {
   );
 
   const [files, setFiles] = useState<File[]>([]);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  // Compose-card drag & drop. The compact SupportingDoc has no dropzone, so drops
+  // are handled here at the card level (mirrors SupportingDoc's file validation).
+  const handleCardDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    // Only intercept FILE drags — text drags into the prompt textarea still work.
+    if (!Array.from(e.dataTransfer.types || []).includes("Files")) return;
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleCardDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    // Ignore leaves that just move onto a child element.
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setIsDragOver(false);
+  };
+
+  const handleCardDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    const dropped = Array.from(e.dataTransfer.files ?? []);
+    if (dropped.length === 0) return;
+    e.preventDefault();
+    setIsDragOver(false);
+
+    const nextFiles = [...files, ...dropped];
+    const allowed = nextFiles.filter(isAllowedFile);
+    const limited = allowed.slice(0, MAX_SUPPORTED_FILES);
+    setFiles(limited);
+
+    if (allowed.length !== nextFiles.length) {
+      notify.error(
+        "지원하지 않는 파일이 있습니다",
+        "지원 형식: Word, PowerPoint, 스프레드시트, PDF/TXT, 이미지 파일."
+      );
+    }
+    if (allowed.length > MAX_SUPPORTED_FILES) {
+      notify.warning(
+        "최대 파일 수 초과",
+        `문서는 최대 ${MAX_SUPPORTED_FILES}개까지만 업로드할 수 있습니다.`
+      );
+    }
+    if (limited.length > files.length) {
+      notify.success(
+        "파일 선택 완료",
+        `${limited.length - files.length}개의 파일이 추가되었습니다.`
+      );
+    }
+  };
   const [config, setConfig] = useState<PresentationConfig>({
     slides: null,
     language: LanguageType.Korean,
@@ -421,7 +468,17 @@ const UploadPage = () => {
           아이디어를 입력하고 필요하면 파일을 첨부하세요. 발표자료를 만들어 드립니다.
         </p>
 
-        <div className="mt-7 w-full rounded-2xl border border-[#EAECF0] bg-white p-4 shadow-[0_4px_24px_rgba(16,24,40,0.06)]">
+        <div
+          className={`mt-7 w-full rounded-2xl border bg-white p-4 shadow-[0_4px_24px_rgba(16,24,40,0.06)] transition-colors ${
+            isDragOver
+              ? "border-[#5146E5] ring-2 ring-[#5146E5]/20"
+              : "border-[#EAECF0]"
+          }`}
+          onDragOver={handleCardDragOver}
+          onDragLeave={handleCardDragLeave}
+          onDrop={handleCardDrop}
+          data-testid="compose-card"
+        >
           <PromptInput
             value={config.prompt}
             onChange={(value) => handleConfigChange("prompt", value)}
