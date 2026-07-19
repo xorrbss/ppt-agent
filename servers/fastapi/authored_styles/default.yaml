@@ -21,19 +21,33 @@ preview:
     - "#2563EB"
   variant: clean-light
 brief: |-
-  VISUAL DIRECTION
-  - Create a clear, versatile consulting aesthetic with generous whitespace and restrained blue accents.
+  MOOD
+  Create a clear, versatile consulting aesthetic with calm confidence, generous whitespace, and a practical focus on the audience's next decision.
 
-  LAYOUT
-  - Use disciplined grids, strong hierarchy, and varied editorial compositions suited to each slide role.
-  - Keep content blocks spacious, aligned, and easy to scan.
+  PALETTE
+  Build from cool white #F8FAFC, white #FFFFFF, dark ink #0F172A, slate #64748B, and brand blue #2563EB. Reserve blue for key findings, actions, and navigational cues.
 
   TYPOGRAPHY
-  - Use confident headings, readable body copy, and concise labels with consistent scale relationships.
+  Use confident sans-serif headings, highly readable body copy, concise labels, and tabular numerals with consistent scale relationships.
 
-  COLOR AND DATA
-  - Build from white, cool gray, dark ink, and the brand blue as the primary accent.
-  - Render charts and tables simply, with direct labels and minimal decoration.
+  LAYOUT SYSTEM
+  Use disciplined grids, strong hierarchy, and varied editorial compositions suited to each slide role. Keep content blocks spacious, aligned, and easy to scan.
+
+  SIGNATURE ELEMENTS
+  Use fine blue rules, compact section labels, restrained evidence panels, direct annotations, and one clear takeaway area per slide.
+
+  DATA VISUALIZATION
+  Render charts and tables simply with direct labels, visible units, meaningful comparisons, and minimal decoration. Highlight only the value that supports the slide's conclusion.
+
+  IMAGE DIRECTION
+  Use clean, credible photography or simple contextual illustrations with one focal subject, neutral lighting, and enough clear space for the message.
+
+  SLIDE ARCHETYPES
+  cover: Pair a concise title and context line with one restrained blue rule or focused image.
+  content: Present one claim with a two-column explanation and supporting evidence.
+  data: Show one dominant chart with direct labels, source context, and a takeaway sentence.
+  timeline: Arrange three to five milestones on a clear horizontal sequence with owners or dates.
+  closing: Summarize the decision, two or three next actions, and the immediate checkpoint.
 
   AVOID
-  - Avoid ornamental clutter, excessive cards, novelty type, and competing accent colors.
+  Avoid ornamental clutter, excessive cards, novelty type, competing accent colors, generic decoration, and conclusions that are not supported by the slide's evidence.

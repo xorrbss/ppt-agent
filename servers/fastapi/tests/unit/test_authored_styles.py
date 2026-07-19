@@ -1,10 +1,80 @@
+import logging
+import re
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+import yaml
 
 from api.v1.ppt.endpoints.authored import AUTHORED_ROUTER
-from utils.authored_styles import load_authored_styles, resolve_authored_style
+from utils.authored_styles import (
+    AUTHORED_STYLE_CATEGORIES,
+    AUTHORED_STYLES_DIRECTORY,
+    load_authored_styles,
+    resolve_authored_style,
+)
+
+
+EXPECTED_AUTHORED_STYLE_IDS = {
+    "academic-edge",
+    "architectural-portfolio",
+    "botanical-journal",
+    "broadside",
+    "clinical-precision",
+    "cobalt-editorial",
+    "cyber-ai",
+    "default",
+    "editorial-tritone",
+    "exec-report",
+    "geometric-mono",
+    "groovy-70s",
+    "liquid-executive",
+    "luxury-editorial",
+    "minimal-vellum",
+    "neo-grid-bold",
+    "neon-venture",
+    "prestige-gold",
+    "prime-noir",
+    "prismatic-tech",
+    "project-launch",
+    "scholars-journal",
+    "science-sketch",
+    "silicon-refined",
+    "soft-editorial",
+    "startup-aura",
+    "strategic-insight",
+    "strategic-navy",
+    "structured-mint",
+    "visual-discovery",
+}
+TECHNOLOGY_STYLE_IDS = {
+    "cyber-ai",
+    "neon-venture",
+    "prismatic-tech",
+    "project-launch",
+    "startup-aura",
+    "visual-discovery",
+}
+REQUIRED_BRIEF_SECTIONS = (
+    "MOOD",
+    "PALETTE",
+    "TYPOGRAPHY",
+    "LAYOUT SYSTEM",
+    "SIGNATURE ELEMENTS",
+    "DATA VISUALIZATION",
+    "IMAGE DIRECTION",
+    "SLIDE ARCHETYPES",
+    "AVOID",
+)
+PLACEHOLDER_PATTERN = re.compile(
+    r"\b(?:TODO|TBD|FIXME|placeholder)\b|lorem ipsum|"
+    r"\{\{.*?\}\}|\$\{[^}]+\}|"
+    r"<(?:placeholder|replace)[^>]*>|\[(?:placeholder|replace)[^]]*\]",
+    re.IGNORECASE | re.DOTALL,
+)
+BRIEF_SECTION_PATTERN = re.compile(
+    r"(?m)^[ \t]*([A-Z][A-Z ]*?[A-Z])[ \t]*(?::(?:[ \t]|$)|$)"
+)
 
 
 def _write(path: Path, content: str) -> None:
@@ -181,7 +251,72 @@ def test_resolve_authored_style_uses_builtin_default_when_default_file_is_broken
     assert style.preview_bg == "#F8FAFC"
 
 
-def test_authored_styles_api_hides_briefs_and_returns_catalogue():
+def test_authored_catalogue_has_exactly_30_complete_contracts(caplog):
+    sources = sorted(AUTHORED_STYLES_DIRECTORY.glob("*.yaml"))
+
+    with caplog.at_level(logging.WARNING, logger="utils.authored_styles"):
+        styles = load_authored_styles()
+
+    assert len(sources) == len(styles) == len(EXPECTED_AUTHORED_STYLE_IDS) == 30
+    assert {source.stem for source in sources} == EXPECTED_AUTHORED_STYLE_IDS
+    assert {style.id for style in styles} == EXPECTED_AUTHORED_STYLE_IDS
+    assert not [
+        record
+        for record in caplog.records
+        if record.name == "utils.authored_styles"
+        and record.levelno >= logging.WARNING
+    ]
+
+    for source in sources:
+        data = yaml.safe_load(source.read_text(encoding="utf-8"))
+        style_id = data["id"]
+
+        assert source.stem == style_id
+        assert data["category"] in AUTHORED_STYLE_CATEGORIES
+        if style_id == "clinical-precision":
+            assert data["category"] == "research"
+        if style_id in TECHNOLOGY_STYLE_IDS:
+            assert data["category"] == "technology"
+        assert data["tags"] and all(
+            isinstance(tag, str) and tag.strip() for tag in data["tags"]
+        )
+        assert data["use_cases"] and all(
+            isinstance(use_case, str) and use_case.strip()
+            for use_case in data["use_cases"]
+        )
+        assert re.search(r"[가-힣]", data["name"])
+        assert re.search(r"[가-힣]", data["description"])
+
+        preview = data["preview"]
+        assert set(preview) == {"bg", "accent", "palette", "variant"}
+        assert len(preview["palette"]) >= 3
+        assert preview["variant"]
+
+        brief = data["brief"]
+        assert tuple(BRIEF_SECTION_PATTERN.findall(brief)) == REQUIRED_BRIEF_SECTIONS
+        for section in REQUIRED_BRIEF_SECTIONS:
+            headings = re.findall(
+                rf"(?m)^[ \t]*{re.escape(section)}[ \t]*:?(?:[ \t]|$)",
+                brief,
+            )
+            assert len(headings) == 1, f"{style_id}: {section} section"
+
+        archetypes = re.search(
+            r"(?ms)^[ \t]*SLIDE ARCHETYPES[ \t]*:?[ \t]*(.*?)"
+            r"(?=^[ \t]*AVOID[ \t]*:?)",
+            brief,
+        )
+        assert archetypes, f"{style_id}: SLIDE ARCHETYPES body"
+        archetype_labels = re.findall(
+            r"(?im)(?:^|[;\n])[ \t]*(?:-\s*)?"
+            r"([a-z][a-z0-9 -]*?)[ \t]*:",
+            archetypes.group(1),
+        )
+        assert len(set(archetype_labels)) >= 5, f"{style_id}: slide archetypes"
+        assert not PLACEHOLDER_PATTERN.search(source.read_text(encoding="utf-8"))
+
+
+def test_authored_styles_api_hides_briefs_and_returns_exact_catalogue():
     app = FastAPI()
     app.include_router(AUTHORED_ROUTER, prefix="/api/v1/ppt")
     client = TestClient(app)
@@ -190,15 +325,9 @@ def test_authored_styles_api_hides_briefs_and_returns_catalogue():
 
     assert response.status_code == 200
     body = response.json()
+    assert len(body) == 30
     assert [style["id"] for style in body] == sorted(style["id"] for style in body)
-    assert {
-        "default",
-        "exec-report",
-        "strategic-navy",
-        "editorial-tritone",
-        "neo-grid-bold",
-        "minimal-vellum",
-    } <= {style["id"] for style in body}
+    assert {style["id"] for style in body} == EXPECTED_AUTHORED_STYLE_IDS
     assert all(
         set(style)
         == {
@@ -235,8 +364,13 @@ def test_authored_styles_api_hides_briefs_and_returns_catalogue():
         assert len(style["preview"]["palette"]) >= 3
         assert style["preview"]["variant"]
 
-    legacy_style = by_id["exec-report"]
-    assert legacy_style["category"] == "general"
-    assert legacy_style["tags"] == []
-    assert legacy_style["use_cases"] == []
-    assert set(legacy_style["preview"]) == {"bg", "accent"}
+    exec_report = by_id["exec-report"]
+    assert exec_report["category"] == "business"
+    assert exec_report["tags"] == ["executive", "finance", "data"]
+    assert exec_report["use_cases"] == ["경영 실적 보고", "이사회 보고", "투자 검토"]
+    assert exec_report["preview"] == {
+        "bg": "#051C2C",
+        "accent": "#00A3E0",
+        "palette": ["#051C2C", "#FFFFFF", "#2E3338", "#00A3E0", "#A7B0B7"],
+        "variant": "executive-ledger",
+    }

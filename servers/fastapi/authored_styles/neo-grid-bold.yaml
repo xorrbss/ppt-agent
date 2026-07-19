@@ -20,19 +20,33 @@ preview:
     - "#7C3AED"
   variant: acid-grid
 brief: |-
-  VISUAL DIRECTION
-  - Build an energetic neo-brutalist system with visible grids, sharp corners, and intentional high-contrast geometry.
+  MOOD
+  Build an energetic neo-brutalist system with visible structure, sharp corners, and intentional high-contrast geometry. The tone should feel direct, provocative, and controlled.
 
-  LAYOUT
-  - Use modular divisions, cropped oversized elements, hard alignment, and dramatic scale shifts while preserving fit.
-  - Vary the grid across slides so the deck feels rhythmic rather than templated.
+  PALETTE
+  Ground slides in black #111111 or off-white #F5F5F0, use acid lime #D9FF3F as the dominant signal, and reserve violet #7C3AED for rare secondary contrast.
 
   TYPOGRAPHY
-  - Favor oversized bold type, compressed labels, and terse copy with uncompromising hierarchy.
+  Favor oversized bold type, compressed labels, terse copy, and uncompromising hierarchy. Crop display type only when the complete message remains immediately understandable.
 
-  COLOR AND DATA
-  - Ground slides in black or off-white and use acid lime as the dominant signal color with rare violet support.
-  - Render charts as bold geometric statements with direct labels and thick, purposeful marks.
+  LAYOUT SYSTEM
+  Use modular divisions, hard alignment, cropped oversized elements, and dramatic scale shifts while preserving fit. Vary the grid across slides so the deck feels rhythmic rather than templated.
+
+  SIGNATURE ELEMENTS
+  Use exposed grid lines, square index markers, thick underline bars, high-contrast labels, and one oversized geometric crop. Keep every mark tied to hierarchy or navigation.
+
+  DATA VISUALIZATION
+  Render charts as bold geometric statements with direct labels, thick purposeful marks, and acid lime reserved for the decisive value. Keep scales and units explicit.
+
+  IMAGE DIRECTION
+  Use stark flash photography, graphic product crops, urban textures, or high-contrast portraits framed by hard rectangular masks. Keep imagery punchy and uncluttered.
+
+  SLIDE ARCHETYPES
+  cover: Combine one oversized title with a hard grid boundary and a single acid-lime signal.
+  content: Divide the field into two or three unequal modules for a claim, evidence, and sharp annotation.
+  data: Turn one comparison into a bold geometric chart with direct values and visible scale.
+  timeline: Use a stepped grid with numbered stages, terse labels, and one active lime marker.
+  closing: Finish with a compact manifesto line, one action, and a strong high-contrast frame.
 
   AVOID
-  - Avoid rounded cards, soft shadows, muted corporate layouts, and decorative complexity without meaning.
+  Avoid rounded cards, soft shadows, muted corporate layouts, gratuitous distortion, dense decorative complexity, and acid lime applied without informational purpose.
