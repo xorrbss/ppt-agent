@@ -21,19 +21,33 @@ preview:
     - "#FFFFFF"
   variant: luminous-dark
 brief: |-
-  VISUAL DIRECTION
-  - Create a premium strategy-consulting atmosphere with deep navy fields and cool blue highlights.
+  MOOD
+  Create a premium strategy-consulting atmosphere with deep navy fields, cool blue highlights, and decisive analytical confidence. Every slide should advance an argument or decision.
 
-  LAYOUT
-  - Use disciplined asymmetric compositions, decisive alignment, and clear zones for evidence and conclusions.
-  - Alternate dark full-bleed statements with lighter analytical slides to control pacing.
+  PALETTE
+  Use deep navy #0B1F3A and secondary navy #102A4C as dominant fields, pale blue #E6F4FF and white #FFFFFF for readable contrast, and sky blue #38BDF8 for emphasis.
 
   TYPOGRAPHY
-  - Pair compact uppercase labels with authoritative headlines and highly legible supporting text.
+  Pair compact uppercase labels with authoritative sans-serif headlines, highly legible supporting text, and tabular numerals. Keep titles declarative and concise.
 
-  COLOR AND DATA
-  - Use navy as the dominant field, sky blue for emphasis, and white or pale blue for contrast.
-  - Draw precise charts, thin luminous rules, and restrained KPI callouts without decorative noise.
+  LAYOUT SYSTEM
+  Use disciplined asymmetric compositions, decisive alignment, and clear zones for evidence and conclusions. Alternate dark statement slides with lighter analytical slides to control pacing.
+
+  SIGNATURE ELEMENTS
+  Use thin luminous rules, compact strategy labels, restrained KPI callouts, angled section markers, and a consistent finding band that points to the implication.
+
+  DATA VISUALIZATION
+  Draw precise comparison bars, trend lines, waterfalls, and compact tables with direct labels and visible units. Use sky blue only for the finding that changes the decision.
+
+  IMAGE DIRECTION
+  Use tightly cropped infrastructure, market, leadership, or product imagery with cool tonal control and clear negative space. Prefer analytical evidence when an image adds no context.
+
+  SLIDE ARCHETYPES
+  cover: Use a full navy field, authoritative title, context line, and one thin luminous rule.
+  content: Place a declarative claim beside structured evidence and a concise strategic implication.
+  data: Feature one dominant analytical chart with a highlighted finding and source line.
+  timeline: Show three to five strategic milestones with decisions, owners, and status cues.
+  closing: Summarize the recommendation, prioritized actions, and the next executive checkpoint.
 
   AVOID
-  - Avoid playful shapes, soft pastel palettes, heavy gradients, and dense dashboard walls.
+  Avoid playful shapes, soft pastel palettes, heavy gradients, dense dashboard walls, vague topic titles, and decorative blue accents that compete with the core conclusion.

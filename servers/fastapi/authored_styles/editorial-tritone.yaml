@@ -19,19 +19,33 @@ preview:
     - "#E85D4A"
   variant: magazine-tritone
 brief: |-
-  VISUAL DIRECTION
-  - Create an art-directed magazine feel using warm cream space, near-black ink, and coral punctuation.
+  MOOD
+  Create an art-directed magazine atmosphere that feels warm, observant, and deliberate. Each slide should carry one memorable editorial beat rather than resemble a corporate template.
 
-  LAYOUT
-  - Compose deliberate text-image relationships, asymmetric columns, generous margins, and occasional full-bleed moments.
-  - Use oversized pull quotes or numerals as editorial anchors rather than repeating card grids.
+  PALETTE
+  Keep the palette strictly tritone: warm cream #FFF8ED, near-black ink #1C1B1A, and coral #E85D4A. Use coral only to direct attention or punctuate a conclusion.
 
   TYPOGRAPHY
-  - Establish expressive contrast between display headlines, compact captions, and calm reading text.
+  Establish expressive contrast between display headlines, calm reading text, compact captions, and oversized pull quotes or numerals. Keep long-form copy comfortably spaced.
 
-  COLOR AND DATA
-  - Keep the palette strictly tritone and use coral only to direct attention.
-  - Treat data as editorial evidence with thin rules, annotated figures, and uncluttered tables.
+  LAYOUT SYSTEM
+  Compose deliberate text-image relationships with asymmetric columns, generous margins, and occasional full-bleed moments. Preserve a clear reading path despite the editorial variation.
+
+  SIGNATURE ELEMENTS
+  Use thin ink rules, coral folio marks, cropped captions, oversized quotation marks, and one off-grid element that reinforces the story.
+
+  DATA VISUALIZATION
+  Treat data as editorial evidence with thin rules, annotated figures, direct labels, and uncluttered tables. Use coral for the single finding the audience should remember.
+
+  IMAGE DIRECTION
+  Favor documentary, culture, product, or portrait photography with natural texture and purposeful cropping. Pair each image with a concise caption or source when context matters.
+
+  SLIDE ARCHETYPES
+  cover: Use a spacious cream field, expressive title, one editorial image, and a small coral folio.
+  content: Balance a narrative column with a cropped image, pull quote, or compact supporting facts.
+  data: Place one annotated figure beside a short interpretation and a restrained source line.
+  timeline: Build a vertical or horizontal editorial sequence using dates, captions, and alternating image moments.
+  closing: End with one resonant statement, a concise implication, and a small coral sign-off.
 
   AVOID
-  - Avoid corporate-blue defaults, glossy effects, generic icon rows, and uniform modular panels.
+  Avoid corporate-blue defaults, glossy effects, generic icon rows, uniform modular panels, decorative image grids, and coral applied to every element.

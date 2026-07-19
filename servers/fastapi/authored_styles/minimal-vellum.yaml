@@ -21,19 +21,33 @@ preview:
     - "#B7AB98"
   variant: tactile-light
 brief: |-
-  VISUAL DIRECTION
-  - Compose a calm, tactile presentation inspired by vellum paper, natural materials, and quiet editorial craft.
+  MOOD
+  Compose a calm, tactile presentation inspired by vellum paper, natural materials, and quiet editorial craft. Let restraint and close attention create the sense of quality.
 
-  LAYOUT
-  - Use generous breathing room, sparse compositions, fine dividers, and carefully balanced text blocks.
-  - Let one meaningful object, quotation, or figure carry each slide whenever possible.
+  PALETTE
+  Work with vellum #F3EFE5, soft white #FCFAF5, dark ink #28231F, muted brown #8A5A44, and warm taupe #B7AB98. Keep contrast gentle but readable.
 
   TYPOGRAPHY
-  - Use dark ink typography with measured scale, relaxed leading, and understated labels.
+  Use measured serif or humanist headings, relaxed leading, dark ink body text, and understated labels. Keep hierarchy clear without abrupt scale changes.
 
-  COLOR AND DATA
-  - Work within warm neutrals, muted brown details, and soft tonal contrast without simulated texture noise.
-  - Keep charts light and precise with hairline axes, direct labels, and ample negative space.
+  LAYOUT SYSTEM
+  Use generous breathing room, sparse compositions, fine dividers, and carefully balanced text blocks. Let one meaningful object, quotation, or figure carry each slide whenever possible.
+
+  SIGNATURE ELEMENTS
+  Use hairline rules, small brown folio marks, quiet margin notes, restrained quotation treatments, and softly framed details that suggest editorial craft without simulated paper noise.
+
+  DATA VISUALIZATION
+  Keep charts light and precise with hairline axes, direct labels, warm neutral comparison tones, and ample negative space. Emphasize one result with muted brown.
+
+  IMAGE DIRECTION
+  Favor natural materials, crafted objects, calm portraits, architecture, or close observational details in soft daylight. Use simple crops with no artificial distressing effects.
+
+  SLIDE ARCHETYPES
+  cover: Place a measured title and small context line beside one quiet object or material detail.
+  content: Balance one short essay-like argument with a restrained image or quotation.
+  data: Present one precise chart or figure with direct labels and a compact interpretive note.
+  timeline: Use a fine rule, small dates, and three to five evenly paced milestones.
+  closing: Leave a concise reflection, implication, or next step within generous open space.
 
   AVOID
-  - Avoid saturated colors, crowded dashboards, heavy borders, glossy effects, and repeated dense cards.
+  Avoid saturated colors, crowded dashboards, heavy borders, glossy effects, repeated dense cards, fake texture overlays, and visual accents without editorial purpose.
