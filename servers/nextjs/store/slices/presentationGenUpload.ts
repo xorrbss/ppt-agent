@@ -16,7 +16,7 @@ interface PresentationGenUploadState {
    * slower — it adds a second authoring round). Off by default for speed. */
   authoredVisionQa: boolean;
 
-  /** Authored mode only: selected design-system preset id. */
+  /** Authored mode only: selected server-authored visual style id. */
   authoredStyle: string;
 }
 
