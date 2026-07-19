@@ -15,6 +15,9 @@ interface PresentationGenUploadState {
   /** Authored mode only: opt into the vision-QA self-correction pass (higher quality,
    * slower — it adds a second authoring round). Off by default for speed. */
   authoredVisionQa: boolean;
+
+  /** Authored mode only: selected design-system preset id. */
+  authoredStyle: string;
 }
 
 const initialState: PresentationGenUploadState = {
@@ -23,6 +26,7 @@ const initialState: PresentationGenUploadState = {
   selectedTemplate: "adaptive", // default = content-first adaptive composer; see presentation-templates/select.ts
   selectedTheme: null, // null = no preset; deck keeps the default (theme picked later in the editor)
   authoredVisionQa: false,
+  authoredStyle: "default",
 };
 
 export const presentationGenUploadSlice = createSlice({
@@ -35,13 +39,20 @@ export const presentationGenUploadSlice = createSlice({
     ) => {
       // Partial merge: only assign keys present in the payload so callers can
       // update a single field (e.g. selectedTemplate) without wiping the rest.
-      const { config, files, selectedTemplate, selectedTheme, authoredVisionQa } =
-        action.payload;
+      const {
+        config,
+        files,
+        selectedTemplate,
+        selectedTheme,
+        authoredVisionQa,
+        authoredStyle,
+      } = action.payload;
       if (config !== undefined) state.config = config;
       if (files !== undefined) state.files = files;
       if (selectedTemplate !== undefined) state.selectedTemplate = selectedTemplate;
       if (selectedTheme !== undefined) state.selectedTheme = selectedTheme;
       if (authoredVisionQa !== undefined) state.authoredVisionQa = authoredVisionQa;
+      if (authoredStyle !== undefined) state.authoredStyle = authoredStyle;
     },
 
   },
