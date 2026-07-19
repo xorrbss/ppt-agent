@@ -152,6 +152,32 @@ class LiteParseService:
         candidates = [
             # Dedicated Docker runtime path
             "/app/document-extraction-liteparse/liteparse_runner.mjs",
+            # Local (non-Docker) fork layout: the runner ships under
+            # electron/resources/document-extraction even when the web backend is
+            # run from servers/fastapi. cwd-relative and file-relative forms.
+            os.path.abspath(
+                os.path.join(
+                    cwd,
+                    "..",
+                    "..",
+                    "electron",
+                    "resources",
+                    "document-extraction",
+                    "liteparse_runner.mjs",
+                )
+            ),
+            os.path.abspath(
+                os.path.join(
+                    service_dir,
+                    "..",
+                    "..",
+                    "..",
+                    "electron",
+                    "resources",
+                    "document-extraction",
+                    "liteparse_runner.mjs",
+                )
+            ),
             # servers/fastapi (repo root layout) → resources/...
             os.path.abspath(
                 os.path.join(
