@@ -65,6 +65,7 @@ a = Analysis(
         ("assets", "assets"),
         ("static", "static"),
         ("alembic", "alembic"),
+        ("authored_styles", "authored_styles"),
     ]
     + datas_fastembed_cache
     + datas_fastembed

@@ -244,6 +244,12 @@ def test_authored_service_resolves_passes_and_persists_canonical_style(monkeypat
     async def fake_render(htmls):
         return [b"png"]
 
+    async def fake_revise(
+        htmls, pngs, contents, roles, brand, design_system, max_cycles
+    ):
+        captured["vision_design_system"] = design_system
+        return htmls, pngs, []
+
     class FakeSession:
         def __init__(self):
             self.added = []
@@ -264,6 +270,7 @@ def test_authored_service_resolves_passes_and_persists_canonical_style(monkeypat
     )
     monkeypatch.setattr(authored_service, "author_deck", fake_author_deck)
     monkeypatch.setattr(authored_service, "render_html_list_to_pngs", fake_render)
+    monkeypatch.setattr(authored_service, "revise_authored_deck", fake_revise)
     monkeypatch.setattr(authored_service, "find_chrome", lambda: True)
     monkeypatch.setattr(
         authored_service, "_save_slide_pngs", lambda presentation_id, pngs: ["slide.png"]
@@ -283,7 +290,10 @@ def test_authored_service_resolves_passes_and_persists_canonical_style(monkeypat
 
     session = FakeSession()
     request = GeneratePresentationRequest(
-        content="topic", template="authored", authored_style="editorial-alias"
+        content="topic",
+        template="authored",
+        authored_style="editorial-alias",
+        vision_qa=True,
     )
     result = _run(
         authored_service.generate_authored_presentation(
@@ -293,6 +303,7 @@ def test_authored_service_resolves_passes_and_persists_canonical_style(monkeypat
     presentation = next(x for x in session.added if isinstance(x, PresentationModel))
 
     assert captured["style"] is selected_style
+    assert captured["vision_design_system"] == "SELECTED DESIGN SYSTEM"
     assert presentation.theme["style"] == "editorial"
     assert presentation.theme["mode"] == "authored"
     assert result.path == "deck.pptx"

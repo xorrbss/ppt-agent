@@ -45,14 +45,16 @@ def test_load_authored_styles_warns_and_skips_broken_or_duplicate_files(tmp_path
     assert caplog.text.count("Skipping invalid authored style") == 3
 
 
-def test_resolve_authored_style_falls_back_to_default_for_unknown_id(tmp_path):
+def test_resolve_authored_style_falls_back_to_default_for_empty_or_unknown_id(tmp_path):
     _write(
         tmp_path / "default.yaml",
         "id: default\nname: Default\ndescription: D\npreview:\n  bg: '#fff'\n  accent: '#000'\nbrief: default brief\n",
     )
 
-    assert resolve_authored_style("does-not-exist", tmp_path).id == "default"
-    assert resolve_authored_style(None, tmp_path).id == "default"
+    for requested_id in (None, "", "   ", "does-not-exist"):
+        style = resolve_authored_style(requested_id, tmp_path)
+        assert style.id == "default"
+        assert style.brief == "default brief"
 
 
 def test_resolve_authored_style_uses_builtin_default_when_default_file_is_broken(tmp_path):
