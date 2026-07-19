@@ -1,0 +1,56 @@
+id: luxury-editorial
+name: 럭셔리 에디토리얼
+description: 에스프레소와 올드 골드, 패션 화보의 촉감과 세리프 활자로 절제된 고급감을 만드는 스타일
+category: editorial
+tags:
+  - 럭셔리
+  - 패션 에디토리얼
+  - 다크
+  - 골드
+  - 포토그래피
+use_cases:
+  - 패션·뷰티 브랜드 소개
+  - 주얼리 컬렉션
+  - 프리미엄 제품 론칭
+  - 문화·라이프스타일 매거진
+preview:
+  bg: "#2D2926"
+  accent: "#D4AF37"
+  palette:
+    - "#2D2926"
+    - "#3C2F2F"
+    - "#D4AF37"
+    - "#A6917C"
+    - "#FFFFFF"
+  variant: dark
+brief: |-
+  MOOD:
+  Create a dark fashion-atelier editorial: quiet, sensual, tactile, and highly art-directed. Favor the intimacy of silk, linen, jewelry, and portraiture over generic corporate luxury. Unlike editorial-tritone, this system is espresso, taupe, and old gold; it is image-and-material led rather than cream-paper, coral punctuation, and pull-quote led.
+
+  PALETTE:
+  Use espresso #2D2926 and deep brown #3C2F2F as the dominant fields, white #FFFFFF for primary copy, taupe #A6917C for secondary information, and old gold #D4AF37 only for fine rules, one key word, a small script accent, or a single metric. Keep gold sparse and flat; never turn the canvas into metallic foil.
+
+  TYPOGRAPHY:
+  Pair a very high-contrast, narrow display serif with a clean sans serif. Set display titles large and disciplined, often uppercase for short fashion statements. A fluid script may cross one word or one short line only; never use it for body copy, labels, or data. Keep body text compact, well-spaced, and limited to two or three short insights.
+
+  LAYOUT SYSTEM:
+  Build asymmetrical 55/45 or 60/40 image splits, full-bleed tactile backgrounds, and generous pools of dark negative space. Let one large serif title cross a photographic boundary while a small gold script accent overlaps it. Use fine gold or white rules and occasional rectangular perimeter frames. Avoid magazine scrapbooking and repeated card grids.
+
+  SIGNATURE ELEMENTS:
+  Repeat a restrained four-point sparkle, a hairline frame, macro material texture, and one serif-plus-script title overlap. Use close crops of fabric, metal, skin, or jewelry as graphic fields. Each slide should feature no more than one ornamental gesture.
+
+  DATA VISUALIZATION:
+  Keep data intimate and minimal: one hero value, two to four thin horizontal bars, or a compact comparison table on espresso. Draw axes and dividers in hairline gold, labels in white or taupe, and reserve gold for one decisive value. Do not use colorful dashboards, glossy gauges, or generic rounded KPI cards.
+
+  IMAGE DIRECTION:
+  Choose warm, low-saturation studio photography with soft directional light: chocolate textiles, linen, macro jewelry, sculptural beauty details, or composed fashion portraits. Crop boldly and preserve shadow. Avoid bright lifestyle stock, busy runway collages, and highly saturated color grading.
+
+  SLIDE ARCHETYPES:
+  - cover: Use a full-bleed tactile image or a 60/40 portrait split, one monumental serif title, one brief script accent, and a fine frame.
+  - content: Pair one macro image with two or three concise insights in a quiet dark column.
+  - data: Feature one gold hero metric or up to four hairline bars with restrained labels.
+  - timeline: Alternate short dated moments with narrow runway-like strips of material or portrait detail; keep each milestone to one line.
+  - closing: Use a thin perimeter frame, a short closing statement, small contact details, and one vertical image crop.
+
+  AVOID:
+  Avoid script paragraphs, gold-filled surfaces, baroque frames, embossed effects, coral-and-cream magazine layouts, generic rounded cards, dense copy, multiple hero images, gradients, fake foil, and unreplaced template text.
