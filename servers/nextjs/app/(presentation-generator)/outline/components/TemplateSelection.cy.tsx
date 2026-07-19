@@ -125,7 +125,10 @@ describe("<TemplateSelection /> authored styles", () => {
     cy.get('[data-testid="layout-template-grid"] > :first-child')
       .should("contain", "템플릿 만들기");
 
-    cy.get('[data-testid="authored-style-select-strategic-navy"]').click();
+    cy.get('[data-testid="authored-style-select-default"]')
+      .should("have.attr", "tabindex", "0")
+      .focus()
+      .type("{rightarrow}");
 
     cy.get("@selectTemplate").should(
       "have.been.calledOnceWith",
@@ -133,7 +136,14 @@ describe("<TemplateSelection /> authored styles", () => {
     );
     cy.get('[data-testid="authored-style-select-strategic-navy"]')
       .should("have.attr", "aria-checked", "true")
+      .and("have.attr", "tabindex", "0")
+      .and("have.focus")
       .and("contain", "선택됨");
+    cy.get('[data-testid="authored-style-select-default"]').should(
+      "have.attr",
+      "tabindex",
+      "-1"
+    );
     cy.then(() => {
       expect(store.getState().pptGenUpload.authoredStyle).to.equal(
         "strategic-navy"

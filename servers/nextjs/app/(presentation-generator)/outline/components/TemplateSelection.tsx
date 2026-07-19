@@ -63,15 +63,47 @@ const BuiltInTemplateCard = memo(function BuiltInTemplateCard({
 // Sentinel id for the authored (high-quality) mode — not a real layout template.
 export const AUTHORED_TEMPLATE_ID = "authored";
 
+function handleAuthoredRadioKeyDown(
+  event: React.KeyboardEvent<HTMLButtonElement>
+) {
+  const direction =
+    event.key === "ArrowRight" || event.key === "ArrowDown"
+      ? 1
+      : event.key === "ArrowLeft" || event.key === "ArrowUp"
+        ? -1
+        : 0;
+  const isBoundaryKey = event.key === "Home" || event.key === "End";
+  if (direction === 0 && !isBoundaryKey) return;
+
+  const group = event.currentTarget.closest('[role="radiogroup"]');
+  const radios = Array.from(
+    group?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? []
+  );
+  const currentIndex = radios.indexOf(event.currentTarget);
+  if (currentIndex < 0 || radios.length === 0) return;
+
+  event.preventDefault();
+  const nextIndex =
+    event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? radios.length - 1
+        : (currentIndex + direction + radios.length) % radios.length;
+  radios[nextIndex].focus();
+  radios[nextIndex].click();
+}
+
 const AuthoredStyleCard = memo(function AuthoredStyleCard({
   style,
   isSelected,
+  isTabStop,
   onSelect,
   visionQa,
   onToggleVisionQa,
 }: {
   style: AuthoredStyleSummary;
   isSelected: boolean;
+  isTabStop: boolean;
   onSelect: (styleId: string) => void;
   visionQa: boolean;
   onToggleVisionQa: (next: boolean) => void;
@@ -91,9 +123,11 @@ const AuthoredStyleCard = memo(function AuthoredStyleCard({
         role="radio"
         aria-checked={isSelected}
         aria-label={`${style.name} AI 저작 스타일 선택`}
+        tabIndex={isTabStop ? 0 : -1}
         data-testid={`authored-style-select-${style.id}`}
         className="min-w-0 cursor-pointer text-left outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-inset"
         onClick={() => onSelect(style.id)}
+        onKeyDown={handleAuthoredRadioKeyDown}
       >
         <div
           data-testid={`authored-style-preview-${style.id}`}
@@ -266,6 +300,7 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = memo(function Templa
             selectedTemplate === AUTHORED_TEMPLATE_ID &&
             selectedAuthoredStyleId === style.id
           }
+          isTabStop={selectedAuthoredStyleId === style.id}
           onSelect={handleAuthoredStyleSelect}
           visionQa={authoredVisionQa}
           onToggleVisionQa={handleToggleVisionQa}
