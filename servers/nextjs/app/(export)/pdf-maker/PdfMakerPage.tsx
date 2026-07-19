@@ -89,6 +89,37 @@ const PDF_PRINT_STYLE = `
   }
 `;
 
+/**
+ * Point SVG <img> icons at the PNG-rasterizing route. The "editable PPTX"
+ * converter embeds each <img> as a real picture via Pillow, which can read
+ * neither SVG nor data-URIs — only real raster served over http/file. So rewrite
+ * every /static or /app_data *.svg icon src to /api/rasterize-icon, which
+ * returns a PNG (via sharp); the converter then downloads and embeds it.
+ */
+function rasterizeSvgIconsForExport(root: HTMLElement): void {
+  const imgs = Array.from(root.querySelectorAll("img")).filter((img) => {
+    const s = img.getAttribute("src") || "";
+    return (
+      /\.svg(\?|#|$)/i.test(s) &&
+      !s.startsWith("data:") &&
+      !s.includes("/api/rasterize-icon")
+    );
+  });
+
+  imgs.forEach((img) => {
+    const raw = img.getAttribute("src");
+    if (!raw) return;
+    const u = new URL(raw, window.location.href);
+    // Only known, server-served icon paths — avoids turning the route into an
+    // open image proxy.
+    if (!/^\/(static|app_data)\//i.test(u.pathname)) return;
+    img.setAttribute(
+      "src",
+      `/api/rasterize-icon?src=${encodeURIComponent(u.pathname + u.search)}`
+    );
+  });
+}
+
 type PresentationPageProps = {
   presentation_id: string;
   exportCookie?: string;
@@ -222,6 +253,26 @@ const PresentationPage = ({ presentation_id, exportCookie }: PresentationPagePro
 
   const slides = presentationData?.slides ?? [];
   const isLoading = contentLoading || slides.length === 0;
+
+  // Once slides are rendered, rasterize SVG icons to PNG so the PPTX converter
+  // can embed them. Mutating <img> src keeps the converter's image/DOM-idle
+  // waits pending until this settles, so it reads the rasterized DOM.
+  useEffect(() => {
+    if (isLoading) return;
+    const el = document.getElementById("presentation-slides-wrapper");
+    if (!el) return;
+    let cancelled = false;
+    const run = async () => {
+      // one frame so the layout has placed the icon <img> elements
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      if (cancelled) return;
+      await rasterizeSvgIconsForExport(el);
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoading]);
 
   return (
     <div className="m-0 flex flex-col overflow-visible p-0">
