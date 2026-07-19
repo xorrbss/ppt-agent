@@ -1,0 +1,62 @@
+id: silicon-refined
+name: 실리콘 리파인드
+description: 정밀한 여백과 선명한 제품 비주얼로 기술의 완성도를 보여주는 프리미엄 미니멀 스타일
+category: business
+tags:
+  - technology
+  - premium
+  - product
+use_cases:
+  - 제품 전략 발표
+  - 혁신 로드맵
+  - 기술 사업 제안
+preview:
+  bg: "#FFFFFF"
+  accent: "#0071E3"
+  palette:
+    - "#FFFFFF"
+    - "#1D1D1F"
+    - "#0071E3"
+    - "#F5F5F7"
+    - "#A7A7AC"
+  variant: precision-white
+brief: >-
+  MOOD: Create an ultra-refined technology presentation that feels quiet, exact, and
+  premium. Let a small number of carefully staged ideas carry the narrative with
+  product-launch clarity.
+
+  PALETTE: Use pure white (#FFFFFF) as the dominant canvas, near-black (#1D1D1F) for
+  primary type, vivid technology blue (#0071E3) for focused emphasis, mist gray
+  (#F5F5F7) for subtle surfaces, and cool silver (#A7A7AC) for secondary details.
+
+  TYPOGRAPHY: Use a precise modern sans-serif with compact tracking for headlines and
+  a highly legible neutral sans-serif for supporting copy. Favor short statements,
+  generous leading, and large numerals without theatrical weight changes.
+
+  LAYOUT SYSTEM: Use exact optical centering, broad whitespace, sparse asymmetric
+  splits, and a modular grid that can form a restrained bento composition when
+  several features must coexist. Give each slide one unmistakable focal point.
+
+  SIGNATURE ELEMENTS: Use hairline dividers, soft gray planes, subtle blue-to-violet
+  light transitions, polished material close-ups, and lightly rounded feature frames
+  with restrained shadows.
+
+  DATA VISUALIZATION: Use thin trend lines, clean comparison bars, isolated KPI
+  numerals, and concise specification tables. Remove nonessential gridlines, label
+  values directly, and use blue only for the active series or breakthrough result.
+
+  IMAGE DIRECTION: Choose studio-lit macro photography of engineered materials,
+  polished hardware, glass, precision components, or elegant abstract technology.
+  Keep backgrounds clean, reflections controlled, and subjects isolated with ample
+  negative space.
+
+  SLIDE ARCHETYPES: cover: one centered statement paired with a single immaculate
+  product or material image; content: a spacious feature split with one visual and
+  one concise value narrative; data: a minimal trend or benchmark with one blue
+  result and a plain-language implication; timeline: a thin product-evolution rail
+  with a few precisely spaced releases; closing: a centered value proposition with
+  one next action and a visual echo of the opening material.
+
+  AVOID: Avoid dense dashboards, heavy borders, dark corporate panels, loud neon
+  effects, ornamental icons, crowded bento grids, exaggerated shadows, generic code
+  imagery, and text that competes with the hero visual.
