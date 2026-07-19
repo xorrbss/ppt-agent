@@ -29,6 +29,15 @@ interface EditableTextProps {
  * this subtree alone, so migrated and not-yet-migrated templates coexist while the
  * rollout is in progress.
  */
+// Phrasing/heading tags whose content model is inline-only, so wrapping the
+// Tiptap editor's block <div> in them produces invalid HTML (<p><div></div></p>)
+// and a hydration error. In edit mode we swap these for a <div> — edit mode is
+// the in-app editor (never exported), and className/style carry the visuals.
+const INLINE_ONLY_TAGS = new Set([
+  "p", "span", "a", "em", "strong", "b", "i", "u", "s", "small", "mark",
+  "code", "sub", "sup", "label", "h1", "h2", "h3", "h4", "h5", "h6",
+]);
+
 const EditableText: React.FC<EditableTextProps> = ({
   path,
   value,
@@ -49,14 +58,18 @@ const EditableText: React.FC<EditableTextProps> = ({
     );
   }
 
+  const EditTag: React.ElementType = INLINE_ONLY_TAGS.has(String(as).toLowerCase())
+    ? "div"
+    : Tag;
+
   return (
-    <Tag data-editable-native className={className} style={style}>
+    <EditTag data-editable-native className={className} style={style}>
       <TiptapText
         content={text}
         placeholder={placeholder}
         onContentChange={(next) => onEdit(path, next)}
       />
-    </Tag>
+    </EditTag>
   );
 };
 
