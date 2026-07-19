@@ -42,6 +42,9 @@ export const usePresentationGeneration = (
   const authoredVisionQa = useSelector(
     (s: RootState) => s.pptGenUpload.authoredVisionQa
   );
+  const authoredStyle = useSelector(
+    (s: RootState) => s.pptGenUpload.authoredStyle
+  );
   // The deck language chosen in the upload flow; threaded into the authored request
   // so the backend picks language-aware fonts (e.g. Noto Sans KR) instead of falling
   // back to its non-Korean default.
@@ -139,6 +142,7 @@ export const usePresentationGeneration = (
           // its language-aware fallback instead of authoring with a literal "Auto".
           language: language && language !== LanguageType.Auto ? language : null,
           vision_qa: authoredVisionQa,
+          authored_style: authoredStyle,
         });
         const taskId = started?.id;
         if (!taskId) throw new Error("생성 작업을 시작하지 못했습니다.");
@@ -324,6 +328,7 @@ export const usePresentationGeneration = (
     router,
     selectedTemplate,
     authoredVisionQa,
+    authoredStyle,
     language,
     pathname,
   ]);

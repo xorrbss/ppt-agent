@@ -240,6 +240,7 @@ export class PresentationGenerationApi {
     slides_markdown: string[];
     language?: string | null;
     vision_qa?: boolean;
+    authored_style?: string;
   }) {
     try {
       const response = await fetch(
@@ -258,6 +259,7 @@ export class PresentationGenerationApi {
             // design-system hardening already prevents most overflow/overlap. Opt in for
             // a max-quality, slower pass.
             vision_qa: body.vision_qa ?? false,
+            authored_style: body.authored_style ?? "default",
           }),
           cache: "no-cache",
         }
