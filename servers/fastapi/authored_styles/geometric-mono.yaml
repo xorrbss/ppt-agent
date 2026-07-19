@@ -1,0 +1,55 @@
+id: geometric-mono
+name: 지오메트릭 모노
+description: 무채색 면과 건축 사진, 단계형 기하 구조로 냉정하고 정밀한 메시지를 만드는 스타일
+category: creative
+tags:
+  - 모노크롬
+  - 기하학
+  - 건축
+  - 정밀함
+  - 고대비
+use_cases:
+  - 건축·산업 포트폴리오
+  - 기업 전략 브리핑
+  - 제품 구조 설명
+  - 가격·옵션 비교
+preview:
+  bg: "#FFFFFF"
+  accent: "#000000"
+  palette:
+    - "#FFFFFF"
+    - "#E0E0E0"
+    - "#333333"
+    - "#000000"
+  variant: light
+brief: |-
+  MOOD:
+  Create cool architectural precision through monochrome mass, hard edges, and controlled photography. The tone is analytical and monumental, never playful. Distinguish this style from neo-grid-bold: use no visible grid-paper texture, no acid-lime accent, and no fragmented sticker energy; rely on continuous tonal slabs, grayscale architecture, and measured hierarchy.
+
+  PALETTE:
+  Use only white #FFFFFF, light gray #E0E0E0, charcoal #333333, and black #000000. Encode hierarchy through value, opacity, outline, and negative space rather than color. Maintain crisp contrast and never introduce a chromatic accent.
+
+  TYPOGRAPHY:
+  Use a bold geometric sans serif for short uppercase titles and a functional sans serif for body copy. Give numerals tabular, engineered presence with heavy weight and clear alignment. Keep body lines short and direct. Do not use serif, script, handwritten, or decorative faces.
+
+  LAYOUT SYSTEM:
+  Compose hard-edged rectangular slabs, balanced 50/50 tonal splits, stepped tiers, and grayscale architectural photographs partially covered by opaque charcoal panels. Use a diagonal pointer, outline circle, or sharp node only when it clarifies direction. Favor large continuous masses over small modules and keep corners square.
+
+  SIGNATURE ELEMENTS:
+  Repeat black-and-white architecture, thick horizontal bars, white outline boxes around key numbers, stepped tonal planes, and an occasional triangle pointer or outline circle. Texture and color are absent by design; the silhouette of each block carries the identity.
+
+  DATA VISUALIZATION:
+  Build stepped price tiers, boxed values, monochrome bars, or waveform-like comparisons. Use white-to-black value shifts for categories, thin axes, precise alignment, and one outlined focal value. Never depend on hue, decorative icons, or glossy chart containers.
+
+  IMAGE DIRECTION:
+  Select black-and-white glass, steel, concrete, transit, or office architecture with low-angle symmetry and hard shadows. Crop images into broad rectangles and preserve strong structural lines. Avoid colorful people photography, soft lifestyle scenes, and ornamental textures.
+
+  SLIDE ARCHETYPES:
+  - cover: Place a grayscale architectural image full bleed with a broad charcoal title slab anchored to one edge.
+  - content: Overlay one asymmetric black panel on a structural photograph and limit supporting copy to three points.
+  - data: Arrange three or four values as a rising tonal staircase with one outlined key number.
+  - timeline: Run a thick charcoal rail across the canvas with sharp triangle pointers and terse milestone labels.
+  - closing: Use a black field, one white uppercase statement, and a single outline-circle mark.
+
+  AVOID:
+  Avoid visible mesh or grid-paper backgrounds, acid lime, neon, colored accents, tiny bento fragments, rounded pills, soft shadows, serif type, ornamental textures, gradients, cluttered labels, and unreplaced template text.
