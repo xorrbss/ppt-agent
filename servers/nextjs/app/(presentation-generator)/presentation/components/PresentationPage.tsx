@@ -17,7 +17,7 @@ import SlideContent from "./SlideContent";
 import { Button } from "@/components/ui/button";
 import { usePathname, useRouter } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Layers } from "lucide-react";
 import {
   usePresentationStreaming,
   usePresentationData,
@@ -328,7 +328,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                 {!presentationData ||
                   loading ||
                   !presentationData?.slides ||
-                  presentationData?.slides.length === 0 ? (
+                  (presentationData.slides.length === 0 && stream) ? (
                   <div className="relative w-full h-[calc(100vh-120px)] mx-auto hide-scrollbar">
                     <div className="">
                       {Array.from({ length: 2 }).map((_, index) => (
@@ -339,6 +339,46 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                       ))}
                     </div>
                     {stream && <LoadingState />}
+                  </div>
+                ) : presentationData.slides.length === 0 ? (
+                  // Loaded, not streaming, but the deck has 0 slides. Previously
+                  // this fell into the skeleton branch and showed permanent gray
+                  // bars with no message — a dead-end. Show a recoverable empty
+                  // state instead (the header's 재생성/regenerate button stays
+                  // available above this area).
+                  <div className="flex w-full h-[calc(100vh-160px)] flex-col items-center justify-center text-center">
+                    <div className="flex max-w-md flex-col items-center rounded-lg border border-gray-200 bg-white px-6 py-8 shadow-sm">
+                      <Layers className="mb-4 h-14 w-14 text-gray-400" />
+                      <h2 className="mb-2 text-lg font-semibold text-gray-800">
+                        슬라이드가 없습니다
+                      </h2>
+                      <p className="mb-5 text-sm text-gray-500">
+                        이 발표자료에는 아직 생성된 슬라이드가 없습니다. 다시
+                        불러오거나 상단의 재생성 버튼으로 슬라이드를 만들 수
+                        있습니다.
+                      </p>
+                      <div className="flex items-center justify-center gap-2">
+                        <Button
+                          onClick={() =>
+                            fetchUserSlides({ clearHistory: false })
+                          }
+                        >
+                          다시 불러오기
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            trackEvent(MixpanelEvent.Navigation, {
+                              from: pathname,
+                              to: "/dashboard",
+                            });
+                            router.push("/dashboard");
+                          }}
+                        >
+                          대시보드로 이동
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <>
