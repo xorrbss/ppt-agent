@@ -92,7 +92,7 @@ node scripts/ppt-agent.mjs --content "회사 소개" --user admin --password s3c
 node scripts/ppt-agent.mjs --batch topics.txt --export pdf --out ./decks
 ```
 Key flags: `--content` / `--batch`, `--slides <n|auto>` (default 8), `--language`
-(default `"Korean (한국어)"`), `--template`, `--export pptx|pdf`, `--instructions`,
+(default `"Korean (한국어)"`), `--template`, `--style <id>` (authored-mode style preset), `--export pptx|pdf`, `--instructions`,
 `--tone`, `--verbosity`, `--web-search`, `--toc`, `--no-title`, `--base`,
 `--user`/`--password`, `--out <dir>`, `--timeout <sec>`. `--flag=value` also works.
 Verified end-to-end: a 3-slide Korean PPTX (valid OOXML) generated and downloaded.
@@ -107,12 +107,13 @@ the exported PPTX in PowerPoint. The default adaptive/template path is unchanged
 - **Web UI:** on the upload or outline screen, pick the **"AI 저작 (고품질)"** template
   card, then generate. Generation runs async (minutes) with a progress overlay and opens
   the viewer when done.
-- **CLI / API:** add `--mode authored` (maps to `template:"authored"`). Use `--async`
-  for long decks (the synchronous path can hit a ~5-min client header timeout).
-  Optional: `--vision-qa` (self-correct flagged slides), and brand tokens
+- **CLI / API:** add `--mode authored` (maps to `template:"authored"`). Use `--style <id>`
+  to select an authored style preset (sent as `authored_style`), and `--async` for long decks
+  (the synchronous path can hit a ~5-min client header timeout). Optional: `--vision-qa`
+  (self-correct flagged slides), and brand tokens
   `--primary-color <hex>` / `--fonts <family>` / `--wordmark <text>`.
   ```powershell
-  node scripts/ppt-agent.mjs --content "2026 AI 도입 전략" --mode authored --slides 6 --async --out ./out
+  node scripts/ppt-agent.mjs --content "2026 AI 도입 전략" --mode authored --style strategic-navy --slides 6 --async --out ./out
   ```
 - **Rendering needs a headless Chrome.** Local Windows uses installed Chrome
   (auto-detected; override with `CHROME_PATH`). The **Docker images already bundle

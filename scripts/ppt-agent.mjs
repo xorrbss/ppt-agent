@@ -22,6 +22,7 @@
 //   --slides <n>             n_slides (default 8, max 50). Use --slides auto to let the model decide
 //   --language <str>         language (default "Korean (한국어)")
 //   --template <name>        template id (default "adaptive")
+//   --style <id>             authored-mode style preset id (sent as authored_style)
 //   --export <pptx|pdf>      export_as (default pptx)
 //   --instructions <str>     extra generation instructions
 //   --tone <str>             default|casual|professional|funny|educational|sales_pitch
@@ -48,6 +49,9 @@
 //
 //   # Batch mode (sequential, continues on per-item failure):
 //   node scripts/ppt-agent.mjs --batch topics.txt --template general --out ./decks
+//
+//   # Authored mode with a style preset:
+//   node scripts/ppt-agent.mjs --content "2026 AI strategy" --mode authored --style strategic-navy --async --out ./out
 
 import { writeFile, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
@@ -117,6 +121,7 @@ function printHelpAndExit() {
       '  --language <str>        default "Korean (한국어)"',
       "  --template <name>       default adaptive",
       "  --mode authored         model-authored bespoke-HTML deck (image PPTX/PDF)",
+      "  --style <id>            authored mode: style preset id",
       "  --vision-qa             authored mode: self-correct flagged slides (slower)",
       "  --primary-color <hex>   authored mode: brand primary colour (e.g. #2563EB)",
       "  --fonts <family>        authored mode: brand font family (e.g. 'Noto Sans KR')",
@@ -158,6 +163,8 @@ function buildBody(content, opts) {
   if (opts.noTitle) body.include_title_slide = false;
   if (opts.toc) body.include_table_of_contents = true;
   if (opts.visionQa) body.vision_qa = true;
+  // Keep the legacy request unchanged unless a style preset was explicitly given.
+  if (opts.authoredStyle) body.authored_style = opts.authoredStyle;
   // Authored-mode brand tokens (ignored by the template path).
   if (opts.primaryColor) body.primary_color = opts.primaryColor;
   if (opts.fonts) body.fonts = opts.fonts;
@@ -531,6 +538,7 @@ async function main() {
     tone: args.tone || null,
     verbosity: args.verbosity || null,
     visionQa: Boolean(args["vision-qa"]),
+    authoredStyle: args.style || null,
     primaryColor: args["primary-color"] || null,
     fonts: args["fonts"] || null,
     wordmark: args["wordmark"] || null,
