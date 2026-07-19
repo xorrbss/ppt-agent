@@ -4,6 +4,7 @@ from fastapi import APIRouter, Body, UploadFile, HTTPException
 
 from constants.documents import UPLOAD_ACCEPTED_FILE_TYPES
 from models.decomposed_file_info import DecomposedFileInfo
+from services.document_conversion_service import DocumentConversionError
 from services.temp_file_service import TEMP_FILE_SERVICE
 from services.documents_loader import DocumentsLoader
 import uuid
@@ -73,7 +74,12 @@ async def decompose_files(
             other_files.append(file_path)
 
     documents_loader = DocumentsLoader(file_paths=other_files, presentation_language=language)
-    await documents_loader.load_documents(temp_dir)
+    try:
+        await documents_loader.load_documents(temp_dir)
+    except DocumentConversionError as exc:
+        # Unconvertible/unsupported document — surface an actionable message
+        # instead of a raw 500 (the frontend shows `detail` directly).
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     parsed_documents = documents_loader.documents
 
     response = []

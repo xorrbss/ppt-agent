@@ -282,6 +282,15 @@ class DocumentsLoader:
             return await asyncio.to_thread(file.read)
 
     def load_office_document(self, file_path: str, temp_dir: Optional[str] = None) -> str:
+        # No LibreOffice (e.g. native Windows): extract text directly for the
+        # formats we can handle without it; otherwise surface a clear error.
+        if not self.document_conversion_service.is_soffice_available():
+            if self.document_service is None:
+                raise DocumentConversionError(
+                    f"'{os.path.basename(file_path)}' 변환에 필요한 LibreOffice를 찾을 수 없습니다."
+                )
+            return self.document_service.parse_to_markdown(file_path)
+
         if temp_dir:
             converted_path = self.document_conversion_service.convert_office_to_pdf(
                 file_path,

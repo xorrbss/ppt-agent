@@ -1,8 +1,9 @@
 import os
+import shutil
 import subprocess
 import logging
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from utils.runtime_limits import log_memory
 
@@ -44,6 +45,18 @@ class DocumentConversionService:
     def __init__(self):
         self.soffice_binary = self._resolve_soffice_binary()
         self.imagemagick_binary = self._resolve_imagemagick_binary()
+        self._soffice_available: Optional[bool] = None
+
+    def is_soffice_available(self) -> bool:
+        """Whether the LibreOffice ``soffice`` binary can be found (cached).
+
+        ``shutil.which`` validates a full ``SOFFICE_PATH`` and searches PATH for a
+        bare name, without spawning a process. Absent on plain Windows installs of
+        this fork, so callers fall back to native extraction.
+        """
+        if self._soffice_available is None:
+            self._soffice_available = shutil.which(self.soffice_binary) is not None
+        return self._soffice_available
 
     @staticmethod
     def _resolve_soffice_binary() -> str:
