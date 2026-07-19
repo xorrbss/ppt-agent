@@ -6,12 +6,29 @@ import { getHeader } from "./header";
 export interface AuthoredStylePreview {
   bg: string;
   accent: string;
+  palette: string[];
+  variant: string;
 }
+
+export const AUTHORED_STYLE_CATEGORIES = [
+  "general",
+  "business",
+  "technology",
+  "research",
+  "editorial",
+  "creative",
+] as const;
+
+export type AuthoredStyleCategory =
+  (typeof AUTHORED_STYLE_CATEGORIES)[number];
 
 export interface AuthoredStyleSummary {
   id: string;
   name: string;
   description: string;
+  category: AuthoredStyleCategory;
+  tags: string[];
+  use_cases: string[];
   preview: AuthoredStylePreview;
 }
 
@@ -20,14 +37,39 @@ export const DEFAULT_AUTHORED_STYLE: AuthoredStyleSummary = {
   name: "기본 블루프린트",
   description:
     "깔끔한 흰 바탕과 브랜드 블루로 구성한 범용 프레젠테이션 스타일",
+  category: "general",
+  tags: ["범용", "깔끔한", "컨설팅"],
+  use_cases: ["회사 소개", "프로젝트 제안", "일반 보고서"],
   preview: {
     bg: "#F8FAFC",
     accent: "#2563EB",
+    palette: ["#F8FAFC", "#FFFFFF", "#0F172A", "#64748B", "#2563EB"],
+    variant: "clean-light",
   },
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function normalizeStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+
+  const seen = new Set<string>();
+  return value.flatMap((item) => {
+    if (typeof item !== "string") return [];
+    const normalized = item.trim();
+    if (!normalized || seen.has(normalized)) return [];
+    seen.add(normalized);
+    return [normalized];
+  });
+}
+
+function normalizeCategory(value: unknown): AuthoredStyleCategory {
+  return typeof value === "string" &&
+    AUTHORED_STYLE_CATEGORIES.includes(value as AuthoredStyleCategory)
+    ? (value as AuthoredStyleCategory)
+    : "general";
 }
 
 function toAuthoredStyleSummary(value: unknown): AuthoredStyleSummary | null {
@@ -36,26 +78,39 @@ function toAuthoredStyleSummary(value: unknown): AuthoredStyleSummary | null {
   const { id, name, description, preview } = value;
   if (
     typeof id !== "string" ||
-    !id ||
+    !id.trim() ||
     typeof name !== "string" ||
-    !name ||
+    !name.trim() ||
     typeof description !== "string" ||
     typeof preview.bg !== "string" ||
-    !preview.bg ||
+    !preview.bg.trim() ||
     typeof preview.accent !== "string" ||
-    !preview.accent
+    !preview.accent.trim()
   ) {
     return null;
   }
 
   // Rebuild the public shape so internal fields such as `brief` never reach UI state.
   return {
-    id,
-    name,
-    description,
+    id: id.trim(),
+    name: name.trim(),
+    description: description.trim(),
+    category: normalizeCategory(value.category),
+    tags: normalizeStringList(value.tags),
+    use_cases: normalizeStringList(value.use_cases),
     preview: {
-      bg: preview.bg,
-      accent: preview.accent,
+      bg: preview.bg.trim(),
+      accent: preview.accent.trim(),
+      palette: (() => {
+        const palette = normalizeStringList(preview.palette);
+        return palette.length > 0
+          ? palette
+          : normalizeStringList([preview.bg, preview.accent]);
+      })(),
+      variant:
+        typeof preview.variant === "string" && preview.variant.trim()
+          ? preview.variant.trim()
+          : "clean-light",
     },
   };
 }
