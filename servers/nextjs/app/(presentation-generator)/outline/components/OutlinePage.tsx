@@ -50,6 +50,10 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
 
   // Auto-bridge: once the outline stream completes, submit exactly once.
   const autoSubmittedRef = useRef(false);
+  // Only auto-submit for a stream that actually ran THIS mount. If the outlines
+  // were already in the store when this page mounted (back-navigation into a
+  // completed auto flow), don't re-fire generation — show the outline instead.
+  const outlinesPreexistingRef = useRef(outlines.length > 0);
   // Track whether generation actually started, so we can tell the brief bridge
   // window (submitted, loading not yet on) apart from a FAILED generation
   // (loading turned on then off while still on this page). handleSubmit handles
@@ -60,6 +64,7 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
   }, [loadingState.isLoading]);
   useEffect(() => {
     if (!auto || autoSubmittedRef.current) return;
+    if (outlinesPreexistingRef.current) return;
     if (!presentation_id || streamState.isStreaming) return;
     if (!outlines || outlines.length === 0) return;
     if (!generationTemplate) return;

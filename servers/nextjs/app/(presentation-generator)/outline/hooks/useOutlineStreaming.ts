@@ -23,7 +23,15 @@ export const useOutlineStreaming = (presentationId: string | null) => {
   const highestIndexRef = useRef<number>(-1);
 
   useEffect(() => {
-    if (!presentationId || outlines.length > 0) return;
+    if (!presentationId || outlines.length > 0) {
+      // Nothing to stream: either there is no presentation yet, or the outlines
+      // are already in the store (e.g. back-navigation into an already-completed
+      // auto flow). isStreaming/isLoading initialize to true; clear them here so
+      // the UI doesn't sit on a permanent "개요를 생성하는 중…" loader forever.
+      setIsStreaming(false);
+      setIsLoading(false);
+      return;
+    }
 
     let eventSource: EventSource | null = null;
     let accumulatedChunks = "";
