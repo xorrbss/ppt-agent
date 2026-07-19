@@ -1,0 +1,9 @@
+id: exec-report
+name: 임원 보고서
+description: 핵심 수치와 의사결정 포인트를 빠르게 읽히게 하는 경영 보고 스타일
+preview:
+  bg: "#FFFFFF"
+  accent: "#0F766E"
+brief: >-
+  Design for executive scanning: concise headlines, dominant KPI numerals, precise
+  rules, quiet tables, and a confident teal accent on a crisp white canvas.

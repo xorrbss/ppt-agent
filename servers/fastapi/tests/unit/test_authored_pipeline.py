@@ -2,11 +2,14 @@
 
 Covers the resilience guarantees that keep authored generation from aborting on one
 bad slide: HTML validity gating, branded fallback, per-slide author retry/fallback,
-per-slide render placeholder, image-PPTX assembly, the authored-deck predicate, and
-brand resolution."""
+per-slide render placeholder, style-brief propagation, image-PPTX assembly, the
+authored-deck predicate, and brand resolution."""
 
 import asyncio
+import hashlib
 import io
+import uuid
+from types import SimpleNamespace
 
 from PIL import Image
 
@@ -16,16 +19,25 @@ from models.presentation_outline_model import (
     SlideOutlineModel,
 )
 from models.sql.presentation import PresentationModel
+from services import authored_presentation_service as authored_service
+from services.authored_presentation_service import resolve_brand
+from utils import slide_capture
 from utils.llm_calls import author_deck as author_deck_mod
 from utils.llm_calls import author_slide as author_slide_mod
-from utils.llm_calls.author_deck import author_deck, build_image_pptx, plan_deck_roles
+from utils.llm_calls import author_vision_qa as author_vision_qa_mod
+from utils.llm_calls.author_deck import (
+    AuthoredDeckResult,
+    author_deck,
+    build_image_pptx,
+    plan_deck_roles,
+)
 from utils.llm_calls.author_slide import (
     Brand,
+    build_design_system,
     fallback_slide_html,
     is_valid_slide_html,
 )
-from utils import slide_capture
-from services.authored_presentation_service import resolve_brand
+from utils.llm_calls.critique_slide import SlideCritique
 
 
 def _run(coro):
@@ -84,7 +96,7 @@ def test_author_deck_uses_authored_html_when_valid(monkeypatch):
         return _VALID
 
     monkeypatch.setattr(author_deck_mod, "author_slide_html", fake)
-    htmls = _run(author_deck(_outline(4), _brand()))
+    htmls = _run(author_deck(_outline(4), _brand())).htmls
     assert len(htmls) == 4
     assert all(h == _VALID for h in htmls)
 
@@ -94,7 +106,7 @@ def test_author_deck_falls_back_when_authoring_raises(monkeypatch):
         raise RuntimeError("provider down")
 
     monkeypatch.setattr(author_deck_mod, "author_slide_html", boom)
-    htmls = _run(author_deck(_outline(3), _brand()))
+    htmls = _run(author_deck(_outline(3), _brand())).htmls
     assert len(htmls) == 3
     # Every slide degraded to a valid branded fallback (deck still completes).
     assert all(is_valid_slide_html(h) for h in htmls)
@@ -106,7 +118,7 @@ def test_author_deck_falls_back_when_authoring_returns_invalid(monkeypatch):
         return ""
 
     monkeypatch.setattr(author_deck_mod, "author_slide_html", empty)
-    htmls = _run(author_deck(_outline(2), _brand()))
+    htmls = _run(author_deck(_outline(2), _brand())).htmls
     assert all(is_valid_slide_html(h) for h in htmls)
 
 
@@ -120,9 +132,181 @@ def test_author_deck_retries_then_succeeds(monkeypatch):
         return _VALID
 
     monkeypatch.setattr(author_deck_mod, "author_slide_html", flaky)
-    htmls = _run(author_deck(_outline(1), _brand()))
+    htmls = _run(author_deck(_outline(1), _brand())).htmls
     assert htmls == [_VALID]
     assert calls["n"] == 2
+
+
+def test_default_design_system_is_byte_for_byte_legacy_output():
+    expected_sha256 = "5ffac30c247a543fef5faa8b3a1c9dc945cc658f65fac243e269a5694e4f5c28"
+    without_style = build_design_system(_brand())
+    canonical_default = build_design_system(
+        _brand(), SimpleNamespace(id="default", brief="this must not replace legacy")
+    )
+
+    assert len(without_style) == 2616
+    assert hashlib.sha256(without_style.encode()).hexdigest() == expected_sha256
+    assert canonical_default == without_style
+
+
+def test_custom_design_system_injects_brief_without_weakening_common_rules():
+    style = SimpleNamespace(
+        id="editorial",
+        brief="  - Editorial composition with raw {curly} braces.\n- Restrained typography.  ",
+    )
+    design_system = build_design_system(_brand(), style)
+
+    assert "- Editorial composition with raw {curly} braces." in design_system
+    assert "Brand primary colour: #2563EB" in design_system
+    assert "EXACTLY 1280x720px" in design_system
+    assert "FIT IS CRITICAL" in design_system
+    assert "Return ONLY the complete HTML document." in design_system
+    assert "The primary is the ONE accent" not in design_system
+
+
+def test_author_deck_builds_and_shares_selected_design_system_once(monkeypatch):
+    style = SimpleNamespace(id="editorial", brief="- Editorial")
+    build_calls = []
+    author_design_systems = []
+
+    def fake_build(brand, selected_style):
+        build_calls.append((brand, selected_style))
+        return "SELECTED DESIGN SYSTEM"
+
+    async def fake_author(content, design_system, brand, role, index, n):
+        author_design_systems.append(design_system)
+        return _VALID
+
+    monkeypatch.setattr(author_deck_mod, "build_design_system", fake_build)
+    monkeypatch.setattr(author_deck_mod, "author_slide_html", fake_author)
+
+    result = _run(author_deck(_outline(3), _brand(), style))
+
+    assert len(build_calls) == 1
+    assert build_calls[0][1] is style
+    assert result == AuthoredDeckResult(
+        htmls=[_VALID, _VALID, _VALID], design_system="SELECTED DESIGN SYSTEM"
+    )
+    assert author_design_systems == ["SELECTED DESIGN SYSTEM"] * 3
+
+
+def test_generate_request_accepts_optional_authored_style():
+    assert GeneratePresentationRequest(content="topic").authored_style is None
+    request = GeneratePresentationRequest(content="topic", authored_style="editorial")
+    assert request.authored_style == "editorial"
+    assert request.model_dump()["authored_style"] == "editorial"
+
+
+def test_vision_qa_reuses_selected_design_system(monkeypatch):
+    captured = []
+
+    async def fake_critique(pngs, contexts=None):
+        return [SlideCritique(needs_fix=True)]
+
+    async def fake_author(
+        content, design_system, brand, role, index, n, reasoning_effort=None
+    ):
+        captured.append((design_system, reasoning_effort))
+        return _VALID
+
+    async def fake_render(html, timeout=60):
+        return b"revised-png"
+
+    monkeypatch.setattr(author_vision_qa_mod, "critique_authored", fake_critique)
+    monkeypatch.setattr(author_vision_qa_mod, "author_slide_html", fake_author)
+    monkeypatch.setattr(author_vision_qa_mod, "render_html_to_png", fake_render)
+
+    htmls, pngs, fixed = _run(
+        author_vision_qa_mod.revise_authored_deck(
+            [_VALID],
+            [b"original-png"],
+            ["content"],
+            ["COVER"],
+            _brand(),
+            "SELECTED DESIGN SYSTEM",
+        )
+    )
+
+    assert captured == [("SELECTED DESIGN SYSTEM", "high")]
+    assert htmls == [_VALID]
+    assert pngs == [b"revised-png"]
+    assert fixed == [0]
+
+
+def test_authored_service_resolves_passes_and_persists_canonical_style(monkeypatch):
+    selected_style = SimpleNamespace(id="editorial", brief="- Editorial")
+    captured = {}
+
+    async def fake_author_deck(outline, brand, style):
+        captured["style"] = style
+        return AuthoredDeckResult([_VALID], "SELECTED DESIGN SYSTEM")
+
+    async def fake_render(htmls):
+        return [b"png"]
+
+    async def fake_revise(
+        htmls, pngs, contents, roles, brand, design_system, max_cycles
+    ):
+        captured["vision_design_system"] = design_system
+        return htmls, pngs, []
+
+    class FakeSession:
+        def __init__(self):
+            self.added = []
+
+        def add(self, value):
+            self.added.append(value)
+
+        def add_all(self, values):
+            self.added.extend(values)
+
+        async def commit(self):
+            return None
+
+    monkeypatch.setattr(
+        authored_service,
+        "resolve_authored_style",
+        lambda style_id: selected_style if style_id == "editorial-alias" else None,
+    )
+    monkeypatch.setattr(authored_service, "author_deck", fake_author_deck)
+    monkeypatch.setattr(authored_service, "render_html_list_to_pngs", fake_render)
+    monkeypatch.setattr(authored_service, "revise_authored_deck", fake_revise)
+    monkeypatch.setattr(authored_service, "find_chrome", lambda: True)
+    monkeypatch.setattr(
+        authored_service, "_save_slide_pngs", lambda presentation_id, pngs: ["slide.png"]
+    )
+    monkeypatch.setattr(
+        authored_service,
+        "_build_authored_export",
+        lambda request, presentation_id, pngs, title: "deck.pptx",
+    )
+
+    from utils import llm_provider
+
+    monkeypatch.setattr(
+        llm_provider, "get_llm_provider", lambda: SimpleNamespace(value="stub")
+    )
+    monkeypatch.setattr(llm_provider, "get_model", lambda: "stub-model")
+
+    session = FakeSession()
+    request = GeneratePresentationRequest(
+        content="topic",
+        template="authored",
+        authored_style="editorial-alias",
+        vision_qa=True,
+    )
+    result = _run(
+        authored_service.generate_authored_presentation(
+            request, uuid.uuid4(), _outline(1), "English", session
+        )
+    )
+    presentation = next(x for x in session.added if isinstance(x, PresentationModel))
+
+    assert captured["style"] is selected_style
+    assert captured["vision_design_system"] == "SELECTED DESIGN SYSTEM"
+    assert presentation.theme["style"] == "editorial"
+    assert presentation.theme["mode"] == "authored"
+    assert result.path == "deck.pptx"
 
 
 # --- render resilience (mocked Chrome) ---------------------------------------

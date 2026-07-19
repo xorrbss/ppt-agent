@@ -1,0 +1,9 @@
+id: neo-grid-bold
+name: 네오 그리드 볼드
+description: 대담한 격자와 강한 타이포그래피로 에너지 있게 구성하는 스타일
+preview:
+  bg: "#111111"
+  accent: "#D9FF3F"
+brief: >-
+  Build energetic modular layouts on a black canvas: visible grids, oversized bold
+  type, acid-lime accents, sharp corners, and intentional high-contrast geometry.

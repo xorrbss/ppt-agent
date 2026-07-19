@@ -1,0 +1,9 @@
+id: default
+name: 기본 블루프린트
+description: 깔끔한 흰 바탕과 브랜드 블루로 구성한 범용 프레젠테이션 스타일
+preview:
+  bg: "#F8FAFC"
+  accent: "#2563EB"
+brief: >-
+  Use a clear consulting-style layout with generous whitespace, restrained blue
+  accents, strong hierarchy, and simple editorial data treatments.

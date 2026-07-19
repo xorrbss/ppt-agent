@@ -63,3 +63,6 @@ class GeneratePresentationRequest(BaseModel):
     wordmark: Optional[str] = Field(
         default=None, description="Authored mode: small footer wordmark text"
     )
+    authored_style: Optional[str] = Field(
+        default=None, description="Authored mode: authored style preset id"
+    )
