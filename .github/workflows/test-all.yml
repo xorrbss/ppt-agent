@@ -11,6 +11,15 @@ jobs:
   test-fastapi:
     name: Test Main FastAPI
     runs-on: ubuntu-latest
+    env:
+      # runner.temp stays writable when this job is moved to a Windows runner.
+      APP_DATA_DIRECTORY: ${{ runner.temp }}/presenton-app-data
+      TEMP_DIRECTORY: ${{ runner.temp }}/presenton-temp
+      USER_CONFIG_PATH: ${{ runner.temp }}/presenton-app-data/userConfig.json
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
+      DATABASE_URL: sqlite+aiosqlite:///./test.db
+      DISABLE_ANONYMOUS_TRACKING: "true"
+      DISABLE_IMAGE_GENERATION: "true"
     
     defaults:
       run:
@@ -47,15 +56,14 @@ jobs:
             pathvalidate pdfplumber chromadb sqlmodel \
             anthropic google-genai openai fastmcp dirtyjson
         fi
-    
-    - name: Set up environment variables
+        python -m pip install pytest
+
+    - name: Prepare runtime directories
       run: |
-        echo "APP_DATA_DIRECTORY=/tmp/app_data" >> $GITHUB_ENV
-        echo "TEMP_DIRECTORY=/tmp/presenton" >> $GITHUB_ENV
-        echo "PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium" >> $GITHUB_ENV
-        echo "DATABASE_URL=sqlite+aiosqlite:///./test.db" >> $GITHUB_ENV
-        echo "DISABLE_ANONYMOUS_TRACKING=true" >> $GITHUB_ENV
-        echo "DISABLE_IMAGE_GENERATION=true" >> $GITHUB_ENV
+        python -c "from pathlib import Path; import os; [Path(os.environ[key]).mkdir(parents=True, exist_ok=True) for key in ('APP_DATA_DIRECTORY', 'TEMP_DIRECTORY')]"
+
+    - name: Run FastAPI pytest suite (including authored catalogue)
+      run: python -m pytest -q --no-header
 
     - name: Build FastAPI binary
       run: |
@@ -84,6 +92,10 @@ jobs:
     - name: Install dependencies
       run: npm ci
 
+    - name: Run ppt-agent CLI mock regression
+      working-directory: .
+      run: node --test scripts/ppt-agent.test.mjs
+
     - name: Run adaptive block-edit unit tests
       run: node --experimental-strip-types lib/adaptiveBlockEdit.test.mjs
 
@@ -107,6 +119,6 @@ jobs:
       with:
         working-directory: servers/nextjs
         component: true
-        spec: "**/AdaptiveBlockControls.cy.tsx,**/AdaptivePropertyControls.cy.tsx,**/ChartLeaf.cy.tsx,**/Variants.cy.tsx,**/UploadPage.cy.tsx,**/ThemeComposer.cy.tsx"
+        spec: "**/AdaptiveBlockControls.cy.tsx,**/AdaptivePropertyControls.cy.tsx,**/ChartLeaf.cy.tsx,**/Variants.cy.tsx,**/UploadPage.cy.tsx,**/ThemeComposer.cy.tsx,**/TemplateSelection.cy.tsx,**/presentationGenUpload.cy.ts,**/presentation-generation.cy.ts"
         install: false
 

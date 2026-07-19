@@ -489,6 +489,9 @@ async function main() {
   if (args.verbosity !== undefined && !VERBOSITIES.includes(args.verbosity)) {
     die(`--verbosity must be one of ${VERBOSITIES.join(", ")} (got "${args.verbosity}")`);
   }
+  if (args.style !== undefined && !args.style) {
+    die(`--style requires a style preset id`);
+  }
 
   // slides: default 8; "auto" (or empty) => omit n_slides so the model decides.
   let nSlides = 8;
