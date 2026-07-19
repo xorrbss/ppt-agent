@@ -1,9 +1,39 @@
 id: minimal-vellum
 name: 미니멀 벨럼
 description: 종이 질감의 부드러운 바탕과 절제된 잉크 톤을 활용한 차분한 스타일
+category: editorial
+tags:
+  - 미니멀
+  - 차분한
+  - 내추럴
+use_cases:
+  - 포트폴리오
+  - 브랜드 가이드
+  - 에세이형 발표
 preview:
   bg: "#F3EFE5"
   accent: "#8A5A44"
-brief: >-
-  Compose a calm, tactile presentation with vellum-like warm neutrals, dark ink
-  typography, muted brown details, hairline dividers, and generous breathing room.
+  palette:
+    - "#F3EFE5"
+    - "#FCFAF5"
+    - "#28231F"
+    - "#8A5A44"
+    - "#B7AB98"
+  variant: tactile-light
+brief: |-
+  VISUAL DIRECTION
+  - Compose a calm, tactile presentation inspired by vellum paper, natural materials, and quiet editorial craft.
+
+  LAYOUT
+  - Use generous breathing room, sparse compositions, fine dividers, and carefully balanced text blocks.
+  - Let one meaningful object, quotation, or figure carry each slide whenever possible.
+
+  TYPOGRAPHY
+  - Use dark ink typography with measured scale, relaxed leading, and understated labels.
+
+  COLOR AND DATA
+  - Work within warm neutrals, muted brown details, and soft tonal contrast without simulated texture noise.
+  - Keep charts light and precise with hairline axes, direct labels, and ample negative space.
+
+  AVOID
+  - Avoid saturated colors, crowded dashboards, heavy borders, glossy effects, and repeated dense cards.

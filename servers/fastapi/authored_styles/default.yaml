@@ -1,9 +1,39 @@
 id: default
 name: 기본 블루프린트
 description: 깔끔한 흰 바탕과 브랜드 블루로 구성한 범용 프레젠테이션 스타일
+category: general
+tags:
+  - 범용
+  - 깔끔한
+  - 컨설팅
+use_cases:
+  - 회사 소개
+  - 프로젝트 제안
+  - 일반 보고서
 preview:
   bg: "#F8FAFC"
   accent: "#2563EB"
-brief: >-
-  Use a clear consulting-style layout with generous whitespace, restrained blue
-  accents, strong hierarchy, and simple editorial data treatments.
+  palette:
+    - "#F8FAFC"
+    - "#FFFFFF"
+    - "#0F172A"
+    - "#64748B"
+    - "#2563EB"
+  variant: clean-light
+brief: |-
+  VISUAL DIRECTION
+  - Create a clear, versatile consulting aesthetic with generous whitespace and restrained blue accents.
+
+  LAYOUT
+  - Use disciplined grids, strong hierarchy, and varied editorial compositions suited to each slide role.
+  - Keep content blocks spacious, aligned, and easy to scan.
+
+  TYPOGRAPHY
+  - Use confident headings, readable body copy, and concise labels with consistent scale relationships.
+
+  COLOR AND DATA
+  - Build from white, cool gray, dark ink, and the brand blue as the primary accent.
+  - Render charts and tables simply, with direct labels and minimal decoration.
+
+  AVOID
+  - Avoid ornamental clutter, excessive cards, novelty type, and competing accent colors.

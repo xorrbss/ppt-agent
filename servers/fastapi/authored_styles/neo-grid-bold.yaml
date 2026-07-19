@@ -1,9 +1,38 @@
 id: neo-grid-bold
 name: 네오 그리드 볼드
 description: 대담한 격자와 강한 타이포그래피로 에너지 있게 구성하는 스타일
+category: creative
+tags:
+  - 네오브루탈
+  - 대담한
+  - 고대비
+use_cases:
+  - 캠페인 기획
+  - 크리에이티브 피치
+  - 트렌드 발표
 preview:
   bg: "#111111"
   accent: "#D9FF3F"
-brief: >-
-  Build energetic modular layouts on a black canvas: visible grids, oversized bold
-  type, acid-lime accents, sharp corners, and intentional high-contrast geometry.
+  palette:
+    - "#111111"
+    - "#F5F5F0"
+    - "#D9FF3F"
+    - "#7C3AED"
+  variant: acid-grid
+brief: |-
+  VISUAL DIRECTION
+  - Build an energetic neo-brutalist system with visible grids, sharp corners, and intentional high-contrast geometry.
+
+  LAYOUT
+  - Use modular divisions, cropped oversized elements, hard alignment, and dramatic scale shifts while preserving fit.
+  - Vary the grid across slides so the deck feels rhythmic rather than templated.
+
+  TYPOGRAPHY
+  - Favor oversized bold type, compressed labels, and terse copy with uncompromising hierarchy.
+
+  COLOR AND DATA
+  - Ground slides in black or off-white and use acid lime as the dominant signal color with rare violet support.
+  - Render charts as bold geometric statements with direct labels and thick, purposeful marks.
+
+  AVOID
+  - Avoid rounded cards, soft shadows, muted corporate layouts, and decorative complexity without meaning.

@@ -1,9 +1,37 @@
 id: editorial-tritone
 name: 에디토리얼 트라이톤
 description: 크림, 잉크, 코랄의 세 가지 색으로 이야기를 선명하게 전하는 스타일
+category: editorial
+tags:
+  - 에디토리얼
+  - 스토리텔링
+  - 따뜻한
+use_cases:
+  - 브랜드 스토리
+  - 트렌드 리포트
+  - 인터뷰 요약
 preview:
   bg: "#FFF8ED"
   accent: "#E85D4A"
-brief: >-
-  Create an editorial magazine feel with warm cream space, near-black typography,
-  coral punctuation, oversized pull quotes, and art-directed text blocks.
+  palette:
+    - "#FFF8ED"
+    - "#1C1B1A"
+    - "#E85D4A"
+  variant: magazine-tritone
+brief: |-
+  VISUAL DIRECTION
+  - Create an art-directed magazine feel using warm cream space, near-black ink, and coral punctuation.
+
+  LAYOUT
+  - Compose deliberate text-image relationships, asymmetric columns, generous margins, and occasional full-bleed moments.
+  - Use oversized pull quotes or numerals as editorial anchors rather than repeating card grids.
+
+  TYPOGRAPHY
+  - Establish expressive contrast between display headlines, compact captions, and calm reading text.
+
+  COLOR AND DATA
+  - Keep the palette strictly tritone and use coral only to direct attention.
+  - Treat data as editorial evidence with thin rules, annotated figures, and uncluttered tables.
+
+  AVOID
+  - Avoid corporate-blue defaults, glossy effects, generic icon rows, and uniform modular panels.

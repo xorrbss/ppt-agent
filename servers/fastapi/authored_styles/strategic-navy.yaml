@@ -1,9 +1,39 @@
 id: strategic-navy
 name: 전략 네이비
 description: 깊은 네이비와 선명한 청색 대비로 전략적 메시지를 강조하는 스타일
+category: business
+tags:
+  - 전략
+  - 프리미엄
+  - 다크
+use_cases:
+  - 전략 제안서
+  - 경영진 브리핑
+  - 시장 분석
 preview:
   bg: "#0B1F3A"
   accent: "#38BDF8"
-brief: >-
-  Use deep navy fields, cool blue highlights, thin luminous rules, and disciplined
-  asymmetric compositions for a premium strategy-consulting atmosphere.
+  palette:
+    - "#0B1F3A"
+    - "#102A4C"
+    - "#E6F4FF"
+    - "#38BDF8"
+    - "#FFFFFF"
+  variant: luminous-dark
+brief: |-
+  VISUAL DIRECTION
+  - Create a premium strategy-consulting atmosphere with deep navy fields and cool blue highlights.
+
+  LAYOUT
+  - Use disciplined asymmetric compositions, decisive alignment, and clear zones for evidence and conclusions.
+  - Alternate dark full-bleed statements with lighter analytical slides to control pacing.
+
+  TYPOGRAPHY
+  - Pair compact uppercase labels with authoritative headlines and highly legible supporting text.
+
+  COLOR AND DATA
+  - Use navy as the dominant field, sky blue for emphasis, and white or pale blue for contrast.
+  - Draw precise charts, thin luminous rules, and restrained KPI callouts without decorative noise.
+
+  AVOID
+  - Avoid playful shapes, soft pastel palettes, heavy gradients, and dense dashboard walls.
