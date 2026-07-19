@@ -115,6 +115,36 @@ the exported PPTX in PowerPoint. The default adaptive/template path is unchanged
   ```powershell
   node scripts/ppt-agent.mjs --content "2026 AI 도입 전략" --mode authored --style strategic-navy --slides 6 --async --out ./out
   ```
+- **스타일 카탈로그 API:** `GET /api/v1/ppt/authored/styles`는 UI와 자동화에서 쓸 공개
+  메타데이터만 반환하며(생성 브리프는 반환하지 않음), `--style <id>`는 이 응답의 `id`를
+  `authored_style`로 전송합니다. 스타일을 생략하면 서버 기본값을 사용하고, `--style`만
+  쓰고 값을 생략하면 CLI가 요청 전에 오류로 종료합니다.
+- **최신 `main` 반영 후 스택 재기동:** 실행 중인 backend/frontend/proxy 터미널에서
+  `Ctrl+C`로 각각 종료한 다음, 새 PowerShell에서 아래 순서로 최신 소스를 받고 위의
+  Web version 명령(backend → frontend → proxy)을 다시 실행합니다. 실행 중인 프로세스를
+  강제 종료하지 말고 각 터미널에서 정상 종료해야 포트와 `app_data`를 안전하게 재사용합니다.
+  ```powershell
+  git fetch origin
+  git switch main
+  git pull --ff-only origin main
+  ```
+- **30종 카탈로그 확인:** web/Docker 인증이 켜진 경우 `-Credential`에 관리자 계정을
+  전달합니다. 인증이 꺼진 Electron 백엔드는 `$credential` 줄과 `-Credential` 인수를
+  생략합니다. 결과가 정확히 `30`이고, `strategic-navy` 같은 반환 `id`만 `--style`에
+  사용합니다.
+  ```powershell
+  $base = "http://localhost:5000"
+  $credential = Get-Credential
+  $styles = Invoke-RestMethod "$base/api/v1/ppt/authored/styles" -Credential $credential
+  $styles.Count
+  $styles.id | Sort-Object
+  ```
+- **라이브 QA:** 실제 설정된 로컬 LLM과 Chrome을 사용하므로 외부 API 키가 필요하며
+  완료까지 수 분이 걸릴 수 있습니다. 생성 뒤 출력된 edit URL을 열어 각 슬라이드의
+  렌더링을 확인하고, `./out`의 PPTX도 PowerPoint에서 열어 확인합니다.
+  ```powershell
+  node scripts/ppt-agent.mjs --content "2026 AI 도입 전략" --mode authored --style strategic-navy --slides 3 --async --base http://localhost:5000 --out ./out
+  ```
 - **Rendering needs a headless Chrome.** Local Windows uses installed Chrome
   (auto-detected; override with `CHROME_PATH`). The **Docker images already bundle
   `chromium`** and set `PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium`, which the renderer
