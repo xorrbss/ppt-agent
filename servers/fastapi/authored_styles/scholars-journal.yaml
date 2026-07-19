@@ -1,0 +1,59 @@
+id: scholars-journal
+name: 스칼러스 저널
+description: 인쇄 학술지의 단정한 판면과 인용 중심 편집을 현대적으로 옮긴 문헌 기반 스타일
+category: research
+tags:
+  - journal
+  - literature-review
+  - citation
+use_cases:
+  - 문헌 리뷰
+  - 세미나
+  - 학술 논문 요약
+preview:
+  bg: "#F6F1E7"
+  accent: "#7C2D12"
+  palette:
+    - "#F6F1E7"
+    - "#25211D"
+    - "#7C2D12"
+    - "#B8A98A"
+    - "#6B6258"
+  variant: journal-plate
+brief: >-
+  MOOD: Create the calm authority of a peer-reviewed journal spread: tactile,
+  measured, and intellectually generous. The design should reward close reading and
+  make sources feel integral to the argument.
+
+  PALETTE: Use paper cream (#F6F1E7), deep editorial ink (#25211D), oxblood (#7C2D12),
+  muted parchment (#B8A98A), and warm gray (#6B6258). Let oxblood mark only key
+  annotations, issue labels, and important citations.
+
+  TYPOGRAPHY: Pair a dignified display serif for titles with a highly readable serif
+  or neutral sans-serif for body copy. Use hanging citation labels, modest italics for
+  publication titles, and tabular figures for dates and statistics.
+
+  LAYOUT SYSTEM: Compose with a magazine-like baseline grid, two text columns when
+  needed, generous outer margins, and deliberate white space around quotations. Keep
+  a clear reading order and never split a citation from its claim.
+
+  SIGNATURE ELEMENTS: Use folio numbers, running heads, quiet hairlines, pull quotes,
+  bibliography-style source strips, and small issue-label capsules.
+
+  DATA VISUALIZATION: Favor editorial tables, evidence matrices, annotated timelines,
+  and restrained line charts. Use ink-first marks with one oxblood highlight; include
+  source, period, and definition notes next to the visualization.
+
+  IMAGE DIRECTION: Choose archival scans, book details, research environments, and
+  monochrome documentary photography. Crop with purpose; use captions that identify
+  creator, collection, or source.
+
+  SLIDE ARCHETYPES: cover: journal masthead, title, author line, and issue-like date;
+  content: a two-column argument with a pull quote or source margin; data: a compact
+  evidence table with an editorial annotation; timeline: dated publication or debate
+  milestones on a ruled baseline; closing: a final thesis with selected references and
+  discussion prompt.
+
+  AVOID: Avoid glossy stock-photo hero images, loud color blocks, justified walls of
+  tiny text, fake citations, novelty typefaces, and decorative elements that mimic
+  scholarly authority without carrying information.
