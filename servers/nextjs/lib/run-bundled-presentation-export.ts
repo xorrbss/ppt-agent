@@ -1,6 +1,7 @@
 import path from "path";
 import os from "os";
 import fs from "fs/promises";
+import { fileURLToPath } from "url";
 import { spawn } from "child_process";
 import { sanitizeFilename } from "@/app/(presentation-generator)/utils/others";
 import {
@@ -55,12 +56,74 @@ function bundledConverterPath(exportRoot: string): string {
   if (fromEnv) {
     return fromEnv;
   }
-  if (process.platform === "linux" && process.arch === "x64") {
-    return path.join(exportRoot, "py", "convert-linux-x64");
-  }
-  throw new Error(
-    `No bundled export converter for ${process.platform}/${process.arch}. Set BUILT_PYTHON_MODULE_PATH.`
+  // The sync script fetches a per-OS/arch PyInstaller binary named
+  // convert-<platform>-<arch>[.exe] (e.g. convert-linux-x64,
+  // convert-win32-x64.exe). Resolve by that convention for every platform;
+  // callers gate on fs.access, so a missing binary surfaces as "not available".
+  const ext = process.platform === "win32" ? ".exe" : "";
+  return path.join(
+    exportRoot,
+    "py",
+    `convert-${process.platform}-${process.arch}${ext}`
   );
+}
+
+/**
+ * Path to a Chrome/Chromium the bundled export (puppeteer) can launch. Honors
+ * PUPPETEER_EXECUTABLE_PATH / CHROME_PATH, then probes common system locations —
+ * so a native (non-Docker) run doesn't fall back to puppeteer's own download
+ * (which is absent/broken on most desktops). Returns undefined if none found
+ * (puppeteer then uses its default resolution).
+ */
+async function resolveChromeExecutable(): Promise<string | undefined> {
+  const fromEnv =
+    process.env.PUPPETEER_EXECUTABLE_PATH?.trim() ||
+    process.env.CHROME_PATH?.trim();
+  if (fromEnv) {
+    return fromEnv;
+  }
+
+  const candidates: string[] = [];
+  if (process.platform === "win32") {
+    const pf = process.env["ProgramFiles"] || "C:\\Program Files";
+    const pfx86 =
+      process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)";
+    const local = process.env["LOCALAPPDATA"];
+    candidates.push(
+      path.join(pf, "Google/Chrome/Application/chrome.exe"),
+      path.join(pfx86, "Google/Chrome/Application/chrome.exe")
+    );
+    if (local) {
+      candidates.push(path.join(local, "Google/Chrome/Application/chrome.exe"));
+    }
+    candidates.push(
+      path.join(pfx86, "Microsoft/Edge/Application/msedge.exe"),
+      path.join(pf, "Microsoft/Edge/Application/msedge.exe")
+    );
+  } else if (process.platform === "darwin") {
+    candidates.push(
+      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+      "/Applications/Chromium.app/Contents/MacOS/Chromium",
+      "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
+    );
+  } else {
+    candidates.push(
+      "/usr/bin/google-chrome",
+      "/usr/bin/google-chrome-stable",
+      "/usr/bin/chromium",
+      "/usr/bin/chromium-browser"
+    );
+  }
+
+  for (const candidate of candidates) {
+    try {
+      await fs.access(candidate);
+      return candidate;
+    } catch {
+      // keep probing
+    }
+  }
+  return undefined;
 }
 
 export async function bundledExportPackageAvailable(): Promise<boolean> {
@@ -109,15 +172,16 @@ function normalizeExportOutputPath(params: {
 
   if (urlValue && typeof urlValue === "string") {
     if (urlValue.startsWith("file://")) {
-      const parsed = new URL(urlValue);
-      const fsPath = decodeURIComponent(parsed.pathname || "");
-      if (fsPath.startsWith("/app_data/")) {
-        return resolveAppDataRelative(fsPath);
+      // fileURLToPath handles Windows drive letters ("file:///C:/x" -> "C:\x").
+      // Parsing .pathname manually yields "/C:/x", which fs then resolves
+      // against the current drive as the bogus "C:\C:\x".
+      const fsPath = fileURLToPath(urlValue);
+      // Docker serves exports from /app_data; remap onto APP_DATA_DIRECTORY.
+      const posix = fsPath.replace(/\\/g, "/");
+      if (posix.startsWith("/app_data/")) {
+        return resolveAppDataRelative(posix);
       }
-      if (path.isAbsolute(fsPath)) {
-        return fsPath;
-      }
-      return resolveAppDataRelative(fsPath);
+      return fsPath;
     }
 
     if (urlValue.startsWith("/app_data/")) {
@@ -206,6 +270,7 @@ async function runBundledPresentationExportLocked(params: {
       format,
       memory: memorySnapshotMb(),
     });
+    const chromeExecutable = await resolveChromeExecutable();
     await new Promise<void>((resolve, reject) => {
       const child = spawn(process.execPath, [entrypoint, exportTaskPath], {
         cwd: appRoot,
@@ -213,6 +278,13 @@ async function runBundledPresentationExportLocked(params: {
         env: {
           ...process.env,
           BUILT_PYTHON_MODULE_PATH: converter,
+          // The entrypoint requires TEMP_DIRECTORY; forward the base we already
+          // resolved so it doesn't error with "TEMP_DIRECTORY must be set".
+          TEMP_DIRECTORY: tempBase,
+          // Point puppeteer at a real Chrome so it doesn't try to download one.
+          ...(chromeExecutable
+            ? { PUPPETEER_EXECUTABLE_PATH: chromeExecutable }
+            : {}),
         },
       });
       const stderr = new BoundedTextBuffer();

@@ -243,12 +243,12 @@ const PresentationHeader = ({
         });
 
         if (!response.ok) {
-          throw new Error("Failed to export PPTX");
+          throw new Error("PPTX 내보내기에 실패했습니다.");
         }
 
         const { path: pptxPath } = await response.json();
         if (!pptxPath) {
-          throw new Error("No path returned from export");
+          throw new Error("내보내기 경로를 받지 못했습니다.");
         }
 
         downloadLink(pptxPath, safePptxFileName);
@@ -311,7 +311,7 @@ const PresentationHeader = ({
           const { path: pdfPath } = await response.json();
           downloadLink(pdfPath, safePdfFileName);
         } else {
-          throw new Error("Failed to export PDF");
+          throw new Error("PDF 내보내기에 실패했습니다.");
         }
       }
       notify.success(
