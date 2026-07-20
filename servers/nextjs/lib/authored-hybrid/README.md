@@ -1,7 +1,7 @@
-# Authored hybrid H1 contract
+# Authored hybrid PPTX contract
 
-This module analyses persisted authored `html_content` without changing the
-existing fidelity export path. It does not assemble native PPTX objects.
+This module analyses persisted authored `html_content` and can assemble a
+hybrid PPTX without changing the existing fidelity export path.
 
 H2 consumes two stable entry points from `index.ts`:
 
@@ -31,3 +31,28 @@ owns a painted pseudo-element or unrepresentable outer paint. Percentage or
 asymmetric corner radii are also raster-only; only uniform pixel radii are
 eligible for a native simple shape. These conservative boundaries are part of
 the H1 contract, not extraction failures.
+
+## Export modes
+
+The PPTX export API accepts `pptxMode: "fidelity" | "hybrid"`. Missing mode and
+explicit `"fidelity"` both use the historical full-slide-image exporter without
+entering this module. PDF ignores this PPTX-only option.
+
+`"hybrid"` first produces that fidelity deck as a valid OOXML skeleton. Only
+slides identified as authored are considered. Each selected slide is rebuilt
+in browser paint order with a transparent 1280x720 PNG backplate at the bottom,
+then successfully prepared native text (including rich runs and CJK font
+fallback), embedded raster images, and simple shapes. An element is suppressed
+from the backplate only after it can be serialized, and H1 must confirm that the
+same DOM identity was hidden during capture. Any rejected, changed, unsafe, or
+overlap-ambiguous element remains rasterised on the backplate. A slide or deck
+failure returns the already-produced fidelity PPTX.
+
+Hybrid execution is fail-closed. HTML is size-bounded and must be static and
+self-contained: scripts, event handlers, frames, forms, external/local URLs,
+CSS imports, vector data URLs, and active protocols are rejected. Native image
+promotion additionally requires a bounded PNG/JPEG/WebP data URL with matching
+magic bytes and safe decoded pixels. Archives reject traversal, encryption,
+ZIP64, duplicate entries, unsupported compression, and oversized payloads.
+Chrome work directories and interim PPTX files are deleted in `finally` paths;
+download paths are contained to the configured export directory.
