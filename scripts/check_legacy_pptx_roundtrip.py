@@ -6,7 +6,7 @@ PPTX with the current converter — a regression guard for converter-version bum
 harness (scripts/check_adaptive_pptx_roundtrip.py).
 
 Run (inside the Docker dev stack):
-  RUN_PPTX_ROUNDTRIP=1 NEXT_PUBLIC_FAST_API=http://127.0.0.1:8000 \
+  RUN_PPTX_ROUNDTRIP=1 NEXT_PUBLIC_FAST_API=http://127.0.0.1 \
     APP_DATA_DIRECTORY=/app_data uv run python scripts/check_legacy_pptx_roundtrip.py
 """
 import asyncio

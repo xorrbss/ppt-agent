@@ -159,17 +159,14 @@ def _preflight(prepared: Sequence[_PreparedStyle], overwrite: bool) -> None:
                     )
 
 
-def convert_path(
-    input_path: Path | str,
-    output_path: Path | str,
+def _finish_conversion(
+    sources: Sequence[Path],
+    converted: Sequence[dict[str, Any]],
+    output_path: Path,
     *,
-    overwrite: bool = False,
-    dry_run: bool = False,
+    overwrite: bool,
+    dry_run: bool,
 ) -> list[ConversionResult]:
-    input_path = Path(input_path).expanduser().resolve()
-    output_path = Path(output_path).expanduser().resolve(strict=False)
-    sources = _sources(input_path)
-    converted = [convert_document(_read_yaml(source), source) for source in sources]
     targets = _targets(sources, output_path, converted)
     prepared = [
         _PreparedStyle(source, target, data, _serialize(data))
@@ -203,3 +200,36 @@ def convert_path(
         ConversionResult(item.source, item.target, str(item.data["id"]))
         for item in prepared
     ]
+
+
+def convert_data(
+    data: Mapping[str, Any],
+    source_path: Path | str,
+    output_path: Path | str,
+    *,
+    overwrite: bool = False,
+    dry_run: bool = False,
+) -> list[ConversionResult]:
+    """Convert one in-memory external-style mapping with the normal I/O contract."""
+    source = Path(source_path).expanduser().resolve()
+    output = Path(output_path).expanduser().resolve(strict=False)
+    converted = [convert_document(data, source)]
+    return _finish_conversion(
+        [source], converted, output, overwrite=overwrite, dry_run=dry_run
+    )
+
+
+def convert_path(
+    input_path: Path | str,
+    output_path: Path | str,
+    *,
+    overwrite: bool = False,
+    dry_run: bool = False,
+) -> list[ConversionResult]:
+    input_path = Path(input_path).expanduser().resolve()
+    output_path = Path(output_path).expanduser().resolve(strict=False)
+    sources = _sources(input_path)
+    converted = [convert_document(_read_yaml(source), source) for source in sources]
+    return _finish_conversion(
+        sources, converted, output_path, overwrite=overwrite, dry_run=dry_run
+    )
