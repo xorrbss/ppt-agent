@@ -105,6 +105,9 @@ jobs:
     - name: Run export app-data path unit tests
       run: node --experimental-strip-types --test lib/app-data-directory.test.mjs
 
+    - name: Run authored hybrid contract and Chrome smoke tests
+      run: node --experimental-strip-types --test lib/authored-hybrid/contract.test.mjs lib/authored-hybrid/chrome.test.mjs
+
     - name: Run composeStyledTheme unit test
       run: node --experimental-strip-types "app/(presentation-generator)/presentation/utils/composeStyledTheme.test.mjs"
 
