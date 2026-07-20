@@ -1,7 +1,8 @@
 "use client";
 
-import React, { memo } from "react";
+import React, { memo, useState } from "react";
 import { Check } from "lucide-react";
+import Image from "next/image";
 
 import type { AuthoredStyleSummary } from "@/app/(presentation-generator)/services/api/authored";
 import { Card } from "@/components/ui/card";
@@ -49,6 +50,7 @@ function getReadableTextColor(background: string): string {
 }
 
 function AuthoredStylePreview({ style }: { style: AuthoredStyleSummary }) {
+  const [imageFailed, setImageFailed] = useState(false);
   const family = getPreviewFamily(style.preview.variant);
   const colors = style.preview.palette;
   const background = style.preview.bg;
@@ -60,6 +62,29 @@ function AuthoredStylePreview({ style }: { style: AuthoredStyleSummary }) {
     (sum, character) => sum + character.charCodeAt(0),
     0
   );
+
+  if (style.preview.image && !imageFailed) {
+    return (
+      <div
+        data-testid={`authored-style-preview-${style.id}`}
+        data-variant={style.preview.variant}
+        data-preview-family="reference"
+        className="relative h-[168px] overflow-hidden bg-slate-950"
+        aria-hidden="true"
+      >
+        <Image
+          src={style.preview.image}
+          alt=""
+          fill
+          sizes="(max-width: 768px) 100vw, 360px"
+          className="object-cover"
+          unoptimized
+          onError={() => setImageFailed(true)}
+        />
+        <div className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-black/10" />
+      </div>
+    );
+  }
 
   return (
     <div

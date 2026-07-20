@@ -26,7 +26,7 @@ from models.sql.slide import SlideModel
 from utils.asset_directory_utils import get_exports_directory, get_images_directory
 from utils.filename_utils import safe_export_basename
 from utils.llm_calls.author_deck import author_deck, build_image_pptx, plan_deck_roles
-from utils.llm_calls.author_slide import AuthoredStyleLike, Brand
+from utils.llm_calls.author_slide import AuthoredStyleLike, Brand, apply_style_defaults
 from utils.llm_calls.author_vision_qa import revise_authored_deck
 from utils.outline_utils import get_presentation_title_from_presentation_outline
 from utils.slide_capture import _placeholder_png, find_chrome, render_html_list_to_pngs
@@ -82,6 +82,8 @@ def resolve_brand(
         primary=(request.primary_color or _DEFAULT_PRIMARY).strip() or _DEFAULT_PRIMARY,
         fonts=(request.fonts or ("Noto Sans KR" if korean else "Inter")).strip(),
         wordmark=(request.wordmark or "").strip(),
+        primary_is_explicit=bool((request.primary_color or "").strip()),
+        fonts_are_explicit=bool((request.fonts or "").strip()),
     )
 
 
@@ -137,8 +139,8 @@ async def generate_authored_presentation(
     Returns the path to the produced file plus the editor path."""
     started = time.monotonic()
     title = authored_title(request, outline)
-    brand = resolve_brand(request, outline, language)
     style = resolve_authored_style(request.authored_style)
+    brand = apply_style_defaults(resolve_brand(request, outline, language), style)
     roles = plan_deck_roles(outline)
 
     # Render needs a headless Chrome. Without it every slide silently degrades to a
@@ -166,6 +168,7 @@ async def generate_authored_presentation(
                 brand,
                 authored_deck.design_system,
                 max_cycles=1,
+                style=style,
             )
             fixed_count = len(fixed)
         except Exception:

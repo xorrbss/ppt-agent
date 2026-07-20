@@ -251,6 +251,62 @@ def test_resolve_authored_style_uses_builtin_default_when_default_file_is_broken
     assert style.preview_bg == "#F8FAFC"
 
 
+def test_load_authored_style_resolves_safe_reference_assets(tmp_path):
+    styles_dir = tmp_path / "styles"
+    assets_dir = tmp_path / "authored_style_assets" / "pilot"
+    styles_dir.mkdir()
+    assets_dir.mkdir(parents=True)
+    (assets_dir / "cover.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    _write(
+        styles_dir / "pilot.yaml",
+        """id: pilot
+name: Pilot
+description: Visual pilot
+preview:
+  bg: '#07130F'
+  accent: '#35F2C2'
+  image: pilot/cover.png
+design_tokens:
+  primary: '#35F2C2'
+  background: '#07130F'
+  heading_font: Space Grotesk
+  body_font: Noto Sans KR
+reference_images:
+  cover:
+    - pilot/cover.png
+brief: private
+""",
+    )
+
+    style = load_authored_styles(styles_dir)[0]
+
+    assert style.preview_image == (assets_dir / "cover.png").resolve()
+    assert style.reference_images["cover"] == (style.preview_image,)
+    assert style.primary_color == "#35F2C2"
+    assert style.body_font == "Noto Sans KR"
+    assert style.public_dict()["preview"]["image"].endswith("/pilot/preview")
+
+
+def test_load_authored_style_rejects_reference_path_traversal(tmp_path, caplog):
+    styles_dir = tmp_path / "styles"
+    styles_dir.mkdir()
+    _write(
+        styles_dir / "unsafe.yaml",
+        """id: unsafe
+name: Unsafe
+description: Unsafe
+preview:
+  bg: '#FFFFFF'
+  accent: '#000000'
+  image: ../secret.png
+brief: private
+""",
+    )
+
+    assert load_authored_styles(styles_dir) == []
+    assert "must stay inside authored_style_assets" in caplog.text
+
+
 def test_authored_catalogue_has_exactly_30_complete_contracts(caplog):
     sources = sorted(AUTHORED_STYLES_DIRECTORY.glob("*.yaml"))
 
@@ -288,7 +344,10 @@ def test_authored_catalogue_has_exactly_30_complete_contracts(caplog):
         assert re.search(r"[가-힣]", data["description"])
 
         preview = data["preview"]
-        assert set(preview) == {"bg", "accent", "palette", "variant"}
+        expected_preview_fields = {"bg", "accent", "palette", "variant"}
+        if style_id == "cyber-ai":
+            expected_preview_fields.add("image")
+        assert set(preview) == expected_preview_fields
         assert len(preview["palette"]) >= 3
         assert preview["variant"]
 
@@ -345,6 +404,9 @@ def test_authored_styles_api_hides_briefs_and_returns_exact_catalogue():
     assert all({"bg", "accent"} <= set(style["preview"]) for style in body)
 
     by_id = {style["id"]: style for style in body}
+    assert by_id["cyber-ai"]["preview"]["image"] == (
+        "/api/v1/ppt/authored/styles/cyber-ai/preview"
+    )
     assert by_id["default"]["name"] == "기본 블루프린트"
     assert by_id["default"]["description"] == (
         "깔끔한 흰 바탕과 브랜드 블루로 구성한 범용 프레젠테이션 스타일"
@@ -374,3 +436,10 @@ def test_authored_styles_api_hides_briefs_and_returns_exact_catalogue():
         "palette": ["#051C2C", "#FFFFFF", "#2E3338", "#00A3E0", "#A7B0B7"],
         "variant": "executive-ledger",
     }
+
+    preview_response = client.get(
+        "/api/v1/ppt/authored/styles/cyber-ai/preview"
+    )
+    assert preview_response.status_code == 200
+    assert preview_response.headers["content-type"] == "image/png"
+    assert preview_response.content.startswith(b"\x89PNG")

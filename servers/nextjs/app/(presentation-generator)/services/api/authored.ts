@@ -8,6 +8,7 @@ export interface AuthoredStylePreview {
   accent: string;
   palette: string[];
   variant: string;
+  image?: string;
 }
 
 export const AUTHORED_STYLE_CATEGORIES = [
@@ -111,6 +112,10 @@ function toAuthoredStyleSummary(value: unknown): AuthoredStyleSummary | null {
         typeof preview.variant === "string" && preview.variant.trim()
           ? preview.variant.trim()
           : "clean-light",
+      image:
+        typeof preview.image === "string" && preview.image.trim()
+          ? getApiUrl(preview.image.trim())
+          : undefined,
     },
   };
 }

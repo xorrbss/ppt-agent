@@ -1,53 +1,75 @@
 id: cyber-ai
-name: 사이버 AI
-description: 심해 녹색과 전기 시안의 정밀한 인터페이스 언어로 AI 시스템의 신뢰성, 흐름, 제어를 설명하는 스타일입니다.
+name: 프리즘 AI 보안
+description: 반투명 프리즘과 정교한 아이소메트릭 시스템 맵으로 복잡한 AI 보안 구조를 미래지향적으로 설명합니다.
 category: technology
 tags:
-  - AI 전략
+  - AI 보안
   - 시스템 아키텍처
-  - 데이터 제품
+  - 프리즘 비주얼
 use_cases:
-  - AI 플랫폼 소개
-  - 기술 아키텍처 리뷰
-  - 데이터 거버넌스 발표
+  - AI 보안 플랫폼 제안
+  - 멀티 에이전트 아키텍처
+  - 디지털 전환 전략
 preview:
-  bg: "#07130F"
-  accent: "#35F2C2"
+  bg: "#F4F7FA"
+  accent: "#4F86D9"
   palette:
-    - "#07130F"
-    - "#DDFCF4"
-    - "#35F2C2"
-    - "#35B9FF"
-    - "#A6FF3F"
-  variant: intelligence-console
+    - "#F4F7FA"
+    - "#171A20"
+    - "#4F86D9"
+    - "#ECA064"
+    - "#67B989"
+    - "#B8A7E8"
+  variant: prismatic-future
+  image: cyber-ai/cover.png
+design_tokens:
+  primary: "#4F86D9"
+  background: "#F4F7FA"
+  heading_font: Noto Sans KR
+  body_font: Noto Sans KR
+  mono_font: IBM Plex Mono
+reference_images:
+  cover:
+    - cyber-ai/cover.png
+  content:
+    - cyber-ai/content.png
+  data:
+    - cyber-ai/data.png
+  timeline:
+    - cyber-ai/timeline.png
+  architecture:
+    - cyber-ai/architecture.png
+  closing:
+    - cyber-ai/closing.png
 brief: |-
   MOOD
-  신뢰할 수 있고 통제 가능한 지능. 사이버 감성은 장식이 아니라 시스템의 흐름과 상태를 읽게 하는 정밀함으로 표현한다.
+  Create an optimistic near-future security platform aesthetic: precise, luminous, calm, and highly engineered. The deck should feel like a premium technology keynote with consulting-grade information design, not a generic corporate template.
 
   PALETTE
-  심해 녹색 #07130F 위에 청백 #DDFCF4를 둔다. 민트 #35F2C2는 활성 흐름, 시안 #35B9FF는 정보 계층, 산성 연두 #A6FF3F는 주의가 필요한 하나의 상태에만 사용한다.
+  Use a soft ice-white canvas #F4F7FA with near-black #171A20 typography. Organize systems with muted zone colours: blue #4F86D9, warm coral #ECA064, mint #67B989, and restrained prism lavender #B8A7E8. Use translucent spectral gradients only as a focal light effect, never as decoration across the whole slide.
 
   TYPOGRAPHY
-  제목은 단단한 산세리프, 라벨·시간·모델명은 작은 모노스페이스를 사용한다. 코드 블록을 장식으로 남발하지 말고, 숫자와 상태 레이블은 명확한 정렬로 읽힌다.
+  Use Noto Sans KR for Korean headings and body copy, with very bold compact headlines and disciplined line breaks. Use IBM Plex Mono sparingly for system labels, metrics, IDs, and stage markers. Make one headline or number unmistakably dominant on every slide.
 
   LAYOUT SYSTEM
-  좌측에는 설명 계층을, 우측에는 파이프라인이나 상태 보드를 둔다. 얇은 구분선, 정교한 정렬, 넓은 검은 공간을 사용하되 전체 화면 격자를 배경 장식으로 만들지 않는다.
+  Build asymmetric editorial compositions with a clear reading path: a strong narrative block on one side and a large engineered visual on the other. Use generous negative space, thin connector lines, and aligned zones. Prefer one integrated system scene or diagram over collections of unrelated cards.
 
   SIGNATURE ELEMENTS
-  연결된 노드, 흐르는 신호선, 작은 상태 칩, 조준점 같은 원형 마커, 미세한 스캔 라인을 사용한다. 프리즘 광학, 보라 네온 지평선, 굵은 라임 격자는 사용하지 않는다.
+  Use translucent prism volumes, softly refracted light, isometric infrastructure clusters, connected agent nodes, layered security zones, and small precise labels. Visuals should feel dimensional and tactile while remaining clean enough for an executive audience.
 
   DATA VISUALIZATION
-  모델 파이프라인, 입력-추론-검증 흐름, 신뢰도 게이지, 시간별 이벤트 스트립을 사용한다. 활성 경로만 민트로 밝히고 나머지 구조는 낮은 대비로 유지한다.
+  Turn data into designed objects: segmented rings, vertical gauges, risk curves, layered pyramids, and stage flows. Direct-label values and use colour to encode meaning consistently. Avoid default chart chrome, legends detached from the data, and equal-weight dashboard tiles.
 
   IMAGE DIRECTION
-  미세 구조, 서버와 센서, 데이터의 흐름을 암시하는 매크로 질감, 어두운 실험실의 실물 장비를 사용한다. 인간형 로봇 클리셰나 녹색 매트릭스 비는 피한다.
+  Favor original inline-SVG or CSS-built isometric systems, architectural cutaways, luminous protective fields, and refracted glass forms. Keep the illustration tightly related to the slide claim. Do not reproduce any wording, logo, watermark, or exact object arrangement from a visual reference.
 
   SLIDE ARCHETYPES
-  cover: 심해 녹색 바탕에 모델 또는 시스템명을 크게, 작은 상태 마커를 곁들인다.
-  content: 왼쪽의 명료한 설명과 오른쪽의 연결된 세 단계 시스템 흐름을 둔다.
-  data: 신뢰도·처리량·지연시간 중 한 지표를 활성 신호선과 직접 수치로 보여 준다.
-  timeline: 신호가 통과하는 수평 파이프라인에 수집·추론·검증·배포 단계를 둔다.
-  closing: 운영 원칙 또는 다음 통제 항목을 상태 칩 세 개 이하로 정리한다.
+  cover: Oversized Korean title on the left with one luminous prism or protected isometric ecosystem occupying the right half.
+  content: A concise claim paired with one integrated process, loop, or before-and-after transformation scene.
+  architecture: A central multi-agent or platform map with clearly separated colour-coded domains and visible connections.
+  data: One dominant KPI family using rings, gauges, or a designed curve with short interpretation labels.
+  timeline: A horizontal incident flow or roadmap whose stages change colour and visual state as the sequence advances.
+  closing: A minimal vision statement with one memorable luminous protection symbol and a clear next action.
 
   AVOID
-  장식용 소스 코드, 글리치 텍스트, 과도한 녹색, 유리 카드 콜라주, 눈에 띄는 배경 격자, 암호 해독 영화 연출.
+  Avoid dark hacker-terminal clichés, matrix rain, neon-on-black overload, generic card grids, stock photography, repetitive rounded rectangles, floating icons without relationships, tiny labels, and decorative complexity that competes with the message.
