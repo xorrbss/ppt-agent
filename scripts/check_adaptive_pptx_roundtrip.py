@@ -10,7 +10,7 @@ design's gate G4 (revision R4): it can only run where the converter binary exist
 Run (inside the Docker dev stack, with Next.js + FastAPI + converter up):
   docker compose up development            # serves :5000, FastAPI :8000, converter
   # then, in the FastAPI container:
-  RUN_PPTX_ROUNDTRIP=1 NEXT_PUBLIC_FAST_API=http://127.0.0.1:8000 \
+  RUN_PPTX_ROUNDTRIP=1 NEXT_PUBLIC_FAST_API=http://127.0.0.1 \
     APP_DATA_DIRECTORY=/app_data uv run python scripts/check_adaptive_pptx_roundtrip.py
 
 Exit code 0 = pass or skip; 1 = a round-trip assertion failed.
