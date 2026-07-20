@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs/promises";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -23,6 +24,40 @@ interface ChromeRunOptions extends AuthoredHybridChromeOptions {
 interface ChromeRunResult {
   serializedDom?: string;
   screenshotPng?: Buffer;
+}
+
+interface NetworkDenyProxy {
+  url: string;
+  close: () => Promise<void>;
+}
+
+/**
+ * Chrome loads a temporary file, but CSS and responsive-image syntax can still
+ * initiate HTTP requests before extraction fails closed. Route every browser
+ * request through a local endpoint that immediately drops the connection.
+ */
+async function startNetworkDenyProxy(): Promise<NetworkDenyProxy> {
+  const server = net.createServer((socket) => socket.destroy());
+  server.unref();
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
+  const address = server.address();
+  if (!address || typeof address === "string") {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    throw new Error("Failed to bind the authored hybrid network deny proxy.");
+  }
+  return {
+    url: `http://127.0.0.1:${address.port}`,
+    close: () =>
+      new Promise<void>((resolve) => {
+        server.close(() => resolve());
+      }),
+  };
 }
 
 async function accessible(filePath: string): Promise<boolean> {
@@ -208,8 +243,10 @@ export async function runAuthoredHybridChrome(
   const htmlPath = path.join(workDirectory, "slide.html");
   const screenshotPath = path.join(workDirectory, "backplate.png");
   const profilePath = path.join(workDirectory, "chrome-profile");
+  let networkDenyProxy: NetworkDenyProxy | undefined;
 
   try {
+    networkDenyProxy = await startNetworkDenyProxy();
     await fs.writeFile(htmlPath, options.html, "utf8");
     const windowSize = options.windowSizePx ?? { width: 1280, height: 720 };
     const args = [
@@ -219,8 +256,11 @@ export async function runAuthoredHybridChrome(
       "--hide-scrollbars",
       "--no-first-run",
       "--no-default-browser-check",
+      "--disable-background-networking",
       "--no-sandbox",
       "--allow-file-access-from-files",
+      `--proxy-server=${networkDenyProxy.url}`,
+      "--proxy-bypass-list=<-loopback>",
       "--force-device-scale-factor=1",
       `--window-size=${windowSize.width},${windowSize.height}`,
       "--run-all-compositor-stages-before-draw",
@@ -251,6 +291,7 @@ export async function runAuthoredHybridChrome(
     }
     return result;
   } finally {
+    await networkDenyProxy?.close().catch(() => {});
     await fs.rm(workDirectory, { recursive: true, force: true }).catch(() => {});
   }
 }
