@@ -54,14 +54,6 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
   // were already in the store when this page mounted (back-navigation into a
   // completed auto flow), don't re-fire generation — show the outline instead.
   const outlinesPreexistingRef = useRef(outlines.length > 0);
-  // Track whether generation actually started, so we can tell the brief bridge
-  // window (submitted, loading not yet on) apart from a FAILED generation
-  // (loading turned on then off while still on this page). handleSubmit handles
-  // its own errors and resets loadingState, so there is no throw to catch.
-  const hasStartedGeneratingRef = useRef(false);
-  useEffect(() => {
-    if (loadingState.isLoading) hasStartedGeneratingRef.current = true;
-  }, [loadingState.isLoading]);
   useEffect(() => {
     if (!auto || autoSubmittedRef.current) return;
     if (outlinesPreexistingRef.current) return;
@@ -77,15 +69,11 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
   }
 
   // Auto mode shows a progress-only view WHILE actively working: streaming the
-  // outline, generating, or the one-tick bridge between them. If generation
-  // fails (loading ended without navigating away), this goes false and we fall
-  // through to the normal outline UI so the user can read the error and retry
-  // via 생성하기 — instead of being stuck on a frozen loader forever.
+  // outline or generating. handleSubmit enables loading synchronously before its
+  // first await. If generation fails and loading ends without navigation, this
+  // becomes false and the normal outline UI lets the user retry.
   const autoWorking =
-    auto &&
-    (streamState.isStreaming ||
-      loadingState.isLoading ||
-      (autoSubmittedRef.current && !hasStartedGeneratingRef.current));
+    auto && (streamState.isStreaming || loadingState.isLoading);
   if (autoWorking) {
     const generating = loadingState.isLoading;
     return (
