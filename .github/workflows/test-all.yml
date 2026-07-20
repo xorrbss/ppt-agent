@@ -12,10 +12,9 @@ jobs:
     name: Test Main FastAPI
     runs-on: ubuntu-latest
     env:
-      # runner.temp stays writable when this job is moved to a Windows runner.
-      APP_DATA_DIRECTORY: ${{ runner.temp }}/presenton-app-data
-      TEMP_DIRECTORY: ${{ runner.temp }}/presenton-temp
-      USER_CONFIG_PATH: ${{ runner.temp }}/presenton-app-data/userConfig.json
+      APP_DATA_DIRECTORY: /tmp/presenton-app-data
+      TEMP_DIRECTORY: /tmp/presenton-temp
+      USER_CONFIG_PATH: /tmp/presenton-app-data/userConfig.json
       PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
       DATABASE_URL: sqlite+aiosqlite:///./test.db
       DISABLE_ANONYMOUS_TRACKING: "true"
@@ -104,6 +103,9 @@ jobs:
 
     - name: Run export app-data path unit tests
       run: node --experimental-strip-types --test lib/app-data-directory.test.mjs
+
+    - name: Run authored hybrid contract and Chrome smoke tests
+      run: node --experimental-strip-types --test lib/authored-hybrid/contract.test.mjs lib/authored-hybrid/chrome.test.mjs
 
     - name: Run composeStyledTheme unit test
       run: node --experimental-strip-types "app/(presentation-generator)/presentation/utils/composeStyledTheme.test.mjs"
