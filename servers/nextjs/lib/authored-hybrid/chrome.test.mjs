@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
-import { createServer } from "node:http";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import sharp from "sharp";
 
@@ -575,27 +575,15 @@ test("backplate capture rejects style-only identity drift", async (t) => {
     return;
   }
 
-  let stylesheetRequests = 0;
-  let stylesheetColor = "rgb(255,0,0)";
-  const server = createServer((request, response) => {
-    if (request.url !== "/style.css") {
-      response.writeHead(404).end();
-      return;
-    }
-    stylesheetRequests += 1;
-    response.writeHead(200, { "content-type": "text/css" });
-    response.end(`p{color:${stylesheetColor}}`);
-  });
-  await new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", resolve);
-  });
-  t.after(() => new Promise((resolve) => server.close(resolve)));
-  const address = server.address();
-  assert.ok(address && typeof address === "object");
-  const baseUrl = `http://127.0.0.1:${address.port}/`;
+  const stylesheetDirectory = await fs.mkdtemp(
+    path.join(os.tmpdir(), "authored-hybrid-style-")
+  );
+  t.after(() => fs.rm(stylesheetDirectory, { recursive: true, force: true }));
+  const stylesheetPath = path.join(stylesheetDirectory, "style.css");
+  await fs.writeFile(stylesheetPath, "p{color:rgb(255,0,0)}", "utf8");
+  const baseUrl = pathToFileURL(`${stylesheetDirectory}${path.sep}`).href;
   const html = `<!doctype html><html><head>
-    <base href="${baseUrl}"><link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css">
     <style>html,body{width:1280px;height:720px;margin:0;overflow:hidden}p{position:absolute;left:80px;top:80px;margin:0;font:32px/40px Arial}</style>
   </head><body><p data-ppt-role="body">stable text</p></body></html>`;
   const options = { chromeExecutable, timeoutMs: 30_000, baseUrl };
@@ -604,9 +592,13 @@ test("backplate capture rejects style-only identity drift", async (t) => {
   assert.ok(text);
   assert.equal(text.text.style.color.hex, "FF0000");
 
-  stylesheetColor = "rgb(0,0,255)";
-  const result = await renderAuthoredBackplate(html, slide, [text.id], options);
+  await fs.writeFile(stylesheetPath, "p{color:rgb(0,0,255)}", "utf8");
+  const result = await renderAuthoredBackplate(
+    html,
+    slide,
+    [text.id],
+    options
+  );
   assert.deepEqual(result.appliedPromotedElementIds, []);
   assert.deepEqual(result.fallbackElementIds, [text.id]);
-  assert.ok(stylesheetRequests >= 2);
 });
