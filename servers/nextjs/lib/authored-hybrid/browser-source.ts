@@ -1542,14 +1542,9 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
 
     var suppression = applySuppression(records);
     if (suppression.applied.length) {
-      await Promise.allSettled(
-        suppression.applied.map(function (id) {
-          var record = records.find(function (item) { return item.observation.id === id; });
-          return record && record.element.tagName === "IMG" && typeof record.element.decode === "function"
-            ? record.element.decode()
-            : Promise.resolve();
-        })
-      );
+      // Suppressed images are already synchronously removed from paint by an
+      // inline !important opacity. decode() is unnecessary here and can remain
+      // pending forever in headless Chrome after swapping an image source.
       await waitForTwoPaints();
     }
 

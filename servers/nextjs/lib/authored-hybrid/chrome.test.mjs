@@ -224,6 +224,35 @@ test("Chrome extracts candidates and produces subset-aware RGBA backplates", asy
   );
 });
 
+test("Chrome backplate capture is not blocked by a pending image decode", async (t) => {
+  const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
+  if (!chromeExecutable) {
+    if (process.env.CI === "true") assert.fail("CI must provide Chrome/Chromium");
+    t.skip("Chrome/Chromium is unavailable");
+    return;
+  }
+
+  const html = `<!doctype html><html><head><style>
+    html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:transparent}
+    img{position:absolute;left:40px;top:40px;width:120px;height:80px}
+  </style></head><body>
+    <img alt="pending decode" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4oKDwHwAFZAIwtYA8zQAAAABJRU5ErkJggg==">
+    <script>HTMLImageElement.prototype.decode=function(){return new Promise(function(){})}</script>
+  </body></html>`;
+  const options = { chromeExecutable, timeoutMs: 30_000 };
+  const slide = await extractAuthoredSlideDom(html, options);
+  const image = slide.elements.find(
+    (element) => "image" in element && element.image.alt === "pending decode"
+  );
+  assert.ok(image);
+  assert.equal(image.classification.mode, "native");
+
+  const result = await renderAuthoredBackplate(html, slide, [image.id], options);
+  assert.deepEqual(result.appliedPromotedElementIds, [image.id]);
+  assert.deepEqual(result.fallbackElementIds, []);
+  assert.deepEqual(await rgbaAt(result.backplatePng, 100, 80), [0, 0, 0, 0]);
+});
+
 test("Chrome rejects changed element identity without failing the whole backplate", async (t) => {
   const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
   if (!chromeExecutable) {
