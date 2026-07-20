@@ -33,6 +33,7 @@ from utils.llm_calls.author_deck import (
 )
 from utils.llm_calls.author_slide import (
     Brand,
+    apply_style_defaults,
     build_design_system,
     fallback_slide_html,
     is_valid_slide_html,
@@ -190,6 +191,69 @@ def test_author_deck_builds_and_shares_selected_design_system_once(monkeypatch):
     assert author_design_systems == ["SELECTED DESIGN SYSTEM"] * 3
 
 
+def test_author_deck_sends_role_specific_visual_references(monkeypatch, tmp_path):
+    cover = tmp_path / "cover.png"
+    content = tmp_path / "content.png"
+    closing = tmp_path / "closing.png"
+    style = SimpleNamespace(
+        id="visual",
+        brief="- Visual",
+        reference_images={
+            "cover": (cover,),
+            "content": (content,),
+            "closing": (closing,),
+        },
+    )
+    captured = []
+
+    async def fake_author(
+        content_text,
+        design_system,
+        brand,
+        role,
+        index,
+        n,
+        reference_images=None,
+    ):
+        captured.append((role, tuple(reference_images or ())))
+        return _VALID
+
+    monkeypatch.setattr(author_deck_mod, "author_slide_html", fake_author)
+
+    _run(author_deck(_outline(3), _brand(), style))
+
+    assert captured == [
+        ("COVER", (cover,)),
+        ("PROBLEM", (content,)),
+        ("CLOSING", (closing,)),
+    ]
+
+
+def test_style_defaults_preserve_explicit_brand_overrides():
+    style = SimpleNamespace(
+        id="visual",
+        primary_color="#35F2C2",
+        body_font="Noto Sans KR",
+        heading_font="Space Grotesk",
+    )
+    preset_brand = apply_style_defaults(_brand(), style)
+    custom_brand = apply_style_defaults(
+        Brand(
+            topic="topic",
+            primary="#FF6600",
+            fonts="Pretendard",
+            primary_is_explicit=True,
+            fonts_are_explicit=True,
+        ),
+        style,
+    )
+
+    assert preset_brand.primary == "#35F2C2"
+    assert preset_brand.fonts == "Noto Sans KR"
+    assert custom_brand.primary == "#FF6600"
+    assert custom_brand.fonts == "Pretendard"
+
+
 def test_generate_request_accepts_optional_authored_style():
     assert GeneratePresentationRequest(content="topic").authored_style is None
     request = GeneratePresentationRequest(content="topic", authored_style="editorial")
@@ -245,9 +309,10 @@ def test_authored_service_resolves_passes_and_persists_canonical_style(monkeypat
         return [b"png"]
 
     async def fake_revise(
-        htmls, pngs, contents, roles, brand, design_system, max_cycles
+        htmls, pngs, contents, roles, brand, design_system, max_cycles, style=None
     ):
         captured["vision_design_system"] = design_system
+        captured["vision_style"] = style
         return htmls, pngs, []
 
     class FakeSession:
@@ -304,6 +369,7 @@ def test_authored_service_resolves_passes_and_persists_canonical_style(monkeypat
 
     assert captured["style"] is selected_style
     assert captured["vision_design_system"] == "SELECTED DESIGN SYSTEM"
+    assert captured["vision_style"] is selected_style
     assert presentation.theme["style"] == "editorial"
     assert presentation.theme["mode"] == "authored"
     assert result.path == "deck.pptx"

@@ -11,10 +11,12 @@ from typing import List, Optional, Tuple
 
 from utils.llm_calls.author_slide import (
     AUTHOR_CONCURRENCY,
+    AuthoredStyleLike,
     Brand,
     author_slide_html,
     is_valid_slide_html,
 )
+from utils.authored_styles import reference_images_for_role
 from utils.llm_calls.critique_slide import SlideCritique, critique_slide_image
 from utils.slide_capture import render_html_to_png
 
@@ -74,6 +76,7 @@ async def revise_authored_deck(
     brand: Brand,
     design_system: str,
     max_cycles: int = 1,
+    style: Optional[AuthoredStyleLike] = None,
 ) -> Tuple[List[str], List[bytes], List[int]]:
     """Bounded critique -> re-author -> re-render loop over an authored deck. Returns
     the (possibly revised) htmls + pngs and the indices that changed."""
@@ -98,10 +101,23 @@ async def revise_authored_deck(
                 # Correction-under-critique is the quality-critical step: re-author at
                 # HIGH reasoning effort (the max) so the fix gets MORE reasoning than the
                 # fast 'low' first pass, regardless of the provider's default effort.
-                new_html = await author_slide_html(
-                    content, design_system, brand, roles[i], i, n,
-                    reasoning_effort="high",
-                )
+                refs = reference_images_for_role(style, roles[i])
+                if refs:
+                    new_html = await author_slide_html(
+                        content,
+                        design_system,
+                        brand,
+                        roles[i],
+                        i,
+                        n,
+                        reasoning_effort="high",
+                        reference_images=refs,
+                    )
+                else:
+                    new_html = await author_slide_html(
+                        content, design_system, brand, roles[i], i, n,
+                        reasoning_effort="high",
+                    )
                 new_png = await render_html_to_png(new_html)
                 return i, new_html, new_png
             except Exception:

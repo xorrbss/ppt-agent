@@ -12,11 +12,12 @@ import logging
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
-from typing import Optional, Protocol
+from dataclasses import dataclass, replace
+from pathlib import Path
+from typing import Mapping, Optional, Protocol, Sequence
 
 from llmai import get_client
-from llmai.shared import SystemMessage, UserMessage
+from llmai.shared import ImageContentPart, SystemMessage, TextContentPart, UserMessage
 
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_config import get_llm_config
@@ -28,6 +29,7 @@ logger = logging.getLogger(__name__)
 # A bespoke full-bleed HTML slide with inline CSS is large; give the model room so
 # the document is never truncated mid-markup (truncation => broken render).
 AUTHOR_MAX_TOKENS = 16000
+REFERENCE_IMAGE_MAX_BYTES = 8 * 1024 * 1024
 
 
 def _env_int(name: str, default: int) -> int:
@@ -102,6 +104,8 @@ class Brand:
     primary: str = "#2563EB"
     fonts: str = "Noto Sans KR"
     wordmark: str = ""
+    primary_is_explicit: bool = False
+    fonts_are_explicit: bool = False
 
 
 class AuthoredStyleLike(Protocol):
@@ -109,6 +113,29 @@ class AuthoredStyleLike(Protocol):
 
     id: str
     brief: str
+    primary_color: Optional[str]
+    background_color: Optional[str]
+    heading_font: Optional[str]
+    body_font: Optional[str]
+    mono_font: Optional[str]
+    reference_images: Mapping[str, tuple[Path, ...]]
+
+
+def apply_style_defaults(brand: Brand, style: Optional[AuthoredStyleLike]) -> Brand:
+    """Apply preset brand defaults without overriding explicit request values."""
+    if style is None or style.id == "default":
+        return brand
+    primary = brand.primary
+    fonts = brand.fonts
+    if not brand.primary_is_explicit:
+        primary = getattr(style, "primary_color", None) or primary
+    if not brand.fonts_are_explicit:
+        fonts = (
+            getattr(style, "body_font", None)
+            or getattr(style, "heading_font", None)
+            or fonts
+        )
+    return replace(brand, primary=primary, fonts=fonts)
 
 
 def build_design_system(
@@ -128,6 +155,22 @@ def build_design_system(
         )
     else:
         style_brief = style.brief.strip()
+        token_lines = []
+        background = getattr(style, "background_color", None)
+        heading_font = getattr(style, "heading_font", None)
+        body_font = getattr(style, "body_font", None)
+        mono_font = getattr(style, "mono_font", None)
+        if background:
+            token_lines.append(f"- Default canvas background: {background}.")
+        if heading_font or body_font or mono_font:
+            token_lines.append(
+                "- Typography roles: "
+                f"headings {heading_font or brand.fonts}; "
+                f"body {body_font or brand.fonts}; "
+                f"labels/data {mono_font or body_font or brand.fonts}."
+            )
+        if token_lines:
+            style_brief = f"{style_brief}\n" + "\n".join(token_lines)
     return _DESIGN_SYSTEM_RULES.format(
         primary=brand.primary or "#2563EB",
         fonts=brand.fonts or "Noto Sans KR",
@@ -152,6 +195,35 @@ def _author_prompt(
         "Design THIS slide bespoke and premium within the shared system, vary the layout to "
         "suit the role, output ONLY the complete self-contained HTML document."
     )
+
+
+_REFERENCE_GUIDANCE = (
+    "\n\nVISUAL REFERENCES are attached for composition, hierarchy, depth, lighting, "
+    "diagram density, and overall polish. Use them as art direction only. Do NOT copy "
+    "their text, logos, brand names, exact illustrations, or factual content. Rebuild "
+    "an original slide from this slide's CONTENT and the shared design system."
+)
+
+
+def _reference_parts(reference_images: Sequence[Path]) -> list[ImageContentPart]:
+    parts: list[ImageContentPart] = []
+    mime_by_suffix = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+    }
+    for path in reference_images:
+        try:
+            if path.stat().st_size > REFERENCE_IMAGE_MAX_BYTES:
+                logger.warning("Skipping oversized authored reference image %s", path)
+                continue
+            mime = mime_by_suffix.get(path.suffix.lower())
+            if mime:
+                parts.append(ImageContentPart(data=path.read_bytes(), mime_type=mime))
+        except OSError as exc:
+            logger.warning("Unable to read authored reference image %s: %s", path, exc)
+    return parts
 
 
 _LEADING_FENCE = re.compile(r"^\s*```[a-zA-Z]*\s*\n")
@@ -270,6 +342,7 @@ async def author_slide_html(
     index: int,
     n: int,
     reasoning_effort: Optional[str] = None,
+    reference_images: Optional[Sequence[Path]] = None,
 ) -> str:
     """Author one bespoke, self-contained 1280x720 HTML slide. Single text-generation
     call against the configured provider; returns the cleaned HTML document.
@@ -279,10 +352,14 @@ async def author_slide_html(
     run at the provider's full default effort rather than the fast authoring 'low'."""
     client = get_client(config=get_llm_config())
     model = get_model()
-    messages = [
-        SystemMessage(content=_SYSTEM),
-        UserMessage(content=_author_prompt(content, design_system, brand, role, index, n)),
-    ]
+    prompt = _author_prompt(content, design_system, brand, role, index, n)
+    image_parts = _reference_parts(reference_images or ())
+    user_content = (
+        [TextContentPart(text=prompt + _REFERENCE_GUIDANCE), *image_parts]
+        if image_parts
+        else prompt
+    )
+    messages = [SystemMessage(content=_SYSTEM), UserMessage(content=user_content)]
     kwargs = get_generate_kwargs(
         model=model, messages=messages, max_tokens=AUTHOR_MAX_TOKENS
     )
@@ -291,14 +368,36 @@ async def author_slide_html(
         # codex-only; get_extra_body() populates extra_body only for the (mutually
         # exclusive) CUSTOM provider, so this reasoning dict is the sole source here.
         kwargs["extra_body"] = reasoning
-    try:
+    async def generate(generate_kwargs: dict):
         # Run the blocking call on the dedicated authoring pool (bounds concurrency to
         # AUTHOR_CONCURRENCY and keeps long authoring threads off the shared default
         # executor used by other LLM calls / exports).
         loop = asyncio.get_running_loop()
-        response = await loop.run_in_executor(
-            _AUTHOR_EXECUTOR, functools.partial(client.generate, **kwargs)
+        return await loop.run_in_executor(
+            _AUTHOR_EXECUTOR, functools.partial(client.generate, **generate_kwargs)
         )
+
+    try:
+        response = await generate(kwargs)
     except Exception as e:
-        raise handle_llm_client_exceptions(e)
+        if not image_parts:
+            raise handle_llm_client_exceptions(e)
+        logger.warning(
+            "Multimodal authored generation failed for slide %d; retrying text-only: %s",
+            index + 1,
+            e,
+        )
+        fallback_messages = [
+            SystemMessage(content=_SYSTEM),
+            UserMessage(content=prompt),
+        ]
+        fallback_kwargs = get_generate_kwargs(
+            model=model, messages=fallback_messages, max_tokens=AUTHOR_MAX_TOKENS
+        )
+        if reasoning:
+            fallback_kwargs["extra_body"] = reasoning
+        try:
+            response = await generate(fallback_kwargs)
+        except Exception as fallback_error:
+            raise handle_llm_client_exceptions(fallback_error)
     return extract_html_document(extract_text(response.content) or "")

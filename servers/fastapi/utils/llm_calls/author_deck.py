@@ -15,10 +15,12 @@ from utils.llm_calls.author_slide import (
     AuthoredStyleLike,
     Brand,
     author_slide_html,
+    apply_style_defaults,
     build_design_system,
     fallback_slide_html,
     is_valid_slide_html,
 )
+from utils.authored_styles import reference_images_for_role
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +46,12 @@ _METRIC_HINTS = (
 )
 _TIMELINE_HINTS = (
     "단계", "로드맵", "분기", "타임라인", "절차", "순서", "스텝",
-    "phase", "roadmap", "timeline", "step", "quarter", "2024", "2025", "2026", "2027",
+    "단계", "로드맵", "프로세스", "대응 흐름", "phase", "roadmap", "timeline", "step",
+    "pipeline", "quarter", "2024", "2025", "2026", "2027",
+)
+_ARCHITECTURE_HINTS = (
+    "아키텍처", "구조", "시스템", "에이전트", "architecture", "system", "platform",
+    "layer", "integration", "agent",
 )
 
 
@@ -57,6 +64,8 @@ def derive_role(index: int, n: int, content: str) -> str:
     if index == 1:
         return "PROBLEM"
     lowered = content.lower()
+    if any(h.lower() in lowered for h in _ARCHITECTURE_HINTS):
+        return "ARCHITECTURE"
     if any(h.lower() in lowered for h in _TIMELINE_HINTS):
         return "ROADMAP"
     if any(h.lower() in lowered for h in _METRIC_HINTS):
@@ -79,6 +88,7 @@ async def _author_one_resilient(
     role: str,
     index: int,
     n: int,
+    reference_images=(),
 ) -> str:
     """Author one slide with one retry and a branded fallback. Never raises and never
     returns invalid HTML — so one bad slide degrades to a clean placeholder instead of
@@ -87,9 +97,20 @@ async def _author_one_resilient(
     last_error: object = "invalid HTML"
     for _ in range(2):
         try:
-            html = await author_slide_html(
-                content, design_system, brand, role, index, n
-            )
+            if reference_images:
+                html = await author_slide_html(
+                    content,
+                    design_system,
+                    brand,
+                    role,
+                    index,
+                    n,
+                    reference_images=reference_images,
+                )
+            else:
+                html = await author_slide_html(
+                    content, design_system, brand, role, index, n
+                )
             if is_valid_slide_html(html):
                 return html
         except Exception as e:  # noqa: BLE001 — resilience boundary, recorded below
@@ -115,12 +136,19 @@ async def author_deck(
     to a clean branded placeholder."""
     slides = list(outline.slides)
     n = len(slides)
+    brand = apply_style_defaults(brand, style)
     design_system = build_design_system(brand, style)
     roles = plan_deck_roles(outline)
     htmls = await asyncio.gather(
         *[
             _author_one_resilient(
-                slides[i].content, design_system, brand, roles[i], i, n
+                slides[i].content,
+                design_system,
+                brand,
+                roles[i],
+                i,
+                n,
+                reference_images_for_role(style, roles[i]),
             )
             for i in range(n)
         ]
