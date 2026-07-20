@@ -415,7 +415,7 @@ def test_export_includes_optional_fastapi_param():
             await export_presentation(dummy, title="safe", export_as="pdf")
 
         pdf_call = mock_pdf.await_args.kwargs
-        assert "pdf-maker" in pdf_call["url"]
+        assert pdf_call["url"].startswith("https://next.example/pdf-maker?")
         assert pdf_call["fastapi_url"] == "https://fast.example"
 
         mock_pptx = AsyncMock(return_value=fake_result)
@@ -425,6 +425,23 @@ def test_export_includes_optional_fastapi_param():
             await export_presentation(dummy, title="two", export_as="pptx")
         pptx_call = mock_pptx.await_args.kwargs
         assert pptx_call["fastapi_url"] is None
+
+    asyncio.run(runner())
+
+
+def test_export_uses_next_internal_url_when_public_url_is_unset(monkeypatch):
+    monkeypatch.delenv("NEXT_PUBLIC_URL", raising=False)
+    monkeypatch.setenv("NEXT_INTERNAL_URL", "http://localhost:5000/")
+
+    async def runner():
+        fake_result = MagicMock(path="/exports/deck.pptx")
+        dummy = uuid.uuid4()
+        mock_export = AsyncMock(return_value=fake_result)
+        with patch.object(EXPORT_TASK_SERVICE, "export_from_url", mock_export):
+            await export_presentation(dummy, title="local", export_as="pptx")
+
+        export_call = mock_export.await_args.kwargs
+        assert export_call["url"] == f"http://localhost:5000/pdf-maker?id={dummy}"
 
     asyncio.run(runner())
 
