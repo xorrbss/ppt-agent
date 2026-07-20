@@ -103,14 +103,25 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       "Arial Unicode MS",
       "sans-serif",
     ];
-    var lower = new Set(
-      families.map(function (family) {
+    var knownCjk = new Set(
+      fallback.map(function (family) {
         return family.toLowerCase();
       })
     );
-    return fallback.filter(function (family) {
-      return !lower.has(family.toLowerCase());
+    var preferred = families.filter(function (family) {
+      var lower = family.toLowerCase();
+      return lower !== "sans-serif" && knownCjk.has(lower);
     });
+    var preferredNames = new Set(
+      preferred.map(function (family) {
+        return family.toLowerCase();
+      })
+    );
+    return preferred.concat(
+      fallback.filter(function (family) {
+        return !preferredNames.has(family.toLowerCase());
+      })
+    );
   }
 
   function textStyle(element, text) {

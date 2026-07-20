@@ -77,7 +77,7 @@ export function preflightAuthoredHtmlForHybrid(
     /<\s*base\b/i,
     /<\s*foreignObject\b/i,
     /<\s*meta\b[^>]*http-equiv\s*=\s*["']?refresh\b/i,
-    /\s(?:on[a-z0-9_-]+|srcdoc)\s*=/i,
+    /(?:\s|\/)(?:on[a-z0-9_-]+|srcdoc)\s*=/i,
     /\b(?:srcset|imagesrcset|ping)\s*=/i,
     /@import\b/i,
     /\b(?:-webkit-)?image-set\s*\(/i,

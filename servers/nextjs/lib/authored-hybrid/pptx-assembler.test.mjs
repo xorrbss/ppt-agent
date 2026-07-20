@@ -15,9 +15,9 @@ const CONTENT_TYPES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 const PRESENTATION = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:sldSz cx="12192000" cy="6858000"/></p:presentation>`;
 const SLIDE = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/><p:pic><p:nvPicPr><p:cNvPr id="2" name="historical full-slide image"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr></p:pic></p:spTree></p:cSld></p:sld>`;
+<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/><p:pic><p:nvPicPr><p:cNvPr id="2" name="historical full-slide image"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="rId2"/></p:blipFill></p:pic></p:spTree></p:cSld></p:sld>`;
 const RELS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/></Relationships>`;
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/></Relationships>`;
 
 const bounds = (x, y, width, height) => ({
   px: { x, y, width, height },
@@ -41,15 +41,53 @@ const textStyle = {
   direction: "ltr",
 };
 
-function skeleton(width = "12192000") {
-  return writePptxArchive(
-    new Map([
-      ["[Content_Types].xml", Buffer.from(CONTENT_TYPES)],
-      ["ppt/presentation.xml", Buffer.from(PRESENTATION.replace("12192000", width))],
-      ["ppt/slides/slide1.xml", Buffer.from(SLIDE)],
-      ["ppt/slides/_rels/slide1.xml.rels", Buffer.from(RELS)],
-    ])
-  );
+function skeleton(
+  width = "12192000",
+  sharedMediaReference = false,
+  aliasedSlideReference = false
+) {
+  const relationshipReference =
+    aliasedSlideReference === "numeric-entity" ? "rId&#50;" : "rId2";
+  const slide = aliasedSlideReference
+    ? SLIDE.replace(
+        "<p:cSld>",
+        aliasedSlideReference === "numeric-entity"
+          ? `<p:cSld><p:bg><p:bgPr><a:blipFill><a:blip r:embed="${relationshipReference}"/></a:blipFill></p:bgPr></p:bg>`
+          : `<p:cSld><p:bg><p:bgPr><a:blipFill><a:blip rel:embed="${relationshipReference}"/></a:blipFill></p:bgPr></p:bg>`
+      ).replace(
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"',
+        aliasedSlideReference === "numeric-entity"
+          ? 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
+          : 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:rel="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
+      )
+    : SLIDE;
+  const entries = new Map([
+    ["[Content_Types].xml", Buffer.from(CONTENT_TYPES)],
+    ["ppt/presentation.xml", Buffer.from(PRESENTATION.replace("12192000", width))],
+    ["ppt/slides/slide1.xml", Buffer.from(slide)],
+    ["ppt/slides/_rels/slide1.xml.rels", Buffer.from(RELS)],
+    ["ppt/media/image1.png", Buffer.from("historical full-slide raster")],
+  ]);
+  if (sharedMediaReference) {
+    entries.set("ppt/slides/slide2.xml", Buffer.from(SLIDE));
+    const sharedRelationships =
+      sharedMediaReference === "explicit-close"
+        ? RELS.replace(
+            /(<Relationship Id="rId2"[^>]*)\/>/,
+            "$1></Relationship>"
+          )
+        : sharedMediaReference === "numeric-entity"
+          ? RELS.replace("image1.png", "image&#49;.png")
+        : sharedMediaReference === "uppercase-target"
+          ? RELS.replace("image1.png", "IMAGE1.PNG")
+        : RELS;
+    const sharedRelsPath =
+      sharedMediaReference === "uppercase-rels-path"
+        ? "ppt/slides/_RELS/slide2.xml.RELS"
+        : "ppt/slides/_rels/slide2.xml.rels";
+    entries.set(sharedRelsPath, Buffer.from(sharedRelationships));
+  }
+  return writePptxArchive(entries);
 }
 
 test("assembler puts a transparent backplate below editable native layers", async () => {
@@ -119,8 +157,144 @@ test("assembler puts a transparent backplate below editable native layers", asyn
       slideXml.indexOf("Presenton hybrid text editable-cjk")
   );
   assert.match(relsXml, /hybrid-s1-backplate-[a-f0-9]{16}\.png/);
+  assert.doesNotMatch(relsXml, /Id="rId2"/);
+  assert.equal(entries.has("ppt/media/image1.png"), false);
   assert.ok([...entries.keys()].some((name) => /^ppt\/media\/hybrid-s1-backplate-/.test(name)));
   assert.match(entries.get("[Content_Types].xml").toString("utf8"), /Extension="png"/);
+});
+
+test("assembler keeps media that an untouched slide still references", async () => {
+  const backplate = await sharp({
+    create: { width: 1280, height: 720, channels: 4, background: "transparent" },
+  })
+    .png()
+    .toBuffer();
+  const output = assembleAuthoredHybridPptx(skeleton("12192000", true), [
+    { slideNumber: 1, backplatePng: backplate, elements: [] },
+  ]);
+  const entries = readPptxArchive(output);
+
+  assert.doesNotMatch(
+    entries.get("ppt/slides/_rels/slide1.xml.rels").toString("utf8"),
+    /Id="rId2"/
+  );
+  assert.match(
+    entries.get("ppt/slides/_rels/slide2.xml.rels").toString("utf8"),
+    /Id="rId2"/
+  );
+  assert.equal(entries.has("ppt/media/image1.png"), true);
+});
+
+test("assembler keeps media referenced by an explicitly closed Relationship", async () => {
+  const backplate = await sharp({
+    create: { width: 1280, height: 720, channels: 4, background: "transparent" },
+  })
+    .png()
+    .toBuffer();
+  const output = assembleAuthoredHybridPptx(skeleton("12192000", "explicit-close"), [
+    { slideNumber: 1, backplatePng: backplate, elements: [] },
+  ]);
+  const entries = readPptxArchive(output);
+
+  assert.match(
+    entries.get("ppt/slides/_rels/slide2.xml.rels").toString("utf8"),
+    /Id="rId2"[^>]*><\/Relationship>/
+  );
+  assert.equal(entries.has("ppt/media/image1.png"), true);
+});
+
+test("assembler keeps relationships referenced through an alternate namespace prefix", async () => {
+  const backplate = await sharp({
+    create: { width: 1280, height: 720, channels: 4, background: "transparent" },
+  })
+    .png()
+    .toBuffer();
+  const output = assembleAuthoredHybridPptx(skeleton("12192000", false, true), [
+    { slideNumber: 1, backplatePng: backplate, elements: [] },
+  ]);
+  const entries = readPptxArchive(output);
+  const slideXml = entries.get("ppt/slides/slide1.xml").toString("utf8");
+  const relationshipsXml = entries
+    .get("ppt/slides/_rels/slide1.xml.rels")
+    .toString("utf8");
+
+  assert.match(slideXml, /rel:embed="rId2"/);
+  assert.match(relationshipsXml, /Id="rId2"/);
+  assert.equal(entries.has("ppt/media/image1.png"), true);
+});
+
+test("assembler resolves XML entities in slide relationship references", async () => {
+  const backplate = await sharp({
+    create: { width: 1280, height: 720, channels: 4, background: "transparent" },
+  })
+    .png()
+    .toBuffer();
+  const output = assembleAuthoredHybridPptx(skeleton("12192000", false, "numeric-entity"), [
+    { slideNumber: 1, backplatePng: backplate, elements: [] },
+  ]);
+  const entries = readPptxArchive(output);
+  const slideXml = entries.get("ppt/slides/slide1.xml").toString("utf8");
+  const relationshipsXml = entries
+    .get("ppt/slides/_rels/slide1.xml.rels")
+    .toString("utf8");
+
+  assert.match(slideXml, /r:embed="rId&#50;"/);
+  assert.match(relationshipsXml, /Id="rId2"/);
+  assert.equal(entries.has("ppt/media/image1.png"), true);
+});
+
+test("assembler resolves XML entities before checking shared media targets", async () => {
+  const backplate = await sharp({
+    create: { width: 1280, height: 720, channels: 4, background: "transparent" },
+  })
+    .png()
+    .toBuffer();
+  const output = assembleAuthoredHybridPptx(skeleton("12192000", "numeric-entity"), [
+    { slideNumber: 1, backplatePng: backplate, elements: [] },
+  ]);
+  const entries = readPptxArchive(output);
+
+  assert.match(
+    entries.get("ppt/slides/_rels/slide2.xml.rels").toString("utf8"),
+    /Target="\.\.\/media\/image&#49;\.png"/
+  );
+  assert.equal(entries.has("ppt/media/image1.png"), true);
+});
+
+test("assembler compares shared OPC part targets without ASCII case", async () => {
+  const backplate = await sharp({
+    create: { width: 1280, height: 720, channels: 4, background: "transparent" },
+  })
+    .png()
+    .toBuffer();
+  const output = assembleAuthoredHybridPptx(skeleton("12192000", "uppercase-target"), [
+    { slideNumber: 1, backplatePng: backplate, elements: [] },
+  ]);
+  const entries = readPptxArchive(output);
+
+  assert.match(
+    entries.get("ppt/slides/_rels/slide2.xml.rels").toString("utf8"),
+    /Target="\.\.\/media\/IMAGE1\.PNG"/
+  );
+  assert.equal(entries.has("ppt/media/image1.png"), true);
+});
+
+test("assembler scans relationship parts without ASCII case", async () => {
+  const backplate = await sharp({
+    create: { width: 1280, height: 720, channels: 4, background: "transparent" },
+  })
+    .png()
+    .toBuffer();
+  const output = assembleAuthoredHybridPptx(skeleton("12192000", "uppercase-rels-path"), [
+    { slideNumber: 1, backplatePng: backplate, elements: [] },
+  ]);
+  const entries = readPptxArchive(output);
+
+  assert.match(
+    entries.get("ppt/slides/_RELS/slide2.xml.RELS").toString("utf8"),
+    /Target="\.\.\/media\/image1\.png"/
+  );
+  assert.equal(entries.has("ppt/media/image1.png"), true);
 });
 
 test("assembler fails closed for an incompatible slide size or malformed PNG", async () => {
