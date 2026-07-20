@@ -16,10 +16,9 @@ jobs:
         working-directory: servers/fastapi
     env:
       # Mirrors the CI env the suite is written for.
-      # runner.temp stays writable when this job is moved to a Windows runner.
-      APP_DATA_DIRECTORY: ${{ runner.temp }}/presenton-app-data
-      TEMP_DIRECTORY: ${{ runner.temp }}/presenton-temp
-      USER_CONFIG_PATH: ${{ runner.temp }}/presenton-app-data/userConfig.json
+      APP_DATA_DIRECTORY: /tmp/presenton-app-data
+      TEMP_DIRECTORY: /tmp/presenton-temp
+      USER_CONFIG_PATH: /tmp/presenton-app-data/userConfig.json
       DATABASE_URL: sqlite+aiosqlite:///./test.db
       DISABLE_ANONYMOUS_TRACKING: "true"
       DISABLE_IMAGE_GENERATION: "true"
