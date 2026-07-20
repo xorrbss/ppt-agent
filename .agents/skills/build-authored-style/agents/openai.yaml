@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build Authored Style"
+  short_description: "Draft Authored YAML from PPTX/PDF evidence"
+  default_prompt: "Use $build-authored-style to analyze one local PPTX or PDF and create a loader-validated Authored style YAML draft with evidence JSON."
