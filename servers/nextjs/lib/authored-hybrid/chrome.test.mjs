@@ -118,6 +118,11 @@ test("Chrome extracts candidates and produces subset-aware RGBA backplates", asy
     title.text.style.cjkFallbackFamilies.includes("Noto Sans KR"),
     "CJK fallback stack should be explicit"
   );
+  assert.equal(
+    title.text.style.cjkFallbackFamilies[0],
+    "Malgun Gothic",
+    "the authored CJK font should remain the preferred PowerPoint typeface"
+  );
 
   const expectedFallbackReasons = [
     "filter",
