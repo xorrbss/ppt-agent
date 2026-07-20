@@ -46,14 +46,21 @@ $env:APP_DATA_DIRECTORY="..\..\app_data"; $env:USER_CONFIG_PATH="..\..\app_data\
 $env:NEXT_INTERNAL_URL="http://localhost:5000"
 uv run python server.py --port 8000 --reload false
 
-# frontend (USER_CONFIG_PATH is required here too — see note below)
+# frontend (APP_DATA_DIRECTORY + USER_CONFIG_PATH are required here too — see note below)
 cd servers/nextjs; npm install
-$env:FAST_API_INTERNAL_URL="http://127.0.0.1:8000"; $env:USER_CONFIG_PATH="..\..\app_data\userConfig.json"; npm run build; npm run start -- -p 3000
+$env:APP_DATA_DIRECTORY="..\..\app_data"; $env:FAST_API_INTERNAL_URL="http://127.0.0.1:8000"; $env:NEXT_INTERNAL_URL="http://localhost:5000"; $env:USER_CONFIG_PATH="..\..\app_data\userConfig.json"; npm run build; npm run start -- -p 3000
 
 # single-origin proxy (serves http://localhost:5000 -> next:3000 / fastapi:8000 / mcp:8001)
 node scripts/presenton-local-proxy.mjs
 ```
 Open http://localhost:5000. First boot shows a one-time admin login (`/api/v1/auth/setup`).
+
+The bundled PPTX/PDF exporter must render through the single-origin proxy because
+authored slides load `/app_data` images. It uses `NEXT_PUBLIC_URL`, then
+`NEXT_INTERNAL_URL`, and otherwise falls back to `http://127.0.0.1:5000` (or the
+frontend process's `PROXY_PORT`).
+The exporter also receives `APP_DATA_DIRECTORY`; for compatibility with older
+native commands it derives that directory from `USER_CONFIG_PATH` when omitted.
 
 > **`USER_CONFIG_PATH` must be set on the Next.js process too, not only the backend.**
 > The route handlers `/api/user-config` and `/api/can-change-keys` read

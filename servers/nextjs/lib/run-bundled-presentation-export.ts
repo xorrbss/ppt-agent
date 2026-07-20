@@ -8,6 +8,8 @@ import {
   BoundedTextBuffer,
   memorySnapshotMb,
 } from "@/lib/runtime-limits";
+import { resolveExportRenderBaseUrl } from "@/lib/export-render-url";
+import { resolveAppDataDirectory } from "@/lib/app-data-directory";
 
 /** Repo `presentation-export/` at app root (`/app/presentation-export` in Docker). */
 export function getExportPackageRoot(): string {
@@ -149,13 +151,9 @@ function normalizeExportOutputPath(params: {
   urlValue?: string;
 }): string {
   const { pathValue, urlValue } = params;
-  const appData = process.env.APP_DATA_DIRECTORY?.trim();
+  const appData = resolveAppDataDirectory();
 
   const resolveAppDataRelative = (value: string): string => {
-    if (!appData) {
-      throw new Error("APP_DATA_DIRECTORY is required for relative export paths.");
-    }
-
     const normalized = value.startsWith("/") ? value.slice(1) : value;
     if (!normalized.startsWith("app_data/")) {
       return path.join(appData, normalized);
@@ -226,11 +224,11 @@ async function runBundledPresentationExportLocked(params: {
   const entrypoint = await resolveExportEntrypoint(exportRoot);
   const converter = bundledConverterPath(exportRoot);
   const appRoot = getPresentonAppRoot();
+  const appDataDirectory = resolveAppDataDirectory();
 
   await fs.access(converter);
 
-  const nextjsUrl =
-    process.env.NEXT_PUBLIC_URL?.trim() || "http://127.0.0.1";
+  const nextjsUrl = resolveExportRenderBaseUrl();
   const q = new URLSearchParams({ id: presentationId });
   const sessionToken = extractSessionTokenFromCookieHeader(cookieHeader);
   if (sessionToken) {
@@ -281,6 +279,9 @@ async function runBundledPresentationExportLocked(params: {
           // The entrypoint requires TEMP_DIRECTORY; forward the base we already
           // resolved so it doesn't error with "TEMP_DIRECTORY must be set".
           TEMP_DIRECTORY: tempBase,
+          // The bundled exporter writes converter output and development-mode
+          // diagnostics here. Native runs may derive this from USER_CONFIG_PATH.
+          APP_DATA_DIRECTORY: appDataDirectory,
           // Point puppeteer at a real Chrome so it doesn't try to download one.
           ...(chromeExecutable
             ? { PUPPETEER_EXECUTABLE_PATH: chromeExecutable }

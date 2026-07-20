@@ -6,16 +6,14 @@ import {
   bundledExportPackageAvailable,
   runBundledPresentationExport,
 } from "@/lib/run-bundled-presentation-export";
+import { resolveAppDataDirectory } from "@/lib/app-data-directory";
 
 function isValidFormat(value: unknown): value is BundledPresentationExportFormat {
   return value === "pdf" || value === "pptx";
 }
 
 function buildExportDownloadUrl(outPath: string): string {
-  const appDataDirectory = process.env.APP_DATA_DIRECTORY?.trim();
-  if (!appDataDirectory) {
-    throw new Error("APP_DATA_DIRECTORY is required to download exported files.");
-  }
+  const appDataDirectory = resolveAppDataDirectory();
 
   const exportsDirectory = path.join(appDataDirectory, "exports");
   const relativePath = path.relative(exportsDirectory, outPath);
