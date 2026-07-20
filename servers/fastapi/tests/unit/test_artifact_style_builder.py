@@ -333,7 +333,7 @@ def test_image_only_pdf_reports_scan_likelihood_without_ocr(tmp_path: Path) -> N
     assert analysis["signals"]["composition"]["element_counts"]["image"] == 1
 
 
-def test_pptx_active_and_external_content_is_only_reported(tmp_path: Path) -> None:
+def test_pptx_analysis_reports_active_and_external_content(tmp_path: Path) -> None:
     source = tmp_path / "security-signals.pptx"
     _pptx(source, tmp_path / "pixel.png")
     _add_inert_security_parts(source)
@@ -353,7 +353,7 @@ def test_pptx_active_and_external_content_is_only_reported(tmp_path: Path) -> No
     }.issubset(_warning_codes(analysis))
 
 
-def test_pdf_active_and_embedded_content_is_only_reported(tmp_path: Path) -> None:
+def test_pdf_analysis_reports_active_and_embedded_content(tmp_path: Path) -> None:
     source = tmp_path / "security-signals.pdf"
     _active_content_pdf(source)
 
@@ -538,6 +538,72 @@ def test_build_writes_analysis_and_loader_validated_yaml_without_catalog_changes
         style_id="observed-deck-draft",
     )
     assert target.read_bytes() == second_target.read_bytes()
+
+
+@pytest.mark.parametrize("artifact_format", ["pptx", "pdf"])
+@pytest.mark.parametrize("dry_run", [True, False])
+def test_build_fails_closed_on_active_content_without_writing(
+    tmp_path: Path, artifact_format: str, dry_run: bool
+) -> None:
+    source = tmp_path / f"active-content.{artifact_format}"
+    if artifact_format == "pptx":
+        _pptx(source, tmp_path / "pixel.png")
+        _add_inert_security_parts(source)
+    else:
+        _active_content_pdf(source)
+    target = tmp_path / "draft.yaml"
+    analysis_target = tmp_path / "draft.json"
+    before = _catalog_digest()
+
+    with pytest.raises(
+        ArtifactAnalysisError, match="active or embedded content is not accepted"
+    ):
+        build_authored_style(
+            source,
+            target,
+            analysis_output=analysis_target,
+            dry_run=dry_run,
+        )
+
+    assert not target.exists()
+    assert not analysis_target.exists()
+    assert _catalog_digest() == before
+
+
+@pytest.mark.parametrize("artifact_format", ["pptx", "pdf"])
+def test_cli_fails_closed_on_active_content_without_writing(
+    tmp_path: Path, artifact_format: str
+) -> None:
+    source = tmp_path / f"active-content.{artifact_format}"
+    if artifact_format == "pptx":
+        _pptx(source, tmp_path / "pixel.png")
+        _add_inert_security_parts(source)
+    else:
+        _active_content_pdf(source)
+    target = tmp_path / "draft.yaml"
+    analysis_target = tmp_path / "draft.json"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(CLI),
+            str(source),
+            "-o",
+            str(target),
+            "--analysis-output",
+            str(analysis_target),
+        ],
+        cwd=tmp_path,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2
+    assert "active or embedded content is not accepted" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert not target.exists()
+    assert not analysis_target.exists()
 
 
 def test_dry_run_writes_nothing_and_reuses_output_preflight(tmp_path: Path) -> None:

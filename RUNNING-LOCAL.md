@@ -40,10 +40,9 @@ run the bundled dependency-free proxy that mirrors `nginx.conf`:
 # backend (APP_DATA_DIRECTORY + USER_CONFIG_PATH are required)
 cd servers/fastapi; uv sync
 $env:APP_DATA_DIRECTORY="..\..\app_data"; $env:USER_CONFIG_PATH="..\..\app_data\userConfig.json"
-# NEXT_INTERNAL_URL lets the backend reach Next.js /api/template for built-in
-# template layouts. Default is http://localhost (nginx :80 in Docker); without
-# nginx, point it at the single-origin proxy below or template generation 404s
-# ("Template 'X' not found"). Adaptive/authored modes don't need it.
+# NEXT_INTERNAL_URL lets the backend reach Next.js /api/template and /pdf-maker.
+# Default is http://localhost (nginx :80 in Docker); without nginx, point it at
+# the single-origin proxy below or template lookup and PPTX/PDF export fail.
 $env:NEXT_INTERNAL_URL="http://localhost:5000"
 uv run python server.py --port 8000 --reload false
 

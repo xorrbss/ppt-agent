@@ -64,8 +64,9 @@ slide. It is an approximate design signal, not a pixel-accurate segmentation.
   extraction, JavaScript/action execution, or embedded-object opening is performed.
 - PPTX is preflighted before `python-pptx` reads it: file size, archive member count,
   expanded size, per-member size/compression ratio, encrypted members, unsafe paths,
-  and required OOXML parts are checked. Macro, embedded, ActiveX/control, and external
-  relationship counts become warnings only.
+  and required OOXML parts are checked. Macro, embedded, and ActiveX/control parts
+  make the builder fail closed before YAML or JSON is written. External relationship
+  counts remain warnings and their targets are never followed.
 - PDF is parsed with the locked `pdfplumber` dependency. Password-protected,
   unsupported-encryption, and extraction-prohibited documents fail clearly. A
   no-text PDF is labeled likely scanned only when image coverage supplies enough
@@ -74,7 +75,8 @@ slide. It is an approximate design signal, not a pixel-accurate segmentation.
   file. Indirect filter/length declarations and filters that cannot be bounded by
   this preflight fail clearly. Serialized and safely decoded PDF name tokens for
   JavaScript, open/additional/launch actions, RichMedia, and embedded files are
-  conservatively counted and warned about; a count can include an inactive token.
+  conservatively counted; any detection makes the builder fail closed before YAML
+  or JSON is written, because a count can include an inactive token.
 - Empty decks/documents, damaged files, unsupported suffixes, documents over 100 MiB,
   and decks/documents over 500 slides/pages fail before conversion.
 - Absent fonts, colors, text hierarchy, composition objects, repeated layouts, and
