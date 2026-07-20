@@ -52,6 +52,7 @@ import MarkdownRenderer from "@/components/MarkDownRender";
 import { cn } from "@/lib/utils";
 
 const MAX_EXPORT_TITLE_LENGTH = 40;
+type PptxExportMode = "fidelity" | "hybrid";
 
 const buildSafeExportFileName = (
   rawTitle: string | null | undefined,
@@ -92,11 +93,13 @@ const PresentationHeader = ({
   isPresentationSaving,
   currentSlide,
   onReload,
+  isAuthoredDeck = false,
 }: {
   presentation_id: string;
   isPresentationSaving: boolean;
   currentSlide?: number;
   onReload?: () => void;
+  isAuthoredDeck?: boolean;
 }) => {
   const [open, setOpen] = useState(false);
   const router = useRouter();
@@ -106,6 +109,7 @@ const PresentationHeader = ({
   const [isRegenerateConfirmOpen, setIsRegenerateConfirmOpen] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const exportTriggerRef = useRef<HTMLButtonElement>(null);
   /** Avoid committing on blur when Save/Cancel was used (focus/click ordering) */
   const titleBlurIntentRef = useRef<"none" | "save" | "cancel">("none");
 
@@ -205,8 +209,8 @@ const PresentationHeader = ({
     }
   };
 
-  const handleExportPptx = async () => {
-    if (isStreaming) return;
+  const handleExportPptx = async (pptxMode?: PptxExportMode) => {
+    if (isStreaming || isExporting) return;
 
     let exportToastId: string | number | undefined;
     try {
@@ -230,16 +234,20 @@ const PresentationHeader = ({
         "pptx"
       );
       const safePptxTitle = safePptxFileName.replace(/\.pptx$/i, "");
-      if (window.electron?.exportPresentation) {
+      // The desktop bridge has no pptxMode argument. Authored exports use the
+      // web API so both fidelity and hybrid modes are explicit; adaptive keeps IPC.
+      if (window.electron?.exportPresentation && !pptxMode) {
         await exportViaIpc("pptx", safePptxTitle);
       } else {
+        const requestBody = {
+          format: "pptx" as const,
+          id: presentation_id,
+          title: safePptxTitle,
+          ...(pptxMode ? { pptxMode } : {}),
+        };
         const response = await fetch("/api/export-presentation", {
           method: "POST",
-          body: JSON.stringify({
-            format: "pptx",
-            id: presentation_id,
-            title: safePptxTitle,
-          }),
+          body: JSON.stringify(requestBody),
         });
 
         if (!response.ok) {
@@ -267,11 +275,12 @@ const PresentationHeader = ({
       );
     } finally {
       setIsExporting(false);
+      requestAnimationFrame(() => exportTriggerRef.current?.focus());
     }
   };
 
   const handleExportPdf = async () => {
-    if (isStreaming) return;
+    if (isStreaming || isExporting) return;
 
     let exportToastId: string | number | undefined;
     try {
@@ -328,6 +337,7 @@ const PresentationHeader = ({
       );
     } finally {
       setIsExporting(false);
+      requestAnimationFrame(() => exportTriggerRef.current?.focus());
     }
   };
   const handleReGenerate = () => {
@@ -353,18 +363,71 @@ const PresentationHeader = ({
     document.body.removeChild(link);
   };
 
+  const closeExportOptions = () => {
+    setOpen(false);
+    requestAnimationFrame(() => exportTriggerRef.current?.focus());
+  };
+
   const ExportOptions = ({ mobile }: { mobile: boolean }) => (
     <div
-      className={` rounded-[18px] max-md:mt-4 ${mobile ? "" : "bg-white"}  p-5`}
+      className={`rounded-[18px] max-md:mt-4 ${mobile ? "" : "bg-white"} p-5`}
+      aria-label="내보내기 형식 선택"
+      role="group"
     >
       <p className="text-sm font-medium text-[#19001F]">다음 형식으로 내보내기</p>
       <div className="my-[18px] h-[1px] bg-[#E8E8E8]" />
       <div className="space-y-3">
+        {isAuthoredDeck && (
+          <>
+            <Button
+              type="button"
+              onClick={() => {
+                closeExportOptions();
+                void handleExportPptx("fidelity");
+              }}
+              disabled={isExporting || isStreaming === true}
+              data-testid="authored-export-fidelity"
+              variant="ghost"
+              className="min-h-11 w-full items-start justify-between whitespace-normal rounded-lg px-2 py-2 text-left text-xs text-black hover:bg-[#F6F6F9] disabled:cursor-not-allowed"
+              aria-label="PPTX로 내보내기, 디자인 그대로"
+            >
+              <span className="min-w-0">
+                <span className="block font-medium">PPTX · 디자인 그대로</span>
+                <span className="mt-1 block text-[11px] font-normal leading-snug text-[#5F5B66]">
+                  슬라이드를 이미지로 유지합니다.
+                </span>
+              </span>
+              <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                closeExportOptions();
+                void handleExportPptx("hybrid");
+              }}
+              disabled={isExporting || isStreaming === true}
+              data-testid="authored-export-hybrid"
+              variant="ghost"
+              className="min-h-11 w-full items-start justify-between whitespace-normal rounded-lg px-2 py-2 text-left text-xs text-black hover:bg-[#F6F6F9] disabled:cursor-not-allowed"
+              aria-label="PPTX로 내보내기, 텍스트 편집 가능"
+            >
+              <span className="min-w-0">
+                <span className="block font-medium">PPTX · 텍스트 편집 가능</span>
+                <span className="mt-1 block text-[11px] font-normal leading-snug text-[#5F5B66]">
+                  텍스트와 일부 요소를 편집할 수 있습니다.
+                </span>
+              </span>
+              <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            </Button>
+          </>
+        )}
         <Button
           onClick={() => {
-            handleExportPdf();
-            setOpen(false);
+            closeExportOptions();
+            void handleExportPdf();
           }}
+          disabled={isExporting || isStreaming === true}
+          data-testid="export-pdf"
           variant="ghost"
           className={`  rounded-none px-0 w-full text-xs flex justify-start text-black hover:bg-transparent ${
             mobile ? "bg-white py-6 border-none rounded-lg" : ""
@@ -373,11 +436,13 @@ const PresentationHeader = ({
           PDF
           <ArrowUpRight className="w-3.5 h-3.5" />
         </Button>
-        <Button
+        {!isAuthoredDeck && <Button
           onClick={() => {
-            handleExportPptx();
-            setOpen(false);
+            closeExportOptions();
+            void handleExportPptx();
           }}
+          disabled={isExporting || isStreaming === true}
+          data-testid="export-pptx"
           variant="ghost"
           className={`w-full flex px-0 justify-start text-xs text-black hover:bg-transparent  ${
             mobile ? "bg-white py-6" : ""
@@ -385,7 +450,7 @@ const PresentationHeader = ({
         >
           PPTX
           <ArrowUpRight className="w-3.5 h-3.5" />
-        </Button>
+        </Button>}
       </div>
     </div>
   );
@@ -499,7 +564,7 @@ const PresentationHeader = ({
           )}
           {presentationData &&
             presentationData.slides &&
-            !presentationData.slides[0].layout.includes("custom") && (
+            !presentationData.slides?.[0]?.layout?.includes("custom") && (
               <ThemeSelector
                 current_theme={presentationData?.theme || {}}
                 themes={themes}
@@ -582,15 +647,19 @@ const PresentationHeader = ({
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
               <button
+                ref={exportTriggerRef}
+                type="button"
                 className="flex  items-center gap-[7px] px-[18px] py-[11px] rounded-[53px] text-sm font-semibold text-[#101323]"
                 style={{
                   background:
                     "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
                 }}
                 disabled={isExporting || isStreaming === true}
+                data-testid="export-trigger"
+                aria-label={isExporting ? "내보내는 중" : "내보내기 형식 선택"}
               >
                 {isExporting ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
                 ) : (
                   "내보내기"
                 )}{" "}
@@ -599,11 +668,16 @@ const PresentationHeader = ({
             </PopoverTrigger>
             <PopoverContent
               align="end"
-              className="w-[200px] rounded-[18px] space-y-2 p-0  "
+              className="w-[min(22rem,calc(100vw-2rem))] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-[18px] space-y-2 p-0"
             >
               <ExportOptions mobile={false} />
             </PopoverContent>
           </Popover>
+          {isExporting && (
+            <span className="sr-only" role="status" aria-live="polite">
+              발표자료를 내보내는 중입니다.
+            </span>
+          )}
         </div>
       </div>
       <Dialog
