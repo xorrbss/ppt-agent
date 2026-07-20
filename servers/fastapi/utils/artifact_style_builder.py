@@ -25,6 +25,62 @@ class ArtifactStyleBuildResult:
     conversion: ConversionResult
 
 
+def _positive_count(value: Any) -> int:
+    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+        return value
+    return 0
+
+
+def _reject_active_or_embedded_content(analysis: Mapping[str, Any]) -> None:
+    """Fail closed before conversion when the analyzer reports unsafe content."""
+    source = analysis.get("source")
+    artifact_format = (
+        str(source.get("format", "")).casefold() if isinstance(source, Mapping) else ""
+    )
+    security = analysis.get("security")
+    if not isinstance(security, Mapping):
+        raise ArtifactAnalysisError("artifact analysis is missing security metadata")
+
+    blocked: list[str] = []
+    if artifact_format == "pptx":
+        for key, label in (
+            ("macro_part_count", "macro part"),
+            ("active_content_part_count", "ActiveX/control part"),
+            ("embedded_part_count", "embedded part"),
+        ):
+            count = _positive_count(security.get(key))
+            if count:
+                blocked.append(f"{label}={count}")
+    elif artifact_format == "pdf":
+        active_counts = security.get("active_content_counts")
+        if not isinstance(active_counts, Mapping):
+            raise ArtifactAnalysisError(
+                "PDF artifact analysis is missing active-content metadata"
+            )
+        for key in (
+            "additional_actions",
+            "javascript",
+            "launch_actions",
+            "open_actions",
+            "rich_media",
+        ):
+            count = _positive_count(active_counts.get(key))
+            if count:
+                blocked.append(f"{key}={count}")
+        embedded_count = _positive_count(security.get("embedded_content_marker_count"))
+        if embedded_count:
+            blocked.append(f"embedded content marker={embedded_count}")
+    else:
+        raise ArtifactAnalysisError(
+            f"unsupported artifact format in analysis: {artifact_format or 'missing'}"
+        )
+
+    if blocked:
+        raise ArtifactAnalysisError(
+            "active or embedded content is not accepted: " + ", ".join(blocked)
+        )
+
+
 def _observed_values(
     analysis: Mapping[str, Any], signal: str
 ) -> list[Mapping[str, Any]]:
@@ -320,6 +376,7 @@ def build_authored_style(
     source = Path(input_path).expanduser().resolve()
     yaml_target = Path(output_path).expanduser().resolve(strict=False)
     analysis = analyze_artifact(source)
+    _reject_active_or_embedded_content(analysis)
     external = analysis_to_converter_input(analysis, style_id=style_id)
     conversions = convert_data(
         external,

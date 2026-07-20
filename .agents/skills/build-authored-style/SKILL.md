@@ -27,7 +27,8 @@ review items rather than source facts.
    existing requested outputs.
 5. Read the analysis JSON before recommending the YAML. Report `evidence`,
    `confidence`, and every warning, especially missing text/font/color evidence,
-   likely scanned PDFs, active or embedded content, and mixed page sizes.
+   likely scanned PDFs, external links, and mixed page sizes. Active or embedded
+   content fails closed before either output is written.
 6. Confirm the authored loader accepts the generated file:
 
    ```bash
@@ -49,7 +50,10 @@ analysis and YAML bytes.
 - Supported direct PDF stream-filter pipelines receive a bounded preflight;
   declarations that cannot be bounded fail before parser open. Serialized and
   safely decoded action, JavaScript, RichMedia, and embedded-file markers are
-  conservative warnings and are never executed or opened.
+  conservative detections and are never executed or opened. Any such detection,
+  plus PPTX macro, ActiveX/control, or embedded parts, makes the builder fail
+  closed without writing YAML or JSON. External hyperlinks remain warnings and
+  are never followed.
 - PPTX theme values and PDF graphics/text objects are partial evidence. Inherited
   styling, raster-only colors, visual meaning, and brand intent may be unavailable.
 - The YAML is a reviewable draft. Operational preview fallbacks are labeled as
