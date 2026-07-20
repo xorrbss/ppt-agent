@@ -307,6 +307,11 @@ process.env.USER_CONFIG_PATH = userConfigPath;
 if (!process.env.FAST_API_INTERNAL_URL) {
   process.env.FAST_API_INTERNAL_URL = `http://127.0.0.1:${fastapiPort}`;
 }
+// Presentation export renders Next.js pages that reference /app_data assets.
+// Route it through nginx so both surfaces share the same authenticated origin.
+if (!process.env.NEXT_INTERNAL_URL) {
+  process.env.NEXT_INTERNAL_URL = `http://127.0.0.1:${nginxListenPort}`;
+}
 
 //? UserConfig is only setup if API Keys can be changed
 const setupUserConfigFromEnv = () => {
