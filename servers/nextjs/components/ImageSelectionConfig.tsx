@@ -84,16 +84,17 @@ const renderQualitySelector = (llmConfig: LLMConfig, input_field_changed: (value
         );
     }
 
-    if (llmConfig.IMAGE_PROVIDER === "gpt-image-1.5") {
+    if (llmConfig.IMAGE_PROVIDER === "gpt-image-1.5" || llmConfig.IMAGE_PROVIDER === "gpt-image-2") {
+        const isGptImage2 = llmConfig.IMAGE_PROVIDER === "gpt-image-2";
         return (
             <div className="w-[295px]">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                    GPT Image 1.5 화질
+                    {isGptImage2 ? "GPT Image 2" : "GPT Image 1.5"} 화질
                 </label>
                 <div className="">
                     <Select
-                        value={llmConfig.GPT_IMAGE_1_5_QUALITY}
-                        onValueChange={(value) => input_field_changed(value, "gpt_image_1_5_quality")}
+                        value={isGptImage2 ? llmConfig.GPT_IMAGE_2_QUALITY : llmConfig.GPT_IMAGE_1_5_QUALITY}
+                        onValueChange={(value) => input_field_changed(value, isGptImage2 ? "gpt_image_2_quality" : "gpt_image_1_5_quality")}
                     >
                         <SelectTrigger
 
@@ -248,6 +249,13 @@ const ImageSelectionConfig = ({ isImageGenerationDisabled, openImageProviderSele
 
                                     if (
                                         provider.value === "gpt-image-1.5" &&
+                                        llmConfig.LLM === "openai"
+                                    ) {
+                                        return <></>;
+                                    }
+
+                                    if (
+                                        provider.value === "gpt-image-2" &&
                                         llmConfig.LLM === "openai"
                                     ) {
                                         return <></>;

@@ -103,6 +103,8 @@ class UserConfig(BaseModel):
     DALL_E_3_QUALITY: Optional[str] = None
     # Gpt Image 1.5 Quality
     GPT_IMAGE_1_5_QUALITY: Optional[str] = None
+    # Gpt Image 2 Quality
+    GPT_IMAGE_2_QUALITY: Optional[str] = None
 
     # Reasoning
     DISABLE_THINKING: Optional[bool] = None

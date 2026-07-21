@@ -3,7 +3,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Button } from '../ui/button';
 import { ArrowUpRight, Check, CheckCircle, ChevronLeft, ChevronUp, Download, Eye, EyeOff, Info, Loader2 } from 'lucide-react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
-import { DALLE_3_QUALITY_OPTIONS, GPT_IMAGE_1_5_QUALITY_OPTIONS, IMAGE_PROVIDERS, LLM_PROVIDERS } from '@/utils/providerConstants';
+import { DALLE_3_QUALITY_OPTIONS, GPT_IMAGE_1_5_QUALITY_OPTIONS, GPT_IMAGE_2_QUALITY_OPTIONS, IMAGE_PROVIDERS, LLM_PROVIDERS } from '@/utils/providerConstants';
 import { cn } from '@/lib/utils';
 import { LLMConfig } from '@/types/llm_config';
 import { RootState } from '@/store/store';
@@ -211,6 +211,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
     const getSelectedImageQuality = (config: LLMConfig): string => {
         if (config.IMAGE_PROVIDER === 'dall-e-3') return config.DALL_E_3_QUALITY || '';
         if (config.IMAGE_PROVIDER === 'gpt-image-1.5') return config.GPT_IMAGE_1_5_QUALITY || '';
+        if (config.IMAGE_PROVIDER === 'gpt-image-2') return config.GPT_IMAGE_2_QUALITY || '';
         return '';
     };
 
@@ -393,6 +394,34 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                             </SelectContent>
                         </Select>
 
+                    </div>
+                </div>
+            );
+        }
+
+        if (llmConfig.IMAGE_PROVIDER === "gpt-image-2") {
+            return (
+                <div className="w-full">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        GPT Image 2 품질
+                    </label>
+                    <div className="">
+                        <Select
+                            value={llmConfig.GPT_IMAGE_2_QUALITY || 'medium'}
+                            onValueChange={(value) => setLlmConfig((prev) => ({
+                                ...prev,
+                                GPT_IMAGE_2_QUALITY: value
+                            }))}
+                        >
+                            <SelectTrigger className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between">
+                                <SelectValue placeholder="품질 선택" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {GPT_IMAGE_2_QUALITY_OPTIONS.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                 </div>
             );

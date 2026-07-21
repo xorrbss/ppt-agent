@@ -457,6 +457,8 @@ const setupUserConfigFromEnv = () => {
       process.env.DALL_E_3_QUALITY || existingConfig.DALL_E_3_QUALITY,
     GPT_IMAGE_1_5_QUALITY:
       process.env.GPT_IMAGE_1_5_QUALITY || existingConfig.GPT_IMAGE_1_5_QUALITY,
+    GPT_IMAGE_2_QUALITY:
+      process.env.GPT_IMAGE_2_QUALITY || existingConfig.GPT_IMAGE_2_QUALITY,
     CODEX_MODEL: process.env.CODEX_MODEL || existingConfig.CODEX_MODEL,
     CODEX_ACCESS_TOKEN: existingConfig.CODEX_ACCESS_TOKEN,
     CODEX_REFRESH_TOKEN: existingConfig.CODEX_REFRESH_TOKEN,

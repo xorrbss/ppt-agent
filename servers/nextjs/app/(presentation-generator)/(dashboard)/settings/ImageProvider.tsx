@@ -7,7 +7,7 @@ import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { LLMConfig } from '@/types/llm_config'
 import OpenAICompatibleImageFields from '@/components/OpenAICompatibleImageFields'
-import { DALLE_3_QUALITY_OPTIONS, GPT_IMAGE_1_5_QUALITY_OPTIONS, IMAGE_PROVIDERS } from '@/utils/providerConstants'
+import { DALLE_3_QUALITY_OPTIONS, GPT_IMAGE_1_5_QUALITY_OPTIONS, GPT_IMAGE_2_QUALITY_OPTIONS, IMAGE_PROVIDERS } from '@/utils/providerConstants'
 import { Check, ChevronUp, Eye, EyeOff } from 'lucide-react'
 import React, { useEffect, useState } from 'react'
 
@@ -101,6 +101,31 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                             </SelectContent>
                         </Select>
 
+                    </div>
+                </div>
+            );
+        }
+
+        if (llmConfig.IMAGE_PROVIDER === "gpt-image-2") {
+            return (
+                <div className="w-[205px]">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        GPT Image 2 품질
+                    </label>
+                    <div className="">
+                        <Select
+                            value={llmConfig.GPT_IMAGE_2_QUALITY || 'medium'}
+                            onValueChange={(value) => input_field_changed(value, "GPT_IMAGE_2_QUALITY")}
+                        >
+                            <SelectTrigger className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between">
+                                <SelectValue placeholder="품질 선택" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {GPT_IMAGE_2_QUALITY_OPTIONS.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                 </div>
             );

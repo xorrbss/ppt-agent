@@ -314,7 +314,7 @@ Docker images install the default spaCy model (`en_core_web_sm`) during build so
 
 #### Image generation
 
-These variables match `docker-compose.yml`. **`IMAGE_PROVIDER`** selects the backend (`pexels`, `pixabay`, `gemini_flash`, `nanobanana_pro`, `dall-e-3`, `gpt-image-1.5`, `comfyui`, `open_webui`). Use **OPENAI_API_KEY** for OpenAI image modes and **GOOGLE_API_KEY** for Gemini image modes (same keys as the LLM section).
+These variables match `docker-compose.yml`. **`IMAGE_PROVIDER`** selects the backend (`pexels`, `pixabay`, `gemini_flash`, `nanobanana_pro`, `dall-e-3`, `gpt-image-1.5`, `gpt-image-2`, `comfyui`, `open_webui`). Use **OPENAI_API_KEY** for OpenAI image modes and **GOOGLE_API_KEY** for Gemini image modes (same keys as the LLM section).
 
 - **DISABLE_IMAGE_GENERATION**=[true/false]: Disable slide image generation.
 - **IMAGE_PROVIDER**: Provider id (see enum above).
@@ -322,6 +322,7 @@ These variables match `docker-compose.yml`. **`IMAGE_PROVIDER`** selects the bac
 - **PIXABAY_API_KEY**: Pixabay stock images.
 - **DALL_E_3_QUALITY**=[standard/hd]: Optional for **dall-e-3** (default `standard`).
 - **GPT_IMAGE_1_5_QUALITY**=[low/medium/high]: Optional for **gpt-image-1.5** (default `medium`).
+- **GPT_IMAGE_2_QUALITY**=[low/medium/high]: Optional for **gpt-image-2** (default `medium`).
 - **COMFYUI_URL** / **COMFYUI_WORKFLOW**: Self-hosted ComfyUI workflow JSON.
 - **OPEN_WEBUI_IMAGE_URL** / **OPEN_WEBUI_IMAGE_API_KEY**: Open WebUI–compatible image endpoint.
 - **OPENAI_COMPAT_IMAGE_BASE_URL** / **OPENAI_COMPAT_IMAGE_API_KEY** / **OPENAI_COMPAT_IMAGE_MODEL**: Required if using **openai_compatible** to send image requests to any OpenAI-compatible `/v1/images/*` endpoint (LiteLLM, Azure, vLLM Gateways, etc.).

@@ -270,6 +270,7 @@ async def check_llm_and_image_provider_api_or_model_availability():
         elif (
             selected_image_provider == ImageProvider.DALLE3
             or selected_image_provider == ImageProvider.GPT_IMAGE_1_5
+            or selected_image_provider == ImageProvider.GPT_IMAGE_2
         ):
             openai_api_key = get_openai_api_key_env()
             if not openai_api_key:

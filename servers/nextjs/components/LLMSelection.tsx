@@ -68,6 +68,8 @@ export default function LLMProviderSelection({
       ((llmConfig.IMAGE_PROVIDER === "dall-e-3" && !llmConfig.OPENAI_API_KEY) ||
         (llmConfig.IMAGE_PROVIDER === "gpt-image-1.5" &&
           !llmConfig.OPENAI_API_KEY) ||
+        (llmConfig.IMAGE_PROVIDER === "gpt-image-2" &&
+          !llmConfig.OPENAI_API_KEY) ||
         (llmConfig.IMAGE_PROVIDER === "gemini_flash" &&
           !llmConfig.GOOGLE_API_KEY) ||
         (llmConfig.IMAGE_PROVIDER === "nanobanana_pro" &&
@@ -223,6 +225,13 @@ export default function LLMProviderSelection({
         !prevConfig.GPT_IMAGE_1_5_QUALITY
       ) {
         updates.GPT_IMAGE_1_5_QUALITY = "medium";
+      }
+
+      if (
+        prevConfig.IMAGE_PROVIDER === "gpt-image-2" &&
+        !prevConfig.GPT_IMAGE_2_QUALITY
+      ) {
+        updates.GPT_IMAGE_2_QUALITY = "medium";
       }
 
       if (Object.keys(updates).length === 0) {

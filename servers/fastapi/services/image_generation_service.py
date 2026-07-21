@@ -14,6 +14,7 @@ from models.sql.image_asset import ImageAsset
 from utils.get_env import (
     get_dall_e_3_quality_env,
     get_gpt_image_1_5_quality_env,
+    get_gpt_image_2_quality_env,
     get_pexels_api_key_env,
     get_open_webui_image_url_env,
     get_open_webui_image_api_key_env,
@@ -26,6 +27,7 @@ from utils.get_env import get_comfyui_url_env
 from utils.get_env import get_comfyui_workflow_env
 from utils.image_provider import (
     is_gpt_image_1_5_selected,
+    is_gpt_image_2_selected,
     is_image_generation_disabled,
     is_pixels_selected,
     is_pixabay_selected,
@@ -43,7 +45,7 @@ import uuid
 COMFYUI_MAX_SEED = 0xFFFFFFFFFFFFFFFF
 COMFYUI_SEED_SOURCE_VALUE_KEYS = {"value", "int", "integer", "number"}
 
-# OpenAI image models (gpt-image-1.5 / dall-e-3) enforce a per-minute rate limit.
+# OpenAI image models (gpt-image-2 / gpt-image-1.5 / dall-e-3) enforce a per-minute rate limit.
 # On 429 we back off and retry instead of falling back to a placeholder.
 OPENAI_IMAGE_MAX_ATTEMPTS = 6
 OPENAI_IMAGE_MAX_WAIT_SECONDS = 30.0
@@ -83,6 +85,8 @@ class ImageGenerationService:
             return self.generate_image_openai_dalle3
         elif is_gpt_image_1_5_selected():
             return self.generate_image_openai_gpt_image_1_5
+        elif is_gpt_image_2_selected():
+            return self.generate_image_openai_gpt_image_2
         elif is_comfyui_selected():
             return self.generate_image_comfyui
         elif is_open_webui_selected():
@@ -195,6 +199,16 @@ class ImageGenerationService:
             output_directory,
             "gpt-image-1.5",
             get_gpt_image_1_5_quality_env() or "medium",
+        )
+
+    async def generate_image_openai_gpt_image_2(
+        self, prompt: str, output_directory: str
+    ) -> str:
+        return await self.generate_image_openai(
+            prompt,
+            output_directory,
+            "gpt-image-2",
+            get_gpt_image_2_quality_env() or "medium",
         )
 
     async def generate_image_open_webui(

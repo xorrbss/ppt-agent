@@ -230,6 +230,11 @@ export const getLLMConfigValidationError = (
           return "OpenAI API key is required for GPT Image 1.5.";
         }
         break;
+      case "gpt-image-2":
+        if (!isProvided(llmConfig.OPENAI_API_KEY)) {
+          return "OpenAI API key is required for GPT Image 2.";
+        }
+        break;
       case "gemini_flash":
         if (!isProvided(llmConfig.GOOGLE_API_KEY)) {
           return "Google API key is required for Gemini Flash image generation.";

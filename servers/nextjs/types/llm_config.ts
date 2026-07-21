@@ -99,6 +99,8 @@ export interface LLMConfig {
   DALL_E_3_QUALITY?: string;
   // GPT Image 1.5 Quality
   GPT_IMAGE_1_5_QUALITY?: string;
+  // GPT Image 2 Quality
+  GPT_IMAGE_2_QUALITY?: string;
 
   // Other Configs
   DISABLE_THINKING?: boolean;

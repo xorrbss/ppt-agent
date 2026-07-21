@@ -30,6 +30,7 @@ class TestImageGenerationOpenAICompatible:
             is_nanobanana_pro_selected=Mock(return_value=False),
             is_dalle3_selected=Mock(return_value=False),
             is_gpt_image_1_5_selected=Mock(return_value=False),
+            is_gpt_image_2_selected=Mock(return_value=False),
             is_comfyui_selected=Mock(return_value=False),
             is_open_webui_selected=Mock(return_value=False),
             is_openai_compatible_selected=Mock(return_value=True),

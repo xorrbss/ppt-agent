@@ -296,6 +296,11 @@ def get_gpt_image_1_5_quality_env():
     return os.getenv("GPT_IMAGE_1_5_QUALITY")
 
 
+# Gpt Image 2 Quality
+def get_gpt_image_2_quality_env():
+    return os.getenv("GPT_IMAGE_2_QUALITY")
+
+
 # Codex OAuth
 def get_codex_access_token_env():
     return os.getenv("CODEX_ACCESS_TOKEN")

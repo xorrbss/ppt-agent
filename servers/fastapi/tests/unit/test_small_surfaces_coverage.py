@@ -49,6 +49,7 @@ from utils.image_provider import (
     is_dalle3_selected,
     is_gemini_flash_selected,
     is_gpt_image_1_5_selected,
+    is_gpt_image_2_selected,
     is_image_generation_disabled,
     is_nanobanana_pro_selected,
     is_open_webui_selected,
@@ -66,6 +67,7 @@ _ALL_IMAGE_PROVIDER_PREDICATES = (
     is_nanobanana_pro_selected,
     is_dalle3_selected,
     is_gpt_image_1_5_selected,
+    is_gpt_image_2_selected,
     is_comfyui_selected,
     is_open_webui_selected,
 )
@@ -288,6 +290,7 @@ def test_get_writable_path_app_data_fallback(monkeypatch, tmp_path):
         ("nanobanana_pro", is_nanobanana_pro_selected),
         ("dall-e-3", is_dalle3_selected),
         ("gpt-image-1.5", is_gpt_image_1_5_selected),
+        ("gpt-image-2", is_gpt_image_2_selected),
         ("comfyui", is_comfyui_selected),
         ("open_webui", is_open_webui_selected),
     ],

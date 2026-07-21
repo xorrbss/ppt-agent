@@ -49,6 +49,7 @@ from utils.get_env import (
     get_openrouter_base_url_env,
     get_openrouter_model_env,
     get_gpt_image_1_5_quality_env,
+    get_gpt_image_2_quality_env,
     get_llm_provider_env,
     get_ollama_model_env,
     get_ollama_url_env,
@@ -127,6 +128,7 @@ from utils.set_env import (
     set_openrouter_base_url_env,
     set_openrouter_model_env,
     set_gpt_image_1_5_quality_env,
+    set_gpt_image_2_quality_env,
     set_llm_provider_env,
     set_ollama_model_env,
     set_ollama_url_env,
@@ -238,6 +240,8 @@ def get_user_config():
         DALL_E_3_QUALITY=existing_config.DALL_E_3_QUALITY or get_dall_e_3_quality_env(),
         GPT_IMAGE_1_5_QUALITY=existing_config.GPT_IMAGE_1_5_QUALITY
         or get_gpt_image_1_5_quality_env(),
+        GPT_IMAGE_2_QUALITY=existing_config.GPT_IMAGE_2_QUALITY
+        or get_gpt_image_2_quality_env(),
         DISABLE_THINKING=(
             existing_config.DISABLE_THINKING
             if existing_config.DISABLE_THINKING is not None
@@ -390,6 +394,8 @@ def update_env_with_user_config():
         set_dall_e_3_quality_env(user_config.DALL_E_3_QUALITY)
     if user_config.GPT_IMAGE_1_5_QUALITY:
         set_gpt_image_1_5_quality_env(user_config.GPT_IMAGE_1_5_QUALITY)
+    if user_config.GPT_IMAGE_2_QUALITY:
+        set_gpt_image_2_quality_env(user_config.GPT_IMAGE_2_QUALITY)
     if user_config.DISABLE_THINKING is not None:
         set_disable_thinking_env(str(user_config.DISABLE_THINKING))
     if user_config.EXTENDED_REASONING is not None:

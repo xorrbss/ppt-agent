@@ -43,6 +43,7 @@ interface FastApiEnv {
   COMFYUI_WORKFLOW?: string,
   DALL_E_3_QUALITY?: string,
   GPT_IMAGE_1_5_QUALITY?: string,
+  GPT_IMAGE_2_QUALITY?: string,
   APP_DATA_DIRECTORY?: string,
   /** Same origin the Next.js app uses for FastAPI (assets + API). Passed through to Python. */
   NEXT_PUBLIC_FAST_API?: string,
@@ -127,6 +128,7 @@ interface UserConfig {
   COMFYUI_WORKFLOW?: string,
   DALL_E_3_QUALITY?: string,
   GPT_IMAGE_1_5_QUALITY?: string,
+  GPT_IMAGE_2_QUALITY?: string,
   CODEX_MODEL?: string,
   CODEX_ACCESS_TOKEN?: string,
   CODEX_REFRESH_TOKEN?: string,

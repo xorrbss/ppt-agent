@@ -344,6 +344,7 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         COMFYUI_WORKFLOW: process.env.COMFYUI_WORKFLOW,
         DALL_E_3_QUALITY: process.env.DALL_E_3_QUALITY,
         GPT_IMAGE_1_5_QUALITY: process.env.GPT_IMAGE_1_5_QUALITY,
+        GPT_IMAGE_2_QUALITY: process.env.GPT_IMAGE_2_QUALITY,
         APP_DATA_DIRECTORY: appDataDir,
         TEMP_DIRECTORY: tempDir,
         USER_CONFIG_PATH: userConfigPath,
@@ -547,6 +548,7 @@ app.whenReady().then(async () => {
       COMFYUI_WORKFLOW: process.env.COMFYUI_WORKFLOW,
       DALL_E_3_QUALITY: process.env.DALL_E_3_QUALITY,
       GPT_IMAGE_1_5_QUALITY: process.env.GPT_IMAGE_1_5_QUALITY,
+      GPT_IMAGE_2_QUALITY: process.env.GPT_IMAGE_2_QUALITY,
     })
   } catch (error) {
     safeWarn("[Presenton] Failed to persist startup user config", error);

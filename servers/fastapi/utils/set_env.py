@@ -245,6 +245,10 @@ def set_gpt_image_1_5_quality_env(value):
     os.environ["GPT_IMAGE_1_5_QUALITY"] = value
 
 
+def set_gpt_image_2_quality_env(value):
+    os.environ["GPT_IMAGE_2_QUALITY"] = value
+
+
 # Codex OAuth
 def set_codex_access_token_env(value: str):
     os.environ["CODEX_ACCESS_TOKEN"] = value

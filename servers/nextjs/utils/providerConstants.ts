@@ -69,6 +69,16 @@ export const IMAGE_PROVIDERS: Record<string, ImageProviderOption> = {
     apiKeyFieldLabel: "OpenAI API Key",
     getApiKeyUrl: "https://www.google.com/search?q=how+to+get+openai+api+key&ie=UTF-8",
   },
+  "gpt-image-2": {
+    value: "gpt-image-2",
+    label: "GPT Image 2",
+    description: "OpenAI's latest image generation model",
+    icon: "/providers/openai.png",
+    requiresApiKey: true,
+    apiKeyField: "OPENAI_API_KEY",
+    apiKeyFieldLabel: "OpenAI API Key",
+    getApiKeyUrl: "https://www.google.com/search?q=how+to+get+openai+api+key&ie=UTF-8",
+  },
   gemini_flash: {
     value: "gemini_flash",
     label: "Gemini Flash",
@@ -260,3 +270,5 @@ export const GPT_IMAGE_1_5_QUALITY_OPTIONS = [
     description: "Best quality with longer generation time",
   },
 ];
+
+export const GPT_IMAGE_2_QUALITY_OPTIONS = GPT_IMAGE_1_5_QUALITY_OPTIONS;
