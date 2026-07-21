@@ -23,8 +23,10 @@ from models.presentation_and_path import PresentationPathAndEditPath
 from models.presentation_outline_model import PresentationOutlineModel
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
+from services.image_generation_service import ImageGenerationService
 from utils.asset_directory_utils import get_exports_directory, get_images_directory
 from utils.filename_utils import safe_export_basename
+from utils.authored_illustrations import apply_authored_illustrations
 from utils.authored_styles import resolve_authored_style
 from utils.llm_calls.author_deck import author_deck, build_image_pptx, plan_deck_roles
 from utils.llm_calls.author_slide import Brand, apply_style_defaults
@@ -148,6 +150,10 @@ async def generate_authored_presentation(
 
     authored_deck = await author_deck(outline, brand, style)
     htmls = authored_deck.htmls
+    if getattr(style, "illustration_prompt", None):
+        htmls = await apply_authored_illustrations(
+            htmls, style, ImageGenerationService(get_images_directory())
+        )
     pngs = await render_html_list_to_pngs(htmls)
 
     fixed_count = 0
