@@ -42,3 +42,35 @@ test("legacy static HTML is extracted without leaving Chrome temp artifacts", as
     await fs.rm(root, { recursive: true, force: true });
   }
 });
+
+test("a timed-out capture still removes its Chrome work directory", async (t) => {
+  const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
+  if (!chromeExecutable) {
+    if (process.env.CI === "true") {
+      assert.fail("CI must provide Chrome/Chromium for authored cleanup coverage");
+    }
+    t.skip("Chrome/Chromium is unavailable");
+    return;
+  }
+
+  const originalTemp = process.env.TEMP_DIRECTORY;
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "presenton-hybrid-timeout-"));
+  process.env.TEMP_DIRECTORY = root;
+  try {
+    // A tiny timeout forces the terminate path while Chrome is still launching and
+    // (on Windows) holding a --user-data-dir lock. The work dir must be gone once
+    // the rejected promise settles — the runner waits for the process to exit first.
+    await assert.rejects(
+      extractAuthoredSlideDom(
+        `<!doctype html><meta charset="utf-8"><body>서울</body>`,
+        { chromeExecutable, timeoutMs: 1 }
+      ),
+      /timed out/
+    );
+    assert.deepEqual(await fs.readdir(root), []);
+  } finally {
+    if (originalTemp === undefined) delete process.env.TEMP_DIRECTORY;
+    else process.env.TEMP_DIRECTORY = originalTemp;
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
