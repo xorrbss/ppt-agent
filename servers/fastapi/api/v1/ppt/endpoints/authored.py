@@ -1,4 +1,4 @@
-from typing import Literal, Optional
+from typing import Optional
 
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException
@@ -19,14 +19,10 @@ class AuthoredStyleSummary(BaseModel):
     id: str
     name: str
     description: str
-    category: Literal[
-        "general",
-        "business",
-        "technology",
-        "research",
-        "editorial",
-        "creative",
-    ]
+    # The authored-style loader already validates category against
+    # AUTHORED_STYLE_CATEGORIES; a plain str avoids a second (drift-prone) source
+    # that would 500 this endpoint when a category is added to the loader only.
+    category: str
     tags: list[str]
     use_cases: list[str]
     preview: AuthoredStylePreview
