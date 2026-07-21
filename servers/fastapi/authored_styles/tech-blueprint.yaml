@@ -1,0 +1,82 @@
+id: tech-blueprint
+name: 테크 블루프린트
+description: 아이콘 기반 비교·프로세스·아키텍처를 선명한 블루 라인 인포그래픽으로 설명하는 미래형 기술 제안서 스타일입니다.
+category: technology
+tags:
+  - 인포그래픽
+  - 기술 제안서
+  - 프로세스
+use_cases:
+  - AI 에이전트 및 자동화 제안
+  - 기존 방식과 신규 방식 비교
+  - 시스템 아키텍처와 도입 로드맵 설명
+preview:
+  bg: "#F7FAFC"
+  accent: "#2878D8"
+  palette:
+    - "#F7FAFC"
+    - "#0B1F3A"
+    - "#2878D8"
+    - "#72AEEF"
+    - "#DCEBFA"
+    - "#58B7A3"
+  variant: visual-explainer
+  image: tech-blueprint/cover.png
+design_tokens:
+  primary: "#2878D8"
+  background: "#F7FAFC"
+  heading_font: Noto Sans KR
+  body_font: Noto Sans KR
+  mono_font: IBM Plex Mono
+illustration:
+  style_prompt: >-
+    premium flat 2D technology infographic, ice-white background, consistent
+    navy outline icons, cobalt blue directional connectors, powder-blue
+    panels, restrained mint success accents, consulting-grade information
+    design, generous whitespace, no readable text inside images, no logos,
+    no watermark, no clip art, no photorealism, no 3D
+reference_images:
+  cover:
+    - tech-blueprint/cover.png
+  content:
+    - tech-blueprint/content.png
+  data:
+    - tech-blueprint/data.png
+  timeline:
+    - tech-blueprint/timeline.png
+  architecture:
+    - tech-blueprint/architecture.png
+  closing:
+    - tech-blueprint/closing.png
+brief: |-
+  MOOD
+  Create a crisp, optimistic technology explainer that makes a complex system feel immediately understandable. The deck should combine premium consulting discipline with the visual clarity of a modern product manual. It is precise and approachable, never childish or generic.
+
+  PALETTE
+  Use ice white #F7FAFC for the canvas and deep navy #0B1F3A for typography and icon outlines. Use cobalt #2878D8 for directional flow and primary emphasis, powder blue #72AEEF and pale blue #DCEBFA for structural zones, and mint #58B7A3 only for verified, improved, or successful states. One slide should have one dominant blue reading path and at most one mint outcome signal.
+
+  TYPOGRAPHY
+  Use Noto Sans KR for Korean titles and body copy. Titles are bold, compact, and written as takeaway claims rather than topic labels. Keep supporting copy short, with labels limited to two lines. Use IBM Plex Mono sparingly for stage markers, system IDs, or small technical metadata. All meaningful text must remain editable HTML, never baked into an image.
+
+  LAYOUT SYSTEM
+  Organize every slide around one explanatory visual system, not a collection of unrelated cards. Use a 12-column grid, generous safe margins, a clear top-left title zone, and a deliberate left-to-right or top-to-bottom reading path. Comparison slides use two broad horizontal lanes; process slides use three to five connected nodes; architecture slides use one hub and no more than four surrounding domains. Reserve a slim implication ribbon at the bottom when a conclusion needs to be made explicit.
+
+  SIGNATURE ELEMENTS
+  Use coherent navy outline icons, cobalt directional rails, small connector dots, pale-blue background zones, blank label tabs, and one restrained mint success marker. Rounded containers may group a complete idea, but borders must stay thin and light. Prefer visibly connected relationships over floating decoration.
+
+  DATA VISUALIZATION
+  Turn metrics into one dominant visual claim: a designed improvement curve, clock gauge, coverage network, shield state, or milestone rail. Draw charts and values as editable inline SVG or HTML. Direct-label the data, keep scales honest, and use mint only for the achieved state. Avoid default legends, detached chart chrome, and equal-weight KPI tile grids.
+
+  IMAGE DIRECTION
+  Use original flat 2D outline illustrations that embody the slide claim: a human facing fragmented browser windows, an agent coordinating a legacy server, a hub connected to enterprise domains, or an operational curve moving toward a verified outcome. Maintain one consistent stroke weight and palette. Visual references guide composition and style only; never reproduce their wording, logos, watermarks, or exact object arrangement.
+
+  SLIDE ARCHETYPES
+  cover: Leave a large title and subtitle field on the left and place one integrated browser-agent ecosystem on the right.
+  content: Use either a two-lane before-and-after comparison or a three-to-five-node process with bold directional flow and a bottom implication ribbon.
+  architecture: Place one orchestration hub in the center with up to four clearly differentiated domains and visible bidirectional or directional connectors.
+  data: Build one dominant improvement curve or gauge family with two or three supporting indicators and a short interpretation strip.
+  timeline: Use a single horizontal rail with four implementation stages, one coherent icon per stage, and compact editable labels below.
+  closing: Pair a spacious vision statement with one memorable coordinated-system or verified-outcome symbol and one clear next action.
+
+  AVOID
+  Avoid dated clip art, mixed illustration styles, thick dark borders, oversized block arrows, 3D objects, photorealistic imagery, decorative gradients, dense paragraphs, more than five process nodes, unlabeled floating icons, text inside generated images, generic card grids, and conclusions that are not visually connected to the evidence above them.

@@ -48,6 +48,7 @@ EXPECTED_AUTHORED_STYLE_IDS = {
     "strategic-insight",
     "strategic-navy",
     "structured-mint",
+    "tech-blueprint",
     "visual-discovery",
 }
 TECHNOLOGY_STYLE_IDS = {
@@ -57,6 +58,7 @@ TECHNOLOGY_STYLE_IDS = {
     "prismatic-tech",
     "project-launch",
     "startup-aura",
+    "tech-blueprint",
     "visual-discovery",
 }
 REQUIRED_BRIEF_SECTIONS = (
@@ -335,7 +337,7 @@ def test_authored_catalogue_has_exactly_30_complete_contracts(caplog):
     with caplog.at_level(logging.WARNING, logger="utils.authored_styles"):
         styles = load_authored_styles()
 
-    assert len(sources) == len(styles) == len(EXPECTED_AUTHORED_STYLE_IDS) == 33
+    assert len(sources) == len(styles) == len(EXPECTED_AUTHORED_STYLE_IDS) == 34
     assert {source.stem for source in sources} == EXPECTED_AUTHORED_STYLE_IDS
     assert {style.id for style in styles} == EXPECTED_AUTHORED_STYLE_IDS
     assert not [
@@ -367,7 +369,7 @@ def test_authored_catalogue_has_exactly_30_complete_contracts(caplog):
 
         preview = data["preview"]
         expected_preview_fields = {"bg", "accent", "palette", "variant"}
-        if style_id == "cyber-ai":
+        if style_id in {"cyber-ai", "tech-blueprint"}:
             expected_preview_fields.add("image")
         assert set(preview) == expected_preview_fields
         assert len(preview["palette"]) >= 3
@@ -406,7 +408,7 @@ def test_authored_styles_api_hides_briefs_and_returns_exact_catalogue():
 
     assert response.status_code == 200
     body = response.json()
-    assert len(body) == 33
+    assert len(body) == 34
     assert [style["id"] for style in body] == sorted(style["id"] for style in body)
     assert {style["id"] for style in body} == EXPECTED_AUTHORED_STYLE_IDS
     assert all(
@@ -428,6 +430,9 @@ def test_authored_styles_api_hides_briefs_and_returns_exact_catalogue():
     by_id = {style["id"]: style for style in body}
     assert by_id["cyber-ai"]["preview"]["image"] == (
         "/api/v1/ppt/authored/styles/cyber-ai/preview"
+    )
+    assert by_id["tech-blueprint"]["preview"]["image"] == (
+        "/api/v1/ppt/authored/styles/tech-blueprint/preview"
     )
     assert by_id["default"]["name"] == "기본 블루프린트"
     assert by_id["default"]["description"] == (
@@ -459,9 +464,10 @@ def test_authored_styles_api_hides_briefs_and_returns_exact_catalogue():
         "variant": "executive-ledger",
     }
 
-    preview_response = client.get(
-        "/api/v1/ppt/authored/styles/cyber-ai/preview"
-    )
-    assert preview_response.status_code == 200
-    assert preview_response.headers["content-type"] == "image/png"
-    assert preview_response.content.startswith(b"\x89PNG")
+    for style_id in ("cyber-ai", "tech-blueprint"):
+        preview_response = client.get(
+            f"/api/v1/ppt/authored/styles/{style_id}/preview"
+        )
+        assert preview_response.status_code == 200
+        assert preview_response.headers["content-type"] == "image/png"
+        assert preview_response.content.startswith(b"\x89PNG")
