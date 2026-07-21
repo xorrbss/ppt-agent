@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -283,6 +284,37 @@ def _catalog_digest() -> str:
 
 def _warning_codes(analysis: dict) -> set[str]:
     return {warning["code"] for warning in analysis["warnings"]}
+
+
+def _rewrite_presentation_xml(path: Path, transform) -> None:
+    with ZipFile(path) as package:
+        members = {name: package.read(name) for name in package.namelist()}
+    xml = members["ppt/presentation.xml"].decode("utf-8")
+    members["ppt/presentation.xml"] = transform(xml).encode("utf-8")
+    with ZipFile(path, "w", compression=ZIP_DEFLATED) as package:
+        for name, data in members.items():
+            package.writestr(name, data)
+
+
+def test_pptx_analysis_fails_clean_on_missing_or_zero_slide_size(
+    tmp_path: Path,
+) -> None:
+    # A malformed presentation.xml (no <p:sldSz>, or a zero dimension) must raise
+    # ArtifactAnalysisError — caught by the CLI's clean handler — rather than a raw
+    # TypeError/ZeroDivisionError traceback from the aspect-ratio math.
+    missing = tmp_path / "no-size.pptx"
+    _pptx(missing, tmp_path / "pixel.png")
+    _rewrite_presentation_xml(missing, lambda xml: re.sub(r"<p:sldSz[^>]*/>", "", xml))
+    with pytest.raises(ArtifactAnalysisError, match="slide size"):
+        analyze_artifact(missing)
+
+    zero = tmp_path / "zero-size.pptx"
+    _pptx(zero, tmp_path / "pixel2.png")
+    _rewrite_presentation_xml(
+        zero, lambda xml: re.sub(r'cy="\d+"', 'cy="0"', xml, count=1)
+    )
+    with pytest.raises(ArtifactAnalysisError, match="invalid slide dimensions"):
+        analyze_artifact(zero)
 
 
 def test_pptx_analysis_is_deterministic_and_extracts_design_signals(

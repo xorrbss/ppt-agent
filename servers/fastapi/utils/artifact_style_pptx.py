@@ -309,8 +309,18 @@ def analyze_pptx(source: Path, raw: bytes) -> dict[str, Any]:
             f"{source}: PPTX exceeds the {MAX_PAGES}-slide safety limit"
         )
 
-    width = int(presentation.slide_width)
-    height = int(presentation.slide_height)
+    # A malformed presentation.xml can omit <p:sldSz> (slide_width None) or declare
+    # a zero dimension; validate here — mirroring the PDF page-dimension guard — so
+    # the aspect-ratio math below can't raise a TypeError/ZeroDivisionError that
+    # would escape the CLI's ArtifactAnalysisError handler as a raw traceback.
+    raw_width = presentation.slide_width
+    raw_height = presentation.slide_height
+    if raw_width is None or raw_height is None:
+        raise ArtifactAnalysisError(f"{source}: PPTX has no slide size")
+    width = int(raw_width)
+    height = int(raw_height)
+    if width <= 0 or height <= 0:
+        raise ArtifactAnalysisError(f"{source}: PPTX has invalid slide dimensions")
     colors: Counter[str] = Counter()
     color_roles: dict[str, set[str]] = defaultdict(set)
     fonts: Counter[str] = Counter()
