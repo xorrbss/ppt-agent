@@ -91,6 +91,26 @@ function toAuthoredStyleSummary(value: unknown): AuthoredStyleSummary | null {
     return null;
   }
 
+  const previewShape: AuthoredStylePreview = {
+    bg: preview.bg.trim(),
+    accent: preview.accent.trim(),
+    palette: (() => {
+      const palette = normalizeStringList(preview.palette);
+      return palette.length > 0
+        ? palette
+        : normalizeStringList([preview.bg, preview.accent]);
+    })(),
+    variant:
+      typeof preview.variant === "string" && preview.variant.trim()
+        ? preview.variant.trim()
+        : "clean-light",
+  };
+  // Only attach `image` when the backend supplied one — emitting `image: undefined`
+  // would leak an own property that breaks deep-equality against the public shape.
+  if (typeof preview.image === "string" && preview.image.trim()) {
+    previewShape.image = getApiUrl(preview.image.trim());
+  }
+
   // Rebuild the public shape so internal fields such as `brief` never reach UI state.
   return {
     id: id.trim(),
@@ -99,24 +119,7 @@ function toAuthoredStyleSummary(value: unknown): AuthoredStyleSummary | null {
     category: normalizeCategory(value.category),
     tags: normalizeStringList(value.tags),
     use_cases: normalizeStringList(value.use_cases),
-    preview: {
-      bg: preview.bg.trim(),
-      accent: preview.accent.trim(),
-      palette: (() => {
-        const palette = normalizeStringList(preview.palette);
-        return palette.length > 0
-          ? palette
-          : normalizeStringList([preview.bg, preview.accent]);
-      })(),
-      variant:
-        typeof preview.variant === "string" && preview.variant.trim()
-          ? preview.variant.trim()
-          : "clean-light",
-      image:
-        typeof preview.image === "string" && preview.image.trim()
-          ? getApiUrl(preview.image.trim())
-          : undefined,
-    },
+    preview: previewShape,
   };
 }
 

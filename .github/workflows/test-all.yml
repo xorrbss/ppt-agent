@@ -127,6 +127,6 @@ jobs:
       with:
         working-directory: servers/nextjs
         component: true
-        spec: "**/AdaptiveBlockControls.cy.tsx,**/AdaptivePropertyControls.cy.tsx,**/ChartLeaf.cy.tsx,**/Variants.cy.tsx,**/UploadPage.cy.tsx,**/ThemeComposer.cy.tsx,**/TemplateSelection.cy.tsx,**/presentationGenUpload.cy.ts,**/presentation-generation.cy.ts"
+        spec: "**/AdaptiveBlockControls.cy.tsx,**/AdaptivePropertyControls.cy.tsx,**/ChartLeaf.cy.tsx,**/Variants.cy.tsx,**/UploadPage.cy.tsx,**/ThemeComposer.cy.tsx,**/TemplateSelection.cy.tsx,**/presentationGenUpload.cy.ts,**/presentation-generation.cy.ts,**/api/authored.cy.ts,**/usePresentationGeneration.cy.tsx,**/PresentationHeader.cy.tsx"
         install: false
 
