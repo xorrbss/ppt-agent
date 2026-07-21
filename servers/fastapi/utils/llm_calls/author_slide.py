@@ -119,7 +119,24 @@ class AuthoredStyleLike(Protocol):
     heading_font: Optional[str]
     body_font: Optional[str]
     mono_font: Optional[str]
+    illustration_prompt: Optional[str]
     reference_images: Mapping[str, tuple[Path, ...]]
+
+
+# Appended to the style brief only for illustration-enabled styles. The image is
+# generated AFTER authoring (utils/authored_illustrations.py fills the slot), so
+# the model designs the composition and all labels/callouts in HTML around a
+# reserved area — text inside generated images is unreliable (especially Korean),
+# HTML text is always crisp and correct.
+_ILLUSTRATION_SLOT_RULES = """\
+- ILLUSTRATION SLOT: you MAY include AT MOST ONE bespoke illustration placeholder:
+  `<img data-illust-prompt="..." style="...">`. In data-illust-prompt, describe the
+  desired SCENE in English (concrete objects, composition, viewpoint) — subject matter
+  only; the visual style is applied automatically. The image will contain NO text, so
+  put every label, callout and annotation in HTML positioned around/over the slot.
+  Reserve the slot's exact area with explicit width/height (or absolute inset) styles
+  so the layout holds even if the image is dropped. Do not reference any other image
+  (no external URLs, no data URIs)."""
 
 
 def apply_style_defaults(brand: Brand, style: Optional[AuthoredStyleLike]) -> Brand:
@@ -184,6 +201,8 @@ def build_design_system(
             )
         if token_lines:
             style_brief = f"{style_brief}\n" + "\n".join(token_lines)
+        if getattr(style, "illustration_prompt", None):
+            style_brief = f"{style_brief}\n{_ILLUSTRATION_SLOT_RULES}"
     return _DESIGN_SYSTEM_RULES.format(
         primary=brand.primary or "#2563EB",
         fonts=brand.fonts or "Noto Sans KR",

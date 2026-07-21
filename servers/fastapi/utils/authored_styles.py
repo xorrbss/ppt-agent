@@ -54,6 +54,7 @@ class AuthoredStyle:
     heading_font: Optional[str] = None
     body_font: Optional[str] = None
     mono_font: Optional[str] = None
+    illustration_prompt: Optional[str] = None
     reference_images: Mapping[str, tuple[Path, ...]] = field(default_factory=dict)
 
     def public_dict(self) -> dict[str, Any]:
@@ -253,6 +254,10 @@ def _parse_style(source: Path, assets_directory: Path) -> AuthoredStyle:
     if not isinstance(tokens, Mapping):
         raise ValueError(f"{source.name}: 'design_tokens' must be a mapping")
 
+    illustration = data.get("illustration", {})
+    if not isinstance(illustration, Mapping):
+        raise ValueError(f"{source.name}: 'illustration' must be a mapping")
+
     preview_image = None
     if "image" in preview:
         preview_image = _asset_path(preview["image"], source, assets_directory)
@@ -275,6 +280,7 @@ def _parse_style(source: Path, assets_directory: Path) -> AuthoredStyle:
         heading_font=_optional_string(tokens, "heading_font", source),
         body_font=_optional_string(tokens, "body_font", source),
         mono_font=_optional_string(tokens, "mono_font", source),
+        illustration_prompt=_optional_string(illustration, "style_prompt", source),
         reference_images=_reference_images(data, source, assets_directory),
     )
 
