@@ -17,6 +17,11 @@ if TYPE_CHECKING:
 
 MAX_SOURCE_BYTES = 1024 * 1024
 MAX_YAML_DEPTH = 100
+# The assembled brief is injected verbatim into the slide-authoring prompt. Cap its
+# size so an oversized (or hostile) external source can't smuggle a huge prompt in;
+# real briefs are a few KB, so this is generous. The tool is trusted-input-only and
+# its output is meant to be reviewed before use — this is a backstop, not a sandbox.
+MAX_BRIEF_CHARS = 12_000
 YAML_SUFFIXES = {".yaml", ".yml"}
 _IDENTIFIER_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 _HEX_PATTERN = re.compile(r"#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?![0-9a-fA-F])")
@@ -358,7 +363,14 @@ def _brief(
         "SLIDE ARCHETYPES:\n" + "\n".join(layout_lines),
         "AVOID:\nAvoid unrelated visual languages, low contrast, decorative clutter, illegible text, and chart effects that obscure the data.",
     ]
-    return _LiteralString("\n\n".join(sections))
+    brief = "\n\n".join(sections)
+    if len(brief) > MAX_BRIEF_CHARS:
+        raise _error(
+            source,
+            f"assembled brief is {len(brief)} chars, exceeding the "
+            f"{MAX_BRIEF_CHARS}-char limit; trim the source style",
+        )
+    return _LiteralString(brief)
 
 
 def convert_document(data: Mapping[str, Any], source: Path) -> dict[str, Any]:
