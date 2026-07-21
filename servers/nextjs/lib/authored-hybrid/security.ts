@@ -56,6 +56,23 @@ export async function readBoundedResponseText(
   return Buffer.concat(chunks, totalBytes).toString("utf8");
 }
 
+/** Concatenate every CSS region (inline `<style>` blocks + `style=` attribute
+ * values) so CSS-only guards run against style content instead of the whole
+ * document — plain-text backslashes ("C:\\Users") or the word "expression"
+ * in prose must not trip a CSS escape/expression check. */
+function extractCssRegions(html: string): string {
+  const regions: string[] = [];
+  for (const match of html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)) {
+    regions.push(match[1]);
+  }
+  for (const match of html.matchAll(
+    /\bstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/gi
+  )) {
+    regions.push(match[1] ?? match[2] ?? "");
+  }
+  return regions.join("\n");
+}
+
 /**
  * H1 renders a temporary HTML file in Chrome. Hybrid mode accepts only the
  * static, self-contained subset produced by the authored pipeline. Anything
@@ -69,6 +86,7 @@ export function preflightAuthoredHtmlForHybrid(
     return { ok: false, reason: "html-too-large" };
   }
 
+  // Structural markup that is unsafe wherever it appears.
   const forbiddenMarkup = [
     /<\s*script\b/i,
     /<\s*(?:iframe|frame|frameset|object|embed|applet)\b/i,
@@ -79,13 +97,28 @@ export function preflightAuthoredHtmlForHybrid(
     /<\s*meta\b[^>]*http-equiv\s*=\s*["']?refresh\b/i,
     /(?:\s|\/)(?:on[a-z0-9_-]+|srcdoc)\s*=/i,
     /\b(?:srcset|imagesrcset|ping)\s*=/i,
+  ];
+  if (forbiddenMarkup.some((pattern) => pattern.test(html))) {
+    return { ok: false, reason: "active-or-external-html" };
+  }
+
+  // Dangerous URL protocols only matter inside a URL context — an attribute
+  // value (after `=` or a quote) or a CSS url(). Anchoring to that context
+  // avoids rejecting ordinary prose like "Profile:" or "Dockerfile:".
+  if (/["'=(]\s*(?:javascript|vbscript|file|blob|ftp):/i.test(html)) {
+    return { ok: false, reason: "active-or-external-html" };
+  }
+
+  // CSS-only constructs (escape obfuscation, remote/vector fetches, IE
+  // expressions) are checked against style regions only.
+  const css = extractCssRegions(html);
+  const forbiddenCss = [
     /@import\b/i,
     /\b(?:-webkit-)?image-set\s*\(/i,
     /\\(?:[0-9a-f]{1,6}[ \t\r\n\f]?|[^\r\n\f0-9a-f])/i,
-    /(?:javascript|vbscript|file|blob|ftp):/i,
     /expression\s*\(/i,
   ];
-  if (forbiddenMarkup.some((pattern) => pattern.test(html))) {
+  if (forbiddenCss.some((pattern) => pattern.test(css))) {
     return { ok: false, reason: "active-or-external-html" };
   }
 

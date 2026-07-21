@@ -379,7 +379,10 @@ function assembleSlide(
   const replacement =
     `<p:spTree>${GROUP_ROOT_XML}${backplatePictureXml(backplateRelationshipId)}` +
     `${nativeXml.join("")}</p:spTree>`;
-  const newSlideXml = slideXml.replace(spTree[0], replacement);
+  // Pass a replacer function so `$&`, `$'`, `$\`` and `$$` sequences inside the
+  // assembled shape XML (e.g. text like "US$'000") are inserted literally instead
+  // of being expanded as String.replace special patterns.
+  const newSlideXml = slideXml.replace(spTree[0], () => replacement);
   const pruned = pruneUnusedImageRelationships(relationshipsXml, newSlideXml, relsPath);
   entries.set(relsPath, Buffer.from(pruned.xml, "utf8"));
   entries.set(
