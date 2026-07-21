@@ -254,6 +254,24 @@ def test_style_defaults_preserve_explicit_brand_overrides():
     assert custom_brand.fonts == "Pretendard"
 
 
+def test_style_defaults_fall_back_to_preview_accent_without_a_primary_token():
+    # 28 of 30 presets describe their palette in prose and carry no primary_color
+    # token; the picker swatch accent must then become the effective brand primary
+    # so the prompt and persisted theme match the style instead of the brand blue.
+    style = SimpleNamespace(id="exec-report", preview_accent="#00A3E0")
+    assert apply_style_defaults(_brand(), style).primary == "#00A3E0"
+
+    # An explicit request colour still wins over the swatch fallback.
+    explicit = Brand(topic="t", primary="#FF6600", primary_is_explicit=True)
+    assert apply_style_defaults(explicit, style).primary == "#FF6600"
+
+    # A structured primary_color token still takes precedence over the swatch.
+    tokened = SimpleNamespace(
+        id="cyber", preview_accent="#00A3E0", primary_color="#35F2C2"
+    )
+    assert apply_style_defaults(_brand(), tokened).primary == "#35F2C2"
+
+
 def test_generate_request_accepts_optional_authored_style():
     assert GeneratePresentationRequest(content="topic").authored_style is None
     request = GeneratePresentationRequest(content="topic", authored_style="editorial")
