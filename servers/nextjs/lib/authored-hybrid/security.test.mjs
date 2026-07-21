@@ -25,6 +25,18 @@ test("static legacy HTML and embedded raster images pass hybrid preflight", () =
   if (decoded.ok) assert.equal(decoded.mime, "png");
 });
 
+test("ordinary business prose with protocol-like words and backslashes passes", () => {
+  for (const html of [
+    "<!doctype html><html><body><h1>Company Profile: 회사 소개</h1></body></html>",
+    "<p>배포 경로는 C:\\Users\\ibiz\\deploy 이며 Dockerfile: 참조</p>",
+    "<p>2024 목표는 US$'000 단위, 순이익 &amp; 성장 &lt;10%&gt;</p>",
+    "<p>ftp is legacy; the expression (매출 - 비용) 을 계산</p>",
+    "<div style=\"color:#123456;font-family:'맑은 고딕'\">서울</div>",
+  ]) {
+    assert.equal(preflightAuthoredHtmlForHybrid(html).ok, true, html);
+  }
+});
+
 test("active, network-bearing, local-file, and vector data content fail closed", () => {
   for (const html of [
     "<script>fetch('https://example.com')</script>",

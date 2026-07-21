@@ -297,6 +297,49 @@ test("assembler scans relationship parts without ASCII case", async () => {
   assert.equal(entries.has("ppt/media/image1.png"), true);
 });
 
+test("assembler inserts promoted text literally even with $-escape sequences", async () => {
+  const backplate = await sharp({
+    create: { width: 1280, height: 720, channels: 4, background: "transparent" },
+  })
+    .png()
+    .toBuffer();
+  // "$'" (and "$&", "$$") are String.replace special patterns; the assembled
+  // shape XML is spliced with replace(spTree, replacement) and must land verbatim.
+  const text = {
+    id: "dollar-text",
+    domPath: "body > h1",
+    tagName: "h1",
+    sourceIndex: 0,
+    zOrder: 3,
+    cssZIndex: 3,
+    bounds: bounds(80, 60, 600, 100),
+    rotationDeg: 0,
+    opacity: 1,
+    classification: { mode: "native", kind: "text", confidence: "safe" },
+    text: {
+      role: "title",
+      plainText: "매출 US$'000 & 순이익 $$1",
+      paragraphs: ["매출 US$'000 & 순이익 $$1"],
+      style: textStyle,
+      runs: [],
+    },
+  };
+  const prepared = await prepareNativeElements([text]);
+  const output = assembleAuthoredHybridPptx(skeleton(), [
+    { slideNumber: 1, backplatePng: backplate, elements: prepared },
+  ]);
+  const slideXml = readPptxArchive(output)
+    .get("ppt/slides/slide1.xml")
+    .toString("utf8");
+
+  assert.match(
+    slideXml,
+    /<a:t xml:space="preserve">매출 US\$&apos;000 &amp; 순이익 \$\$1<\/a:t>/
+  );
+  // The original single spTree must not be duplicated by pattern expansion.
+  assert.equal((slideXml.match(/<p:spTree>/g) || []).length, 1);
+});
+
 test("assembler fails closed for an incompatible slide size or malformed PNG", async () => {
   const png = await sharp({
     create: { width: 1280, height: 720, channels: 4, background: "transparent" },
