@@ -26,8 +26,10 @@ EXPECTED_AUTHORED_STYLE_IDS = {
     "default",
     "editorial-tritone",
     "exec-report",
+    "flat-infographic",
     "geometric-mono",
     "groovy-70s",
+    "iso-blueprint",
     "liquid-executive",
     "luxury-editorial",
     "minimal-vellum",
@@ -40,6 +42,7 @@ EXPECTED_AUTHORED_STYLE_IDS = {
     "scholars-journal",
     "science-sketch",
     "silicon-refined",
+    "sketch-note",
     "soft-editorial",
     "startup-aura",
     "strategic-insight",
@@ -49,6 +52,7 @@ EXPECTED_AUTHORED_STYLE_IDS = {
 }
 TECHNOLOGY_STYLE_IDS = {
     "cyber-ai",
+    "iso-blueprint",
     "neon-venture",
     "prismatic-tech",
     "project-launch",
@@ -331,7 +335,7 @@ def test_authored_catalogue_has_exactly_30_complete_contracts(caplog):
     with caplog.at_level(logging.WARNING, logger="utils.authored_styles"):
         styles = load_authored_styles()
 
-    assert len(sources) == len(styles) == len(EXPECTED_AUTHORED_STYLE_IDS) == 30
+    assert len(sources) == len(styles) == len(EXPECTED_AUTHORED_STYLE_IDS) == 33
     assert {source.stem for source in sources} == EXPECTED_AUTHORED_STYLE_IDS
     assert {style.id for style in styles} == EXPECTED_AUTHORED_STYLE_IDS
     assert not [
@@ -402,7 +406,7 @@ def test_authored_styles_api_hides_briefs_and_returns_exact_catalogue():
 
     assert response.status_code == 200
     body = response.json()
-    assert len(body) == 30
+    assert len(body) == 33
     assert [style["id"] for style in body] == sorted(style["id"] for style in body)
     assert {style["id"] for style in body} == EXPECTED_AUTHORED_STYLE_IDS
     assert all(

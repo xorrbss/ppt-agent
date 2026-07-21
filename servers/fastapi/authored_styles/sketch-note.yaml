@@ -1,0 +1,73 @@
+id: sketch-note
+name: 스케치 노트
+description: 잉크 손그림 일러스트와 형광 하이라이트로 개념을 풀어내는 교육·강의용 노트 스타일
+category: research
+tags:
+  - 인포그래픽
+  - 손그림
+  - 교육
+use_cases:
+  - 교육·강의 자료
+  - 개념 설명 세미나
+  - 워크숍 진행 자료
+preview:
+  bg: "#FBF7EF"
+  accent: "#C74A33"
+  palette:
+    - "#FBF7EF"
+    - "#2F2A25"
+    - "#C74A33"
+    - "#F4C542"
+    - "#FFFFFF"
+  variant: ink-notebook
+illustration:
+  style_prompt: >-
+    hand-drawn ink sketch illustration, confident black line art with loose
+    cross-hatching, selective brick-red (#C74A33) and warm yellow (#F4C542)
+    marker highlights, warm paper-white background, notebook doodle style,
+    charming but precise, generous empty margin, no shading gradients
+brief: >-
+  MOOD: Create the feeling of a brilliant teacher's notebook — hand-drawn
+  warmth with rigorous structure. Slides should read like beautifully kept
+  lecture notes that make hard ideas feel simple and memorable.
+
+  PALETTE: Use warm paper (#FBF7EF) as the canvas, near-black ink (#2F2A25)
+  for text and structure, brick red (#C74A33) for the one key emphasis per
+  slide, warm yellow (#F4C542) as a highlighter wash behind crucial phrases,
+  and white (#FFFFFF) for note cards. Red and yellow are teaching signals,
+  not decoration.
+
+  TYPOGRAPHY: A humanist sans-serif or a restrained handwriting-adjacent
+  face for headings, with a highly legible sans for body text. Underlines,
+  circled numbers and highlighter washes are drawn with CSS/SVG so Korean
+  text stays crisp — never inside images.
+
+  LAYOUT SYSTEM: Anchor each slide with ONE sketch illustration slot — a
+  hand-drawn scene or diagram occupying a third to half of the slide — and
+  arrange note-style HTML around it: highlighted key sentences, numbered
+  margin notes, small definition cards. Vary slot placement per slide.
+  Reserve the slot area with explicit sizing so the layout holds without
+  the image.
+
+  SIGNATURE ELEMENTS: Ink-sketch scenes, yellow highlighter washes behind
+  key phrases, red circled numbers and arrows drawn as SVG, dashed rules,
+  slightly rotated note cards, hand-drawn-feel dividers.
+
+  DATA VISUALIZATION: Draw charts as inline SVG with a hand-sketched feel —
+  slightly imperfect axes, direct labels, red marking the insight. Keep all
+  numbers in HTML/SVG, never in the generated image.
+
+  IMAGE DIRECTION: Describe one clear sketched scene per slide that teaches
+  the concept visually (a lightbulb machine, gears meshing, a path up a
+  mountain with flags, a magnifying glass over documents). Composition
+  only — the image must contain no text.
+
+  SLIDE ARCHETYPES: cover: big warm title with a hero sketch and one yellow
+  highlight; content: sketch beside 3-4 highlighted teaching points; data:
+  one sketched-feel SVG chart with a red insight note; timeline: a drawn
+  path with numbered flag markers; closing: summary notes with a small
+  celebratory sketch and next steps.
+
+  AVOID: Avoid text baked into images, polished 3D or photographic imagery,
+  more than one red emphasis per slide, overcrowded doodles, childish
+  clip-art, and pale low-contrast ink.
