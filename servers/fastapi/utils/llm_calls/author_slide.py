@@ -113,6 +113,7 @@ class AuthoredStyleLike(Protocol):
 
     id: str
     brief: str
+    preview_accent: str
     primary_color: Optional[str]
     background_color: Optional[str]
     heading_font: Optional[str]
@@ -122,13 +123,25 @@ class AuthoredStyleLike(Protocol):
 
 
 def apply_style_defaults(brand: Brand, style: Optional[AuthoredStyleLike]) -> Brand:
-    """Apply preset brand defaults without overriding explicit request values."""
+    """Apply preset brand defaults without overriding explicit request values.
+
+    Most style presets describe their palette in prose rather than a structured
+    ``primary_color`` token, but every preset carries a ``preview_accent`` (the
+    signal colour shown in the picker swatch). Falling back to it keeps the deck's
+    ``Brand primary colour`` line and the persisted ``theme.primary`` consistent
+    with the style's palette instead of leaving the generic brand blue, which would
+    contradict the brief the model is authoring from.
+    """
     if style is None or style.id == "default":
         return brand
     primary = brand.primary
     fonts = brand.fonts
     if not brand.primary_is_explicit:
-        primary = getattr(style, "primary_color", None) or primary
+        primary = (
+            getattr(style, "primary_color", None)
+            or getattr(style, "preview_accent", None)
+            or primary
+        )
     if not brand.fonts_are_explicit:
         fonts = (
             getattr(style, "body_font", None)
