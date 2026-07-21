@@ -143,6 +143,18 @@ const PresentationHeader = ({
     }
   }, [isEditingTitle]);
 
+  // Restore focus to the export trigger once an export finishes. The trigger is
+  // `disabled` while `isExporting`, so focusing it inside the export handler could
+  // no-op before React re-enabled the button; running here (after the enabling
+  // re-render commits) guarantees keyboard focus returns to the trigger.
+  const wasExportingRef = useRef(false);
+  useEffect(() => {
+    if (wasExportingRef.current && !isExporting) {
+      exportTriggerRef.current?.focus();
+    }
+    wasExportingRef.current = isExporting;
+  }, [isExporting]);
+
   const beginTitleEdit = () => {
     if (isStreaming || !presentationData) return;
     setDraftTitle(presentationData.title || "");
@@ -275,7 +287,6 @@ const PresentationHeader = ({
       );
     } finally {
       setIsExporting(false);
-      requestAnimationFrame(() => exportTriggerRef.current?.focus());
     }
   };
 
@@ -337,7 +348,6 @@ const PresentationHeader = ({
       );
     } finally {
       setIsExporting(false);
-      requestAnimationFrame(() => exportTriggerRef.current?.focus());
     }
   };
   const handleReGenerate = () => {
