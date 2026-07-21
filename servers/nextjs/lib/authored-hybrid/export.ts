@@ -34,6 +34,11 @@ const MAX_PRESENTATION_RESPONSE_BYTES = 50 * 1024 * 1024;
 const MAX_HYBRID_SLIDES = 100;
 const MAX_FIDELITY_PPTX_BYTES = 512 * 1024 * 1024;
 const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
+// Total wall-clock budget for the sequential per-slide hybrid pass. Each slide can
+// take ~60s worst case (extract + up to 2 backplate relaunches); without a ceiling a
+// pathological deck holds the export request for tens of minutes. When the budget is
+// spent the remaining slides simply keep their fidelity (image) render.
+const HYBRID_DECK_BUDGET_MS = 8 * 60_000;
 
 interface StoredSlide {
   index?: unknown;
@@ -215,7 +220,9 @@ async function writeHybridPptx(
   } finally {
     await fs.rm(temporaryPath, { force: true }).catch(() => {});
   }
-  await fs.rm(safeFidelityPath, { force: true }).catch(() => {});
+  // Keep the fidelity PPTX: it is a normal export artifact at a title-derived path,
+  // so a previously issued download link (or a concurrent export reading it) must
+  // not 404 just because a hybrid variant was written alongside it.
   return hybridPath;
 }
 
@@ -251,7 +258,15 @@ export async function runAuthoredHybridPresentationExport(
     if (!chromeExecutable) return fidelity;
 
     const layers: AuthoredHybridSlideLayer[] = [];
+    const deckStart = Date.now();
     for (let arrayIndex = 0; arrayIndex < presentation.slides.length; arrayIndex += 1) {
+      if (Date.now() - deckStart > HYBRID_DECK_BUDGET_MS) {
+        console.warn(
+          `[authored-hybrid] deck time budget exhausted after ${arrayIndex} slides; ` +
+            "remaining slides keep the fidelity render"
+        );
+        break;
+      }
       const rawSlide = presentation.slides[arrayIndex];
       if (!isRecord(rawSlide)) continue;
       const slide = rawSlide as StoredSlide;
