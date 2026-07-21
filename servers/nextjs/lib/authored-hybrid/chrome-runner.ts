@@ -119,18 +119,40 @@ export async function resolveAuthoredHybridChromeExecutable(): Promise<
   return undefined;
 }
 
-function terminateChrome(child: ChildProcess): void {
-  if (!child.pid) return;
-  if (process.platform === "win32") {
-    const killer = spawn(
-      "taskkill",
-      ["/pid", String(child.pid), "/T", "/F"],
-      { stdio: "ignore", windowsHide: true }
-    );
-    killer.unref();
-    return;
-  }
-  child.kill("SIGKILL");
+const KILL_GRACE_MS = 5_000;
+
+/** Kill Chrome and resolve only once the process has actually exited, so callers
+ * can delete the work directory afterwards. On Windows the detached child holds a
+ * lock on `--user-data-dir`; deleting before it exits raises EBUSY and leaks the
+ * temp dir. A grace timer guarantees we never hang if `exit` is never reported. */
+function terminateChrome(child: ChildProcess): Promise<void> {
+  return new Promise((resolve) => {
+    if (!child.pid || child.exitCode !== null || child.signalCode !== null) {
+      resolve();
+      return;
+    }
+    let done = false;
+    let grace: ReturnType<typeof setTimeout>;
+    const settle = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(grace);
+      resolve();
+    };
+    child.once("exit", settle);
+    grace = setTimeout(settle, KILL_GRACE_MS);
+    grace.unref?.();
+    if (process.platform === "win32") {
+      const killer = spawn(
+        "taskkill",
+        ["/pid", String(child.pid), "/T", "/F"],
+        { stdio: "ignore", windowsHide: true }
+      );
+      killer.unref();
+    } else {
+      child.kill("SIGKILL");
+    }
+  });
 }
 
 function appendBounded(
@@ -172,9 +194,12 @@ async function spawnChrome(
     };
     const timer = setTimeout(() => {
       finish(() => {
-        terminateChrome(child);
-        reject(
-          new Error(`Chrome authored hybrid capture timed out after ${timeoutMs}ms.`)
+        void terminateChrome(child).then(() =>
+          reject(
+            new Error(
+              `Chrome authored hybrid capture timed out after ${timeoutMs}ms.`
+            )
+          )
         );
       });
     }, timeoutMs);
@@ -184,8 +209,7 @@ async function spawnChrome(
         stdoutBytes = appendBounded(stdout, chunk, stdoutBytes);
       } catch (error) {
         finish(() => {
-          terminateChrome(child);
-          reject(error);
+          void terminateChrome(child).then(() => reject(error));
         });
       }
     });
@@ -194,8 +218,7 @@ async function spawnChrome(
         stderrBytes = appendBounded(stderr, chunk, stderrBytes);
       } catch (error) {
         finish(() => {
-          terminateChrome(child);
-          reject(error);
+          void terminateChrome(child).then(() => reject(error));
         });
       }
     });
