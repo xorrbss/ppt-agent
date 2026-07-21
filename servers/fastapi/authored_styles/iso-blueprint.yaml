@@ -1,0 +1,79 @@
+id: iso-blueprint
+name: 아이소 블루프린트
+description: 블루+오렌지 아이소메트릭 3D 일러스트와 HTML 라벨로 시스템·프로세스를 설명하는 인포그래픽 스타일
+category: technology
+tags:
+  - 인포그래픽
+  - 아이소메트릭
+  - 시스템
+use_cases:
+  - 시스템 아키텍처 설명
+  - 보안·통제 체계 브리핑
+  - 기술 프로세스 소개
+preview:
+  bg: "#EDEEF1"
+  accent: "#E87722"
+  palette:
+    - "#EDEEF1"
+    - "#2E5FB7"
+    - "#E87722"
+    - "#1F2430"
+    - "#FFFFFF"
+  variant: iso-console
+illustration:
+  style_prompt: >-
+    clean isometric 3D technical illustration, industrial machinery, pipes,
+    consoles and devices, cobalt blue (#2E5FB7) and vivid orange (#E87722)
+    plastic-and-metal surfaces with light gray platforms, soft ambient
+    shadows, plain very light gray background, minimal, crisp vector-render
+    quality, generous empty margin around the scene
+brief: >-
+  MOOD: Create a confident systems-engineering explainer with the warmth of a
+  well-made product manual. Every slide should feel like a precision diagram
+  a senior engineer drew to make a complex mechanism instantly understandable
+  to a non-technical decision maker.
+
+  PALETTE: Use very light gray (#EDEEF1) as the canvas, cobalt blue (#2E5FB7)
+  for primary structures and emphasis, vivid orange (#E87722) as the single
+  action/signal color for the most important element or risk, near-black ink
+  (#1F2430) for text, and white (#FFFFFF) for cards and surfaces. Orange is
+  scarce and decisive — one concept per slide owns it.
+
+  TYPOGRAPHY: A strong modern sans-serif throughout. Slide titles are large,
+  dark and left-aligned with tight tracking; annotation labels are compact,
+  bold and sit close to what they describe; supporting bullets are calm and
+  well-spaced. Korean text must remain crisp and never be drawn inside images.
+
+  LAYOUT SYSTEM: The signature composition places ONE large isometric
+  illustration slot occupying roughly the left 55-65% of the slide, with
+  short bold HTML callout labels floating directly beside the parts of the
+  scene they describe (connected by proximity, not clutter), and a right-hand
+  column of 2-4 concise takeaway bullets. Vary the arrangement per role:
+  cover slides may center the scene under the title; content slides may flip
+  the illustration to the right. Reserve the slot area with explicit sizing
+  so the layout holds even without the image.
+
+  SIGNATURE ELEMENTS: Isometric machinery scenes, floating bold labels with
+  small connector ticks, one orange-highlighted critical element per slide,
+  thin light-gray platform lines, generous whitespace around the scene.
+
+  DATA VISUALIZATION: Prefer annotated flows and mechanisms over abstract
+  charts. When a chart is needed, draw it as clean inline SVG in the same
+  blue/orange system with direct labels — never inside the generated image.
+
+  IMAGE DIRECTION: Describe one coherent isometric scene per slide that
+  physically embodies the concept (pipelines, gates, control panels, locks,
+  conveyor flows, server stacks). Composition only — all text, numbers and
+  labels live in HTML around the image.
+
+  SLIDE ARCHETYPES: cover: title over a wide hero scene with one orange
+  focal point; content: scene left, labeled callouts on the scene, takeaway
+  bullets right; data: one dominant annotated SVG flow or metric panel with
+  a small supporting scene; timeline: horizontal milestone rail with small
+  isometric markers; closing: decision summary with one compact scene and
+  clear next actions.
+
+  AVOID: Avoid text baked into images, multiple competing scenes on one
+  slide, photographic imagery, gradients on the canvas, dense paragraph
+  blocks, more than one orange focal concept, and decorative icons that do
+  not explain the mechanism.
