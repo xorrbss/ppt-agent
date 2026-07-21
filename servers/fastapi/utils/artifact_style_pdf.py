@@ -24,6 +24,7 @@ from utils.artifact_style_analysis import (
     MAX_ARTIFACT_BYTES,
     MAX_PAGES,
     ArtifactAnalysisError,
+    _signal,
 )
 
 
@@ -369,14 +370,6 @@ def _layout_signature(
         f"{key}={min(count, 9)}" for key, count in sorted(regions.items())
     )
     return sha256(payload.encode("utf-8")).hexdigest()[:12]
-
-
-def _signal(values: list[dict[str, Any]], confidence: str) -> dict[str, Any]:
-    return {
-        "confidence": confidence if values else "none",
-        "status": "observed" if values else "unavailable",
-        "values": values,
-    }
 
 
 def _open_pdf(source: Path, raw: bytes) -> Any:

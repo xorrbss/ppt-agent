@@ -20,6 +20,7 @@ from utils.artifact_style_analysis import (
     MAX_ARTIFACT_BYTES,
     MAX_PAGES,
     ArtifactAnalysisError,
+    _signal,
 )
 
 
@@ -267,14 +268,6 @@ def _layout_signature(
         f"{key}={min(value, 9)}" for key, value in sorted(cells.items())
     )
     return sha256(payload.encode("utf-8")).hexdigest()[:12]
-
-
-def _signal(values: list[dict[str, Any]], confidence: str) -> dict[str, Any]:
-    return {
-        "confidence": confidence if values else "none",
-        "status": "observed" if values else "unavailable",
-        "values": values,
-    }
 
 
 def analyze_pptx(source: Path, raw: bytes) -> dict[str, Any]:

@@ -11,6 +11,7 @@ from typing import Any, Mapping, Sequence
 from utils.authored_style_converter import (
     ConversionError,
     YAML_SUFFIXES,
+    _WINDOWS_RESERVED,
     _read_yaml,
     _serialize,
     convert_document,
@@ -18,11 +19,6 @@ from utils.authored_style_converter import (
 from utils.authored_styles import load_authored_styles
 
 
-_WINDOWS_RESERVED_NAMES = (
-    {"con", "prn", "aux", "nul"}
-    | {f"com{number}" for number in range(1, 10)}
-    | {f"lpt{number}" for number in range(1, 10)}
-)
 _WINDOWS_FORBIDDEN_FILENAME_CHARACTERS = set('<>:"/\\|?*')
 
 
@@ -97,7 +93,7 @@ def _targets(
             raise ConversionError(f"{output_path}: output file must use .yaml")
         windows_base_name = output_path.name.split(".", 1)[0].casefold()
         if (
-            windows_base_name in _WINDOWS_RESERVED_NAMES
+            windows_base_name in _WINDOWS_RESERVED
             or output_path.name.rstrip(" .") != output_path.name
             or any(ord(character) < 32 for character in output_path.name)
             or any(

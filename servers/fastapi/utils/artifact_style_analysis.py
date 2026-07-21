@@ -18,6 +18,15 @@ class ArtifactAnalysisError(ValueError):
     """Raised when an artifact cannot be analyzed safely or meaningfully."""
 
 
+def _signal(values: list[dict[str, Any]], confidence: str) -> dict[str, Any]:
+    """Shared shape for one analyzed design signal (colors, fonts, layouts, …)."""
+    return {
+        "confidence": confidence if values else "none",
+        "status": "observed" if values else "unavailable",
+        "values": values,
+    }
+
+
 def _read_artifact(source: Path) -> bytes:
     if not source.exists():
         raise ArtifactAnalysisError(f"{source}: input does not exist")
