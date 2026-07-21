@@ -240,6 +240,24 @@ def test_resolve_authored_style_falls_back_to_default_for_empty_or_unknown_id(tm
         assert style.brief == "default brief"
 
 
+def test_resolve_authored_style_warns_only_for_an_unknown_named_id(tmp_path, caplog):
+    _write(
+        tmp_path / "default.yaml",
+        "id: default\nname: Default\ndescription: D\npreview:\n  bg: '#FFFFFF'\n  accent: '#000000'\nbrief: default brief\n",
+    )
+
+    with caplog.at_level(logging.WARNING):
+        resolve_authored_style("stategic-navy", tmp_path)  # typo of a real style
+    assert "Unknown authored style 'stategic-navy'" in caplog.text
+
+    caplog.clear()
+    # Empty / default requests are not typos and must stay quiet.
+    with caplog.at_level(logging.WARNING):
+        resolve_authored_style(None, tmp_path)
+        resolve_authored_style("default", tmp_path)
+    assert "Unknown authored style" not in caplog.text
+
+
 def test_resolve_authored_style_uses_builtin_default_when_default_file_is_broken(tmp_path):
     _write(tmp_path / "default.yaml", "id: [not valid")
 

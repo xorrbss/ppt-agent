@@ -323,9 +323,17 @@ def resolve_authored_style(
     """Resolve a preset, falling back to the default style for unknown IDs."""
     styles = load_authored_styles(styles_directory)
     by_id = {style.id: style for style in styles}
-    requested_id = (style_id or DEFAULT_AUTHORED_STYLE_ID).strip()
+    requested_id = (style_id or "").strip() or DEFAULT_AUTHORED_STYLE_ID
+    resolved = by_id.get(requested_id)
+    if resolved is None and requested_id != DEFAULT_AUTHORED_STYLE_ID:
+        # A specific style was asked for but doesn't exist (e.g. a CLI/API typo);
+        # surface it instead of silently shipping a default-styled deck.
+        LOGGER.warning(
+            "Unknown authored style %r; falling back to the default style",
+            requested_id,
+        )
     return (
-        by_id.get(requested_id)
+        resolved
         or by_id.get(DEFAULT_AUTHORED_STYLE_ID)
         or _BUILTIN_DEFAULT_STYLE
     )
