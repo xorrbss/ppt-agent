@@ -25,8 +25,9 @@ from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from utils.asset_directory_utils import get_exports_directory, get_images_directory
 from utils.filename_utils import safe_export_basename
+from utils.authored_styles import resolve_authored_style
 from utils.llm_calls.author_deck import author_deck, build_image_pptx, plan_deck_roles
-from utils.llm_calls.author_slide import AuthoredStyleLike, Brand, apply_style_defaults
+from utils.llm_calls.author_slide import Brand, apply_style_defaults
 from utils.llm_calls.author_vision_qa import revise_authored_deck
 from utils.outline_utils import get_presentation_title_from_presentation_outline
 from utils.slide_capture import _placeholder_png, find_chrome, render_html_list_to_pngs
@@ -35,13 +36,6 @@ AUTHORED_TEMPLATE = "authored"
 _DEFAULT_PRIMARY = "#2563EB"
 
 LOGGER = logging.getLogger(__name__)
-
-
-def resolve_authored_style(style_id: Optional[str]) -> AuthoredStyleLike:
-    """Resolve through A1's catalog while keeping this dependent branch importable."""
-    from utils.authored_styles import resolve_authored_style as resolve
-
-    return resolve(style_id)
 
 
 def _is_korean(*candidates: Optional[str]) -> bool:
