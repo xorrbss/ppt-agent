@@ -105,6 +105,21 @@ def test_output_is_byte_deterministic(tmp_path):
     ).read_bytes()
 
 
+def test_brief_length_cap_rejects_oversized_source(tmp_path):
+    from utils.authored_style_converter import MAX_BRIEF_CHARS
+
+    data = yaml.safe_load(FIXTURE.read_text(encoding="utf-8"))
+    # The MOOD section copies the source `description` verbatim; a huge one must
+    # fail clean (bounded prompt-injection surface) instead of emitting a giant brief.
+    data["description"] = "가" * (MAX_BRIEF_CHARS + 100)
+    source = tmp_path / "oversized.yaml"
+    source.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+    with pytest.raises(ConversionError, match="char limit"):
+        convert_path(source, tmp_path / "out")
+    assert not (tmp_path / "out").exists()
+
+
 def test_batch_is_sorted_and_accepts_yaml_and_yml(tmp_path):
     source_dir = tmp_path / "inputs"
     source_dir.mkdir()

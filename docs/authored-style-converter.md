@@ -10,6 +10,13 @@ PPT-agent의 Authored 스타일 스키마로 변환한다. 변환 결과에 네�
 [`CONTRIBUTING.md`](https://github.com/YamilAyma/notebooklm-prompt-styles/blob/84b108d2228372370aace26d69583b74a8b7cde5/CONTRIBUTING.md#step-1-create-the-style-yaml)를
 기준으로 작성했다. 외부 저장소는 조사 자료일 뿐이며 런타임에 내려받지 않는다.
 
+> **신뢰 입력 전용 · 검토 후 사용.** 변환기는 소스 YAML의 설명·팔레트·레이아웃
+> 문구를 `brief`로 (공백 정리만 하고) 그대로 옮기며, 이 `brief`는 슬라이드 저작
+> LLM 프롬프트에 그대로 주입된다. 크기는 `MAX_BRIEF_CHARS`(12,000자)로 제한되지만
+> 내용은 정화하지 않는다. 따라서 신뢰할 수 있는 소스만 변환하고, 산출된 초안을
+> `authored_styles/`로 복사하기 전에 사람이 검토한다. YAML 파싱 자체는
+> `yaml.safe_load`(코드 실행 없음) + alias/중복키/깊이/크기 방어로 안전하다.
+
 ## 사용법
 
 저장소 루트에서 실행한다.
