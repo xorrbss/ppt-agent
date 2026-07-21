@@ -144,11 +144,29 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     if (!["left", "center", "right", "justify"].includes(alignment)) {
       alignment = "left";
     }
+    // Which alignment property maps to the vertical (block) axis depends on the
+    // layout: a flex ROW centers vertically via align-items (cross axis) while its
+    // justify-content controls the HORIZONTAL axis; a flex COLUMN is the reverse;
+    // grid maps align-items to the vertical axis. Treating a row's justify-content
+    // as a vertical anchor (the old bug) shifted centered text within its box.
     var vertical = "top";
-    var alignItems = style.alignItems;
-    var justifyContent = style.justifyContent;
-    if (alignItems === "center" || justifyContent === "center") vertical = "middle";
-    if (alignItems === "flex-end" || justifyContent === "flex-end") vertical = "bottom";
+    var display = style.display || "";
+    if (display === "flex" || display === "inline-flex") {
+      var flexDirection = style.flexDirection || "row";
+      var isColumn =
+        flexDirection === "column" || flexDirection === "column-reverse";
+      var isReversed =
+        flexDirection === "row-reverse" || flexDirection === "column-reverse";
+      var verticalAlign = isColumn ? style.justifyContent : style.alignItems;
+      var bottomValues =
+        isColumn && isReversed ? ["flex-start", "start"] : ["flex-end", "end"];
+      if (verticalAlign === "center") vertical = "middle";
+      else if (bottomValues.indexOf(verticalAlign) !== -1) vertical = "bottom";
+    } else if (display === "grid" || display === "inline-grid") {
+      if (style.alignItems === "center") vertical = "middle";
+      else if (style.alignItems === "flex-end" || style.alignItems === "end")
+        vertical = "bottom";
+    }
     return {
       fontFamily: families[0] || "sans-serif",
       fontFamilies: families.length ? families : ["sans-serif"],

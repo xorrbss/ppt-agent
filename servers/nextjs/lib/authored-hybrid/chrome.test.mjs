@@ -607,3 +607,41 @@ test("backplate capture rejects style-only identity drift", async (t) => {
   assert.deepEqual(result.appliedPromotedElementIds, []);
   assert.deepEqual(result.fallbackElementIds, [text.id]);
 });
+
+test("vertical text anchor honors flex-direction", async (t) => {
+  const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
+  if (!chromeExecutable) {
+    if (process.env.CI === "true") {
+      assert.fail("CI must provide Chrome/Chromium for anchor coverage");
+    }
+    t.skip("Chrome/Chromium is unavailable");
+    return;
+  }
+
+  const html = `<!doctype html><meta charset="utf-8"><style>
+    html,body{margin:0;width:1280px;height:720px;background:#fff}
+    .box{position:absolute;width:400px;height:160px;display:flex;
+         font:700 30px Arial,sans-serif;color:#123}
+    #row{left:40px;top:40px;justify-content:center;align-items:flex-start}
+    #col{left:40px;top:240px;flex-direction:column;justify-content:center}
+    #cross{left:40px;top:440px;align-items:center}
+  </style>
+  <div class="box" id="row" data-ppt-role="title">가로중앙 ROW</div>
+  <div class="box" id="col" data-ppt-role="title">세로중앙 COL</div>
+  <div class="box" id="cross" data-ppt-role="title">교차중앙 CROSS</div>`;
+  const slide = await extractAuthoredSlideDom(html, {
+    chromeExecutable,
+    timeoutMs: 30_000,
+  });
+  const row = textElement(slide, "가로중앙 ROW");
+  const col = textElement(slide, "세로중앙 COL");
+  const cross = textElement(slide, "교차중앙 CROSS");
+  assert.ok(row && col && cross);
+  // Row flex: justify-content centers the HORIZONTAL axis, so the vertical anchor
+  // stays top (the old bug mapped it to middle).
+  assert.equal(row.text.style.verticalAlignment, "top");
+  // Column flex: justify-content is the main (vertical) axis -> middle.
+  assert.equal(col.text.style.verticalAlignment, "middle");
+  // Row flex: align-items centers the cross (vertical) axis -> middle.
+  assert.equal(cross.text.style.verticalAlignment, "middle");
+});
