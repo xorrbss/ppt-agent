@@ -7,6 +7,10 @@ from llmai.shared import JSONSchemaResponse, Message, SystemMessage, UserMessage
 
 from models.presentation_layout import SlideLayoutModel
 from models.presentation_outline_model import SlideOutlineModel
+from utils.content_preservation import (
+    requires_content_preservation,
+    without_content_preservation_marker,
+)
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_config import get_llm_config
 from utils.llm_provider import get_model
@@ -38,11 +42,7 @@ You need to generate structured content json based on the schema.
 - Do not apply patterns across multiple slides unless explicitly requested.
 - If instructions are ambiguous, use the most direct interpretation without extending scope.
 
-# Content Depth
-- Be specific and concrete: prefer named examples, figures, dates, percentages, and cause-effect detail over generic statements.
-- Genuinely expand each outline point into substantive prose — do not merely restate or summarize the outline.
-- Fill each text field toward its maximum length budget, and populate the MAXIMUM number of list items the schema allows. Do not leave fields near their minimum or ship under-filled lists.
-- Every bullet or point must carry real, distinct information; never use filler such as "various aspects", "many benefits", or vague placeholders.
+{content_depth_rules}
 
 {markdown_emphasis_rules}
 
@@ -99,6 +99,9 @@ def get_system_prompt(
     instructions: Optional[str] = None,
     response_schema: Optional[dict] = None,
 ):
+    preserve_source_content = requires_content_preservation(instructions)
+    instructions = without_content_preservation_marker(instructions)
+
     markdown_emphasis_rules = (
         "- Strictly use markdown to emphasize important points, by bolding or "
         "italicizing the part of text."
@@ -128,12 +131,32 @@ def get_system_prompt(
         response_schema
     )
 
+    if preserve_source_content:
+        verbosity_instructions = (
+            "# Verbosity Instructions:\nUse only as much text and as many items as "
+            "the source provides. Never invent or duplicate content to meet a density target."
+        )
+        content_depth_rules = """# Content Preservation
+- Treat the supplied slide content as the complete and authoritative source.
+- Preserve every fact, number, date, proper noun, URL, qualifier, and relationship.
+- Do not add examples, claims, interpretations, or supporting details that are not present in the source.
+- Rephrase only when required by the response schema or a field length limit; never change meaning.
+- Distribute the source across required schema fields without dropping information. Do not duplicate content merely to fill optional fields.
+- Keep the slide in the same language as the source content."""
+    else:
+        content_depth_rules = """# Content Depth
+- Be specific and concrete: prefer named examples, figures, dates, percentages, and cause-effect detail over generic statements.
+- Genuinely expand each outline point into substantive prose — do not merely restate or summarize the outline.
+- Fill each text field toward its maximum length budget, and populate the MAXIMUM number of list items the schema allows. Do not leave fields near their minimum or ship under-filled lists.
+- Every bullet or point must carry real, distinct information; never use filler such as \"various aspects\", \"many benefits\", or vague placeholders."""
+
     return SLIDE_CONTENT_SYSTEM_PROMPT.format(
         markdown_emphasis_rules=markdown_emphasis_rules,
         user_instructions=user_instructions,
         tone_instructions=tone_instructions,
         verbosity_instructions=verbosity_instructions,
         output_fields_instructions=output_fields_instructions,
+        content_depth_rules=content_depth_rules,
     )
 
 

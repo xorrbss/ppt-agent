@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 from types import SimpleNamespace
 
+from utils import authored_illustrations as illustrations_mod
 from utils.authored_illustrations import apply_authored_illustrations
 from utils.authored_styles import load_authored_styles
 from utils.llm_calls.author_slide import Brand, build_design_system
@@ -115,6 +116,37 @@ def test_slides_without_slots_pass_through_untouched(tmp_path: Path):
 
     assert out == [plain]
     assert service.prompts == []
+
+
+def test_illustration_limit_is_shared_across_concurrent_decks(monkeypatch, tmp_path):
+    image = tmp_path / "illust.png"
+    image.write_bytes(_PNG_BYTES)
+
+    class TrackingService:
+        def __init__(self):
+            self.active = 0
+            self.max_active = 0
+
+        async def generate_image(self, prompt):
+            self.active += 1
+            self.max_active = max(self.max_active, self.active)
+            await asyncio.sleep(0.01)
+            self.active -= 1
+            return SimpleNamespace(path=str(image))
+
+    service = TrackingService()
+    monkeypatch.setattr(illustrations_mod, "ILLUSTRATION_CONCURRENCY", 1)
+
+    async def scenario():
+        return await asyncio.gather(
+            apply_authored_illustrations([_SLOT_HTML], _style(), service),
+            apply_authored_illustrations([_SLOT_HTML], _style(), service),
+        )
+
+    results = _run(scenario())
+
+    assert service.max_active == 1
+    assert all("data:image/png;base64," in deck[0] for deck in results)
 
 
 def test_design_system_gains_slot_rules_only_for_illustration_styles():

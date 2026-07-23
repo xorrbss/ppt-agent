@@ -12,14 +12,19 @@ import json
 import uuid
 from typing import Annotated, List, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from models.presentation_and_path import PresentationPathAndEditPath
-from models.presentation_from_template import EditPresentationRequest
+from models.generate_presentation_request import GeneratePresentationRequest
+from models.presentation_from_template import (
+    AuthoredQualityReviewRequest,
+    EditPresentationRequest,
+    RetemplatePresentationRequest,
+)
 from models.presentation_layout import PresentationLayoutModel
 from models.presentation_outline_model import (
     PresentationOutlineModel,
@@ -28,9 +33,15 @@ from models.presentation_outline_model import (
 from models.presentation_with_slides import PresentationWithSlides
 from models.slide_spec_model import spec_to_blocks
 from models.sql.presentation import PresentationModel
+from models.sql.async_presentation_generation_status import (
+    AsyncPresentationGenerationTaskModel,
+)
 from models.sql.slide import SlideModel
 from models.sse_response import SSECompleteResponse, SSEErrorResponse, SSEResponse
 from services import presentation_version_service as version_service
+from services.authored_quality_review_service import (
+    queue_authored_quality_review,
+)
 from services.database import get_async_session
 from services.generation_pipeline import build_template_structure
 from services.image_generation_service import ImageGenerationService
@@ -49,13 +60,27 @@ from utils.process_slides import (
     process_slide_add_placeholder_assets,
     process_slide_and_fetch_assets,
 )
+from utils.authored_styles import load_authored_styles
 
 from api.v1.ppt.endpoints.presentation_helpers import (
     build_export_cookie_header,
     resolve_presentation_fonts,
 )
+from api.v1.ppt.endpoints.presentation_generate import queue_presentation_generation
 
 PRESENTATION_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
+
+
+def _is_authored_slide(slide: SlideModel) -> bool:
+    """Recognize authored slide sentinels retained by legacy saved decks."""
+    return (
+        slide.layout_group == "authored"
+        or (slide.layout or "").startswith("authored:")
+        or (
+            isinstance(slide.content, dict)
+            and slide.content.get("__authored__") is True
+        )
+    )
 
 
 @PRESENTATION_ROUTER.post("/prepare", response_model=PresentationModel)
@@ -124,6 +149,116 @@ async def prepare_presentation(
     )
 
     return presentation
+
+
+@PRESENTATION_ROUTER.post(
+    "/{id}/quality-review",
+    response_model=AsyncPresentationGenerationTaskModel,
+    summary="Review and optionally repair an existing AI-authored presentation",
+)
+async def quality_review_authored_presentation(
+    id: uuid.UUID,
+    request: AuthoredQualityReviewRequest,
+    background_tasks: BackgroundTasks,
+    sql_session: AsyncSession = Depends(get_async_session),
+):
+    """Run high-quality visual QA against persisted authored HTML.
+
+    The task can inspect either the whole deck or the current slide. In repair mode,
+    only slides with visible problems are re-authored, and the pre-review deck is
+    saved to version history before any live slide is replaced.
+    """
+    return await queue_authored_quality_review(
+        id, request, background_tasks, sql_session
+    )
+
+
+@PRESENTATION_ROUTER.post(
+    "/{id}/retemplate",
+    response_model=AsyncPresentationGenerationTaskModel,
+    summary="Re-author a presentation with another AI-authored template",
+)
+async def retemplate_authored_presentation(
+    id: uuid.UUID,
+    request: RetemplatePresentationRequest,
+    request_http: Request,
+    background_tasks: BackgroundTasks,
+    sql_session: AsyncSession = Depends(get_async_session),
+):
+    """Create a new AI-authored deck from the saved semantic outline.
+
+    The authored HTML is intentionally not used as generation input.  It is a
+    rendered artifact and may contain shortened or decorative text. The stored
+    LLM-authored outline remains the authoritative source, and the original
+    presentation is never modified.
+    """
+    source = await sql_session.get(PresentationModel, id)
+    if not source:
+        raise HTTPException(status_code=404, detail="Presentation not found")
+
+    # Early authored decks did not always persist presentation.mode/theme.mode.
+    # Their slides still contain authored layout/content sentinels.
+    is_authored_source = source.is_authored()
+    if not is_authored_source:
+        source_slides = (
+            await sql_session.execute(
+                select(SlideModel).where(SlideModel.presentation == id)
+            )
+        ).scalars().all()
+        is_authored_source = any(_is_authored_slide(slide) for slide in source_slides)
+
+    if not is_authored_source:
+        raise HTTPException(
+            status_code=400,
+            detail="Only AI-authored presentations can change authored templates",
+        )
+
+    authored_style = request.authored_style.strip()
+    valid_style_ids = {style.id for style in load_authored_styles()}
+    if not authored_style or authored_style not in valid_style_ids:
+        raise HTTPException(status_code=400, detail="AI-authored template not found")
+
+    source_outline = source.get_presentation_outline()
+    if not source_outline or not source_outline.slides:
+        raise HTTPException(
+            status_code=400,
+            detail="The authored presentation has no reusable semantic content",
+        )
+    if any(not slide.content.strip() for slide in source_outline.slides):
+        raise HTTPException(
+            status_code=400,
+            detail="Every source slide must have semantic content",
+        )
+
+    generation_payload = {
+        "content": (
+            source.title or source.content or source_outline.slides[0].content
+        )[:500],
+        "slides_markdown": [slide.content for slide in source_outline.slides],
+        # The saved semantic outline is the authoritative LLM-authored manuscript.
+        # Do not feed rendered html_content back into the model and do not add
+        # internal conversion markers to the user's instructions.
+        "instructions": source.instructions,
+        "language": source.language,
+        "template": "authored",
+        "include_table_of_contents": False,
+        "include_title_slide": False,
+        "export_as": "pptx",
+        "vision_qa": request.vision_qa,
+        "authored_style": authored_style,
+    }
+    if source.tone:
+        generation_payload["tone"] = source.tone
+    if source.verbosity:
+        generation_payload["verbosity"] = source.verbosity
+
+    generation_request = GeneratePresentationRequest(**generation_payload)
+    return await queue_presentation_generation(
+        generation_request,
+        background_tasks,
+        sql_session,
+        export_cookie_header=build_export_cookie_header(request_http),
+    )
 
 
 @PRESENTATION_ROUTER.get("/stream/{id}", response_model=PresentationWithSlides)

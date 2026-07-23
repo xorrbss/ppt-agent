@@ -28,15 +28,37 @@ They predate the fork version and update-channel separation documented here.
 - The strict signing gate correctly rejects the current NSIS, AppX, and
   unpacked executable as `NotSigned`.
 
-Verified unsigned artifacts:
+## Verified in CI
+
+The manual `G4 round-trip and release gates` run
+[`30026316385`](https://github.com/xorrbss/ppt-agent/actions/runs/30026316385)
+completed successfully at commit
+`68b6e7e04f41d75ac81d0226ef8d4dfbe2f073d2`.
+
+- Production export-runtime staging passed.
+- Adaptive PPTX round-trip and legacy export smoke passed.
+- The Windows v0.4.2 release gate passed.
+- NSIS and AppX packaging passed.
+- The packaged Sharp runtime passed its load check.
+- The NSIS installer passed isolated unattended install and uninstall.
+- Unsigned AppX installation was intentionally skipped; its package structure
+  and manifest were verified.
+
+Verified unsigned CI artifacts:
 
 | Artifact | Bytes | SHA-256 |
 | --- | ---: | --- |
-| `Presenton-0.8.6-beta.exe` | 464,686,365 | `9D5DAB96B4C58FE12EB43886F3C5E3EA02074D963482304041C2AC865CB4A4CA` |
-| `Presenton-0.8.6-beta.appx` | 592,399,168 | `EFDC3C3F209F635774C58E8AB4554F0C1A5E5CAE6544E3DE33084AC5C7F33D4F` |
+| `Presenton-2026.7.2401.exe` | 417,346,068 | `A89EC72EE136EDF7F220EEB45AFEBF329B86314E623296F76F6E3503BA9165F6` |
+| `Presenton-2026.7.2401.appx` | 541,183,655 | `406C2BC8FBC48B2814ABFC3789B6A159881651C345E141A149FB2DCEEBE05661` |
 
-These hashes describe local unsigned candidates only. Rebuild and regenerate
-hashes after changing the application version or applying signatures.
+These hashes describe the unsigned CI candidate only. The uploaded artifact is
+`Presenton-Windows-68b6e7e04f41d75ac81d0226ef8d4dfbe2f073d2`
+(artifact ID `8571912061`, scheduled to expire on 2026-08-06). Rebuild and
+regenerate hashes after changing the application version, identity, publisher,
+or signatures.
+
+The older local `Presenton-0.8.6-beta` artifacts are obsolete and the current
+verifier correctly rejects their AppX version. They must not be promoted.
 
 ## Required release inputs
 
@@ -47,19 +69,23 @@ hashes after changing the application version or applying signatures.
    - `CSC_LINK`
    - `CSC_KEY_PASSWORD` when the PFX is password protected
 3. If the release-upload workflow remains enabled, also configure its R2
-   credentials or disable that workflow for the fork. Publishing a release
-   without them currently causes the follow-up upload job to fail.
+   environment and credentials:
+   - environment: `sync_r2`
+   - `R2_ACCOUNT_ID`
+   - `R2_ACCESS_KEY`
+   - `R2_SECRET_KEY`
+
+   Confirm that the `presenton-desktop` bucket exists and that these credentials
+   can write to `presenton-desktop/${VERSION}`. Publishing a release without
+   them causes the follow-up upload job to fail or wait.
 
 Never record certificate material, passwords, or secret values in this
 document, source control, build logs, or uploaded artifacts.
 
 ## CI promotion sequence
 
-The local release workflow and every file it references must first exist on the
-same remote ref. The workflow alone is insufficient because several verifier,
-preflight, and authored-hybrid test files are currently local worktree files.
-
-After an authorized commit and push:
+The unsigned sequence through step 2 has completed on `origin/main`. For a
+signed release:
 
 1. Run `G4 round-trip and release gates` with:
    - `package_windows=true`
@@ -79,12 +105,10 @@ After an authorized commit and push:
 
 | Blocker | Current evidence | Resolution |
 | --- | --- | --- |
-| Updated workflow is not on `origin/main` | Remote workflow is still the legacy G4 definition | Authorized commit and push of the workflow and all referenced files |
-| No signing inputs | Repository Actions secrets and environments contain no signing secrets | Configure a trusted certificate and secrets |
-| AppX signer trust is unknown | Current artifacts are unsigned | Validate certificate subject, chain, timestamp, and runner trust |
-| Fork package has not been rebuilt | Existing local artifacts are `0.8.6-beta`; configured version is `2026.7.2401` / AppX `2026.7.2401.0` | Rebuild in CI and verify filenames, manifest version, and hashes |
-| AppX identity is upstream-owned | Identity/publisher still use `PresentonAI.Presenton` and the upstream publisher subject | Select a fork identity together with the trusted signing certificate |
-| Release upload credentials absent | Repository Actions secrets are empty | Configure R2 credentials or disable the upload workflow |
+| No signing inputs | Repository Actions secrets and environments contain no signing secrets | Configure a trusted certificate, `CSC_LINK`, and optional `CSC_KEY_PASSWORD` |
+| Fork identity and publisher are undecided | Build configuration still uses `PresentonAI.Presenton`, `Presenton Inc.`, and the upstream publisher subject | Select fork-owned identifiers and use the exact signing-certificate subject as AppX publisher |
+| AppX signer trust is unknown | The verified CI artifacts are unsigned | Validate certificate EKU, expiry, chain, subject, timestamp, and runner trust |
+| Release upload environment and credentials are absent | Repository environments, Actions secrets, and releases are empty | Create `sync_r2`, configure the three R2 secrets, and verify bucket access before publishing |
 
 ## Deferred optimization
 

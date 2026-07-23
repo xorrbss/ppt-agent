@@ -33,6 +33,23 @@ export const metadata: Metadata = {
   title: "Presenton - Open Source AI presentation generator",
   description:
     "Open-source AI presentation generator with custom layouts, multi-model support (OpenAI, Gemini, Ollama), and PDF/PPTX export. A free Gamma alternative.",
+  icons: {
+    icon: [
+      {
+        url: "/dx-browser-icon-v2.png",
+        type: "image/png",
+        sizes: "512x512",
+      },
+    ],
+    shortcut: ["/dx-browser-icon-v2.png"],
+    apple: [
+      {
+        url: "/apple-icon.png",
+        type: "image/png",
+        sizes: "180x180",
+      },
+    ],
+  },
   keywords: [
     "AI presentation generator",
     "data storytelling",

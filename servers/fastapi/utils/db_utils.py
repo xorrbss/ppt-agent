@@ -1,4 +1,5 @@
 import os
+import tempfile
 from utils.get_env import get_app_data_directory_env, get_database_url_env
 from urllib.parse import urlsplit, urlunsplit, parse_qsl
 import ssl
@@ -56,7 +57,9 @@ def get_pool_kwargs() -> dict:
 
 def get_database_url_and_connect_args() -> tuple[str, dict]:
     database_url = get_database_url_env() or "sqlite:///" + os.path.join(
-        get_app_data_directory_env() or "/tmp/presenton", "fastapi.db"
+        get_app_data_directory_env()
+        or os.path.join(tempfile.gettempdir(), "presenton"),
+        "fastapi.db",
     )
 
     _ensure_sqlite_parent_dir(database_url)

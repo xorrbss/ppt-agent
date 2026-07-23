@@ -39,7 +39,13 @@ def test_get_user_prompt_uses_autodetect_defaults():
 
 
 def test_generate_ppt_outline_streams_json_chunks_and_keeps_schema_shape():
-    async def fake_stream_generate_events(_client, **_kwargs):
+    captured_kwargs = {}
+
+    async def is_disconnected():
+        return False
+
+    async def fake_stream_generate_events(_client, **kwargs):
+        captured_kwargs.update(kwargs)
         yield content_event('{"slides": [')
         yield content_event('{"content": "## Intro\\nBullet"}')
         yield content_event("]}")
@@ -58,6 +64,7 @@ def test_generate_ppt_outline_streams_json_chunks_and_keeps_schema_shape():
                 content="topic",
                 n_slides=1,
                 language="English",
+                disconnect_checker=is_disconnected,
             )
         )
 
@@ -65,6 +72,7 @@ def test_generate_ppt_outline_streams_json_chunks_and_keeps_schema_shape():
     validated = PresentationOutlineModel.model_validate(parsed)
     assert len(validated.slides) == 1
     assert validated.slides[0].content.startswith("## Intro")
+    assert captured_kwargs["disconnect_checker"] is is_disconnected
 
 
 def test_generate_ppt_outline_returns_http_exception_chunk_on_failure():

@@ -7,6 +7,36 @@
 // Dependency-free (Node built-ins only). Lives OUTSIDE the repo to keep the clone pristine.
 import http from "node:http";
 import net from "node:net";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
+const NEXTJS_DIR = path.resolve(SCRIPT_DIR, "..", "servers", "nextjs");
+
+/**
+ * Next.js standalone output does not copy static assets automatically. The
+ * standalone server runs from the nested servers/nextjs directory, so keep
+ * the build's static assets beside server.js before accepting requests.
+ */
+function syncStandaloneAssets() {
+  const standaloneRoot = path.join(NEXTJS_DIR, ".next-build", "standalone");
+  const serverRoot = path.join(standaloneRoot, "servers", "nextjs");
+  const staticSource = path.join(NEXTJS_DIR, ".next-build", "static");
+  const staticDestination = path.join(serverRoot, ".next-build", "static");
+
+  if (!fs.existsSync(path.join(serverRoot, "server.js"))) {
+    return;
+  }
+  if (!fs.existsSync(staticSource)) {
+    throw new Error(`Next.js static assets are missing: ${staticSource}`);
+  }
+
+  fs.mkdirSync(path.dirname(staticDestination), { recursive: true });
+  fs.cpSync(staticSource, staticDestination, { recursive: true, force: true });
+}
+
+syncStandaloneAssets();
 
 const LISTEN_PORT = Number(process.env.PROXY_PORT || 5000);
 const NEXT = { host: "127.0.0.1", port: Number(process.env.NEXT_PORT || 3000) };

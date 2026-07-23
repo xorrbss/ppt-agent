@@ -90,7 +90,7 @@ function skeleton(
   return writePptxArchive(entries);
 }
 
-test("assembler puts a transparent backplate below editable native layers", async () => {
+test("assembler sandwiches residual raster between the editable canvas and foreground geometry", async () => {
   const backplate = await sharp({
     create: { width: 1280, height: 720, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
   })
@@ -113,6 +113,16 @@ test("assembler puts a transparent backplate below editable native layers", asyn
       paragraphs: ["편집 가능한 서울"],
       style: textStyle,
       runs: [],
+      containerShape: {
+        bounds: bounds(64, 48, 640, 124),
+        shape: {
+          shape: "round-rectangle",
+          fill: { hex: "EAF2FF", alpha: 1 },
+          stroke: { hex: "2F6BCA", alpha: 1 },
+          strokeWidthPt: 1,
+          radiusPt: 12,
+        },
+      },
     },
   };
   const shape = {
@@ -134,7 +144,26 @@ test("assembler puts a transparent backplate below editable native layers", asyn
       radiusPt: 0,
     },
   };
-  const prepared = await prepareNativeElements([text, shape]);
+  const canvas = {
+    id: "editable-canvas",
+    domPath: "body > section",
+    tagName: "section",
+    sourceIndex: 0,
+    zOrder: 0,
+    cssZIndex: 0,
+    bounds: bounds(0, 0, 1280, 720),
+    rotationDeg: 0,
+    opacity: 1,
+    classification: { mode: "native", kind: "shape", confidence: "safe" },
+    shape: {
+      shape: "rectangle",
+      fill: { hex: "F7FAFC", alpha: 1 },
+      stroke: null,
+      strokeWidthPt: 0,
+      radiusPt: 0,
+    },
+  };
+  const prepared = await prepareNativeElements([canvas, text, shape]);
   const output = assembleAuthoredHybridPptx(skeleton(), [
     { slideNumber: 1, backplatePng: backplate, elements: prepared },
   ]);
@@ -149,18 +178,68 @@ test("assembler puts a transparent backplate below editable native layers", asyn
   assert.match(slideXml, /<a:t xml:space="preserve">편집 가능한 서울<\/a:t>/);
   assert.match(slideXml, /prst="ellipse"/);
   assert.ok(
+    slideXml.indexOf("Presenton hybrid shape editable-canvas") <
+      slideXml.indexOf("Presenton hybrid backplate")
+  );
+  assert.ok(
     slideXml.indexOf("Presenton hybrid backplate") <
       slideXml.indexOf("Presenton hybrid shape native-shape")
   );
   assert.ok(
-    slideXml.indexOf("Presenton hybrid shape native-shape") <
+    slideXml.indexOf("Presenton hybrid backplate") <
+      slideXml.indexOf("Presenton hybrid shape editable-cjk-container")
+  );
+  assert.ok(
+    slideXml.indexOf("Presenton hybrid backplate") <
       slideXml.indexOf("Presenton hybrid text editable-cjk")
   );
+  const textOverlayStart = slideXml.indexOf("Presenton hybrid text editable-cjk");
+  const textOverlayEnd = slideXml.indexOf("</p:sp>", textOverlayStart);
+  const textOverlayXml = slideXml.slice(textOverlayStart, textOverlayEnd);
+  assert.match(textOverlayXml, /<a:noFill\/>/);
+  assert.doesNotMatch(textOverlayXml, /val="EAF2FF"/);
   assert.match(relsXml, /hybrid-s1-backplate-[a-f0-9]{16}\.png/);
   assert.doesNotMatch(relsXml, /Id="rId2"/);
   assert.equal(entries.has("ppt/media/image1.png"), false);
   assert.ok([...entries.keys()].some((name) => /^ppt\/media\/hybrid-s1-backplate-/.test(name)));
   assert.match(entries.get("[Content_Types].xml").toString("utf8"), /Extension="png"/);
+});
+
+test("assembler stores an opaque full-slide residual as the slide background", async () => {
+  const backplate = await sharp({
+    create: { width: 1280, height: 720, channels: 3, background: "#F7FAFC" },
+  })
+    .png()
+    .toBuffer();
+  const canvas = {
+    id: "editable-canvas",
+    domPath: "body > section",
+    tagName: "section",
+    sourceIndex: 0,
+    zOrder: 0,
+    cssZIndex: 0,
+    bounds: bounds(0, 0, 1280, 720),
+    rotationDeg: 0,
+    opacity: 1,
+    classification: { mode: "native", kind: "shape", confidence: "safe" },
+    shape: {
+      shape: "rectangle",
+      fill: { hex: "F7FAFC", alpha: 1 },
+      stroke: null,
+      strokeWidthPt: 0,
+      radiusPt: 0,
+    },
+  };
+  const prepared = await prepareNativeElements([canvas]);
+  const output = assembleAuthoredHybridPptx(skeleton(), [
+    { slideNumber: 1, backplatePng: backplate, elements: prepared },
+  ]);
+  const entries = readPptxArchive(output);
+  const slideXml = entries.get("ppt/slides/slide1.xml").toString("utf8");
+
+  assert.match(slideXml, /<p:bg><p:bgPr><a:blipFill[^>]*><a:blip r:embed="rId3"\/>/);
+  assert.doesNotMatch(slideXml, /Presenton hybrid backplate/);
+  assert.doesNotMatch(slideXml, /Presenton hybrid shape editable-canvas/);
 });
 
 test("assembler keeps media that an untouched slide still references", async () => {

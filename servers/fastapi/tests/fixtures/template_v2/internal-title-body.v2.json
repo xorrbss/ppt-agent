@@ -1,0 +1,44 @@
+{
+  "version": "v2-standard",
+  "presentation_id": "presentation-1",
+  "template_id": "internal-v2-title-body",
+  "title": "Internal Template V2 PoC",
+  "slides": [
+    {
+      "id": "slide-1",
+      "layout": "title-body",
+      "nodes": [
+        {
+          "id": "slide-1-title",
+          "type": "text",
+          "slot": "title",
+          "text": "Quarterly direction"
+        },
+        {
+          "id": "slide-1-body",
+          "type": "text",
+          "slot": "body",
+          "text": "Focus the team on reliable delivery."
+        }
+      ]
+    },
+    {
+      "id": "slide-2",
+      "layout": "title-body",
+      "nodes": [
+        {
+          "id": "slide-2-title",
+          "type": "text",
+          "slot": "title",
+          "text": "Next checkpoint"
+        },
+        {
+          "id": "slide-2-body",
+          "type": "text",
+          "slot": "body",
+          "text": "Review export quality before cohort expansion."
+        }
+      ]
+    }
+  ]
+}

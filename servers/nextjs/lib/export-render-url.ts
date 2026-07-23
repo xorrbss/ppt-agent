@@ -30,3 +30,16 @@ export function resolveExportRenderBaseUrl(
 
   return `http://127.0.0.1:${port}`;
 }
+
+/**
+ * Build the headless-browser route without embedding authentication material.
+ * The bundled exporter injects cookies into Puppeteer from its ephemeral task
+ * file before navigation, so the URL only needs the presentation identifier.
+ */
+export function buildExportRenderUrl(
+  baseUrl: string,
+  presentationId: string
+): string {
+  const query = new URLSearchParams({ id: presentationId });
+  return `${baseUrl.replace(/\/+$/, "")}/pdf-maker?${query.toString()}`;
+}

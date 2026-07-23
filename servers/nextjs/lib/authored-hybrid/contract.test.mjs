@@ -37,6 +37,7 @@ const TEXT_STYLE = {
   horizontalAlignment: "left",
   verticalAlignment: "top",
   direction: "ltr",
+  wrapMode: "wrap",
 };
 
 test("1280x720 CSS pixels map to the fixed wide-slide contract", () => {
@@ -188,9 +189,75 @@ test("browser observations become a versioned JSON-safe H2 contract", () => {
   invalidColor.elements[0].text.style.color.hex = "#123";
   assert.throws(() => assertAuthoredHybridSlide(invalidColor), /uppercase sRGB/);
 
+  const invalidWrapMode = structuredClone(slide);
+  invalidWrapMode.elements[0].text.style.wrapMode = "overflow";
+  assert.throws(() => assertAuthoredHybridSlide(invalidWrapMode), /wrapMode is invalid/);
+
   const invalidUnits = structuredClone(slide);
   invalidUnits.elements[0].bounds.inches.x = 99;
   assert.throws(() => assertAuthoredHybridSlide(invalidUnits), /px\/96 inch/);
+
+  const freeform = structuredClone(slide);
+  freeform.elements[1].shape = {
+    shape: "freeform",
+    fill: null,
+    stroke: { hex: "2878D8", alpha: 1 },
+    strokeWidthPt: 2,
+    radiusPt: 0,
+    points: [
+      { x: 0, y: 0.5 },
+      { x: 0.45, y: 0.5 },
+      { x: 0.65, y: 1 },
+      { x: 1, y: 1 },
+    ],
+    closed: false,
+  };
+  assert.doesNotThrow(() => assertAuthoredHybridSlide(freeform));
+
+  const invalidFreeform = structuredClone(freeform);
+  invalidFreeform.elements[1].shape.points[2].x = 1.2;
+  assert.throws(() => assertAuthoredHybridSlide(invalidFreeform), /points\[2\]\.x/);
+});
+
+test("raster-classified text keeps an editable payload and suppression eligibility", () => {
+  const html = "<!doctype html><p>decorated but editable</p>";
+  const slide = buildAuthoredHybridSlide(
+    html,
+    {
+      viewport: { widthPx: 1280, heightPx: 720, devicePixelRatio: 1 },
+      appliedPromotedElementIds: [],
+      rejectedPromotedElementIds: [],
+      warnings: [],
+      elements: [
+        {
+          id: "h1-0001",
+          domPath: "body > p:nth-of-type(1)",
+          tagName: "p",
+          sourceIndex: 0,
+          cssZIndex: null,
+          boundsPx: { x: 40, y: 40, width: 320, height: 48 },
+          rotationDeg: 0,
+          opacity: 1,
+          candidateKind: "text",
+          fallbackReasons: ["decorated-text", "pseudo-element"],
+          text: {
+            role: "body",
+            plainText: "decorated but editable",
+            paragraphs: ["decorated but editable"],
+            style: TEXT_STYLE,
+            runs: [],
+          },
+        },
+      ],
+    },
+    undefined
+  );
+
+  assert.equal(slide.elements[0].classification.mode, "raster");
+  assert.equal(slide.elements[0].text.plainText, "decorated but editable");
+  assert.deepEqual(slide.backplate.eligibleElementIds, ["h1-0001"]);
+  assert.deepEqual(slide.backplate.rasterElementIds, ["h1-0001"]);
+  assert.doesNotThrow(() => assertAuthoredHybridSlide(slide));
 });
 
 test("contract construction rejects a viewport that would corrupt geometry", () => {

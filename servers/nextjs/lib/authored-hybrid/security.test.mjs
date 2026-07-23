@@ -25,6 +25,14 @@ test("static legacy HTML and embedded raster images pass hybrid preflight", () =
   if (decoded.ok) assert.equal(decoded.mime, "png");
 });
 
+test("same-document SVG marker URLs pass hybrid preflight", () => {
+  const html = `<!doctype html><html><head><style>
+    .flow{marker-end:url(#arrowBlue)}
+  </style></head><body><svg><defs><marker id="arrowBlue"></marker></defs>
+    <path class="flow" d="M0 0 L10 10"/></svg></body></html>`;
+  assert.deepEqual(preflightAuthoredHtmlForHybrid(html), { ok: true });
+});
+
 test("ordinary business prose with protocol-like words and backslashes passes", () => {
   for (const html of [
     "<!doctype html><html><body><h1>Company Profile: 회사 소개</h1></body></html>",

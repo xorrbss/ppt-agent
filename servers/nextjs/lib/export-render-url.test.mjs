@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resolveExportRenderBaseUrl } from "./export-render-url.ts";
+import {
+  buildExportRenderUrl,
+  resolveExportRenderBaseUrl,
+} from "./export-render-url.ts";
 
 test("explicit public export URL has highest priority", () => {
   assert.equal(
@@ -36,4 +39,17 @@ test("invalid fallback port fails before spawning the exporter", () => {
     () => resolveExportRenderBaseUrl({ PROXY_PORT: "not-a-port" }),
     /numeric TCP port/
   );
+});
+
+test("export render URL contains no session or cookie material", () => {
+  const url = buildExportRenderUrl(
+    "http://127.0.0.1:5000/",
+    "12345678-1234-1234-1234-123456789abc"
+  );
+
+  assert.equal(
+    url,
+    "http://127.0.0.1:5000/pdf-maker?id=12345678-1234-1234-1234-123456789abc"
+  );
+  assert.doesNotMatch(url, /cookie|session|token/i);
 });

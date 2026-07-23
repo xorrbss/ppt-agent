@@ -7,12 +7,14 @@ compose/structure/content/export path entirely — so it also works where the
 byte-PPTX export runtime is unavailable (the converter is Linux-only). The fast
 default adaptive/template path is completely untouched."""
 
+import asyncio
 import io
 import logging
 import os
 import time
 import traceback
 import uuid
+from dataclasses import dataclass
 from typing import List, Optional
 
 from pathvalidate import sanitize_filename
@@ -26,18 +28,34 @@ from models.sql.slide import SlideModel
 from services.image_generation_service import ImageGenerationService
 from utils.asset_directory_utils import get_exports_directory, get_images_directory
 from utils.filename_utils import safe_export_basename
-from utils.authored_illustrations import apply_authored_illustrations
+from utils.authored_illustrations import apply_authored_illustration
 from utils.authored_styles import resolve_authored_style
-from utils.llm_calls.author_deck import author_deck, build_image_pptx, plan_deck_roles
+from utils.llm_calls.author_deck import (
+    AuthoredDeckResult,
+    author_planned_slide,
+    build_image_pptx,
+    plan_deck_roles,
+    prepare_authored_deck,
+)
 from utils.llm_calls.author_slide import Brand, apply_style_defaults
 from utils.llm_calls.author_vision_qa import revise_authored_deck
 from utils.outline_utils import get_presentation_title_from_presentation_outline
-from utils.slide_capture import _placeholder_png, find_chrome, render_html_list_to_pngs
+from utils.slide_capture import _placeholder_png, find_chrome, render_html_to_png
 
 AUTHORED_TEMPLATE = "authored"
 _DEFAULT_PRIMARY = "#2563EB"
 
 LOGGER = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class AuthoredGenerationPipelineResult:
+    deck: AuthoredDeckResult
+    pngs: List[bytes]
+    elapsed: float
+    author_work: float
+    illustration_work: float
+    render_work: float
 
 
 def _is_korean(*candidates: Optional[str]) -> bool:
@@ -124,6 +142,83 @@ def _build_authored_export(
     return build_image_pptx(pngs, os.path.join(exports, f"{stem}.pptx"))
 
 
+async def _author_illustrate_render_pipeline(
+    outline: PresentationOutlineModel,
+    brand: Brand,
+    style,
+) -> AuthoredGenerationPipelineResult:
+    """Pipeline each slide through author -> illustration -> render.
+
+    Every slide advances as soon as its previous stage finishes, instead of waiting
+    for the slowest slide at each deck-wide stage boundary. Per-stage process-wide
+    limits remain enforced by the author, image and render helpers. ``gather`` starts
+    all slide pipelines concurrently and its ordered result keeps deck order stable.
+    """
+    started = time.monotonic()
+    plan = prepare_authored_deck(outline, brand, style)
+    image_service = (
+        ImageGenerationService(get_images_directory())
+        if getattr(style, "illustration_prompt", None)
+        else None
+    )
+
+    async def process_slide(
+        index: int,
+    ) -> tuple[int, str, bytes, bool, float, float, float]:
+        author_started = time.monotonic()
+        html = await author_planned_slide(plan, index)
+        author_work = time.monotonic() - author_started
+
+        illustration_work = 0.0
+        if image_service is not None:
+            illustration_started = time.monotonic()
+            html = await apply_authored_illustration(
+                html, style, image_service, slide_index=index
+            )
+            illustration_work = time.monotonic() - illustration_started
+
+        render_started = time.monotonic()
+        render_failed = False
+        try:
+            png = await render_html_to_png(html)
+        except Exception as exc:  # preserve the existing per-slide fallback behavior
+            LOGGER.warning("Authored slide render failed at index %d: %s", index, exc)
+            png = _placeholder_png()
+            render_failed = True
+        render_work = time.monotonic() - render_started
+        return (
+            index,
+            html,
+            png,
+            render_failed,
+            author_work,
+            illustration_work,
+            render_work,
+        )
+
+    results = list(
+        await asyncio.gather(
+            *(process_slide(index) for index in range(len(plan.contents)))
+        )
+    )
+    if results and all(render_failed for _, _, _, render_failed, *_ in results):
+        raise RuntimeError(
+            "Every authored slide failed to render. Install Playwright's Chromium "
+            "headless shell or set CHROME_PATH to a working headless browser."
+        )
+
+    htmls = [html for _, html, _, _, _, _, _ in results]
+    pngs = [png for _, _, png, _, _, _, _ in results]
+    return AuthoredGenerationPipelineResult(
+        deck=AuthoredDeckResult(htmls=htmls, design_system=plan.design_system),
+        pngs=pngs,
+        elapsed=time.monotonic() - started,
+        author_work=sum(result[4] for result in results),
+        illustration_work=sum(result[5] for result in results),
+        render_work=sum(result[6] for result in results),
+    )
+
+
 async def generate_authored_presentation(
     request: GeneratePresentationRequest,
     presentation_id: uuid.UUID,
@@ -148,16 +243,15 @@ async def generate_authored_presentation(
             "authored slides will render as blank placeholders."
         )
 
-    authored_deck = await author_deck(outline, brand, style)
+    pipeline = await _author_illustrate_render_pipeline(outline, brand, style)
+    authored_deck = pipeline.deck
     htmls = authored_deck.htmls
-    if getattr(style, "illustration_prompt", None):
-        htmls = await apply_authored_illustrations(
-            htmls, style, ImageGenerationService(get_images_directory())
-        )
-    pngs = await render_html_list_to_pngs(htmls)
+    pngs = pipeline.pngs
 
     fixed_count = 0
+    vision_elapsed = 0.0
     if getattr(request, "vision_qa", False):
+        vision_started = time.monotonic()
         try:
             contents = [s.content for s in outline.slides]
             htmls, pngs, fixed = await revise_authored_deck(
@@ -173,25 +267,15 @@ async def generate_authored_presentation(
             fixed_count = len(fixed)
         except Exception:
             traceback.print_exc()
+        finally:
+            vision_elapsed = time.monotonic() - vision_started
 
     # Observability: one structured summary (counts/timing/model only — no secrets).
     placeholder = _placeholder_png()
     blank_renders = sum(1 for p in pngs if p == placeholder)
     from utils.llm_provider import get_llm_provider, get_model
 
-    LOGGER.info(
-        "[authored] done id=%s slides=%d provider=%s model=%s vision_qa=%s "
-        "vqa_fixed=%d blank_renders=%d elapsed=%.1fs",
-        presentation_id,
-        len(htmls),
-        get_llm_provider().value,
-        get_model(),
-        bool(getattr(request, "vision_qa", False)),
-        fixed_count,
-        blank_renders,
-        time.monotonic() - started,
-    )
-
+    persist_started = time.monotonic()
     image_refs = _save_slide_pngs(presentation_id, pngs)
 
     presentation = PresentationModel(
@@ -230,8 +314,32 @@ async def generate_authored_presentation(
     sql_session.add(presentation)
     sql_session.add_all(slides)
     await sql_session.commit()
+    persist_elapsed = time.monotonic() - persist_started
 
+    export_started = time.monotonic()
     out_path = _build_authored_export(request, presentation_id, pngs, title)
+    export_elapsed = time.monotonic() - export_started
+    LOGGER.info(
+        "[authored] done id=%s slides=%d provider=%s model=%s vision_qa=%s "
+        "vqa_fixed=%d blank_renders=%d total=%.1fs author=%.1fs "
+        "illustrations=%.1fs render=%.1fs pipeline=%.1fs vision=%.1fs "
+        "persist=%.1fs export=%.1fs",
+        presentation_id,
+        len(htmls),
+        get_llm_provider().value,
+        get_model(),
+        bool(getattr(request, "vision_qa", False)),
+        fixed_count,
+        blank_renders,
+        time.monotonic() - started,
+        pipeline.author_work,
+        pipeline.illustration_work,
+        pipeline.render_work,
+        pipeline.elapsed,
+        vision_elapsed,
+        persist_elapsed,
+        export_elapsed,
+    )
     return PresentationPathAndEditPath(
         presentation_id=presentation_id,
         path=out_path,

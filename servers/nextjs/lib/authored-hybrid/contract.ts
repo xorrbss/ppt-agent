@@ -8,7 +8,9 @@ import {
   AUTHORED_SLIDE_WIDTH_PX,
   type AuthoredHybridElement,
   type AuthoredHybridElementBase,
+  type AuthoredHybridShapePayload,
   type AuthoredHybridSlideV1,
+  type AuthoredHybridTextPayload,
 } from "./schema.ts";
 import { classifyAuthoredHybridCandidate } from "./classifier.ts";
 import type {
@@ -31,6 +33,54 @@ function invariant(condition: unknown, message: string): asserts condition {
 
 function finite(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
+}
+
+function hasTextPayload(
+  element: AuthoredHybridElement
+): element is AuthoredHybridElement & { text: AuthoredHybridTextPayload } {
+  return "text" in element && element.text !== undefined;
+}
+
+function hasShapePayload(
+  element: AuthoredHybridElement
+): element is AuthoredHybridElement & { shape: AuthoredHybridShapePayload } {
+  return "shape" in element && element.shape !== undefined;
+}
+
+const UNSAFE_EDITABLE_SHAPE_REASONS = new Set([
+  "extraction-error",
+  "invalid-bounds",
+  "outside-slide",
+  "clip-path",
+  "mask",
+  "filter",
+  "backdrop-filter",
+  "mix-blend-mode",
+  "complex-transform",
+  "transformed-ancestor",
+  "animated",
+  "unsupported-background",
+  "unsupported-opacity",
+]);
+
+function isEditableRasterShapePayload(
+  element: AuthoredHybridElement
+): element is AuthoredHybridElement & { shape: AuthoredHybridShapePayload } {
+  return (
+    element.classification.mode === "raster" &&
+    element.classification.candidateKind === "shape" &&
+    hasShapePayload(element) &&
+    !element.classification.reasons.some((reason) =>
+      UNSAFE_EDITABLE_SHAPE_REASONS.has(reason)
+    ) &&
+    Boolean(
+      element.shape.fill ||
+      element.shape.gradient ||
+      element.shape.stroke ||
+      element.shape.borderLines?.length ||
+      element.shape.shadowLayers?.length
+    )
+  );
 }
 
 function oneOf(value: unknown, allowed: readonly string[], label: string): void {
@@ -82,6 +132,120 @@ function assertTextStyle(value: unknown, label: string): void {
   oneOf(style.horizontalAlignment, ["left", "center", "right", "justify"], `${label}.horizontalAlignment`);
   oneOf(style.verticalAlignment, ["top", "middle", "bottom"], `${label}.verticalAlignment`);
   oneOf(style.direction, ["ltr", "rtl"], `${label}.direction`);
+  if (style.wrapMode !== undefined) {
+    oneOf(style.wrapMode, ["wrap", "no-wrap"], `${label}.wrapMode`);
+  }
+}
+
+function assertShapePayload(value: unknown, label: string): void {
+  invariant(typeof value === "object" && value !== null, `${label} is missing`);
+  const shape = value as Record<string, unknown>;
+  oneOf(shape.shape, ["rectangle", "round-rectangle", "ellipse", "line", "freeform"], `${label}.shape`);
+  if (shape.fill !== null) assertColor(shape.fill, `${label}.fill`);
+  if (shape.gradient !== undefined) {
+    invariant(typeof shape.gradient === "object" && shape.gradient !== null, `${label}.gradient is invalid`);
+    const gradient = shape.gradient as Record<string, unknown>;
+    invariant(finite(gradient.angleDeg), `${label}.gradient.angleDeg must be finite`);
+    invariant(Array.isArray(gradient.stops) && gradient.stops.length >= 2, `${label}.gradient.stops must contain at least two stops`);
+    let previousPosition = -1;
+    gradient.stops.forEach((stop, index) => {
+      invariant(typeof stop === "object" && stop !== null, `${label}.gradient.stops[${index}] is invalid`);
+      const gradientStop = stop as Record<string, unknown>;
+      assertColor(gradientStop.color, `${label}.gradient.stops[${index}].color`);
+      invariant(
+        finite(gradientStop.position) && gradientStop.position >= 0 && gradientStop.position <= 1,
+        `${label}.gradient.stops[${index}].position must be between 0 and 1`
+      );
+      invariant(gradientStop.position >= previousPosition, `${label}.gradient.stops must be ordered`);
+      previousPosition = gradientStop.position;
+    });
+  }
+  if (shape.stroke !== null) assertColor(shape.stroke, `${label}.stroke`);
+  invariant(finite(shape.strokeWidthPt) && shape.strokeWidthPt >= 0, `${label}.strokeWidthPt is invalid`);
+  if (shape.dash !== undefined) {
+    oneOf(shape.dash, ["dash", "dot"], `${label}.dash`);
+  }
+  if (shape.lineCap !== undefined) {
+    oneOf(shape.lineCap, ["round"], `${label}.lineCap`);
+  }
+  if (shape.lineJoin !== undefined) {
+    oneOf(shape.lineJoin, ["round"], `${label}.lineJoin`);
+  }
+  invariant(finite(shape.radiusPt) && shape.radiusPt >= 0, `${label}.radiusPt is invalid`);
+  if (shape.borderLines !== undefined) {
+    invariant(Array.isArray(shape.borderLines), `${label}.borderLines must be an array`);
+    shape.borderLines.forEach((line, index) => {
+      invariant(typeof line === "object" && line !== null, `${label}.borderLines[${index}] is invalid`);
+      const borderLine = line as Record<string, unknown>;
+      oneOf(borderLine.side, ["top", "right", "bottom", "left"], `${label}.borderLines[${index}].side`);
+      assertColor(borderLine.color, `${label}.borderLines[${index}].color`);
+      invariant(finite(borderLine.widthPt) && borderLine.widthPt > 0, `${label}.borderLines[${index}].widthPt is invalid`);
+      if (borderLine.dash !== undefined) {
+        oneOf(borderLine.dash, ["dash", "dot"], `${label}.borderLines[${index}].dash`);
+      }
+    });
+  }
+  if (shape.shadowLayers !== undefined) {
+    invariant(Array.isArray(shape.shadowLayers), `${label}.shadowLayers must be an array`);
+    shape.shadowLayers.forEach((layer, index) => {
+      invariant(typeof layer === "object" && layer !== null, `${label}.shadowLayers[${index}] is invalid`);
+      const shadowLayer = layer as Record<string, unknown>;
+      invariant(finite(shadowLayer.offsetXPx), `${label}.shadowLayers[${index}].offsetXPx is invalid`);
+      invariant(finite(shadowLayer.offsetYPx), `${label}.shadowLayers[${index}].offsetYPx is invalid`);
+      invariant(finite(shadowLayer.spreadPx), `${label}.shadowLayers[${index}].spreadPx is invalid`);
+      assertColor(shadowLayer.color, `${label}.shadowLayers[${index}].color`);
+    });
+  }
+  if (shape.endArrow !== undefined) {
+    oneOf(shape.endArrow, ["triangle"], `${label}.endArrow`);
+  }
+  if (shape.points !== undefined) {
+    invariant(Array.isArray(shape.points), `${label}.points must be an array`);
+    invariant(shape.points.length >= 2 && shape.points.length <= 256, `${label}.points length is invalid`);
+    shape.points.forEach((point, index) => {
+      invariant(typeof point === "object" && point !== null, `${label}.points[${index}] is invalid`);
+      const vertex = point as Record<string, unknown>;
+      invariant(
+        finite(vertex.x) && vertex.x >= 0 && vertex.x <= 1,
+        `${label}.points[${index}].x is invalid`
+      );
+      invariant(
+        finite(vertex.y) && vertex.y >= 0 && vertex.y <= 1,
+        `${label}.points[${index}].y is invalid`
+      );
+    });
+  }
+  if (shape.shape === "freeform") {
+    invariant(Array.isArray(shape.points) && shape.points.length >= 2, `${label}.points are required for a freeform`);
+  }
+  if (shape.closed !== undefined) {
+    invariant(typeof shape.closed === "boolean", `${label}.closed is invalid`);
+  }
+  if (shape.preserveContents !== undefined) {
+    invariant(typeof shape.preserveContents === "boolean", `${label}.preserveContents is invalid`);
+  }
+}
+
+function convertTextPayload(
+  observation: NonNullable<BrowserElementObservation["text"]>
+): AuthoredHybridTextPayload {
+  const { containerShape, ...text } = observation;
+  return {
+    ...text,
+    role: observation.role === "unsupported" ? "body" : observation.role,
+    runs: observation.runs.map((run) => ({
+      text: run.text,
+      bounds: rectPxToBounds(run.boundsPx),
+      fragments: run.fragmentRectsPx.map(rectPxToBounds),
+      style: run.style,
+    })),
+    ...(containerShape
+      ? { containerShape: {
+          bounds: rectPxToBounds(containerShape.boundsPx),
+          shape: containerShape.shape,
+        } }
+      : {}),
+  };
 }
 
 function convertElement(
@@ -111,6 +275,20 @@ function convertElement(
   };
 
   if (classification.mode === "raster") {
+    if (observation.candidateKind === "text" && observation.text) {
+      return {
+        ...base,
+        classification,
+        text: convertTextPayload(observation.text),
+      };
+    }
+    if (observation.candidateKind === "shape" && observation.shape) {
+      return {
+        ...base,
+        classification,
+        shape: observation.shape,
+      };
+    }
     return { ...base, classification };
   }
   if (classification.kind === "text" && observation.text) {
@@ -122,16 +300,7 @@ function convertElement(
     return {
       ...base,
       classification: { mode: "native", kind: "text", confidence: "safe" },
-      text: {
-        ...observation.text,
-        role: observation.text.role,
-        runs: observation.text.runs.map((run) => ({
-          text: run.text,
-          bounds: rectPxToBounds(run.boundsPx),
-          fragments: run.fragmentRectsPx.map(rectPxToBounds),
-          style: run.style,
-        })),
-      },
+      text: convertTextPayload(observation.text),
     };
   }
   if (classification.kind === "image" && observation.image) {
@@ -211,7 +380,13 @@ export function buildAuthoredHybridSlide(
       heightPx: AUTHORED_SLIDE_HEIGHT_PX,
       transparentBackground: true,
       eligibleElementIds: elements
-        .filter((element) => element.classification.mode === "native")
+        .filter(
+          (element) =>
+            element.classification.mode === "native" ||
+            (element.classification.mode === "raster" &&
+              ((element.classification.candidateKind === "text" && hasTextPayload(element)) ||
+                (element.classification.candidateKind === "shape" && isEditableRasterShapePayload(element))))
+        )
         .map((element) => element.id),
       rasterElementIds: elements
         .filter((element) => element.classification.mode === "raster")
@@ -277,7 +452,7 @@ export function assertAuthoredHybridSlide(
   );
   invariant(Array.isArray(slide.elements), "elements must be an array");
   const ids = new Set<string>();
-  const nativeIds: string[] = [];
+  const eligibleIds: string[] = [];
   const rasterIds: string[] = [];
   slide.elements.forEach((element, index) => {
     invariant(typeof element.id === "string" && element.id.length > 0, `elements[${index}].id is invalid`);
@@ -293,16 +468,16 @@ export function assertAuthoredHybridSlide(
     assertBounds(element.bounds, `element ${element.id}.bounds`);
 
     if (element.classification.mode === "native") {
-      nativeIds.push(element.id);
+      eligibleIds.push(element.id);
       oneOf(element.classification.kind, ["text", "image", "shape"], `element ${element.id} native kind`);
       invariant(element.classification.confidence === "safe", `element ${element.id} native confidence is invalid`);
       invariant(
-        (element.classification.kind === "text" && "text" in element) ||
+        (element.classification.kind === "text" && hasTextPayload(element)) ||
           (element.classification.kind === "image" && "image" in element) ||
           (element.classification.kind === "shape" && "shape" in element),
         `element ${element.id} native payload does not match its kind`
       );
-      if (element.classification.kind === "text" && "text" in element) {
+      if (element.classification.kind === "text" && hasTextPayload(element)) {
         oneOf(element.text.role, ["title", "body", "numeric", "caption"], `element ${element.id} text.role`);
         invariant(typeof element.text.plainText === "string", `element ${element.id} text.plainText is invalid`);
         assertStringArray(element.text.paragraphs, `element ${element.id} text.paragraphs`);
@@ -317,6 +492,10 @@ export function assertAuthoredHybridSlide(
           );
           assertTextStyle(run.style, `element ${element.id} run ${runIndex}.style`);
         });
+        if (element.text.containerShape) {
+          assertBounds(element.text.containerShape.bounds, `element ${element.id} text.containerShape.bounds`);
+          assertShapePayload(element.text.containerShape.shape, `element ${element.id} text.containerShape.shape`);
+        }
       } else if (element.classification.kind === "image" && "image" in element) {
         invariant(typeof element.image.src === "string", `element ${element.id} image.src is invalid`);
         invariant(typeof element.image.alt === "string", `element ${element.id} image.alt is invalid`);
@@ -331,11 +510,7 @@ export function assertAuthoredHybridSlide(
         }
         invariant(crop.left + crop.right < 1 && crop.top + crop.bottom < 1, `element ${element.id} image.crop removes the entire image`);
       } else if (element.classification.kind === "shape" && "shape" in element) {
-        oneOf(element.shape.shape, ["rectangle", "round-rectangle", "ellipse", "line"], `element ${element.id} shape.shape`);
-        if (element.shape.fill !== null) assertColor(element.shape.fill, `element ${element.id} shape.fill`);
-        if (element.shape.stroke !== null) assertColor(element.shape.stroke, `element ${element.id} shape.stroke`);
-        invariant(finite(element.shape.strokeWidthPt) && element.shape.strokeWidthPt >= 0, `element ${element.id} shape.strokeWidthPt is invalid`);
-        invariant(finite(element.shape.radiusPt) && element.shape.radiusPt >= 0, `element ${element.id} shape.radiusPt is invalid`);
+        assertShapePayload(element.shape, `element ${element.id} shape`);
       }
     } else {
       rasterIds.push(element.id);
@@ -350,6 +525,38 @@ export function assertAuthoredHybridSlide(
           element.classification.reasons.every((reason) => FALLBACK_REASON_SET.has(reason)),
         `element ${element.id} raster fallback reasons are invalid`
       );
+      if (hasTextPayload(element)) {
+        invariant(
+          element.classification.candidateKind === "text",
+          `element ${element.id} raster text payload has a non-text candidate kind`
+        );
+        eligibleIds.push(element.id);
+        oneOf(element.text.role, ["title", "body", "numeric", "caption"], `element ${element.id} text.role`);
+        invariant(typeof element.text.plainText === "string", `element ${element.id} text.plainText is invalid`);
+        assertStringArray(element.text.paragraphs, `element ${element.id} text.paragraphs`);
+        assertTextStyle(element.text.style, `element ${element.id} text.style`);
+        invariant(Array.isArray(element.text.runs), `element ${element.id} text.runs must be an array`);
+        element.text.runs.forEach((run, runIndex) => {
+          invariant(typeof run.text === "string", `element ${element.id} run ${runIndex} text is invalid`);
+          assertBounds(run.bounds, `element ${element.id} run ${runIndex}.bounds`);
+          invariant(Array.isArray(run.fragments), `element ${element.id} run ${runIndex}.fragments must be an array`);
+          run.fragments.forEach((fragment, fragmentIndex) =>
+            assertBounds(fragment, `element ${element.id} run ${runIndex}.fragments[${fragmentIndex}]`)
+          );
+          assertTextStyle(run.style, `element ${element.id} run ${runIndex}.style`);
+        });
+        if (element.text.containerShape) {
+          assertBounds(element.text.containerShape.bounds, `element ${element.id} text.containerShape.bounds`);
+          assertShapePayload(element.text.containerShape.shape, `element ${element.id} text.containerShape.shape`);
+        }
+      } else if (hasShapePayload(element)) {
+        invariant(
+          element.classification.candidateKind === "shape",
+          `element ${element.id} raster shape payload has a non-shape candidate kind`
+        );
+        assertShapePayload(element.shape, `element ${element.id} shape`);
+        if (isEditableRasterShapePayload(element)) eligibleIds.push(element.id);
+      }
     }
   });
 
@@ -362,8 +569,8 @@ export function assertAuthoredHybridSlide(
     "backplate dimensions/transparency are invalid"
   );
   invariant(
-    JSON.stringify(slide.backplate.eligibleElementIds) === JSON.stringify(nativeIds),
-    "backplate eligible IDs do not match native elements"
+    JSON.stringify(slide.backplate.eligibleElementIds) === JSON.stringify(eligibleIds),
+    "backplate eligible IDs do not match promotable elements"
   );
   invariant(
     JSON.stringify(slide.backplate.rasterElementIds) === JSON.stringify(rasterIds),

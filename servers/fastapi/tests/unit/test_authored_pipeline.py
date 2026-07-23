@@ -11,6 +11,7 @@ import io
 import uuid
 from types import SimpleNamespace
 
+import pytest
 from PIL import Image
 
 from models.generate_presentation_request import GeneratePresentationRequest
@@ -138,14 +139,14 @@ def test_author_deck_retries_then_succeeds(monkeypatch):
     assert calls["n"] == 2
 
 
-def test_default_design_system_is_byte_for_byte_legacy_output():
-    expected_sha256 = "5ffac30c247a543fef5faa8b3a1c9dc945cc658f65fac243e269a5694e4f5c28"
+def test_default_design_system_is_byte_for_byte_canonical_output():
+    expected_sha256 = "4d452fbef402c6aaacaccba10dd9668729c8167a768908e4951fee94e7071858"
     without_style = build_design_system(_brand())
     canonical_default = build_design_system(
         _brand(), SimpleNamespace(id="default", brief="this must not replace legacy")
     )
 
-    assert len(without_style) == 2616
+    assert len(without_style) == 2806
     assert hashlib.sha256(without_style.encode()).hexdigest() == expected_sha256
     assert canonical_default == without_style
 
@@ -161,8 +162,19 @@ def test_custom_design_system_injects_brief_without_weakening_common_rules():
     assert "Brand primary colour: #2563EB" in design_system
     assert "EXACTLY 1280x720px" in design_system
     assert "FIT IS CRITICAL" in design_system
+    assert "NEVER render visible text below 12px (9pt)" in design_system
     assert "Return ONLY the complete HTML document." in design_system
     assert "The primary is the ONE accent" not in design_system
+
+
+def test_temporary_authored_render_enforces_9pt_without_mutating_source():
+    html = "<html><head></head><body><span style='font-size:8px'>small</span></body></html>"
+    instrumented = slide_capture._with_minimum_authored_font_size(html)
+
+    assert instrumented != html
+    assert "minimumPx = 12" in instrumented
+    assert instrumented.endswith("</body></html>")
+    assert "data-presenton-minimum-font-size" not in html
 
 
 def test_author_deck_builds_and_shares_selected_design_system_once(monkeypatch):
@@ -315,16 +327,168 @@ def test_vision_qa_reuses_selected_design_system(monkeypatch):
     assert fixed == [0]
 
 
+def test_vision_qa_subset_preserves_absolute_slide_position(monkeypatch):
+    captured = []
+
+    async def fake_critique(pngs, contexts=None):
+        return [SlideCritique(needs_fix=True)]
+
+    async def fake_author(
+        content, design_system, brand, role, index, n, reasoning_effort=None
+    ):
+        captured.append((index, n))
+        return _VALID
+
+    async def fake_render(html, timeout=60):
+        return b"revised-png"
+
+    monkeypatch.setattr(author_vision_qa_mod, "critique_authored", fake_critique)
+    monkeypatch.setattr(author_vision_qa_mod, "author_slide_html", fake_author)
+    monkeypatch.setattr(author_vision_qa_mod, "render_html_to_png", fake_render)
+
+    _run(
+        author_vision_qa_mod.revise_authored_deck(
+            [_VALID],
+            [b"original-png"],
+            ["content"],
+            ["PILLARS"],
+            _brand(),
+            "SELECTED DESIGN SYSTEM",
+            slide_indices=[4],
+            total_slides=10,
+        )
+    )
+
+    assert captured == [(4, 10)]
+
+
+def test_vision_qa_pipelines_fast_slide_fix_before_slowest_review(monkeypatch):
+    """A reviewed slide must start correction without waiting for every review."""
+
+    async def scenario():
+        first_correction_started = asyncio.Event()
+
+        async def fake_critique(pngs, contexts=None):
+            if pngs[0] == b"png-1":
+                await asyncio.wait_for(first_correction_started.wait(), timeout=0.5)
+            return [SlideCritique(needs_fix=True)]
+
+        async def fake_author(
+            content, design_system, brand, role, index, n, reasoning_effort=None
+        ):
+            if index == 0:
+                first_correction_started.set()
+            return _VALID.replace("</body>", f"<p>fixed-{index}</p></body>")
+
+        async def fake_render(html, timeout=60):
+            if "fixed-0" in html:
+                return b"fixed-png-0"
+            return b"fixed-png-1"
+
+        monkeypatch.setattr(author_vision_qa_mod, "critique_authored", fake_critique)
+        monkeypatch.setattr(author_vision_qa_mod, "author_slide_html", fake_author)
+        monkeypatch.setattr(author_vision_qa_mod, "render_html_to_png", fake_render)
+
+        return await asyncio.wait_for(
+            author_vision_qa_mod.revise_authored_deck(
+                [_VALID, _VALID],
+                [b"png-0", b"png-1"],
+                ["content 0", "content 1"],
+                ["COVER", "CONTENT"],
+                _brand(),
+                "SELECTED DESIGN SYSTEM",
+            ),
+            timeout=1,
+        )
+
+    htmls, pngs, fixed = _run(scenario())
+
+    assert ["fixed-0" in htmls[0], "fixed-1" in htmls[1]] == [True, True]
+    assert pngs == [b"fixed-png-0", b"fixed-png-1"]
+    assert fixed == [0, 1]
+
+
+def test_vision_qa_rejects_invalid_reauthor_before_render(monkeypatch):
+    render_calls = 0
+
+    async def fake_critique(pngs, contexts=None):
+        return [SlideCritique(needs_fix=True)]
+
+    async def fake_author(*args, **kwargs):
+        return "truncated output"
+
+    async def fake_render(html, timeout=60):
+        nonlocal render_calls
+        render_calls += 1
+        return b"must-not-render"
+
+    monkeypatch.setattr(author_vision_qa_mod, "critique_authored", fake_critique)
+    monkeypatch.setattr(author_vision_qa_mod, "author_slide_html", fake_author)
+    monkeypatch.setattr(author_vision_qa_mod, "render_html_to_png", fake_render)
+
+    htmls, pngs, fixed = _run(
+        author_vision_qa_mod.revise_authored_deck(
+            [_VALID],
+            [b"original-png"],
+            ["content"],
+            ["COVER"],
+            _brand(),
+            "SELECTED DESIGN SYSTEM",
+        )
+    )
+
+    assert render_calls == 0
+    assert htmls == [_VALID]
+    assert pngs == [b"original-png"]
+    assert fixed == []
+
+
+def test_vision_qa_cache_reuses_identical_successful_review(monkeypatch):
+    calls = 0
+
+    async def fake_review(image, slide_context=None):
+        nonlocal calls
+        calls += 1
+        await asyncio.sleep(0)
+        return SlideCritique(needs_fix=False)
+
+    author_vision_qa_mod._vqa_cache.clear()
+    author_vision_qa_mod._vqa_inflight.clear()
+    author_vision_qa_mod._vqa_sem = None
+    monkeypatch.setattr(author_vision_qa_mod, "VQA_CACHE_SIZE", 2)
+    monkeypatch.setattr(author_vision_qa_mod, "get_model", lambda: "test-model")
+    monkeypatch.setattr(author_vision_qa_mod, "critique_slide_image", fake_review)
+
+    async def review_twice():
+        first = await author_vision_qa_mod.critique_authored(
+            [b"same-png", b"same-png"], ["same-context", "same-context"]
+        )
+        second = await author_vision_qa_mod.critique_authored(
+            [b"same-png"], ["same-context"]
+        )
+        return first, second
+
+    first, second = _run(review_twice())
+
+    assert calls == 1
+    assert first[0] is first[1]
+    assert second[0].needs_fix is False
+
+
 def test_authored_service_resolves_passes_and_persists_canonical_style(monkeypatch):
     selected_style = SimpleNamespace(id="editorial", brief="- Editorial")
     captured = {}
 
-    async def fake_author_deck(outline, brand, style):
+    async def fake_pipeline(outline, brand, style):
         captured["style"] = style
-        return AuthoredDeckResult([_VALID], "SELECTED DESIGN SYSTEM")
-
-    async def fake_render(htmls):
-        return [b"png"]
+        return authored_service.AuthoredGenerationPipelineResult(
+            deck=AuthoredDeckResult([_VALID], "SELECTED DESIGN SYSTEM"),
+            pngs=[b"png"],
+            elapsed=0.1,
+            author_work=0.1,
+            illustration_work=0.0,
+            render_work=0.1,
+        )
 
     async def fake_revise(
         htmls, pngs, contents, roles, brand, design_system, max_cycles, style=None
@@ -351,8 +515,9 @@ def test_authored_service_resolves_passes_and_persists_canonical_style(monkeypat
         "resolve_authored_style",
         lambda style_id: selected_style if style_id == "editorial-alias" else None,
     )
-    monkeypatch.setattr(authored_service, "author_deck", fake_author_deck)
-    monkeypatch.setattr(authored_service, "render_html_list_to_pngs", fake_render)
+    monkeypatch.setattr(
+        authored_service, "_author_illustrate_render_pipeline", fake_pipeline
+    )
     monkeypatch.setattr(authored_service, "revise_authored_deck", fake_revise)
     monkeypatch.setattr(authored_service, "find_chrome", lambda: True)
     monkeypatch.setattr(
@@ -393,12 +558,110 @@ def test_authored_service_resolves_passes_and_persists_canonical_style(monkeypat
     assert result.path == "deck.pptx"
 
 
+def test_slide_pipeline_renders_fast_slide_before_slowest_author_finishes(monkeypatch):
+    """A slide must advance immediately; deck-wide author/render barriers regress this."""
+
+    async def scenario():
+        first_rendered = asyncio.Event()
+        plan = SimpleNamespace(
+            contents=("slide 0", "slide 1"), design_system="PIPELINED DESIGN SYSTEM"
+        )
+
+        async def fake_author(selected_plan, index):
+            assert selected_plan is plan
+            if index == 1:
+                await asyncio.wait_for(first_rendered.wait(), timeout=0.5)
+            return (
+                "<!DOCTYPE html><html><head></head><body>"
+                f"<h1>slide-{index}</h1></body></html>"
+            )
+
+        async def fake_render(html):
+            if "slide-0" in html:
+                first_rendered.set()
+                return b"png-0"
+            return b"png-1"
+
+        monkeypatch.setattr(
+            authored_service, "prepare_authored_deck", lambda *args: plan
+        )
+        monkeypatch.setattr(authored_service, "author_planned_slide", fake_author)
+        monkeypatch.setattr(authored_service, "render_html_to_png", fake_render)
+
+        return await asyncio.wait_for(
+            authored_service._author_illustrate_render_pipeline(
+                _outline(2),
+                _brand(),
+                SimpleNamespace(id="default", illustration_prompt=None),
+            ),
+            timeout=1,
+        )
+
+    result = _run(scenario())
+
+    assert ["slide-0" in html for html in result.deck.htmls] == [True, False]
+    assert ["slide-1" in html for html in result.deck.htmls] == [False, True]
+    assert result.pngs == [b"png-0", b"png-1"]
+    assert result.deck.design_system == "PIPELINED DESIGN SYSTEM"
+
+
 # --- render resilience (mocked Chrome) ---------------------------------------
 
 
-def test_render_list_uses_placeholder_on_failure(monkeypatch):
+def test_find_chrome_prefers_playwright_headless_shell(monkeypatch, tmp_path):
+    for name in ("CHROME_PATH", "PUPPETEER_EXECUTABLE_PATH", "CHROMIUM_PATH"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    shell = (
+        tmp_path
+        / "ms-playwright"
+        / "chromium_headless_shell-1228"
+        / "chrome-headless-shell-win64"
+        / "chrome-headless-shell.exe"
+    )
+    shell.parent.mkdir(parents=True)
+    shell.write_bytes(b"browser")
+
+    assert slide_capture.find_chrome() == str(shell)
+
+
+def test_render_html_cache_reuses_successful_identical_render(monkeypatch):
+    calls = 0
+    rendered = _png_1280x720((12, 34, 56))
+
+    async def fake_uncached(html, timeout=60):
+        nonlocal calls
+        calls += 1
+        await asyncio.sleep(0)
+        return rendered
+
+    slide_capture._render_cache.clear()
+    slide_capture._render_inflight.clear()
+    monkeypatch.setattr(slide_capture, "RENDER_CACHE_SIZE", 2)
+    monkeypatch.setattr(slide_capture, "_render_html_to_png_uncached", fake_uncached)
+
+    async def render_twice():
+        return await asyncio.gather(
+            slide_capture.render_html_to_png(_VALID),
+            slide_capture.render_html_to_png(_VALID),
+        )
+
+    first = _run(render_twice())
+    second = _run(slide_capture.render_html_to_png(_VALID))
+    assert calls == 1
+    assert first == [rendered, rendered]
+    assert second == rendered
+
+
+def test_render_list_uses_placeholder_on_partial_failure(monkeypatch):
+    calls = 0
+
     async def boom(html, timeout=60):
-        raise RuntimeError("no chrome")
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("one bad slide")
+        return _png_1280x720((10, 20, 30))
 
     monkeypatch.setattr(slide_capture, "render_html_to_png", boom)
     pngs = _run(slide_capture.render_html_list_to_pngs([_VALID, _VALID]))
@@ -406,6 +669,15 @@ def test_render_list_uses_placeholder_on_failure(monkeypatch):
     for png in pngs:
         img = Image.open(io.BytesIO(png))
         assert img.size == (slide_capture.SLIDE_W, slide_capture.SLIDE_H)
+
+
+def test_render_list_rejects_deck_when_every_slide_fails(monkeypatch):
+    async def boom(html, timeout=60):
+        raise RuntimeError("no working chrome")
+
+    monkeypatch.setattr(slide_capture, "render_html_to_png", boom)
+    with pytest.raises(RuntimeError, match="Every authored slide failed"):
+        _run(slide_capture.render_html_list_to_pngs([_VALID, _VALID]))
 
 
 # --- image PPTX assembly -----------------------------------------------------

@@ -8,7 +8,10 @@ import {
   BoundedTextBuffer,
   memorySnapshotMb,
 } from "@/lib/runtime-limits";
-import { resolveExportRenderBaseUrl } from "@/lib/export-render-url";
+import {
+  buildExportRenderUrl,
+  resolveExportRenderBaseUrl,
+} from "@/lib/export-render-url";
 import { resolveAppDataDirectory } from "@/lib/app-data-directory";
 
 /** Repo `presentation-export/` at app root (`/app/presentation-export` in Docker). */
@@ -24,19 +27,6 @@ export function getPresentonAppRoot(): string {
     process.env.PRESENTON_APP_ROOT?.trim() ||
     path.join(process.cwd(), "..", "..")
   );
-}
-
-function extractSessionTokenFromCookieHeader(cookieHeader?: string): string | undefined {
-  if (!cookieHeader) {
-    return undefined;
-  }
-
-  const match = cookieHeader.match(/(?:^|;\s*)presenton_session=([^;]+)/);
-  if (!match?.[1]) {
-    return undefined;
-  }
-
-  return decodeURIComponent(match[1]);
 }
 
 async function resolveExportEntrypoint(exportRoot: string): Promise<string> {
@@ -229,19 +219,8 @@ async function runBundledPresentationExportLocked(params: {
   await fs.access(converter);
 
   const nextjsUrl = resolveExportRenderBaseUrl();
-  const q = new URLSearchParams({ id: presentationId });
-  const sessionToken = extractSessionTokenFromCookieHeader(cookieHeader);
-  if (sessionToken) {
-    q.set("exportSession", sessionToken);
-  }
   const fastapiUrl = process.env.NEXT_PUBLIC_FAST_API?.trim();
-  if (fastapiUrl) {
-    q.set("fastapiUrl", fastapiUrl);
-  }
-  const basePptUrl = `${nextjsUrl}/pdf-maker?${q.toString()}`;
-  const pptUrl = cookieHeader?.trim()
-    ? `${basePptUrl}#exportCookie=${encodeURIComponent(cookieHeader)}`
-    : basePptUrl;
+  const pptUrl = buildExportRenderUrl(nextjsUrl, presentationId);
 
   const tempBase =
     process.env.TEMP_DIRECTORY?.trim() || path.join(os.tmpdir(), "presenton");

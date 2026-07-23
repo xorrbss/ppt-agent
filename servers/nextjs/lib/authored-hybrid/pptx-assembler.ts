@@ -2,13 +2,18 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 
 import {
-  serializePreparedNativeElement,
+  preparedNativeElementNonVisualIdCount,
+  preparedNativeElementUnderlayNonVisualIdCount,
+  serializePreparedNativeElementOverlay,
+  serializePreparedNativeElementUnderlay,
   type PreparedNativeElement,
 } from "./native-plan.ts";
 import { readPptxArchive, writePptxArchive } from "./pptx-archive.ts";
 
 const SLIDE_WIDTH_EMU = 12_192_000;
 const SLIDE_HEIGHT_EMU = 6_858_000;
+const SLIDE_WIDTH_PX = 1_280;
+const SLIDE_HEIGHT_PX = 720;
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 
 export interface AuthoredHybridSlideLayer {
@@ -45,6 +50,35 @@ function assertBackplatePng(png: Buffer): void {
   ) {
     throw new Error("Hybrid backplate must be a 1280x720 PNG.");
   }
+}
+
+/**
+ * Authored slides commonly start with an opaque, full-canvas rectangle that
+ * supplies only the page colour. It is editable geometry, but it must remain
+ * below the residual raster; otherwise it hides raster-only illustrations
+ * while later text and small shapes still appear correctly.
+ */
+function isCanvasBackgroundShape(item: PreparedNativeElement): boolean {
+  if (item.kind !== "shape") return false;
+  const { x, y, width, height } = item.source.bounds.px;
+  const shape = item.source.shape;
+  const fillIsOpaque = shape.fill
+    ? shape.fill.alpha * item.source.opacity >= 0.995
+    : Boolean(
+        shape.gradient?.stops.length &&
+          shape.gradient.stops.every(
+            (stop) => stop.color.alpha * item.source.opacity >= 0.995
+          )
+      );
+  return (
+    shape.shape === "rectangle" &&
+    fillIsOpaque &&
+    Math.abs(item.source.rotationDeg) < 0.001 &&
+    x <= 0.5 &&
+    y <= 0.5 &&
+    x + width >= SLIDE_WIDTH_PX - 0.5 &&
+    y + height >= SLIDE_HEIGHT_PX - 0.5
+  );
 }
 
 function appendRelationship(
@@ -125,6 +159,19 @@ function allocateMediaName(
 
 function backplatePictureXml(relationshipId: string): string {
   return `<p:pic><p:nvPicPr><p:cNvPr id="2" name="Presenton hybrid backplate"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${relationshipId}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${SLIDE_WIDTH_EMU}" cy="${SLIDE_HEIGHT_EMU}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr></p:pic>`;
+}
+
+function backplateBackgroundXml(relationshipId: string): string {
+  return `<p:bg><p:bgPr><a:blipFill dpi="0" rotWithShape="1"><a:blip r:embed="${relationshipId}"/><a:stretch><a:fillRect/></a:stretch></a:blipFill><a:effectLst/></p:bgPr></p:bg>`;
+}
+
+function isOpaqueRgbPng(png: Buffer): boolean {
+  // The PNG IHDR colour-type byte is 2 for true-colour RGB without an alpha
+  // channel. Such a residual covers the entire canvas (typically a page-level
+  // gradient), so keeping it as a selectable picture only creates a misleading
+  // full-slide object. A real slide background preserves the appearance while
+  // leaving all extracted text, boxes, lines, and icons independently editable.
+  return png.length > 25 && png[25] === 2;
 }
 
 function rawRelationshipAttribute(tag: string, attribute: string): string | null {
@@ -344,13 +391,21 @@ function assembleSlide(
     backplateRelationshipId,
     `../media/${backplateName}`
   );
+  const useSlideBackground = isOpaqueRgbPng(layer.backplatePng);
 
-  const nativeXml: string[] = [];
+  // A full-canvas page-colour rectangle belongs below the residual raster.
+  // All other promoted geometry, text-owned container paint, transparent text
+  // overlays, and native images sit above it. This preserves raster-only
+  // illustrations without baking editable boxes and lines into the background.
+  const canvasBackgroundXml: string[] = [];
+  const underlayXml: string[] = [];
+  const overlayXml: string[] = [];
   const ordered = [...layer.elements].sort(
     (left, right) =>
       left.source.zOrder - right.source.zOrder ||
       left.source.sourceIndex - right.source.sourceIndex
   );
+  let nextNonVisualId = 3;
   ordered.forEach((item, index) => {
     let relationshipId: string | undefined;
     if (item.kind === "image") {
@@ -370,19 +425,48 @@ function assembleSlide(
       );
       entries.set(`ppt/media/${mediaName}`, Buffer.from(item.png));
     }
-    nativeXml.push(
-      serializePreparedNativeElement(item, index + 3, relationshipId)
+    const underlayCount = preparedNativeElementUnderlayNonVisualIdCount(item);
+    const underlay = serializePreparedNativeElementUnderlay(
+      item,
+      nextNonVisualId
     );
+    const overlay = serializePreparedNativeElementOverlay(
+      item,
+      nextNonVisualId + underlayCount,
+      relationshipId
+    );
+    if (underlay) {
+      (isCanvasBackgroundShape(item) ? canvasBackgroundXml : underlayXml).push(
+        underlay
+      );
+    }
+    if (overlay) overlayXml.push(overlay);
+    nextNonVisualId += preparedNativeElementNonVisualIdCount(item);
   });
 
   entries.set(`ppt/media/${backplateName}`, Buffer.from(layer.backplatePng));
   const replacement =
-    `<p:spTree>${GROUP_ROOT_XML}${backplatePictureXml(backplateRelationshipId)}` +
-    `${nativeXml.join("")}</p:spTree>`;
+    `<p:spTree>${GROUP_ROOT_XML}${useSlideBackground ? "" : canvasBackgroundXml.join("")}` +
+    `${useSlideBackground ? "" : backplatePictureXml(backplateRelationshipId)}` +
+    `${underlayXml.join("")}${overlayXml.join("")}</p:spTree>`;
   // Pass a replacer function so `$&`, `$'`, `$\`` and `$$` sequences inside the
   // assembled shape XML (e.g. text like "US$'000") are inserted literally instead
   // of being expanded as String.replace special patterns.
-  const newSlideXml = slideXml.replace(spTree[0], () => replacement);
+  let newSlideXml = slideXml.replace(spTree[0], () => replacement);
+  if (useSlideBackground) {
+    const background = backplateBackgroundXml(backplateRelationshipId);
+    if (/<p:bg\b[^>]*>[\s\S]*?<\/p:bg>/i.test(newSlideXml)) {
+      newSlideXml = newSlideXml.replace(
+        /<p:bg\b[^>]*>[\s\S]*?<\/p:bg>/i,
+        () => background
+      );
+    } else {
+      newSlideXml = newSlideXml.replace(
+        /<p:cSld\b[^>]*>/i,
+        (openingTag) => `${openingTag}${background}`
+      );
+    }
+  }
   const pruned = pruneUnusedImageRelationships(relationshipsXml, newSlideXml, relsPath);
   entries.set(relsPath, Buffer.from(pruned.xml, "utf8"));
   entries.set(

@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { box-sizing: border-box; }
+    html, body { width: 1280px; height: 720px; margin: 0; overflow: hidden; }
+    body { position: relative; background: #f7f9fc; color: #172033; font-family: Arial, sans-serif; }
+    h1 { position: absolute; left: 72px; top: 48px; margin: 0; font-size: 36px; line-height: 44px; }
+    table { position: absolute; left: 72px; top: 150px; width: 620px; border-collapse: collapse; font-size: 20px; }
+    th, td { border: 2px solid #2f6bca; padding: 14px 18px; text-align: left; background: #ffffff; }
+    th { background: #dce9ff; }
+    .round-card { position: absolute; left: 780px; top: 150px; width: 330px; height: 150px;
+      border: 3px solid #21876f; border-radius: 24px; background: #dff7ef; }
+    .circle { position: absolute; left: 820px; top: 370px; width: 120px; height: 120px;
+      border-radius: 50%; background: #f5b942; border: 3px solid #a96d00; }
+    .rule { position: absolute; left: 72px; top: 535px; width: 1040px; height: 2px; background: #2f6bca; }
+    .caption { position: absolute; left: 72px; top: 570px; width: 680px; font-size: 18px; line-height: 25px; }
+  </style>
+</head>
+<body>
+  <h1>Quarterly operating review</h1>
+  <table aria-label="Operating metrics">
+    <thead><tr><th>Metric</th><th>Plan</th><th>Actual</th></tr></thead>
+    <tbody>
+      <tr><td>Revenue</td><td>120</td><td>128</td></tr>
+      <tr><td>Retention</td><td>91%</td><td>94%</td></tr>
+    </tbody>
+  </table>
+  <div class="round-card"></div>
+  <div class="circle"></div>
+  <div class="rule"></div>
+  <div class="caption">All labels and values must remain editable while borders and simple geometry retain their authored positions.</div>
+</body>
+</html>
