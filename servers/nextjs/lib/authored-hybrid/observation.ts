@@ -22,6 +22,10 @@ export interface BrowserTextObservation {
   paragraphs: string[];
   style: AuthoredHybridTextStyle;
   runs: BrowserTextRunObservation[];
+  containerShape?: {
+    boundsPx: AuthoredHybridRect;
+    shape: BrowserShapeObservation;
+  };
 }
 
 export interface BrowserImageObservation
@@ -62,6 +66,9 @@ export interface AuthoredHybridExpectedPromotedElement {
   rotationDeg: number;
   opacity: number;
   contentKey: string;
+  suppressWholeElement?: boolean;
+  /** The text root's simple fill/border is emitted as a separate native underlay. */
+  suppressContainerPaint?: boolean;
 }
 
 export interface BrowserAuthoredHybridObservation {

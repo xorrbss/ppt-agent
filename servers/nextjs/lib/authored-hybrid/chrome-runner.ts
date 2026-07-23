@@ -4,6 +4,9 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { resolveAuthoredHybridChromeExecutable } from "./chrome-runtime-discovery.ts";
+
+export { resolveAuthoredHybridChromeExecutable } from "./chrome-runtime-discovery.ts";
 
 const DEFAULT_TIMEOUT_MS = 20_000;
 const MAX_CAPTURE_OUTPUT_BYTES = 64 * 1024 * 1024;
@@ -29,6 +32,15 @@ interface ChromeRunResult {
 interface NetworkDenyProxy {
   url: string;
   close: () => Promise<void>;
+}
+
+async function accessible(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -58,65 +70,6 @@ async function startNetworkDenyProxy(): Promise<NetworkDenyProxy> {
         server.close(() => resolve());
       }),
   };
-}
-
-async function accessible(filePath: string): Promise<boolean> {
-  try {
-    await fs.access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** First-party Chrome resolution, intentionally independent of generated export code. */
-export async function resolveAuthoredHybridChromeExecutable(): Promise<
-  string | undefined
-> {
-  const fromEnv =
-    process.env.AUTHORED_HYBRID_CHROME_PATH?.trim() ||
-    process.env.PUPPETEER_EXECUTABLE_PATH?.trim() ||
-    process.env.CHROME_PATH?.trim();
-  if (fromEnv) return fromEnv;
-
-  const candidates: string[] = [];
-  if (process.platform === "win32") {
-    const programFiles = process.env.ProgramFiles || "C:\\Program Files";
-    const programFilesX86 =
-      process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)";
-    const localAppData = process.env.LOCALAPPDATA;
-    candidates.push(
-      path.join(programFiles, "Google/Chrome/Application/chrome.exe"),
-      path.join(programFilesX86, "Google/Chrome/Application/chrome.exe")
-    );
-    if (localAppData) {
-      candidates.push(
-        path.join(localAppData, "Google/Chrome/Application/chrome.exe")
-      );
-    }
-    candidates.push(
-      path.join(programFilesX86, "Microsoft/Edge/Application/msedge.exe"),
-      path.join(programFiles, "Microsoft/Edge/Application/msedge.exe")
-    );
-  } else if (process.platform === "darwin") {
-    candidates.push(
-      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-      "/Applications/Chromium.app/Contents/MacOS/Chromium",
-      "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
-    );
-  } else {
-    candidates.push(
-      "/usr/bin/google-chrome",
-      "/usr/bin/google-chrome-stable",
-      "/usr/bin/chromium",
-      "/usr/bin/chromium-browser"
-    );
-  }
-
-  for (const candidate of candidates) {
-    if (await accessible(candidate)) return candidate;
-  }
-  return undefined;
 }
 
 const KILL_GRACE_MS = 5_000;

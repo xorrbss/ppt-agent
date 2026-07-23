@@ -117,7 +117,7 @@ function validatePromotedElementIds(
 function promotedElementContentKey(
   element: AuthoredHybridSlideV1["elements"][number]
 ): string {
-  if ("text" in element) {
+  if ("text" in element && element.text !== undefined) {
     return `text:${JSON.stringify({
       role: element.text.role,
       plainText: element.text.plainText,
@@ -129,6 +129,12 @@ function promotedElementContentKey(
         fragmentRectsPx: run.fragments.map((fragment) => fragment.px),
         style: run.style,
       })),
+      containerShape: element.text.containerShape
+        ? {
+            boundsPx: element.text.containerShape.bounds.px,
+            shape: element.text.containerShape.shape,
+          }
+        : undefined,
     })}`;
   }
   if ("image" in element) {
@@ -153,19 +159,40 @@ function expectedPromotedElements(
   const byId = new Map(slide.elements.map((element) => [element.id, element]));
   return promotedElementIds.map((id) => {
     const element = byId.get(id);
-    if (!element || element.classification.mode !== "native") {
-      throw new Error(`Authored hybrid element ${id} is not a native candidate.`);
+    const rasterText =
+      element?.classification.mode === "raster" &&
+      element.classification.candidateKind === "text" &&
+      "text" in element &&
+      element.text !== undefined;
+    const rasterShape =
+      element?.classification.mode === "raster" &&
+      element.classification.candidateKind === "shape" &&
+      "shape" in element &&
+      element.shape !== undefined;
+    if (!element || (element.classification.mode !== "native" && !rasterText && !rasterShape)) {
+      throw new Error(`Authored hybrid element ${id} is not a promotable candidate.`);
     }
     return {
       id: element.id,
       domPath: element.domPath,
       tagName: element.tagName,
       sourceIndex: element.sourceIndex,
-      candidateKind: element.classification.kind,
+      candidateKind:
+        element.classification.mode === "native"
+          ? element.classification.kind
+          : rasterText
+            ? "text"
+            : "shape",
       boundsPx: element.bounds.px,
       rotationDeg: element.rotationDeg,
       opacity: element.opacity,
       contentKey: promotedElementContentKey(element),
+      // Suppress glyph paint only. Hiding a styled text container wholesale can
+      // also hide inline SVG/icon descendants that must remain on the backplate.
+      suppressWholeElement: false,
+      suppressContainerPaint: Boolean(
+        "text" in element && element.text?.containerShape
+      ),
     };
   });
 }

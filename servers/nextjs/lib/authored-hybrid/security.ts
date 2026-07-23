@@ -126,7 +126,11 @@ export function preflightAuthoredHtmlForHybrid(
   // remains eligible for the backplate, but SVG data URLs are intentionally not.
   const cssUrlPattern = /url\(\s*(["']?)(.*?)\1\s*\)/gis;
   for (const match of html.matchAll(cssUrlPattern)) {
-    const result = validateHybridDataImageUrl(match[2].trim());
+    const value = match[2].trim();
+    // Same-document SVG paint servers and markers (for example
+    // marker-end:url(#arrow)) do not load external content.
+    if (/^#[A-Za-z_][A-Za-z0-9_.:-]*$/.test(value)) continue;
+    const result = validateHybridDataImageUrl(value);
     if (!result.ok) return { ok: false, reason: "unsafe-css-url" };
   }
 
