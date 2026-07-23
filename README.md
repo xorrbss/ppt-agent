@@ -317,6 +317,7 @@ Docker images install the default spaCy model (`en_core_web_sm`) during build so
 These variables match `docker-compose.yml`. **`IMAGE_PROVIDER`** selects the backend (`pexels`, `pixabay`, `gemini_flash`, `nanobanana_pro`, `dall-e-3`, `gpt-image-1.5`, `gpt-image-2`, `comfyui`, `open_webui`). Use **OPENAI_API_KEY** for OpenAI image modes and **GOOGLE_API_KEY** for Gemini image modes (same keys as the LLM section).
 
 - **DISABLE_IMAGE_GENERATION**=[true/false]: Disable slide image generation.
+- **ENABLE_PARALLEL_IMAGE_GENERATION**=[true/false]: Allow concurrent image provider requests (default `true`). Set to `false` to generate images one at a time when the provider has strict rate limits.
 - **IMAGE_PROVIDER**: Provider id (see enum above).
 - **PEXELS_API_KEY**: Pexels stock images.
 - **PIXABAY_API_KEY**: Pixabay stock images.
@@ -326,6 +327,8 @@ These variables match `docker-compose.yml`. **`IMAGE_PROVIDER`** selects the bac
 - **COMFYUI_URL** / **COMFYUI_WORKFLOW**: Self-hosted ComfyUI workflow JSON.
 - **OPEN_WEBUI_IMAGE_URL** / **OPEN_WEBUI_IMAGE_API_KEY**: Open WebUI–compatible image endpoint.
 - **OPENAI_COMPAT_IMAGE_BASE_URL** / **OPENAI_COMPAT_IMAGE_API_KEY** / **OPENAI_COMPAT_IMAGE_MODEL**: Required if using **openai_compatible** to send image requests to any OpenAI-compatible `/v1/images/*` endpoint (LiteLLM, Azure, vLLM Gateways, etc.).
+
+The parallel image generation option applies everywhere images are generated: initial presentation generation, slide editing and regeneration, direct image requests, and assistant image tools.
 
 #### Telemetry
 
