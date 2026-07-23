@@ -50,9 +50,17 @@ import ThemeApi from "../../services/api/theme";
 import { Theme } from "../../services/api/types";
 import MarkdownRenderer from "@/components/MarkDownRender";
 import { cn } from "@/lib/utils";
+import AuthoredTemplateChanger from "./AuthoredTemplateChanger";
+import AuthoredQualityReview from "./AuthoredQualityReview";
 
 const MAX_EXPORT_TITLE_LENGTH = 40;
 type PptxExportMode = "fidelity" | "hybrid";
+
+function getAuthoredStyleId(theme: unknown): string | null {
+  if (!theme || typeof theme !== "object") return null;
+  const style = (theme as Record<string, unknown>).style;
+  return typeof style === "string" ? style : null;
+}
 
 const buildSafeExportFileName = (
   rawTitle: string | null | undefined,
@@ -121,18 +129,24 @@ const PresentationHeader = ({
   );
 
   useEffect(() => {
+    if (isAuthoredDeck) return;
+
+    let cancelled = false;
     const load = async () => {
       try {
         const [customThemes] = await Promise.all([ThemeApi.getThemes()]);
-        setThemes([...customThemes, ...DEFAULT_THEMES]);
+        if (!cancelled) setThemes([...customThemes, ...DEFAULT_THEMES]);
       } catch (e: any) {
-        notify.error("테마를 불러올 수 없습니다", e?.message || "테마를 불러오지 못했습니다.");
+        if (!cancelled) {
+          notify.error("테마를 불러올 수 없습니다", e?.message || "테마를 불러오지 못했습니다.");
+        }
       }
     };
-    if (themes.length === 0) {
-      load();
-    }
-  }, []);
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthoredDeck]);
 
   const { onUndo, onRedo, canUndo, canRedo } = usePresentationUndoRedo();
 
@@ -468,12 +482,12 @@ const PresentationHeader = ({
   const titleBlock = (
     <div
       className={cn(
-        "min-w-0 max-w-[min(640px,calc(100vw-12rem))] flex-1 transition-[box-shadow] duration-200",
+        "min-w-0 flex-1 transition-[box-shadow] duration-200",
         isEditingTitle && "relative z-[60]"
       )}
     >
       {isEditingTitle ? (
-        <div className="flex items-stretch w-[450px]  gap-0.5 rounded-[14px] border border-[#E4E2EB] bg-white pl-3.5 pr-1 py-1 shadow-[0_2px_12px_rgba(17,3,31,0.06)] ring-2 ring-[#5141e5]/15">
+        <div className="flex w-full max-w-[450px] items-stretch gap-0.5 rounded-[14px] border border-[#E4E2EB] bg-white pl-3.5 pr-1 py-1 shadow-[0_2px_12px_rgba(17,3,31,0.06)] ring-2 ring-[#5141e5]/15">
           <input
             ref={titleInputRef}
             value={draftTitle}
@@ -530,7 +544,7 @@ const PresentationHeader = ({
             "disabled:pointer-events-none disabled:opacity-100 disabled:hover:bg-transparent"
           )}
         >
-          <h2 className="min-w-0 flex-1 font-unbounded text-lg w-[450px] leading-snug text-[#101323]">
+          <h2 className="min-w-0 flex-1 font-unbounded text-lg leading-snug text-[#101323]">
             <MarkdownRenderer
               content={presentationData?.title || "발표자료"}
               className="mb-0 min-w-0 overflow-hidden text-ellipsis line-clamp-1 text-sm text-[#101323] prose-p:my-0 prose-headings:my-0"
@@ -549,15 +563,15 @@ const PresentationHeader = ({
 
   return (
     <>
-      <div className="py-[18px] px-4 sticky top-0 bg-white z-50 shadow-sm font-syne flex justify-between items-center gap-4">
-        <div className="flex items-center gap-3">
+      <div className="sticky top-0 z-50 flex w-full min-w-0 items-center justify-between gap-4 bg-white px-4 py-[18px] font-syne shadow-sm">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           <img
             onClick={() => {
               router.push("/dashboard");
             }}
             src="/logo-with-bg.png"
             alt=""
-            className="w-10 h-10 cursor-pointer object-contain"
+            className="h-10 w-10 shrink-0 cursor-pointer object-contain"
           />
           {presentationData && !isStreaming && !isEditingTitle ? (
             <ToolTip content="발표자료 이름 변경">{titleBlock}</ToolTip>
@@ -566,20 +580,36 @@ const PresentationHeader = ({
           )}
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex shrink-0 items-center gap-2.5">
           {isPresentationSaving && (
             <div className="flex items-center gap-2">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
             </div>
           )}
-          {presentationData &&
-            presentationData.slides &&
+          {presentationData && isAuthoredDeck ? (
+            <>
+              <AuthoredTemplateChanger
+                presentationId={presentation_id}
+                currentStyleId={getAuthoredStyleId(presentationData.theme)}
+                disabled={isStreaming || isPresentationSaving}
+              />
+              <AuthoredQualityReview
+                presentationId={presentation_id}
+                currentSlide={currentSlide}
+                slideCount={presentationData.slides?.length || 0}
+                disabled={isStreaming || isPresentationSaving}
+                onReload={onReload}
+              />
+            </>
+          ) : (
+            presentationData?.slides &&
             !presentationData.slides?.[0]?.layout?.includes("custom") && (
               <ThemeSelector
                 current_theme={presentationData?.theme || {}}
                 themes={themes}
               />
-            )}
+            )
+          )}
 
           <div className="flex items-center gap-2 bg-[#F6F6F9] px-3.5 h-[38px] border border-[#EDECEC] rounded-[80px]">
             <ToolTip content="발표자료 재생성">

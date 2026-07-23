@@ -314,6 +314,62 @@ export class PresentationGenerationApi {
       throw error;
     }
   }
+
+  static async retemplateAuthoredPresentation(
+    presentationId: string,
+    presentationData: { authored_style: string; vision_qa?: boolean }
+  ) {
+    try {
+      const response = await fetch(
+        getApiUrl(`/api/v1/ppt/presentation/${presentationId}/retemplate`),
+        {
+          method: "POST",
+          headers: getHeader(),
+          body: JSON.stringify(presentationData),
+          cache: "no-cache",
+        }
+      );
+
+      return await ApiResponseHandler.handleResponse(
+        response,
+        "Failed to change presentation template"
+      );
+    } catch (error) {
+      console.error("error changing authored presentation template", error);
+      throw error;
+    }
+  }
+
+  static async reviewAuthoredPresentation(
+    presentationId: string,
+    reviewData: {
+      scope: "all" | "current";
+      slide_indices?: number[];
+      mode: "analyze_only" | "analyze_and_fix";
+    }
+  ) {
+    try {
+      const response = await fetch(
+        getApiUrl(
+          `/api/v1/ppt/presentation/${presentationId}/quality-review`
+        ),
+        {
+          method: "POST",
+          headers: getHeader(),
+          body: JSON.stringify(reviewData),
+          cache: "no-cache",
+        }
+      );
+
+      return await ApiResponseHandler.handleResponse(
+        response,
+        "Failed to start high-quality review"
+      );
+    } catch (error) {
+      console.error("error starting authored presentation quality review", error);
+      throw error;
+    }
+  }
   
   // IMAGE AND ICON SEARCH
   

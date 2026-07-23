@@ -27,6 +27,7 @@ import {
 import { PresentationPageProps } from "../types";
 import LoadingState from "./LoadingState";
 import { applyPresentationThemeToElement } from "../utils/applyPresentationThemeDom";
+import { isAuthoredPresentation } from "../utils/isAuthoredPresentation";
 
 import PresentationHeader from "./PresentationHeader";
 import Chat from "./Chat";
@@ -54,15 +55,9 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   const { presentationData, isStreaming } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
-  // Authored decks are model-authored images with no React layout (layout is null;
-  // theme.mode === "authored"). They are view-only in-app — editing happens in
-  // PowerPoint via the exported image PPTX. Prefer the explicit `mode` field; the
-  // theme/layout sentinels remain as fallbacks for decks generated before it.
-  const isAuthoredDeck =
-    !!presentationData &&
-    ((presentationData as any).mode === "authored" ||
-      (presentationData as any).theme?.mode === "authored" ||
-      !presentationData.layout);
+  // Current decks use mode/theme; legacy saved decks are detected from their
+  // authored slide sentinels.
+  const isAuthoredDeck = isAuthoredPresentation(presentationData as any);
   const slidesLength = presentationData?.slides?.length ?? 0;
   const lastStreamingSlideIndex =
     slidesLength > 0
