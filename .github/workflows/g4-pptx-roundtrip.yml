@@ -79,6 +79,7 @@ jobs:
         run: |
           npm run test:standalone-copy
           npm run test:package-preflight
+          npm run test:build-config
           npm run test:update-channel
 
       - name: Test Windows release artifact verifier

@@ -116,4 +116,7 @@ const config = {
   },
 }
 
-builder.build({ config })
+// Packaging and publishing are intentionally separate release steps. Explicitly
+// disable electron-builder's CI auto-publish detection so unsigned validation
+// builds never require a GitHub token or create a release as a side effect.
+builder.build({ config, publish: "never" })
