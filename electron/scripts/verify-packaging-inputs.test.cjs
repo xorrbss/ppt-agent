@@ -156,7 +156,7 @@ test("rejects export marker mismatch and damaged Sharp", async (t) => {
       );
       assert.throws(
         () => validate(fixture, { sharpCheck: undefined }),
-        /Electron Sharp native addon is not loadable/
+        /Electron Sharp native addon is not loadable[\s\S]*damaged fixture Sharp/
       );
     } finally {
       fixture.cleanup();
@@ -170,7 +170,7 @@ test("rejects missing or damaged Next.js Sharp from the standalone cwd", async (
     try {
       assert.throws(
         () => validate(fixture, { nextSharpCheck: undefined }),
-        /Next\.js Sharp native addon is not loadable/
+        /Next\.js Sharp native addon is not loadable[\s\S]*Cannot find module 'sharp'/
       );
     } finally {
       fixture.cleanup();
@@ -186,7 +186,7 @@ test("rejects missing or damaged Next.js Sharp from the standalone cwd", async (
       );
       assert.throws(
         () => validate(fixture, { nextSharpCheck: undefined }),
-        /Next\.js Sharp native addon is not loadable/
+        /Next\.js Sharp native addon is not loadable[\s\S]*damaged fixture Next Sharp/
       );
     } finally {
       fixture.cleanup();

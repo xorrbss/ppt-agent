@@ -1,7 +1,68 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const nextjsRoot = path.dirname(fileURLToPath(import.meta.url));
+const repositoryRoot = path.resolve(nextjsRoot, "../..");
+const exportRuntimeTrace = ["../../presentation-export/**/*"];
+const semverRuntimeTrace = [
+  "node_modules/.pnpm/semver@*/node_modules/semver/**/*",
+];
+const sharpNativeRuntimeTrace = [
+  "node_modules/@img/sharp-*/lib/**/*",
+  "node_modules/.pnpm/@img+sharp-*/node_modules/@img/sharp-*/lib/**/*",
+];
+const linkFreeRuntimeTrace = [
+  "node_modules/@img/**/*",
+  "node_modules/@next/env/**/*",
+  "node_modules/@swc/helpers/**/*",
+  "node_modules/baseline-browser-mapping/**/*",
+  "node_modules/caniuse-lite/**/*",
+  "node_modules/client-only/**/*",
+  "node_modules/detect-libc/**/*",
+  "node_modules/nanoid/**/*",
+  "node_modules/picocolors/**/*",
+  "node_modules/postcss/**/*",
+  "node_modules/scheduler/**/*",
+  "node_modules/semver/**/*",
+  "node_modules/source-map-js/**/*",
+  "node_modules/styled-jsx/**/*",
+];
+
 const nextConfig = {
   reactStrictMode: false,
   distDir: ".next-build",
   output: "standalone",
+  outputFileTracingRoot: repositoryRoot,
+  outputFileTracingIncludes: {
+    "/*": [
+      ...semverRuntimeTrace,
+      ...sharpNativeRuntimeTrace,
+      ...linkFreeRuntimeTrace,
+    ],
+    "/api/export-presentation": exportRuntimeTrace,
+  },
+  outputFileTracingExcludes: {
+    "/*": [
+      "../../.git/**/*",
+      "../../.cache/**/*",
+      "../../electron/dist/resources/**/*",
+      "../../electron/src/**/*",
+      "../../docs/**/*",
+      "../../servers/fastapi/**/*",
+      "../../**/.next*/cache/**/*",
+      "../../**/__pycache__/**/*",
+      "../../**/tests/**/*",
+      "../../**/cypress/**/*",
+      "../../**/*.test.*",
+      "../../**/*.spec.*",
+      "../../**/*.cy.*",
+      "../../**/package-lock.json",
+      "../../**/pnpm-lock.yaml",
+      "../../**/yarn.lock",
+      "../../**/uv.lock",
+      "../../**/*.tsbuildinfo",
+    ],
+  },
   ...(process.env.NODE_ENV !== "production"
     ? {
         allowedDevOrigins: [

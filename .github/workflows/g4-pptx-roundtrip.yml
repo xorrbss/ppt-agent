@@ -147,11 +147,36 @@ jobs:
             throw "require_signed=true requires the CSC_LINK repository secret"
           }
 
-      - name: Build packaged application resources
+      - name: Build packaged Next.js application resource
+        working-directory: electron
+        run: npm run build:nextjs
+
+      - name: Verify packaged Next.js Sharp runtime
+        shell: pwsh
         working-directory: electron
         run: |
-          npm run build:nextjs
-          npm run build:fastapi
+          $directRoot = Resolve-Path "resources/nextjs" -ErrorAction Stop
+          $nestedRoot = Join-Path $directRoot "servers/nextjs"
+          $serverRoot = if (Test-Path -LiteralPath (Join-Path $directRoot "server.js")) {
+            $directRoot
+          } elseif (Test-Path -LiteralPath (Join-Path $nestedRoot "server.js")) {
+            $nestedRoot
+          } else {
+            throw "Packaged Next.js standalone is missing server.js"
+          }
+          Push-Location $serverRoot
+          try {
+            node -e "require('sharp')"
+            if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+            }
+          } finally {
+            Pop-Location
+          }
+
+      - name: Build packaged FastAPI application resource
+        working-directory: electron
+        run: npm run build:fastapi
 
       - name: Build NSIS and AppX packages
         working-directory: electron

@@ -3,6 +3,7 @@ const fs = require("node:fs")
 const os = require("node:os")
 const path = require("node:path")
 const test = require("node:test")
+const { pathToFileURL } = require("node:url")
 
 const {
   atomicReplaceDirectory,
@@ -21,6 +22,23 @@ function fixture(t) {
 function directoryLink(target, linkPath) {
   fs.symlinkSync(target, linkPath, "dir")
 }
+
+test("Next.js standalone tracing includes Sharp native runtime files", async () => {
+  const configPath = path.join(__dirname, "..", "..", "servers", "nextjs", "next.config.mjs")
+  const config = (await import(pathToFileURL(configPath).href)).default
+  const includes = config.outputFileTracingIncludes?.["/*"] || []
+
+  assert.ok(
+    includes.includes("node_modules/@img/sharp-*/lib/**/*"),
+    "standalone tracing must include npm-installed Sharp native libraries"
+  )
+  assert.ok(
+    includes.includes(
+      "node_modules/.pnpm/@img+sharp-*/node_modules/@img/sharp-*/lib/**/*"
+    ),
+    "standalone tracing must include pnpm-installed Sharp native libraries"
+  )
+})
 
 test("copies internal links without dereferencing them", (t) => {
   const root = fixture(t)

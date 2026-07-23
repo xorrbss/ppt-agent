@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const { execFileSync } = require("child_process");
+const { spawnSync } = require("child_process");
 
 const EXPECTED_EXPORT_VERSION = "v0.4.2";
 const DEFAULT_MAX_STANDALONE_FILES = 150000;
@@ -265,13 +265,24 @@ function converterCandidates(exportRoot, platform, arch) {
 }
 
 function defaultSharpCheck(root, label) {
-  try {
-    execFileSync(process.execPath, ["-e", "require('sharp')"], {
-      cwd: root,
-      stdio: "ignore",
-    });
-  } catch (error) {
-    fail(`${label} Sharp native addon is not loadable: ${error.message}`);
+  const check = spawnSync(process.execPath, ["-e", "require('sharp')"], {
+    cwd: root,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  });
+  if (check.error) {
+    fail(`${label} Sharp native addon check could not start: ${check.error.message}`);
+  }
+  if (check.status !== 0) {
+    const detail = [check.stderr, check.stdout]
+      .filter((value) => typeof value === "string" && value.trim())
+      .map((value) => value.trim())
+      .join("\n");
+    fail(
+      `${label} Sharp native addon is not loadable (exit ${check.status})` +
+        (detail ? `\n${detail}` : "")
+    );
   }
 }
 
