@@ -15,6 +15,10 @@ from models.slide_spec_model import (
     archetype_to_layout_id,
     spec_to_blocks,
 )
+from utils.content_preservation import (
+    requires_content_preservation,
+    without_content_preservation_marker,
+)
 from utils.archetype_profiles import capacity_menu_text
 from utils.get_dynamic_models import get_composition_model_with_n_slides
 from utils.llm_client_error_handler import handle_llm_client_exceptions
@@ -60,6 +64,49 @@ def get_system_prompt(
     tone: Optional[str] = None,
     verbosity: Optional[str] = None,
 ) -> str:
+    preserve_source_content = requires_content_preservation(instructions)
+    instructions = without_content_preservation_marker(instructions)
+    if preserve_source_content:
+        fill_instruction = (
+            "2. Map the supplied content into the selected archetype without adding, "
+            "removing, summarizing, or changing any fact. Preserve every number, date, "
+            "proper noun, URL, qualifier, and relationship. Rephrase only when a field's "
+            "schema limit requires it, and keep the meaning unchanged. Do not duplicate "
+            "content just to fill optional fields. For image slides, derive the English "
+            "__image_prompt__ only from visual concepts already present and leave "
+            "__image_url__ empty.\n"
+        )
+        content_depth = (
+            "\n# Content Preservation\n"
+            "- The input outline is the complete and authoritative content source.\n"
+            "- Do not introduce examples, claims, interpretations, or details absent from it.\n"
+            "- Use one output slide per input slide, in the original order and language.\n"
+        )
+        verbosity_instruction = (
+            "Use only as much text and as many items as the source provides. Never invent "
+            "content to meet a density target."
+        )
+    else:
+        fill_instruction = (
+            "2. Fill that archetype's fields from the slide's content. Expand the BODY fields "
+            "(leads, bullets, card text, takeaways, captions, speaker notes) with substantive "
+            "detail and populate the MAXIMUM number of list items the archetype allows — never "
+            "ship under-filled lists. Keep SHORT fields (titles, eyebrows, labels, stat values, "
+            "step labels, attributions) tight. NEVER exceed any field's max-length or max-item "
+            "limit — over-long output is rejected. For image slides, write a vivid English "
+            "__image_prompt__ and leave __image_url__ empty.\n"
+        )
+        content_depth = (
+            "\n# Content Depth\n"
+            "- Be specific and concrete: prefer named examples, figures, dates, percentages, "
+            "and cause-effect detail over generic statements.\n"
+            "- Genuinely expand each outline point into substantive prose — do not merely "
+            "restate or summarize the outline.\n"
+            "- Every bullet, card, stat, or point must carry real, distinct information; never "
+            'use filler such as "various aspects" or vague placeholders.\n'
+        )
+        verbosity_instruction = _verbosity_instructions(verbosity)
+
     return (
         "You are an expert presentation slide composer (NotebookLM / Gamma style).\n"
         "For EACH input outline slide, compose exactly ONE adaptive slide, in order:\n"
@@ -75,14 +122,8 @@ def get_system_prompt(
         "   - the opening/title slide → cover; a table-of-contents → agenda;\n"
         "   - a single bold message/quote → big-statement; a section transition → section-divider;\n"
         "   - the final thank-you/contact slide → closing.\n"
-        "2. Fill that archetype's fields from the slide's content. Expand the BODY fields "
-        "(leads, bullets, card text, takeaways, captions, speaker notes) with substantive "
-        "detail and populate the MAXIMUM number of list items the archetype allows — never "
-        "ship under-filled lists. Keep SHORT fields (titles, eyebrows, labels, stat values, "
-        "step labels, attributions) tight. NEVER exceed any field's max-length or max-item "
-        "limit — over-long output is rejected. For image slides, write a vivid English "
-        "__image_prompt__ and leave __image_url__ empty.\n"
-        "3. VARIETY & RHYTHM (compose the deck as a whole, not slide-by-slide):\n"
+        + fill_instruction
+        + "3. VARIETY & RHYTHM (compose the deck as a whole, not slide-by-slide):\n"
         "   - NEVER use the same archetype on two adjacent slides; avoid 3 of the same kind in a row.\n"
         "   - Insert a breather (section-divider, big-statement, or image-led) roughly every "
         "3-5 content slides to vary visual density.\n"
@@ -103,14 +144,8 @@ def get_system_prompt(
         "   - card-grid: \"uniform\" (default) or \"accent\" (primary accent bar per card).\n"
         "   - two-column: \"image-right\" (default) or \"image-left\" (mirror the layout).\n"
         "Omit `variant` to use the default. Only set the values listed above.\n"
-        "\n# Content Depth\n"
-        "- Be specific and concrete: prefer named examples, figures, dates, percentages, "
-        "and cause-effect detail over generic statements.\n"
-        "- Genuinely expand each outline point into substantive prose — do not merely "
-        "restate or summarize the outline.\n"
-        "- Every bullet, card, stat, or point must carry real, distinct information; never "
-        'use filler such as "various aspects" or vague placeholders.\n'
-        f"\n# Verbosity\n{_verbosity_instructions(verbosity)}\n"
+        + content_depth
+        + f"\n# Verbosity\n{verbosity_instruction}\n"
         + (f"\n# Tone\nMake the slides {tone}.\n" if tone else "")
         + (f"\n# User Instructions\n{instructions}\n" if instructions else "")
     )

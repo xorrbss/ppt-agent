@@ -299,7 +299,7 @@ def test_default_conversion_never_changes_official_catalogue(tmp_path):
         convert_path(source, AUTHORED_STYLES_DIRECTORY)
 
     assert _digest_catalogue() == before
-    assert len(load_authored_styles()) == 34
+    assert len(load_authored_styles()) == 35
 
 
 def test_cli_works_outside_repository_and_reports_errors_without_traceback(tmp_path):

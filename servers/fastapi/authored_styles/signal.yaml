@@ -1,0 +1,102 @@
+id: signal
+name: 시그널 브리핑
+description: 이코노미스트풍 네이비+크림 이중 지면과 앤티크 골드 한 색으로 완성하는 문예적 인텔리전스 브리핑 스타일
+category: editorial
+tags:
+  - 에디토리얼
+  - 하이포멀
+  - 브리핑
+use_cases:
+  - 경영진 브리핑
+  - 분기 리뷰
+  - 전략 보고서
+preview:
+  bg: "#1C2644"
+  accent: "#C8A870"
+  palette:
+    - "#1C2644"
+    - "#F0ECE3"
+    - "#C8A870"
+    - "#E2DCD0"
+    - "#2E3D5C"
+  variant: editorial-briefing
+design_tokens:
+  primary: "#C8A870"
+  background: "#1C2644"
+  heading_font: Source Serif 4
+  body_font: DM Sans
+  mono_font: IBM Plex Mono
+brief: >-
+  This is the SIGNAL system — a literary editorial briefing: The Economist's
+  restraint crossed with a private intelligence memo. Follow its rules exactly;
+  they are the template.
+
+  MOOD: Quiet authority. A typical slide uses a fraction of its canvas — a
+  kicker, a headline, one careful sentence, a footer. The register is "I have
+  one thing to say and I will say it carefully." A slide crowded edge-to-edge
+  is a broken slide. Density: medium-low, asymmetric.
+
+  PALETTE: Dual surfaces, used interchangeably slide to slide — deep editorial
+  navy #1C2644 (secondary dark panel #232F55) and warm aged-paper cream
+  #F0ECE3 (alt #E6E0D4). Never pure white backgrounds. Text on navy: warm
+  off-white #E2DCD0 (muted #8A96A8, hint #4E5A6E) — NEVER #FFFFFF. Text on
+  cream: navy-biased ink #1A2030 (muted #5A6270). Hairlines: #2E3D5C on navy,
+  #CAC4B4 on cream. Exactly ONE accent: antique gold #C8A870 — used ONLY for
+  (a) short rules, (b) italic emphasis inside headlines/leads, (c) numerical
+  figures, (d) kickers. Gold never fills backgrounds, never colors body text.
+
+  TYPOGRAPHY: Load from Google Fonts: "Source Serif 4" + "Noto Serif KR"
+  (headline voice), "DM Sans" + "Noto Sans KR" (body substance), "IBM Plex
+  Mono" (metadata chrome). The ladder is fixed — serif for display/h1/h2/h3,
+  sans for lead/body/caption, mono ONLY for kickers/labels/counters/notes.
+  Scale on the 1280x720 canvas: display 120px w700 lh0.96 ls-0.02em; h1 66px
+  w600 lh1.08 ls-0.01em; h2 38px w600 lh1.18; h3 24px w500; lead 18px lh1.58;
+  body 14px lh1.65; caption 11px; mono label 9-10px w500 uppercase ls0.14em.
+  THE SIGNAL MOMENT: an emphasized phrase inside a serif headline renders in
+  italic Source Serif 4 in gold, mid-sentence — use it on most headline slides.
+  Emphasis inside sans body switches font to italic serif gold (never bold,
+  never underline). Every statistical numeral: Source Serif 4 w600 in gold.
+
+  LAYOUT SYSTEM: Slide padding 96px horizontal, 40px vertical; section gaps
+  29/18/9px. Standard slides are a grid of three rows: top chrome bar (mono
+  section label left, mono counter like "02 / 06" right, 1px hairline rule
+  beneath), 1fr body, bottom foot bar (mirror chrome). Cover, chapter,
+  statement, quote and closing slides are CHROMELESS. Every dark slide carries
+  a near-invisible 54px grid texture overlay (two linear-gradients, 3% white).
+  Depth is flat-plus-hairline: no shadows, no rounded corners (only donut
+  charts and 9px timeline dots are round), regions separate by 1px hairlines.
+
+  SIGNATURE ELEMENTS: 36px x 1px gold rule between kicker and headline (and
+  as the chapter mark); mono uppercase gold kickers; outlined gold tag pills;
+  em-dash "—" in mono gold as EVERY bullet marker (no dots); stat tiles with
+  a 1px top hairline, large gold serif numeral, sans label, mono note;
+  vertical timeline: 1px hairline spine with 9px gold dots; cycle steps with
+  a 2px gold top rule; pyramid bands with 3px gold left border filled with
+  gold-to-navy color-mix fading 70% to 8% and widening 38% to 100%.
+
+  DATA VISUALIZATION: Inline SVG only, drawn in the system: bars in muted
+  slate #4E5A6E with the ONE highlighted bar in gold; 1px dashed low-opacity
+  grid lines; donut charts with a 22% center well painted in the surface
+  color; direct mono labels; every key figure in gold serif. State the
+  takeaway in the headline, not in the chart.
+
+  IMAGE DIRECTION: Prefer no imagery — typography carries the deck. If an
+  image is essential, run it fullbleed behind a bottom-up scrim from
+  transparent to rgba(15,20,36,0.9) (the system's only gradient) with type
+  reversed above it.
+
+  SLIDE ARCHETYPES: cover: chromeless navy or cream, mono date/classification
+  line, 36px gold rule, display headline with one gold italic phrase, acres
+  of empty space; content: chrome bar + asymmetric editorial columns divided
+  by a floor-to-ceiling hairline, kicker + h2 left, lead/body right; data:
+  chrome bar + one dominant chart or a row of 3-4 stat tiles with gold serif
+  numerals; timeline: vertical hairline spine with gold dots, mono dates,
+  serif entry titles; architecture: labeled panels separated by hairlines
+  with muted connector arrows (steps lead, connectors recede); closing:
+  chromeless, one quiet serif statement with a gold italic phrase, mono
+  contact/footer line.
+
+  AVOID: Pure white text or backgrounds; a second accent color; gold body
+  text or gold fills; drop shadows; rounded chrome; bold-in-body emphasis;
+  serif body text; mono in headlines; standard dot bullets; chrome bars
+  without their hairline; slides more than half full; decorative imagery.
