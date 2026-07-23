@@ -4,6 +4,8 @@ import json
 import os
 import re
 import secrets
+from weakref import WeakKeyDictionary
+
 import aiohttp
 from fastapi import HTTPException
 from google import genai
@@ -21,6 +23,7 @@ from utils.get_env import (
     get_openai_compat_image_base_url_env,
     get_openai_compat_image_api_key_env,
     get_openai_compat_image_model_env,
+    is_parallel_image_generation_enabled,
 )
 from utils.get_env import get_pixabay_api_key_env
 from utils.get_env import get_comfyui_url_env
@@ -44,6 +47,19 @@ import uuid
 
 COMFYUI_MAX_SEED = 0xFFFFFFFFFFFFFFFF
 COMFYUI_SEED_SOURCE_VALUE_KEYS = {"value", "int", "integer", "number"}
+_IMAGE_GENERATION_LOCKS: WeakKeyDictionary[
+    asyncio.AbstractEventLoop, asyncio.Lock
+] = WeakKeyDictionary()
+
+
+def _get_image_generation_lock() -> asyncio.Lock:
+    """Share one image request lock across presentation, editor, and chat services."""
+    loop = asyncio.get_running_loop()
+    lock = _IMAGE_GENERATION_LOCKS.get(loop)
+    if lock is None:
+        lock = asyncio.Lock()
+        _IMAGE_GENERATION_LOCKS[loop] = lock
+    return lock
 
 # OpenAI image models (gpt-image-2 / gpt-image-1.5 / dall-e-3) enforce a per-minute rate limit.
 # On 429 we back off and retry instead of falling back to a placeholder.
@@ -120,12 +136,11 @@ class ImageGenerationService:
         print(f"Request - Generating Image for {image_prompt}")
 
         try:
-            if self.is_stock_provider_selected():
-                image_path = await self.image_gen_func(image_prompt)
+            if is_parallel_image_generation_enabled():
+                image_path = await self._call_image_provider(image_prompt)
             else:
-                image_path = await self.image_gen_func(
-                    image_prompt, self.output_directory
-                )
+                async with _get_image_generation_lock():
+                    image_path = await self._call_image_provider(image_prompt)
             if image_path:
                 if image_path.startswith("http"):
                     return image_path
@@ -147,6 +162,11 @@ class ImageGenerationService:
         except Exception as e:
             print(f"Error generating image: {e}")
             return absolute_fastapi_asset_url("/static/images/placeholder.jpg")
+
+    async def _call_image_provider(self, image_prompt: str) -> str:
+        if self.is_stock_provider_selected():
+            return await self.image_gen_func(image_prompt)
+        return await self.image_gen_func(image_prompt, self.output_directory)
 
     async def generate_image_openai(
         self, prompt: str, output_directory: str, model: str, quality: str

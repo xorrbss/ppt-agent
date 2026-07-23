@@ -1,6 +1,13 @@
 const fs = require("fs")
 const path = require("path")
 const { spawnSync } = require("child_process")
+const {
+  atomicReplaceDirectory,
+  copyTreeSafe,
+  removeMaterializedPnpmStore,
+  validateCopiedLinks,
+  validateLinkFreeTree,
+} = require("./scripts/standalone-copy.cjs")
 
 const electronRoot = __dirname
 const nextjsDir = path.join(electronRoot, "..", "servers", "nextjs")
@@ -13,13 +20,11 @@ function rm(p) {
 }
 
 function cpDir(src, dest) {
-  fs.mkdirSync(path.dirname(dest), { recursive: true })
-  fs.cpSync(src, dest, { recursive: true })
+  copyTreeSafe(src, dest, { materializeLinks: true })
 }
 
 console.log("Running Next.js production build (BUILD_TARGET=electron)…")
 
-rm(outDir)
 rm(nextBuildDir)
 
 const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm"
@@ -44,47 +49,88 @@ if (!fs.existsSync(standaloneDir)) {
   process.exit(1)
 }
 
-fs.mkdirSync(path.join(outDir, ".next-build"), { recursive: true })
+const resourcesDir = path.dirname(outDir)
+fs.mkdirSync(resourcesDir, { recursive: true })
+const tempOutDir = fs.mkdtempSync(path.join(resourcesDir, ".nextjs-copy-"))
 
-for (const name of fs.readdirSync(standaloneDir)) {
-  fs.cpSync(
-    path.join(standaloneDir, name),
-    path.join(outDir, name),
-    { recursive: true }
+function remapNextjsExternalLink({ resolvedTarget }) {
+  const relativeToNextjs = path.relative(nextjsDir, resolvedTarget)
+  if (
+    relativeToNextjs === ".." ||
+    relativeToNextjs.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relativeToNextjs)
+  ) {
+    return null
+  }
+  const bundledTarget = path.join(
+    standaloneDir,
+    "servers",
+    "nextjs",
+    relativeToNextjs
   )
+  return fs.existsSync(bundledTarget) ? bundledTarget : null
 }
 
-// Next.js 16 standalone traces the app under servers/nextjs/; the server process
-// runs from that directory, so static assets and public files must live beside
-// server.js — not only at the bundle root (older Next versions used a flatter layout).
-const nestedStandaloneDir = path.join(outDir, "servers", "nextjs")
+try {
+  copyTreeSafe(standaloneDir, tempOutDir, {
+    materializeLinks: true,
+    remapExternalLink: remapNextjsExternalLink,
+  })
 
-const staticSrc = path.join(nextBuildDir, "static")
-const staticDestinations = [
-  path.join(outDir, ".next-build", "static"),
-  path.join(nestedStandaloneDir, ".next-build", "static"),
-]
-if (fs.existsSync(staticSrc)) {
-  for (const staticDest of staticDestinations) {
-    cpDir(staticSrc, staticDest)
+  // Next.js 16 standalone traces the app under servers/nextjs/. Older
+  // standalone layouts put server.js at the bundle root. Assets only need to
+  // live beside the selected server; copying them to both locations adds tens
+  // of MiB without adding a runtime fallback.
+  const nestedStandaloneDir = path.join(tempOutDir, "servers", "nextjs")
+  const directServer = path.join(tempOutDir, "server.js")
+  const nestedServer = path.join(nestedStandaloneDir, "server.js")
+  const serverDir = fs.existsSync(directServer)
+    ? tempOutDir
+    : fs.existsSync(nestedServer)
+      ? nestedStandaloneDir
+      : null
+  if (!serverDir) {
+    throw new Error("Standalone bundle is missing server.js")
   }
-} else {
-  console.error("Expected Next.js static output at:", staticSrc)
-  process.exit(1)
-}
 
-const publicDir = path.join(nextjsDir, "public")
-if (fs.existsSync(publicDir)) {
-  cpDir(publicDir, path.join(outDir, "public"))
-  if (fs.existsSync(nestedStandaloneDir)) {
-    cpDir(publicDir, path.join(nestedStandaloneDir, "public"))
+  // copyTreeSafe materializes pnpm links for AppX compatibility. Once every
+  // package is a real directory, the traced .pnpm backing store is redundant.
+  if (removeMaterializedPnpmStore(serverDir)) {
+    console.log("Removed materialized pnpm backing store from:", serverDir)
   }
-}
 
-const templatesSrc = path.join(nextjsDir, "app", "presentation-templates")
-const templatesDest = path.join(outDir, "presentation-templates")
-if (fs.existsSync(templatesSrc)) {
-  cpDir(templatesSrc, templatesDest)
+  const staticSrc = path.join(nextBuildDir, "static")
+  if (fs.existsSync(staticSrc)) {
+    cpDir(staticSrc, path.join(serverDir, ".next-build", "static"))
+  } else {
+    throw new Error(`Expected Next.js static output at: ${staticSrc}`)
+  }
+
+  const publicDir = path.join(nextjsDir, "public")
+  if (fs.existsSync(publicDir)) {
+    cpDir(publicDir, path.join(serverDir, "public"))
+  }
+
+  const templatesSrc = path.join(nextjsDir, "app", "presentation-templates")
+  const templatesDest = path.join(tempOutDir, "presentation-templates")
+  if (fs.existsSync(templatesSrc)) {
+    cpDir(templatesSrc, templatesDest)
+  }
+
+  for (const requiredDirectory of [
+    path.join(serverDir, ".next-build", "static"),
+    path.join(serverDir, "public"),
+  ]) {
+    if (!fs.existsSync(requiredDirectory)) {
+      throw new Error(`Standalone bundle is missing: ${requiredDirectory}`)
+    }
+  }
+  validateCopiedLinks(tempOutDir)
+  validateLinkFreeTree(tempOutDir)
+  atomicReplaceDirectory(tempOutDir, outDir)
+} catch (error) {
+  rm(tempOutDir)
+  throw error
 }
 
 console.log("Next.js bundle copied to:", outDir)

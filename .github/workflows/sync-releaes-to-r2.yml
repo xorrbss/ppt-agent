@@ -3,11 +3,26 @@ name: Upload Release to R2
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing GitHub release tag to synchronize
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-release-to-r2-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
 
 jobs:
   upload:
     runs-on: ubuntu-latest
     environment: sync_r2
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
 
     steps:
       - name: Checkout code
@@ -17,24 +32,50 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           mkdir assets
-          gh release download "${{ github.event.release.tag_name }}" --dir assets --pattern '*.deb' --pattern '*.dmg' --pattern '*.exe'
+          gh release download "$RELEASE_TAG" \
+            --dir assets \
+            --pattern '*.deb' \
+            --pattern '*.dmg' \
+            --pattern '*.exe' \
+            --pattern '*.appx' \
+            --pattern 'SHA256SUMS*.txt'
           echo "Downloaded files:"
           ls -lh assets/
 
-      - name: Extract version from filename
+      - name: Resolve release version
         run: |
-          FILE=$(ls assets/ | head -n 1)
-          VERSION=$(echo "$FILE" | sed -E 's/^Presenton-(.+)\.(deb|dmg|exe)$/\1/')
-          echo "Extracted version: $VERSION"
+          set -euo pipefail
+          VERSION="${RELEASE_TAG#electron-v}"
+          if [ "$VERSION" = "$RELEASE_TAG" ]; then
+            VERSION="${RELEASE_TAG#v}"
+          fi
+          if [ -z "$VERSION" ]; then
+            echo "Could not resolve a version from release tag: $RELEASE_TAG" >&2
+            exit 1
+          fi
+          echo "Resolved version: $VERSION"
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-      # 4. Install rclone
       - name: Install rclone
         run: |
           curl https://rclone.org/install.sh | sudo bash
 
-      # 5. Configure R2
+      - name: Validate R2 credentials
+        env:
+          R2_ACCESS_KEY: ${{ secrets.R2_ACCESS_KEY }}
+          R2_SECRET_KEY: ${{ secrets.R2_SECRET_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          for name in R2_ACCESS_KEY R2_SECRET_KEY R2_ACCOUNT_ID; do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing required sync_r2 environment secret: $name" >&2
+              exit 1
+            fi
+          done
+
       - name: Configure R2
         run: |
           mkdir -p ~/.config/rclone
@@ -47,7 +88,6 @@ jobs:
           endpoint = https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
           EOF
 
-      # 6. Upload to R2 (FINAL STEP)
       - name: Upload files to R2
         run: |
-          rclone copy assets r2:presenton-desktop/${{ env.VERSION }} --progress --transfers=8
+          rclone copy assets "r2:presenton-desktop/${VERSION}" --progress --transfers=8

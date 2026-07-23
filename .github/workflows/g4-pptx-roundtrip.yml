@@ -5,7 +5,7 @@
 # check_legacy_pptx_roundtrip.py).
 #
 # PR-gate: validated green in real CI (run 27089398688, 4m52s) before promotion.
-name: G4 byte-PPTX round-trip (adaptive)
+name: G4 round-trip and release gates
 
 on:
   push:
@@ -13,8 +13,306 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      package_windows:
+        description: Build and structurally verify the Windows NSIS/AppX release artifacts
+        required: false
+        default: false
+        type: boolean
+      require_signed:
+        description: Require valid Authenticode signatures during the optional Windows package gate
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
 
 jobs:
+  release-export-runtime:
+    name: production export runtime stage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build production export runtime
+        run: docker build --target assets-builder --tag presenton-export-runtime-gate .
+
+      - name: Verify production export runtime
+        run: |
+          docker run --rm presenton-export-runtime-gate sh -lc '
+            node /app/scripts/sync-presentation-export.cjs --check-only &&
+            node --check /app/presentation-export/index.cjs &&
+            test -x /app/presentation-export/py/convert-linux-x64
+          '
+
+  windows-release-gate:
+    name: Windows v0.4.2 release gate
+    runs-on: windows-latest
+    timeout-minutes: 35
+    env:
+      CYPRESS_INSTALL_BINARY: "0"
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            electron/package-lock.json
+            servers/nextjs/package-lock.json
+
+      - name: Install Node.js dependencies
+        run: |
+          npm ci
+          npm ci --prefix electron
+          npm ci --prefix servers/nextjs
+
+      - name: Test v0.4.2 export runtime synchronization
+        run: npm run test:presentation-export-sync
+
+      - name: Test link-free standalone staging and package preflight
+        working-directory: electron
+        run: |
+          npm run test:standalone-copy
+          npm run test:package-preflight
+          npm run test:update-channel
+
+      - name: Test Windows release artifact verifier
+        working-directory: electron
+        run: node --test scripts/verify-windows-release.test.cjs
+
+      - name: Test authored-hybrid export contracts
+        working-directory: servers/nextjs
+        run: >
+          node --experimental-strip-types --test
+          lib/authored-hybrid/mode.test.mjs
+          lib/authored-hybrid/pptx-archive.test.mjs
+          lib/authored-hybrid/cleanup.test.mjs
+
+      - name: Typecheck Electron and reject undefined main-process names
+        working-directory: electron
+        run: |
+          npm run typecheck
+          npm run build:ts
+          npm run check:main-no-undef
+
+  windows-package:
+    name: Package and verify Windows release artifacts
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.package_windows }}
+    needs: windows-release-gate
+    runs-on: windows-latest
+    timeout-minutes: 120
+    env:
+      CYPRESS_INSTALL_BINARY: "0"
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            electron/package-lock.json
+            servers/nextjs/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          working-directory: servers/fastapi
+
+      - name: Install release build dependencies
+        run: |
+          npm ci
+          npm ci --prefix electron
+          npm ci --prefix servers/nextjs
+          uv sync --frozen --directory servers/fastapi
+
+      - name: Validate signed-release inputs
+        if: ${{ inputs.require_signed }}
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:CSC_LINK)) {
+            throw "require_signed=true requires the CSC_LINK repository secret"
+          }
+
+      - name: Build packaged application resources
+        working-directory: electron
+        run: |
+          npm run build:nextjs
+          npm run build:fastapi
+
+      - name: Build NSIS and AppX packages
+        working-directory: electron
+        run: npm run build:electron
+
+      - name: Verify Windows release artifacts
+        shell: pwsh
+        working-directory: electron
+        env:
+          REQUIRE_SIGNED: ${{ inputs.require_signed }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $verifyArguments = @("scripts/verify-windows-release.cjs", "dist")
+          if ($env:REQUIRE_SIGNED -eq "true") {
+            $verifyArguments += "--require-signature"
+          }
+          node @verifyArguments
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+          $package = Get-Content -Raw package.json | ConvertFrom-Json
+          $baseName = "Presenton-$($package.version)"
+          $nsis = Get-Item -LiteralPath "dist/$baseName.exe"
+          $appx = Get-Item -LiteralPath "dist/$baseName.appx"
+
+          $hashLines = @($nsis, $appx) | ForEach-Object {
+            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)"
+          }
+          $hashLines | Set-Content -Encoding ascii "dist/SHA256SUMS.windows.txt"
+          $hashLines
+
+      - name: Smoke install and uninstall NSIS package
+        shell: pwsh
+        working-directory: electron
+        run: |
+          $ErrorActionPreference = "Stop"
+          $package = Get-Content -Raw package.json | ConvertFrom-Json
+          $nsis = Get-Item -LiteralPath "dist/Presenton-$($package.version).exe"
+          $runnerTemp = [System.IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd(
+            [System.IO.Path]::DirectorySeparatorChar,
+            [System.IO.Path]::AltDirectorySeparatorChar
+          )
+          $installRoot = [System.IO.Path]::GetFullPath(
+            (Join-Path $runnerTemp "presenton-nsis-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT")
+          )
+          $requiredPrefix = "$runnerTemp$([System.IO.Path]::DirectorySeparatorChar)"
+          if (-not $installRoot.StartsWith(
+            $requiredPrefix,
+            [System.StringComparison]::OrdinalIgnoreCase
+          )) {
+            throw "Refusing NSIS smoke outside RUNNER_TEMP: $installRoot"
+          }
+          if (Test-Path -LiteralPath $installRoot) {
+            throw "NSIS smoke target already exists: $installRoot"
+          }
+
+          $installedExe = Join-Path $installRoot "Presenton.exe"
+          $marker = Join-Path $installRoot "resources/app/resources/export/.installed-version"
+          $didInstall = $false
+          try {
+            $installer = Start-Process `
+              -FilePath $nsis.FullName `
+              -ArgumentList "/S", "/D=$installRoot" `
+              -Wait `
+              -PassThru `
+              -WindowStyle Hidden
+            $didInstall = Test-Path -LiteralPath $installRoot
+            if ($installer.ExitCode -ne 0) {
+              throw "Silent NSIS install failed with exit code $($installer.ExitCode)"
+            }
+
+            if (-not (Test-Path -LiteralPath $installedExe -PathType Leaf)) {
+              throw "NSIS install is missing Presenton.exe: $installedExe"
+            }
+            if (-not (Test-Path -LiteralPath $marker -PathType Leaf)) {
+              throw "NSIS install is missing the export marker: $marker"
+            }
+            $installedExportVersion = (Get-Content -Raw -LiteralPath $marker).Trim()
+            if ($installedExportVersion -ne "v0.4.2") {
+              throw "NSIS install export marker must be v0.4.2, received: $installedExportVersion"
+            }
+          } finally {
+            if ($didInstall) {
+              $uninstallers = @(
+                Get-ChildItem -LiteralPath $installRoot -File -Filter "Uninstall*.exe"
+              )
+              if ($uninstallers.Count -ne 1) {
+                throw "Expected exactly one NSIS uninstaller, found $($uninstallers.Count)"
+              }
+              $uninstaller = Start-Process `
+                -FilePath $uninstallers[0].FullName `
+                -ArgumentList "/S" `
+                -Wait `
+                -PassThru `
+                -WindowStyle Hidden
+              if ($uninstaller.ExitCode -ne 0) {
+                throw "Silent NSIS uninstall failed with exit code $($uninstaller.ExitCode)"
+              }
+            }
+          }
+          for ($attempt = 0; $attempt -lt 20 -and (Test-Path -LiteralPath $installedExe); $attempt++) {
+            Start-Sleep -Milliseconds 500
+          }
+          if (Test-Path -LiteralPath $installedExe) {
+            throw "Silent NSIS uninstall left Presenton.exe behind: $installedExe"
+          }
+
+      - name: Smoke install and remove signed AppX package
+        if: ${{ inputs.require_signed }}
+        shell: pwsh
+        working-directory: electron
+        run: |
+          $ErrorActionPreference = "Stop"
+          $identityName = "PresentonAI.Presenton"
+          $existing = @(Get-AppxPackage -Name $identityName -ErrorAction SilentlyContinue)
+          if ($existing.Count -ne 0) {
+            throw "Refusing to replace a pre-existing AppX identity: $identityName"
+          }
+          $package = Get-Content -Raw package.json | ConvertFrom-Json
+          $appx = Get-Item -LiteralPath "dist/Presenton-$($package.version).appx"
+          try {
+            Add-AppxPackage -Path $appx.FullName -ErrorAction Stop
+            $matches = @(Get-AppxPackage -Name $identityName -ErrorAction Stop)
+            if ($matches.Count -ne 1) {
+              throw "Expected one installed AppX identity, found $($matches.Count)"
+            }
+            if ($matches[0].Name -ne $identityName) {
+              throw "Installed AppX identity mismatch: $($matches[0].Name)"
+            }
+          } finally {
+            $cleanupPackages = @(
+              Get-AppxPackage -Name $identityName -ErrorAction SilentlyContinue
+            )
+            foreach ($cleanupPackage in $cleanupPackages) {
+              Remove-AppxPackage -Package $cleanupPackage.PackageFullName -ErrorAction Stop
+            }
+          }
+          if (@(Get-AppxPackage -Name $identityName -ErrorAction SilentlyContinue).Count -ne 0) {
+            throw "AppX cleanup left the package installed: $identityName"
+          }
+
+      - name: Skip AppX install smoke for unsigned package
+        if: ${{ !inputs.require_signed }}
+        shell: pwsh
+        run: |
+          Write-Host "Unsigned package mode: AppX install is intentionally skipped; structural verification passed."
+
+      - name: Upload verified Windows release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Presenton-Windows-${{ github.sha }}
+          path: |
+            electron/dist/Presenton-*.exe
+            electron/dist/Presenton-*.appx
+            electron/dist/SHA256SUMS.windows.txt
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
   g4:
     name: adaptive PPTX round-trip
     runs-on: ubuntu-latest
@@ -26,10 +324,16 @@ jobs:
         with:
           node-version: '22'
 
-      # presentation-export is gitignored; sync it (v0.3.x via presentationExportVersion)
-      # so the dev compose bind-mount (./ -> /app) exposes the converter in-container.
+      - name: Test export runtime release gate
+        run: npm run test:presentation-export-sync
+
+      # presentation-export is gitignored; sync the pinned v0.4.2 runtime so the
+      # dev compose bind-mount (./ -> /app) exposes the converter in-container.
       - name: Sync export runtime
         run: node scripts/sync-presentation-export.cjs --force
+
+      - name: Verify synced export runtime
+        run: npm run check:presentation-export
 
       - name: Start dev stack (auth/mem0/image off, cypress binary skipped)
         run: |

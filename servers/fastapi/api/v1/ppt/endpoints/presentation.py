@@ -129,6 +129,7 @@ async def prepare_presentation(
 @PRESENTATION_ROUTER.get("/stream/{id}", response_model=PresentationWithSlides)
 async def stream_presentation(
     id: uuid.UUID,
+    request: Request,
     regenerate: bool = False,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
@@ -157,6 +158,9 @@ async def stream_presentation(
     image_generation_service = ImageGenerationService(get_images_directory())
 
     async def inner():
+        if await request.is_disconnected():
+            return
+
         # Idempotent stream: if this deck was already generated, REPLAY the
         # persisted slides through the SSE envelope instead of re-running the LLM
         # and delete-replacing slides. A browser refresh / link prefetch of the
@@ -217,6 +221,9 @@ async def stream_presentation(
         yielded_slide_asset_sse_count = 0
 
         for i, slide_layout_index in enumerate(structure.slides):
+            if await request.is_disconnected():
+                raise asyncio.CancelledError
+
             slide_layout = layout.slides[slide_layout_index]
 
             try:
@@ -233,6 +240,7 @@ async def stream_presentation(
                         presentation.tone,
                         presentation.verbosity,
                         presentation.instructions,
+                        disconnect_checker=request.is_disconnected,
                     )
                     slide_speaker_note = slide_content.get("__speaker_note__", "")
             except HTTPException as e:

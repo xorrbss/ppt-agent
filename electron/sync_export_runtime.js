@@ -9,6 +9,7 @@ const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, "package.jso
 const targetRoot = path.join(__dirname, "resources", "export");
 const targetPyDir = path.join(targetRoot, "py");
 const targetIndex = path.join(targetRoot, "index.js");
+const installedVersionFile = path.join(targetRoot, ".installed-version");
 const cacheDir = path.join(__dirname, ".cache", "export-runtime");
 const exportRepoBase = "https://github.com/presenton/presenton-export/releases/download";
 const exportVersion = packageJson.exportVersion || "v0.1.0";
@@ -43,7 +44,7 @@ function getPlatformAssetName() {
   );
 }
 
-function getConverterCandidates() {
+function getConverterCandidates(pyDir = targetPyDir) {
   const platformAliases = {
     linux: ["linux"],
     darwin: ["darwin", "macos", "mac"],
@@ -61,23 +62,47 @@ function getConverterCandidates() {
 
   for (const p of platforms) {
     for (const a of archs) {
-      candidates.push(path.join(targetPyDir, `convert-${p}-${a}`));
-      candidates.push(path.join(targetPyDir, `convert-${p}-${a}.exe`));
+      candidates.push(path.join(pyDir, `convert-${p}-${a}`));
+      candidates.push(path.join(pyDir, `convert-${p}-${a}.exe`));
     }
-    candidates.push(path.join(targetPyDir, `convert-${p}`));
-    candidates.push(path.join(targetPyDir, `convert-${p}.exe`));
+    candidates.push(path.join(pyDir, `convert-${p}`));
+    candidates.push(path.join(pyDir, `convert-${p}.exe`));
   }
 
   if (windows) {
-    candidates.push(path.join(targetPyDir, "convert.exe"));
+    candidates.push(path.join(pyDir, "convert.exe"));
   }
-  candidates.push(path.join(targetPyDir, "convert"));
+  candidates.push(path.join(pyDir, "convert"));
 
   return [...new Set(candidates)];
 }
 
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
+}
+
+function readInstalledVersion(markerFile = installedVersionFile) {
+  if (!fs.existsSync(markerFile)) {
+    return null;
+  }
+  const version = fs.readFileSync(markerFile, "utf8").trim();
+  return version || null;
+}
+
+function writeInstalledVersionAtomic(version, markerFile = installedVersionFile) {
+  ensureDir(path.dirname(markerFile));
+  const tempFile = `${markerFile}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    fs.writeFileSync(tempFile, `${version}\n`, "utf8");
+    try {
+      fs.renameSync(tempFile, markerFile);
+    } catch {
+      fs.copyFileSync(tempFile, markerFile);
+      fs.rmSync(tempFile, { force: true });
+    }
+  } finally {
+    fs.rmSync(tempFile, { force: true });
+  }
 }
 
 function chmodIfPossible(filePath) {
@@ -125,12 +150,31 @@ function isFormatCompatible(format) {
   return true;
 }
 
-function validateExistingRuntime() {
-  if (!fs.existsSync(targetIndex)) {
-    return { ok: false, reason: `Missing runtime bundle: ${targetIndex}` };
+function validateExistingRuntime(expectedVersion, runtimeRoot = targetRoot) {
+  const runtimeIndex = path.join(runtimeRoot, "index.js");
+  const runtimePyDir = path.join(runtimeRoot, "py");
+  const markerFile = path.join(runtimeRoot, ".installed-version");
+  const installedVersion = readInstalledVersion(markerFile);
+  if (!installedVersion) {
+    return {
+      ok: false,
+      reason: `Missing installed-version marker: ${markerFile}`,
+    };
+  }
+  if (installedVersion !== expectedVersion) {
+    return {
+      ok: false,
+      reason:
+        `Installed export runtime version ${installedVersion} does not match ` +
+        `requested version ${expectedVersion}.`,
+    };
   }
 
-  const converterCandidates = getConverterCandidates();
+  if (!fs.existsSync(runtimeIndex)) {
+    return { ok: false, reason: `Missing runtime bundle: ${runtimeIndex}` };
+  }
+
+  const converterCandidates = getConverterCandidates(runtimePyDir);
   const converterPath = converterCandidates.find((candidate) => fs.existsSync(candidate));
 
   if (!converterPath) {
@@ -157,7 +201,7 @@ function validateExistingRuntime() {
   }
 
   chmodIfPossible(converterPath);
-  return { ok: true, converterPath };
+  return { ok: true, version: installedVersion, converterPath };
 }
 
 function hasExportDirectoryContent() {
@@ -437,8 +481,7 @@ function resolveExtractedRoot(extractDir) {
   );
 }
 
-async function downloadAndInstallRuntime() {
-  const tag = await getTargetVersion();
+async function downloadAndInstallRuntime(tag) {
   const assetName = getPlatformAssetName();
   const downloadUrl = `${exportRepoBase}/${tag}/${assetName}`;
 
@@ -473,20 +516,48 @@ async function downloadAndInstallRuntime() {
   return { tag, downloadUrl };
 }
 
+function assertElectronSharpLoadable(cwd = __dirname) {
+  try {
+    execFileSync(process.execPath, ["-e", "require('sharp')"], {
+      cwd,
+      stdio: "ignore",
+    });
+  } catch (err) {
+    throw new Error(
+      `Electron export runtime requires a loadable sharp native addon: ${err.message}`
+    );
+  }
+}
+
+function finalizeRuntimeInstall(
+  tag,
+  {
+    assertSharp = assertElectronSharpLoadable,
+    writeMarker = writeInstalledVersionAtomic,
+  } = {}
+) {
+  assertSharp();
+  writeMarker(tag);
+}
+
 async function main() {
-  const existing = validateExistingRuntime();
+  const targetVersion = await getTargetVersion();
+  const existing = validateExistingRuntime(targetVersion);
 
   if (checkOnly) {
     if (!existing.ok) {
       throw new Error(existing.reason);
     }
+    assertElectronSharpLoadable();
     console.log("[export-runtime] Existing runtime is valid.");
+    console.log(`  - version: ${existing.version}`);
     console.log(`  - ${targetIndex}`);
     console.log(`  - ${existing.converterPath}`);
     return;
   }
 
   if (existing.ok && !forceDownload) {
+    assertElectronSharpLoadable();
     console.log("[export-runtime] Using existing runtime artifacts:");
     console.log(`  - ${targetIndex}`);
     console.log(`  - ${existing.converterPath}`);
@@ -497,8 +568,10 @@ async function main() {
     console.log("[export-runtime] Existing export directory is invalid, re-syncing package.");
   }
 
-  const { tag, downloadUrl } = await downloadAndInstallRuntime();
-  const installed = validateExistingRuntime();
+  const { tag, downloadUrl } = await downloadAndInstallRuntime(targetVersion);
+  finalizeRuntimeInstall(tag);
+
+  const installed = validateExistingRuntime(targetVersion);
   if (!installed.ok) {
     throw new Error(installed.reason);
   }
@@ -510,7 +583,17 @@ async function main() {
   console.log(`  - ${installed.converterPath}`);
 }
 
-main().catch((error) => {
-  console.error(`[export-runtime] ${error.message}`);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(`[export-runtime] ${error.message}`);
+    process.exit(1);
+  });
+} else {
+  module.exports = {
+    assertElectronSharpLoadable,
+    finalizeRuntimeInstall,
+    readInstalledVersion,
+    validateExistingRuntime,
+    writeInstalledVersionAtomic,
+  };
+}

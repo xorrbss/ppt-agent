@@ -7,10 +7,10 @@
  *   2. package.json → presentationExportVersion
  *
  * CLI: --force  re-download even if valid runtime already exists
- *       --check-only  verify index.cjs + converter exist and exit 0/1
+ *       --check-only  verify installed version + runtime files and exit 0/1
  *
- * On every run (including --check-only), index.cjs is overwritten from index.js
- * so the CommonJS entrypoint never drifts from the bundled ESM build.
+ * Normal sync repairs index.cjs from index.js. --check-only is read-only and
+ * rejects a missing or stale CommonJS entrypoint.
  */
 const fs = require("fs");
 const path = require("path");
@@ -23,6 +23,8 @@ const targetRoot = path.join(repoRoot, "presentation-export");
 const targetPyDir = path.join(targetRoot, "py");
 const targetIndexJs = path.join(targetRoot, "index.js");
 const targetIndexCjs = path.join(targetRoot, "index.cjs");
+const installedVersionFileName = ".installed-version";
+const installedVersionFile = path.join(targetRoot, installedVersionFileName);
 const packageJsonFile = path.join(repoRoot, "package.json");
 const cacheDir = path.join(repoRoot, ".cache", "presentation-export");
 const exportRepoBase =
@@ -47,6 +49,28 @@ const checkOnly = cliArgs.has("--check-only");
 
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
+}
+
+function readInstalledVersion(markerFile = installedVersionFile) {
+  if (!fs.existsSync(markerFile)) {
+    return null;
+  }
+  const version = fs.readFileSync(markerFile, "utf8").trim();
+  return version || null;
+}
+
+function writeInstalledVersionAtomic(
+  version,
+  markerFile = installedVersionFile
+) {
+  ensureDir(path.dirname(markerFile));
+  const tempFile = `${markerFile}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    fs.writeFileSync(tempFile, `${version}\n`, "utf8");
+    moveFileAtomic(tempFile, markerFile);
+  } finally {
+    fs.rmSync(tempFile, { force: true });
+  }
 }
 
 function readPinnedVersion() {
@@ -173,60 +197,121 @@ function moveFileAtomic(src, dest) {
   }
 }
 
-function normalizeRuntimeLayout() {
-  if (!fs.existsSync(targetRoot)) {
+function normalizeRuntimeLayout(runtimeRoot = targetRoot) {
+  if (!fs.existsSync(runtimeRoot)) {
     return;
   }
 
-  ensureDir(targetPyDir);
+  const runtimePyDir = path.join(runtimeRoot, "py");
+  ensureDir(runtimePyDir);
 
-  const rootCandidates = getConverterCandidates(targetRoot);
+  const rootCandidates = getConverterCandidates(runtimeRoot);
   for (const sourcePath of rootCandidates) {
     if (!fs.existsSync(sourcePath)) {
       continue;
     }
 
-    const destinationPath = path.join(targetPyDir, path.basename(sourcePath));
+    const destinationPath = path.join(runtimePyDir, path.basename(sourcePath));
     if (!fs.existsSync(destinationPath)) {
       moveFileAtomic(sourcePath, destinationPath);
     }
   }
 }
 
-function ensureCommonJsEntrypoint() {
-  if (!fs.existsSync(targetIndexJs)) {
-    return { ok: false, reason: `Missing runtime bundle: ${targetIndexJs}` };
+function ensureCommonJsEntrypoint(
+  runtimeRoot = targetRoot,
+  { repair = true } = {}
+) {
+  const indexJs = path.join(runtimeRoot, "index.js");
+  const indexCjs = path.join(runtimeRoot, "index.cjs");
+  if (!fs.existsSync(indexJs)) {
+    return { ok: false, reason: `Missing runtime bundle: ${indexJs}` };
+  }
+
+  if (!repair) {
+    if (!fs.existsSync(indexCjs)) {
+      return {
+        ok: false,
+        reason: `Missing CommonJS runtime bundle: ${indexCjs}`,
+      };
+    }
+
+    try {
+      if (!fs.readFileSync(indexJs).equals(fs.readFileSync(indexCjs))) {
+        return {
+          ok: false,
+          reason: `CommonJS runtime bundle does not match ${indexJs}: ${indexCjs}`,
+        };
+      }
+      return { ok: true, entrypointPath: indexCjs };
+    } catch (err) {
+      return {
+        ok: false,
+        reason: `Failed to verify CommonJS entrypoint ${indexCjs}: ${err.message}`,
+      };
+    }
   }
 
   try {
-    fs.copyFileSync(targetIndexJs, targetIndexCjs);
-    return { ok: true, entrypointPath: targetIndexCjs };
+    fs.copyFileSync(indexJs, indexCjs);
+    return { ok: true, entrypointPath: indexCjs };
   } catch (err) {
     return {
       ok: false,
-      reason: `Failed to create CommonJS entrypoint ${targetIndexCjs}: ${err.message}`,
+      reason: `Failed to create CommonJS entrypoint ${indexCjs}: ${err.message}`,
     };
   }
 }
 
-function validateExistingRuntime() {
-  normalizeRuntimeLayout();
+function validateExistingRuntime(
+  expectedVersion,
+  runtimeRoot = targetRoot,
+  { repair = true } = {}
+) {
+  const markerFile = path.join(runtimeRoot, installedVersionFileName);
+  const installedVersion = readInstalledVersion(markerFile);
+  if (!installedVersion) {
+    return {
+      ok: false,
+      reason: `Missing installed-version marker: ${markerFile}`,
+    };
+  }
+  if (installedVersion !== expectedVersion) {
+    return {
+      ok: false,
+      reason:
+        `Installed presentation-export version ${installedVersion} does not match ` +
+        `requested version ${expectedVersion}.`,
+    };
+  }
 
-  const entrypoint = ensureCommonJsEntrypoint();
+  if (repair) {
+    normalizeRuntimeLayout(runtimeRoot);
+  }
+
+  const entrypoint = ensureCommonJsEntrypoint(runtimeRoot, { repair });
   if (!entrypoint.ok) {
     return { ok: false, reason: entrypoint.reason };
   }
 
-  const candidates = getConverterCandidates();
+  const runtimePyDir = path.join(runtimeRoot, "py");
+  const candidates = getConverterCandidates(runtimePyDir);
   const converterPath = candidates.find((c) => fs.existsSync(c));
   if (!converterPath) {
     return {
       ok: false,
-      reason: `No converter binary under ${targetPyDir} or ${targetRoot}.`,
+      reason: `No converter binary under ${runtimePyDir} or ${runtimeRoot}.`,
     };
   }
-  chmodIfPossible(converterPath);
-  return { ok: true, entrypointPath: entrypoint.entrypointPath, converterPath };
+  if (repair) {
+    chmodIfPossible(converterPath);
+  }
+  return {
+    ok: true,
+    version: installedVersion,
+    entrypointPath: entrypoint.entrypointPath,
+    converterPath,
+  };
 }
 
 function downloadFile(url, outputPath, redirects = 5) {
@@ -305,8 +390,7 @@ function resolveExtractedRoot(extractDir) {
   throw new Error(`Unable to locate export runtime root under ${extractDir}`);
 }
 
-async function downloadAndInstallRuntime() {
-  const tag = await getTargetVersion();
+async function downloadAndInstallRuntime(tag) {
   const downloadUrl = `${exportRepoBase}/${tag}/${exportAssetName}`;
 
   ensureDir(cacheDir);
@@ -330,9 +414,8 @@ async function downloadAndInstallRuntime() {
 }
 
 // The prebuilt runtime bundles sharp's JS but not its libvips native addon, and a
-// fresh install wipes any previously-installed node_modules. On Windows/macOS the
-// sync is the only provisioner, so (re)install sharp next to the runtime; Linux is
-// left to the Docker image, which provisions it itself.
+// fresh install wipes any previously-installed node_modules. Install sharp next
+// to the runtime before recording the installed-version marker.
 function detectBundledSharpVersion() {
   const fallback = "0.34.4";
   try {
@@ -344,19 +427,30 @@ function detectBundledSharpVersion() {
   }
 }
 
-function ensureRuntimeSharp() {
-  if (process.platform === "linux") {
-    return;
-  }
+function canLoadRuntimeSharp(runtimeRoot = targetRoot) {
   try {
     execFileSync(process.execPath, ["-e", "require('sharp')"], {
-      cwd: targetRoot,
+      cwd: runtimeRoot,
       stdio: "ignore",
     });
-    return; // already resolvable
+    return true;
   } catch {
-    // fall through to install
+    return false;
   }
+}
+
+function assertRuntimeSharpLoadable(runtimeRoot = targetRoot) {
+  if (!canLoadRuntimeSharp(runtimeRoot)) {
+    throw new Error(
+      "presentation-export requires a loadable sharp native addon. " +
+        "Run `npm run sync:presentation-export` to repair the runtime."
+    );
+  }
+}
+
+function ensureRuntimeSharp() {
+  if (canLoadRuntimeSharp()) return;
+
   const version = detectBundledSharpVersion();
   const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
   console.log(
@@ -369,22 +463,57 @@ function ensureRuntimeSharp() {
       { stdio: "inherit" }
     );
   } catch (err) {
-    console.warn(
-      `[presentation-export] WARNING: could not install sharp (${err.message}). ` +
-        `Editable PPTX/PDF export may fail; install it manually with:\n` +
+    throw new Error(
+      `Could not install sharp (${err.message}). Install it manually with:\n` +
         `  npm install --prefix presentation-export --no-save sharp@${version}`
+    );
+  }
+
+  try {
+    assertRuntimeSharpLoadable();
+  } catch (err) {
+    throw new Error(
+      `sharp@${version} was installed but cannot be loaded by presentation-export: ${err.message}`
     );
   }
 }
 
+function prepareRuntimeArtifacts(runtimeRoot = targetRoot) {
+  normalizeRuntimeLayout(runtimeRoot);
+  const entrypoint = ensureCommonJsEntrypoint(runtimeRoot);
+  if (!entrypoint.ok) {
+    throw new Error(entrypoint.reason);
+  }
+}
+
+function finalizeRuntimeInstall(
+  tag,
+  {
+    prepareRuntime,
+    ensureSharp = ensureRuntimeSharp,
+    writeMarker = writeInstalledVersionAtomic,
+  } = {}
+) {
+  if (prepareRuntime) {
+    prepareRuntime();
+  }
+  ensureSharp();
+  writeMarker(tag);
+}
+
 async function main() {
-  const existing = validateExistingRuntime();
+  const targetVersion = await getTargetVersion();
+  const existing = validateExistingRuntime(targetVersion, targetRoot, {
+    repair: !checkOnly,
+  });
 
   if (checkOnly) {
     if (!existing.ok) {
       throw new Error(existing.reason);
     }
+    assertRuntimeSharpLoadable();
     console.log("[presentation-export] OK");
+    console.log(`  - version: ${existing.version}`);
     console.log(`  - ${existing.entrypointPath}`);
     console.log(`  - ${existing.converterPath}`);
     return;
@@ -398,12 +527,17 @@ async function main() {
     return;
   }
 
-  const { tag, downloadUrl } = await downloadAndInstallRuntime();
-  const installed = validateExistingRuntime();
+  const { tag, downloadUrl } = await downloadAndInstallRuntime(targetVersion);
+  finalizeRuntimeInstall(tag, {
+    prepareRuntime: () => prepareRuntimeArtifacts(targetRoot),
+  });
+
+  const installed = validateExistingRuntime(targetVersion, targetRoot, {
+    repair: false,
+  });
   if (!installed.ok) {
     throw new Error(installed.reason);
   }
-  ensureRuntimeSharp();
 
   console.log("[presentation-export] Synced successfully:");
   console.log(`  - release: ${tag}`);
@@ -412,7 +546,18 @@ async function main() {
   console.log(`  - ${installed.converterPath}`);
 }
 
-main().catch((err) => {
-  console.error(`[presentation-export] ${err.message}`);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(`[presentation-export] ${err.message}`);
+    process.exit(1);
+  });
+} else {
+  module.exports = {
+    installedVersionFileName,
+    assertRuntimeSharpLoadable,
+    finalizeRuntimeInstall,
+    readInstalledVersion,
+    writeInstalledVersionAtomic,
+    validateExistingRuntime,
+  };
+}

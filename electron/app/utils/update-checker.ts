@@ -2,6 +2,7 @@ import { net } from "electron";
 import { app, BrowserWindow } from "electron";
 import { isDev } from "./constants";
 import { safeStderrWrite } from "./safe-console";
+import { getUpdateDownloadUrl, isNewerVersion, isValidReleaseVersion } from "./update-channel";
 
 /**
  * Version check URL — GitHub raw version.json (no API required).
@@ -9,10 +10,9 @@ import { safeStderrWrite } from "./safe-console";
  */
 const VERSION_JSON_URL =
   process.env.UPDATE_SERVER_URL ||
-  "https://raw.githubusercontent.com/presenton/presenton/refs/heads/main/electron/version.json";
+  "https://raw.githubusercontent.com/xorrbss/ppt-agent/refs/heads/main/electron/version.json";
 
 const CURRENT_VERSION = app.getVersion();
-const WEBSITE_DOWNLOAD_URL = "https://presenton.ai/download";
 
 /** Maximum number of fetch attempts (polls). */
 const MAX_ATTEMPTS = 3;
@@ -39,30 +39,6 @@ interface VersionResponse {
     mac: string;
     windows: string;
   };
-}
-
-/**
- * Simple semver comparison that strips pre-release labels for numeric comparison.
- * Returns true if `remote` is strictly newer than `current`.
- */
-function isNewerVersion(current: string, remote: string): boolean {
-  const toNumbers = (v: string) =>
-    v
-      .replace(/[^0-9.]/g, "")
-      .split(".")
-      .map(Number);
-
-  const curr = toNumbers(current);
-  const rem = toNumbers(remote);
-  const len = Math.max(curr.length, rem.length);
-
-  for (let i = 0; i < len; i++) {
-    const c = curr[i] ?? 0;
-    const r = rem[i] ?? 0;
-    if (r > c) return true;
-    if (r < c) return false;
-  }
-  return false;
 }
 
 async function fetchVersionInfo(): Promise<VersionResponse | null> {
@@ -299,10 +275,14 @@ async function checkForUpdatesWithRetry(win: BrowserWindow): Promise<void> {
     }
 
     if (data) {
+      if (!isValidReleaseVersion(data.version)) {
+        log(`Ignoring invalid remote version: ${data.version}`);
+        return;
+      }
       const newer = isNewerVersion(CURRENT_VERSION, data.version);
       log(`Remote ${data.version} vs current ${CURRENT_VERSION} -> newer? ${newer}`);
       if (newer) {
-        const downloadUrl = WEBSITE_DOWNLOAD_URL;
+        const downloadUrl = getUpdateDownloadUrl(data.version, data.downloads, process.platform);
         log(`Injecting banner for ${data.version} (after ${INJECT_DELAY_MS}ms delay)`);
         scheduleBannerInjection(win, data.version, downloadUrl, data.message);
       } else {
