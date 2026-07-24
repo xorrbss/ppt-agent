@@ -39,6 +39,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Sync pinned presentation export runtime
+        run: node scripts/sync-presentation-export.cjs --force
+      - name: Verify pinned presentation export runtime
+        run: node scripts/sync-presentation-export.cjs --check-only
       - name: Verify compatibility manifest and protected patches
         run: node --test scripts/verify-upstream-compatibility.test.mjs
 
