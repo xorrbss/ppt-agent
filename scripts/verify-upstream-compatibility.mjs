@@ -444,6 +444,76 @@ for (const patch of registry.patches ?? []) {
 }
 check(requiredCategories.size === 0, `missing protected patch categories: ${[...requiredCategories]}`);
 
+// Every contract source referenced by the registries must sit inside the
+// compatibility workflow's pull_request path filter. Otherwise a PR that edits a
+// protected file without touching any compatibility file would merge without this
+// gate ever running, and the drift would surface later on an unrelated PR.
+function globToRegExp(glob) {
+  let source = "^";
+  for (let index = 0; index < glob.length; index += 1) {
+    const character = glob[index];
+    if (character === "*") {
+      if (glob[index + 1] === "*") {
+        source += ".*";
+        index += 1;
+      } else {
+        source += "[^/]*";
+      }
+    } else if (/[.+^${}()|[\]\\?]/.test(character)) {
+      source += `\\${character}`;
+    } else {
+      source += character;
+    }
+  }
+  return new RegExp(`${source}$`);
+}
+
+function collectWorkflowPaths(text) {
+  const lines = text.split(/\r?\n/);
+  const paths = [];
+  let inPaths = false;
+  for (const line of lines) {
+    if (/^\s*paths:\s*$/.test(line)) {
+      inPaths = true;
+      continue;
+    }
+    if (!inPaths) continue;
+    const entry = line.match(/^\s*-\s*"([^"]+)"\s*$/);
+    if (entry) {
+      paths.push(entry[1]);
+    } else if (line.trim().length > 0) {
+      break;
+    }
+  }
+  return paths;
+}
+
+const compatWorkflowPath = ".github/workflows/upstream-compatibility.yml";
+const compatWorkflowText = await readText(compatWorkflowPath);
+const workflowPathMatchers = collectWorkflowPaths(compatWorkflowText).map(globToRegExp);
+check(workflowPathMatchers.length > 0, `no pull_request path filter found in ${compatWorkflowPath}`);
+const gatedContractSources = new Set(
+  [
+    ...(manifest.versions ?? []).flatMap((version) =>
+      [version.source, version.mirror].filter(Boolean)
+    ),
+    manifest.templateV2Renderer?.source,
+    manifest.templateV2PayloadBoundary?.source,
+    manifest.templateV2PayloadBoundary?.test,
+    manifest.api?.routerSource,
+    ...(manifest.api?.keyEndpoints ?? []).map((endpoint) => endpoint.source),
+    ...(registry.patches ?? []).flatMap((patch) =>
+      (patch.files ?? []).map((file) => file.path)
+    ),
+  ].filter(Boolean)
+);
+for (const contractSource of gatedContractSources) {
+  check(
+    workflowPathMatchers.some((matcher) => matcher.test(contractSource)),
+    `${contractSource} is a gated contract source but is not covered by any path in ${compatWorkflowPath}`
+  );
+}
+
 if (errors.length > 0) {
   console.error(`Upstream compatibility verification failed (${errors.length}/${checks} checks):`);
   for (const error of errors) console.error(`- ${error}`);
