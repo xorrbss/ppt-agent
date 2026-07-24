@@ -17,7 +17,13 @@ It does not decide whether the official upstream branch moved.
 - the job writes a Markdown step summary and retains Markdown/JSON evidence;
 - ordinary upstream movement is a reviewable success, configured
   `contract-risk` exits `2`, and operational/metadata errors exit `1` while
-  explicitly leaving `changeDetected` false.
+  explicitly leaving `changeDetected` false;
+- scheduled/dispatch runs additionally open or update a single rolling
+  `upstream-intake`-labelled issue whenever drift is detected or an intake
+  error occurs, so reviewable movement is not lost in a green run and repeated
+  errors do not spawn duplicate issues. Detecting that the nightly stopped
+  running entirely (GitHub disables cron after prolonged inactivity) needs an
+  external uptime monitor and is intentionally out of scope.
 
 Both workflows use read-only repository permissions. The intake checkout and
 runtime actions are immutable digest pins, credentials are not persisted, and
