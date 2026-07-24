@@ -118,6 +118,17 @@ def _element(
             decorative=False,
             name=_slot_name(candidate),
         )
+    if candidate.kind == "group":
+        return Group(
+            type="group",
+            position=position,
+            size=size,
+            children=[
+                _element(child, relative=False)
+                for child in candidate.children or []
+            ],
+            name=_slot_name(candidate),
+        )
     raise ValueError("unsupported_candidate_cannot_be_assembled")
 
 

@@ -65,21 +65,39 @@ def _number(value: str | None) -> float:
         return 0.0
 
 
-def _shape_transform(shape, slide_cx: float, slide_cy: float) -> dict[str, float]:
+def _shape_transform(
+    shape,
+    slide_cx: float,
+    slide_cy: float,
+    *,
+    scale_x: float | None = None,
+    scale_y: float | None = None,
+    origin_x: float = 0,
+    origin_y: float = 0,
+) -> dict[str, float]:
     xfrm = shape.find("./p:spPr/a:xfrm", NS)
     if xfrm is None:
         xfrm = shape.find("./p:xfrm", NS)
     if xfrm is None:
+        xfrm = shape.find("./p:grpSpPr/a:xfrm", NS)
+    if xfrm is None:
         return {"x": 0, "y": 0, "width": 0, "height": 0, "rotation": 0}
     off = xfrm.find("a:off", NS)
     ext = xfrm.find("a:ext", NS)
-    scale_x = CANVAS_WIDTH / slide_cx
-    canvas_height = slide_cy * scale_x
+    scale_x = scale_x if scale_x is not None else CANVAS_WIDTH / slide_cx
+    scale_y = scale_y if scale_y is not None else scale_x
+    canvas_height = slide_cy * scale_y
     return {
-        "x": _number(off.get("x") if off is not None else None) * scale_x,
-        "y": _number(off.get("y") if off is not None else None) * scale_x,
+        "x": (
+            _number(off.get("x") if off is not None else None) - origin_x
+        )
+        * scale_x,
+        "y": (
+            _number(off.get("y") if off is not None else None) - origin_y
+        )
+        * scale_y,
         "width": _number(ext.get("cx") if ext is not None else None) * scale_x,
-        "height": _number(ext.get("cy") if ext is not None else None) * scale_x,
+        "height": _number(ext.get("cy") if ext is not None else None) * scale_y,
         "rotation": _number(xfrm.get("rot")) / 60000,
         "_canvas_height": canvas_height,
     }
@@ -89,6 +107,8 @@ def _shape_identity(shape, index: int) -> tuple[str, str]:
     props = shape.find("./p:nvSpPr/p:cNvPr", NS)
     if props is None:
         props = shape.find("./p:nvGraphicFramePr/p:cNvPr", NS)
+    if props is None:
+        props = shape.find("./p:nvGrpSpPr/p:cNvPr", NS)
     if props is None:
         return str(index), f"shape_{index}"
     return props.get("id") or str(index), props.get("name") or f"shape_{index}"
@@ -122,9 +142,15 @@ def _unsupported_shape(shape, index: int, reason: str) -> ShapeCandidate:
     )
 
 
-def _parse_shape(shape, index: int, slide_cx: float, slide_cy: float) -> ShapeCandidate:
+def _parse_shape(
+    shape,
+    index: int,
+    slide_cx: float,
+    slide_cy: float,
+    **space,
+) -> ShapeCandidate:
     source_id, name = _shape_identity(shape, index)
-    transform = _shape_transform(shape, slide_cx, slide_cy)
+    transform = _shape_transform(shape, slide_cx, slide_cy, **space)
     transform.pop("_canvas_height", None)
     text = _text(shape)
     if text:
@@ -164,9 +190,10 @@ def _parse_graphic_frame(
     slide_cy: float,
     reader: PptxPackageReader,
     relationships: dict[str, tuple[str, str]],
+    **space,
 ) -> ShapeCandidate:
     source_id, name = _shape_identity(shape, index)
-    transform = _shape_transform(shape, slide_cx, slide_cy)
+    transform = _shape_transform(shape, slide_cx, slide_cy, **space)
     transform.pop("_canvas_height", None)
     table = shape.find("./a:graphic/a:graphicData/a:tbl", NS)
     if table is None:
@@ -233,6 +260,93 @@ def _parse_graphic_frame(
     )
 
 
+def _parse_group(
+    shape,
+    index: int,
+    slide_cx: float,
+    slide_cy: float,
+    reader: PptxPackageReader,
+    relationships: dict[str, tuple[str, str]],
+    **space,
+) -> ShapeCandidate:
+    source_id, name = _shape_identity(shape, index)
+    transform = _shape_transform(shape, slide_cx, slide_cy, **space)
+    transform.pop("_canvas_height", None)
+    xfrm = shape.find("./p:grpSpPr/a:xfrm", NS)
+    child_off = xfrm.find("a:chOff", NS) if xfrm is not None else None
+    child_ext = xfrm.find("a:chExt", NS) if xfrm is not None else None
+    child_cx = _number(child_ext.get("cx") if child_ext is not None else None)
+    child_cy = _number(child_ext.get("cy") if child_ext is not None else None)
+    if child_cx <= 0 or child_cy <= 0:
+        return ShapeCandidate(
+            source_id=source_id,
+            name=name,
+            kind="unsupported",
+            confidence=0,
+            unsupported_reason="invalid_group_coordinate_space",
+            **transform,
+        )
+    child_space = {
+        "scale_x": transform["width"] / child_cx,
+        "scale_y": transform["height"] / child_cy,
+        "origin_x": _number(
+            child_off.get("x") if child_off is not None else None
+        ),
+        "origin_y": _number(
+            child_off.get("y") if child_off is not None else None
+        ),
+    }
+    children: list[ShapeCandidate] = []
+    for child_index, child in enumerate(list(shape), start=1):
+        tag = child.tag.rsplit("}", 1)[-1]
+        if tag == "sp":
+            children.append(
+                _parse_shape(child, child_index, slide_cx, slide_cy, **child_space)
+            )
+        elif tag == "graphicFrame":
+            children.append(
+                _parse_graphic_frame(
+                    child,
+                    child_index,
+                    slide_cx,
+                    slide_cy,
+                    reader,
+                    relationships,
+                    **child_space,
+                )
+            )
+        elif tag == "grpSp":
+            children.append(
+                _parse_group(
+                    child,
+                    child_index,
+                    slide_cx,
+                    slide_cy,
+                    reader,
+                    relationships,
+                    **child_space,
+                )
+            )
+    supported = [child for child in children if child.kind != "unsupported"]
+    if not supported:
+        return ShapeCandidate(
+            source_id=source_id,
+            name=name,
+            kind="unsupported",
+            confidence=0,
+            unsupported_reason="group_contains_no_supported_shapes",
+            **transform,
+        )
+    return ShapeCandidate(
+        source_id=source_id,
+        name=name,
+        kind="group",
+        children=supported,
+        confidence=min(child.confidence for child in supported),
+        **transform,
+    )
+
+
 def parse_presentation_candidates(
     reader: PptxPackageReader,
     *,
@@ -290,6 +404,17 @@ def parse_presentation_candidates(
                 elif tag == "graphicFrame":
                     shapes.append(
                         _parse_graphic_frame(
+                            child,
+                            index,
+                            slide_cx,
+                            slide_cy,
+                            reader,
+                            slide_relationships,
+                        )
+                    )
+                elif tag == "grpSp":
+                    shapes.append(
+                        _parse_group(
                             child,
                             index,
                             slide_cx,

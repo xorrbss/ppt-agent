@@ -17,7 +17,7 @@ class ChartSeriesCandidate(PptxCandidateModel):
 class ShapeCandidate(PptxCandidateModel):
     source_id: str
     name: str
-    kind: Literal["text", "container", "table", "chart", "unsupported"]
+    kind: Literal["text", "container", "table", "chart", "group", "unsupported"]
     x: float = 0
     y: float = 0
     width: float = 0
@@ -28,6 +28,7 @@ class ShapeCandidate(PptxCandidateModel):
     chart_type: str | None = None
     chart_categories: list[str] | None = None
     chart_series: list[ChartSeriesCandidate] | None = None
+    children: list["ShapeCandidate"] | None = None
     fill_color: str | None = None
     confidence: float = Field(ge=0, le=1)
     unsupported_reason: str | None = None
@@ -107,3 +108,6 @@ class PresentationCandidates(PptxCandidateModel):
     slides: list[SlideCandidate] = Field(min_length=1)
     relationship_graph: RelationshipGraphEvidence | None = None
     style_graph: StyleGraphEvidence | None = None
+
+
+ShapeCandidate.model_rebuild()

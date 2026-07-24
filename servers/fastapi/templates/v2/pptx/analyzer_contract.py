@@ -40,7 +40,7 @@ class ValidatedChartSeriesCandidate(AnalyzerContractModel):
 class ValidatedShapeCandidate(AnalyzerContractModel):
     source_id: NonEmptyString
     name: NonEmptyString
-    kind: Literal["text", "container", "table", "chart", "unsupported"]
+    kind: Literal["text", "container", "table", "chart", "group", "unsupported"]
     x: NonNegativeFinite = 0
     y: NonNegativeFinite = 0
     width: NonNegativeFinite = 0
@@ -51,6 +51,7 @@ class ValidatedShapeCandidate(AnalyzerContractModel):
     chart_type: StrictStr | None = None
     chart_categories: list[StrictStr] | None = None
     chart_series: list[ValidatedChartSeriesCandidate] | None = None
+    children: list["ValidatedShapeCandidate"] | None = None
     fill_color: StrictStr | None = None
     confidence: Confidence
     unsupported_reason: StrictStr | None = None
@@ -88,6 +89,11 @@ class ValidatedShapeCandidate(AnalyzerContractModel):
             )
         ):
             raise ValueError("non_chart_candidate_cannot_contain_chart_data")
+        if self.kind == "group":
+            if not self.children:
+                raise ValueError("group_candidate_requires_children")
+        elif self.children is not None:
+            raise ValueError("non_group_candidate_cannot_contain_children")
         if self.kind == "unsupported" and not self.unsupported_reason:
             raise ValueError("unsupported_candidate_requires_reason")
         if self.kind != "unsupported" and self.unsupported_reason is not None:
