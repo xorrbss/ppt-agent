@@ -10,6 +10,7 @@ buffer durable across reloads.
 Kept out of the presentation endpoint (already a god-file) so the storage policy
 lives in one place.
 """
+from copy import deepcopy
 import uuid
 from datetime import timezone
 from typing import List, Optional
@@ -19,6 +20,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from models.sql.presentation_version import PresentationVersionModel
 from models.sql.slide import SlideModel
+from templates.v2.persistence import canonicalize_slide_dump
 from utils.datetime_utils import get_current_utc_datetime
 
 # Don't snapshot more often than this — rapid autosaves collapse to one point.
@@ -78,6 +80,8 @@ async def snapshot_slides(
     if not slides_dumps:
         return None
 
+    canonical_slides = [canonicalize_slide_dump(dump) for dump in slides_dumps]
+
     if not force:
         latest = await _latest_version(session, presentation_id)
         if latest is not None and _seconds_since(latest.created_at) < (
@@ -87,7 +91,7 @@ async def snapshot_slides(
 
     version = PresentationVersionModel(
         presentation_id=presentation_id,
-        slides=slides_dumps,
+        slides=canonical_slides,
         label=label,
     )
     session.add(version)
@@ -108,16 +112,18 @@ async def list_versions(
 
 
 def _slide_from_dump(presentation_id: uuid.UUID, dump: dict) -> SlideModel:
+    canonical = canonicalize_slide_dump(dump)
     return SlideModel(
         id=uuid.uuid4(),
         presentation=presentation_id,
-        layout_group=dump.get("layout_group"),
-        layout=dump.get("layout"),
-        index=dump.get("index"),
-        content=dump.get("content") or {},
-        html_content=dump.get("html_content"),
-        speaker_note=dump.get("speaker_note"),
-        properties=dump.get("properties"),
+        layout_group=canonical.get("layout_group"),
+        layout=canonical.get("layout"),
+        index=canonical.get("index"),
+        content=deepcopy(canonical.get("content") or {}),
+        html_content=canonical.get("html_content"),
+        ui=deepcopy(canonical.get("ui")),
+        speaker_note=canonical.get("speaker_note"),
+        properties=deepcopy(canonical.get("properties")),
     )
 
 
@@ -129,6 +135,11 @@ async def restore_version(
     version = await session.get(PresentationVersionModel, version_id)
     if version is None or version.presentation_id != presentation_id:
         return None
+
+    # Validate the complete target before checkpointing or deleting live state.
+    restored = [
+        _slide_from_dump(presentation_id, dump) for dump in (version.slides or [])
+    ]
 
     # Checkpoint the current slides first, so the restore is itself undoable.
     current = list(
@@ -150,8 +161,5 @@ async def restore_version(
     await session.execute(
         delete(SlideModel).where(SlideModel.presentation == presentation_id)
     )
-    restored = [
-        _slide_from_dump(presentation_id, dump) for dump in (version.slides or [])
-    ]
     session.add_all(restored)
     return restored

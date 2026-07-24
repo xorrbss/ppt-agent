@@ -24,6 +24,9 @@ from api.v1.ppt.endpoints.pptx_slides import PPTX_FONTS_ROUTER
 from api.v1.ppt.endpoints.theme import THEMES_ROUTER
 from api.v1.ppt.endpoints.theme_generate import THEME_ROUTER
 from api.v1.ppt.endpoints.authored import AUTHORED_ROUTER
+from api.v1.ppt.endpoints.structured_templates import (
+    STRUCTURED_TEMPLATES_ROUTER,
+)
 from templates.router import TEMPLATE_ROUTER
 
 
@@ -53,4 +56,5 @@ API_V1_PPT_ROUTER.include_router(PPTX_FONTS_ROUTER)
 API_V1_PPT_ROUTER.include_router(THEMES_ROUTER)
 API_V1_PPT_ROUTER.include_router(THEME_ROUTER)
 API_V1_PPT_ROUTER.include_router(AUTHORED_ROUTER)
+API_V1_PPT_ROUTER.include_router(STRUCTURED_TEMPLATES_ROUTER)
 API_V1_PPT_ROUTER.include_router(TEMPLATE_ROUTER)

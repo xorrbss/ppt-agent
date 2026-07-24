@@ -14,7 +14,12 @@ import os
 from typing import Any, Callable, Mapping
 
 
-TEMPLATE_V2_FORMAT = "v2-standard"
+# This PoC predates the production Template V2 contract.  Keep its persisted
+# marker distinct so an internal title/body fixture can never be mistaken for
+# a native ``slide.ui`` Template V2 presentation.
+INTERNAL_TEMPLATE_V2_FORMAT = "internal-v2-poc"
+# Compatibility alias for callers/tests of the isolated PoC.
+TEMPLATE_V2_FORMAT = INTERNAL_TEMPLATE_V2_FORMAT
 TEMPLATE_V2_FLAG = "ENABLE_TEMPLATE_V2_POC"
 TEMPLATE_V2_ALLOWLIST = "TEMPLATE_V2_POC_TEMPLATE_ALLOWLIST"
 INTERNAL_TEMPLATE_V2_ID = "internal-v2-title-body"

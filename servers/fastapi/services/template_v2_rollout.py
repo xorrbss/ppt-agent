@@ -1,9 +1,10 @@
-"""Operational guardrails for the isolated Template V2 proof of concept.
+"""Operational guardrails shared by internal PoC and official Template V2.
 
-This service intentionally has no persistence or HTTP dependencies.  Endpoint
-callers can apply the rollout policy before discovery/creation, while readers
-and exporters can continue to serve rows that already carry the V2 marker after
-the creation kill switch is disabled.
+This service intentionally has no persistence or HTTP dependencies. Endpoint
+callers apply their policy before discovery/creation, while readers and
+exporters can continue to serve already persisted V2 rows after the creation
+kill switch is disabled. The selected format marker distinguishes the internal
+PoC envelope from the official native ``v2-standard`` contract.
 
 Observations use a closed schema.  Presentation payloads, prompts, slide text,
 authored HTML, and raw template identifiers are never accepted by the event
@@ -16,13 +17,13 @@ from dataclasses import asdict, dataclass
 from hashlib import sha256
 import json
 import logging
-from typing import Any, Callable, Iterable, Literal, Mapping
+from typing import Any, Callable, Iterable, Literal, Mapping, Protocol
 
 from services.template_v2_poc import (
     TEMPLATE_V2_FORMAT,
     TemplateV2ContractError,
-    TemplateV2Policy,
 )
+from templates.v2.constants import TEMPLATE_V2_VERSION
 
 
 LOGGER = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ TemplateV2Operation = Literal[
     "adapter",
     "create",
     "discover",
+    "delete",
     "duplicate",
     "export",
     "read",
@@ -45,6 +47,7 @@ _OPERATIONS = {
     "adapter",
     "create",
     "discover",
+    "delete",
     "duplicate",
     "export",
     "read",
@@ -92,6 +95,7 @@ _OBSERVATION_CODES = {
     "template_v2_presentation_not_found",
     "template_v2_source_mutated",
     "template_v2_template_not_allowed",
+    "template_v2_template_id_required",
     "template_v2_unknown_internal_template",
     "template_v2_unknown_layout",
     "template_v2_unknown_node_type",
@@ -101,6 +105,15 @@ _OBSERVATION_CODES = {
 }
 
 ObservationSink = Callable[[dict[str, object]], None]
+
+
+class TemplateV2RolloutPolicy(Protocol):
+    creation_enabled: bool
+    allowed_template_ids: frozenset[str]
+
+    def can_discover(self, template_id: str) -> bool: ...
+
+    def can_read(self, presentation: Mapping[str, Any]) -> bool: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,11 +158,16 @@ class TemplateV2RolloutService:
 
     def __init__(
         self,
-        policy: TemplateV2Policy,
+        policy: TemplateV2RolloutPolicy,
         observation_sink: ObservationSink | None = None,
+        *,
+        format_marker: str = TEMPLATE_V2_FORMAT,
     ) -> None:
+        if format_marker not in {TEMPLATE_V2_FORMAT, TEMPLATE_V2_VERSION}:
+            raise ValueError("Unsupported Template V2 format marker")
         self._policy = policy
         self._observation_sink = observation_sink or _default_observation_sink
+        self._format_marker = format_marker
 
     def can_discover(self, template_id: str) -> bool:
         allowed = self._policy.can_discover(template_id)
@@ -299,7 +317,7 @@ class TemplateV2RolloutService:
             event="template_v2_rollout",
             operation=operation,
             outcome=outcome,
-            format_marker=TEMPLATE_V2_FORMAT,
+            format_marker=self._format_marker,
             template_id_hash=_template_id_hash(template_id),
             creation_enabled=self._policy.creation_enabled,
             code=_validate_code(code),

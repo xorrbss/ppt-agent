@@ -14,6 +14,7 @@ from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from pydantic import ValidationError
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -514,10 +515,30 @@ async def update_presentation(
     # that only want to change one slide must use /slide/edit, not a partial list
     # here, or the omitted slides are dropped.
     if slides:
-        # Just to make sure id is UUID
-        for slide in slides:
-            slide.presentation = uuid.UUID(slide.presentation)
-            slide.id = uuid.UUID(slide.id)
+        # SQLModel table classes are permissive when FastAPI constructs them as
+        # request parameters. Revalidate their raw trees explicitly at this
+        # persistence boundary so malformed native UI cannot surface later as
+        # an unhandled snapshot/SQLAlchemy error.
+        validated_slides: list[SlideModel] = []
+        for slide_index, slide in enumerate(slides):
+            try:
+                validated_slides.append(
+                    SlideModel.model_validate(slide.model_dump(mode="python"))
+                )
+            except ValidationError as error:
+                details = []
+                for validation_error in error.errors(include_url=False):
+                    validation_error = dict(validation_error)
+                    validation_error.pop("ctx", None)
+                    validation_error["loc"] = [
+                        "body",
+                        "slides",
+                        slide_index,
+                        *validation_error.get("loc", ()),
+                    ]
+                    details.append(validation_error)
+                raise HTTPException(status_code=422, detail=details) from error
+        slides = validated_slides
 
         # Snapshot this saved state into durable history (throttled + capped) so the
         # editor's undo survives reloads. Runs before the full-replace below.
