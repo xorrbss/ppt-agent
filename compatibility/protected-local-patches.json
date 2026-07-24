@@ -1,5 +1,10 @@
 {
   "schemaVersion": 1,
+  "remoteIntakeReview": {
+    "policy": "compatibility/upstream-intake-policy.json",
+    "disposition": "manual-reconciliation-required",
+    "rule": "An exact upstream changed-path overlap is risk evidence, not proof that a local patch is broken. The local verifier and behavioral tests remain authoritative."
+  },
   "patches": [
     {
       "id": "authored-hybrid-export",
@@ -145,6 +150,157 @@
             "test_postgresql_full_cycle_preserves_legacy_data_and_contracts",
             "test_postgresql_populated_sidecar_cycle_and_child_first_delete",
             "PPT_AGENT_REQUIRE_POSTGRES_INTEGRATION"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "authored-editability-fidelity",
+      "category": "authored-hybrid",
+      "rationale": "Preserve the 9pt editable text floor, axis-aligned straight lines, explicit clipping bounds, and no-autofit behavior without treating the word clip alone as a regression.",
+      "files": [
+        {
+          "path": "servers/nextjs/lib/authored-hybrid/native-plan.ts",
+          "requiredContains": [
+            "MIN_EDITABLE_FONT_SIZE_PT = 9",
+            "axisAlignedLineBounds",
+            "horzOverflow=\"clip\" vertOverflow=\"clip\"",
+            "<a:noAutofit/>"
+          ]
+        },
+        {
+          "path": "servers/nextjs/lib/authored-hybrid/browser-source.ts",
+          "requiredContains": [
+            "Math.max(9, round(fontSizePx * 0.75))",
+            "overflow-clipped"
+          ]
+        },
+        {
+          "path": "servers/nextjs/lib/authored-hybrid/native-plan.test.mjs",
+          "requiredContains": [
+            "horzOverflow=\"clip\"",
+            "<a:noAutofit\\/>",
+            "axis-aligned"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "presentation-export-strategy-boundary",
+      "category": "export-boundary",
+      "rationale": "Keep authored HTML, adaptive legacy, authored-hybrid, and Template V2 general export identities separate and fail closed on mixed payloads.",
+      "files": [
+        {
+          "path": "servers/nextjs/lib/presentation-export-strategy.ts",
+          "requiredContains": [
+            "\"template-v2-general\"",
+            "\"authored-hybrid\"",
+            "\"legacy-general\"",
+            "mixed_slide_payload_forbidden"
+          ]
+        },
+        {
+          "path": "servers/nextjs/lib/presentation-export-boundary.ts",
+          "requiredContains": [
+            "executePersistedPresentationExport",
+            "executeExportAtProductionBoundary"
+          ]
+        },
+        {
+          "path": "servers/nextjs/lib/presentation-export-strategy.test.ts",
+          "requiredContains": [
+            "Template V2 delegates only to the existing general executor",
+            "authored HTML delegates only to the existing hybrid executor",
+            "invalid identities fail closed before either executor"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "authentication-filesystem-share-boundaries",
+      "category": "security",
+      "rationale": "Preserve secret-free render URLs, normalized traversal checks, bounded file-format allowlists, login throttling, and opaque share-token lifecycle behavior.",
+      "files": [
+        {
+          "path": "servers/nextjs/lib/export-render-url.ts",
+          "requiredContains": [
+            "new URLSearchParams({ id: presentationId })",
+            "query.set(\"source_sha256\"",
+            "without embedding authentication material"
+          ]
+        },
+        {
+          "path": "servers/fastapi/api/middlewares.py",
+          "requiredContains": [
+            "posixpath.normpath(path)",
+            "NORMALIZED path",
+            "dot-segment traversal"
+          ]
+        },
+        {
+          "path": "servers/fastapi/utils/validators.py",
+          "requiredContains": [
+            "accepted_mime_types",
+            "accepted_extensions"
+          ]
+        },
+        {
+          "path": "servers/fastapi/api/v1/auth/router.py",
+          "requiredContains": [
+            "_LOGIN_MAX_FAILURES = 5",
+            "_LOGIN_WINDOW_SECONDS = 300",
+            "time.monotonic()",
+            "status_code=429"
+          ]
+        },
+        {
+          "path": "servers/fastapi/api/v1/ppt/endpoints/presentation_share.py",
+          "requiredContains": [
+            "secrets.token_urlsafe(32)",
+            "_MIN_TOKEN_LEN = 16",
+            "Shared presentation not found"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "windows-sqlite-sharp-electron",
+      "category": "windows-sync",
+      "rationale": "Preserve Windows SQLite path normalization, pinned Sharp/native runtime packaging, Electron resource containment, and renderer isolation settings.",
+      "files": [
+        {
+          "path": "servers/fastapi/utils/db_utils.py",
+          "requiredContains": [
+            "sqlite URLs on Windows",
+            "tempfile.gettempdir()",
+            "os.makedirs(parent, exist_ok=True)"
+          ]
+        },
+        {
+          "path": "servers/nextjs/next.config.mjs",
+          "requiredContains": [
+            "sharpNativeRuntimeTrace",
+            "node_modules/@img/sharp-"
+          ]
+        },
+        {
+          "path": "electron/scripts/verify-packaging-inputs.cjs",
+          "requiredContains": [
+            "EXPECTED_EXPORT_VERSION = \"v0.4.2\"",
+            "Export runtime marker must be"
+          ]
+        },
+        {
+          "path": "electron/app/utils/resource-root.ts",
+          "requiredContains": [
+            "resource path must stay below resourceRoot"
+          ]
+        },
+        {
+          "path": "electron/app/main.ts",
+          "requiredContains": [
+            "contextIsolation: true",
+            "nodeIntegration: false"
           ]
         }
       ]

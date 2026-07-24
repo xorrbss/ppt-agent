@@ -72,6 +72,10 @@ const upstreamTestContracts = await readJson(
   manifest.registries?.upstreamTestContracts ??
     "compatibility/upstream-test-contracts.json"
 );
+const remoteIntakePolicy = await readJson(
+  manifest.registries?.remoteIntakePolicy ??
+    "compatibility/upstream-intake-policy.json"
+);
 
 check(manifest.schemaVersion === 1, "manifest schemaVersion must be 1");
 check(ledger.schemaVersion === 1, "migration ledger schemaVersion must be 1");
@@ -79,6 +83,10 @@ check(registry.schemaVersion === 1, "protected patch registry schemaVersion must
 check(
   upstreamTestContracts.schemaVersion === 1,
   "upstream test contract registry schemaVersion must be 1"
+);
+check(
+  remoteIntakePolicy.schemaVersion === 1,
+  "remote intake policy schemaVersion must be 1"
 );
 check(
   /^[0-9a-f]{40}$/.test(manifest.baseline?.upstreamSha ?? ""),
@@ -92,6 +100,29 @@ check(
   upstreamTestContracts.baselineUpstreamSha === manifest.baseline?.upstreamSha,
   "manifest and upstream test contract baseline SHAs differ"
 );
+check(
+  remoteIntakePolicy.baselineSha === manifest.baseline?.upstreamSha,
+  "manifest and remote intake policy baseline SHAs differ"
+);
+check(
+  remoteIntakePolicy.repository === manifest.baseline?.repository,
+  "manifest and remote intake policy repositories differ"
+);
+check(
+  ledger.remoteIntakeReview?.policy === manifest.registries?.remoteIntakePolicy,
+  "migration ledger remote intake policy link differs"
+);
+check(
+  registry.remoteIntakeReview?.policy === manifest.registries?.remoteIntakePolicy,
+  "protected patch remote intake policy link differs"
+);
+checkUnique(remoteIntakePolicy.categories ?? [], (entry) => entry.id, "remote intake categories");
+for (const category of remoteIntakePolicy.categories ?? []) {
+  check(
+    ["info", "review", "contract-risk"].includes(category.severity),
+    `remote intake category ${category.id} has invalid severity`
+  );
+}
 
 checkUnique(manifest.versions ?? [], (entry) => entry.id, "version ids");
 for (const version of manifest.versions ?? []) {

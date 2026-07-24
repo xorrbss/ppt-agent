@@ -1,6 +1,11 @@
 {
   "schemaVersion": 1,
   "baselineUpstreamSha": "57b194b234b42c8b28f8a507a30322de200e3e83",
+  "remoteIntakeReview": {
+    "policy": "compatibility/upstream-intake-policy.json",
+    "disposition": "report-only-until-human-review",
+    "rule": "A changed upstream Alembic file is unreviewed evidence. The intake tool must not add revisions, rewrite translations, select a head, merge, or cherry-pick."
+  },
   "commonRevision": "c7b70d0f31b1",
   "upstreamTipRevision": "b8e2f4a7c9d1",
   "localTipRevision": "0a1b2c3d4e5f",

@@ -198,6 +198,7 @@
   "registries": {
     "migrationTranslationLedger": "compatibility/migration-translation-ledger.json",
     "protectedLocalPatches": "compatibility/protected-local-patches.json",
-    "upstreamTestContracts": "compatibility/upstream-test-contracts.json"
+    "upstreamTestContracts": "compatibility/upstream-test-contracts.json",
+    "remoteIntakePolicy": "compatibility/upstream-intake-policy.json"
   }
 }
