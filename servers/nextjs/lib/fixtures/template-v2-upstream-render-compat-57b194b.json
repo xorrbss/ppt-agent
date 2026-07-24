@@ -1,0 +1,267 @@
+{
+  "upstream_sha": "57b194b234b42c8b28f8a507a30322de200e3e83",
+  "source_fixture": "servers/fastapi/tests/fixtures/template_v2/upstream-elements-57b194b.json",
+  "scores": {
+    "direct_wire": {
+      "supported": 10,
+      "unsupported": 1,
+      "total": 11,
+      "percent": 90.91
+    },
+    "after_upstream_coercion": {
+      "supported": 11,
+      "unsupported": 0,
+      "total": 11,
+      "percent": 100
+    }
+  },
+  "documented_coercions": [
+    {
+      "type": "chart",
+      "field": "data_labels",
+      "from": true,
+      "to": "top",
+      "upstream_validator": "Chart._coerce_legacy_data_labels"
+    }
+  ],
+  "cases": [
+    {
+      "type": "text",
+      "direct": "supported",
+      "plan": {
+        "frame": [0, 0, null, null],
+        "semantic_key": "text",
+        "semantic": {
+          "alignment": null,
+          "stroke": null,
+          "shadow": null
+        }
+      },
+      "renderer_markers": [
+        "data-template-v2-element=\"text\"",
+        "data-element-name=\"title\"",
+        "Title"
+      ]
+    },
+    {
+      "type": "container",
+      "direct": "supported",
+      "plan": {
+        "frame": [0, 0, null, null],
+        "semantic_key": "container",
+        "semantic": {
+          "alignment": null,
+          "stroke": null,
+          "shadow": null
+        }
+      },
+      "renderer_markers": [
+        "data-template-v2-element=\"container\"",
+        "background:#FFFFFF"
+      ]
+    },
+    {
+      "type": "image",
+      "direct": "supported",
+      "plan": {
+        "frame": [0, 0, null, null],
+        "semantic_key": "image",
+        "semantic": {
+          "fit": "fill",
+          "flipH": false,
+          "flipV": false,
+          "opacity": 1,
+          "focusX": 50,
+          "focusY": 50,
+          "cropScale": 1,
+          "clipPath": null,
+          "color": null,
+          "isIcon": false
+        }
+      },
+      "renderer_markers": [
+        "data-template-v2-element=\"image\"",
+        "data-image-fit=\"fill\"",
+        "src=\"/app_data/images/hero.png\""
+      ]
+    },
+    {
+      "type": "text-list",
+      "direct": "supported",
+      "plan": {
+        "frame": [0, 0, null, null],
+        "semantic_key": null,
+        "semantic": null
+      },
+      "renderer_markers": [
+        "data-template-v2-element=\"text-list\"",
+        "data-element-name=\"bullets\"",
+        "First"
+      ]
+    },
+    {
+      "type": "table",
+      "direct": "supported",
+      "plan": {
+        "frame": [0, 0, null, null],
+        "semantic_key": null,
+        "semantic": null
+      },
+      "renderer_markers": [
+        "data-template-v2-element=\"table\"",
+        "Metric",
+        "Revenue"
+      ]
+    },
+    {
+      "type": "vector",
+      "direct": "supported",
+      "plan": {
+        "frame": [0, 0, 100, 80],
+        "semantic_key": "vector",
+        "semantic": {
+          "shape": "polygon",
+          "closed": true,
+          "tension": null,
+          "segments": null,
+          "frame": {
+            "x": 0,
+            "y": 0,
+            "width": 100,
+            "height": 80
+          },
+          "points": [
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": 100,
+              "y": 80
+            }
+          ]
+        }
+      },
+      "renderer_markers": [
+        "data-template-v2-element=\"vector\"",
+        "<polygon points=\"0,0 100,80\""
+      ]
+    },
+    {
+      "type": "chart",
+      "direct": "unsupported",
+      "plan_error": "template_v2_render_plan_invalid_chart_data_labels:upstream.chart.0.0.data_labels",
+      "renderer_error": "template_v2_renderer_invalid_chart_data_labels:0.0.0.data_labels",
+      "normalized_plan": {
+        "frame": [0, 0, null, null],
+        "semantic_key": "chart",
+        "semantic": {
+          "type": "bar",
+          "categories": [
+            "Q1",
+            "Q2"
+          ],
+          "series": [
+            {
+              "name": "Revenue",
+              "values": [
+                10,
+                12
+              ]
+            }
+          ],
+          "colors": [],
+          "title": null,
+          "titleColor": "#111827",
+          "legendColor": "#374151",
+          "axisColor": "#6b7280",
+          "gridColor": "#e5e7eb",
+          "xAxis": false,
+          "yAxis": false,
+          "xAxisTitle": null,
+          "yAxisTitle": null,
+          "xAxisGrid": false,
+          "yAxisGrid": false,
+          "dataLabels": "top",
+          "legend": false,
+          "source": null,
+          "horizontal": false,
+          "stacked": false
+        }
+      },
+      "renderer_markers": [
+        "data-template-v2-element=\"chart\"",
+        "data-chart-type=\"bar\"",
+        "data-chart-data-label=\"top\"",
+        ">Q1<",
+        ">10<"
+      ]
+    },
+    {
+      "type": "infographic",
+      "direct": "supported",
+      "plan": {
+        "frame": [0, 0, null, null],
+        "semantic_key": "infographic",
+        "semantic": {
+          "type": "progress_bar",
+          "minimum": 0,
+          "maximum": 100,
+          "value": 64,
+          "ratio": 0.64,
+          "colors": [
+            "#E5E7EB",
+            "#2563EB"
+          ]
+        }
+      },
+      "renderer_markers": [
+        "data-template-v2-element=\"infographic\"",
+        "data-infographic-type=\"progress_bar\"",
+        "width:64%",
+        ">64%<"
+      ]
+    },
+    {
+      "type": "flex",
+      "direct": "supported",
+      "plan": {
+        "frame": [0, 0, 0, 0],
+        "semantic_key": null,
+        "semantic": null
+      },
+      "renderer_markers": [
+        "data-template-v2-element=\"flex\"",
+        "data-template-v2-layout=\"absolute-plan\"",
+        "data-element-name=\"cards\""
+      ]
+    },
+    {
+      "type": "grid",
+      "direct": "supported",
+      "plan": {
+        "frame": [0, 0, 0, 0],
+        "semantic_key": null,
+        "semantic": null
+      },
+      "renderer_markers": [
+        "data-template-v2-element=\"grid\"",
+        "data-template-v2-layout=\"absolute-plan\"",
+        "data-element-name=\"metrics-grid\""
+      ]
+    },
+    {
+      "type": "group",
+      "direct": "supported",
+      "plan": {
+        "frame": [0, 0, null, null],
+        "semantic_key": null,
+        "semantic": null
+      },
+      "renderer_markers": [
+        "data-template-v2-element=\"group\"",
+        "data-element-name=\"decoration\""
+      ]
+    }
+  ]
+}

@@ -41,7 +41,9 @@ TEMPLATE_ROUTER.get("/all", response_model=list[TemplateDetail])(get_all_templat
 TEMPLATE_ROUTER.get(
     "/{template_id}/layouts", response_model=GetTemplateLayoutsResponse
 )(get_layouts)
-TEMPLATE_ROUTER.get("/{id}", response_model=PresentationLayoutModel)(get_template_by_id)
+TEMPLATE_ROUTER.get("/{template_id}", response_model=PresentationLayoutModel)(
+    get_template_by_id
+)
 TEMPLATE_ROUTER.get("/{id}/example", response_model=TemplateExample)(
     get_template_example
 )

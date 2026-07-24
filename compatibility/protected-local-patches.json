@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "patches": [
+    {
+      "id": "authored-hybrid-export",
+      "category": "authored-hybrid",
+      "rationale": "Preserve editable native layers, fidelity fallback, output containment, bounded fetches, and network-isolation coverage during upstream rebases.",
+      "files": [
+        {
+          "path": "servers/nextjs/lib/authored-hybrid/export.ts",
+          "requiredContains": [
+            "HYBRID_CACHE_VERSION",
+            "resolveSafeFidelityPptx",
+            "fs.realpath",
+            "runAuthoredHybridPresentationExport"
+          ]
+        },
+        {
+          "path": "servers/nextjs/lib/authored-hybrid/security.test.mjs",
+          "requiredContains": [
+            "Chrome blocks network requests",
+            "presentation response reads are byte-bounded"
+          ]
+        },
+        {
+          "path": "servers/nextjs/app/api/export-presentation/route.ts",
+          "requiredContains": [
+            "runAuthoredHybridPresentationExport",
+            "path.relative(exportsDirectory, outPath)",
+            "path.isAbsolute(relativePath)"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "windows-export-runtime-sync",
+      "category": "windows-sync",
+      "rationale": "Keep the pinned exporter runtime reproducible and executable on Windows as well as Linux.",
+      "files": [
+        {
+          "path": "scripts/sync-presentation-export.cjs",
+          "requiredContains": [
+            "--check-only",
+            "EXPORT_RUNTIME_VERSION",
+            "process.platform === \"win32\"",
+            "powershell",
+            ".installed-version"
+          ]
+        },
+        {
+          "path": "servers/nextjs/lib/run-bundled-presentation-export.ts",
+          "requiredContains": [
+            "process.platform === \"win32\"",
+            "path.isAbsolute(pathValue)",
+            "spawn(process.execPath"
+          ]
+        },
+        {
+          "path": "presentation-export/.installed-version",
+          "requiredContains": ["v0.4.2"]
+        }
+      ]
+    },
+    {
+      "id": "export-security-boundaries",
+      "category": "security",
+      "rationale": "Protect loopback-only render URLs, path containment, finite process deadlines, and cross-platform process-tree termination.",
+      "files": [
+        {
+          "path": "servers/nextjs/lib/export-render-url.ts",
+          "requiredContains": ["http://127.0.0.1:"]
+        },
+        {
+          "path": "servers/nextjs/lib/export-process-supervisor.ts",
+          "requiredContains": [
+            "DEFAULT_EXPORT_DEADLINE_MS",
+            "presentation_export_timeout",
+            "taskkill.exe",
+            "SIGKILL"
+          ]
+        },
+        {
+          "path": "servers/nextjs/lib/authored-hybrid/export.ts",
+          "requiredContains": [
+            "resolved.startsWith(exportsDirectory + path.sep)",
+            "mode: 0o600"
+          ]
+        }
+      ]
+    }
+  ]
+}

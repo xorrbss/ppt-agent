@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "baselineUpstreamSha": "57b194b234b42c8b28f8a507a30322de200e3e83",
+  "commonRevision": "c7b70d0f31b1",
+  "upstreamTipRevision": "b8e2f4a7c9d1",
+  "localTipRevision": "f9a0b1c2d3e4",
+  "upstreamChain": [
+    { "revision": "6e4a1b2c3d5f", "downRevision": "c7b70d0f31b1", "file": "6e4a1b2c3d5f_add_template_v2_and_presentation_version.py" },
+    { "revision": "7f5b2c3d4e6a", "downRevision": "6e4a1b2c3d5f", "file": "7f5b2c3d4e6a_add_slide_ui.py" },
+    { "revision": "8a6c4d2e1f30", "downRevision": "7f5b2c3d4e6a", "file": "8a6c4d2e1f30_add_merged_components_to_template_v2.py" },
+    { "revision": "9b2d1c4e5f6a", "downRevision": "8a6c4d2e1f30", "file": "9b2d1c4e5f6a_add_fonts_column_to_presentations.py" },
+    { "revision": "1d9a4c7b8e2f", "downRevision": "9b2d1c4e5f6a", "file": "1d9a4c7b8e2f_add_template_v2_chat_scope.py" },
+    { "revision": "2c8f4a1b9d7e", "downRevision": "1d9a4c7b8e2f", "file": "2c8f4a1b9d7e_make_template_v2_layouts_nullable.py" },
+    { "revision": "5d7e9a1b2c3f", "downRevision": "2c8f4a1b9d7e", "file": "5d7e9a1b2c3f_add_font_uploads.py" },
+    { "revision": "3f2a1b4c5d6e", "downRevision": "5d7e9a1b2c3f", "file": "3f2a1b4c5d6e_template_v2_ids_to_strings.py" },
+    { "revision": "4b7c9d0e1f2a", "downRevision": "3f2a1b4c5d6e", "file": "4b7c9d0e1f2a_add_is_default_to_template_v2.py" },
+    { "revision": "a7d4c9e2f1b3", "downRevision": "4b7c9d0e1f2a", "file": "a7d4c9e2f1b3_add_async_tasks.py" },
+    { "revision": "b8e2f4a7c9d1", "downRevision": "a7d4c9e2f1b3", "file": "b8e2f4a7c9d1_normalize_async_task_statuses.py" }
+  ],
+  "localChain": [
+    { "revision": "c8d1e2f3a4b5", "downRevision": "c7b70d0f31b1", "file": "c8d1e2f3a4b5_add_deck_plan_column.py" },
+    { "revision": "d1f2a3b4c5e6", "downRevision": "c8d1e2f3a4b5", "file": "d1f2a3b4c5e6_add_mode_column.py" },
+    { "revision": "e2f3a4b5c6d7", "downRevision": "d1f2a3b4c5e6", "file": "e2f3a4b5c6d7_add_presentation_versions_table.py" },
+    { "revision": "f3a4b5c6d7e8", "downRevision": "e2f3a4b5c6d7", "file": "f3a4b5c6d7e8_add_share_token_column.py" },
+    { "revision": "a4b5c6d7e8f9", "downRevision": "f3a4b5c6d7e8", "file": "a4b5c6d7e8f9_add_template_v2_phase_one.py" },
+    { "revision": "b5c6d7e8f9a0", "downRevision": "a4b5c6d7e8f9", "file": "b5c6d7e8f9a0_add_template_v2_pptx_imports.py" },
+    { "revision": "c6d7e8f9a0b1", "downRevision": "b5c6d7e8f9a0", "file": "c6d7e8f9a0b1_add_template_v2_revision.py" },
+    { "revision": "d7e8f9a0b1c2", "downRevision": "c6d7e8f9a0b1", "file": "d7e8f9a0b1c2_add_template_v2_import_attempt_lease.py" },
+    { "revision": "e8f9a0b1c2d3", "downRevision": "d7e8f9a0b1c2", "file": "e8f9a0b1c2d3_add_template_v2_source_retention.py" },
+    { "revision": "f9a0b1c2d3e4", "downRevision": "e8f9a0b1c2d3", "file": "f9a0b1c2d3e4_add_template_v2_local_state_sidecar.py" }
+  ],
+  "translations": [
+    {
+      "upstreamRevision": "6e4a1b2c3d5f",
+      "localRevisions": ["e2f3a4b5c6d7", "a4b5c6d7e8f9"],
+      "disposition": "split-and-consolidated",
+      "note": "Presentation versions remain separate locally; the initial Template V2 schema is consolidated into the guarded Phase 1 migration."
+    },
+    {
+      "upstreamRevision": "7f5b2c3d4e6a",
+      "localRevisions": ["a4b5c6d7e8f9"],
+      "disposition": "consolidated",
+      "note": "Frozen slide UI state is part of the guarded local Template V2 schema."
+    },
+    {
+      "upstreamRevision": "8a6c4d2e1f30",
+      "localRevisions": ["a4b5c6d7e8f9"],
+      "disposition": "consolidated",
+      "note": "merged_components is created by the local Phase 1 migration."
+    },
+    {
+      "upstreamRevision": "9b2d1c4e5f6a",
+      "localRevisions": [],
+      "disposition": "already-in-local-baseline",
+      "evidenceFiles": ["servers/fastapi/alembic/versions/00b3c27a13bc_init.py"],
+      "note": "The local baseline already creates presentations.fonts."
+    },
+    {
+      "upstreamRevision": "1d9a4c7b8e2f",
+      "localRevisions": [],
+      "disposition": "intentionally-untranslated",
+      "note": "The local Template V2 product flow does not persist the upstream chat-scope foreign key."
+    },
+    {
+      "upstreamRevision": "2c8f4a1b9d7e",
+      "localRevisions": ["a4b5c6d7e8f9"],
+      "disposition": "consolidated",
+      "note": "Nullable layout/component payloads are created in their final form by Phase 1."
+    },
+    {
+      "upstreamRevision": "5d7e9a1b2c3f",
+      "localRevisions": [],
+      "disposition": "intentionally-untranslated",
+      "note": "The upstream font_uploads persistence table is outside the local Template V2 compatibility surface."
+    },
+    {
+      "upstreamRevision": "3f2a1b4c5d6e",
+      "localRevisions": ["a4b5c6d7e8f9"],
+      "disposition": "consolidated",
+      "note": "Template and presentation identifiers are created in their final local types."
+    },
+    {
+      "upstreamRevision": "4b7c9d0e1f2a",
+      "localRevisions": ["a4b5c6d7e8f9"],
+      "disposition": "consolidated",
+      "note": "is_default is created by Phase 1 with its final default and nullability."
+    },
+    {
+      "upstreamRevision": "a7d4c9e2f1b3",
+      "localRevisions": [],
+      "disposition": "intentionally-untranslated",
+      "evidenceFiles": ["servers/fastapi/alembic/versions/00b3c27a13bc_init.py"],
+      "note": "The local runtime retains async_presentation_generation_tasks rather than introducing upstream async_tasks."
+    },
+    {
+      "upstreamRevision": "b8e2f4a7c9d1",
+      "localRevisions": [],
+      "disposition": "not-applicable",
+      "note": "Status normalization targets the upstream-only async_tasks table."
+    }
+  ],
+  "localOnlyExtensions": [
+    {
+      "revision": "b5c6d7e8f9a0",
+      "purpose": "Durable PPTX import jobs"
+    },
+    {
+      "revision": "c6d7e8f9a0b1",
+      "purpose": "Optimistic Template V2 revision"
+    },
+    {
+      "revision": "d7e8f9a0b1c2",
+      "purpose": "Import attempt ownership and leases"
+    },
+    {
+      "revision": "e8f9a0b1c2d3",
+      "purpose": "Private source-retention cleanup audit"
+    },
+    {
+      "revision": "f9a0b1c2d3e4",
+      "purpose": "Private Template V2 local revision sidecar",
+      "ownershipPolicy": "presentation-owned",
+      "legacyColumnDropGuard": "Do not drop template_v2.presentation_id until the dropping migration first validates complete, non-orphaned sidecars and atomically installs a verified presentations-to-template_v2 delete path. The sidecar presentation FK only deletes the sidecar child."
+    }
+  ]
+}

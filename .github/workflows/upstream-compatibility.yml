@@ -1,0 +1,35 @@
+name: Upstream compatibility
+
+on:
+  pull_request:
+    paths:
+      - "compatibility/**"
+      - "scripts/verify-upstream-compatibility.mjs"
+      - "scripts/verify-upstream-compatibility.test.mjs"
+      - "package.json"
+      - "presentation-export/.installed-version"
+      - "servers/nextjs/package.json"
+      - "servers/nextjs/lib/template-v2-general-renderer.mjs"
+      - "servers/nextjs/lib/authored-hybrid/**"
+      - "servers/nextjs/lib/export-*.ts"
+      - "servers/nextjs/lib/presentation-export-boundary.ts"
+      - "servers/nextjs/lib/run-bundled-presentation-export.ts"
+      - "servers/nextjs/app/api/export-presentation/route.ts"
+      - "servers/fastapi/api/v1/ppt/**"
+      - "servers/fastapi/alembic/versions/**"
+      - ".github/workflows/upstream-compatibility.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify compatibility manifest and protected patches
+        run: node --test scripts/verify-upstream-compatibility.test.mjs

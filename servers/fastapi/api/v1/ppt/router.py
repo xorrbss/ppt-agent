@@ -30,6 +30,9 @@ from api.v1.ppt.endpoints.structured_templates import (
 from api.v1.ppt.endpoints.structured_template_imports import (
     STRUCTURED_TEMPLATE_IMPORTS_ROUTER,
 )
+from api.v1.ppt.endpoints.template_v2_compat import (
+    TEMPLATE_V2_COMPAT_ROUTER,
+)
 from templates.router import TEMPLATE_ROUTER
 
 
@@ -59,6 +62,7 @@ API_V1_PPT_ROUTER.include_router(PPTX_FONTS_ROUTER)
 API_V1_PPT_ROUTER.include_router(THEMES_ROUTER)
 API_V1_PPT_ROUTER.include_router(THEME_ROUTER)
 API_V1_PPT_ROUTER.include_router(AUTHORED_ROUTER)
-API_V1_PPT_ROUTER.include_router(STRUCTURED_TEMPLATES_ROUTER)
 API_V1_PPT_ROUTER.include_router(STRUCTURED_TEMPLATE_IMPORTS_ROUTER)
+API_V1_PPT_ROUTER.include_router(STRUCTURED_TEMPLATES_ROUTER)
+API_V1_PPT_ROUTER.include_router(TEMPLATE_V2_COMPAT_ROUTER)
 API_V1_PPT_ROUTER.include_router(TEMPLATE_ROUTER)

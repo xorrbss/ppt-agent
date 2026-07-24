@@ -345,29 +345,29 @@ async def get_layouts(
 
 
 async def get_template_by_id(
-    id: str = Path(
+    template_id: str = Path(
         ...,
         description=f"The id of the template, must be one of {', '.join(DEFAULT_TEMPLATES)} or your custom template",
     ),
     sql_session: AsyncSession = Depends(get_async_session),
 ):
-    if id.startswith("custom-"):
+    if template_id.startswith("custom-"):
         try:
-            template_id = uuid.UUID(id.replace("custom-", ""))
+            custom_template_id = uuid.UUID(template_id.replace("custom-", ""))
         except Exception as exc:
             raise HTTPException(
                 status_code=400,
                 detail="Template not found. Please use a valid template.",
             ) from exc
 
-        template = await sql_session.get(TemplateModel, template_id)
+        template = await sql_session.get(TemplateModel, custom_template_id)
         if not template:
             raise HTTPException(
                 status_code=400,
                 detail="Template not found. Please use a valid template.",
             )
 
-    return await get_layout_by_name(id)
+    return await get_layout_by_name(template_id)
 
 
 async def get_template_example(
@@ -377,7 +377,7 @@ async def get_template_example(
     ),
     sql_session: AsyncSession = Depends(get_async_session),
 ):
-    template = await get_template_by_id(id=id, sql_session=sql_session)
+    template = await get_template_by_id(template_id=id, sql_session=sql_session)
     return TemplateExample(**build_template_example(id, template))
 
 
