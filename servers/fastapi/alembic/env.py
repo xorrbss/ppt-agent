@@ -28,6 +28,13 @@ from models.sql.presentation_layout_code import (  # noqa: F401, E402
 )
 from models.sql.slide import SlideModel  # noqa: F401, E402
 from models.sql.template import TemplateModel  # noqa: F401, E402
+from models.sql.template_v2 import TemplateV2  # noqa: F401, E402
+from models.sql.template_v2_local_state import (  # noqa: F401, E402
+    TemplateV2LocalState,
+)
+from models.sql.template_v2_pptx_import import (  # noqa: F401, E402
+    TemplateV2PptxImport,
+)
 from models.sql.template_create_info import TemplateCreateInfoModel  # noqa: F401, E402
 from models.sql.webhook_subscription import WebhookSubscription  # noqa: F401, E402
 
