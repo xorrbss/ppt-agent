@@ -30,6 +30,7 @@ import {
 } from "@/lib/template-v2-studio-autosave";
 import { getTemplateV2HistoryKeyboardIntent } from "@/lib/template-v2-studio-keyboard";
 import { toggleTemplateV2Selection } from "@/lib/template-v2-studio-ui";
+import type { TemplateV2ConflictSnapshot } from "@/lib/template-v2-studio-conflict";
 import {
   adaptUpstreamTemplateV2LayoutsToStudio,
   serializeStudioLayoutsForUpstream,
@@ -37,6 +38,9 @@ import {
 } from "@/lib/template-v2-upstream-compat";
 import { getApiUrl } from "@/utils/api";
 import TemplateV2Canvas from "./TemplateV2Canvas";
+import TemplateV2ConflictRecovery from "./TemplateV2ConflictRecovery";
+import TemplateV2ContentInspector from "./TemplateV2ContentInspector";
+import TemplateV2GeometryInspector from "./TemplateV2GeometryInspector";
 import TemplateV2PptxImportPanel from "./TemplateV2PptxImportPanel";
 
 interface StructuredTemplate {
@@ -211,10 +215,10 @@ export default function TemplateV2Studio({
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [conflict, setConflict] = useState(false);
+  const [conflict, setConflict] =
+    useState<TemplateV2ConflictSnapshot | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const saveTokenRef = useRef(0);
-  const textTransactionRef = useRef(0);
   const mountedRef = useRef(true);
   const lifecycleFlushRef = useRef(false);
   const conflictRef = useRef(false);
@@ -383,7 +387,7 @@ export default function TemplateV2Studio({
     conflictRef.current = false;
     setLoading(true);
     setError(null);
-    setConflict(false);
+    setConflict(null);
     fetch(
       getApiUrl(
         `/api/v1/ppt/structured-templates/${encodeURIComponent(templateId)}`
@@ -534,9 +538,13 @@ export default function TemplateV2Studio({
       setSaving(true);
       setError(null);
       setNotice(null);
-      setConflict(false);
+      setConflict(null);
     }
     conflictRef.current = false;
+    const serializedLayouts = serializeStudioLayoutsForUpstream(
+      currentTemplate.layoutsDocument,
+      layoutsSnapshot
+    );
     try {
       const response = await fetch(
         getApiUrl(
@@ -552,10 +560,7 @@ export default function TemplateV2Studio({
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            layouts: serializeStudioLayoutsForUpstream(
-              currentTemplate.layoutsDocument,
-              layoutsSnapshot
-            ),
+            layouts: serializedLayouts,
             expected_revision: revisionSnapshot,
           }),
         }
@@ -569,7 +574,18 @@ export default function TemplateV2Studio({
           payload.detail.code === "template_v2_revision_conflict"
         ) {
           conflictRef.current = true;
-          if (mountedRef.current) setConflict(true);
+          const currentRevision =
+            typeof payload.detail.current_revision === "number"
+              ? payload.detail.current_revision
+              : revisionSnapshot;
+          if (mountedRef.current) {
+            setConflict({
+              templateId: currentTemplate.id,
+              expectedRevision: revisionSnapshot,
+              currentRevision,
+              layouts: serializedLayouts,
+            });
+          }
         }
         throw new Error(errorMessage(response.status, payload));
       }
@@ -788,7 +804,7 @@ export default function TemplateV2Studio({
           <button
             type="button"
             onClick={() => void flushAutosave()}
-            disabled={!state.dirty || saving || conflict}
+            disabled={!state.dirty || saving || Boolean(conflict)}
             title={
               conflict
                 ? "Reload the server version before saving again."
@@ -810,25 +826,16 @@ export default function TemplateV2Studio({
         >
           <span>{error}</span>
           {conflict ? (
-            <button
-              type="button"
-              className="rounded border border-red-300/40 px-3 py-1"
-              onClick={() => {
-                if (
-                  window.confirm(
-                    "Reload the server version? Unsaved local edits will be discarded."
-                  )
-                ) {
-                  autosaveRef.current?.discardPending();
-                  conflictRef.current = false;
-                  setConflict(false);
-                  setError(null);
-                  setReloadKey((value) => value + 1);
-                }
+            <TemplateV2ConflictRecovery
+              snapshot={conflict}
+              onReload={() => {
+                autosaveRef.current?.discardPending();
+                conflictRef.current = false;
+                setConflict(null);
+                setError(null);
+                setReloadKey((value) => value + 1);
               }}
-            >
-              Reload server version
-            </button>
+            />
           ) : null}
         </div>
       ) : null}
@@ -1107,46 +1114,44 @@ export default function TemplateV2Studio({
               </p>
             ) : null}
           </section>
-          {selectedElement?.type === "text" &&
+          {selectedElement &&
           state.selection &&
-          state.selectionSet.length === 1 &&
-          Array.isArray(selectedElement.runs) ? (
-            <div className="mt-5 space-y-4">
-              <p className="text-sm font-medium">
-                Text runs · {pathLabel(state.selection.elementPath)}
-              </p>
-              {selectedElement.runs.map((run, runIndex) =>
-                isJsonRecord(run) ? (
-                  <label key={runIndex} className="block text-xs text-slate-400">
-                    Run {runIndex + 1}
-                    <textarea
-                      value={stringValue(run.text, "")}
-                      disabled={selectionControls.lockConflict}
-                      onFocus={() => {
-                        textTransactionRef.current += 1;
-                      }}
-                      onBlur={() =>
-                        dispatch({
-                          type: "select",
-                          selection: state.selection,
-                        })
-                      }
-                      onChange={(event) => {
-                        dispatch({
-                          type: "edit-text-run",
-                          selection: state.selection as StudioSelection,
-                          runIndex,
-                          text: event.target.value,
-                          historyKey: `text-${textTransactionRef.current}`,
-                        });
-                        setNotice(null);
-                      }}
-                      className="mt-1 min-h-20 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-violet-400"
-                    />
-                  </label>
-                ) : null
-              )}
-            </div>
+          state.selectionSet.length === 1 ? (
+            <>
+              <TemplateV2GeometryInspector
+                element={selectedElement}
+                disabled={selectionControls.lockConflict}
+                onChange={(geometry) => {
+                  dispatch({
+                    type: "update-element-geometry",
+                    selection: state.selection as StudioSelection,
+                    geometry,
+                  });
+                  setNotice(null);
+                }}
+              />
+              <TemplateV2ContentInspector
+                element={selectedElement}
+                pathLabel={pathLabel(state.selection.elementPath)}
+                disabled={selectionControls.lockConflict}
+                onBlur={() =>
+                  dispatch({
+                    type: "select",
+                    selection: state.selection,
+                  })
+                }
+                onEdit={(target, text, historyKey) => {
+                  dispatch({
+                    type: "edit-content-run",
+                    selection: state.selection as StudioSelection,
+                    target,
+                    text,
+                    historyKey,
+                  });
+                  setNotice(null);
+                }}
+              />
+            </>
           ) : (
             <p className="mt-5 rounded-lg bg-slate-950 p-3 text-sm text-slate-400">
               Select a text, container, image, or group. Groups are move-only;

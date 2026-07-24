@@ -30,7 +30,7 @@
     {
       "id": "rich-elements",
       "directory": "03-rich-elements",
-      "expectedText": ["Renderer contract", "Fast", "Safe", "Header", "Value", "Revenue", "FY26", "Plan", "Quarter", "Q1", "Q2", "Q3", "40", "65", "88", "20", "15", "12", "Finance model", "72%"],
+      "expectedText": ["Renderer contract", "Fast", "Safe", "Header", "Value", "Grouped", "Revenue", "FY26", "Plan", "Quarter", "Q1", "Q2", "Q3", "40", "65", "88", "20", "15", "12", "Finance model", "72%"],
       "templateIdentity": { "version": "v2-standard", "mode": "template" },
       "tolerances": { "maxMeanAbsoluteError": 10, "maxBadPixelRatio": 0.035, "maxBadComponentPixels": 7000 }
     }

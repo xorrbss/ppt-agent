@@ -127,3 +127,20 @@ jobs:
             1|2) exit "$INTAKE_CODE" ;;
             *) echo "Unexpected or missing intake exit code: $INTAKE_CODE" >&2; exit 70 ;;
           esac
+      - name: Signal external intake heartbeat
+        if: success()
+        continue-on-error: true
+        shell: bash
+        env:
+          HEARTBEAT_URL: ${{ secrets.UPSTREAM_INTAKE_HEARTBEAT_URL }}
+        run: |
+          if [ -z "$HEARTBEAT_URL" ]; then
+            echo "::warning::UPSTREAM_INTAKE_HEARTBEAT_URL is unset; external stale-cron detection is inactive."
+            exit 0
+          fi
+          curl --fail --silent --show-error \
+            --retry 3 \
+            --retry-all-errors \
+            --max-time 20 \
+            --request POST \
+            "$HEARTBEAT_URL"

@@ -17,6 +17,13 @@ This directory records the U0 compatibility contract against upstream commit
   official `presenton/presenton:main`, including the pinned commit metadata,
   review categories, and contract-risk escalation rules.
 
+The verifier derives renderer, endpoint, and reviewed-test totals from these
+registries instead of pinning duplicate numeric counts. Baseline SHA,
+repository, commit timestamp (normalized across time zones), and subject must
+agree between the compatibility manifest and intake policy. Protected files may
+also declare `forbiddenContains` anchors for negative invariants such as
+loopback exposure or insecure Electron web preferences.
+
 The two commands deliberately have different responsibilities:
 
 - `node scripts/verify-upstream-compatibility.mjs` verifies the checked-out

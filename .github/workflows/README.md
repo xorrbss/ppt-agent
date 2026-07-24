@@ -21,9 +21,12 @@ It does not decide whether the official upstream branch moved.
 - scheduled/dispatch runs additionally open or update a single rolling
   `upstream-intake`-labelled issue whenever drift is detected or an intake
   error occurs, so reviewable movement is not lost in a green run and repeated
-  errors do not spawn duplicate issues. Detecting that the nightly stopped
-  running entirely (GitHub disables cron after prolonged inactivity) needs an
-  external uptime monitor and is intentionally out of scope.
+  errors do not spawn duplicate issues;
+- a successful live run POSTs to the secret
+  `UPSTREAM_INTAKE_HEARTBEAT_URL`. Configure that URL in an external dead-man
+  monitor with a window longer than the daily schedule (36 hours is
+  recommended). A missing secret leaves intake functional but emits a warning
+  because stale-cron detection is inactive.
 
 Both workflows use read-only repository permissions. The intake checkout and
 runtime actions are immutable digest pins, credentials are not persisted, and
@@ -37,6 +40,29 @@ Changes to the compatibility registries also trigger
 `upstream-compatibility.yml`, which prepares the pinned export runtime before
 running the local verifier. That runtime-dependent verifier is intentionally
 not duplicated in the intake workflow's offline job.
+
+### Required status checks
+
+Protect `main` with these exact, always-present pull-request checks:
+
+- `Test All Applications / Test Main FastAPI (locked + system + binary)`
+- `Test All Applications / Test Main Next.js`
+
+The following checks are path- or matrix-scoped and therefore must not be added
+as global branch-protection requirements in their current form; GitHub would
+leave unrelated pull requests waiting for a check that was never created:
+
+- `Upstream compatibility / verify`
+- `Upstream compatibility / delete-safety-windows`
+- `Upstream compatibility / template-v2-postgresql`
+- `Template V2 Export Fidelity / ubuntu-latest structural + visual`
+- `Template V2 Export Fidelity / windows-latest structural + visual`
+- `G4 round-trip and release gates / production export runtime stage`
+- `G4 round-trip and release gates / Windows v0.4.2 release gate`
+- `G4 round-trip and release gates / adaptive PPTX round-trip`
+
+Repository ruleset changes remain an administrator action. After changing
+workflow or job `name` fields, update branch protection and this list together.
 
 ## Workflow roles
 

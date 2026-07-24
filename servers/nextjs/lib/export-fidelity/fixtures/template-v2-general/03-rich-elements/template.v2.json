@@ -129,6 +129,30 @@
             "stroke": { "color": "#b45309", "width": 3 }
           },
           {
+            "type": "group",
+            "position": { "x": 540, "y": 470 },
+            "size": { "width": 190, "height": 90 },
+            "children": [{
+              "type": "container",
+              "position": { "x": 0, "y": 0 },
+              "size": { "width": 190, "height": 90 },
+              "fill": { "color": "#fef3c7" },
+              "border_radius": { "tl": 12, "tr": 12, "bl": 12, "br": 12 },
+              "child": {
+                "type": "text",
+                "size": { "width": 190, "height": 90 },
+                "font": { "size": 20, "family": "Arial", "color": "#92400e", "bold": true },
+                "alignment": { "horizontal": "center", "vertical": "middle" },
+                "runs": [{ "text": "Grouped" }],
+                "decorative": false,
+                "name": "group label",
+                "max_length": 40,
+                "min_length": 1
+              }
+            }],
+            "name": "group"
+          },
+          {
             "type": "image",
             "position": { "x": 718, "y": 36 },
             "size": { "width": 52, "height": 52 },

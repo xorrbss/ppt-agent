@@ -4,6 +4,10 @@ import {
   normalizeTemplateV2SelectionSet,
   templateV2SelectionKey,
 } from "./template-v2-studio-commands.ts";
+import {
+  updateTemplateV2ContentRun,
+  type TemplateV2RunTarget,
+} from "./template-v2-studio-content.ts";
 
 export type JsonRecord = Record<string, unknown>;
 export type ElementPath = Array<string | number>;
@@ -135,6 +139,13 @@ export type TemplateV2StudioAction =
       type: "edit-text-run";
       selection: StudioSelection;
       runIndex: number;
+      text: string;
+      historyKey?: string;
+    }
+  | {
+      type: "edit-content-run";
+      selection: StudioSelection;
+      target: TemplateV2RunTarget;
       text: string;
       historyKey?: string;
     }
@@ -705,6 +716,7 @@ export function templateV2StudioReducer(
         )
       );
     case "edit-text-run":
+    case "edit-content-run":
       if (!state.layouts) return state;
       if (
         isTemplateV2SelectionLocked(
@@ -716,17 +728,15 @@ export function templateV2StudioReducer(
       }
       return commit(
         state,
-        updateTemplateV2Element(state.layouts, action.selection, (element) => {
-          if (element.type !== "text" || !Array.isArray(element.runs)) {
-            return element;
-          }
-          const run = element.runs[action.runIndex];
-          if (!isJsonRecord(run)) return element;
-          if (run.text === action.text) return element;
-          const runs = element.runs.slice();
-          runs[action.runIndex] = { ...run, text: action.text };
-          return { ...element, runs };
-        }),
+        updateTemplateV2Element(state.layouts, action.selection, (element) =>
+          updateTemplateV2ContentRun(
+            element,
+            action.type === "edit-text-run"
+              ? { kind: "text", runIndex: action.runIndex }
+              : action.target,
+            action.text
+          )
+        ),
         action.historyKey
       );
     case "add-rectangle":

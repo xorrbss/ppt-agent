@@ -45,6 +45,11 @@ function checkUnique(items, selector, label) {
   check(new Set(values).size === values.length, `${label} must be unique`);
 }
 
+function normalizedTimestamp(value) {
+  const timestamp = Date.parse(value ?? "");
+  return Number.isNaN(timestamp) ? null : timestamp;
+}
+
 function checkLinearChain(chain, commonRevision, tipRevision, label) {
   check(Array.isArray(chain) && chain.length > 0, `${label} must not be empty`);
   if (!Array.isArray(chain) || chain.length === 0) return;
@@ -109,6 +114,23 @@ check(
   "manifest and remote intake policy repositories differ"
 );
 check(
+  normalizedTimestamp(manifest.baseline?.committedAt) !== null,
+  "manifest baseline committedAt must be an ISO-compatible timestamp"
+);
+check(
+  normalizedTimestamp(remoteIntakePolicy.baselineMetadata?.committedAt) !== null,
+  "remote intake policy baseline committedAt must be an ISO-compatible timestamp"
+);
+check(
+  normalizedTimestamp(remoteIntakePolicy.baselineMetadata?.committedAt) ===
+    normalizedTimestamp(manifest.baseline?.committedAt),
+  "manifest and remote intake policy baseline committedAt values differ"
+);
+check(
+  remoteIntakePolicy.baselineMetadata?.subject === manifest.baseline?.subject,
+  "manifest and remote intake policy baseline subjects differ"
+);
+check(
   ledger.remoteIntakeReview?.policy === manifest.registries?.remoteIntakePolicy,
   "migration ledger remote intake policy link differs"
 );
@@ -160,7 +182,7 @@ const actualDiscriminators = [
   ...rendererSource.matchAll(/element\.type === "([^"]+)"/g),
 ].map((match) => match[1]);
 const expectedDiscriminators = manifest.templateV2Renderer?.discriminators ?? [];
-check(expectedDiscriminators.length === 11, "renderer contract must contain exactly 11 discriminators");
+check(expectedDiscriminators.length > 0, "renderer contract must contain at least one discriminator");
 checkUnique(expectedDiscriminators, (value) => value, "renderer discriminators");
 check(
   JSON.stringify(actualDiscriminators) === JSON.stringify(expectedDiscriminators),
@@ -256,10 +278,7 @@ checkUnique(
   (reviewedTest) => reviewedTest,
   "reviewed upstream tests"
 );
-check(
-  reviewedUpstreamTests.length === 14,
-  `expected 14 reviewed upstream tests, got ${reviewedUpstreamTests.length}`
-);
+check(reviewedUpstreamTests.length > 0, "reviewed upstream tests must not be empty");
 for (const excludedContract of
   upstreamTestContracts.excludedApiContracts ?? []) {
   check(

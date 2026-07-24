@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { getApiUrl } from "@/utils/api";
+import TemplateV2ImportReview from "./TemplateV2ImportReview";
 
 const IMPORT_ENDPOINT = "/api/v1/ppt/structured-templates/imports";
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
@@ -289,29 +290,35 @@ export default function TemplateV2PptxImportPanel({
                 </div>
 
                 {analysis ? (
-                  <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                    <dt className="text-slate-400">Analyzer</dt>
-                    <dd>{analysis.provider?.id ?? "unknown"}</dd>
-                    <dt className="text-slate-400">External AI</dt>
-                    <dd>
-                      {analysis.provider?.external_ai === false
-                        ? "not used"
-                        : "unknown"}
-                    </dd>
-                    <dt className="text-slate-400">Slides / shapes</dt>
-                    <dd>
-                      {summary?.slide_count ?? 0} / {summary?.shape_count ?? 0}
-                    </dd>
-                    <dt className="text-slate-400">Unsupported shapes</dt>
-                    <dd>{summary?.unsupported_shape_count ?? 0}</dd>
-                    <dt className="text-slate-400">Preview / render</dt>
-                    <dd>
-                      {analysis.preview?.status ?? "unknown"} /{" "}
-                      {analysis.render?.status ?? "unknown"}
-                    </dd>
-                    <dt className="text-slate-400">Visual fidelity</dt>
-                    <dd>{summary?.visual_fidelity_status ?? "not_evaluated"}</dd>
-                  </dl>
+                  <>
+                    <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                      <dt className="text-slate-400">Analyzer</dt>
+                      <dd>{analysis.provider?.id ?? "unknown"}</dd>
+                      <dt className="text-slate-400">External AI</dt>
+                      <dd>
+                        {analysis.provider?.external_ai === false
+                          ? "not used"
+                          : "unknown"}
+                      </dd>
+                      <dt className="text-slate-400">Slides / shapes</dt>
+                      <dd>
+                        {summary?.slide_count ?? 0} /{" "}
+                        {summary?.shape_count ?? 0}
+                      </dd>
+                      <dt className="text-slate-400">Unsupported shapes</dt>
+                      <dd>{summary?.unsupported_shape_count ?? 0}</dd>
+                      <dt className="text-slate-400">Preview / render</dt>
+                      <dd>
+                        {analysis.preview?.status ?? "unknown"} /{" "}
+                        {analysis.render?.status ?? "unknown"}
+                      </dd>
+                      <dt className="text-slate-400">Visual fidelity</dt>
+                      <dd>
+                        {summary?.visual_fidelity_status ?? "not_evaluated"}
+                      </dd>
+                    </dl>
+                    <TemplateV2ImportReview analysis={analysis} />
+                  </>
                 ) : null}
 
                 {record.repeat_suggestions.length ? (

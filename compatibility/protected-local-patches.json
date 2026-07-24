@@ -73,7 +73,8 @@
       "files": [
         {
           "path": "servers/nextjs/lib/export-render-url.ts",
-          "requiredContains": ["http://127.0.0.1:"]
+          "requiredContains": ["http://127.0.0.1:"],
+          "forbiddenContains": ["http://0.0.0.0:"]
         },
         {
           "path": "servers/nextjs/lib/export-process-supervisor.ts",
@@ -301,6 +302,10 @@
           "requiredContains": [
             "contextIsolation: true",
             "nodeIntegration: false"
+          ],
+          "forbiddenContains": [
+            "contextIsolation: false",
+            "nodeIntegration: true"
           ]
         }
       ]

@@ -40,6 +40,35 @@ function importResponse(
             },
             preview: { status: "not_provided" },
             render: { status: "not_run" },
+            candidates: {
+              slides: [
+                {
+                  shapes: [
+                    {
+                      source_id: "shape-1",
+                      name: "Title",
+                      kind: "text",
+                      x: 10,
+                      y: 20,
+                      width: 300,
+                      height: 40,
+                      confidence: 0.92,
+                    },
+                    {
+                      source_id: "shape-7",
+                      name: "Chart",
+                      kind: "unsupported",
+                      x: 400,
+                      y: 100,
+                      width: 200,
+                      height: 160,
+                      confidence: 0,
+                      unsupported_reason: "unsupported_graphic_frame",
+                    },
+                  ],
+                },
+              ],
+            },
             summary: {
               slide_count: 2,
               shape_count: 7,
@@ -130,6 +159,10 @@ describe("TemplateV2PptxImportPanel", () => {
     cy.contains("deterministic-ooxml-static");
     cy.contains("External AI").parent().contains("not used");
     cy.contains("Repeat-block suggestions (not applied)");
+    cy.contains("summary", "Review candidate differences (2)").click();
+    cy.contains("td", "Editable text");
+    cy.contains("td", "Manual review");
+    cy.contains("td", "92%");
     cy.get("@confirmImport.all").should("have.length", 0);
 
     cy.contains("button", "Confirm and create new Template V2").click();
