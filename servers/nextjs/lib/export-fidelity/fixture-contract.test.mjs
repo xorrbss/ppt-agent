@@ -8,15 +8,39 @@ import { renderTemplateV2GeneralPresentationHtml } from "../template-v2-general-
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "fixtures", "template-v2-general");
+const REPO_ROOT = path.resolve(HERE, "..", "..", "..", "..");
+
+function collectElementTypes(template) {
+  const types = new Set();
+  const visit = (element) => {
+    if (!element || typeof element !== "object") return;
+    if (typeof element.type === "string") types.add(element.type);
+    if (element.child) visit(element.child);
+    if (Array.isArray(element.children)) element.children.forEach(visit);
+  };
+  for (const slide of template.slides ?? []) {
+    for (const component of slide.ui?.components ?? []) {
+      for (const element of component.elements ?? []) visit(element);
+    }
+  }
+  return types;
+}
 
 test("Template V2 fidelity corpus keeps persisted template-only cases", async () => {
   const manifest = JSON.parse(await fs.readFile(path.join(ROOT, "manifest.json"), "utf8"));
+  const compatibility = JSON.parse(
+    await fs.readFile(path.join(REPO_ROOT, "compatibility", "upstream-compatibility.json"), "utf8")
+  );
+  const coveredElementTypes = new Set();
   assert.equal(manifest.contract, "template-v2-general-export-fidelity-v1");
   assert.deepEqual(manifest.canvas, { width: 1280, height: 720 });
-  assert.deepEqual(manifest.cases.map((fixture) => fixture.id), ["title-body", "geometry", "text-fit", "rich-elements"]);
+  assert.ok(manifest.cases.length > 0);
+  assert.equal(new Set(manifest.cases.map((fixture) => fixture.id)).size, manifest.cases.length);
+  assert.equal(new Set(manifest.cases.map((fixture) => fixture.directory)).size, manifest.cases.length);
   for (const fixture of manifest.cases) {
     assert.deepEqual(fixture.templateIdentity, { version: "v2-standard", mode: "template" });
     const template = JSON.parse(await fs.readFile(path.join(ROOT, fixture.directory, "template.v2.json"), "utf8"));
+    collectElementTypes(template).forEach((type) => coveredElementTypes.add(type));
     const source = renderTemplateV2GeneralPresentationHtml(template);
     assert.match(source, /id="presentation-slides-wrapper"/);
     assert.match(source, /class="main-slide"/);
@@ -44,4 +68,9 @@ test("Template V2 fidelity corpus keeps persisted template-only cases", async ()
       assert.match(source, /data-chart-source/);
     }
   }
+  assert.deepEqual(
+    [...coveredElementTypes].sort(),
+    [...compatibility.templateV2Renderer.discriminators].sort(),
+    "fidelity corpus must cover every pinned Template V2 renderer discriminator"
+  );
 });

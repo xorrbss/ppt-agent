@@ -5,6 +5,7 @@ on:
     paths:
       - "presentation-export/**"
       - "scripts/sync-presentation-export.cjs"
+      - "compatibility/upstream-compatibility.json"
       - "servers/nextjs/app/(export)/**"
       - "servers/nextjs/app/api/export-presentation/**"
       - "servers/nextjs/lib/export-fidelity/**"
