@@ -378,7 +378,9 @@ def test_enabled_with_empty_allowlist_hides_discovery_and_rejects_writes(
 
 
 def test_structured_template_routes_stay_under_authenticated_api_v1_namespace():
-    paths = {route.path for route in API_V1_PPT_ROUTER.routes}
+    app = FastAPI()
+    app.include_router(API_V1_PPT_ROUTER)
+    paths = set(app.openapi()["paths"])
 
     assert "/api/v1/ppt/structured-templates" in paths
     assert "/api/v1/ppt/structured-templates/{template_id}" in paths

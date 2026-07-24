@@ -10,10 +10,17 @@ from templates.v2.policy import get_structured_template_policy
 
 
 def _methods_by_path(router) -> dict[str, set[str]]:
-    result: dict[str, set[str]] = {}
-    for route in router.routes:
-        result.setdefault(route.path, set()).update(route.methods or set())
-    return result
+    app = FastAPI()
+    app.include_router(router)
+    return {
+        path: {
+            method.upper()
+            for method in operations
+            if method
+            in {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
+        }
+        for path, operations in app.openapi()["paths"].items()
+    }
 
 
 def test_template_v2_is_default_off_without_rollout_configuration(monkeypatch):

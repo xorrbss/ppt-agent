@@ -4,6 +4,7 @@ import re
 import uuid
 
 from fastapi import FastAPI
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
@@ -65,15 +66,29 @@ def _normalized_path(path: str) -> str:
     return re.sub(r"\{[^}]+\}", "{param}", path)
 
 
+def _effective_api_routes(router, prefix: str = ""):
+    for route in router.routes:
+        if isinstance(route, APIRoute):
+            yield f"{prefix}{route.path}", route
+            continue
+        original_router = getattr(route, "original_router", None)
+        include_context = getattr(route, "include_context", None)
+        if original_router is not None and include_context is not None:
+            yield from _effective_api_routes(
+                original_router,
+                f"{prefix}{include_context.prefix}",
+            )
+
+
 def test_template_routes_have_no_method_path_collision():
     routes = [
-        route
-        for route in API_V1_PPT_ROUTER.routes
-        if route.path.startswith("/api/v1/ppt/template/")
+        (path, route)
+        for path, route in _effective_api_routes(API_V1_PPT_ROUTER)
+        if path.startswith("/api/v1/ppt/template/")
     ]
     pairs = [
-        (method, _normalized_path(route.path))
-        for route in routes
+        (method, _normalized_path(path))
+        for path, route in routes
         for method in route.methods
     ]
     duplicates = {
@@ -85,10 +100,10 @@ def test_template_routes_have_no_method_path_collision():
     assert duplicates == {}
 
     core = {
-        (method, _normalized_path(route.path)): route.endpoint.__module__
-        for route in routes
+        (method, _normalized_path(path)): route.endpoint.__module__
+        for path, route in routes
         for method in route.methods
-        if _normalized_path(route.path)
+        if _normalized_path(path)
         in {
             "/api/v1/ppt/template/all",
             "/api/v1/ppt/template/{param}",
