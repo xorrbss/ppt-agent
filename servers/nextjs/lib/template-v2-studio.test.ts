@@ -177,6 +177,51 @@ test("editing one text run preserves every other run and its metadata", () => {
   });
 });
 
+test("content run edits participate in reducer history and dirty tracking", () => {
+  const layouts: JsonRecord = {
+    layouts: [
+      {
+        id: "layout",
+        components: [
+          {
+            id: "component",
+            elements: [
+              {
+                type: "text-list",
+                items: [[{ text: "Old", font: { bold: true } }]],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  const selection: StudioSelection = {
+    layoutId: "layout",
+    componentId: "component",
+    elementPath: [0],
+  };
+  const loaded = templateV2StudioReducer(EMPTY_TEMPLATE_V2_STUDIO_STATE, {
+    type: "load",
+    layouts,
+  });
+  const updated = templateV2StudioReducer(loaded, {
+    type: "edit-content-run",
+    selection,
+    target: { kind: "list-item", itemIndex: 0, runIndex: 0 },
+    text: "New",
+    historyKey: "content-1",
+  });
+  const element = getSelectedElement(updated.layouts, selection);
+
+  assert.deepEqual(element?.items, [
+    [{ text: "New", font: { bold: true } }],
+  ]);
+  assert.equal(updated.dirty, true);
+  assert.equal(updated.past.length, 1);
+  assert.equal(updated.lastHistoryKey, "content-1");
+});
+
 test("history coalesces one text transaction and keeps the save checkpoint", () => {
   const loaded = templateV2StudioReducer(EMPTY_TEMPLATE_V2_STUDIO_STATE, {
     type: "load",

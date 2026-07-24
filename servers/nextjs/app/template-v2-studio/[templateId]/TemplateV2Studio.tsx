@@ -37,6 +37,7 @@ import {
 } from "@/lib/template-v2-upstream-compat";
 import { getApiUrl } from "@/utils/api";
 import TemplateV2Canvas from "./TemplateV2Canvas";
+import TemplateV2ContentInspector from "./TemplateV2ContentInspector";
 import TemplateV2PptxImportPanel from "./TemplateV2PptxImportPanel";
 
 interface StructuredTemplate {
@@ -214,7 +215,6 @@ export default function TemplateV2Studio({
   const [conflict, setConflict] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const saveTokenRef = useRef(0);
-  const textTransactionRef = useRef(0);
   const mountedRef = useRef(true);
   const lifecycleFlushRef = useRef(false);
   const conflictRef = useRef(false);
@@ -1107,46 +1107,30 @@ export default function TemplateV2Studio({
               </p>
             ) : null}
           </section>
-          {selectedElement?.type === "text" &&
+          {selectedElement &&
           state.selection &&
-          state.selectionSet.length === 1 &&
-          Array.isArray(selectedElement.runs) ? (
-            <div className="mt-5 space-y-4">
-              <p className="text-sm font-medium">
-                Text runs · {pathLabel(state.selection.elementPath)}
-              </p>
-              {selectedElement.runs.map((run, runIndex) =>
-                isJsonRecord(run) ? (
-                  <label key={runIndex} className="block text-xs text-slate-400">
-                    Run {runIndex + 1}
-                    <textarea
-                      value={stringValue(run.text, "")}
-                      disabled={selectionControls.lockConflict}
-                      onFocus={() => {
-                        textTransactionRef.current += 1;
-                      }}
-                      onBlur={() =>
-                        dispatch({
-                          type: "select",
-                          selection: state.selection,
-                        })
-                      }
-                      onChange={(event) => {
-                        dispatch({
-                          type: "edit-text-run",
-                          selection: state.selection as StudioSelection,
-                          runIndex,
-                          text: event.target.value,
-                          historyKey: `text-${textTransactionRef.current}`,
-                        });
-                        setNotice(null);
-                      }}
-                      className="mt-1 min-h-20 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-violet-400"
-                    />
-                  </label>
-                ) : null
-              )}
-            </div>
+          state.selectionSet.length === 1 ? (
+            <TemplateV2ContentInspector
+              element={selectedElement}
+              pathLabel={pathLabel(state.selection.elementPath)}
+              disabled={selectionControls.lockConflict}
+              onBlur={() =>
+                dispatch({
+                  type: "select",
+                  selection: state.selection,
+                })
+              }
+              onEdit={(target, text, historyKey) => {
+                dispatch({
+                  type: "edit-content-run",
+                  selection: state.selection as StudioSelection,
+                  target,
+                  text,
+                  historyKey,
+                });
+                setNotice(null);
+              }}
+            />
           ) : (
             <p className="mt-5 rounded-lg bg-slate-950 p-3 text-sm text-slate-400">
               Select a text, container, image, or group. Groups are move-only;
