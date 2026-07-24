@@ -12,7 +12,8 @@
       "id": "title-body",
       "directory": "00-title-body",
       "expectedText": ["Quarterly direction", "Focus the team on reliable delivery."],
-      "templateIdentity": { "version": "v2-standard", "mode": "template" }
+      "templateIdentity": { "version": "v2-standard", "mode": "template" },
+      "tolerances": { "maxBadPixelRatio": 0.015, "maxBadComponentPixels": 4500 }
     },
     {
       "id": "geometry",

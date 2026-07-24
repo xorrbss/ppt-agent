@@ -82,7 +82,14 @@ jobs:
           if (-not (Test-Path -LiteralPath $soffice)) {
             throw "LibreOffice executable not found at $soffice"
           }
-          $pdftocairo = (Get-Command pdftocairo.exe -ErrorAction Stop).Source
+          $pdftocairo = Get-ChildItem `
+            -LiteralPath (Join-Path $env:ChocolateyInstall "lib\poppler\tools") `
+            -Recurse `
+            -Filter pdftocairo.exe |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $pdftocairo) {
+            throw "pdftocairo.exe not found under the Chocolatey poppler package"
+          }
           "SOFFICE_PATH=$soffice" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "PDFTOCAIRO_PATH=$pdftocairo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
