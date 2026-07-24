@@ -38,8 +38,12 @@ export function resolveExportRenderBaseUrl(
  */
 export function buildExportRenderUrl(
   baseUrl: string,
-  presentationId: string
+  presentationId: string,
+  expectedPresentationSha256?: string
 ): string {
   const query = new URLSearchParams({ id: presentationId });
+  if (expectedPresentationSha256) {
+    query.set("source_sha256", expectedPresentationSha256);
+  }
   return `${baseUrl.replace(/\/+$/, "")}/pdf-maker?${query.toString()}`;
 }

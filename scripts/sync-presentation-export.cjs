@@ -452,16 +452,45 @@ function ensureRuntimeSharp() {
   if (canLoadRuntimeSharp()) return;
 
   const version = detectBundledSharpVersion();
-  const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
+  const installArgs = [
+    "install",
+    "--prefix",
+    targetRoot,
+    "--no-save",
+    "--no-audit",
+    "--no-fund",
+    `sharp@${version}`,
+  ];
+  let npmCmd = "npm";
+  let npmArgs = installArgs;
+  if (process.platform === "win32") {
+    const npmCliCandidates = [
+      process.env.npm_execpath,
+      path.join(
+        path.dirname(process.execPath),
+        "node_modules",
+        "npm",
+        "bin",
+        "npm-cli.js"
+      ),
+    ].filter(Boolean);
+    const npmCli = npmCliCandidates.find((candidate) => fs.existsSync(candidate));
+    if (!npmCli) {
+      throw new Error(
+        "Could not locate npm-cli.js for the Windows Sharp installation. " +
+          `Install it manually with:\n  npm install --prefix presentation-export --no-save sharp@${version}`
+      );
+    }
+    // Running npm.cmd directly through CreateProcess fails with EINVAL on
+    // Windows. Invoke npm's JavaScript entrypoint with the current Node binary.
+    npmCmd = process.execPath;
+    npmArgs = [npmCli, ...installArgs];
+  }
   console.log(
     `[presentation-export] Installing sharp@${version} for byte-PPTX export (${process.platform}/${process.arch})`
   );
   try {
-    execFileSync(
-      npmCmd,
-      ["install", "--prefix", targetRoot, "--no-save", "--no-audit", "--no-fund", `sharp@${version}`],
-      { stdio: "inherit" }
-    );
+    execFileSync(npmCmd, npmArgs, { stdio: "inherit" });
   } catch (err) {
     throw new Error(
       `Could not install sharp (${err.message}). Install it manually with:\n` +

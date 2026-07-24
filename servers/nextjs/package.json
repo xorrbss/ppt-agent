@@ -9,7 +9,8 @@
     "prebuild": "node scripts/generate-layout-schemas.mjs",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test:template-v2-export-fidelity": "node --test lib/template-v2-general-renderer.test.mjs lib/export-fidelity/*.test.mjs"
   },
   "dependencies": {
     "@babel/parser": "^7.28.4",
@@ -50,8 +51,8 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
     "html2canvas": "^1.4.1",
-    "konva": "10.3.0",
     "jsonrepair": "^3.12.0",
+    "konva": "10.3.0",
     "lucide-react": "^0.447.0",
     "marked": "^15.0.11",
     "mermaid": "^11.9.0",

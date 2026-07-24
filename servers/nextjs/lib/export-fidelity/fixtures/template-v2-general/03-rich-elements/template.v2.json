@@ -1,0 +1,187 @@
+{
+  "version": "v2-standard",
+  "mode": "template",
+  "template_id": "internal-v2-rich-elements",
+  "slides": [{
+    "id": "slide-rich-elements",
+    "ui": {
+      "id": "rich-elements",
+      "description": "Template V2 renderer contract coverage",
+      "components": [{
+        "id": "main",
+        "description": "List, table, layouts, vector, chart, and infographic",
+        "position": { "x": 0, "y": 0 },
+        "elements": [
+          {
+            "type": "text",
+            "position": { "x": 64, "y": 36 },
+            "size": { "width": 700, "height": 54 },
+            "font": { "size": 36, "family": "Arial", "color": "#123b72", "bold": true },
+            "alignment": { "horizontal": "left", "vertical": "middle" },
+            "stroke": { "color": "#ffffff", "width": 1, "opacity": 0.6 },
+            "shadow": { "color": "#000000", "blur": 3, "opacity": 0.2, "offset_x": 1, "offset_y": 2 },
+            "runs": [{ "text": "Renderer contract" }],
+            "decorative": false,
+            "name": "title",
+            "max_length": 120,
+            "min_length": 1
+          },
+          {
+            "type": "text-list",
+            "position": { "x": 64, "y": 120 },
+            "size": { "width": 300, "height": 150 },
+            "font": { "size": 24, "family": "Arial", "color": "#172554" },
+            "marker": "bullet",
+            "items": [[{ "text": "Fast" }], [{ "text": "Safe" }]],
+            "decorative": false,
+            "name": "principles",
+            "max_items": 6,
+            "min_items": 1,
+            "max_item_length": 80,
+            "min_item_length": 1
+          },
+          {
+            "type": "table",
+            "position": { "x": 390, "y": 120 },
+            "size": { "width": 360, "height": 150 },
+            "columns": [{
+              "color": { "color": "#dbeafe" },
+              "font": { "size": 20, "family": "Arial", "color": "#172554", "bold": true },
+              "alignment": "center",
+              "runs": [{ "text": "Header" }]
+            }],
+            "rows": [[{
+              "color": { "color": "#eff6ff" },
+              "font": { "size": 20, "family": "Arial", "color": "#1e3a8a" },
+              "alignment": "center",
+              "runs": [{ "text": "Value" }]
+            }]],
+            "decorative": false,
+            "name": "contract table",
+            "max_columns": 4,
+            "min_columns": 1,
+            "max_rows": 6,
+            "min_rows": 1
+          },
+          {
+            "type": "flex",
+            "position": { "x": 64, "y": 310 },
+            "size": { "width": 420, "height": 96 },
+            "direction": "row",
+            "gap": 12,
+            "align_items": "stretch",
+            "justify_content": "flex-start",
+            "children": [
+              {
+                "type": "container",
+                "size": { "width": 190, "height": 96 },
+                "fill": { "color": "#dbeafe" },
+                "alignment": { "horizontal": "center", "vertical": "middle" },
+                "shadow": { "color": "#172554", "blur": 4, "opacity": 0.25, "offset_x": 2, "offset_y": 3 },
+                "border_radius": { "tl": 12, "tr": 12, "bl": 12, "br": 12 },
+                "child": {
+                  "type": "text",
+                  "size": { "width": 190, "height": 96 },
+                  "font": { "size": 20, "family": "Arial", "color": "#1e3a8a", "bold": true },
+                  "alignment": { "horizontal": "center", "vertical": "middle" },
+                  "runs": [{ "text": "Flex A" }],
+                  "decorative": false,
+                  "name": "flex a",
+                  "max_length": 40,
+                  "min_length": 1
+                }
+              },
+              {
+                "type": "container",
+                "size": { "width": 190, "height": 96 },
+                "fill": { "color": "#bfdbfe" },
+                "border_radius": { "tl": 12, "tr": 12, "bl": 12, "br": 12 }
+              }
+            ],
+            "name": "flex row",
+            "max_children": 4,
+            "min_children": 1
+          },
+          {
+            "type": "grid",
+            "position": { "x": 64, "y": 440 },
+            "size": { "width": 420, "height": 180 },
+            "columns": 2,
+            "rows": 2,
+            "gap": 10,
+            "children": [
+              { "type": "container", "size": { "width": 200, "height": 84 }, "fill": { "color": "#e0f2fe" } },
+              { "type": "container", "size": { "width": 200, "height": 84 }, "fill": { "color": "#bae6fd" } },
+              { "type": "container", "size": { "width": 200, "height": 84 }, "fill": { "color": "#7dd3fc" } },
+              { "type": "container", "size": { "width": 200, "height": 84 }, "fill": { "color": "#38bdf8" } }
+            ],
+            "name": "grid",
+            "max_children": 6,
+            "min_children": 1
+          },
+          {
+            "type": "vector",
+            "shape": "polygon",
+            "points": [{ "x": 540, "y": 340 }, { "x": 660, "y": 300 }, { "x": 740, "y": 390 }, { "x": 620, "y": 430 }],
+            "closed": true,
+            "curve": { "type": "smooth", "tension": 0.5, "segments": 12 },
+            "fill": { "color": "#fbbf24" },
+            "stroke": { "color": "#b45309", "width": 3 }
+          },
+          {
+            "type": "image",
+            "position": { "x": 718, "y": 36 },
+            "size": { "width": 52, "height": 52 },
+            "data": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='%232563eb' d='M10 20h80v60H10z'/%3E%3Ccircle fill='%23fbbf24' cx='35' cy='40' r='12'/%3E%3C/svg%3E",
+            "fit": "cover",
+            "flip_h": true,
+            "opacity": 0.85,
+            "focus_x": 25,
+            "focus_y": 50,
+            "crop_scale": 1.25,
+            "clip_path": "circle(48% at 50% 50%)",
+            "decorative": true,
+            "name": "appearance image"
+          },
+          {
+            "type": "chart",
+            "position": { "x": 790, "y": 110 },
+            "size": { "width": 420, "height": 270 },
+            "chart_type": "stacked_bar",
+            "title": "Revenue",
+            "title_color": "#172554",
+            "legend_color": "#172554",
+            "axis_color": "#334155",
+            "grid_color": "#cbd5e1",
+            "colors": ["#2563eb", "#f59e0b"],
+            "categories": ["Q1", "Q2", "Q3"],
+            "series": [
+              { "name": "FY26", "values": [40, 65, 88] },
+              { "name": "Plan", "values": [20, 15, 12] }
+            ],
+            "x_axis": true,
+            "y_axis": true,
+            "x_axis_title": "Quarter",
+            "y_axis_title": "Revenue",
+            "x_axis_grid": true,
+            "y_axis_grid": true,
+            "data_labels": "mid",
+            "legend": true,
+            "source": "Finance model",
+            "decorative": false,
+            "name": "revenue chart"
+          },
+          {
+            "type": "infographic",
+            "position": { "x": 790, "y": 440 },
+            "size": { "width": 420, "height": 80 },
+            "data": { "type": "progress_bar", "min_value": 0, "max_value": 100, "value": 72 },
+            "colors": ["#2563eb", "#dbeafe"],
+            "decorative": false,
+            "name": "progress"
+          }
+        ]
+      }]
+    }
+  }]
+}

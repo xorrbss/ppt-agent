@@ -141,3 +141,31 @@ test("presentation response reads are byte-bounded for declared and streamed siz
   );
   await assert.rejects(readBoundedResponseText(streamed, 64), /size limit/);
 });
+
+test("bounded response reads enforce UTF-8 byte boundaries and reject invalid lengths", async () => {
+  assert.equal(
+    await readBoundedResponseText(new Response("서울"), 6),
+    "서울"
+  );
+  await assert.rejects(
+    readBoundedResponseText(
+      new Response("x", { headers: { "content-length": "not-a-number" } }),
+      64
+    ),
+    /size limit/
+  );
+
+  let cancelled = false;
+  const streamed = new Response(
+    new ReadableStream({
+      cancel() {
+        cancelled = true;
+      },
+      start(controller) {
+        controller.enqueue(new Uint8Array(65));
+      },
+    })
+  );
+  await assert.rejects(readBoundedResponseText(streamed, 64), /size limit/);
+  assert.equal(cancelled, true);
+});

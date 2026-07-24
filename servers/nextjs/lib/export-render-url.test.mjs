@@ -53,3 +53,18 @@ test("export render URL contains no session or cookie material", () => {
   );
   assert.doesNotMatch(url, /cookie|session|token/i);
 });
+
+test("snapshot-bound render URL carries only the expected payload hash", () => {
+  const sha256 = "a".repeat(64);
+  const url = buildExportRenderUrl(
+    "http://127.0.0.1:5000",
+    "deck-1",
+    sha256
+  );
+
+  assert.equal(
+    url,
+    `http://127.0.0.1:5000/pdf-maker?id=deck-1&source_sha256=${sha256}`
+  );
+  assert.doesNotMatch(url, /cookie|session|token|slides|html_content/i);
+});

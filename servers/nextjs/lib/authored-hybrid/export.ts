@@ -267,6 +267,7 @@ async function writeHybridPptx(
 async function runUncachedAuthoredHybridExport(
   params: AuthoredHybridExportParams,
   presentation: StoredPresentation,
+  sourceSha256: string,
   cacheKey: string,
   requestStartedAt: number
 ): Promise<BundledPresentationExportResult> {
@@ -276,6 +277,7 @@ async function runUncachedAuthoredHybridExport(
     presentationId: params.presentationId,
     title: params.title,
     cookieHeader: params.cookieHeader,
+    expectedPresentationSha256: sourceSha256,
   });
   const fidelityMs = elapsedMs(fidelityStartedAt);
 
@@ -424,6 +426,7 @@ export async function runAuthoredHybridPresentationExport(
   const job = runUncachedAuthoredHybridExport(
     params,
     presentation,
+    fetched.sourceSha256,
     cacheKey,
     requestStartedAt
   ).finally(() => {
