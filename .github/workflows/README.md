@@ -17,7 +17,13 @@ It does not decide whether the official upstream branch moved.
 - the job writes a Markdown step summary and retains Markdown/JSON evidence;
 - ordinary upstream movement is a reviewable success, configured
   `contract-risk` exits `2`, and operational/metadata errors exit `1` while
-  explicitly leaving `changeDetected` false.
+  explicitly leaving `changeDetected` false;
+- scheduled/dispatch runs additionally open or update a single rolling
+  `upstream-intake`-labelled issue whenever drift is detected or an intake
+  error occurs, so reviewable movement is not lost in a green run and repeated
+  errors do not spawn duplicate issues. Detecting that the nightly stopped
+  running entirely (GitHub disables cron after prolonged inactivity) needs an
+  external uptime monitor and is intentionally out of scope.
 
 Both workflows use read-only repository permissions. The intake checkout and
 runtime actions are immutable digest pins, credentials are not persisted, and
@@ -70,10 +76,14 @@ release-version comment. Service containers are digest-pinned. Compatibility
 runtime lines remain Node 22 and Python 3.11; changing those lines is a
 deliberate compatibility decision rather than routine action churn.
 
-Operating-system package repositories, the release upload helper downloaded by
-`sync-releaes-to-r2.yml`, and release archives without an upstream checksum are
-still external mutable inputs. They are kept visible as residual supply-chain
-risk rather than described as digest-pinned.
+The pinned `presentation-export` archive is verified against a per-asset SHA-256
+recorded in `compatibility/upstream-compatibility.json` (`exportRuntime.assets`);
+`sync-presentation-export.cjs` fails closed if the downloaded bytes do not match,
+so a re-uploaded release for the pinned tag cannot silently replace the runtime.
+
+Operating-system package repositories and the release upload helper downloaded by
+`sync-releaes-to-r2.yml` remain external mutable inputs. They are kept visible as
+residual supply-chain risk rather than described as digest-pinned.
 
 ## Local CI parity runner
 

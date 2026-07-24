@@ -16,6 +16,7 @@ const fs = require("fs");
 const path = require("path");
 const https = require("https");
 const http = require("http");
+const crypto = require("crypto");
 const { execFileSync } = require("child_process");
 
 const repoRoot = path.join(__dirname, "..");
@@ -390,6 +391,51 @@ function resolveExtractedRoot(extractDir) {
   throw new Error(`Unable to locate export runtime root under ${extractDir}`);
 }
 
+// The release archive is a version-pinned but mutable network input: GitHub lets a
+// tag's asset be re-uploaded. When the compatibility manifest pins a SHA-256 for the
+// requested version+asset, verify the downloaded bytes before extracting so a
+// swapped or corrupted archive fails closed instead of installing silently.
+function expectedAssetSha256(tag, assetName) {
+  const manifestPath = path.join(
+    repoRoot,
+    "compatibility",
+    "upstream-compatibility.json"
+  );
+  let manifest;
+  try {
+    manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  } catch {
+    return null;
+  }
+  const runtime = manifest.exportRuntime;
+  if (!runtime || runtime.version !== tag) {
+    return null;
+  }
+  const hex = runtime.assets && runtime.assets[assetName];
+  return typeof hex === "string" && /^[0-9a-f]{64}$/.test(hex) ? hex : null;
+}
+
+function verifyDownloadedAsset(zipPath, tag, assetName) {
+  const expected = expectedAssetSha256(tag, assetName);
+  if (!expected) {
+    console.log(
+      `[presentation-export] No pinned checksum for ${assetName}@${tag}; skipping integrity check.`
+    );
+    return;
+  }
+  const actual = crypto
+    .createHash("sha256")
+    .update(fs.readFileSync(zipPath))
+    .digest("hex");
+  if (actual !== expected) {
+    throw new Error(
+      `Checksum mismatch for ${assetName}@${tag}: expected ${expected}, got ${actual}. ` +
+        "The pinned release asset may have been re-uploaded or corrupted."
+    );
+  }
+  console.log(`[presentation-export] Verified ${assetName} sha256 ${actual}`);
+}
+
 async function downloadAndInstallRuntime(tag) {
   const downloadUrl = `${exportRepoBase}/${tag}/${exportAssetName}`;
 
@@ -399,6 +445,7 @@ async function downloadAndInstallRuntime(tag) {
 
   console.log(`[presentation-export] Downloading ${downloadUrl}`);
   await downloadFile(downloadUrl, zipPath);
+  verifyDownloadedAsset(zipPath, tag, exportAssetName);
 
   console.log(`[presentation-export] Extracting ${zipPath}`);
   unzipArchive(zipPath, extractDir);

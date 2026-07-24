@@ -41,6 +41,14 @@ jobs:
   live-intake:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
+    # issues: write lets the scheduled run turn a silent-green (upstream moved,
+    # review needed) or a lone-red (intake error) into a single rolling, actionable
+    # issue. Residual risk: GitHub disables cron after ~60 days of repo inactivity;
+    # detecting that the nightly stopped needs an external uptime monitor, which is
+    # intentionally out of scope here.
+    permissions:
+      contents: read
+      issues: write
     steps:
       - name: Checkout exact task revision
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
@@ -77,6 +85,37 @@ jobs:
           path: reports/upstream-intake.*
           if-no-files-found: error
           retention-days: 14
+      - name: Surface drift or intake error as a rolling issue
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          report_json=reports/upstream-intake.json
+          report_md=reports/upstream-intake.md
+          if [ ! -f "$report_json" ]; then
+            echo "No intake report was produced; nothing to surface." >&2
+            exit 0
+          fi
+          signal=$(jq -r 'if (.changeDetected == true) or (.status == "intake-error") then "yes" else "no" end' "$report_json")
+          if [ "$signal" != "yes" ]; then
+            echo "Upstream unchanged and no intake error; no issue raised."
+            exit 0
+          fi
+          status=$(jq -r '.status' "$report_json")
+          risk=$(jq -r '.risk' "$report_json")
+          title="Upstream main intake: ${status} (risk: ${risk})"
+          gh label create upstream-intake \
+            --color FBCA04 \
+            --description "Automated upstream main intake signal" \
+            2>/dev/null || true
+          existing=$(gh issue list --state open --label upstream-intake --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --title "$title"
+            gh issue comment "$existing" --body-file "$report_md"
+          else
+            gh issue create --title "$title" --label upstream-intake --body-file "$report_md"
+          fi
       - name: Enforce intake decision
         if: always()
         shell: bash

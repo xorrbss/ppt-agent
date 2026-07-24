@@ -197,18 +197,33 @@ export function classifyFiles(files, policy, registry) {
       file.filename ?? "",
       file.patch ?? "",
     ].join("\n");
+    // GitHub omits `patch` for binary files and diffs over its size limit. When it
+    // is absent, an evidence regex cannot decide whether the change is risky, so a
+    // path match must fail closed to the rule's severity instead of falling through
+    // to `unclassified/info` and hiding a large rewrite of a watched contract file.
+    const evidenceUnavailable = !file.patch;
     const matches = [];
     for (const rule of policy.categories) {
       const pathRegex = compile(rule, "pathRegex");
       const evidenceRegex = compile(rule, "evidenceRegex");
-      if (
-        (!pathRegex || pathRegex.test(file.filename ?? "")) &&
-        (!evidenceRegex || evidenceRegex.test(evidence))
-      ) {
+      if (pathRegex && !pathRegex.test(file.filename ?? "")) continue;
+      if (!evidenceRegex || evidenceRegex.test(evidence)) {
         let severity = rule.severity;
         const riskRegex = compile(rule, "riskRegex");
         if (riskRegex?.test(evidence)) severity = "contract-risk";
         matches.push({ id: rule.id, label: rule.label, severity });
+        risk = maxSeverity(risk, severity);
+      } else if (evidenceUnavailable) {
+        // The path matched a watched category but the diff is unavailable, so the
+        // change can be neither confirmed nor ruled out. Surface it for human
+        // review without inheriting a contract-risk severity that presumes the
+        // unseen evidence matched (many rules match a broad path on purpose).
+        const severity = rule.severity === "info" ? "info" : "review";
+        matches.push({
+          id: rule.id,
+          label: `${rule.label} (unverified: no diff available)`,
+          severity,
+        });
         risk = maxSeverity(risk, severity);
       }
     }

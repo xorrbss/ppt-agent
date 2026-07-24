@@ -51,6 +51,19 @@
       "jsonPointer": "/dependencies/react-konva"
     }
   ],
+  "exportRuntime": {
+    "releaseRepository": "presenton/presenton-export",
+    "version": "v0.4.2",
+    "note": "SHA-256 of each published release archive. sync-presentation-export.cjs verifies the downloaded asset against these before extraction so a re-uploaded release cannot silently replace the pinned runtime.",
+    "assets": {
+      "export-Linux-X64.zip": "8abcc9cdd59b071c32e754206dfad6abd3a82d11cfc65f4694d0d730fee9da69",
+      "export-Linux-ARM64.zip": "b9c166115cb182e4627fbbf01db9d03245b361f521ac240b8aa3474256abdc66",
+      "export-macOS-X64.zip": "e260a2b56228921aac3f4a245afad8ec05a3e69890500a4249726bbfd026de05",
+      "export-macOS-ARM64.zip": "c37caa4d74526418b4e071d4794158679758ce815f3c8a1809cb21993741784d",
+      "export-Windows-X64.zip": "62f143101e88c2e4bd5abff19f78c3010b3d0e7e4fca2aed432889f75c1bc84d",
+      "export-Windows-ia32.zip": "3b46708f63e63decd9c2cadffefe1f3b0137a3e97a17108838ec3cc031f6d096"
+    }
+  },
   "templateV2Renderer": {
     "source": "servers/nextjs/lib/template-v2-general-renderer.mjs",
     "discriminators": [
