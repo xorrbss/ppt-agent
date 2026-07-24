@@ -71,6 +71,9 @@ There is no `/api/v2` rollout surface.
    workflow. Authored and adaptive execution paths must remain unchanged.
 5. Monitor `template_v2_rollout` events by operation, outcome, and code.
    Template identifiers are hashed; presentation content is never logged.
+6. Monitor `template_v2_pptx_queue` events. `dispatch` counts work offered to
+   workers, while `recover` counts expired leases returned to the queue. Both
+   payloads contain only an operation, outcome, and bounded aggregate count.
 
 ## Rollback
 

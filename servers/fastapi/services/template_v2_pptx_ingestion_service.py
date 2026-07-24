@@ -27,6 +27,9 @@ from services.template_v2_pptx_retention_service import (
 from services.template_v2_pptx_observability import (
     log_pptx_analysis_observation,
 )
+from services.template_v2_pptx_queue_observability import (
+    log_pptx_queue_observation,
+)
 from services.template_v2_pptx_storage import (
     get_private_source_retention_ttl,
     verify_private_source,
@@ -1109,6 +1112,16 @@ async def dispatch_template_v2_pptx_imports_once() -> int:
         _track_import_task(
             asyncio.create_task(run_template_v2_pptx_import(import_id, task_id))
         )
+    log_pptx_queue_observation(
+        operation="recover",
+        outcome="completed",
+        count=recovered,
+    )
+    log_pptx_queue_observation(
+        operation="dispatch",
+        outcome="completed",
+        count=len(queued),
+    )
     if recovered:
         logger.warning("Recovered %s stalled Template V2 PPTX imports", recovered)
     return len(queued)
