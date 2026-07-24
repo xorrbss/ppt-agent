@@ -122,7 +122,10 @@ describe("TemplateV2PptxImportPanel", () => {
       "POST",
       `**/api/v1/ppt/structured-templates/imports/${importId}/confirm`,
       (request) => {
-        expect(request.body).to.deep.equal({ expected_revision: 2 });
+        expect(request.body).to.deep.equal({
+          expected_revision: 2,
+          accepted_repeat_suggestion_ids: ["repeat-safe"],
+        });
         request.reply({
           statusCode: 200,
           body: importResponse("confirmed", 3),
@@ -158,7 +161,10 @@ describe("TemplateV2PptxImportPanel", () => {
     cy.contains("PPTX analysis complete; explicit confirmation required");
     cy.contains("deterministic-ooxml-static");
     cy.contains("External AI").parent().contains("not used");
-    cy.contains("Repeat-block suggestions (not applied)");
+    cy.contains("Repeat-block suggestions");
+    cy.contains("li", "horizontal")
+      .find('input[type="checkbox"]')
+      .check();
     cy.contains("summary", "Review candidate differences (2)").click();
     cy.contains("td", "Editable text");
     cy.contains("td", "Manual review");
