@@ -35,6 +35,7 @@ REVISION_TEMPLATE_V2_IMPORT_LEASES = "d7e8f9a0b1c2"
 REVISION_TEMPLATE_V2_SOURCE_RETENTION = "e8f9a0b1c2d3"
 REVISION_TEMPLATE_V2_LOCAL_STATE = "f9a0b1c2d3e4"
 REVISION_TEMPLATE_V2_DELETE_SAFETY = "0a1b2c3d4e5f"
+REVISION_TEMPLATE_V2_IMPORT_REVIEW = "1b2c3d4e5f6a"
 TEMPLATE_V2_IMPORT_LEASE_COLUMNS = {
     "attempt_number",
     "attempt_token",
@@ -48,6 +49,16 @@ TEMPLATE_V2_SOURCE_RETENTION_COLUMNS = {
     "source_cleanup_lease_expires_at",
     "source_cleanup_attempted_at",
     "source_deleted_at",
+}
+TEMPLATE_V2_IMPORT_REVIEW_COLUMNS = {
+    "owner_scope",
+    "request_key_hash",
+    "request_fingerprint",
+    "revision",
+    "analysis_result",
+    "repeat_suggestions",
+    "confirmed_at",
+    "cancelled_at",
 }
 TEMPLATE_V2_EXPECTED_COLUMNS = set(PHASE_ONE_EXPECTED_COLUMNS)
 
@@ -280,7 +291,23 @@ def _infer_revision_from_schema(
         if delete_action == sidecar_delete_action == "CASCADE":
             return REVISION_TEMPLATE_V2_LOCAL_STATE
         if delete_action == sidecar_delete_action == "RESTRICT":
-            return REVISION_TEMPLATE_V2_DELETE_SAFETY
+            present_review_columns = (
+                TEMPLATE_V2_IMPORT_REVIEW_COLUMNS & import_columns
+            )
+            if not present_review_columns:
+                return REVISION_TEMPLATE_V2_DELETE_SAFETY
+            if not TEMPLATE_V2_IMPORT_REVIEW_COLUMNS.issubset(import_columns):
+                raise RuntimeError(
+                    "Template V2 PPTX review schema is only partially applied"
+                )
+            if (
+                "uq_template_v2_pptx_imports_owner_request_key"
+                not in dispatch_indexes
+            ):
+                raise RuntimeError(
+                    "Template V2 PPTX owner request-key index is missing"
+                )
+            return REVISION_TEMPLATE_V2_IMPORT_REVIEW
         raise RuntimeError(
             "Template V2 presentation ownership FKs have unsupported or "
             "mixed delete actions: "
@@ -338,7 +365,14 @@ def _infer_revision_from_schema(
         template_v2_local_state_presentation_fk_delete_action(inspector)
     )
     if delete_action == sidecar_delete_action == "RESTRICT":
-        return REVISION_TEMPLATE_V2_DELETE_SAFETY
+        present_review_columns = TEMPLATE_V2_IMPORT_REVIEW_COLUMNS & import_columns
+        if not present_review_columns:
+            return REVISION_TEMPLATE_V2_DELETE_SAFETY
+        if not TEMPLATE_V2_IMPORT_REVIEW_COLUMNS.issubset(import_columns):
+            raise RuntimeError(
+                "Template V2 PPTX review schema is only partially applied"
+            )
+        return REVISION_TEMPLATE_V2_IMPORT_REVIEW
     if delete_action != sidecar_delete_action:
         raise RuntimeError(
             "Template V2 presentation ownership FKs have mixed delete actions"

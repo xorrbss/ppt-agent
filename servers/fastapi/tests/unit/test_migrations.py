@@ -306,7 +306,7 @@ def test_template_v2_phase_one_migration_is_additive_from_actual_previous_head(
             )
             template_indexes = db_inspector.get_indexes("template_v2")
 
-        assert revision == migrations.REVISION_TEMPLATE_V2_DELETE_SAFETY
+        assert revision == migrations.REVISION_TEMPLATE_V2_IMPORT_REVIEW
         assert "template_v2" in tables
         assert "template_v2_local_state" in tables
         assert "template_v2_pptx_imports" in tables
@@ -1410,7 +1410,7 @@ def test_template_v2_upgrade_downgrade_upgrade_cycle(tmp_path):
                 connection.execute(
                     text("SELECT version_num FROM alembic_version")
                 ).scalar_one()
-                == migrations.REVISION_TEMPLATE_V2_DELETE_SAFETY
+                == migrations.REVISION_TEMPLATE_V2_IMPORT_REVIEW
             )
             assert migrations.TEMPLATE_V2_EXPECTED_COLUMNS.issubset(
                 {
@@ -1449,7 +1449,7 @@ def test_template_v2_upgrade_downgrade_upgrade_cycle(tmp_path):
                 connection.execute(
                     text("SELECT version_num FROM alembic_version")
                 ).scalar_one()
-                == migrations.REVISION_TEMPLATE_V2_DELETE_SAFETY
+                == migrations.REVISION_TEMPLATE_V2_IMPORT_REVIEW
             )
             assert "template_v2" in inspector.get_table_names()
             assert migrations.SLIDE_UI_CHECK_CONSTRAINT in {

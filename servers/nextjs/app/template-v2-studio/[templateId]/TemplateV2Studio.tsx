@@ -37,6 +37,7 @@ import {
 } from "@/lib/template-v2-upstream-compat";
 import { getApiUrl } from "@/utils/api";
 import TemplateV2Canvas from "./TemplateV2Canvas";
+import TemplateV2PptxImportPanel from "./TemplateV2PptxImportPanel";
 
 interface StructuredTemplate {
   id: string;
@@ -799,6 +800,8 @@ export default function TemplateV2Studio({
           </button>
         </div>
       </header>
+
+      <TemplateV2PptxImportPanel currentTemplateId={template.id} />
 
       {error ? (
         <div

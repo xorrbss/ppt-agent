@@ -25,8 +25,8 @@ class TemplateV2PptxImport(SQLModel, table=True):
     """Local lifecycle sidecar and review evidence for one private PPTX import.
 
     Import state is deliberately separate from the upstream-compatible
-    ``template_v2`` definition. ``draft_template_id`` is the only bridge back
-    to a canonical template row.
+    ``template_v2`` definition. ``draft_template_id`` remains null until the
+    owner explicitly confirms the analyzed candidate.
     """
 
     __tablename__ = "template_v2_pptx_imports"
@@ -42,9 +42,40 @@ class TemplateV2PptxImport(SQLModel, table=True):
             "source_deleted_at",
             "source_retention_expires_at",
         ),
+        Index(
+            "uq_template_v2_pptx_imports_owner_request_key",
+            "owner_scope",
+            "request_key_hash",
+            unique=True,
+        ),
     )
 
     id: uuid.UUID = Field(primary_key=True, default_factory=uuid.uuid4)
+    owner_scope: str = Field(
+        sa_column=Column(
+            String(64),
+            nullable=False,
+            default="local-disabled-auth-scope-v1",
+            server_default="local-disabled-auth-scope-v1",
+        )
+    )
+    request_key_hash: Optional[str] = Field(
+        default=None,
+        sa_column=Column(String(64), nullable=True),
+    )
+    request_fingerprint: Optional[str] = Field(
+        default=None,
+        sa_column=Column(String(64), nullable=True),
+    )
+    revision: int = Field(
+        sa_column=Column(
+            Integer,
+            nullable=False,
+            default=1,
+            server_default=text("1"),
+        ),
+        default=1,
+    )
     task_id: str = Field(
         sa_column=Column(
             String,
@@ -129,6 +160,22 @@ class TemplateV2PptxImport(SQLModel, table=True):
     manifest: dict = Field(
         default_factory=dict,
         sa_column=Column(JSON, nullable=False, default=dict),
+    )
+    analysis_result: Optional[dict] = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True),
+    )
+    repeat_suggestions: Optional[list[dict]] = Field(
+        default_factory=list,
+        sa_column=Column(JSON, nullable=True, default=list),
+    )
+    confirmed_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    cancelled_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
     )
     created_at: datetime = Field(
         sa_column=Column(

@@ -89,6 +89,18 @@ TEMPLATE_V2_IMPORT_LIFECYCLE_COLUMNS = frozenset(
         "updated_at",
     }
 )
+TEMPLATE_V2_IMPORT_REVIEW_COLUMNS = frozenset(
+    {
+        "owner_scope",
+        "request_key_hash",
+        "request_fingerprint",
+        "revision",
+        "analysis_result",
+        "repeat_suggestions",
+        "confirmed_at",
+        "cancelled_at",
+    }
+)
 TEMPLATE_V2_LOCAL_STATE_TEMPLATE_FK = (
     "fk_template_v2_local_state_template_id_template_v2"
 )
@@ -807,7 +819,14 @@ def validate_template_v2_local_sidecars(connection) -> PhaseOneSchemaReport:
                 TEMPLATE_V2_IMPORT_LIFECYCLE_TABLE
             )
         }
-        if import_columns != TEMPLATE_V2_IMPORT_LIFECYCLE_COLUMNS:
+        allowed_import_column_sets = {
+            TEMPLATE_V2_IMPORT_LIFECYCLE_COLUMNS,
+            (
+                TEMPLATE_V2_IMPORT_LIFECYCLE_COLUMNS
+                | TEMPLATE_V2_IMPORT_REVIEW_COLUMNS
+            ),
+        }
+        if import_columns not in allowed_import_column_sets:
             incompatible.append(
                 f"{TEMPLATE_V2_IMPORT_LIFECYCLE_TABLE} has incompatible columns"
             )

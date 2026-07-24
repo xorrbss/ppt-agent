@@ -5,9 +5,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import uuid
 
-import pytest
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
@@ -20,8 +18,8 @@ from models.sql.template_v2 import TemplateV2
 from models.sql.template_v2_local_state import TemplateV2LocalState
 from models.sql.template_v2_pptx_import import TemplateV2PptxImport
 from services import template_v2_pptx_ingestion_service as ingestion
-from templates.v2.pptx.assembler import AssembledTemplateV2Draft
-from templates.v2.models.layouts import RawSlideLayouts, SlideLayouts
+from templates.v2.pptx.analyzer import analyze_ooxml_candidates
+from templates.v2.pptx.models import PresentationCandidates
 
 
 async def _database(path: Path):
@@ -96,60 +94,61 @@ async def _insert_import(
     return import_id, task_id
 
 
-def _assembled_draft() -> AssembledTemplateV2Draft:
-    text = {
-        "type": "text",
-        "position": {"x": 1, "y": 1},
-        "size": {"width": 8, "height": 1},
-        "runs": [{"text": "Imported title"}],
-        "decorative": False,
-        "name": "title",
-        "min_length": 1,
-        "max_length": 80,
-    }
-    raw_layouts = RawSlideLayouts.model_validate(
+def _analysis_result() -> dict:
+    candidates = PresentationCandidates.model_validate(
         {
-            "layouts": [
+            "source_sha256": "a" * 64,
+            "slides": [
                 {
-                    "id": "import-layout",
-                    "description": "Imported source slide layout",
-                    "elements": [text],
-                }
-            ]
-        }
-    )
-    layouts = SlideLayouts.model_validate(
-        {
-            "layouts": [
-                {
-                    "id": "import-layout",
-                    "description": "Imported editable slide layout",
-                    "components": [
+                    "source_part": "ppt/slides/slide1.xml",
+                    "relationship_id": "rId1",
+                    "width": 1280.0,
+                    "height": 720.0,
+                    "shapes": [
                         {
-                            "id": "hero",
-                            "description": "Imported editable hero component",
-                            "position": {"x": 1, "y": 1},
-                            "elements": [
-                                {
-                                    **text,
-                                    "position": {"x": 0, "y": 0},
-                                }
-                            ],
+                            "source_id": "shape-1",
+                            "name": "Title",
+                            "kind": "text",
+                            "x": 100.0,
+                            "y": 100.0,
+                            "width": 800.0,
+                            "height": 100.0,
+                            "rotation": 0.0,
+                            "text": "Imported title",
+                            "confidence": 1.0,
                         }
                     ],
+                    "external_relationships": [],
                 }
-            ]
+            ],
         }
     )
-    return AssembledTemplateV2Draft(
-        raw_layouts=raw_layouts,
-        layouts=layouts,
-        contents=[{"hero": {"title": "Imported title"}}],
-        manifest={
-            "schema_version": 1,
-            "review": {"required": True},
-        },
-    )
+    return analyze_ooxml_candidates(candidates).model_dump(mode="json")
+
+
+async def _mark_review_required(maker, import_id: uuid.UUID, task_id: str) -> None:
+    async with maker() as session:
+        job = await session.get(TemplateV2PptxImport, import_id)
+        task = await session.get(
+            AsyncPresentationGenerationTaskModel,
+            task_id,
+        )
+        assert job is not None
+        assert task is not None
+        job.state = "review_required"
+        job.revision = 2
+        job.analysis_result = _analysis_result()
+        job.repeat_suggestions = []
+        task.status = "completed"
+        task.data = {
+            "kind": ingestion.IMPORT_TASK_KIND,
+            "import_id": str(import_id),
+            "state": "review_required",
+            "attempt_number": job.attempt_number,
+        }
+        session.add(job)
+        session.add(task)
+        await session.commit()
 
 
 def test_concurrent_workers_only_one_claims_the_queued_attempt(
@@ -195,52 +194,27 @@ def test_concurrent_workers_only_one_claims_the_queued_attempt(
     asyncio.run(scenario())
 
 
-def test_finalize_writes_template_and_sidecar_once_across_retries(
+def test_concurrent_confirmation_creates_exactly_one_template(
     tmp_path: Path,
-    monkeypatch,
 ) -> None:
     async def scenario() -> None:
-        engine, maker = await _database(tmp_path / "finalize-idempotent.sqlite")
-        monkeypatch.setattr(ingestion, "async_session_maker", maker)
+        engine, maker = await _database(tmp_path / "confirm.sqlite")
         try:
-            import_id, task_id = await _insert_import(
-                maker,
-                state="processing",
-                task_status="running",
-                attempt_number=1,
-                attempt_token="current-owner",
-                lease_expires_at=datetime.now(timezone.utc)
-                + timedelta(minutes=10),
-            )
-            assembled = _assembled_draft()
+            import_id, task_id = await _insert_import(maker)
+            await _mark_review_required(maker, import_id, task_id)
 
-            assert not await ingestion._persist_success(
-                import_id,
-                task_id,
-                "stale-owner",
-                assembled,
-            )
-            outcomes = await asyncio.gather(
-                ingestion._persist_success(
-                    import_id,
-                    task_id,
-                    "current-owner",
-                    assembled,
-                ),
-                ingestion._persist_success(
-                    import_id,
-                    task_id,
-                    "current-owner",
-                    assembled,
-                ),
-            )
-            assert sorted(outcomes) == [False, True]
-            assert not await ingestion._persist_success(
-                import_id,
-                task_id,
-                "current-owner",
-                assembled,
-            )
+            async def confirm() -> str:
+                async with maker() as session:
+                    return await ingestion.confirm_template_v2_pptx_import(
+                        session,
+                        import_id,
+                        task_id,
+                        owner_scope="local-disabled-auth-scope-v1",
+                        expected_revision=2,
+                    )
+
+            outcomes = await asyncio.gather(confirm(), confirm())
+            assert sorted(outcomes) == ["already_confirmed", "confirmed"]
 
             async with maker() as session:
                 job = await session.get(TemplateV2PptxImport, import_id)
@@ -250,23 +224,17 @@ def test_finalize_writes_template_and_sidecar_once_across_retries(
                 )
                 assert job is not None
                 assert task is not None
-                assert job.state == "review_required"
-                assert job.draft_template_id is not None
-                assert job.attempt_token is None
-                assert task.status == "completed"
-
-                template = await session.get(
-                    TemplateV2,
-                    job.draft_template_id,
+                assert job.state == "confirmed"
+                assert job.revision == 3
+                assert job.draft_template_id == job.requested_template_id
+                assert job.confirmed_at is not None
+                assert task.data["state"] == "confirmed"
+                assert (
+                    await session.scalar(
+                        select(func.count()).select_from(PresentationModel)
+                    )
+                    == 1
                 )
-                local_state = await session.get(
-                    TemplateV2LocalState,
-                    job.draft_template_id,
-                )
-                assert template is not None
-                assert local_state is not None
-                assert local_state.presentation_id == template.presentation_id
-                assert local_state.revision == 1
                 assert (
                     await session.scalar(
                         select(func.count()).select_from(TemplateV2)
@@ -283,15 +251,21 @@ def test_finalize_writes_template_and_sidecar_once_across_retries(
                 )
                 assert (
                     await session.scalar(
-                        select(func.count()).select_from(PresentationModel)
-                    )
-                    == 1
-                )
-                assert (
-                    await session.scalar(
                         select(func.count()).select_from(SlideModel)
                     )
                     == 1
+                )
+
+            async with maker() as session:
+                assert (
+                    await ingestion.confirm_template_v2_pptx_import(
+                        session,
+                        import_id,
+                        task_id,
+                        owner_scope="different-owner",
+                        expected_revision=3,
+                    )
+                    == "not_found"
                 )
         finally:
             await engine.dispose()
@@ -299,7 +273,104 @@ def test_finalize_writes_template_and_sidecar_once_across_retries(
     asyncio.run(scenario())
 
 
-def test_finalize_constraint_failure_rolls_back_entire_transaction(
+def test_analysis_persists_review_candidate_without_creating_template(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    async def scenario() -> None:
+        engine, maker = await _database(tmp_path / "finalize-idempotent.sqlite")
+        monkeypatch.setattr(ingestion, "async_session_maker", maker)
+        try:
+            import_id, task_id = await _insert_import(
+                maker,
+                state="processing",
+                task_status="running",
+                attempt_number=1,
+                attempt_token="current-owner",
+                lease_expires_at=datetime.now(timezone.utc)
+                + timedelta(minutes=10),
+            )
+            analysis_result = _analysis_result()
+
+            assert not await ingestion._persist_analysis(
+                import_id,
+                task_id,
+                "stale-owner",
+                analysis_result,
+                [],
+            )
+            outcomes = await asyncio.gather(
+                ingestion._persist_analysis(
+                    import_id,
+                    task_id,
+                    "current-owner",
+                    analysis_result,
+                    [],
+                ),
+                ingestion._persist_analysis(
+                    import_id,
+                    task_id,
+                    "current-owner",
+                    analysis_result,
+                    [],
+                ),
+            )
+            assert sorted(outcomes) == [False, True]
+            assert not await ingestion._persist_analysis(
+                import_id,
+                task_id,
+                "current-owner",
+                analysis_result,
+                [],
+            )
+
+            async with maker() as session:
+                job = await session.get(TemplateV2PptxImport, import_id)
+                task = await session.get(
+                    AsyncPresentationGenerationTaskModel,
+                    task_id,
+                )
+                assert job is not None
+                assert task is not None
+                assert job.state == "review_required"
+                assert job.draft_template_id is None
+                assert job.analysis_result == analysis_result
+                assert job.revision == 2
+                assert job.attempt_token is None
+                assert task.status == "completed"
+                assert (
+                    await session.scalar(
+                        select(func.count()).select_from(TemplateV2)
+                    )
+                    == 0
+                )
+                assert (
+                    await session.scalar(
+                        select(func.count()).select_from(
+                            TemplateV2LocalState
+                        )
+                    )
+                    == 0
+                )
+                assert (
+                    await session.scalar(
+                        select(func.count()).select_from(PresentationModel)
+                    )
+                    == 0
+                )
+                assert (
+                    await session.scalar(
+                        select(func.count()).select_from(SlideModel)
+                    )
+                    == 0
+                )
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_confirm_refuses_existing_template_without_mutating_import(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -347,12 +418,25 @@ def test_finalize_constraint_failure_rolls_back_entire_transaction(
                 )
                 await session.commit()
 
-            with pytest.raises(IntegrityError):
-                await ingestion._persist_success(
-                    import_id,
-                    task_id,
-                    "current-owner",
-                    _assembled_draft(),
+            async with maker() as session:
+                job = await session.get(TemplateV2PptxImport, import_id)
+                assert job is not None
+                job.state = "review_required"
+                job.attempt_token = None
+                job.analysis_result = _analysis_result()
+                job.revision = 2
+                await session.commit()
+
+            async with maker() as session:
+                assert (
+                    await ingestion.confirm_template_v2_pptx_import(
+                        session,
+                        import_id,
+                        task_id,
+                        owner_scope="local-disabled-auth-scope-v1",
+                        expected_revision=2,
+                    )
+                    == "template_conflict"
                 )
 
             async with maker() as session:
@@ -363,10 +447,9 @@ def test_finalize_constraint_failure_rolls_back_entire_transaction(
                 )
                 assert job is not None
                 assert task is not None
-                assert job.state == "processing"
+                assert job.state == "review_required"
                 assert job.draft_template_id is None
-                assert job.attempt_token == "current-owner"
-                assert task.status == "running"
+                assert job.revision == 2
                 assert (
                     await session.scalar(
                         select(func.count()).select_from(PresentationModel)

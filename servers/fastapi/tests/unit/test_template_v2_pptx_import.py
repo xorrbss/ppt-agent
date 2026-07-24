@@ -12,6 +12,7 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from fastapi import HTTPException, UploadFile
 from sqlalchemy import Column, MetaData, String, Table, create_engine, inspect
+from starlette.requests import Request
 from starlette.datastructures import Headers
 
 from api.v1.ppt.endpoints import structured_template_imports
@@ -19,6 +20,7 @@ from api.v1.ppt.endpoints.structured_template_imports import (
     create_structured_template_import,
 )
 from models.sql.template_v2_pptx_import import TemplateV2PptxImport
+from services import template_v2_pptx_ingestion_service as ingestion
 from services.template_v2_pptx_storage import (
     PPTX_MEDIA_TYPE,
     PptxUploadRejected,
@@ -92,6 +94,23 @@ def _upload(payload: bytes, *, filename: str = "source.pptx") -> UploadFile:
     )
 
 
+def _request(username: str = "local-user") -> Request:
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/api/v1/ppt/structured-templates/imports",
+            "headers": [],
+            "query_string": b"",
+            "scheme": "http",
+            "server": ("test", 80),
+            "client": ("test", 1),
+        }
+    )
+    request.state.auth_username = username
+    return request
+
+
 def test_ooxml_candidates_are_deterministic_and_manifest_review_is_explicit(
     tmp_path: Path,
 ) -> None:
@@ -112,7 +131,6 @@ def test_ooxml_candidates_are_deterministic_and_manifest_review_is_explicit(
         "text",
         "unsupported",
     ]
-
     draft = assemble_template_v2_draft(first)
     assert draft.raw_layouts.model_validate(
         draft.raw_layouts.model_dump(mode="json")
@@ -134,6 +152,62 @@ def test_ooxml_candidates_are_deterministic_and_manifest_review_is_explicit(
         "unsupported_ooxml:graphicFrame"
     )
     assert draft.manifest["slides"][0]["fallback"]["kind"] == "manual_review"
+
+
+def test_worker_analysis_binds_source_and_separates_inventory(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    app_data = tmp_path / "app-data"
+    app_data.mkdir()
+    monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
+    payload = _pptx_bytes()
+    import_id = uuid.uuid4()
+    stored = asyncio.run(
+        store_private_pptx(
+            _upload(payload),
+            import_id=import_id,
+        )
+    )
+    observations: list[dict] = []
+    monkeypatch.setattr(
+        ingestion,
+        "log_pptx_analysis_observation",
+        lambda **event: observations.append(event),
+    )
+
+    analysis, suggestions, inventory = ingestion._analyze_import_source(
+        stored.storage_key,
+        stored.sha256,
+        import_id=import_id,
+        source_filename=stored.display_filename,
+        source_media_type=stored.media_type,
+        source_size_bytes=stored.size_bytes,
+    )
+
+    assert analysis["provider"]["id"] == "deterministic-ooxml-static"
+    assert analysis["provider"]["external_ai"] is False
+    assert analysis["preview"]["status"] == "not_provided"
+    assert analysis["render"]["status"] == "not_run"
+    assert isinstance(suggestions, list)
+    assert inventory["source"] == stored.secret_free_metadata().to_manifest()
+    assert inventory["artifacts"]
+    assert inventory["candidates"] == [
+        {
+            "identifier": "deterministic-ooxml-static-analysis-v1",
+            "media_type": "application/json",
+            "sha256": inventory["candidates"][0]["sha256"],
+            "size_bytes": inventory["candidates"][0]["size_bytes"],
+        }
+    ]
+    assert observations == [
+        {
+            "provider": "deterministic-ooxml-static",
+            "status": "completed",
+            "duration_ms": observations[0]["duration_ms"],
+            "count": 1,
+        }
+    ]
 
 
 def test_package_preflight_rejects_traversal_and_windows_paths(
@@ -241,6 +315,7 @@ def test_import_api_queues_for_the_durable_dispatcher(
     fake_async_session,
 ) -> None:
     monkeypatch.setenv("APP_DATA_DIRECTORY", str(tmp_path / "app-data"))
+    monkeypatch.setenv("DISABLE_AUTH", "true")
     monkeypatch.setenv("ENABLE_TEMPLATE_V2", "true")
     monkeypatch.setenv("TEMPLATE_V2_TEMPLATE_ALLOWLIST", "safe-template")
     notifications: list[str] = []
@@ -249,11 +324,21 @@ def test_import_api_queues_for_the_durable_dispatcher(
         "notify_template_v2_pptx_dispatcher",
         lambda: notifications.append("queued"),
     )
+    class EmptyResult:
+        def scalar_one_or_none(self):
+            return None
+
+    async def execute_empty(*_args, **_kwargs):
+        return EmptyResult()
+
+    monkeypatch.setattr(fake_async_session, "execute", execute_empty)
 
     response = asyncio.run(
         create_structured_template_import(
+            request=_request(),
             template_id="safe-template",
             pptx_file=_upload(_pptx_bytes()),
+            idempotency_key="request-key-0001",
             sql_session=fake_async_session,
         )
     )
@@ -261,6 +346,9 @@ def test_import_api_queues_for_the_durable_dispatcher(
     assert response.state == "queued"
     assert response.requested_template_id == "safe-template"
     assert response.source_sha256
+    assert response.source_inventory["source"]["sha256"] == response.source_sha256
+    assert response.source_inventory["artifacts"] == []
+    assert response.source_inventory["candidates"] == []
     assert fake_async_session.commit_count == 1
     jobs = [
         obj
@@ -281,8 +369,10 @@ def test_import_api_respects_default_off_policy(
     try:
         asyncio.run(
             create_structured_template_import(
+                request=_request(),
                 template_id="blocked",
                 pptx_file=_upload(_pptx_bytes()),
+                idempotency_key="request-key-0002",
                 sql_session=fake_async_session,
             )
         )
@@ -339,6 +429,19 @@ def test_import_migration_upgrade_and_empty_downgrade(tmp_path: Path) -> None:
     assert retention_spec is not None and retention_spec.loader is not None
     retention_migration = importlib.util.module_from_spec(retention_spec)
     retention_spec.loader.exec_module(retention_migration)
+    review_migration_path = (
+        Path(__file__).parents[2]
+        / "alembic"
+        / "versions"
+        / "1b2c3d4e5f6a_add_template_v2_import_review_boundary.py"
+    )
+    review_spec = importlib.util.spec_from_file_location(
+        "pptx_import_review_migration",
+        review_migration_path,
+    )
+    assert review_spec is not None and review_spec.loader is not None
+    review_migration = importlib.util.module_from_spec(review_spec)
+    review_spec.loader.exec_module(review_migration)
 
     with engine.begin() as connection:
         migration.op = Operations(MigrationContext.configure(connection))
@@ -347,6 +450,8 @@ def test_import_migration_upgrade_and_empty_downgrade(tmp_path: Path) -> None:
         lease_migration.upgrade()
         retention_migration.op = Operations(MigrationContext.configure(connection))
         retention_migration.upgrade()
+        review_migration.op = Operations(MigrationContext.configure(connection))
+        review_migration.upgrade()
         inspector = inspect(connection)
         assert "template_v2_pptx_imports" in inspector.get_table_names()
         columns = {
@@ -369,6 +474,14 @@ def test_import_migration_upgrade_and_empty_downgrade(tmp_path: Path) -> None:
             "source_cleanup_lease_expires_at",
             "source_cleanup_attempted_at",
             "source_deleted_at",
+            "owner_scope",
+            "request_key_hash",
+            "request_fingerprint",
+            "revision",
+            "analysis_result",
+            "repeat_suggestions",
+            "confirmed_at",
+            "cancelled_at",
         }.issubset(columns)
         indexes = {
             index["name"]
@@ -377,6 +490,8 @@ def test_import_migration_upgrade_and_empty_downgrade(tmp_path: Path) -> None:
         assert "ix_template_v2_pptx_imports_requested_template_id" in indexes
         assert "ix_template_v2_pptx_imports_dispatch" in indexes
         assert "ix_template_v2_pptx_imports_source_cleanup" in indexes
+        assert "uq_template_v2_pptx_imports_owner_request_key" in indexes
+        review_migration.downgrade()
         retention_migration.downgrade()
         lease_migration.downgrade()
         migration.downgrade()

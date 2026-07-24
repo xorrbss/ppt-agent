@@ -8,7 +8,7 @@
   },
   "commonRevision": "c7b70d0f31b1",
   "upstreamTipRevision": "b8e2f4a7c9d1",
-  "localTipRevision": "0a1b2c3d4e5f",
+  "localTipRevision": "1b2c3d4e5f6a",
   "databaseCompatibility": {
     "verified": [
       {
@@ -52,7 +52,8 @@
     { "revision": "d7e8f9a0b1c2", "downRevision": "c6d7e8f9a0b1", "file": "d7e8f9a0b1c2_add_template_v2_import_attempt_lease.py" },
     { "revision": "e8f9a0b1c2d3", "downRevision": "d7e8f9a0b1c2", "file": "e8f9a0b1c2d3_add_template_v2_source_retention.py" },
     { "revision": "f9a0b1c2d3e4", "downRevision": "e8f9a0b1c2d3", "file": "f9a0b1c2d3e4_add_template_v2_local_state_sidecar.py" },
-    { "revision": "0a1b2c3d4e5f", "downRevision": "f9a0b1c2d3e4", "file": "0a1b2c3d4e5f_harden_template_v2_delete_cascade.py" }
+    { "revision": "0a1b2c3d4e5f", "downRevision": "f9a0b1c2d3e4", "file": "0a1b2c3d4e5f_harden_template_v2_delete_cascade.py" },
+    { "revision": "1b2c3d4e5f6a", "downRevision": "0a1b2c3d4e5f", "file": "1b2c3d4e5f6a_add_template_v2_import_review_boundary.py" }
   ],
   "translations": [
     {
@@ -156,6 +157,10 @@
       "compatibilityGuard": "Validate complete, matching sidecar ownership before replacing both presentation ownership CASCADE actions with RESTRICT. Delete canonical templates explicitly in the presentation transaction and preserve import audit rows.",
       "conflictPolicy": "Return 409 presentation_delete_dependency_conflict when ownership diverges or a concurrent dependency survives.",
       "sqliteConcurrencyPolicy": "After rollback, return retryable 503 presentation_delete_temporarily_unavailable with Retry-After: 1 only for SQLite BUSY/LOCKED. Do not reclassify other database OperationalError values or multiply SQLite's bounded driver wait with an application retry loop."
+    },
+    {
+      "revision": "1b2c3d4e5f6a",
+      "purpose": "Owner-scoped, idempotent PPTX analysis review and explicit confirmation boundary"
     }
   ]
 }

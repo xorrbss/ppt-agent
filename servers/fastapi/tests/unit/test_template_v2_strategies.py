@@ -1,4 +1,5 @@
 import json
+from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -117,6 +118,46 @@ def test_strategy_resolver_selects_authored_hybrid_without_replacing_it():
         presentation,
         [{"ui": None, "html_content": "<section>Editable</section>"}],
     ) == AUTHORED_STRATEGIES
+
+
+def test_default_off_preserves_authored_html_and_authored_hybrid_contract():
+    policy = get_structured_template_policy({})
+    presentation = {
+        "version": LEGACY_PRESENTATION_VERSION,
+        "mode": "authored",
+        "layout": None,
+    }
+    slides = [{"ui": None, "html_content": "<section>Editable</section>"}]
+    before = deepcopy((presentation, slides))
+
+    strategies = resolve_presentation_strategies(presentation, slides)
+
+    assert policy.creation_enabled is False
+    assert strategies.generation is GenerationStrategy.AUTHORED_HTML
+    assert strategies.editor is EditorCapability.AUTHORED_HTML
+    assert strategies.export is ExportStrategy.AUTHORED_HYBRID
+    assert (presentation, slides) == before
+
+
+@pytest.mark.parametrize("mode", ["template", "adaptive"])
+def test_default_off_leaves_legacy_template_and_adaptive_on_existing_pipeline(mode):
+    policy = get_structured_template_policy({})
+    presentation = {
+        "version": LEGACY_PRESENTATION_VERSION,
+        "mode": mode,
+        "layout": {"name": "existing-layout"},
+    }
+    slides = [{"ui": None, "html_content": None}]
+    before = deepcopy((presentation, slides))
+
+    with pytest.raises(
+        StrategyResolutionError,
+        match="legacy_strategy_managed_by_existing_pipeline",
+    ):
+        resolve_presentation_strategies(presentation, slides)
+
+    assert policy.creation_enabled is False
+    assert (presentation, slides) == before
 
 
 def test_adapter_registry_delegates_to_existing_executors_after_resolution():

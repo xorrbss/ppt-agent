@@ -1,11 +1,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 from pathlib import Path, PurePosixPath
 import re
 import stat
-from zipfile import BadZipFile, ZipFile, ZipInfo
+from zipfile import (
+    BadZipFile,
+    ZIP_DEFLATED,
+    ZIP_STORED,
+    ZipFile,
+    ZipInfo,
+)
 import xml.etree.ElementTree as ET
+
+from .source_inventory import HashedInventoryItem
 
 
 class UnsafePptxPackage(ValueError):
@@ -46,15 +55,41 @@ def _canonical_member_name(name: str) -> str:
         or _DRIVE_PREFIX.match(normalized)
     ):
         raise UnsafePptxPackage("unsafe_zip_member_path")
-    parts = PurePosixPath(normalized).parts
-    if any(part in {"", ".", ".."} for part in parts):
+    raw_parts = normalized.split("/")
+    if any(part in {"", ".", ".."} for part in raw_parts):
         raise UnsafePptxPackage("unsafe_zip_member_path")
-    return "/".join(parts)
+    return "/".join(PurePosixPath(normalized).parts)
 
 
 def _is_symlink(info: ZipInfo) -> bool:
     unix_mode = info.external_attr >> 16
     return stat.S_IFMT(unix_mode) == stat.S_IFLNK
+
+
+def _member_fingerprint(
+    info: ZipInfo,
+) -> tuple[int, int, int, int, int, int, int, int, int, bytes]:
+    return (
+        info.file_size,
+        info.compress_size,
+        info.CRC,
+        info.compress_type,
+        info.flag_bits,
+        info.external_attr,
+        info.internal_attr,
+        info.create_system,
+        info.header_offset,
+        info.extra,
+    )
+
+
+def _contains_forbidden_xml_declaration(payload: bytes) -> bool:
+    upper = payload.upper()
+    without_nuls = upper.replace(b"\x00", b"")
+    return any(
+        marker in upper or marker in without_nuls
+        for marker in _FORBIDDEN_XML_DECLARATIONS
+    )
 
 
 class PptxPackageReader:
@@ -84,6 +119,8 @@ class PptxPackageReader:
                         raise UnsafePptxPackage("encrypted_zip_member")
                     if _is_symlink(info):
                         raise UnsafePptxPackage("symlink_zip_member")
+                    if info.compress_type not in {ZIP_STORED, ZIP_DEFLATED}:
+                        raise UnsafePptxPackage("unsupported_zip_compression")
                     if info.file_size > self.limits.max_member_bytes:
                         raise UnsafePptxPackage("zip_member_size_limit_exceeded")
                     total_size += info.file_size
@@ -123,22 +160,95 @@ class PptxPackageReader:
         info = self._members.get(canonical)
         if info is None:
             raise UnsafePptxPackage("referenced_package_part_missing")
-        limit = max_bytes or self.limits.max_member_bytes
+        limit = self.limits.max_member_bytes if max_bytes is None else max_bytes
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit <= 0:
+            raise ValueError("invalid_package_part_size_limit")
         if info.file_size > limit:
             raise UnsafePptxPackage("package_part_size_limit_exceeded")
         try:
-            with ZipFile(self.path) as archive, archive.open(info) as stream:
-                payload = stream.read(limit + 1)
-        except BadZipFile as error:
+            with ZipFile(self.path) as archive:
+                current = self._revalidate_archive(archive)[canonical]
+                with archive.open(current) as stream:
+                    payload = stream.read(limit + 1)
+        except (BadZipFile, KeyError, NotImplementedError, RuntimeError) as error:
             raise UnsafePptxPackage("invalid_zip_member") from error
         if len(payload) > limit:
             raise UnsafePptxPackage("package_part_size_limit_exceeded")
+        if len(payload) != info.file_size:
+            raise UnsafePptxPackage("invalid_zip_member_size")
         return payload
+
+    def _revalidate_archive(self, archive: ZipFile) -> dict[str, ZipInfo]:
+        infos = archive.infolist()
+        if len(infos) != len(self._members):
+            raise UnsafePptxPackage("pptx_package_changed_after_preflight")
+        current_members: dict[str, ZipInfo] = {}
+        folded_names: set[str] = set()
+        for info in infos:
+            try:
+                name = _canonical_member_name(info.filename)
+            except UnsafePptxPackage as error:
+                raise UnsafePptxPackage(
+                    "pptx_package_changed_after_preflight"
+                ) from error
+            folded = name.casefold()
+            if folded in folded_names:
+                raise UnsafePptxPackage("pptx_package_changed_after_preflight")
+            folded_names.add(folded)
+            current_members[name] = info
+        if set(current_members) != set(self._members):
+            raise UnsafePptxPackage("pptx_package_changed_after_preflight")
+        if any(
+            _member_fingerprint(current_members[name])
+            != _member_fingerprint(expected)
+            for name, expected in self._members.items()
+        ):
+            raise UnsafePptxPackage("pptx_package_changed_after_preflight")
+        return current_members
+
+    def artifact_inventory(self) -> tuple[HashedInventoryItem, ...]:
+        """Hash bounded package parts without exporting their contents."""
+
+        if not self._members:
+            raise RuntimeError("package_preflight_required")
+        inventory: list[HashedInventoryItem] = []
+        try:
+            with ZipFile(self.path) as archive:
+                current_members = self._revalidate_archive(archive)
+                for name in sorted(self._members):
+                    current = current_members[name]
+                    if current.is_dir():
+                        continue
+                    digest = hashlib.sha256()
+                    size = 0
+                    with archive.open(current) as stream:
+                        while True:
+                            chunk = stream.read(1024 * 1024)
+                            if not chunk:
+                                break
+                            size += len(chunk)
+                            if size > self.limits.max_member_bytes:
+                                raise UnsafePptxPackage(
+                                    "zip_member_size_limit_exceeded"
+                                )
+                            digest.update(chunk)
+                    if size != current.file_size:
+                        raise UnsafePptxPackage("invalid_zip_member_size")
+                    inventory.append(
+                        HashedInventoryItem(
+                            scope="artifact",
+                            identifier=name,
+                            size_bytes=size,
+                            sha256=digest.hexdigest(),
+                        )
+                    )
+        except (BadZipFile, KeyError, NotImplementedError, RuntimeError) as error:
+            raise UnsafePptxPackage("invalid_zip_member") from error
+        return tuple(inventory)
 
     def read_xml(self, name: str) -> ET.Element:
         payload = self.read_member(name, max_bytes=self.limits.max_xml_bytes)
-        upper = payload.upper()
-        if any(marker in upper for marker in _FORBIDDEN_XML_DECLARATIONS):
+        if _contains_forbidden_xml_declaration(payload):
             raise UnsafePptxPackage("unsafe_xml_declaration")
         try:
             return ET.fromstring(payload)

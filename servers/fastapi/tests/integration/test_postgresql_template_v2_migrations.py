@@ -28,7 +28,7 @@ from utils.db_utils import to_sync_sqlalchemy_url
 FASTAPI_ROOT = Path(__file__).resolve().parents[2]
 PRE_TEMPLATE_V2_REVISION = "f3a4b5c6d7e8"
 PRE_LOCAL_STATE_REVISION = "e8f9a0b1c2d3"
-HEAD_REVISION = "0a1b2c3d4e5f"
+HEAD_REVISION = "1b2c3d4e5f6a"
 
 
 def _alembic_config(database_url: str) -> Config:

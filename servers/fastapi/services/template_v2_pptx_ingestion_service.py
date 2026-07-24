@@ -4,6 +4,7 @@ import asyncio
 from copy import deepcopy
 from datetime import datetime, timedelta
 import logging
+from time import perf_counter
 import uuid
 
 from sqlalchemy import and_, or_, select, update
@@ -23,6 +24,9 @@ from services.template_v2_pptx_retention_service import (
     maybe_cleanup_expired_private_sources,
     terminal_source_retention,
 )
+from services.template_v2_pptx_observability import (
+    log_pptx_analysis_observation,
+)
 from services.template_v2_pptx_storage import (
     get_private_source_retention_ttl,
     verify_private_source,
@@ -33,8 +37,18 @@ from templates.v2.pptx.assembler import (
     AssembledTemplateV2Draft,
     assemble_template_v2_draft,
 )
+from templates.v2.pptx.analyzer import analyze_ooxml_candidates
+from templates.v2.pptx.models import PresentationCandidates
 from templates.v2.pptx.ooxml_parser import parse_presentation_candidates
 from templates.v2.pptx.package_reader import PptxPackageReader, UnsafePptxPackage
+from templates.v2.pptx.repeat_suggestions import (
+    build_repeat_block_suggestions,
+)
+from templates.v2.pptx.source_inventory import (
+    SecretFreeSourceMetadata,
+    SourceInventory,
+    candidate_inventory_item,
+)
 from templates.v2.policy import get_structured_template_policy
 from templates.v2.strategies import (
     TEMPLATE_V2_STRATEGIES,
@@ -205,13 +219,61 @@ async def _heartbeat_loop(
 def _analyze_import_source(
     storage_key: str,
     source_sha256: str,
-) -> AssembledTemplateV2Draft:
-    source = verify_private_source(storage_key, source_sha256)
-    candidates = parse_presentation_candidates(
-        PptxPackageReader(source),
-        source_sha256=source_sha256,
-    )
-    return assemble_template_v2_draft(candidates)
+    *,
+    import_id: uuid.UUID,
+    source_filename: str,
+    source_media_type: str,
+    source_size_bytes: int,
+) -> tuple[dict, list[dict], dict]:
+    started_at = perf_counter()
+    try:
+        source = verify_private_source(
+            storage_key,
+            source_sha256,
+            expected_import_id=import_id,
+            expected_size_bytes=source_size_bytes,
+        )
+        reader = PptxPackageReader(source)
+        candidates = parse_presentation_candidates(
+            reader,
+            source_sha256=source_sha256,
+        )
+        analysis = analyze_ooxml_candidates(candidates)
+        analysis_payload = analysis.model_dump(mode="json")
+        inventory = SourceInventory(
+            source=SecretFreeSourceMetadata(
+                display_filename=source_filename,
+                media_type=source_media_type,
+                size_bytes=source_size_bytes,
+                sha256=source_sha256,
+            ),
+            artifacts=reader.artifact_inventory(),
+            candidates=(
+                candidate_inventory_item(
+                    "deterministic-ooxml-static-analysis-v1",
+                    analysis_payload,
+                ),
+            ),
+        ).to_manifest()
+        log_pptx_analysis_observation(
+            provider="deterministic-ooxml-static",
+            status="completed",
+            duration_ms=(perf_counter() - started_at) * 1000,
+            count=analysis.summary.slide_count,
+        )
+        return (
+            analysis_payload,
+            build_repeat_block_suggestions(candidates),
+            inventory,
+        )
+    except Exception:
+        log_pptx_analysis_observation(
+            provider="deterministic-ooxml-static",
+            status="failed",
+            duration_ms=(perf_counter() - started_at) * 1000,
+            count=0,
+        )
+        raise
 
 
 def _apply_deprecated_template_v2_constructor_bridge(
@@ -232,13 +294,15 @@ def _apply_deprecated_template_v2_constructor_bridge(
     return values
 
 
-async def _persist_success(
+async def _persist_analysis(
     import_id: uuid.UUID,
     task_id: str,
     attempt_token: str,
-    assembled: AssembledTemplateV2Draft,
+    analysis_result: dict,
+    repeat_suggestions: list[dict],
+    source_inventory: dict | None = None,
 ) -> bool:
-    finalized_at = _now()
+    analyzed_at = _now()
     async with async_session_maker() as session:
         gate = await session.execute(
             update(TemplateV2PptxImport)
@@ -247,12 +311,12 @@ async def _persist_success(
                 TemplateV2PptxImport.task_id == task_id,
                 TemplateV2PptxImport.state == "processing",
                 TemplateV2PptxImport.attempt_token == attempt_token,
-                TemplateV2PptxImport.lease_expires_at > finalized_at,
+                TemplateV2PptxImport.lease_expires_at > analyzed_at,
             )
             .values(
                 state="finalizing",
-                lease_expires_at=finalized_at + IMPORT_LEASE_DURATION,
-                updated_at=finalized_at,
+                lease_expires_at=analyzed_at + IMPORT_LEASE_DURATION,
+                updated_at=analyzed_at,
             )
             .execution_options(synchronize_session=False)
         )
@@ -264,75 +328,31 @@ async def _persist_success(
         if import_job is None or task is None:
             await session.rollback()
             return False
-        presentation = PresentationModel(
-            content=f"Private PPTX import {import_job.source_filename}",
-            n_slides=len(assembled.layouts.layouts),
-            language="en",
-            title=import_job.source_filename.rsplit(".", 1)[0],
-            layout=None,
-            structure=None,
-            theme={"mode": "template"},
-            mode="template",
-            version=TEMPLATE_V2_VERSION,
-        )
-        slides: list[SlideModel] = []
-        for index, layout in enumerate(assembled.layouts.layouts):
-            generated = build_generated_slide(layout, assembled.contents[index])
-            slides.append(
-                SlideModel(
-                    presentation=presentation.id,
-                    layout_group="native",
-                    layout=generated.layout_id,
-                    index=index,
-                    content=generated.content,
-                    ui=generated.ui,
-                    html_content=None,
-                    properties=None,
-                )
-            )
-        if (
-            resolve_presentation_strategies(presentation, slides)
-            != TEMPLATE_V2_STRATEGIES
-        ):
-            raise RuntimeError("template_v2_strategy_boundary_violation")
-        all_components = [
-            component.model_dump(mode="json")
-            for layout in assembled.layouts.layouts
-            for component in layout.components
-        ]
-        template = TemplateV2(
-            **_apply_deprecated_template_v2_constructor_bridge(
-                {
-                    "id": import_job.requested_template_id,
-                    "name": presentation.title or "Imported PPTX",
-                    "description": (
-                        "Deterministic OOXML draft; visual review required."
-                    ),
-                    "raw_layouts": assembled.raw_layouts.model_dump(mode="json"),
-                    "components": {"components": all_components},
-                    "merged_components": None,
-                    "layouts": assembled.layouts.model_dump(mode="json"),
-                    "assets": None,
-                    "is_default": False,
-                },
-                presentation_id=presentation.id,
-            )
-        )
-        local_state = TemplateV2LocalState(
-            template_id=template.id,
-            presentation_id=presentation.id,
-            revision=1,
-        )
-        import_job.draft_template_id = template.id
         import_job.state = "review_required"
         import_job.attempt_token = None
         import_job.lease_expires_at = None
+        import_job.analysis_result = deepcopy(analysis_result)
+        import_job.repeat_suggestions = deepcopy(repeat_suggestions)
+        import_job.revision += 1
+        manifest_updates = deepcopy(import_job.manifest or {})
+        if source_inventory is not None:
+            manifest_updates["source_inventory"] = deepcopy(source_inventory)
         retention_expires_at, manifest = terminal_source_retention(
             {
-                **deepcopy(assembled.manifest),
+                **manifest_updates,
                 "attempt_number": import_job.attempt_number,
+                "analysis": {
+                    "contract_version": analysis_result.get("contract_version"),
+                    "provider": deepcopy(analysis_result.get("provider")),
+                    "status": analysis_result.get("status"),
+                    "summary": deepcopy(analysis_result.get("summary")),
+                },
+                "review": {
+                    "required": True,
+                    "reason": "explicit_confirmation_required",
+                },
             },
-            terminal_at=finalized_at,
+            terminal_at=analyzed_at,
         )
         import_job.manifest = manifest
         import_job.source_retention_expires_at = retention_expires_at
@@ -340,34 +360,222 @@ async def _persist_success(
         import_job.source_cleanup_lease_expires_at = None
         import_job.source_cleanup_attempted_at = None
         import_job.source_deleted_at = None
-        import_job.updated_at = finalized_at
+        import_job.updated_at = analyzed_at
         task.status = "completed"
-        task.message = "Template V2 draft created; visual review required"
+        task.message = "PPTX analysis complete; explicit confirmation required"
         task.error = None
         task.data = _task_data(
             import_id,
             state=import_job.state,
             attempt_number=import_job.attempt_number,
-            draft_template_id=template.id,
         )
-        task.updated_at = finalized_at
-        session.add(presentation)
-        session.add_all(slides)
-        session.add(template)
-        session.add(local_state)
+        task.updated_at = analyzed_at
         session.add(import_job)
         session.add(task)
-        try:
-            await session.commit()
-        except IntegrityError:
-            await session.rollback()
-            raise
+        await session.commit()
         return True
+
+
+def _assemble_confirmed_candidate(
+    import_job: TemplateV2PptxImport,
+) -> AssembledTemplateV2Draft:
+    analysis_result = import_job.analysis_result
+    if not isinstance(analysis_result, dict):
+        raise ValueError("template_v2_import_analysis_missing")
+    candidate_payload = analysis_result.get("candidates")
+    if not isinstance(candidate_payload, dict):
+        raise ValueError("template_v2_import_candidate_missing")
+    candidates = PresentationCandidates.model_validate(candidate_payload)
+    return assemble_template_v2_draft(candidates)
+
+
+async def confirm_template_v2_pptx_import(
+    session: AsyncSession,
+    import_id: uuid.UUID,
+    task_id: str,
+    *,
+    owner_scope: str,
+    expected_revision: int,
+) -> str:
+    """Create Template V2 once, only after an owner-scoped explicit confirm."""
+    import_job = (
+        await session.execute(
+            select(TemplateV2PptxImport).where(
+                TemplateV2PptxImport.id == import_id,
+                TemplateV2PptxImport.task_id == task_id,
+                TemplateV2PptxImport.owner_scope == owner_scope,
+            )
+        )
+    ).scalar_one_or_none()
+    if import_job is None:
+        return "not_found"
+    if import_job.state == "confirmed" and import_job.draft_template_id:
+        return "already_confirmed"
+    if import_job.state != "review_required":
+        return "state_conflict"
+    if import_job.revision != expected_revision:
+        return "revision_conflict"
+    if await session.get(TemplateV2, import_job.requested_template_id) is not None:
+        return "template_conflict"
+
+    assembled = _assemble_confirmed_candidate(import_job)
+    confirmed_at = _now()
+    gate = await session.execute(
+        update(TemplateV2PptxImport)
+        .where(
+            TemplateV2PptxImport.id == import_id,
+            TemplateV2PptxImport.task_id == task_id,
+            TemplateV2PptxImport.owner_scope == owner_scope,
+            TemplateV2PptxImport.state == "review_required",
+            TemplateV2PptxImport.revision == expected_revision,
+            TemplateV2PptxImport.draft_template_id.is_(None),
+        )
+        .values(
+            state="confirming",
+            revision=TemplateV2PptxImport.revision + 1,
+            updated_at=confirmed_at,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    if gate.rowcount != 1:
+        await session.rollback()
+        current = (
+            await session.execute(
+                select(TemplateV2PptxImport).where(
+                    TemplateV2PptxImport.id == import_id,
+                    TemplateV2PptxImport.owner_scope == owner_scope,
+                )
+            )
+        ).scalar_one_or_none()
+        if current and current.state == "confirmed" and current.draft_template_id:
+            return "already_confirmed"
+        return "revision_conflict"
+
+    presentation = PresentationModel(
+        content=f"Private PPTX import {import_job.source_filename}",
+        n_slides=len(assembled.layouts.layouts),
+        language="en",
+        title=import_job.source_filename.rsplit(".", 1)[0],
+        layout=None,
+        structure=None,
+        theme={"mode": "template"},
+        mode="template",
+        version=TEMPLATE_V2_VERSION,
+    )
+    slides: list[SlideModel] = []
+    for index, layout in enumerate(assembled.layouts.layouts):
+        generated = build_generated_slide(layout, assembled.contents[index])
+        slides.append(
+            SlideModel(
+                presentation=presentation.id,
+                layout_group="native",
+                layout=generated.layout_id,
+                index=index,
+                content=generated.content,
+                ui=generated.ui,
+                html_content=None,
+                properties=None,
+            )
+        )
+    if resolve_presentation_strategies(presentation, slides) != TEMPLATE_V2_STRATEGIES:
+        await session.rollback()
+        raise RuntimeError("template_v2_strategy_boundary_violation")
+    all_components = [
+        component.model_dump(mode="json")
+        for layout in assembled.layouts.layouts
+        for component in layout.components
+    ]
+    template = TemplateV2(
+        **_apply_deprecated_template_v2_constructor_bridge(
+            {
+                "id": import_job.requested_template_id,
+                "name": presentation.title or "Imported PPTX",
+                "description": (
+                    "Confirmed deterministic OOXML import; visual review retained."
+                ),
+                "raw_layouts": assembled.raw_layouts.model_dump(mode="json"),
+                "components": {"components": all_components},
+                "merged_components": None,
+                "layouts": assembled.layouts.model_dump(mode="json"),
+                "assets": None,
+                "is_default": False,
+            },
+            presentation_id=presentation.id,
+        )
+    )
+    local_state = TemplateV2LocalState(
+        template_id=template.id,
+        presentation_id=presentation.id,
+        revision=1,
+    )
+    manifest = {
+        **deepcopy(import_job.manifest or {}),
+        "confirmation": {
+            "confirmed_at": confirmed_at.isoformat(),
+            "repeat_suggestions_applied": False,
+        },
+        "review": {
+            "required": False,
+            "reason": "owner_confirmed_unmerged_candidate",
+        },
+    }
+    await session.execute(
+        update(TemplateV2PptxImport)
+        .where(
+            TemplateV2PptxImport.id == import_id,
+            TemplateV2PptxImport.owner_scope == owner_scope,
+            TemplateV2PptxImport.state == "confirming",
+            TemplateV2PptxImport.revision == expected_revision + 1,
+        )
+        .values(
+            state="confirmed",
+            draft_template_id=template.id,
+            confirmed_at=confirmed_at,
+            manifest=manifest,
+            updated_at=confirmed_at,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    task = await session.get(AsyncPresentationGenerationTaskModel, task_id)
+    if task is None:
+        await session.rollback()
+        return "state_conflict"
+    task.status = "completed"
+    task.message = "Template V2 created after explicit confirmation"
+    task.error = None
+    task.data = _task_data(
+        import_id,
+        state="confirmed",
+        attempt_number=import_job.attempt_number,
+        draft_template_id=template.id,
+    )
+    task.updated_at = confirmed_at
+    session.add(presentation)
+    session.add_all(slides)
+    session.add(template)
+    session.add(local_state)
+    session.add(task)
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        current = (
+            await session.execute(
+                select(TemplateV2PptxImport).where(
+                    TemplateV2PptxImport.id == import_id,
+                    TemplateV2PptxImport.owner_scope == owner_scope,
+                )
+            )
+        ).scalar_one_or_none()
+        if current and current.state == "confirmed" and current.draft_template_id:
+            return "already_confirmed"
+        return "template_conflict"
+    return "confirmed"
 
 
 def _failure_code(error: Exception) -> str:
     if isinstance(error, IntegrityError):
-        return "template_v2_draft_persistence_conflict"
+        return "template_v2_import_analysis_persistence_conflict"
     if isinstance(error, UnsafePptxPackage):
         return error.code
     return getattr(error, "code", "template_v2_pptx_import_failed")
@@ -406,6 +614,7 @@ async def fail_template_v2_pptx_import(
             )
             .values(
                 state="failed",
+                revision=TemplateV2PptxImport.revision + 1,
                 attempt_token=None,
                 lease_expires_at=None,
                 source_retention_expires_at=retention_expires_at,
@@ -445,6 +654,7 @@ async def requeue_failed_template_v2_pptx_import(
     task_id: str,
     manifest: dict,
     *,
+    expected_revision: int | None = None,
     now: datetime | None = None,
 ) -> bool:
     """Atomically move exactly one failed import back to the durable queue."""
@@ -458,25 +668,29 @@ async def requeue_failed_template_v2_pptx_import(
             "superseded_by_retry_at": queued_at.isoformat(),
         },
     }
+    predicates = [
+        TemplateV2PptxImport.id == import_id,
+        TemplateV2PptxImport.task_id == task_id,
+        TemplateV2PptxImport.state == "failed",
+        TemplateV2PptxImport.attempt_token.is_(None),
+        TemplateV2PptxImport.source_deleted_at.is_(None),
+        TemplateV2PptxImport.source_cleanup_token.is_(None),
+        or_(
+            TemplateV2PptxImport.source_retention_expires_at > queued_at,
+            and_(
+                TemplateV2PptxImport.source_retention_expires_at.is_(None),
+                TemplateV2PptxImport.updated_at > legacy_cutoff,
+            ),
+        ),
+    ]
+    if expected_revision is not None:
+        predicates.append(TemplateV2PptxImport.revision == expected_revision)
     result = await session.execute(
         update(TemplateV2PptxImport)
-        .where(
-            TemplateV2PptxImport.id == import_id,
-            TemplateV2PptxImport.task_id == task_id,
-            TemplateV2PptxImport.state == "failed",
-            TemplateV2PptxImport.attempt_token.is_(None),
-            TemplateV2PptxImport.source_deleted_at.is_(None),
-            TemplateV2PptxImport.source_cleanup_token.is_(None),
-            or_(
-                TemplateV2PptxImport.source_retention_expires_at > queued_at,
-                and_(
-                    TemplateV2PptxImport.source_retention_expires_at.is_(None),
-                    TemplateV2PptxImport.updated_at > legacy_cutoff,
-                ),
-            ),
-        )
+        .where(*predicates)
         .values(
             state="queued",
+            revision=TemplateV2PptxImport.revision + 1,
             attempt_token=None,
             lease_expires_at=None,
             source_retention_expires_at=None,
@@ -484,6 +698,8 @@ async def requeue_failed_template_v2_pptx_import(
             source_cleanup_lease_expires_at=None,
             source_cleanup_attempted_at=None,
             source_deleted_at=None,
+            analysis_result=None,
+            repeat_suggestions=[],
             manifest=retry_manifest,
             updated_at=queued_at,
         )
@@ -523,6 +739,94 @@ async def requeue_failed_template_v2_pptx_import(
         return False
     await session.commit()
     notify_template_v2_pptx_dispatcher()
+    return True
+
+
+async def cancel_template_v2_pptx_import(
+    session: AsyncSession,
+    import_id: uuid.UUID,
+    task_id: str,
+    *,
+    owner_scope: str,
+    expected_revision: int,
+    now: datetime | None = None,
+) -> bool:
+    """Cancel an owner-scoped import with optimistic concurrency."""
+    cancelled_at = now or _now()
+    import_job = (
+        await session.execute(
+            select(TemplateV2PptxImport).where(
+                TemplateV2PptxImport.id == import_id,
+                TemplateV2PptxImport.task_id == task_id,
+                TemplateV2PptxImport.owner_scope == owner_scope,
+            )
+        )
+    ).scalar_one_or_none()
+    if import_job is None:
+        return False
+    if import_job.state == "cancelled":
+        return True
+    retention_expires_at, manifest = terminal_source_retention(
+        {
+            **deepcopy(import_job.manifest or {}),
+            "cancelled_at": cancelled_at.isoformat(),
+            "review": {
+                "required": False,
+                "reason": "owner_cancelled",
+            },
+        },
+        terminal_at=cancelled_at,
+    )
+    result = await session.execute(
+        update(TemplateV2PptxImport)
+        .where(
+            TemplateV2PptxImport.id == import_id,
+            TemplateV2PptxImport.task_id == task_id,
+            TemplateV2PptxImport.owner_scope == owner_scope,
+            TemplateV2PptxImport.revision == expected_revision,
+            TemplateV2PptxImport.state.in_(
+                ("queued", "processing", "finalizing", "failed", "review_required")
+            ),
+        )
+        .values(
+            state="cancelled",
+            revision=TemplateV2PptxImport.revision + 1,
+            attempt_token=None,
+            lease_expires_at=None,
+            source_retention_expires_at=retention_expires_at,
+            source_cleanup_token=None,
+            source_cleanup_lease_expires_at=None,
+            source_cleanup_attempted_at=None,
+            source_deleted_at=None,
+            cancelled_at=cancelled_at,
+            manifest=manifest,
+            updated_at=cancelled_at,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    if result.rowcount != 1:
+        await session.rollback()
+        return False
+    task_result = await session.execute(
+        update(AsyncPresentationGenerationTaskModel)
+        .where(AsyncPresentationGenerationTaskModel.id == task_id)
+        .values(
+            status="cancelled",
+            message="Template V2 PPTX import cancelled",
+            error=None,
+            data=_task_data(
+                import_id,
+                state="cancelled",
+                attempt_number=import_job.attempt_number,
+            ),
+            updated_at=cancelled_at,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    if task_result.rowcount != 1:
+        await session.rollback()
+        return False
+    await session.commit()
     return True
 
 
@@ -682,18 +986,27 @@ async def run_template_v2_pptx_import(import_id: uuid.UUID, task_id: str) -> Non
                 raise AttemptOwnershipLost()
             storage_key = import_job.source_storage_key
             source_sha256 = import_job.source_sha256
-        assembled = await asyncio.to_thread(
+            source_filename = import_job.source_filename
+            source_media_type = import_job.source_media_type
+            source_size_bytes = import_job.source_size_bytes
+        analysis_result, repeat_suggestions, source_inventory = await asyncio.to_thread(
             _analyze_import_source,
             storage_key,
             source_sha256,
+            import_id=import_id,
+            source_filename=source_filename,
+            source_media_type=source_media_type,
+            source_size_bytes=source_size_bytes,
         )
         if ownership_lost.is_set():
             raise AttemptOwnershipLost()
-        if not await _persist_success(
+        if not await _persist_analysis(
             import_id,
             task_id,
             attempt_token,
-            assembled,
+            analysis_result,
+            repeat_suggestions,
+            source_inventory,
         ):
             raise AttemptOwnershipLost()
     except asyncio.CancelledError:

@@ -16,6 +16,7 @@ from models.sql.template_v2 import (
 from template_v2_schema_contract import (
     TEMPLATE_V2_CANONICAL_COLUMNS,
     TEMPLATE_V2_IMPORT_LIFECYCLE_COLUMNS,
+    TEMPLATE_V2_IMPORT_REVIEW_COLUMNS,
     TEMPLATE_V2_LEGACY_DROP_REQUIREMENT,
     TEMPLATE_V2_PRESENTATION_DELETE_POLICY,
     TEMPLATE_V2_PRESENTATION_OWNERSHIP_POLICY,
@@ -155,7 +156,7 @@ def test_local_state_migration_backfills_and_validates_sidecars(tmp_path):
                 connection.execute(
                     text("SELECT version_num FROM alembic_version")
                 ).scalar_one()
-                == migrations.REVISION_TEMPLATE_V2_DELETE_SAFETY
+                == migrations.REVISION_TEMPLATE_V2_IMPORT_REVIEW
             )
             assert set(inspector.get_table_names()) >= {
                 "template_v2",
@@ -174,7 +175,10 @@ def test_local_state_migration_backfills_and_validates_sidecars(tmp_path):
                 for column in inspector.get_columns(
                     "template_v2_pptx_imports"
                 )
-            } == TEMPLATE_V2_IMPORT_LIFECYCLE_COLUMNS
+            } == (
+                TEMPLATE_V2_IMPORT_LIFECYCLE_COLUMNS
+                | TEMPLATE_V2_IMPORT_REVIEW_COLUMNS
+            )
             row = connection.execute(
                 text(
                     """
@@ -219,7 +223,7 @@ def test_complete_schema_inference_recognizes_local_state_head(tmp_path):
                     set(inspector.get_table_names()),
                     "ignored-future-head",
                 )
-                == migrations.REVISION_TEMPLATE_V2_DELETE_SAFETY
+                == migrations.REVISION_TEMPLATE_V2_IMPORT_REVIEW
             )
     finally:
         engine.dispose()
