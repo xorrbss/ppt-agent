@@ -699,6 +699,33 @@ async def _run_async_generation(
         )
 
 
+async def queue_presentation_generation(
+    request: GeneratePresentationRequest,
+    background_tasks: BackgroundTasks,
+    sql_session: AsyncSession,
+    export_cookie_header: Optional[str] = None,
+) -> AsyncPresentationGenerationTaskModel:
+    """Validate and enqueue one presentation generation job."""
+    (presentation_id,) = await check_if_api_request_is_valid(request, sql_session)
+
+    async_status = AsyncPresentationGenerationTaskModel(
+        status="pending",
+        message="Queued for generation",
+        data=None,
+    )
+    sql_session.add(async_status)
+    await sql_session.commit()
+
+    background_tasks.add_task(
+        _run_async_generation,
+        request,
+        presentation_id,
+        async_status.id,
+        export_cookie_header,
+    )
+    return async_status
+
+
 @PRESENTATION_GENERATE_ROUTER.post(
     "/generate/async", response_model=AsyncPresentationGenerationTaskModel
 )
@@ -709,24 +736,12 @@ async def generate_presentation_async(
     sql_session: AsyncSession = Depends(get_async_session),
 ):
     try:
-        (presentation_id,) = await check_if_api_request_is_valid(request, sql_session)
-
-        async_status = AsyncPresentationGenerationTaskModel(
-            status="pending",
-            message="Queued for generation",
-            data=None,
-        )
-        sql_session.add(async_status)
-        await sql_session.commit()
-
-        background_tasks.add_task(
-            _run_async_generation,
+        return await queue_presentation_generation(
             request,
-            presentation_id,
-            async_status.id,
-            build_export_cookie_header(request_http),
+            background_tasks,
+            sql_session,
+            export_cookie_header=build_export_cookie_header(request_http),
         )
-        return async_status
 
     except Exception as e:
         if not isinstance(e, HTTPException):

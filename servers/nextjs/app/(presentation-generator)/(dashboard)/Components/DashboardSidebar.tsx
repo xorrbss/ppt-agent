@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { LayoutDashboard, Star, Brain, Settings, Palette, HelpCircle } from "lucide-react";
+import { LayoutDashboard, Star, Brain, Settings, Palette } from "lucide-react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 
@@ -37,9 +37,11 @@ const DashboardSidebar = () => {
             <div>
 
                 <Link href={`/dashboard`} className="flex items-center  pb-6 border-b border-[#E1E1E5]   gap-2    ">
-                    <div className="bg-[#7C51F8] rounded-full cursor-pointer p-1 flex justify-center items-center mx-auto">
-                        <img src="/logo-with-bg.png" alt="Presenton logo" className="h-[40px] object-contain w-full" />
-                    </div>
+                    <img
+                        src="/logo-with-bg.png"
+                        alt="Presenton logo"
+                        className="mx-auto h-[40px] w-[40px] cursor-pointer object-contain"
+                    />
                 </Link>
                 <nav className="pt-6 font-syne" aria-label="대시보드 섹션">
                     <div className="  space-y-6">
@@ -94,17 +96,7 @@ const DashboardSidebar = () => {
 
             <div className=" pt-5 border-t border-[#E1E1E5]  font-syne "
             >
-                <div className="mb-4">
-
-                    <Link href="https://docs.presenton.ai/help" target="_blank" className="flex flex-col tex-center items-center gap-2  transition-colors"><HelpCircle className="w-4 h-4" /><span className="text-[11px] text-slate-800">도움말</span></Link>
-                </div>
-                <div className="mb-4">
-
-                    <Link href="https://discord.com/invite/9ZsKKxudNE" target="_blank" className="flex flex-col tex-center items-center gap-2  transition-colors"><img src="/discord.png" alt="Discord" className="w-5 h-5 rounded-full object-cover border border-[#EDEEEF]" /><span className="text-[11px] text-slate-800">커뮤니티</span></Link>
-                </div>
-
-
-                {BelongingNavItems.map(({ key, label: itemLabel, icon: Icon }) => {
+                {BelongingNavItems.map(({ key, label: itemLabel }) => {
                     const isActive = activeTab === key;
                     return (
                         <Link

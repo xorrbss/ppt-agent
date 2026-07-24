@@ -12,6 +12,7 @@ class FakeAsyncSession:
         self.added_all: list[Any] = []
         self.deleted: list[Any] = []
         self.commit_count = 0
+        self.rollback_count = 0
 
     async def get(self, _model: Any, key: Any):
         return self._get_results.get(key)
@@ -27,6 +28,9 @@ class FakeAsyncSession:
 
     async def commit(self) -> None:
         self.commit_count += 1
+
+    async def rollback(self) -> None:
+        self.rollback_count += 1
 
     async def refresh(self, _obj: Any) -> None:
         return None

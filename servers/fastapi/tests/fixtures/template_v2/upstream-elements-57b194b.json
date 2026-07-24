@@ -1,0 +1,215 @@
+{
+  "upstream_sha": "57b194b234b42c8b28f8a507a30322de200e3e83",
+  "model_path": "servers/fastapi/templates/v2/models/elements.py",
+  "elements": [
+    {
+      "type": "text",
+      "runs": [
+        {
+          "text": "Title",
+          "upstream_run_extension": {
+            "locale": "ko-KR"
+          }
+        }
+      ],
+      "decorative": false,
+      "name": "title",
+      "min_length": 1,
+      "max_length": 80,
+      "upstream_element_extension": "text-vNext"
+    },
+    {
+      "type": "container",
+      "fill": {
+        "color": "#FFFFFF",
+        "future_gradient": "linear"
+      },
+      "child": null,
+      "upstream_element_extension": "container-vNext"
+    },
+    {
+      "type": "image",
+      "data": "/app_data/images/hero.png",
+      "decorative": false,
+      "name": "hero",
+      "is_icon": false,
+      "upstream_element_extension": "image-vNext"
+    },
+    {
+      "type": "text-list",
+      "items": [
+        [
+          {
+            "text": "First"
+          }
+        ]
+      ],
+      "decorative": false,
+      "name": "bullets",
+      "min_items": 1,
+      "max_items": 3,
+      "min_item_length": 1,
+      "max_item_length": 40,
+      "upstream_element_extension": "text-list-vNext"
+    },
+    {
+      "type": "table",
+      "columns": [
+        {
+          "runs": [
+            {
+              "text": "Metric"
+            }
+          ]
+        }
+      ],
+      "rows": [
+        [
+          {
+            "runs": [
+              {
+                "text": "Revenue"
+              }
+            ]
+          }
+        ]
+      ],
+      "decorative": false,
+      "name": "metrics",
+      "min_columns": 1,
+      "max_columns": 1,
+      "min_rows": 1,
+      "max_rows": 1,
+      "upstream_element_extension": "table-vNext"
+    },
+    {
+      "type": "vector",
+      "shape": "polygon",
+      "points": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 100,
+          "y": 80
+        }
+      ],
+      "closed": true,
+      "upstream_element_extension": "vector-vNext"
+    },
+    {
+      "type": "chart",
+      "chart_type": "bar",
+      "categories": [
+        "Q1",
+        "Q2"
+      ],
+      "series": [
+        {
+          "name": "Revenue",
+          "values": [
+            10,
+            12
+          ]
+        }
+      ],
+      "data_labels": true,
+      "decorative": false,
+      "name": "revenue",
+      "upstream_element_extension": "chart-vNext"
+    },
+    {
+      "type": "infographic",
+      "data": {
+        "type": "progress_bar",
+        "min_value": 0,
+        "max_value": 100,
+        "value": 64,
+        "future_format": "percent"
+      },
+      "colors": [
+        "#E5E7EB",
+        "#2563EB"
+      ],
+      "decorative": false,
+      "name": "progress",
+      "upstream_element_extension": "infographic-vNext"
+    },
+    {
+      "type": "flex",
+      "direction": "row",
+      "children": [],
+      "name": "cards",
+      "min_children": 0,
+      "max_children": 3,
+      "upstream_element_extension": "flex-vNext"
+    },
+    {
+      "type": "grid",
+      "columns": 2,
+      "children": [],
+      "name": "metrics-grid",
+      "min_children": 0,
+      "max_children": 4,
+      "upstream_element_extension": "grid-vNext"
+    },
+    {
+      "type": "group",
+      "children": [],
+      "name": "decoration",
+      "upstream_element_extension": "group-vNext"
+    }
+  ],
+  "upstream_valid_local_strict_differences": [
+    {
+      "type": "text",
+      "runs": [
+        {
+          "text": "Accepted upstream"
+        }
+      ],
+      "decorative": false,
+      "name": "bounds",
+      "min_length": 10,
+      "max_length": 2
+    },
+    {
+      "type": "chart",
+      "chart_type": "pie",
+      "categories": [
+        "A",
+        "B"
+      ],
+      "series": [
+        {
+          "name": "Primary",
+          "values": [
+            10,
+            20
+          ]
+        },
+        {
+          "name": "Still present on the wire",
+          "values": [
+            30,
+            40
+          ]
+        }
+      ],
+      "decorative": false,
+      "name": "pie"
+    },
+    {
+      "type": "infographic",
+      "data": {
+        "type": "gauge",
+        "min_value": 0,
+        "max_value": 100,
+        "value": 140
+      },
+      "decorative": false,
+      "name": "gauge"
+    }
+  ]
+}

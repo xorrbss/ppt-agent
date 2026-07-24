@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -29,16 +29,34 @@ import {
   preflightAuthoredHtmlForHybrid,
   readBoundedResponseText,
 } from "./security.ts";
+import {
+  mapWithConcurrency,
+  parseBoundedPositiveInt,
+} from "./export-performance.ts";
 
 const MAX_PRESENTATION_RESPONSE_BYTES = 50 * 1024 * 1024;
 const MAX_HYBRID_SLIDES = 100;
 const MAX_FIDELITY_PPTX_BYTES = 512 * 1024 * 1024;
 const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
-// Total wall-clock budget for the sequential per-slide hybrid pass. Each slide can
+// Total wall-clock budget for the bounded-concurrency per-slide hybrid pass. Each slide can
 // take ~60s worst case (extract + up to 2 backplate relaunches); without a ceiling a
 // pathological deck holds the export request for tens of minutes. When the budget is
 // spent the remaining slides simply keep their fidelity (image) render.
 const HYBRID_DECK_BUDGET_MS = 8 * 60_000;
+const HYBRID_CACHE_VERSION = "authored-hybrid-v3-minimum-9pt-text";
+const HYBRID_RESULT_CACHE_LIMIT = 24;
+const HYBRID_EXPORT_CONCURRENCY = parseBoundedPositiveInt(
+  process.env.AUTHORED_HYBRID_CONCURRENCY,
+  4,
+  1,
+  8
+);
+
+const completedHybridExports = new Map<string, string>();
+const inFlightHybridExports = new Map<
+  string,
+  Promise<BundledPresentationExportResult>
+>();
 
 interface StoredSlide {
   index?: unknown;
@@ -59,6 +77,11 @@ interface AuthoredHybridExportParams {
   cookieHeader?: string;
 }
 
+interface FetchedPresentation {
+  presentation: StoredPresentation;
+  sourceSha256: string;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -66,7 +89,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 async function fetchPresentation(
   presentationId: string,
   cookieHeader: string
-): Promise<StoredPresentation> {
+): Promise<FetchedPresentation> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PRESENTATION_FETCH_TIMEOUT_MS);
   try {
@@ -93,7 +116,10 @@ async function fetchPresentation(
     );
     const parsed: unknown = JSON.parse(body);
     if (!isRecord(parsed)) throw new Error("presentation response is not an object");
-    return parsed as StoredPresentation;
+    return {
+      presentation: parsed as StoredPresentation,
+      sourceSha256: createHash("sha256").update(body).digest("hex"),
+    };
   } finally {
     clearTimeout(timer);
   }
@@ -137,9 +163,20 @@ async function prepareSlideLayer(
   const extractionOptions = { chromeExecutable, timeoutMs: 20_000 };
   const contract = await extractAuthoredSlideDom(html, extractionOptions);
   const prepared = preSerializePreparedElements(
-    await prepareNativeElements(contract.elements)
+    await prepareNativeElements(contract.elements, {
+      includeRasterText: true,
+      includeRasterShapes: true,
+    })
   );
-  let selected = selectLayerSafeNativeElements(contract.elements, prepared);
+  let selected = selectLayerSafeNativeElements(
+    contract.elements,
+    prepared,
+    undefined,
+    // Text remains editable above the residual backplate. Shapes only move to
+    // the native layer when doing so preserves their authored stacking order;
+    // otherwise translucent ancestor cards would wash out later SVG artwork.
+    { promoteTextAboveRaster: true, promoteShapesAboveRaster: false }
+  );
   if (!selected.length) return null;
 
   let backplate = await renderAuthoredBackplate(
@@ -152,7 +189,8 @@ async function prepareSlideLayer(
   const finalSelected = selectLayerSafeNativeElements(
     contract.elements,
     prepared,
-    applied
+    applied,
+    { promoteTextAboveRaster: true, promoteShapesAboveRaster: false }
   );
   if (!finalSelected.length) return null;
 
@@ -226,66 +264,219 @@ async function writeHybridPptx(
   return hybridPath;
 }
 
-/**
- * Generate the historical fidelity deck first, then opportunistically replace
- * only authored slides that pass every extraction/assembly guard.
- */
-export async function runAuthoredHybridPresentationExport(
-  params: AuthoredHybridExportParams
+async function runUncachedAuthoredHybridExport(
+  params: AuthoredHybridExportParams,
+  presentation: StoredPresentation,
+  sourceSha256: string,
+  cacheKey: string,
+  requestStartedAt: number
 ): Promise<BundledPresentationExportResult> {
+  const fidelityStartedAt = performance.now();
   const fidelity = await runBundledPresentationExport({
     format: "pptx",
     presentationId: params.presentationId,
     title: params.title,
     cookieHeader: params.cookieHeader,
+    expectedPresentationSha256: sourceSha256,
   });
+  const fidelityMs = elapsedMs(fidelityStartedAt);
 
   try {
-    const presentation = await fetchPresentation(
+    const slides = Array.isArray(presentation.slides) ? presentation.slides : [];
+    const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
+    if (!chromeExecutable) {
+      console.info(
+        `[authored-hybrid] fidelity-only total=${elapsedMs(requestStartedAt)}ms ` +
+          `fidelity=${fidelityMs}ms reason=chrome-unavailable`
+      );
+      return fidelity;
+    }
+
+    const slideInputs = slides
+      .map((rawSlide, arrayIndex) => {
+        if (!isRecord(rawSlide)) return null;
+        const slide = rawSlide as StoredSlide;
+        const html = typeof slide.html_content === "string" ? slide.html_content : "";
+        return html ? { html, slideNumber: arrayIndex + 1 } : null;
+      })
+      .filter(
+        (value): value is { html: string; slideNumber: number } => value !== null
+      );
+
+    const deckStart = Date.now();
+    const slidesStartedAt = performance.now();
+    let budgetWarningWritten = false;
+    const preparedLayers = await mapWithConcurrency(
+      slideInputs,
+      HYBRID_EXPORT_CONCURRENCY,
+      async ({ html, slideNumber }) => {
+        if (Date.now() - deckStart > HYBRID_DECK_BUDGET_MS) {
+          if (!budgetWarningWritten) {
+            budgetWarningWritten = true;
+            console.warn(
+              "[authored-hybrid] deck time budget exhausted; remaining slides " +
+                "keep the fidelity render"
+            );
+          }
+          return null;
+        }
+        try {
+          return await prepareSlideLayer(html, slideNumber, chromeExecutable);
+        } catch (error) {
+          console.warn(
+            `[authored-hybrid:slide-${slideNumber}] fidelity fallback after slide processing failure`,
+            error
+          );
+          return null;
+        }
+      }
+    );
+    const layers = preparedLayers.filter(
+      (layer): layer is AuthoredHybridSlideLayer => layer !== null
+    );
+    const slidesMs = elapsedMs(slidesStartedAt);
+    if (!layers.length) return fidelity;
+    const assemblyStartedAt = performance.now();
+    const hybridPath = await writeHybridPptx(fidelity.path, layers);
+    const assemblyMs = elapsedMs(assemblyStartedAt);
+    rememberCompletedHybridExport(cacheKey, hybridPath);
+    console.info(
+      `[authored-hybrid] complete total=${elapsedMs(requestStartedAt)}ms ` +
+        `fidelity=${fidelityMs}ms slides=${slidesMs}ms assembly=${assemblyMs}ms ` +
+        `editable=${layers.length}/${slides.length} ` +
+        `concurrency=${HYBRID_EXPORT_CONCURRENCY}`
+    );
+    return { path: hybridPath };
+  } catch (error) {
+    console.warn(
+      "[authored-hybrid] fidelity fallback after hybrid processing failure",
+      error
+    );
+    return fidelity;
+  }
+}
+
+/**
+ * Export authored decks with editable native layers. Identical completed exports
+ * are reused while this server process is alive, and concurrent duplicate requests
+ * share one export job instead of spawning duplicate Chrome processes.
+ */
+export async function runAuthoredHybridPresentationExport(
+  params: AuthoredHybridExportParams
+): Promise<BundledPresentationExportResult> {
+  const requestStartedAt = performance.now();
+  let fetched: FetchedPresentation;
+  try {
+    fetched = await fetchPresentation(
       params.presentationId,
       params.cookieHeader ?? ""
     );
-    if (!isAuthoredPresentation(presentation) || !Array.isArray(presentation.slides)) {
-      return fidelity;
-    }
-    if (
-      presentation.slides.length === 0 ||
-      presentation.slides.length > MAX_HYBRID_SLIDES
-    ) {
-      return fidelity;
-    }
-    const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
-    if (!chromeExecutable) return fidelity;
-
-    const layers: AuthoredHybridSlideLayer[] = [];
-    const deckStart = Date.now();
-    for (let arrayIndex = 0; arrayIndex < presentation.slides.length; arrayIndex += 1) {
-      if (Date.now() - deckStart > HYBRID_DECK_BUDGET_MS) {
-        console.warn(
-          `[authored-hybrid] deck time budget exhausted after ${arrayIndex} slides; ` +
-            "remaining slides keep the fidelity render"
-        );
-        break;
-      }
-      const rawSlide = presentation.slides[arrayIndex];
-      if (!isRecord(rawSlide)) continue;
-      const slide = rawSlide as StoredSlide;
-      const html = typeof slide.html_content === "string" ? slide.html_content : "";
-      if (!html) continue;
-      const slideNumber = arrayIndex + 1;
-      try {
-        const layer = await prepareSlideLayer(html, slideNumber, chromeExecutable);
-        if (layer) layers.push(layer);
-      } catch {
-        console.warn(
-          `[authored-hybrid:slide-${slideNumber}] fidelity fallback after slide processing failure`
-        );
-      }
-    }
-    if (!layers.length) return fidelity;
-    return { path: await writeHybridPptx(fidelity.path, layers) };
-  } catch {
-    console.warn("[authored-hybrid] fidelity fallback after hybrid processing failure");
-    return fidelity;
+  } catch (error) {
+    console.warn(
+      "[authored-hybrid] presentation lookup failed; using fidelity export",
+      error
+    );
+    return runBundledPresentationExport({
+      format: "pptx",
+      presentationId: params.presentationId,
+      title: params.title,
+      cookieHeader: params.cookieHeader,
+    });
   }
+
+  const { presentation } = fetched;
+  if (!isAuthoredPresentation(presentation) || !Array.isArray(presentation.slides)) {
+    return runBundledPresentationExport({
+      format: "pptx",
+      presentationId: params.presentationId,
+      title: params.title,
+      cookieHeader: params.cookieHeader,
+    });
+  }
+  if (
+    presentation.slides.length === 0 ||
+    presentation.slides.length > MAX_HYBRID_SLIDES
+  ) {
+    return runBundledPresentationExport({
+      format: "pptx",
+      presentationId: params.presentationId,
+      title: params.title,
+      cookieHeader: params.cookieHeader,
+    });
+  }
+
+  const cacheKey = createHybridCacheKey(
+    params.presentationId,
+    fetched.sourceSha256
+  );
+  const cached = await readCompletedHybridExport(cacheKey);
+  if (cached) {
+    console.info(
+      `[authored-hybrid] cache-hit total=${elapsedMs(requestStartedAt)}ms`
+    );
+    return cached;
+  }
+
+  const inFlight = inFlightHybridExports.get(cacheKey);
+  if (inFlight) {
+    console.info("[authored-hybrid] joined existing export job");
+    return inFlight;
+  }
+
+  const job = runUncachedAuthoredHybridExport(
+    params,
+    presentation,
+    fetched.sourceSha256,
+    cacheKey,
+    requestStartedAt
+  ).finally(() => {
+    if (inFlightHybridExports.get(cacheKey) === job) {
+      inFlightHybridExports.delete(cacheKey);
+    }
+  });
+  inFlightHybridExports.set(cacheKey, job);
+  return job;
+}
+
+function createHybridCacheKey(
+  presentationId: string,
+  sourceSha256: string
+): string {
+  return createHash("sha256")
+    .update(HYBRID_CACHE_VERSION)
+    .update("\0")
+    .update(presentationId)
+    .update("\0")
+    .update(sourceSha256)
+    .digest("hex");
+}
+
+function rememberCompletedHybridExport(cacheKey: string, outPath: string): void {
+  completedHybridExports.delete(cacheKey);
+  completedHybridExports.set(cacheKey, outPath);
+  while (completedHybridExports.size > HYBRID_RESULT_CACHE_LIMIT) {
+    const oldestKey = completedHybridExports.keys().next().value;
+    if (typeof oldestKey !== "string") break;
+    completedHybridExports.delete(oldestKey);
+  }
+}
+
+async function readCompletedHybridExport(
+  cacheKey: string
+): Promise<BundledPresentationExportResult | null> {
+  const cachedPath = completedHybridExports.get(cacheKey);
+  if (!cachedPath) return null;
+  try {
+    const safePath = await resolveSafeFidelityPptx(cachedPath);
+    completedHybridExports.delete(cacheKey);
+    completedHybridExports.set(cacheKey, safePath);
+    return { path: safePath };
+  } catch {
+    completedHybridExports.delete(cacheKey);
+    return null;
+  }
+}
+
+function elapsedMs(startedAt: number): number {
+  return Math.round(performance.now() - startedAt);
 }

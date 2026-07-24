@@ -1,0 +1,204 @@
+{
+  "schemaVersion": 1,
+  "baseline": {
+    "repository": "presenton/presenton",
+    "upstreamSha": "57b194b234b42c8b28f8a507a30322de200e3e83",
+    "committedAt": "2026-07-23T18:00:14+05:45",
+    "subject": "Refactor code structure for improved readability and maintainability"
+  },
+  "versions": [
+    {
+      "id": "root-app",
+      "value": "1.0.0",
+      "source": "package.json",
+      "jsonPointer": "/version"
+    },
+    {
+      "id": "web-app",
+      "value": "0.1.0",
+      "source": "servers/nextjs/package.json",
+      "jsonPointer": "/version"
+    },
+    {
+      "id": "presentation-export",
+      "value": "v0.4.2",
+      "source": "package.json",
+      "jsonPointer": "/presentationExportVersion",
+      "mirror": "presentation-export/.installed-version"
+    },
+    {
+      "id": "next",
+      "value": "16.2.6",
+      "source": "servers/nextjs/package.json",
+      "jsonPointer": "/dependencies/next"
+    },
+    {
+      "id": "react",
+      "value": "19.2.6",
+      "source": "servers/nextjs/package.json",
+      "jsonPointer": "/dependencies/react"
+    },
+    {
+      "id": "konva",
+      "value": "10.3.0",
+      "source": "servers/nextjs/package.json",
+      "jsonPointer": "/dependencies/konva"
+    },
+    {
+      "id": "react-konva",
+      "value": "19.2.4",
+      "source": "servers/nextjs/package.json",
+      "jsonPointer": "/dependencies/react-konva"
+    }
+  ],
+  "templateV2Renderer": {
+    "source": "servers/nextjs/lib/template-v2-general-renderer.mjs",
+    "discriminators": [
+      "text",
+      "container",
+      "image",
+      "text-list",
+      "table",
+      "vector",
+      "chart",
+      "infographic",
+      "flex",
+      "grid",
+      "group"
+    ]
+  },
+  "templateV2PayloadBoundary": {
+    "source": "servers/nextjs/lib/template-v2-upstream-compat.ts",
+    "test": "servers/nextjs/lib/template-v2-upstream-compat.test.ts",
+    "wireShapes": [
+      "array",
+      "envelope",
+      "nested-envelope"
+    ],
+    "sourceRequiredContains": [
+      "adaptUpstreamTemplateV2LayoutsToStudio",
+      "serializeStudioLayoutsForUpstream",
+      "adaptGeneratedTemplateV2UiToStudio",
+      "source: clone(value)"
+    ],
+    "testRequiredContains": [
+      "round-trips every pinned upstream layouts envelope without data loss",
+      "preserving unknown upstream fields and shape",
+      "fails closed for malformed layouts instead of silently dropping values"
+    ]
+  },
+  "api": {
+    "rootPrefix": "/api/v1/ppt",
+    "routerSource": "servers/fastapi/api/v1/ppt/router.py",
+    "routerIncludes": [
+      "PRESENTATION_GENERATE_ROUTER",
+      "PRESENTATION_CRUD_ROUTER",
+      "STRUCTURED_TEMPLATE_IMPORTS_ROUTER",
+      "STRUCTURED_TEMPLATES_ROUTER",
+      "TEMPLATE_V2_COMPAT_ROUTER"
+    ],
+    "keyEndpoints": [
+      {
+        "method": "POST",
+        "path": "/api/v1/ppt/presentation/generate",
+        "source": "servers/fastapi/api/v1/ppt/endpoints/presentation_generate.py",
+        "requiredContains": [
+          "@PRESENTATION_GENERATE_ROUTER.post(",
+          "\"/generate\", response_model=PresentationPathAndEditPath"
+        ]
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/ppt/presentation/generate/async",
+        "source": "servers/fastapi/api/v1/ppt/endpoints/presentation_generate.py",
+        "requiredContains": [
+          "\"/generate/async\", response_model=AsyncPresentationGenerationTaskModel"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/ppt/presentation/status/{id}",
+        "source": "servers/fastapi/api/v1/ppt/endpoints/presentation_generate.py",
+        "requiredContains": [
+          "\"/status/{id}\", response_model=AsyncPresentationGenerationTaskModel"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/ppt/presentation/{id}",
+        "source": "servers/fastapi/api/v1/ppt/endpoints/presentation_crud.py",
+        "requiredContains": [
+          "@PRESENTATION_CRUD_ROUTER.get(\"/{id}\""
+        ]
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/ppt/structured-templates",
+        "source": "servers/fastapi/api/v1/ppt/endpoints/structured_templates.py",
+        "requiredContains": [
+          "@STRUCTURED_TEMPLATES_ROUTER.post(",
+          "status_code=status.HTTP_201_CREATED"
+        ]
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/v1/ppt/structured-templates/{template_id}",
+        "source": "servers/fastapi/api/v1/ppt/endpoints/structured_templates.py",
+        "requiredContains": [
+          "@STRUCTURED_TEMPLATES_ROUTER.patch(",
+          "\"/{template_id}\""
+        ]
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/ppt/structured-templates/imports",
+        "source": "servers/fastapi/api/v1/ppt/endpoints/structured_template_imports.py",
+        "requiredContains": [
+          "@STRUCTURED_TEMPLATE_IMPORTS_ROUTER.post(",
+          "status_code=status.HTTP_202_ACCEPTED"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/ppt/structured-templates/imports/{import_id}",
+        "source": "servers/fastapi/api/v1/ppt/endpoints/structured_template_imports.py",
+        "requiredContains": [
+          "@STRUCTURED_TEMPLATE_IMPORTS_ROUTER.get(",
+          "\"/{import_id}\""
+        ]
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/ppt/structured-templates/imports/{import_id}/retry",
+        "source": "servers/fastapi/api/v1/ppt/endpoints/structured_template_imports.py",
+        "requiredContains": [
+          "\"/{import_id}/retry\""
+        ]
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/v1/ppt/template/{template_id}",
+        "source": "servers/fastapi/api/v1/ppt/endpoints/template_v2_compat.py",
+        "requiredContains": [
+          "@TEMPLATE_V2_COMPAT_ROUTER.patch(",
+          "\"/{template_id}\""
+        ]
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/v1/ppt/template/{template_id}",
+        "source": "servers/fastapi/api/v1/ppt/endpoints/template_v2_compat.py",
+        "requiredContains": [
+          "@TEMPLATE_V2_COMPAT_ROUTER.delete(",
+          "\"/{template_id}\""
+        ]
+      }
+    ]
+  },
+  "registries": {
+    "migrationTranslationLedger": "compatibility/migration-translation-ledger.json",
+    "protectedLocalPatches": "compatibility/protected-local-patches.json",
+    "upstreamTestContracts": "compatibility/upstream-test-contracts.json",
+    "remoteIntakePolicy": "compatibility/upstream-intake-policy.json"
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "version": "v2-standard",
+  "mode": "template",
+  "template_id": "internal-v2-text-fit",
+  "slides": [{
+    "id": "slide-text-fit",
+    "ui": {
+      "id": "text-fit",
+      "description": "Editable text clipping boundary layout",
+      "components": [{
+        "id": "main",
+        "description": "Complete text fitting test composition",
+        "position": { "x": 0, "y": 0 },
+        "elements": [
+          { "type": "container", "position": { "x": 0, "y": 0 }, "size": { "width": 1280, "height": 720 }, "fill": { "color": "#fbfcff" } },
+          {
+            "type": "text",
+            "position": { "x": 88, "y": 58 },
+            "size": { "width": 800, "height": 50 },
+            "font": { "size": 40, "family": "Arial", "color": "#123b72", "bold": true, "line_height": 48 },
+            "runs": [{ "text": "Text fit boundary" }],
+            "decorative": false,
+            "name": "title",
+            "max_length": 120,
+            "min_length": 1
+          },
+          { "type": "container", "position": { "x": 88, "y": 156 }, "size": { "width": 780, "height": 230 }, "fill": { "color": "#eaf3ff" }, "stroke": { "color": "#2f80ed", "width": 3 } },
+          {
+            "type": "text",
+            "position": { "x": 114, "y": 178 },
+            "size": { "width": 728, "height": 186 },
+            "font": { "size": 27, "family": "Arial", "color": "#173b65", "line_height": 39 },
+            "runs": [{ "text": "The export must keep this sentence inside the editable text area while preserving every editable word at the right and lower boundaries." }],
+            "decorative": false,
+            "name": "body",
+            "max_length": 500,
+            "min_length": 1
+          },
+          { "type": "container", "position": { "x": 92, "y": 404 }, "size": { "width": 770, "height": 52 }, "fill": { "color": "#fff0a8" } },
+          {
+            "type": "text",
+            "position": { "x": 92, "y": 404 },
+            "size": { "width": 770, "height": 52 },
+            "font": { "size": 22, "family": "Arial", "color": "#6a4800", "bold": true, "line_height": 28 },
+            "alignment": { "horizontal": "center", "vertical": "middle" },
+            "runs": [{ "text": "VISIBLE SENTINEL" }],
+            "decorative": false,
+            "name": "sentinel",
+            "max_length": 80,
+            "min_length": 1
+          },
+          {
+            "type": "text",
+            "position": { "x": 912, "y": 177 },
+            "size": { "width": 250, "height": 150 },
+            "font": { "size": 18, "family": "Arial", "color": "#5d7393", "line_height": 29 },
+            "runs": [{ "text": "The yellow sentinel sits directly below the clipped text region. Overflow that escapes the box changes this area." }],
+            "decorative": false,
+            "name": "note",
+            "max_length": 300,
+            "min_length": 1
+          }
+        ]
+      }]
+    }
+  }]
+}

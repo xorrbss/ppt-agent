@@ -1,0 +1,110 @@
+name: Upstream compatibility
+
+on:
+  pull_request:
+    paths:
+      - "compatibility/**"
+      - "scripts/verify-upstream-compatibility.mjs"
+      - "scripts/verify-upstream-compatibility.test.mjs"
+      - "scripts/sync-presentation-export.cjs"
+      - "package.json"
+      - "presentation-export/.installed-version"
+      - "servers/nextjs/package.json"
+      - "servers/nextjs/lib/template-v2-general-renderer.mjs"
+      - "servers/nextjs/lib/template-v2-upstream-compat.*"
+      - "servers/nextjs/lib/authored-hybrid/**"
+      - "servers/nextjs/lib/export-*.ts"
+      - "servers/nextjs/lib/presentation-export-boundary.ts"
+      - "servers/nextjs/lib/run-bundled-presentation-export.ts"
+      - "servers/nextjs/app/api/export-presentation/route.ts"
+      - "servers/fastapi/api/v1/ppt/**"
+      - "servers/fastapi/alembic/versions/**"
+      - "servers/fastapi/migrations.py"
+      - "servers/fastapi/services/presentation_deletion_service.py"
+      - "servers/fastapi/template_v2_schema_contract.py"
+      - "servers/fastapi/tests/unit/test_migrations.py"
+      - "servers/fastapi/tests/unit/test_template_v2_local_state_migration.py"
+      - "servers/fastapi/tests/unit/test_presentation_delete_safety.py"
+      - "servers/fastapi/tests/integration/test_postgresql_template_v2_migrations.py"
+      - ".github/workflows/upstream-compatibility.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: "22"
+      - name: Sync pinned presentation export runtime
+        run: node scripts/sync-presentation-export.cjs --force
+      - name: Verify pinned presentation export runtime
+        run: node scripts/sync-presentation-export.cjs --check-only
+      - name: Verify compatibility manifest and protected patches
+        run: node --test scripts/verify-upstream-compatibility.test.mjs
+
+  delete-safety-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: servers/fastapi
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+      - name: Install locked FastAPI dependencies
+        run: uv sync --frozen
+      - name: Verify Windows migration and presentation delete safety
+        run: >-
+          uv run pytest -q --no-header
+          tests/unit/test_migrations.py
+          tests/unit/test_template_v2_local_state_migration.py
+          tests/unit/test_presentation_delete_safety.py
+
+  template-v2-postgresql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: servers/fastapi
+    services:
+      postgres:
+        image: >-
+          postgres:16.9-alpine3.21@sha256:36e8aabaa6fa6037537cff64011fa45a200fe2ba202141b9aca48cff3df7ad42
+        env:
+          POSTGRES_USER: presenton
+          POSTGRES_PASSWORD: presenton
+          POSTGRES_DB: presenton_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U presenton -d presenton_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PPT_AGENT_POSTGRES_TEST_URL: >-
+        postgresql+psycopg://presenton:presenton@127.0.0.1:5432/presenton_test
+      PPT_AGENT_REQUIRE_POSTGRES_INTEGRATION: "1"
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+      - name: Install locked FastAPI dependencies
+        run: uv sync --frozen
+      - name: Verify Template V2 on PostgreSQL
+        run: >-
+          uv run pytest -q --no-header
+          tests/integration/test_postgresql_template_v2_migrations.py

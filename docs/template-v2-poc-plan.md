@@ -7,6 +7,32 @@ version. The public routes remain under `/api/v1`. This first phase does not
 change existing presentations, the default template picker, or the authored
 HTML/hybrid export pipeline.
 
+## Current implementation status
+
+The isolated phase-one contract is implemented without production routing or
+database changes:
+
+- `services/template_v2_poc.py` defines a strict `v2-standard` title/body
+  schema, stable slide/node ID validation, one adaptive-only adapter, an
+  export-ready JSON contract, and a fixture repository used to verify
+  create/save/reopen/duplicate/Undo/Redo behavior.
+- `tests/fixtures/template_v2/internal-title-body.v2.json` is the first new
+  internal template fixture. It does not replace or relabel an existing
+  template.
+- `services/template_v2_rollout.py` implements default-off discovery/creation,
+  explicit allowlisting, kill-switch-safe reads and exports for existing marked
+  rows, and content-free structured observations.
+- Unit and contract tests reject unknown nodes and fields, duplicate IDs,
+  authored/HTML output, unstructured observation values, and accidental
+  content logging.
+
+The current implementation is deliberately not wired into production
+endpoints, persistence, or the UI template registry. The repository has no
+production `presentation.version` storage migration for this format, and those
+call sites currently contain unrelated user work. Before internal traffic is
+enabled, add a reviewed migration and connect discovery/create/read/export to
+these boundaries without introducing `/api/v2`.
+
 ## Compatibility boundary
 
 The current fork has two distinct rendering contracts:
@@ -43,6 +69,8 @@ phase-one flag.
 Use a server-controlled capability plus an explicit presentation-format marker:
 
 - `ENABLE_TEMPLATE_V2_POC=false` by default.
+- `TEMPLATE_V2_POC_TEMPLATE_ALLOWLIST` contains the exact internal template IDs
+  permitted for discovery and creation.
 - `presentation.version = "v2-standard"` only for newly created PoC
   presentations.
 - No inference from a template ID or from `/api/v2`; existing rows without the

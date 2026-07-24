@@ -4,17 +4,59 @@ binary) + a deterministic PIL crop: the /pdf-maker page stacks slides at exactly
 1280x720 with gap 0 / margin 0, so slide i is the box (0, i*720, 1280, (i+1)*720)."""
 
 import asyncio
+import hashlib
 import io
+import logging
 import os
 import pathlib
 import signal
 import subprocess
 import tempfile
 import time
-from typing import List, Optional
+from collections import OrderedDict
+from typing import Dict, List, Optional
 
 SLIDE_W = 1280
 SLIDE_H = 720
+LOGGER = logging.getLogger(__name__)
+
+_MINIMUM_AUTHORED_FONT_SCRIPT = r"""<script data-presenton-minimum-font-size>
+(() => {
+  const minimumPx = 12; // 12 CSS px = 9 PowerPoint points.
+  const rules = [];
+  [document.body, ...document.body.querySelectorAll("*")].forEach((element, index) => {
+    if (["SCRIPT", "STYLE", "TEXTAREA", "NOSCRIPT", "TEMPLATE"].includes(element.tagName)) return;
+    const hasOwnText = [...element.childNodes].some(
+      (node) => node.nodeType === Node.TEXT_NODE && Boolean((node.textContent || "").trim())
+    );
+    if (hasOwnText && parseFloat(getComputedStyle(element).fontSize) < minimumPx) {
+      element.style.setProperty("font-size", `${minimumPx}px`, "important");
+    }
+    ["::before", "::after"].forEach((pseudo) => {
+      const style = getComputedStyle(element, pseudo);
+      if (style.content && style.content !== "none" && style.content !== "normal" &&
+          parseFloat(style.fontSize) < minimumPx) {
+        const attribute = `data-presenton-min-font-${index}-${pseudo === "::before" ? "before" : "after"}`;
+        element.setAttribute(attribute, "true");
+        rules.push(`[${attribute}]${pseudo}{font-size:${minimumPx}px!important}`);
+      }
+    });
+  });
+  if (rules.length) {
+    const sheet = document.createElement("style");
+    sheet.textContent = rules.join("\n");
+    document.head.appendChild(sheet);
+  }
+})();
+</script>"""
+
+
+def _with_minimum_authored_font_size(html: str) -> str:
+    """Instrument only the temporary render document; persisted authored HTML stays clean."""
+    closing_body = html.lower().rfind("</body>")
+    if closing_body < 0:
+        return html + _MINIMUM_AUTHORED_FONT_SCRIPT
+    return html[:closing_body] + _MINIMUM_AUTHORED_FONT_SCRIPT + html[closing_body:]
 
 
 def _kill_process_tree(proc: "subprocess.Popen") -> None:
@@ -69,11 +111,71 @@ async def _wait_for_output(out: str, timeout: float = 15.0) -> bool:
     return os.path.isfile(out) and os.path.getsize(out) > 0
 
 
+def _playwright_headless_shell_candidates() -> List[pathlib.Path]:
+    """Return installed Playwright headless-shell executables, newest first.
+
+    Desktop Chrome can hand a headless request to an already-running browser and
+    exit successfully without writing a screenshot. Playwright's standalone
+    headless shell does not share the user's browser profile/process, so it is the
+    most reliable automatic choice for server-side slide rendering.
+    """
+    roots: List[pathlib.Path] = []
+    configured_root = os.getenv("PLAYWRIGHT_BROWSERS_PATH")
+    if configured_root and configured_root != "0":
+        roots.append(pathlib.Path(configured_root).expanduser())
+
+    local_app_data = os.getenv("LOCALAPPDATA")
+    if local_app_data:
+        roots.append(pathlib.Path(local_app_data) / "ms-playwright")
+    roots.extend(
+        [
+            pathlib.Path.home() / ".cache" / "ms-playwright",
+            pathlib.Path.home() / "Library" / "Caches" / "ms-playwright",
+        ]
+    )
+
+    found: List[pathlib.Path] = []
+    seen = set()
+    for root in roots:
+        try:
+            resolved_root = root.resolve()
+        except OSError:
+            resolved_root = root
+        if resolved_root in seen or not root.is_dir():
+            continue
+        seen.add(resolved_root)
+        for candidate in root.glob(
+            "chromium_headless_shell-*/*/chrome-headless-shell*"
+        ):
+            if candidate.name not in {
+                "chrome-headless-shell",
+                "chrome-headless-shell.exe",
+            }:
+                continue
+            if candidate.is_file():
+                found.append(candidate)
+
+    def revision(candidate: pathlib.Path) -> int:
+        for part in candidate.parts:
+            prefix = "chromium_headless_shell-"
+            if part.startswith(prefix):
+                try:
+                    return int(part[len(prefix) :])
+                except ValueError:
+                    return -1
+        return -1
+
+    return sorted(found, key=revision, reverse=True)
+
+
 def find_chrome() -> Optional[str]:
     for env in ("CHROME_PATH", "PUPPETEER_EXECUTABLE_PATH", "CHROMIUM_PATH"):
         p = os.getenv(env)
         if p and os.path.isfile(p):
             return p
+    headless_shells = _playwright_headless_shell_candidates()
+    if headless_shells:
+        return str(headless_shells[0])
     for cand in (
         r"C:\Program Files\Google\Chrome\Application\chrome.exe",
         r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
@@ -145,7 +247,7 @@ async def capture_slides(
         return slides
 
 
-async def render_html_to_png(html: str, timeout: int = 60) -> bytes:
+async def _render_html_to_png_uncached(html: str, timeout: int = 60) -> bytes:
     """Render a self-contained HTML document to an exact 1280x720 PNG via headless
     chrome. Used by the authored-mode pipeline (the HTML is authored in-memory, not
     served from /pdf-maker). Raises RuntimeError if no chrome is found or the
@@ -169,7 +271,7 @@ async def render_html_to_png(html: str, timeout: int = 60) -> bytes:
             html_path = os.path.join(td, "slide.html")
             out = os.path.join(td, "slide.png")
             with open(html_path, "w", encoding="utf-8") as f:
-                f.write(html)
+                f.write(_with_minimum_authored_font_size(html))
             args = [
                 chrome,
                 "--headless=new",
@@ -197,6 +299,41 @@ async def render_html_to_png(html: str, timeout: int = 60) -> bytes:
             return buf.getvalue()
 
 
+async def render_html_to_png(html: str, timeout: int = 60) -> bytes:
+    """Render one authored slide, reusing successful identical renders in-process.
+
+    Vision QA and repeated generation/export attempts can request the exact same HTML.
+    A small memory-bounded LRU avoids relaunching Chrome, while the in-flight table
+    prevents concurrent duplicate requests from doing the same work twice.
+    """
+    if RENDER_CACHE_SIZE <= 0:
+        return await _render_html_to_png_uncached(html, timeout=timeout)
+
+    key = hashlib.sha256(
+        f"authored-render-v2-minimum-9pt\0{timeout}\0{html}".encode("utf-8")
+    ).hexdigest()
+    cached = _render_cache.get(key)
+    if cached is not None:
+        _render_cache.move_to_end(key)
+        return cached
+
+    task = _render_inflight.get(key)
+    if task is None:
+        task = asyncio.create_task(_render_html_to_png_uncached(html, timeout=timeout))
+        _render_inflight[key] = task
+    try:
+        rendered = await asyncio.shield(task)
+    finally:
+        if _render_inflight.get(key) is task and task.done():
+            _render_inflight.pop(key, None)
+
+    _render_cache[key] = rendered
+    _render_cache.move_to_end(key)
+    while len(_render_cache) > RENDER_CACHE_SIZE:
+        _render_cache.popitem(last=False)
+    return rendered
+
+
 # Bound concurrent headless-chrome subprocesses PROCESS-WIDE (not per deck): each render
 # is a separate chrome process, and M concurrent decks would otherwise spawn M×N browsers
 # and exhaust memory/CPU (the observed hang cascade). One shared semaphore, acquired at the
@@ -211,6 +348,17 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _env_nonnegative_int(name: str, default: int) -> int:
+    try:
+        value = int(os.getenv(name, "").strip())
+        return value if value >= 0 else default
+    except (TypeError, ValueError):
+        return default
+
+
+RENDER_CACHE_SIZE = _env_nonnegative_int("AUTHORED_RENDER_CACHE_SIZE", 32)
+_render_cache: "OrderedDict[str, bytes]" = OrderedDict()
+_render_inflight: Dict[str, "asyncio.Task[bytes]"] = {}
 RENDER_CONCURRENCY = _env_int("AUTHORED_RENDER_CONCURRENCY", 4)
 _render_sem: Optional[asyncio.Semaphore] = None
 
@@ -239,10 +387,21 @@ async def render_html_list_to_pngs(htmls: List[str], timeout: int = 60) -> List[
     resilience: a slide that fails to render becomes a neutral placeholder so one failure
     can't abort the whole deck. Concurrency is bounded inside render_html_to_png."""
 
-    async def render_one(html: str) -> bytes:
+    async def render_one(index: int, html: str) -> tuple[bytes, bool]:
         try:
-            return await render_html_to_png(html, timeout=timeout)
-        except Exception:
-            return _placeholder_png()
+            return await render_html_to_png(html, timeout=timeout), False
+        except Exception as exc:
+            LOGGER.warning(
+                "Authored slide render failed at index %d: %s", index, exc
+            )
+            return _placeholder_png(), True
 
-    return list(await asyncio.gather(*[render_one(h) for h in htmls]))
+    results = list(
+        await asyncio.gather(*[render_one(index, html) for index, html in enumerate(htmls)])
+    )
+    if results and all(failed for _, failed in results):
+        raise RuntimeError(
+            "Every authored slide failed to render. Install Playwright's Chromium "
+            "headless shell or set CHROME_PATH to a working headless browser."
+        )
+    return [png for png, _ in results]

@@ -7,9 +7,12 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   test-fastapi:
-    name: Test Main FastAPI
+    name: Test Main FastAPI (locked + system + binary)
     runs-on: ubuntu-latest
     env:
       APP_DATA_DIRECTORY: /tmp/presenton-app-data
@@ -26,13 +29,14 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v5
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
     
-    - name: Set up Python
-      uses: actions/setup-python@v5
+    - name: Install uv (with Python 3.11)
+      uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
       with:
         python-version: "3.11"
-        cache: 'pip'
+        working-directory: servers/fastapi
+        enable-cache: true
     
     - name: Install system dependencies
       run: |
@@ -44,30 +48,17 @@ jobs:
           chromium-driver \
           imagemagick
     
-    - name: Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip
-        # Install package in editable mode if pyproject.toml exists, otherwise install dependencies directly
-        if [ -f "pyproject.toml" ]; then
-          pip install -e .
-        else
-          pip install aiohttp aiomysql aiosqlite asyncpg fastapi[standard] \
-            pathvalidate pdfplumber chromadb sqlmodel \
-            anthropic google-genai openai fastmcp dirtyjson
-        fi
-        python -m pip install pytest
+    - name: Install locked Python dependencies
+      run: uv sync --frozen
 
     - name: Prepare runtime directories
-      run: |
-        python -c "from pathlib import Path; import os; [Path(os.environ[key]).mkdir(parents=True, exist_ok=True) for key in ('APP_DATA_DIRECTORY', 'TEMP_DIRECTORY')]"
+      run: uv run python -c "from pathlib import Path; import os; [Path(os.environ[key]).mkdir(parents=True, exist_ok=True) for key in ('APP_DATA_DIRECTORY', 'TEMP_DIRECTORY')]"
 
     - name: Run FastAPI pytest suite (including authored catalogue)
-      run: python -m pytest -q --no-header
+      run: uv run pytest -q --no-header
 
     - name: Build FastAPI binary
-      run: |
-        python -m pip install pyinstaller
-        pyinstaller server.spec
+      run: uv run --with pyinstaller python -m PyInstaller server.spec
 
   test-nextjs:
     name: Test Main Next.js
@@ -79,10 +70,10 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v5
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
     
     - name: Set up Node.js
-      uses: actions/setup-node@v5
+      uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
       with:
         node-version: '22'
         cache: 'npm'
@@ -91,24 +82,16 @@ jobs:
     - name: Install dependencies
       run: npm ci
 
-    - name: Run ppt-agent CLI mock regression
+    - name: Validate local parity entrypoint mapping
       working-directory: .
-      run: node --test scripts/ppt-agent.test.mjs
+      run: node scripts/test-local.mjs --dry-run --all
 
-    - name: Run adaptive block-edit unit tests
-      run: node --experimental-strip-types lib/adaptiveBlockEdit.test.mjs
+    - name: Run shared Next.js CI Node suite
+      working-directory: .
+      run: npm run test:next-ci
 
-    - name: Run export render URL unit tests
-      run: node --experimental-strip-types --test lib/export-render-url.test.mjs
-
-    - name: Run export app-data path unit tests
-      run: node --experimental-strip-types --test lib/app-data-directory.test.mjs
-
-    - name: Run authored hybrid contract, assembly, security, and Chrome smoke tests
-      run: node --experimental-strip-types --test lib/authored-hybrid/contract.test.mjs lib/authored-hybrid/chrome.test.mjs lib/authored-hybrid/mode.test.mjs lib/authored-hybrid/security.test.mjs lib/authored-hybrid/pptx-archive.test.mjs lib/authored-hybrid/native-plan.test.mjs lib/authored-hybrid/pptx-assembler.test.mjs lib/authored-hybrid/cleanup.test.mjs
-
-    - name: Run composeStyledTheme unit test
-      run: node --experimental-strip-types "app/(presentation-generator)/presentation/utils/composeStyledTheme.test.mjs"
+    - name: Lint application
+      run: npm run lint
 
     - name: Build application
       env:
@@ -123,10 +106,10 @@ jobs:
     # The official action handles Xvfb + Linux Electron deps; npm ci already
     # installed the binary, so install: false.
     - name: Cypress component tests (gate — adaptive editor + theme + upload)
-      uses: cypress-io/github-action@v7
+      uses: cypress-io/github-action@fa4a118725a8f001170d49631ea89e5d66fee626 # v7.4.1
       with:
         working-directory: servers/nextjs
         component: true
-        spec: "**/AdaptiveBlockControls.cy.tsx,**/AdaptivePropertyControls.cy.tsx,**/ChartLeaf.cy.tsx,**/Variants.cy.tsx,**/UploadPage.cy.tsx,**/ThemeComposer.cy.tsx,**/TemplateSelection.cy.tsx,**/presentationGenUpload.cy.ts,**/presentation-generation.cy.ts,**/api/authored.cy.ts,**/usePresentationGeneration.cy.tsx,**/PresentationHeader.cy.tsx"
+        spec: "**/AdaptiveBlockControls.cy.tsx,**/AdaptivePropertyControls.cy.tsx,**/ChartLeaf.cy.tsx,**/Variants.cy.tsx,**/UploadPage.cy.tsx,**/ThemeComposer.cy.tsx,**/TemplateSelection.cy.tsx,**/presentationGenUpload.cy.ts,**/presentation-generation.cy.ts,**/api/authored.cy.ts,**/usePresentationGeneration.cy.tsx,**/PresentationHeader.cy.tsx,**/TemplateV2Studio.cy.tsx,**/TemplateV2PptxImportPanel.cy.tsx"
         install: false
 

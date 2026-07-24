@@ -69,10 +69,12 @@ DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
   must fit fully inside it with NO overflow, NO clipping, and NO overlap between blocks. This is
   the single most common failure — prioritise it over visual ambition. Use less/shorter text and
   generous spacing rather than cramming.
+- Typography floor: NEVER render visible text below 12px (9pt). If content does not fit at
+  12px, shorten it, restructure the layout, or enlarge its container; do not scale text down.
 - Heading sizing: size headings to the ACTUAL text length so they never exceed their area. For a
-  long heading, REDUCE the font-size (e.g. `clamp()` or a smaller fixed size) instead of letting
-  it grow extra lines that collide with the block below. Budget vertical space for the real number
-  of wrapped lines.
+  long heading, REDUCE the font-size only as far as 12px (e.g. `clamp(12px, ...)`) instead of
+  letting it grow extra lines that collide with the block below. Budget vertical space for the
+  real number of wrapped lines.
 - No fragile positioning: do NOT hard-pin a block to a fixed top/absolute offset that a longer
   heading could overlap. Prefer normal document flow (flex/grid column with gaps); reserve
   absolute positioning for decorative layers only, and keep clear gaps between text blocks.

@@ -6,6 +6,11 @@ from fastapi import FastAPI
 
 from migrations import migrate_database_on_startup
 from services.database import create_db_and_tables, dispose_engines
+from services.template_v2_pptx_ingestion_service import (
+    start_template_v2_pptx_dispatcher,
+    stop_template_v2_pptx_dispatcher,
+)
+from templates.v2.policy import get_structured_template_policy
 from utils.get_env import get_app_data_directory_env
 from utils.model_availability import (
     check_llm_and_image_provider_api_or_model_availability,
@@ -93,8 +98,20 @@ async def app_lifespan(_: FastAPI):
     os.makedirs(get_app_data_directory_env(), exist_ok=True)
     await migrate_database_on_startup()
     await create_db_and_tables()
-    _bootstrap_auth_from_env()
-    await check_llm_and_image_provider_api_or_model_availability()
-    yield
-    # Shutdown: release all database connections to prevent stale/leaked pools.
-    await dispose_engines()
+    template_v2_dispatcher_started = False
+    template_v2_policy = get_structured_template_policy()
+    if (
+        template_v2_policy.creation_enabled
+        and template_v2_policy.allowed_template_ids
+    ):
+        await start_template_v2_pptx_dispatcher()
+        template_v2_dispatcher_started = True
+    try:
+        _bootstrap_auth_from_env()
+        await check_llm_and_image_provider_api_or_model_availability()
+        yield
+    finally:
+        if template_v2_dispatcher_started:
+            await stop_template_v2_pptx_dispatcher()
+        # Release all database connections to prevent stale/leaked pools.
+        await dispose_engines()

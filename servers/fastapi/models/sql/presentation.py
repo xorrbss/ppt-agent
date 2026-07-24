@@ -9,6 +9,7 @@ from models.presentation_structure_model import PresentationStructureModel
 from models.presentation_layout import PresentationLayoutModel
 from models.slide_spec_model import PresentationComposition
 from utils.datetime_utils import get_current_utc_datetime
+from templates.v2.constants import LEGACY_PRESENTATION_VERSION
 
 
 class PresentationModel(SQLModel, table=True):
@@ -52,6 +53,18 @@ class PresentationModel(SQLModel, table=True):
     # / layout is None → authored). Additive, nullable; legacy rows are backfilled by
     # migration and still read correctly via the is_authored() fallback below.
     mode: Optional[str] = Field(sa_column=Column(String), default=None)
+    # Persisted presentation-format identity. Legacy/template/adaptive decks
+    # remain v1-standard; native Template V2 decks are explicitly v2-standard.
+    # No existing presentation is converted by this additive field.
+    version: str = Field(
+        sa_column=Column(
+            String,
+            nullable=False,
+            default=LEGACY_PRESENTATION_VERSION,
+            server_default=LEGACY_PRESENTATION_VERSION,
+        ),
+        default=LEGACY_PRESENTATION_VERSION,
+    )
     # Read-only public share link. NULL = not shared. When set, the unguessable
     # token serves this deck (only) via GET /presentation/public/{share_token}
     # without the admin session (see SessionAuthMiddleware exemption).
@@ -80,6 +93,7 @@ class PresentationModel(SQLModel, table=True):
             # previously dropped here, which lost authored brand colours (and the
             # legacy authored sentinel) on /derive.
             mode=self.mode,
+            version=self.version,
             theme=self.theme,
         )
 

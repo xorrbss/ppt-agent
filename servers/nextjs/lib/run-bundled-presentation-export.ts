@@ -8,8 +8,15 @@ import {
   BoundedTextBuffer,
   memorySnapshotMb,
 } from "@/lib/runtime-limits";
-import { resolveExportRenderBaseUrl } from "@/lib/export-render-url";
+import {
+  buildExportRenderUrl,
+  resolveExportRenderBaseUrl,
+} from "@/lib/export-render-url";
 import { resolveAppDataDirectory } from "@/lib/app-data-directory";
+import {
+  resolveExportProcessLimits,
+  superviseExportProcess,
+} from "@/lib/export-process-supervisor";
 
 /** Repo `presentation-export/` at app root (`/app/presentation-export` in Docker). */
 export function getExportPackageRoot(): string {
@@ -24,19 +31,6 @@ export function getPresentonAppRoot(): string {
     process.env.PRESENTON_APP_ROOT?.trim() ||
     path.join(process.cwd(), "..", "..")
   );
-}
-
-function extractSessionTokenFromCookieHeader(cookieHeader?: string): string | undefined {
-  if (!cookieHeader) {
-    return undefined;
-  }
-
-  const match = cookieHeader.match(/(?:^|;\s*)presenton_session=([^;]+)/);
-  if (!match?.[1]) {
-    return undefined;
-  }
-
-  return decodeURIComponent(match[1]);
 }
 
 async function resolveExportEntrypoint(exportRoot: string): Promise<string> {
@@ -209,6 +203,7 @@ export async function runBundledPresentationExport(params: {
   title: string | undefined;
   format: BundledPresentationExportFormat;
   cookieHeader?: string;
+  expectedPresentationSha256?: string;
 }): Promise<BundledPresentationExportResult> {
   return runBundledPresentationExportLocked(params);
 }
@@ -218,8 +213,15 @@ async function runBundledPresentationExportLocked(params: {
   title: string | undefined;
   format: BundledPresentationExportFormat;
   cookieHeader?: string;
+  expectedPresentationSha256?: string;
 }): Promise<BundledPresentationExportResult> {
-  const { presentationId, title, format, cookieHeader } = params;
+  const {
+    presentationId,
+    title,
+    format,
+    cookieHeader,
+    expectedPresentationSha256,
+  } = params;
   const exportRoot = getExportPackageRoot();
   const entrypoint = await resolveExportEntrypoint(exportRoot);
   const converter = bundledConverterPath(exportRoot);
@@ -229,19 +231,12 @@ async function runBundledPresentationExportLocked(params: {
   await fs.access(converter);
 
   const nextjsUrl = resolveExportRenderBaseUrl();
-  const q = new URLSearchParams({ id: presentationId });
-  const sessionToken = extractSessionTokenFromCookieHeader(cookieHeader);
-  if (sessionToken) {
-    q.set("exportSession", sessionToken);
-  }
   const fastapiUrl = process.env.NEXT_PUBLIC_FAST_API?.trim();
-  if (fastapiUrl) {
-    q.set("fastapiUrl", fastapiUrl);
-  }
-  const basePptUrl = `${nextjsUrl}/pdf-maker?${q.toString()}`;
-  const pptUrl = cookieHeader?.trim()
-    ? `${basePptUrl}#exportCookie=${encodeURIComponent(cookieHeader)}`
-    : basePptUrl;
+  const pptUrl = buildExportRenderUrl(
+    nextjsUrl,
+    presentationId,
+    expectedPresentationSha256
+  );
 
   const tempBase =
     process.env.TEMP_DIRECTORY?.trim() || path.join(os.tmpdir(), "presenton");
@@ -269,9 +264,11 @@ async function runBundledPresentationExportLocked(params: {
       memory: memorySnapshotMb(),
     });
     const chromeExecutable = await resolveChromeExecutable();
+    const processLimits = resolveExportProcessLimits();
     await new Promise<void>((resolve, reject) => {
       const child = spawn(process.execPath, [entrypoint, exportTaskPath], {
         cwd: appRoot,
+        detached: process.platform !== "win32",
         stdio: ["ignore", "pipe", "pipe"],
         env: {
           ...process.env,
@@ -292,47 +289,36 @@ async function runBundledPresentationExportLocked(params: {
       const stdout = new BoundedTextBuffer();
       const onStderrData = (d: Buffer) => stderr.append(d);
       const onStdoutData = (d: Buffer) => stdout.append(d);
-      let settled = false;
       const cleanup = () => {
         child.stderr?.removeListener("data", onStderrData);
         child.stdout?.removeListener("data", onStdoutData);
-        child.removeListener("error", onError);
-        child.removeListener("close", onClose);
       };
-      const finish = (callback: () => void) => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        callback();
-      };
-      const onError = (error: Error) => finish(() => reject(error));
-      const onClose = (code: number | null, signal: NodeJS.Signals | null) => {
-        console.info("[bundled-export] child exit", {
-          presentationId,
-          format,
-          pid: child.pid,
-          code,
-          signal,
-          memory: memorySnapshotMb(),
-        });
-        if (code === 0) {
-          finish(resolve);
-        } else {
-          const errText = stderr.toString();
-          const outText = stdout.toString();
-          finish(() => {
+      child.stderr?.on("data", onStderrData);
+      child.stdout?.on("data", onStdoutData);
+      superviseExportProcess(child, processLimits)
+        .then(({ code, signal }) => {
+          console.info("[bundled-export] child exit", {
+            presentationId,
+            format,
+            pid: child.pid,
+            code,
+            signal,
+            memory: memorySnapshotMb(),
+          });
+          if (code === 0) {
+            resolve();
+          } else {
+            const errText = stderr.toString();
+            const outText = stdout.toString();
             reject(
               new Error(
                 `Export process exited with code ${code ?? "unknown"}${signal ? ` signal ${signal}` : ""}${errText ? `. ${errText}` : ""}${outText ? ` stdout: ${outText}` : ""}`
               )
             );
-          });
-        }
-      };
-      child.stderr?.on("data", onStderrData);
-      child.stdout?.on("data", onStdoutData);
-      child.once("error", onError);
-      child.once("close", onClose);
+          }
+        })
+        .catch(reject)
+        .finally(cleanup);
     });
 
     const responseRaw = await fs.readFile(responsePath, "utf8");
@@ -352,6 +338,20 @@ async function runBundledPresentationExportLocked(params: {
 
     return { path: outPath };
   } finally {
-    await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
+    await fs
+      .rm(workDir, {
+        recursive: true,
+        force: true,
+        // Windows can retain short-lived handles while the terminated exporter
+        // and Chrome process tree is closing. Retry before reporting a leak.
+        maxRetries: 5,
+        retryDelay: 200,
+      })
+      .catch((error) => {
+        console.warn("[bundled-export] temporary workspace cleanup failed", {
+          workDir,
+          error,
+        });
+      });
   }
 }

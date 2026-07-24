@@ -25,6 +25,14 @@ test("static legacy HTML and embedded raster images pass hybrid preflight", () =
   if (decoded.ok) assert.equal(decoded.mime, "png");
 });
 
+test("same-document SVG marker URLs pass hybrid preflight", () => {
+  const html = `<!doctype html><html><head><style>
+    .flow{marker-end:url(#arrowBlue)}
+  </style></head><body><svg><defs><marker id="arrowBlue"></marker></defs>
+    <path class="flow" d="M0 0 L10 10"/></svg></body></html>`;
+  assert.deepEqual(preflightAuthoredHtmlForHybrid(html), { ok: true });
+});
+
 test("ordinary business prose with protocol-like words and backslashes passes", () => {
   for (const html of [
     "<!doctype html><html><body><h1>Company Profile: 회사 소개</h1></body></html>",
@@ -132,4 +140,32 @@ test("presentation response reads are byte-bounded for declared and streamed siz
     })
   );
   await assert.rejects(readBoundedResponseText(streamed, 64), /size limit/);
+});
+
+test("bounded response reads enforce UTF-8 byte boundaries and reject invalid lengths", async () => {
+  assert.equal(
+    await readBoundedResponseText(new Response("서울"), 6),
+    "서울"
+  );
+  await assert.rejects(
+    readBoundedResponseText(
+      new Response("x", { headers: { "content-length": "not-a-number" } }),
+      64
+    ),
+    /size limit/
+  );
+
+  let cancelled = false;
+  const streamed = new Response(
+    new ReadableStream({
+      cancel() {
+        cancelled = true;
+      },
+      start(controller) {
+        controller.enqueue(new Uint8Array(65));
+      },
+    })
+  );
+  await assert.rejects(readBoundedResponseText(streamed, 64), /size limit/);
+  assert.equal(cancelled, true);
 });

@@ -16,6 +16,8 @@ SESSION_COOKIE_NAME = "presenton_session"
 PBKDF2_ITERATIONS = 200_000
 SESSION_TTL_SECONDS = 60 * 60 * 24 * 30
 AUTH_CONFIG_FIELDS = ("AUTH_USERNAME", "AUTH_PASSWORD_HASH", "AUTH_SECRET_KEY")
+DISABLED_AUTH_OWNER_SCOPE = "local-disabled-auth-scope-v1"
+_OWNER_SCOPE_PURPOSE = b"template-v2-pptx-import-owner-v1\x00"
 
 
 def _base64url_encode(data: bytes) -> str:
@@ -313,6 +315,26 @@ def get_internal_auth_headers() -> dict[str, str]:
         return {}
 
     return {"Authorization": f"Bearer {create_session_token(username)}"}
+
+
+def get_request_owner_scope(request: Request) -> str:
+    """Return a stable, privacy-preserving owner scope for local resources."""
+    if is_disable_auth_enabled():
+        return DISABLED_AUTH_OWNER_SCOPE
+
+    username = getattr(request.state, "auth_username", None)
+    if not isinstance(username, str) or not username.strip():
+        raise ValueError("Authenticated request identity is unavailable")
+
+    secret = _load_user_config().get("AUTH_SECRET_KEY")
+    if not isinstance(secret, str) or not secret:
+        raise ValueError("Authentication signing secret is unavailable")
+
+    return hmac.new(
+        secret.encode("utf-8"),
+        _OWNER_SCOPE_PURPOSE + username.strip().encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
 
 
 def _is_secure_request(request: Request) -> bool:

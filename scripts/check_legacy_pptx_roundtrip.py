@@ -2,8 +2,8 @@
 
 Confirms a NON-adaptive (legacy `general` template) deck still exports to editable
 PPTX with the current converter — a regression guard for converter-version bumps
-(e.g. v0.2.9 -> v0.3.x). Same converter guard / skip behaviour as the adaptive G4
-harness (scripts/check_adaptive_pptx_roundtrip.py).
+(e.g. v0.2.9 -> v0.3.x). Optional probes skip without a converter; the required
+`RUN_PPTX_ROUNDTRIP=1` invocation fails instead.
 
 Run (inside the Docker dev stack):
   RUN_PPTX_ROUNDTRIP=1 NEXT_PUBLIC_FAST_API=http://127.0.0.1 \
@@ -19,13 +19,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "servers", "fas
 from services.export_task_service import EXPORT_TASK_SERVICE  # noqa: E402
 
 
-def _skip(reason: str) -> None:
+def _skip_or_fail(reason: str) -> None:
+    if os.environ.get("RUN_PPTX_ROUNDTRIP") == "1":
+        print(f"FAIL (legacy PPTX smoke required): {reason}")
+        sys.exit(1)
     print(f"SKIP (legacy PPTX smoke): {reason}")
     sys.exit(0)
 
 
 if not os.path.isfile(EXPORT_TASK_SERVICE.converter_path):
-    _skip(
+    _skip_or_fail(
         f"export converter not found at {EXPORT_TASK_SERVICE.converter_path} "
         "- byte-level PPTX export needs the Linux/Docker runtime."
     )

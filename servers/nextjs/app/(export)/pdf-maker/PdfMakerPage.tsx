@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import "@/app/(presentation-generator)/utils/prism-languages";
@@ -10,13 +10,18 @@ import { usePathname } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { AlertCircle } from "lucide-react";
 import { setPresentationData } from "@/store/slices/presentationGeneration";
+import type { PresentationData } from "@/store/slices/presentationGeneration";
 import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
-import { ApiResponseHandler } from "@/app/(presentation-generator)/services/api/api-error-handler";
 import { useFontLoader } from "@/app/(presentation-generator)/hooks/useFontLoad";
 import { Theme } from "@/app/(presentation-generator)/services/api/types";
 import { applyPresentationThemeTokens } from "@/app/(presentation-generator)/presentation/utils/presentationThemeTokens";
 import SlideScale from "@/app/(presentation-generator)/components/PresentationRender";
 import { normalizeBackendAssetUrls } from "@/utils/api";
+import {
+  resolvePersistedExportStrategy,
+  type PersistedPresentation,
+} from "@/lib/presentation-export-strategy";
+import TemplateV2GeneralSlide from "./TemplateV2GeneralSlide";
 
 const PDF_PRINT_STYLE = `
   html,
@@ -122,24 +127,30 @@ function rasterizeSvgIconsForExport(root: HTMLElement): void {
 
 type PresentationPageProps = {
   presentation_id: string;
-  exportCookie?: string;
+  initialPresentationData?: PresentationData;
 };
 
-const PresentationPage = ({ presentation_id, exportCookie }: PresentationPageProps) => {
+const PresentationPage = ({
+  presentation_id,
+  initialPresentationData,
+}: PresentationPageProps) => {
   const pathname = usePathname();
-  const [contentLoading, setContentLoading] = useState(true);
-  const exportCookieFromHash =
-    typeof window !== "undefined"
-      ? new URLSearchParams(window.location.hash.replace(/^#/, "")).get(
-          "exportCookie"
-        ) ?? undefined
-      : undefined;
-  const effectiveExportCookie = exportCookie ?? exportCookieFromHash;
-
+  const normalizedInitialPresentationData = useMemo(
+    () =>
+      initialPresentationData
+        ? normalizeBackendAssetUrls(initialPresentationData)
+        : undefined,
+    [initialPresentationData]
+  );
+  const [contentLoading, setContentLoading] = useState(
+    !normalizedInitialPresentationData
+  );
   const dispatch = useDispatch();
-  const { presentationData } = useSelector(
+  const { presentationData: storedPresentationData } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
+  const presentationData =
+    normalizedInitialPresentationData ?? storedPresentationData;
   const [error, setError] = useState(false);
 
   useEffect(() => {
@@ -156,14 +167,19 @@ const PresentationPage = ({ presentation_id, exportCookie }: PresentationPagePro
     }
   }, [presentationData]);
   useEffect(() => {
+    if (normalizedInitialPresentationData) {
+      dispatch(setPresentationData(normalizedInitialPresentationData as any));
+      if ((normalizedInitialPresentationData as any).fonts) {
+        useFontLoader((normalizedInitialPresentationData as any).fonts);
+      }
+      return;
+    }
     fetchUserSlides();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- route id and initial SSR payload are immutable for this render
 
   const fetchUserSlides = async () => {
     try {
-      const data = effectiveExportCookie
-        ? await fetchPresentationForExport(presentation_id, effectiveExportCookie)
-        : await DashboardApi.getPresentation(presentation_id);
+      const data = await DashboardApi.getPresentation(presentation_id);
       const normalizedData = normalizeBackendAssetUrls(data);
       dispatch(setPresentationData(normalizedData));
 
@@ -185,24 +201,6 @@ const PresentationPage = ({ presentation_id, exportCookie }: PresentationPagePro
     } finally {
       setContentLoading(false);
     }
-  };
-
-  const fetchPresentationForExport = async (
-    id: string,
-    cookieHeader: string
-  ) => {
-    const response = await fetch(`/api/export-presentation-data/${id}`, {
-      method: "GET",
-      headers: {
-        "x-export-cookie": cookieHeader,
-      },
-      cache: "no-store",
-    });
-
-    return ApiResponseHandler.handleResponse(
-      response,
-      "프레젠테이션을 찾을 수 없습니다"
-    );
   };
 
   const applyTheme = (theme: Theme) => {
@@ -253,6 +251,15 @@ const PresentationPage = ({ presentation_id, exportCookie }: PresentationPagePro
 
   const slides = presentationData?.slides ?? [];
   const isLoading = contentLoading || slides.length === 0;
+  const exportStrategy = useMemo(
+    () =>
+      slides.length > 0
+        ? resolvePersistedExportStrategy(
+            presentationData as PersistedPresentation
+          )
+        : null,
+    [presentationData, slides.length]
+  );
 
   // Once slides are rendered, rasterize SVG icons to PNG so the PPTX converter
   // can embed them. Mutating <img> src keeps the converter's image/DOM-idle
@@ -333,12 +340,16 @@ const PresentationPage = ({ presentation_id, exportCookie }: PresentationPagePro
                       data-layout={slide.layout}
                       data-group={slide.layout_group}
                     >
-                      <SlideScale
-                        slide={slide}
-                        theme={presentationData?.theme ?? null}
-                        isEditMode={false}
-                        fixedSize
-                      />
+                      {exportStrategy === "template-v2-general" ? (
+                        <TemplateV2GeneralSlide slide={slide} />
+                      ) : (
+                        <SlideScale
+                          slide={slide}
+                          theme={presentationData?.theme ?? null}
+                          isEditMode={false}
+                          fixedSize
+                        />
+                      )}
                     </div>
                   </div>
                 ))}

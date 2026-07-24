@@ -1,0 +1,46 @@
+{
+  "ref": {
+    "object": {
+      "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  },
+  "commit": {
+    "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "html_url": "https://github.com/presenton/presenton/commit/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "commit": {
+      "committer": {
+        "date": "2026-07-25T01:02:03Z"
+      },
+      "message": "Document experimental v2 template endpoint"
+    }
+  },
+  "compare": {
+    "status": "ahead",
+    "ahead_by": 1,
+    "behind_by": 0,
+    "total_commits": 1,
+    "files": [
+      {
+        "filename": "docs/experimental-editor-docs/api.md",
+        "status": "modified",
+        "additions": 2,
+        "deletions": 0,
+        "patch": "@@ -1 +1,3 @@\n Existing\n+POST /api/v2/templates\n+Experimental only"
+      },
+      {
+        "filename": "servers/nextjs/proxy.ts",
+        "status": "modified",
+        "additions": 1,
+        "deletions": 0,
+        "patch": "@@ -1 +1,2 @@\n proxy\n+const prefix = \"/api/v2\""
+      },
+      {
+        "filename": "README.md",
+        "status": "modified",
+        "additions": 1,
+        "deletions": 0,
+        "patch": "@@ -1 +1,2 @@\n Presenton\n+Editorial cleanup"
+      }
+    ]
+  }
+}

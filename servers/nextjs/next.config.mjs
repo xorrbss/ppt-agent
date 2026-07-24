@@ -30,7 +30,7 @@ const linkFreeRuntimeTrace = [
 
 const nextConfig = {
   reactStrictMode: false,
-  distDir: ".next-build",
+  distDir: process.env.PRESENTON_TEST_NEXT_DIST_DIR || ".next-build",
   output: "standalone",
   outputFileTracingRoot: repositoryRoot,
   outputFileTracingIncludes: {

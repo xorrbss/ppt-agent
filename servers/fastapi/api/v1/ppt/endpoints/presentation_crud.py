@@ -8,6 +8,7 @@ import uuid
 from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -18,6 +19,12 @@ from models.presentation_with_slides import PresentationWithSlides
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from services.database import get_async_session
+from services.presentation_deletion_service import (
+    PresentationDeleteConflictError,
+    PresentationDeleteRetryableError,
+    PresentationDeletionService,
+    is_retryable_sqlite_lock,
+)
 
 from api.v1.ppt.endpoints.presentation_helpers import resolve_presentation_fonts
 
@@ -76,12 +83,44 @@ async def get_presentation(
 async def delete_presentation(
     id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session)
 ):
-    presentation = await sql_session.get(PresentationModel, id)
+    try:
+        presentation = await sql_session.get(PresentationModel, id)
+    except OperationalError as error:
+        await sql_session.rollback()
+        if not is_retryable_sqlite_lock(error, sql_session):
+            raise
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "presentation_delete_temporarily_unavailable",
+                "presentation_id": str(id),
+                "retryable": True,
+            },
+            headers={"Retry-After": "1"},
+        ) from error
     if not presentation:
         raise HTTPException(404, "Presentation not found")
 
-    await sql_session.delete(presentation)
-    await sql_session.commit()
+    try:
+        await PresentationDeletionService(sql_session).delete(presentation)
+    except PresentationDeleteConflictError as error:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "presentation_delete_dependency_conflict",
+                "presentation_id": str(error.presentation_id),
+            },
+        ) from error
+    except PresentationDeleteRetryableError as error:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "presentation_delete_temporarily_unavailable",
+                "presentation_id": str(error.presentation_id),
+                "retryable": True,
+            },
+            headers={"Retry-After": "1"},
+        ) from error
 
 
 @PRESENTATION_CRUD_ROUTER.post("/create", response_model=PresentationModel)

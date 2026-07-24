@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "repository": "presenton/presenton",
+  "branch": "main",
+  "baselineSha": "57b194b234b42c8b28f8a507a30322de200e3e83",
+  "baselineMetadata": {
+    "committedAt": "2026-07-23T12:15:14Z",
+    "subject": "Refactor code structure for improved readability and maintainability"
+  },
+  "requestTimeoutMs": 20000,
+  "maximumCompareFiles": 300,
+  "categories": [
+    {
+      "id": "api-v2-backend-route",
+      "label": "/api/v2 actual backend route",
+      "severity": "contract-risk",
+      "pathRegex": "^servers/fastapi/",
+      "evidenceRegex": "(api/v2|api\\\\.v2|/v2/|prefix\\s*=\\s*[\"']?/api/v2)"
+    },
+    {
+      "id": "api-v1-endpoint",
+      "label": "API v1 endpoint",
+      "severity": "review",
+      "pathRegex": "^servers/fastapi/(api|main\\.py)",
+      "evidenceRegex": "(/api/v1|api\\\\.v1|APIRouter|include_router|@[^\\n]+\\.(get|post|put|patch|delete)\\()",
+      "riskRegex": "^-[^\\n]*(/api/v1|include_router|@[^\\n]+\\.(get|post|put|patch|delete)\\()"
+    },
+    {
+      "id": "alembic-contract",
+      "label": "Alembic revision graph",
+      "severity": "review",
+      "pathRegex": "^servers/fastapi/alembic/(versions/.*\\.py|env\\.py)$",
+      "evidenceRegex": "(revision|down_revision|alembic|op\\.)",
+      "riskRegex": "(^-[^\\n]*(revision|down_revision)\\s*=|\"status\"\\s*:\\s*\"(modified|removed|renamed)\")"
+    },
+    {
+      "id": "template-v2-schema",
+      "label": "Template V2 schema/discriminator",
+      "severity": "review",
+      "pathRegex": "(template_v2|template-v2|templates/v2|structured_template)",
+      "evidenceRegex": "(discriminator|Literal\\[|SlideElement|type[\"']?\\s*:|model_config|Field\\()",
+      "riskRegex": "^-[^\\n]*(Literal\\[|SlideElement|discriminator|type[\"']?\\s*:)"
+    },
+    {
+      "id": "presentation-export-version",
+      "label": "presentation-export version/runtime",
+      "severity": "contract-risk",
+      "pathRegex": "(^package\\.json$|presentation-export|sync-presentation-export|run-bundled-presentation-export)",
+      "evidenceRegex": "(presentationExportVersion|installed-version|presentation-export|EXPORT_RUNTIME_VERSION|sharp)"
+    },
+    {
+      "id": "authored-adaptive-export-boundary",
+      "label": "authored/adaptive/export boundary",
+      "severity": "review",
+      "pathRegex": "(authored|adaptive|export-presentation|presentation-export|generation|template-v2-general|presentation_version)",
+      "evidenceRegex": "(authored|adaptive|ExportStrategy|GenerationStrategy|template-v2|export|presentation_version)"
+    },
+    {
+      "id": "security-invariant",
+      "label": "security invariant",
+      "severity": "review",
+      "pathRegex": "(middleware|auth|share|validator|upload|export|electron|proxy|url)",
+      "evidenceRegex": "(secret|token|travers|contain|realpath|loopback|127\\.0\\.0\\.1|thrott|rate.limit|file.format|content.type|webSecurity|contextIsolation|nodeIntegration)"
+    },
+    {
+      "id": "windows-runtime-invariant",
+      "label": "Windows/SQLite/Sharp/Electron invariant",
+      "severity": "review",
+      "pathRegex": "(windows|win32|sqlite|sharp|electron|sync-presentation-export|run-bundled-presentation-export)",
+      "evidenceRegex": "(win32|Windows|sqlite|sharp|Electron|taskkill|powershell|Expand-Archive)"
+    },
+    {
+      "id": "api-v2-next-route",
+      "label": "/api/v2 Next route",
+      "severity": "review",
+      "pathRegex": "^servers/nextjs/(app|pages)/api/v2/",
+      "evidenceRegex": "(api/v2|/v2/)"
+    },
+    {
+      "id": "api-v2-proxy-trace",
+      "label": "/api/v2 proxy/client trace (not a backend route)",
+      "severity": "info",
+      "pathRegex": "^servers/nextjs/(proxy\\.ts|utils/|lib/|app/)",
+      "evidenceRegex": "(api/v2|/v2/)"
+    },
+    {
+      "id": "api-v2-experimental-doc",
+      "label": "/api/v2 experimental documentation (not a backend route)",
+      "severity": "info",
+      "pathRegex": "^(docs/experimental-editor-docs/|docs/)",
+      "evidenceRegex": "(api/v2|/v2/)"
+    }
+  ]
+}

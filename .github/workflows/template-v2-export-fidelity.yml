@@ -1,0 +1,132 @@
+name: Template V2 Export Fidelity
+
+on:
+  pull_request:
+    paths:
+      - "presentation-export/**"
+      - "scripts/sync-presentation-export.cjs"
+      - "servers/nextjs/app/(export)/**"
+      - "servers/nextjs/app/api/export-presentation/**"
+      - "servers/nextjs/lib/export-fidelity/**"
+      - "servers/nextjs/lib/template-v2-general-renderer.*"
+      - "servers/nextjs/lib/template-v2-render-plan.*"
+      - "servers/nextjs/lib/presentation-export-**"
+      - "servers/nextjs/lib/run-bundled-presentation-export*"
+      - "servers/nextjs/package.json"
+      - "servers/nextjs/package-lock.json"
+      - "servers/fastapi/template_v2_schema_contract.py"
+      - "servers/fastapi/templates/v2/**"
+      - "servers/fastapi/models/sql/template_v2*.py"
+      - "servers/fastapi/models/sql/presentation.py"
+      - "servers/fastapi/models/sql/slide.py"
+      - "servers/fastapi/models/presentation_with_slides.py"
+      - "servers/fastapi/services/template_v2*.py"
+      - "servers/fastapi/services/presentation_deletion_service.py"
+      - "servers/fastapi/services/presentation_version_service.py"
+      - "servers/fastapi/api/v1/ppt/endpoints/structured_template*.py"
+      - "servers/fastapi/api/v1/ppt/endpoints/presentation.py"
+      - "servers/fastapi/api/v1/ppt/router.py"
+      - "servers/fastapi/alembic/versions/*template_v2*.py"
+      - "servers/fastapi/alembic/versions/*delete_cascade*.py"
+      - "servers/fastapi/alembic/env.py"
+      - "servers/fastapi/migrations.py"
+      - "servers/fastapi/tests/fixtures/template_v2/**"
+      - "servers/fastapi/tests/unit/test_migrations.py"
+      - "servers/fastapi/tests/unit/test_template_v2_local_state_migration.py"
+      - "servers/fastapi/tests/unit/test_presentation_delete_safety.py"
+      - ".github/workflows/template-v2-export-fidelity.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fidelity:
+    name: ${{ matrix.os }} structural + visual
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: servers/nextjs/package-lock.json
+
+      - name: Install Next.js dependencies
+        working-directory: servers/nextjs
+        run: npm ci
+
+      - name: Install Linux visual dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium fonts-liberation fonts-noto-cjk libreoffice poppler-utils
+
+      - name: Install Windows visual dependencies
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install libreoffice-fresh --yes --no-progress
+          $popplerArchive = Join-Path $env:RUNNER_TEMP "poppler-26.02.0-0.zip"
+          Invoke-WebRequest `
+            -Uri "https://github.com/oschwartz10612/poppler-windows/releases/download/v26.02.0-0/Release-26.02.0-0.zip" `
+            -OutFile $popplerArchive
+          $expectedSha256 = "993E4A94376ED712FAFC7058D724EA0B943D118BBD2305CD9ED55174EB85CDA5"
+          $actualSha256 = (Get-FileHash -LiteralPath $popplerArchive -Algorithm SHA256).Hash
+          if ($actualSha256 -ne $expectedSha256) {
+            throw "Poppler archive SHA-256 mismatch: expected $expectedSha256, received $actualSha256"
+          }
+          Expand-Archive -LiteralPath $popplerArchive -DestinationPath (Join-Path $env:RUNNER_TEMP "poppler")
+
+      - name: Discover Windows visual tools
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $soffice = Join-Path $env:ProgramFiles "LibreOffice\program\soffice.exe"
+          if (-not (Test-Path -LiteralPath $soffice)) {
+            throw "LibreOffice executable not found at $soffice"
+          }
+          $pdftocairo = Get-ChildItem `
+            -LiteralPath (Join-Path $env:RUNNER_TEMP "poppler") `
+            -Recurse `
+            -Filter pdftocairo.exe |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $pdftocairo) {
+            throw "pdftocairo.exe not found in the pinned Poppler archive"
+          }
+          "SOFFICE_PATH=$soffice" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "PDFTOCAIRO_PATH=$pdftocairo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Synchronize pinned presentation-export runtime
+        run: node scripts/sync-presentation-export.cjs --force
+
+      - name: Verify pinned presentation-export runtime
+        run: node scripts/sync-presentation-export.cjs --check-only
+
+      - name: Run Template V2 structural and visual fidelity gate
+        working-directory: servers/nextjs
+        env:
+          CI: "true"
+          REQUIRE_TEMPLATE_V2_VISUAL: "1"
+          TEST_ARTIFACT_DIR: ${{ github.workspace }}/test-artifacts/template-v2-${{ runner.os }}
+        run: npm run test:template-v2-export-fidelity
+
+      - name: Upload fidelity failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: template-v2-fidelity-${{ runner.os }}
+          path: test-artifacts/template-v2-${{ runner.os }}
+          if-no-files-found: ignore
+          retention-days: 14

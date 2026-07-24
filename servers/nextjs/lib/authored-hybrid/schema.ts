@@ -101,6 +101,8 @@ export interface AuthoredHybridTextStyle {
   horizontalAlignment: "left" | "center" | "right" | "justify";
   verticalAlignment: "top" | "middle" | "bottom";
   direction: "ltr" | "rtl";
+  /** Preserve CSS nowrap/pre semantics so PowerPoint does not invent line breaks. */
+  wrapMode?: "wrap" | "no-wrap";
 }
 
 export interface AuthoredHybridTextRun {
@@ -116,6 +118,11 @@ export interface AuthoredHybridTextPayload {
   paragraphs: string[];
   style: AuthoredHybridTextStyle;
   runs: AuthoredHybridTextRun[];
+  /** A simple CSS fill/border owned by the text root, exported as one text shape. */
+  containerShape?: {
+    bounds: AuthoredHybridBounds;
+    shape: AuthoredHybridShapePayload;
+  };
 }
 
 export interface AuthoredHybridImagePayload {
@@ -134,11 +141,55 @@ export interface AuthoredHybridImagePayload {
 }
 
 export interface AuthoredHybridShapePayload {
-  shape: "rectangle" | "round-rectangle" | "ellipse" | "line";
+  shape: "rectangle" | "round-rectangle" | "ellipse" | "line" | "freeform";
   fill: AuthoredHybridColor | null;
+  /** Native PowerPoint linear-gradient fill reconstructed from CSS. */
+  gradient?: {
+    /** CSS angle: 0deg points upward, 90deg points right. */
+    angleDeg: number;
+    stops: Array<{
+      color: AuthoredHybridColor;
+      /** Normalized position from 0 through 1. Duplicate positions create hard stops. */
+      position: number;
+    }>;
+  };
   stroke: AuthoredHybridColor | null;
   strokeWidthPt: number;
+  /** PowerPoint preset dash reconstructed from a CSS border style. */
+  dash?: "dash" | "dot";
+  /** Rounded SVG stroke caps retained for faithful editable connector ends. */
+  lineCap?: "round";
+  /** Rounded SVG stroke joins retained for faithful sampled curves. */
+  lineJoin?: "round";
   radiusPt: number;
+  /** CSS sides that cannot be represented by a single uniform PowerPoint outline. */
+  borderLines?: Array<{
+    side: "top" | "right" | "bottom" | "left";
+    color: AuthoredHybridColor;
+    widthPt: number;
+    dash?: "dash" | "dot";
+  }>;
+  /**
+   * Solid, zero-blur CSS box-shadow layers reconstructed as independent
+   * editable PowerPoint shapes underneath the owning shape.
+   */
+  shadowLayers?: Array<{
+    offsetXPx: number;
+    offsetYPx: number;
+    spreadPx: number;
+    color: AuthoredHybridColor;
+  }>;
+  /** Arrowhead reconstructed from a CSS pseudo-element on a thin connector. */
+  endArrow?: "triangle";
+  /**
+   * Normalized vertices for an editable SVG-derived freeform. Coordinates are
+   * relative to the element bounds and must stay between 0 and 1.
+   */
+  points?: Array<{ x: number; y: number }>;
+  /** Close an SVG-derived freeform so PowerPoint can preserve its native fill. */
+  closed?: boolean;
+  /** Suppress only this element's paint so child content remains in the backplate. */
+  preserveContents?: boolean;
 }
 
 export interface AuthoredHybridElementBase {
@@ -191,6 +242,14 @@ export interface AuthoredHybridRasterElement extends AuthoredHybridElementBase {
     candidateKind: AuthoredHybridNativeKind | "complex";
     reasons: AuthoredHybridFallbackReason[];
   };
+  /**
+   * Text payloads survive conservative raster classification so the editable
+   * export mode can promote the glyphs while keeping unsupported decoration in
+   * the fidelity backplate.
+   */
+  text?: AuthoredHybridTextPayload;
+  /** Safe PowerPoint approximations may also be promoted from raster fallback. */
+  shape?: AuthoredHybridShapePayload;
 }
 
 export type AuthoredHybridElement =
@@ -206,7 +265,7 @@ export interface AuthoredHybridBackplatePlan {
   heightPx: typeof AUTHORED_SLIDE_HEIGHT_PX;
   /** Chrome captures with omitBackground so transparent CSS remains RGBA. */
   transparentBackground: true;
-  /** H2 may promote any subset; only successfully assembled IDs are hidden. */
+  /** H2 may promote native items and extracted editable raster text/shapes. */
   eligibleElementIds: string[];
   rasterElementIds: string[];
 }

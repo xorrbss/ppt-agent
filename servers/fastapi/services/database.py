@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     AsyncSession,
 )
+from sqlalchemy import event
 from sqlmodel import SQLModel
 
 from models.sql.async_presentation_generation_status import (
@@ -16,7 +17,11 @@ from models.sql.key_value import KeyValueSqlModel
 from models.sql.ollama_pull_status import OllamaPullStatus
 from models.sql.presentation_layout_code import PresentationLayoutCodeModel
 from models.sql.presentation import PresentationModel
+from models.sql.presentation_version import PresentationVersionModel
 from models.sql.template import TemplateModel
+from models.sql.template_v2 import TemplateV2
+from models.sql.template_v2_local_state import TemplateV2LocalState
+from models.sql.template_v2_pptx_import import TemplateV2PptxImport
 from models.sql.template_create_info import TemplateCreateInfoModel
 from models.sql.slide import SlideModel
 from models.sql.webhook_subscription import WebhookSubscription
@@ -33,6 +38,18 @@ _pool_kwargs = get_pool_kwargs() if "sqlite" not in database_url else {}
 sql_engine: AsyncEngine = create_async_engine(
     database_url, connect_args=connect_args, **_pool_kwargs
 )
+
+
+if "sqlite" in database_url:
+    @event.listens_for(sql_engine.sync_engine, "connect")
+    def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record):
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA foreign_keys=ON")
+        finally:
+            cursor.close()
+
+
 async_session_maker = async_sessionmaker(sql_engine, expire_on_commit=False)
 
 
@@ -51,6 +68,7 @@ async def create_db_and_tables():
                     sync_conn,
                     tables=[
                         PresentationModel.__table__,
+                        PresentationVersionModel.__table__,
                         SlideModel.__table__,
                         KeyValueSqlModel.__table__,
                         ChatHistoryMessageModel.__table__,
@@ -58,6 +76,9 @@ async def create_db_and_tables():
                         PresentationLayoutCodeModel.__table__,
                         TemplateCreateInfoModel.__table__,
                         TemplateModel.__table__,
+                        TemplateV2.__table__,
+                        TemplateV2LocalState.__table__,
+                        TemplateV2PptxImport.__table__,
                         WebhookSubscription.__table__,
                         AsyncPresentationGenerationTaskModel.__table__,
                         OllamaPullStatus.__table__,

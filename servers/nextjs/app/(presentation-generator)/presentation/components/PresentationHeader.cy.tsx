@@ -11,6 +11,7 @@ import {
   setPresentationData,
   setStreaming,
 } from "@/store/slices/presentationGeneration";
+import { isAuthoredPresentation } from "../utils/isAuthoredPresentation";
 
 const mountHeader = (isAuthoredDeck: boolean) => {
   store.dispatch(
@@ -62,7 +63,7 @@ const expectExportBody = (expected: Record<string, string>) =>
 
 describe("PresentationHeader authored export", () => {
   beforeEach(() => {
-    cy.stub(ThemeApi, "getThemes").resolves([]);
+    cy.stub(ThemeApi, "getThemes").as("getThemes").resolves([]);
     cy.stub(PresentationGenerationApi, "updatePresentationContent").resolves({});
     cy.intercept("POST", "**/api/export-presentation", (request) => {
       request.reply({
@@ -74,6 +75,27 @@ describe("PresentationHeader authored export", () => {
         body: { path: "/exports/deck.pptx" },
       });
     }).as("exportPresentation");
+  });
+
+  it("shows template conversion instead of an ineffective theme control for authored decks", () => {
+    mountHeader(true);
+
+    cy.get('[data-testid="template-change-trigger"]')
+      .should("be.visible")
+      .and("contain.text", "템플릿 변경");
+    cy.get('[data-testid="quality-review-trigger"]')
+      .should("be.visible")
+      .and("contain.text", "고품질 검수");
+    cy.contains("button", "테마").should("not.exist");
+    cy.get("@getThemes").should("not.have.been.called");
+  });
+
+  it("keeps the theme control for regular editable decks", () => {
+    mountHeader(false);
+
+    cy.get('[data-testid="template-change-trigger"]').should("not.exist");
+    cy.contains("button", "테마").should("be.visible");
+    cy.get("@getThemes").should("have.been.calledOnce");
   });
 
   it("sends fidelity by default for the authored design-preserving option", () => {
@@ -172,5 +194,40 @@ describe("PresentationHeader authored export", () => {
     cy.get('[data-testid="authored-export-fidelity"]').click();
     cy.wait("@failedExport");
     cy.get('[data-testid="export-trigger"]').should("not.be.disabled");
+  });
+});
+
+describe("legacy authored presentation detection", () => {
+  it("recognizes a saved authored deck from its slide sentinel", () => {
+    expect(
+      isAuthoredPresentation({
+        mode: "template",
+        theme: null,
+        layout: { name: "legacy-layout" },
+        slides: [
+          {
+            layout_group: "authored",
+            layout: "authored:content",
+            content: { __authored__: true },
+          },
+        ],
+      }),
+    ).to.equal(true);
+  });
+
+  it("does not classify a regular saved template as authored", () => {
+    expect(
+      isAuthoredPresentation({
+        mode: "template",
+        theme: null,
+        slides: [
+          {
+            layout_group: "business-template",
+            layout: "business-template:content",
+            content: {},
+          },
+        ],
+      }),
+    ).to.equal(false);
   });
 });

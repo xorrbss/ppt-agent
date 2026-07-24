@@ -1,0 +1,38 @@
+{
+  "contract": "template-v2-general-export-fidelity-v1",
+  "canvas": { "width": 1280, "height": 720 },
+  "defaults": {
+    "maxMeanAbsoluteError": 6,
+    "maxBadPixelRatio": 0.015,
+    "maxBadComponentPixels": 4500,
+    "pixelDelta": 32
+  },
+  "cases": [
+    {
+      "id": "title-body",
+      "directory": "00-title-body",
+      "expectedText": ["Quarterly direction", "Focus the team on reliable delivery."],
+      "templateIdentity": { "version": "v2-standard", "mode": "template" }
+    },
+    {
+      "id": "geometry",
+      "directory": "01-geometry",
+      "expectedText": ["Operating model", "Plan", "Build", "Measure"],
+      "templateIdentity": { "version": "v2-standard", "mode": "template" }
+    },
+    {
+      "id": "text-fit",
+      "directory": "02-text-fit",
+      "expectedText": ["Text fit boundary", "The export must keep this sentence inside the editable text area while preserving every editable word at the right and lower boundaries.", "VISIBLE SENTINEL"],
+      "templateIdentity": { "version": "v2-standard", "mode": "template" },
+      "tolerances": { "maxMeanAbsoluteError": 8, "maxBadPixelRatio": 0.035, "maxBadComponentPixels": 5000 }
+    },
+    {
+      "id": "rich-elements",
+      "directory": "03-rich-elements",
+      "expectedText": ["Renderer contract", "Fast", "Safe", "Header", "Value", "Revenue", "FY26", "Plan", "Quarter", "Q1", "Q2", "Q3", "40", "65", "88", "20", "15", "12", "Finance model", "72%"],
+      "templateIdentity": { "version": "v2-standard", "mode": "template" },
+      "tolerances": { "maxMeanAbsoluteError": 10, "maxBadPixelRatio": 0.035, "maxBadComponentPixels": 7000 }
+    }
+  ]
+}

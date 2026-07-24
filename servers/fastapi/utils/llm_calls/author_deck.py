@@ -8,7 +8,8 @@ import asyncio
 import io
 import logging
 from dataclasses import dataclass
-from typing import List, Optional
+from pathlib import Path
+from typing import List, Optional, Tuple
 
 from models.presentation_outline_model import PresentationOutlineModel
 from utils.llm_calls.author_slide import (
@@ -30,6 +31,17 @@ class AuthoredDeckResult:
     """First-pass slides plus the exact design system reused by vision-QA."""
 
     htmls: List[str]
+    design_system: str
+
+
+@dataclass(frozen=True)
+class AuthoredDeckPlan:
+    """Immutable inputs shared by independently-running slide author tasks."""
+
+    contents: Tuple[str, ...]
+    roles: Tuple[str, ...]
+    reference_images: Tuple[Tuple[Path, ...], ...]
+    brand: Brand
     design_system: str
 
 
@@ -125,6 +137,39 @@ async def _author_one_resilient(
     return fallback_slide_html(content, brand, role, index, n)
 
 
+def prepare_authored_deck(
+    outline: PresentationOutlineModel,
+    brand: Brand,
+    style: Optional[AuthoredStyleLike] = None,
+) -> AuthoredDeckPlan:
+    """Prepare the shared prompt inputs once, before slide-level pipelining starts."""
+    slides = list(outline.slides)
+    effective_brand = apply_style_defaults(brand, style)
+    roles = tuple(plan_deck_roles(outline))
+    return AuthoredDeckPlan(
+        contents=tuple(slide.content for slide in slides),
+        roles=roles,
+        reference_images=tuple(
+            tuple(reference_images_for_role(style, role)) for role in roles
+        ),
+        brand=effective_brand,
+        design_system=build_design_system(effective_brand, style),
+    )
+
+
+async def author_planned_slide(plan: AuthoredDeckPlan, index: int) -> str:
+    """Author one planned slide; safe to compose with illustration/render stages."""
+    return await _author_one_resilient(
+        plan.contents[index],
+        plan.design_system,
+        plan.brand,
+        plan.roles[index],
+        index,
+        len(plan.contents),
+        plan.reference_images[index],
+    )
+
+
 async def author_deck(
     outline: PresentationOutlineModel,
     brand: Brand,
@@ -134,26 +179,11 @@ async def author_deck(
     concurrency and per-slide resilience. Returns the valid HTML documents (order
     preserved) plus the exact prompt shared with vision-QA; failed slides fall back
     to a clean branded placeholder."""
-    slides = list(outline.slides)
-    n = len(slides)
-    brand = apply_style_defaults(brand, style)
-    design_system = build_design_system(brand, style)
-    roles = plan_deck_roles(outline)
+    plan = prepare_authored_deck(outline, brand, style)
     htmls = await asyncio.gather(
-        *[
-            _author_one_resilient(
-                slides[i].content,
-                design_system,
-                brand,
-                roles[i],
-                i,
-                n,
-                reference_images_for_role(style, roles[i]),
-            )
-            for i in range(n)
-        ]
+        *[author_planned_slide(plan, i) for i in range(len(plan.contents))]
     )
-    return AuthoredDeckResult(htmls=list(htmls), design_system=design_system)
+    return AuthoredDeckResult(htmls=list(htmls), design_system=plan.design_system)
 
 
 def build_image_pptx(images: List[bytes], out_path: str) -> str:

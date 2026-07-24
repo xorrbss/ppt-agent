@@ -3,9 +3,9 @@
 Seeds an adaptive deck, exports it to PPTX via the real export runtime, reopens
 the .pptx with python-pptx, and asserts that each archetype produced the expected
 EDITABLE shapes (text frames with real text, a real table, a chart). This is the
-design's gate G4 (revision R4): it can only run where the converter binary exists
-(Linux/Docker — `convert-linux-x64`); on Windows the converter is absent
-(`convert-win32.exe` is not shipped), so the script skips cleanly.
+design's gate G4 (revision R4): CI runs it in Linux/Docker with the matching
+`convert-linux-x64` runtime. Optional probes skip when the host-matched converter
+is absent; `RUN_PPTX_ROUNDTRIP=1` makes that missing precondition fail.
 
 Run (inside the Docker dev stack, with Next.js + FastAPI + converter up):
   docker compose up development            # serves :5000, FastAPI :8000, converter
@@ -13,7 +13,8 @@ Run (inside the Docker dev stack, with Next.js + FastAPI + converter up):
   RUN_PPTX_ROUNDTRIP=1 NEXT_PUBLIC_FAST_API=http://127.0.0.1 \
     APP_DATA_DIRECTORY=/app_data uv run python scripts/check_adaptive_pptx_roundtrip.py
 
-Exit code 0 = pass or skip; 1 = a round-trip assertion failed.
+Exit code 0 = pass or an optional probe skip; 1 = a required precondition or
+round-trip assertion failed.
 """
 import asyncio
 import os
@@ -25,16 +26,19 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "servers", "fas
 from services.export_task_service import EXPORT_TASK_SERVICE  # noqa: E402
 
 
-def _skip(reason: str) -> None:
+def _skip_or_fail(reason: str) -> None:
+    if os.environ.get("RUN_PPTX_ROUNDTRIP") == "1":
+        print(f"FAIL (G4 byte-PPTX round-trip required): {reason}")
+        sys.exit(1)
     print(f"SKIP (G4 byte-PPTX round-trip): {reason}")
     sys.exit(0)
 
 
 if not os.path.isfile(EXPORT_TASK_SERVICE.converter_path):
-    _skip(
+    _skip_or_fail(
         f"export converter not found at {EXPORT_TASK_SERVICE.converter_path} "
-        "- byte-level PPTX export needs the Linux/Docker runtime (Windows lacks "
-        "convert-win32.exe). The DOM contract is verified separately via /pdf-maker."
+        "- the G4 CI gate needs its Linux/Docker converter runtime. "
+        "The DOM contract is verified separately via /pdf-maker."
     )
 
 from pptx import Presentation  # noqa: E402

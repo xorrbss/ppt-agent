@@ -85,6 +85,105 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     return { hex: hex, alpha: round(clamp(alpha, 0, 1)) };
   }
 
+  function splitCssArguments(value) {
+    var parts = [];
+    var depth = 0;
+    var start = 0;
+    for (var index = 0; index < value.length; index += 1) {
+      var character = value[index];
+      if (character === "(") depth += 1;
+      if (character === ")") depth = Math.max(0, depth - 1);
+      if (character === "," && depth === 0) {
+        parts.push(value.slice(start, index).trim());
+        start = index + 1;
+      }
+    }
+    parts.push(value.slice(start).trim());
+    return parts.filter(Boolean);
+  }
+
+  function cssGradientAngle(value) {
+    var normalized = String(value || "").trim().toLowerCase();
+    var degrees = normalized.match(/^(-?(?:\d+(?:\.\d+)?|\.\d+))deg$/);
+    if (degrees) return number(degrees[1], 180);
+    var directions = {
+      "to top": 0,
+      "to top right": 45,
+      "to right top": 45,
+      "to right": 90,
+      "to bottom right": 135,
+      "to right bottom": 135,
+      "to bottom": 180,
+      "to bottom left": 225,
+      "to left bottom": 225,
+      "to left": 270,
+      "to top left": 315,
+      "to left top": 315,
+    };
+    return Object.prototype.hasOwnProperty.call(directions, normalized)
+      ? directions[normalized]
+      : null;
+  }
+
+  function parseLinearGradient(value, bounds) {
+    var match = String(value || "").trim().match(/^linear-gradient\((.*)\)$/i);
+    if (!match) return null;
+    var parts = splitCssArguments(match[1]);
+    if (parts.length < 2) return null;
+    var angle = cssGradientAngle(parts[0]);
+    if (angle !== null) parts.shift();
+    else angle = 180;
+    var radians = angle * Math.PI / 180;
+    var axisLength = Math.max(
+      0.01,
+      Math.abs(Math.sin(radians)) * bounds.width +
+        Math.abs(Math.cos(radians)) * bounds.height
+    );
+    var stops = parts.map(function (part) {
+      var stop = part.match(/^(rgba?\([^)]*\)|#[0-9a-f]{3,8})(?:\s+(.+))?$/i);
+      if (!stop) return null;
+      var color = parseColor(stop[1]);
+      if (!color) return null;
+      var position = null;
+      if (stop[2]) {
+        var positionValue = stop[2].trim().split(/\s+/)[0];
+        if (/%$/.test(positionValue)) {
+          position = number(positionValue, Number.NaN) / 100;
+        } else if (/px$/.test(positionValue)) {
+          position = number(positionValue, Number.NaN) / axisLength;
+        } else if (/^0(?:\.0+)?$/.test(positionValue)) {
+          position = 0;
+        }
+        if (position !== null && !Number.isFinite(position)) return null;
+      }
+      return { color: color, position: position };
+    });
+    if (stops.length < 2 || stops.some(function (stop) { return !stop; })) return null;
+    if (stops[0].position === null) stops[0].position = 0;
+    if (stops[stops.length - 1].position === null) stops[stops.length - 1].position = 1;
+    var cursor = 0;
+    while (cursor < stops.length) {
+      if (stops[cursor].position !== null) {
+        cursor += 1;
+        continue;
+      }
+      var runStart = cursor;
+      while (cursor < stops.length && stops[cursor].position === null) cursor += 1;
+      var previous = stops[runStart - 1].position;
+      var next = stops[cursor].position;
+      var count = cursor - runStart + 1;
+      for (var offset = 0; offset < cursor - runStart; offset += 1) {
+        stops[runStart + offset].position = previous + (next - previous) * (offset + 1) / count;
+      }
+    }
+    var last = 0;
+    stops.forEach(function (stop) {
+      stop.position = round(clamp(Math.max(last, stop.position), 0, 1));
+      last = stop.position;
+    });
+    return { angleDeg: round(angle), stops: stops };
+  }
+
   function fontFamilies(value) {
     return value
       .split(",")
@@ -144,6 +243,8 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     if (!["left", "center", "right", "justify"].includes(alignment)) {
       alignment = "left";
     }
+    var fontSizePt = Math.max(9, round(fontSizePx * 0.75));
+    var lineHeightMultiple = round(lineHeightPx / Math.max(fontSizePx, 0.01));
     // Which alignment property maps to the vertical (block) axis depends on the
     // layout: a flex ROW centers vertically via align-items (cross axis) while its
     // justify-content controls the HORIZONTAL axis; a flex COLUMN is the reverse;
@@ -171,7 +272,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       fontFamily: families[0] || "sans-serif",
       fontFamilies: families.length ? families : ["sans-serif"],
       cjkFallbackFamilies: cjkFallbacks(text, families),
-      fontSizePt: round(fontSizePx * 0.75),
+      fontSizePt: fontSizePt,
       fontWeight: fontWeight,
       bold: fontWeight >= 600,
       italic: style.fontStyle === "italic" || style.fontStyle === "oblique",
@@ -181,13 +282,20 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       letterSpacingPt:
         style.letterSpacing === "normal" ? 0 : round(number(style.letterSpacing, 0) * 0.75),
       lineHeight: {
-        points: round(lineHeightPx * 0.75),
-        multiple: round(lineHeightPx / Math.max(fontSizePx, 0.01)),
+        points: Math.max(
+          round(lineHeightPx * 0.75),
+          round(fontSizePt * lineHeightMultiple)
+        ),
+        multiple: lineHeightMultiple,
         source: lineHeightSource,
       },
       horizontalAlignment: alignment,
       verticalAlignment: vertical,
       direction: style.direction === "rtl" ? "rtl" : "ltr",
+      wrapMode:
+        style.whiteSpace === "nowrap" || style.whiteSpace === "pre"
+          ? "no-wrap"
+          : "wrap",
     };
   }
 
@@ -228,18 +336,24 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     var style = getComputedStyle(element);
     var transform = style.transform;
     if (hasIndividualTransform(style)) {
-      return { safe: false, rotationDeg: 0 };
+      // Individual CSS translation only changes the final position already
+      // reported by getBoundingClientRect(). It does not distort geometry and
+      // is therefore safe to reproduce at those measured coordinates.
+      var translateOnly = style.translate && style.translate !== "none" &&
+        (!style.rotate || style.rotate === "none") &&
+        (!style.scale || style.scale === "none");
+      return { safe: Boolean(translateOnly), rotationDeg: 0, matrix: null };
     }
     if (!transform || transform === "none") {
-      return { safe: true, rotationDeg: 0 };
+      return { safe: true, rotationDeg: 0, matrix: null };
     }
     var match = transform.match(/^matrix\(([^)]+)\)$/);
-    if (!match) return { safe: false, rotationDeg: 0 };
+    if (!match) return { safe: false, rotationDeg: 0, matrix: null };
     var values = match[1].split(",").map(function (part) {
       return number(part, Number.NaN);
     });
     if (values.length !== 6 || values.some(function (value) { return !Number.isFinite(value); })) {
-      return { safe: false, rotationDeg: 0 };
+      return { safe: false, rotationDeg: 0, matrix: null };
     }
     var a = values[0];
     var b = values[1];
@@ -262,18 +376,51 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       Math.abs(origin[0] - element.offsetWidth / 2) < 0.01 &&
       Math.abs(origin[1] - element.offsetHeight / 2) < 0.01 &&
       (origin.length < 3 || (Number.isFinite(origin[2]) && Math.abs(origin[2]) < 0.01));
+    var rotationDeg = round((Math.atan2(b, a) * 180) / Math.PI);
     var safe =
       Math.abs(scaleX - 1) < 0.001 &&
       Math.abs(scaleY - 1) < 0.001 &&
       Math.abs(dot) < 0.001 &&
       determinant > 0.999 &&
-      Math.abs(e) < 0.001 &&
-      Math.abs(f) < 0.001 &&
-      centeredOrigin;
+      Number.isFinite(e) &&
+      Number.isFinite(f) &&
+      (Math.abs(rotationDeg) < 0.001 || centeredOrigin);
     return {
       safe: safe,
-      rotationDeg: safe ? round((Math.atan2(b, a) * 180) / Math.PI) : 0,
+      rotationDeg: safe ? rotationDeg : 0,
+      matrix: { a: a, b: b, c: c, d: d, e: e, f: f },
     };
+  }
+
+  function affineRectanglePoints(transform, sourceWidth, sourceHeight) {
+    if (!transform || !transform.matrix) return null;
+    var matrix = transform.matrix;
+    var sourceWidthPx = Math.max(0.0001, number(sourceWidth, 1));
+    var sourceHeightPx = Math.max(0.0001, number(sourceHeight, 1));
+    var corners = [
+      { x: 0, y: 0 },
+      { x: sourceWidthPx, y: 0 },
+      { x: sourceWidthPx, y: sourceHeightPx },
+      { x: 0, y: sourceHeightPx },
+    ].map(function (point) {
+      return {
+        x: matrix.a * point.x + matrix.c * point.y,
+        y: matrix.b * point.x + matrix.d * point.y,
+      };
+    });
+    var minimumX = Math.min.apply(null, corners.map(function (point) { return point.x; }));
+    var maximumX = Math.max.apply(null, corners.map(function (point) { return point.x; }));
+    var minimumY = Math.min.apply(null, corners.map(function (point) { return point.y; }));
+    var maximumY = Math.max.apply(null, corners.map(function (point) { return point.y; }));
+    var width = maximumX - minimumX;
+    var height = maximumY - minimumY;
+    if (width <= 0.0001 || height <= 0.0001) return null;
+    return corners.map(function (point) {
+      return {
+        x: round(clamp((point.x - minimumX) / width, 0, 1)),
+        y: round(clamp((point.y - minimumY) / height, 0, 1)),
+      };
+    });
   }
 
   function unrotatedRect(element, rotationDeg) {
@@ -334,6 +481,257 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     );
   }
 
+  function pseudoSuppressionAttribute(pseudo) {
+    return pseudo === "::before"
+      ? "data-presenton-authored-hybrid-suppress-before"
+      : "data-presenton-authored-hybrid-suppress-after";
+  }
+
+  function ensurePseudoSuppressionStyle() {
+    var styleId = "__presenton_authored_hybrid_pseudo_suppression__";
+    if (document.getElementById(styleId)) return;
+    var style = document.createElement("style");
+    style.id = styleId;
+    style.textContent =
+      "[data-presenton-authored-hybrid-suppress-pseudo='true']::before," +
+      "[data-presenton-authored-hybrid-suppress-pseudo='true']::after," +
+      "[data-presenton-authored-hybrid-suppress-before='true']::before," +
+      "[data-presenton-authored-hybrid-suppress-after='true']::after{" +
+      "content:none!important;display:none!important;background:none!important;" +
+      "border:0!important;outline:0!important;box-shadow:none!important;}";
+    document.head.appendChild(style);
+  }
+
+  function emptyPseudoContent(style) {
+    var content = String(style.content || "").trim();
+    return content === "" || content === "none" || content === "normal" ||
+      content === "\"\"" || content === "''";
+  }
+
+  function pseudoTextContent(style) {
+    var content = String(style.content || "").trim();
+    if (emptyPseudoContent(style)) return "";
+    if (!/^(["']).*\1$/.test(content)) return "";
+    var inner = content.slice(1, -1);
+    return inner
+      .replace(/\\([0-9a-fA-F]{1,6})\s?/g, function (_match, hex) {
+        try { return String.fromCodePoint(Number.parseInt(hex, 16)); }
+        catch (_error) { return ""; }
+      })
+      .replace(/\\(.)/g, "$1");
+  }
+
+  function pseudoBorderTrianglePayload(style) {
+    var sides = ["Top", "Right", "Bottom", "Left"].map(function (side) {
+      return {
+        side: side.toLowerCase(),
+        width: number(style["border" + side + "Width"], 0),
+        color: parseColor(style["border" + side + "Color"]),
+      };
+    });
+    var painted = sides.filter(function (side) {
+      return side.width > 0 && side.color && side.color.alpha > 0;
+    });
+    if (painted.length !== 1) return null;
+    var transparent = sides.filter(function (side) {
+      return side.width > 0 && (!side.color || side.color.alpha <= 0);
+    });
+    var paintedSide = painted[0];
+    var adjacent = paintedSide.side === "left" || paintedSide.side === "right"
+      ? ["top", "bottom"]
+      : ["left", "right"];
+    if (!adjacent.every(function (side) {
+      return transparent.some(function (candidate) { return candidate.side === side; });
+    })) return null;
+    var points = paintedSide.side === "left"
+      ? [{ x: 0, y: 0 }, { x: 1, y: 0.5 }, { x: 0, y: 1 }]
+      : paintedSide.side === "right"
+        ? [{ x: 1, y: 0 }, { x: 0, y: 0.5 }, { x: 1, y: 1 }]
+        : paintedSide.side === "top"
+          ? [{ x: 0, y: 0 }, { x: 0.5, y: 1 }, { x: 1, y: 0 }]
+          : [{ x: 0, y: 1 }, { x: 0.5, y: 0 }, { x: 1, y: 1 }];
+    return {
+      shape: "freeform",
+      fill: paintedSide.color,
+      stroke: null,
+      strokeWidthPt: 0,
+      radiusPt: 0,
+      points: points,
+      closed: true,
+      preserveContents: false,
+    };
+  }
+
+  function materializedPseudoShape(element, pseudo, sourceIndex, id) {
+    var pseudoStyle;
+    try {
+      pseudoStyle = getComputedStyle(element, pseudo);
+    } catch (_error) {
+      return null;
+    }
+    var pseudoText = pseudoTextContent(pseudoStyle);
+    var hasGeometry = paintedBackground(pseudoStyle) || hasBorder(pseudoStyle);
+    if (
+      pseudoStyle.display === "none" || pseudoStyle.visibility === "hidden" ||
+      (!pseudoText && !hasGeometry)
+    ) return null;
+
+    ensurePseudoSuppressionStyle();
+    var clone = document.createElement("span");
+    clone.setAttribute("data-presenton-authored-pseudo-clone", pseudo.slice(2));
+    for (var styleIndex = 0; styleIndex < pseudoStyle.length; styleIndex += 1) {
+      var property = pseudoStyle.item(styleIndex);
+      clone.style.setProperty(
+        property,
+        pseudoStyle.getPropertyValue(property),
+        "important"
+      );
+    }
+    clone.style.setProperty("content", "normal", "important");
+    clone.style.setProperty("pointer-events", "none", "important");
+    if (pseudoText) clone.textContent = pseudoText;
+
+    var attribute = pseudoSuppressionAttribute(pseudo);
+    var previousAttribute = element.getAttribute(attribute);
+    if (pseudo === "::before") element.insertBefore(clone, element.firstChild);
+    else element.appendChild(clone);
+    element.setAttribute(attribute, "true");
+
+    try {
+      var transform = analyzeTransform(clone);
+      var reasons = ["pseudo-element"];
+      var affinePoints = !pseudoText && !transform.safe
+        ? affineRectanglePoints(transform, clone.offsetWidth, clone.offsetHeight)
+        : null;
+      if (!transform.safe && !affinePoints) reasons.push("complex-transform");
+      var bounds = unrotatedRect(clone, transform.rotationDeg);
+      if (bounds.width <= 0 || bounds.height <= 0 || !Object.values(bounds).every(Number.isFinite)) {
+        return null;
+      }
+      if (
+        bounds.x < 0 || bounds.y < 0 ||
+        bounds.x + bounds.width > WIDTH || bounds.y + bounds.height > HEIGHT
+      ) reasons.push("outside-slide");
+      var zIndexText = pseudoStyle.zIndex;
+      var zIndex = /^-?\d+$/.test(zIndexText) ? Number.parseInt(zIndexText, 10) : null;
+      var observation = {
+        id: id,
+        domPath: domPath(element) + pseudo,
+        tagName: "pseudo",
+        sourceIndex: sourceIndex,
+        cssZIndex: zIndex,
+        boundsPx: bounds,
+        rotationDeg: transform.rotationDeg,
+        opacity: round(effectiveOpacity(element) * number(pseudoStyle.opacity, 1)),
+        candidateKind: pseudoText ? "text" : "shape",
+        fallbackReasons: reasons,
+      };
+      if (pseudoText) {
+        var extractedRuns = textRuns(clone);
+        var renderedPlainText = extractedRuns.runs.map(function (run) { return run.text; }).join("");
+        var plainText = renderedPlainText || pseudoText;
+        observation.text = {
+          role: inferTextRole(clone, plainText),
+          plainText: plainText,
+          paragraphs: [plainText],
+          style: textStyle(clone, plainText),
+          runs: extractedRuns.runs,
+        };
+        var containerShape = textContainerShape(clone, bounds);
+        if (containerShape) observation.text.containerShape = containerShape;
+        observation.boundsPx = textContentRect(clone, bounds, transform.rotationDeg);
+      } else {
+        var pseudoTriangle = pseudoBorderTrianglePayload(getComputedStyle(clone));
+        observation.shape = pseudoTriangle || shapePayload(clone, reasons, bounds, false);
+        if (affinePoints && observation.shape) {
+          observation.shape.shape = "freeform";
+          observation.shape.points = affinePoints;
+          observation.shape.closed = true;
+          observation.shape.radiusPt = 0;
+        }
+      }
+      observation.fallbackReasons = unique(reasons);
+      return { element: element, observation: observation, pseudo: pseudo };
+    } catch (_pseudoError) {
+      return null;
+    } finally {
+      clone.remove();
+      if (previousAttribute === null) element.removeAttribute(attribute);
+      else element.setAttribute(attribute, previousAttribute);
+    }
+  }
+
+  function textContentRect(element, bounds, rotationDeg) {
+    // PowerPoint text boxes place glyphs inside their own content area. CSS
+    // getBoundingClientRect(), however, includes padding and borders. Starting
+    // editable text at that outer edge visibly shifts padded callouts and can
+    // make the last line run outside the authored box.
+    if (Math.abs(rotationDeg) >= 0.001) return bounds;
+    var style = getComputedStyle(element);
+    var left = number(style.borderLeftWidth, 0) + number(style.paddingLeft, 0);
+    var right = number(style.borderRightWidth, 0) + number(style.paddingRight, 0);
+    var top = number(style.borderTopWidth, 0) + number(style.paddingTop, 0);
+    var bottom = number(style.borderBottomWidth, 0) + number(style.paddingBottom, 0);
+    return {
+      x: round(bounds.x + left),
+      y: round(bounds.y + top),
+      width: round(Math.max(0.5, bounds.width - left - right)),
+      height: round(Math.max(0.5, bounds.height - top - bottom)),
+    };
+  }
+
+  function overflowClips(value) {
+    return Boolean(value && value !== "visible");
+  }
+
+  function hasScrollableOverflow(element, style) {
+    var epsilon = 1;
+    return Boolean(
+      (overflowClips(style.overflowX) && element.scrollWidth > element.clientWidth + epsilon) ||
+        (overflowClips(style.overflowY) && element.scrollHeight > element.clientHeight + epsilon)
+    );
+  }
+
+  function clippedByAncestor(element, ancestor, style) {
+    var epsilon = 0.75;
+    var rect = element.getBoundingClientRect();
+    var ancestorRect = ancestor.getBoundingClientRect();
+    var clipLeft = ancestorRect.left + ancestor.clientLeft;
+    var clipTop = ancestorRect.top + ancestor.clientTop;
+    var clipRight = clipLeft + ancestor.clientWidth;
+    var clipBottom = clipTop + ancestor.clientHeight;
+    return Boolean(
+      (overflowClips(style.overflowX) &&
+        (rect.left < clipLeft - epsilon || rect.right > clipRight + epsilon)) ||
+        (overflowClips(style.overflowY) &&
+          (rect.top < clipTop - epsilon || rect.bottom > clipBottom + epsilon))
+    );
+  }
+
+  function isDecomposableSvgDropShadow(element, styledElement, filterValue) {
+    if (
+      !element || element.namespaceURI !== "http://www.w3.org/2000/svg" ||
+      !SVG_SHAPE_TAGS.has(element.tagName.toUpperCase()) ||
+      !styledElement || styledElement.namespaceURI !== "http://www.w3.org/2000/svg"
+    ) return false;
+    var reference = String(filterValue || "").match(
+      /url\(\s*["']?(?:[^#"')]*#)?([^"')\s]+)["']?\s*\)/i
+    );
+    if (!reference) return false;
+    var root = element.closest("svg");
+    if (!root) return false;
+    var filter = root.querySelector("filter#" + CSS.escape(reference[1]));
+    if (!filter) return false;
+    var primitives = Array.from(filter.children);
+    // feDropShadow affects only appearance, not the editable source geometry.
+    // PowerPoint may omit this soft shadow, but retaining every primitive as a
+    // native shape is preferable to baking the complete illustration into the
+    // full-slide residual bitmap. More structural SVG filters stay raster.
+    return primitives.length > 0 && primitives.every(function (primitive) {
+      return primitive.tagName.toUpperCase() === "FEDROPSHADOW";
+    });
+  }
+
   function safetyReasons(element, kind, transform) {
     var reasons = [];
     var current = element;
@@ -344,7 +742,10 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       if (style.clipPath && style.clipPath !== "none") reasons.push("clip-path");
       var maskImage = style.maskImage || style.webkitMaskImage;
       if (maskImage && maskImage !== "none") reasons.push("mask");
-      if (style.filter && style.filter !== "none") reasons.push("filter");
+      if (
+        style.filter && style.filter !== "none" &&
+        !isDecomposableSvgDropShadow(element, current, style.filter)
+      ) reasons.push("filter");
       var backdrop = style.backdropFilter || style.webkitBackdropFilter;
       if (backdrop && backdrop !== "none") reasons.push("backdrop-filter");
       if (style.mixBlendMode && style.mixBlendMode !== "normal") {
@@ -355,16 +756,27 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
         ((style.transform && style.transform !== "none") ||
           hasIndividualTransform(style))
       ) {
-        reasons.push("transformed-ancestor");
-        reasons.push("unknown-z-order");
+        var ancestorTransform = analyzeTransform(current);
+        // A pure translation is already included in every descendant's
+        // viewport bounds. Rotated/scaled/skewed ancestry still changes the
+        // descendant geometry and remains a raster fallback.
+        if (!ancestorTransform.safe || Math.abs(ancestorTransform.rotationDeg) >= 0.001) {
+          reasons.push("transformed-ancestor");
+          reasons.push("unknown-z-order");
+        }
       }
-      // Replaced images commonly expose a UA-level overflow:clip even when
-      // no authored clipping is present. Their crop safety is evaluated from
-      // object-fit/object-position instead, while ancestor clipping remains a
-      // hard raster fallback.
+      // An authored slide root commonly uses overflow:hidden to define the
+      // canvas. Treat it as clipping only when this candidate actually crosses
+      // that clip boundary. Replaced images also expose UA overflow:clip, so
+      // their own crop safety is handled by object-fit/object-position instead.
+      // HTML diagram/timeline wrappers contribute raster paint, but their
+      // descendant labels must still be traversed and promoted as editable
+      // text. Only intrinsically atomic graphics suppress their descendants.
       if (
         !documentRoot && (!own || kind !== "image") &&
-        (style.overflowX !== "visible" || style.overflowY !== "visible")
+        (own
+          ? hasScrollableOverflow(current, style)
+          : clippedByAncestor(element, current, style))
       ) {
         reasons.push("overflow-clipped");
       }
@@ -450,7 +862,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
         }
         if (
           target !== element &&
-          (targetStyle.overflowX !== "visible" || targetStyle.overflowY !== "visible")
+          hasScrollableOverflow(target, targetStyle)
         ) {
           reasons.push("overflow-clipped");
         }
@@ -575,17 +987,24 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       return false;
     }
     var rect = element.getBoundingClientRect();
+    if (svgShapeElement(element) && typeof element.getTotalLength === "function") {
+      try {
+        return element.getTotalLength() > 0 && (parseColor(style.stroke) || parseColor(style.fill));
+      } catch (_svgLengthError) {
+        return false;
+      }
+    }
     return rect.width >= 0.5 && rect.height >= 0.5;
   }
 
   var INLINE_TAGS = new Set([
     "A", "ABBR", "B", "BDI", "BDO", "BR", "CITE", "CODE", "DEL", "EM",
     "I", "INS", "KBD", "MARK", "Q", "S", "SAMP", "SMALL", "SPAN", "STRONG",
-    "SUB", "SUP", "TIME", "U", "VAR", "WBR"
+    "SUB", "SUP", "TIME", "U", "VAR", "WBR", "TSPAN"
   ]);
   var TEXT_ROOT_TAGS = new Set([
     "H1", "H2", "H3", "H4", "H5", "H6", "P", "LI", "FIGCAPTION",
-    "BLOCKQUOTE", "LABEL", "SMALL"
+    "BLOCKQUOTE", "LABEL", "SMALL", "TEXT", "TEXTPATH"
   ]);
 
   function directText(element) {
@@ -595,21 +1014,40 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
   }
 
   function textRoot(element) {
-    if (!element.innerText || !element.innerText.trim()) return false;
-    return TEXT_ROOT_TAGS.has(element.tagName) || directText(element);
+    var tag = element.tagName.toUpperCase();
+    // SVGTextElement does not expose innerText consistently in Chromium.
+    // Its textContent is nevertheless rendered text and must be promoted just
+    // like an HTML label so it cannot disappear from an editable export.
+    var renderedText = element.innerText ||
+      (["TEXT", "TEXTPATH"].includes(tag) ? element.textContent : "") || "";
+    if (!renderedText.trim()) return false;
+    return TEXT_ROOT_TAGS.has(tag) ||
+      (directText(element) && !nestedBlockContent(element));
   }
 
   function nestedBlockContent(element) {
     return Array.from(element.querySelectorAll("*")).some(function (child) {
-      return !INLINE_TAGS.has(child.tagName);
+      return !INLINE_TAGS.has(child.tagName.toUpperCase());
+    });
+  }
+
+  function hasDecoratedDescendant(element) {
+    return Array.from(element.querySelectorAll("*")).some(function (child) {
+      var childStyle = getComputedStyle(child);
+      return paintedBackground(childStyle) || hasBorder(childStyle) ||
+        hasExternalPaint(childStyle) || pseudoPainted(child, "::before") ||
+        pseudoPainted(child, "::after");
     });
   }
 
   function complexKind(element) {
     // SVG DOM tagName values are lowercase in Chromium, unlike HTML tagName.
     var tag = element.tagName.toUpperCase();
-    if (tag === "TABLE") return "complex-table";
+    // HTML tables are decomposed into editable table/cell rectangles and text.
+    // Canvas and SVG still need a fidelity fallback because their authored
+    // primitives are not represented by ordinary DOM boxes.
     if (tag === "SVG") {
+      if (decomposableSvgRoot(element)) return null;
       return element.querySelector("text,textPath,foreignObject") ? "svg-text" : "complex-diagram";
     }
     if (tag === "CANVAS") return "complex-chart";
@@ -623,6 +1061,23 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       /(^|[\s_-])(diagram|flowchart|timeline|mindmap)([\s_-]|$)/.test(classes)
     ) {
       return "complex-diagram";
+    }
+    // Some authored templates use a semantic .visual wrapper for a large,
+    // CSS-built hero illustration instead of an SVG. Its nested browser/card/
+    // connector primitives cannot be reconstructed reliably as independent
+    // PowerPoint shapes, but the complete illustration should still be a
+    // selectable object rather than remain fused into the slide backplate.
+    // Require an accessible label and substantial geometry so small helpers
+    // such as .visual-title are not accidentally collapsed into pictures.
+    if (/(^|\s)visual(\s|$)/.test(classes)) {
+      var visualRect = element.getBoundingClientRect();
+      if (
+        (element.getAttribute("aria-label") || "").trim() &&
+        visualRect.width >= 240 && visualRect.height >= 180 &&
+        element.querySelectorAll("*").length >= 12
+      ) {
+        return "complex-diagram";
+      }
     }
     return null;
   }
@@ -654,24 +1109,188 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
   function textRuns(element) {
     var runs = [];
     var failed = false;
+    var activeLineBand = null;
+
+    function rectBand(rect) {
+      return {
+        top: rect.top,
+        bottom: rect.bottom,
+        height: Math.max(1, rect.height),
+      };
+    }
+
+    function sharesVisualLine(rect, band) {
+      if (!band) return false;
+      var overlap = Math.min(rect.bottom, band.bottom) - Math.max(rect.top, band.top);
+      var minimumHeight = Math.min(Math.max(1, rect.height), band.height);
+      return overlap >= minimumHeight * 0.25;
+    }
+
+    function extendLineBand(band, rect) {
+      if (!band) return rectBand(rect);
+      // Retain the common vertical band instead of growing a union forever.
+      // A union can be stretched by the zero-width space at a browser wrap
+      // point until it overlaps the next visual line, losing every subsequent
+      // soft break. The intersection remains stable across mixed-size inline
+      // runs while separating genuinely different baselines.
+      var top = Math.max(band.top, rect.top);
+      var bottom = Math.min(band.bottom, rect.bottom);
+      if (bottom <= top) return rectBand(rect);
+      return { top: top, bottom: bottom, height: Math.max(1, bottom - top) };
+    }
+
+    function pushLineBreak(parent, rect, softLineBreak) {
+      if (!runs.length || runs[runs.length - 1].text.endsWith("\n")) return;
+      runs.push({
+        text: "\n",
+        boundsPx: { x: round(rect.left), y: round(rect.top), width: 0, height: 0 },
+        fragmentRectsPx: [],
+        style: textStyle(parent, "\n"),
+        softLineBreak: Boolean(softLineBreak),
+      });
+    }
+
+    function pushTextSlice(node, parent, start, end) {
+      if (end <= start) return;
+      var text = (node.textContent || "").slice(start, end);
+      if (!text) return;
+      var range = document.createRange();
+      range.setStart(node, start);
+      range.setEnd(node, end);
+      var fragments = Array.from(range.getClientRects())
+        .filter(function (rect) { return rect.width > 0 || rect.height > 0; })
+        .map(rectValue);
+      runs.push({
+        text: text,
+        boundsPx: rectValue(range.getBoundingClientRect()),
+        fragmentRectsPx: fragments,
+        style: textStyle(parent, text),
+      });
+    }
+
+    function normalizeCollapsibleRunWhitespace() {
+      var whiteSpace = getComputedStyle(element).whiteSpace;
+      if (["pre", "pre-wrap", "break-spaces"].includes(whiteSpace)) return;
+      runs.forEach(function (run) {
+        // Newlines used only to pretty-print authored HTML are ordinary
+        // collapsible whitespace. Keep the standalone newline runs that we
+        // created for browser visual lines, but never turn indentation between
+        // inline spans into a PowerPoint paragraph break.
+        if (run.text !== "\n") run.text = run.text.replace(/[\t\f\v\r\n ]+/g, " ");
+      });
+      for (var index = 0; index < runs.length; index += 1) {
+        if (runs[index].text !== "\n") continue;
+        if (index > 0) runs[index - 1].text = runs[index - 1].text.replace(/ +$/g, "");
+        if (index + 1 < runs.length) runs[index + 1].text = runs[index + 1].text.replace(/^ +/g, "");
+      }
+      for (var adjacent = 1; adjacent < runs.length; adjacent += 1) {
+        if (runs[adjacent - 1].text.endsWith(" ") && runs[adjacent].text.startsWith(" ")) {
+          runs[adjacent].text = runs[adjacent].text.replace(/^ +/g, "");
+        }
+      }
+      if (runs.length) {
+        runs[0].text = runs[0].text.replace(/^ +/g, "");
+        runs[runs.length - 1].text = runs[runs.length - 1].text.replace(/ +$/g, "");
+      }
+      runs = runs.filter(function (run) { return run.text.length > 0; });
+    }
+
+    function createsTextLineBoundary(node) {
+      if (node === element) return false;
+      var parent = node.parentElement;
+      if (parent) {
+        var parentStyle = getComputedStyle(parent);
+        var parentDisplay = parentStyle.display;
+        // Flex/grid items are blockified by the browser even when the author
+        // used inline spans. A row of labels and arrows must therefore stay on
+        // one editable line. Character geometry still detects real wrapping.
+        if (
+          parentDisplay === "flex" ||
+          parentDisplay === "inline-flex" ||
+          parentDisplay === "grid" ||
+          parentDisplay === "inline-grid"
+        ) {
+          return false;
+        }
+      }
+      var display = getComputedStyle(node).display;
+      return [
+        "block",
+        "flow-root",
+        "flex",
+        "grid",
+        "list-item",
+        "table",
+      ].includes(display);
+    }
+
+    function hasFollowingTextContent(node) {
+      var sibling = node.nextSibling;
+      while (sibling) {
+        if (
+          sibling.nodeType === Node.TEXT_NODE &&
+          Boolean((sibling.textContent || "").trim())
+        ) {
+          return true;
+        }
+        if (
+          sibling.nodeType === Node.ELEMENT_NODE &&
+          sibling.tagName !== "BR" &&
+          visibleElement(sibling) &&
+          Boolean((sibling.innerText || sibling.textContent || "").trim())
+        ) {
+          return true;
+        }
+        if (sibling.nodeType === Node.ELEMENT_NODE && sibling.tagName === "BR") {
+          return false;
+        }
+        sibling = sibling.nextSibling;
+      }
+      return false;
+    }
 
     function visit(node) {
       if (node.nodeType === Node.TEXT_NODE) {
         var text = node.textContent || "";
         if (!text) return;
         try {
-          var range = document.createRange();
-          range.selectNodeContents(node);
-          var fragments = Array.from(range.getClientRects())
-            .filter(function (rect) { return rect.width > 0 || rect.height > 0; })
-            .map(rectValue);
-          var bounds = rectValue(range.getBoundingClientRect());
-          runs.push({
-            text: text,
-            boundsPx: bounds,
-            fragmentRectsPx: fragments,
-            style: textStyle(node.parentElement || element, text),
-          });
+          var parent = node.parentElement || element;
+          var whiteSpace = getComputedStyle(parent).whiteSpace;
+          var preservesSourceLineBreaks = [
+            "pre",
+            "pre-wrap",
+            "break-spaces",
+          ].includes(whiteSpace);
+          var sliceStart = 0;
+          for (var index = 0; index < text.length; index += 1) {
+            if (
+              preservesSourceLineBreaks &&
+              (text[index] === "\n" || text[index] === "\r")
+            ) {
+              pushTextSlice(node, parent, sliceStart, index);
+              pushLineBreak(parent, parent.getBoundingClientRect(), false);
+              activeLineBand = null;
+              sliceStart = index + 1;
+              continue;
+            }
+            var characterRange = document.createRange();
+            characterRange.setStart(node, index);
+            characterRange.setEnd(node, index + 1);
+            var characterRects = Array.from(characterRange.getClientRects()).filter(function (rect) {
+              return rect.width > 0 || rect.height > 0;
+            });
+            if (!characterRects.length) continue;
+            var characterRect = characterRects[0];
+            if (activeLineBand && !sharesVisualLine(characterRect, activeLineBand)) {
+              pushTextSlice(node, parent, sliceStart, index);
+              pushLineBreak(parent, characterRect, true);
+              sliceStart = index;
+              activeLineBand = rectBand(characterRect);
+            } else {
+              activeLineBand = extendLineBand(activeLineBand, characterRect);
+            }
+          }
+          pushTextSlice(node, parent, sliceStart, text.length);
         } catch (_error) {
           failed = true;
         }
@@ -687,13 +1306,29 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
           fragmentRectsPx: [],
           style: textStyle(parent, "\n"),
         });
+        activeLineBand = null;
         return;
       }
+      var lineBoundary = createsTextLineBoundary(node);
+      if (lineBoundary && runs.some(function (run) {
+        return run.text !== "\n" && Boolean(run.text.trim());
+      })) {
+        pushLineBreak(node, node.getBoundingClientRect(), false);
+        activeLineBand = null;
+      }
       Array.from(node.childNodes).forEach(visit);
+      if (lineBoundary && hasFollowingTextContent(node)) {
+        pushLineBreak(node, node.getBoundingClientRect(), false);
+        activeLineBand = null;
+      }
     }
 
     Array.from(element.childNodes).forEach(visit);
-    return { runs: runs, failed: failed };
+    normalizeCollapsibleRunWhitespace();
+    var identityText = runs.map(function (run) {
+      return run.softLineBreak ? "" : run.text;
+    }).join("");
+    return { runs: runs, failed: failed, identityText: identityText };
   }
 
   function imagePayload(element, reasons, bounds) {
@@ -737,9 +1372,669 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     };
   }
 
-  function shapePayload(element, reasons, bounds) {
+  function svgSerializationMarkup(element, bounds) {
+    var clone = element.cloneNode(true);
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    clone.setAttribute("width", String(Math.max(1, Math.round(bounds.width))));
+    clone.setAttribute("height", String(Math.max(1, Math.round(bounds.height))));
+    if (!clone.getAttribute("viewBox")) {
+      clone.setAttribute("viewBox", "0 0 " + bounds.width + " " + bounds.height);
+    }
+    var originals = [element].concat(Array.from(element.querySelectorAll("*")));
+    var copies = [clone].concat(Array.from(clone.querySelectorAll("*")));
+    var inheritedPaint = [
+      "color", "fill", "fill-opacity", "stroke", "stroke-opacity", "stroke-width",
+      "stroke-linecap", "stroke-linejoin", "stroke-dasharray", "opacity",
+      "font-family", "font-size", "font-style", "font-weight", "letter-spacing",
+      "text-anchor", "dominant-baseline", "paint-order", "vector-effect",
+    ];
+    originals.forEach(function (source, index) {
+      var target = copies[index];
+      if (!target) return;
+      var style = getComputedStyle(source);
+      inheritedPaint.forEach(function (property) {
+        var value = style.getPropertyValue(property);
+        if (value) target.style.setProperty(property, value);
+      });
+    });
+    return new XMLSerializer().serializeToString(clone);
+  }
+
+  async function svgImagePayload(element, reasons, bounds) {
+    try {
+      var markup = svgSerializationMarkup(element, bounds);
+      var source = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(markup);
+      var image = new Image();
+      image.decoding = "sync";
+      image.src = source;
+      await image.decode();
+      var scale = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+      var width = Math.max(1, Math.round(bounds.width * scale));
+      var height = Math.max(1, Math.round(bounds.height * scale));
+      var canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      var context = canvas.getContext("2d");
+      if (!context) throw new Error("2d canvas unavailable");
+      context.clearRect(0, 0, width, height);
+      context.drawImage(image, 0, 0, width, height);
+      return {
+        src: canvas.toDataURL("image/png"),
+        alt: element.getAttribute("aria-label") || element.getAttribute("title") || "",
+        naturalWidth: width,
+        naturalHeight: height,
+        objectFit: "fill",
+        objectPosition: "50% 50%",
+        crop: { left: 0, top: 0, right: 0, bottom: 0 },
+      };
+    } catch (_svgImageError) {
+      reasons.push("extraction-error");
+      return null;
+    }
+  }
+
+  function htmlDiagramSerializationMarkup(element, bounds) {
+    var clone = element.cloneNode(true);
+    var originals = [element].concat(Array.from(element.querySelectorAll("*")));
+    var copies = [clone].concat(Array.from(clone.querySelectorAll("*")));
+    originals.forEach(function (source, index) {
+      var target = copies[index];
+      if (!target) return;
+      var style = getComputedStyle(source);
+      for (var propertyIndex = 0; propertyIndex < style.length; propertyIndex += 1) {
+        var property = style[propertyIndex];
+        var value = style.getPropertyValue(property);
+        if (value) target.style.setProperty(property, value, style.getPropertyPriority(property));
+      }
+      target.removeAttribute(ELEMENT_ATTRIBUTE);
+      target.style.setProperty("animation", "none", "important");
+      target.style.setProperty("transition", "none", "important");
+      // Text remains independently promoted and editable. Keep its layout in
+      // this snapshot but clear only the glyph paint so it is not duplicated
+      // inside the selectable illustration picture.
+      if (directText(source)) {
+        target.style.setProperty("color", "transparent", "important");
+        target.style.setProperty("-webkit-text-fill-color", "transparent", "important");
+        target.style.setProperty("text-decoration-color", "transparent", "important");
+        target.style.setProperty("-webkit-text-stroke-color", "transparent", "important");
+        target.style.setProperty("text-shadow", "none", "important");
+      }
+      // SVG glyphs are painted by fill/stroke, not CSS color. A semantic
+      // HTML diagram can contain a large inline SVG, so leaving those paints
+      // intact duplicates every SVG label beneath the editable text overlay.
+      // Keep the text nodes in the clone for layout, but remove their glyph
+      // paint from the selectable illustration picture.
+      if (
+        source.namespaceURI === "http://www.w3.org/2000/svg" &&
+        ["TEXT", "TEXTPATH", "TSPAN"].includes(source.tagName.toUpperCase())
+      ) {
+        target.setAttribute("fill", "transparent");
+        target.setAttribute("stroke", "none");
+        target.style.setProperty("fill", "transparent", "important");
+        target.style.setProperty("stroke", "transparent", "important");
+        target.style.setProperty("paint-order", "normal", "important");
+      }
+    });
+    clone.style.setProperty("position", "relative", "important");
+    clone.style.setProperty("left", "0", "important");
+    clone.style.setProperty("top", "0", "important");
+    clone.style.setProperty("right", "auto", "important");
+    clone.style.setProperty("bottom", "auto", "important");
+    clone.style.setProperty("margin", "0", "important");
+    clone.style.setProperty("transform", "none", "important");
+    clone.style.setProperty("width", Math.max(1, bounds.width) + "px", "important");
+    clone.style.setProperty("height", Math.max(1, bounds.height) + "px", "important");
+    var wrapper = document.createElement("div");
+    wrapper.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+    wrapper.style.cssText = "position:relative;margin:0;padding:0;width:" +
+      Math.max(1, bounds.width) + "px;height:" + Math.max(1, bounds.height) +
+      "px;overflow:visible";
+    // Inline computed styles preserve ordinary descendants. Retain authored
+    // rules as well because CSS illustrations frequently use ::before/::after
+    // for connector strokes, dots, and decorative rings.
+    var cssText = "";
+    Array.from(document.styleSheets).forEach(function (sheet) {
+      try {
+        cssText += Array.from(sheet.cssRules || []).map(function (rule) {
+          return rule.cssText;
+        }).join("\n") + "\n";
+      } catch (_styleSheetAccessError) {
+        // Cross-origin sheets are already reflected by the computed styles;
+        // only their pseudo-elements cannot be copied into this local image.
+      }
+    });
+    if (cssText) {
+      var styleElement = document.createElement("style");
+      styleElement.textContent = cssText;
+      wrapper.appendChild(styleElement);
+    }
+    wrapper.appendChild(clone);
+    var content = new XMLSerializer().serializeToString(wrapper);
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="' +
+      Math.max(1, Math.round(bounds.width)) + '" height="' +
+      Math.max(1, Math.round(bounds.height)) + '" viewBox="0 0 ' +
+      Math.max(1, bounds.width) + ' ' + Math.max(1, bounds.height) + '">' +
+      '<foreignObject x="0" y="0" width="100%" height="100%">' + content +
+      '</foreignObject></svg>';
+  }
+
+  async function htmlDiagramImagePayload(element, reasons, bounds) {
+    try {
+      var markup = htmlDiagramSerializationMarkup(element, bounds);
+      var source = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(markup);
+      var image = new Image();
+      image.decoding = "sync";
+      image.src = source;
+      await image.decode();
+      var scale = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+      var width = Math.max(1, Math.round(bounds.width * scale));
+      var height = Math.max(1, Math.round(bounds.height * scale));
+      var canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      var context = canvas.getContext("2d");
+      if (!context) throw new Error("2d canvas unavailable");
+      context.clearRect(0, 0, width, height);
+      context.drawImage(image, 0, 0, width, height);
+      return {
+        src: canvas.toDataURL("image/png"),
+        alt: element.getAttribute("aria-label") || "",
+        naturalWidth: width,
+        naturalHeight: height,
+        objectFit: "fill",
+        objectPosition: "50% 50%",
+        crop: { left: 0, top: 0, right: 0, bottom: 0 },
+      };
+    } catch (_htmlDiagramImageError) {
+      reasons.push("extraction-error");
+      return null;
+    }
+  }
+
+  var SVG_SHAPE_TAGS = new Set(["PATH", "LINE", "POLYLINE", "POLYGON", "RECT", "CIRCLE", "ELLIPSE"]);
+
+  function decomposableSvgRoot(element) {
+    if (!element || element.tagName.toUpperCase() !== "SVG") return false;
+    var rect = element.getBoundingClientRect();
+    // Small pictograms are just as valuable to edit as large connectors. Their
+    // path primitives are cheap to sample and no longer need to remain baked
+    // into the residual PNG.
+    if (rect.width < 4 || rect.height < 4) return false;
+    // Filter definitions do not make the underlying geometry non-editable.
+    // The primitives inside <defs> are ignored by svgShapeElement(), while
+    // visible paths/rectangles/circles can still be promoted individually.
+    // A filtered group may retain its shadow in the residual layer, but it no
+    // longer forces the entire SVG illustration into one full-slide bitmap.
+    if (element.querySelector("foreignObject,image,use,mask,pattern")) return false;
+    // Large illustrations (browser windows, robots, shields, charts, etc.) rely
+    // on exact SVG curve, clipping, and paint-order semantics. Converting dozens
+    // of paths into independent PowerPoint freeforms visibly breaks those
+    // relationships. Keep such an illustration as one movable picture while
+    // continuing to promote compact diagrams and connector SVGs shape-by-shape.
+    var visiblePrimitiveCount = Array.from(
+      element.querySelectorAll("path,line,polyline,polygon,rect,circle,ellipse")
+    ).filter(function (primitive) {
+      return !primitive.closest("defs,marker,clipPath,mask,pattern");
+    }).length;
+    return visiblePrimitiveCount <= 24;
+  }
+
+  function svgShapeElement(element) {
+    if (!element || element.namespaceURI !== "http://www.w3.org/2000/svg") return false;
+    if (!SVG_SHAPE_TAGS.has(element.tagName.toUpperCase())) return false;
+    if (element.closest("defs,marker,clipPath,mask,pattern")) return false;
+    var root = element.closest("svg");
+    return Boolean(root && decomposableSvgRoot(root));
+  }
+
+  function svgScale(element) {
+    var matrix = typeof element.getScreenCTM === "function" ? element.getScreenCTM() : null;
+    if (!matrix) return 1;
+    var scaleX = Math.hypot(matrix.a, matrix.b);
+    var scaleY = Math.hypot(matrix.c, matrix.d);
+    return Math.max(0.01, (scaleX + scaleY) / 2);
+  }
+
+  function svgScreenPoint(element, point) {
+    var matrix = element.getScreenCTM();
+    if (!matrix) return null;
+    return {
+      x: matrix.a * point.x + matrix.c * point.y + matrix.e,
+      y: matrix.b * point.x + matrix.d * point.y + matrix.f,
+    };
+  }
+
+  function svgSampledPoints(element, reasons) {
+    if (typeof element.getTotalLength !== "function" || typeof element.getPointAtLength !== "function") {
+      reasons.push("unsupported-shape");
+      return [];
+    }
+    try {
+      var total = element.getTotalLength();
+      if (!Number.isFinite(total) || total <= 0) {
+        reasons.push("invalid-bounds");
+        return [];
+      }
+      var screenLength = total * svgScale(element);
+      var nativeBounds = element.getBoundingClientRect();
+      var compactArrowLike = ["PATH", "POLYLINE", "POLYGON"].includes(
+        element.tagName.toUpperCase()
+      ) && nativeBounds.width <= 32 && nativeBounds.height <= 32;
+      // Detached chevrons and triangle tips need dense sampling so their true
+      // vertex is retained. Sparse equal-distance samples can jump over the
+      // middle vertex and leave the PowerPoint arrowhead short of its line.
+      var segmentCount = Math.max(
+        compactArrowLike ? 32 : 1,
+        Math.min(64, Math.ceil(screenLength / 14))
+      );
+      var points = [];
+      for (var index = 0; index <= segmentCount; index += 1) {
+        var point = svgScreenPoint(element, element.getPointAtLength(total * index / segmentCount));
+        if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+          reasons.push("extraction-error");
+          return [];
+        }
+        if (!points.length || Math.hypot(point.x - points[points.length - 1].x, point.y - points[points.length - 1].y) > 0.05) {
+          points.push(point);
+        }
+      }
+      return points;
+    } catch (_svgGeometryError) {
+      reasons.push("extraction-error");
+      return [];
+    }
+  }
+
+  function svgClosedPath(element) {
+    var tag = element.tagName.toUpperCase();
+    return tag === "POLYGON" ||
+      (tag === "PATH" && /[zZ](?:\s*)$/.test(element.getAttribute("d") || ""));
+  }
+
+  function svgCircularPortTargets(root) {
+    // The connector SVG and its port elements are often siblings under
+    // different layout wrappers, so search the rendered slide rather than only
+    // the SVG's immediate parent. The distance gate below keeps the match local.
+    var scope = document.body || (root && root.parentElement);
+    if (!scope) return [];
+    return Array.from(scope.querySelectorAll("*"))
+      .filter(function (candidate) {
+        if (candidate === root || candidate.closest("svg")) return false;
+        var rect = candidate.getBoundingClientRect();
+        if (rect.width < 8 || rect.width > 30 || rect.height < 8 || rect.height > 30) return false;
+        if (Math.abs(rect.width - rect.height) > 3) return false;
+        var style = getComputedStyle(candidate);
+        if (style.display === "none" || style.visibility === "hidden" || number(style.opacity, 1) <= 0) return false;
+        var radius = Math.max(
+          number(style.borderTopLeftRadius, 0),
+          number(style.borderTopRightRadius, 0),
+          number(style.borderBottomRightRadius, 0),
+          number(style.borderBottomLeftRadius, 0)
+        );
+        var borderWidth = Math.max(
+          number(style.borderTopWidth, 0),
+          number(style.borderRightWidth, 0),
+          number(style.borderBottomWidth, 0),
+          number(style.borderLeftWidth, 0)
+        );
+        var semanticPort = /(^|\s|[-_])port(?:\s|$|[-_])/i.test(
+          typeof candidate.className === "string" ? candidate.className : ""
+        ) || candidate.hasAttribute("data-port");
+        return semanticPort ||
+          (radius >= Math.min(rect.width, rect.height) * 0.4 && borderWidth >= 1);
+      })
+      .map(function (candidate) {
+        var rect = candidate.getBoundingClientRect();
+        return {
+          x: rect.left + rect.width / 2,
+          y: rect.top + rect.height / 2,
+          radius: Math.min(rect.width, rect.height) / 2,
+        };
+      });
+  }
+
+  function svgCardBoundaryTargets(root) {
+    var scope = document.body || (root && root.parentElement);
+    if (!scope) return [];
+    return Array.from(scope.querySelectorAll("*"))
+      .filter(function (candidate) {
+        if (
+          candidate === root || candidate.closest("svg") ||
+          candidate.contains(root) || root.contains(candidate)
+        ) return false;
+        var rect = candidate.getBoundingClientRect();
+        if (rect.width < 60 || rect.width > 700 || rect.height < 36 || rect.height > 500) return false;
+        var style = getComputedStyle(candidate);
+        if (style.display === "none" || style.visibility === "hidden" || number(style.opacity, 1) <= 0) return false;
+        var borderWidth = Math.max(
+          number(style.borderTopWidth, 0),
+          number(style.borderRightWidth, 0),
+          number(style.borderBottomWidth, 0),
+          number(style.borderLeftWidth, 0)
+        );
+        return borderWidth >= 0.75 && style.borderStyle !== "none";
+      })
+      .map(function (candidate) {
+        var rect = candidate.getBoundingClientRect();
+        return {
+          left: rect.left,
+          right: rect.right,
+          top: rect.top,
+          bottom: rect.bottom,
+        };
+      });
+  }
+
+  function svgStandaloneArrowhead(element) {
+    var tag = element.tagName.toUpperCase();
+    if (!["PATH", "POLYLINE", "POLYGON"].includes(tag)) return false;
+    var rect = element.getBoundingClientRect();
+    if (rect.width > 32 || rect.height > 32 || rect.width < 3 || rect.height < 3) return false;
     var style = getComputedStyle(element);
-    if (style.backgroundImage && style.backgroundImage !== "none") {
+    var fill = parseColor(style.fill);
+    var stroke = parseColor(style.stroke);
+    if (svgClosedPath(element)) {
+      return Boolean(fill && fill.alpha > 0 && (!stroke || stroke.alpha <= 0));
+    }
+    return Boolean(stroke && stroke.alpha > 0 && (!fill || fill.alpha <= 0));
+  }
+
+  function svgSnapEndpointToCard(endpoint, adjacent, cards) {
+    var dx = endpoint.x - adjacent.x;
+    var dy = endpoint.y - adjacent.y;
+    if (Math.hypot(dx, dy) < 0.5) return false;
+    var horizontal = Math.abs(dx) >= Math.abs(dy);
+    var best = null;
+    cards.forEach(function (card) {
+      var distance = null;
+      var x = endpoint.x;
+      var y = endpoint.y;
+      if (horizontal && dx > 0 && endpoint.y >= card.top - 4 && endpoint.y <= card.bottom + 4) {
+        distance = card.left - endpoint.x;
+        x = card.left;
+        y = clamp(endpoint.y, card.top, card.bottom);
+      } else if (horizontal && dx < 0 && endpoint.y >= card.top - 4 && endpoint.y <= card.bottom + 4) {
+        distance = endpoint.x - card.right;
+        x = card.right;
+        y = clamp(endpoint.y, card.top, card.bottom);
+      } else if (!horizontal && dy > 0 && endpoint.x >= card.left - 4 && endpoint.x <= card.right + 4) {
+        distance = card.top - endpoint.y;
+        x = clamp(endpoint.x, card.left, card.right);
+        y = card.top;
+      } else if (!horizontal && dy < 0 && endpoint.x >= card.left - 4 && endpoint.x <= card.right + 4) {
+        distance = endpoint.y - card.bottom;
+        x = clamp(endpoint.x, card.left, card.right);
+        y = card.bottom;
+      }
+      if (distance !== null && distance >= 0.5 && distance <= 56 && (!best || distance < best.distance)) {
+        best = { distance: distance, x: x, y: y };
+      }
+    });
+    if (!best) return false;
+    endpoint.x = best.x;
+    endpoint.y = best.y;
+    return true;
+  }
+
+  function svgConnectorRenderedPoints(element, reasons) {
+    var points = svgSampledPoints(element, reasons);
+    if (points.length < 2 || svgClosedPath(element)) return points;
+    if (svgStandaloneArrowhead(element)) return points;
+    var style = getComputedStyle(element);
+    var stroke = parseColor(style.stroke);
+    if (!stroke || stroke.alpha <= 0) return points;
+    // The authored SVG path is the visual source of truth. Snapping endpoints
+    // to nearby HTML cards/ports or rebuilding rounded paths as orthogonal
+    // routes changes the visible bends and arrow alignment in PowerPoint.
+    // Dense path sampling already produces editable freeforms, so preserve the
+    // original path coordinates exactly and let normal layer ordering hide any
+    // intentional connector overlap beneath cards or ports.
+    return points;
+  }
+
+  function svgArrowheadTranslation(element) {
+    if (!svgStandaloneArrowhead(element)) return { x: 0, y: 0 };
+    var style = getComputedStyle(element);
+    var fill = parseColor(style.fill);
+    var stroke = parseColor(style.stroke);
+    if (
+      svgClosedPath(element) &&
+      (!fill || fill.alpha <= 0 || (stroke && stroke.alpha > 0))
+    ) {
+      return { x: 0, y: 0 };
+    }
+    var rect = element.getBoundingClientRect();
+    if (rect.width > 24 || rect.height > 24) return { x: 0, y: 0 };
+    var root = element.closest("svg");
+    if (!root) return { x: 0, y: 0 };
+    var ownPoints = svgSampledPoints(element, []);
+    if (!ownPoints.length) return { x: 0, y: 0 };
+
+    var best = null;
+    Array.from(root.querySelectorAll("path,line,polyline")).forEach(function (candidate) {
+      if (candidate === element || svgClosedPath(candidate)) return;
+      var candidateStyle = getComputedStyle(candidate);
+      var candidateStroke = parseColor(candidateStyle.stroke);
+      if (!candidateStroke || candidateStroke.alpha <= 0) return;
+      var candidatePoints = svgConnectorRenderedPoints(candidate, []);
+      if (candidatePoints.length < 2) return;
+      [0, candidatePoints.length - 1].forEach(function (endpointIndex) {
+        var endpoint = candidatePoints[endpointIndex];
+        var directionIndex = endpointIndex === 0 ? 1 : candidatePoints.length - 2;
+        var directionStep = endpointIndex === 0 ? 1 : -1;
+        while (
+          directionIndex >= 0 && directionIndex < candidatePoints.length &&
+          Math.hypot(
+            candidatePoints[directionIndex].x - endpoint.x,
+            candidatePoints[directionIndex].y - endpoint.y
+          ) < 36
+        ) {
+          directionIndex += directionStep;
+        }
+        if (directionIndex < 0 || directionIndex >= candidatePoints.length) {
+          directionIndex = endpointIndex === 0 ? 1 : candidatePoints.length - 2;
+        }
+        var directionPoint = candidatePoints[directionIndex];
+        var dx = endpoint.x - directionPoint.x;
+        var dy = endpoint.y - directionPoint.y;
+        var axis = Math.abs(dx) >= Math.abs(dy) ? "x" : "y";
+        var sign = (axis === "x" ? dx : dy) >= 0 ? 1 : -1;
+        var extreme = sign > 0
+          ? Math.max.apply(Math, ownPoints.map(function (point) { return point[axis]; }))
+          : Math.min.apply(Math, ownPoints.map(function (point) { return point[axis]; }));
+        ownPoints.filter(function (point) {
+          return Math.abs(point[axis] - extreme) <= 0.75;
+        }).forEach(function (point) {
+          var distance = Math.hypot(endpoint.x - point.x, endpoint.y - point.y);
+          if (distance <= 64 && (!best || distance < best.distance)) {
+            best = {
+              distance: distance,
+              x: endpoint.x - point.x,
+              y: endpoint.y - point.y,
+            };
+          }
+        });
+      });
+    });
+    return best && best.distance > 0.5
+      ? { x: best.x, y: best.y }
+      : { x: 0, y: 0 };
+  }
+
+  function svgRenderedPoints(element, reasons) {
+    return svgClosedPath(element)
+      ? svgSampledPoints(element, reasons)
+      : svgConnectorRenderedPoints(element, reasons);
+  }
+
+  function svgShapeBounds(element, reasons) {
+    var tag = element.tagName.toUpperCase();
+    if (["RECT", "CIRCLE", "ELLIPSE"].includes(tag)) {
+      var nativeRect = element.getBoundingClientRect();
+      return rectValue(nativeRect);
+    }
+    var points = svgRenderedPoints(element, reasons);
+    if (!points.length) return rectValue(element.getBoundingClientRect());
+    var xs = points.map(function (point) { return point.x; });
+    var ys = points.map(function (point) { return point.y; });
+    var style = getComputedStyle(element);
+    var padding = Math.max(0.5, number(style.strokeWidth, 1) * svgScale(element) / 2);
+    var left = Math.min.apply(Math, xs);
+    var right = Math.max.apply(Math, xs);
+    var top = Math.min.apply(Math, ys);
+    var bottom = Math.max.apply(Math, ys);
+    if (right - left < 0.5) {
+      left -= padding;
+      right += padding;
+    }
+    if (bottom - top < 0.5) {
+      top -= padding;
+      bottom += padding;
+    }
+    return {
+      x: round(left),
+      y: round(top),
+      width: round(Math.max(0.5, right - left)),
+      height: round(Math.max(0.5, bottom - top)),
+    };
+  }
+
+  function svgShapePayload(element, reasons, bounds) {
+    var style = getComputedStyle(element);
+    var tag = element.tagName.toUpperCase();
+    var fill = parseColor(style.fill);
+    var stroke = parseColor(style.stroke);
+    // SVG exposes fill/stroke opacity separately from the color itself.
+    // Folding both values together here is important because DrawingML stores
+    // the effective alpha on the color; otherwise very faint authored guide
+    // lines become fully opaque after export.
+    if (fill) {
+      fill.alpha = round(clamp(fill.alpha * number(style.fillOpacity, 1), 0, 1));
+    }
+    if (stroke) {
+      stroke.alpha = round(clamp(stroke.alpha * number(style.strokeOpacity, 1), 0, 1));
+    }
+    if (fill && fill.alpha === 0) fill = null;
+    if (stroke && stroke.alpha === 0) stroke = null;
+    var strokeWidthPt = stroke
+      ? round(Math.max(0.1, number(style.strokeWidth, 1) * svgScale(element) * 0.75))
+      : 0;
+    var dashValues = String(style.strokeDasharray || "")
+      .trim()
+      .split(/[\s,]+/)
+      .map(function (value) { return number(value, Number.NaN); })
+      .filter(function (value) { return Number.isFinite(value) && value > 0; });
+    var dash = dashValues.length
+      ? (dashValues[0] <= Math.max(1, number(style.strokeWidth, 1) * 1.5) ? "dot" : "dash")
+      : undefined;
+    var closed = svgClosedPath(element);
+    var shape = tag === "RECT"
+      ? ((number(element.getAttribute("rx"), 0) > 0 || number(element.getAttribute("ry"), 0) > 0)
+        ? "round-rectangle"
+        : "rectangle")
+      : (["CIRCLE", "ELLIPSE"].includes(tag) ? "ellipse" : "freeform");
+    var payload = {
+      shape: shape,
+      fill: closed || shape !== "freeform" ? fill : null,
+      stroke: stroke,
+      strokeWidthPt: strokeWidthPt,
+      dash: dash,
+      lineCap: style.strokeLinecap === "round" ? "round" : undefined,
+      lineJoin: style.strokeLinejoin === "round" ? "round" : undefined,
+      radiusPt: shape === "round-rectangle"
+        ? round(Math.max(number(element.getAttribute("rx"), 0), number(element.getAttribute("ry"), 0)) * svgScale(element) * 0.75)
+        : 0,
+      endArrow:
+        ((style.markerEnd && style.markerEnd !== "none") ||
+          (element.getAttribute("marker-end") && element.getAttribute("marker-end") !== "none"))
+          ? "triangle"
+          : undefined,
+      preserveContents: false,
+    };
+    if (shape === "freeform") {
+      var points = svgRenderedPoints(element, reasons);
+      payload.points = points.map(function (point) {
+        return {
+          x: round(clamp((point.x - bounds.x) / Math.max(bounds.width, 0.01), 0, 1)),
+          y: round(clamp((point.y - bounds.y) / Math.max(bounds.height, 0.01), 0, 1)),
+        };
+      });
+      payload.closed = closed;
+      if (payload.points.length < 2) reasons.push("unsupported-shape");
+    }
+    if (!payload.fill && !payload.stroke) reasons.push("unsupported-shape");
+    return payload;
+  }
+
+  function simpleBoxShadowLayers(style) {
+    if (!style.boxShadow || style.boxShadow === "none") return [];
+    return splitCssList(style.boxShadow).flatMap(function (shadow) {
+      if (/\binset\b/i.test(shadow)) return [];
+      var colorText = shadow.match(/rgba?\([^)]*\)|#[0-9a-fA-F]{3,8}\b/i);
+      var color = colorText ? parseColor(colorText[0]) : null;
+      if (!color || color.alpha <= 0) return [];
+      var lengths = (shadow.match(/-?(?:\d+(?:\.\d+)?|\.\d+)px/g) || []).map(function (value) {
+        return number(value, 0);
+      });
+      if (lengths.length < 2) return [];
+      var blur = Math.max(0, lengths[2] || 0);
+      // A blurred shadow has no exact editable PowerPoint equivalent. Keep it
+      // in the fidelity backplate; solid shadows can be reconstructed exactly
+      // as independent editable shapes.
+      if (blur > 0.01) return [];
+      return [{
+        offsetXPx: round(lengths[0]),
+        offsetYPx: round(lengths[1]),
+        spreadPx: round(lengths[3] || 0),
+        color: color,
+      }];
+    });
+  }
+
+  function roundedRectanglePoints(bounds, inputRadii) {
+    var width = Math.max(0.01, bounds.width);
+    var height = Math.max(0.01, bounds.height);
+    var radii = inputRadii.map(function (radius) {
+      return clamp(radius, 0, Math.min(width, height) / 2);
+    });
+    var scale = Math.min(
+      1,
+      width / Math.max(0.01, radii[0] + radii[1]),
+      width / Math.max(0.01, radii[3] + radii[2]),
+      height / Math.max(0.01, radii[0] + radii[3]),
+      height / Math.max(0.01, radii[1] + radii[2])
+    );
+    radii = radii.map(function (radius) { return radius * scale; });
+    var points = [];
+    function appendArc(centerX, centerY, radius, startDeg, endDeg) {
+      var steps = radius > 0.01 ? 5 : 1;
+      for (var step = 0; step <= steps; step += 1) {
+        var angle = (startDeg + ((endDeg - startDeg) * step) / steps) * Math.PI / 180;
+        points.push({
+          x: round(clamp((centerX + Math.cos(angle) * radius) / width, 0, 1)),
+          y: round(clamp((centerY + Math.sin(angle) * radius) / height, 0, 1)),
+        });
+      }
+    }
+    appendArc(radii[0], radii[0], radii[0], 180, 270);
+    appendArc(width - radii[1], radii[1], radii[1], 270, 360);
+    appendArc(width - radii[2], height - radii[2], radii[2], 0, 90);
+    appendArc(radii[3], height - radii[3], radii[3], 90, 180);
+    return points.filter(function (point, index) {
+      return index === 0 || point.x !== points[index - 1].x || point.y !== points[index - 1].y;
+    });
+  }
+
+  function shapePayload(element, reasons, bounds, preserveContents) {
+    if (svgShapeElement(element)) {
+      return svgShapePayload(element, reasons, bounds);
+    }
+    var style = getComputedStyle(element);
+    var backgroundImage = style.backgroundImage || "none";
+    var gradient = backgroundImage !== "none"
+      ? parseLinearGradient(backgroundImage, bounds)
+      : null;
+    if (backgroundImage !== "none" && !gradient) {
       reasons.push("unsupported-background");
     }
     var fill = parseColor(style.backgroundColor);
@@ -753,25 +2048,12 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       number(style.borderBottomWidth, 0),
       number(style.borderLeftWidth, 0),
     ];
-    var borderUniform = widths.every(function (width) {
-      return Math.abs(width - widths[0]) < 0.01;
-    });
     var borderStyles = [
       style.borderTopStyle,
       style.borderRightStyle,
       style.borderBottomStyle,
       style.borderLeftStyle,
     ];
-    var borderStyleUniform = borderStyles.every(function (value) {
-      return value === borderStyles[0];
-    });
-    if (
-      !borderUniform ||
-      !borderStyleUniform ||
-      !["none", "solid"].includes(borderStyles[0])
-    ) {
-      reasons.push("unsupported-shape");
-    }
     var borderColorValues = [
       style.borderTopColor,
       style.borderRightColor,
@@ -779,60 +2061,179 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       style.borderLeftColor,
     ];
     var borderColors = borderColorValues.map(parseColor);
-    if (widths[0] > 0 && borderColors.some(function (color) { return !color; })) {
-      reasons.push("unsupported-color");
-    }
-    var stroke = widths[0] > 0 ? borderColors[0] : null;
-    if (
-      widths[0] > 0 &&
-      borderColors.some(function (color) {
-        return !color || !stroke || color.hex !== stroke.hex || color.alpha !== stroke.alpha;
-      })
-    ) {
+    var sides = ["top", "right", "bottom", "left"];
+    var activeBorders = sides.map(function (side, index) {
+      return {
+        side: side,
+        width: widths[index],
+        style: borderStyles[index],
+        color: borderColors[index],
+      };
+    }).filter(function (border) {
+      return border.width > 0.01 && border.style !== "none";
+    });
+    if (activeBorders.some(function (border) {
+      return !["solid", "dashed", "dotted"].includes(border.style);
+    })) {
       reasons.push("unsupported-shape");
     }
+    if (activeBorders.some(function (border) { return !border.color; })) {
+      reasons.push("unsupported-color");
+    }
+    var uniformBorder = activeBorders.length === 4 && activeBorders.every(function (border) {
+      var first = activeBorders[0];
+      return ["solid", "dashed", "dotted"].includes(border.style) &&
+        border.style === first.style && Boolean(border.color) && Boolean(first.color) &&
+        Math.abs(border.width - first.width) < 0.01 &&
+        border.color.hex === first.color.hex && border.color.alpha === first.color.alpha;
+    });
+    var stroke = uniformBorder ? activeBorders[0].color : null;
+    var borderLines = uniformBorder ? [] : activeBorders.filter(function (border) {
+      return ["solid", "dashed", "dotted"].includes(border.style) && border.color && border.color.alpha > 0;
+    }).map(function (border) {
+      return {
+        side: border.side,
+        color: border.color,
+        widthPt: round(border.width * 0.75),
+        dash: border.style === "dashed" ? "dash" : border.style === "dotted" ? "dot" : undefined,
+      };
+    });
     if (stroke && stroke.alpha === 0) stroke = null;
-    if (!fill && !stroke) reasons.push("unsupported-shape");
+    if (!fill && !gradient && !stroke && borderLines.length === 0) reasons.push("unsupported-shape");
     var radiusValues = [
       style.borderTopLeftRadius,
       style.borderTopRightRadius,
       style.borderBottomRightRadius,
       style.borderBottomLeftRadius,
     ];
-    var radiusPattern = /^([\d.]+)px$/;
+    var radiusPattern = /^([\d.]+)(px|%)$/;
     var radii = radiusValues.map(function (value) {
       var match = String(value).match(radiusPattern);
-      return match ? number(match[1], Number.NaN) : Number.NaN;
+      if (!match) return Number.NaN;
+      return match[2] === "%"
+        ? (number(match[1], Number.NaN) / 100) * Math.min(bounds.width, bounds.height)
+        : number(match[1], Number.NaN);
     });
-    if (
-      (radii.some(function (radius) { return !Number.isFinite(radius); }) ||
-        radii.some(function (radius) { return Math.abs(radius - radii[0]) >= 0.01; }))
-    ) {
+    if (radii.some(function (radius) { return !Number.isFinite(radius); })) {
       reasons.push("unsupported-shape");
     }
+    var nonUniformRadii = radii.every(Number.isFinite) &&
+      radii.some(function (radius) { return Math.abs(radius - radii[0]) >= 0.01; });
     var radiusPx = Number.isFinite(radii[0])
       ? Math.min(radii[0], bounds.width / 2, bounds.height / 2)
       : 0;
     var shape = "rectangle";
     if (Math.min(bounds.width, bounds.height) <= 3 && Math.max(bounds.width, bounds.height) >= 8) {
       shape = "line";
+    } else if (
+      radiusValues.every(function (value) { return /^(?:50(?:\.0+)?)%$/.test(String(value)); }) ||
+      (Math.abs(bounds.width - bounds.height) <= 1 &&
+        radiusPx >= Math.min(bounds.width, bounds.height) / 2 - 0.5)
+    ) {
+      shape = "ellipse";
+    } else if (nonUniformRadii) {
+      shape = "freeform";
     } else if (radiusPx > 0) {
       shape = "round-rectangle";
     }
-    return {
+    var strokeWidthPt = uniformBorder
+      ? round(activeBorders[0].width * 0.75)
+      : 0;
+    if (shape === "line" && !stroke && fill) {
+      stroke = fill;
+      fill = null;
+      strokeWidthPt = round(Math.max(0.75, Math.min(bounds.width, bounds.height) * 0.75));
+    }
+    var payload = {
       shape: shape,
       fill: fill,
+      gradient: gradient || undefined,
       stroke: stroke,
-      strokeWidthPt: round(widths[0] * 0.75),
+      strokeWidthPt: strokeWidthPt,
+      dash: uniformBorder
+        ? activeBorders[0].style === "dashed"
+          ? "dash"
+          : activeBorders[0].style === "dotted"
+            ? "dot"
+            : undefined
+        : undefined,
       radiusPt: round(radiusPx * 0.75),
+      borderLines: borderLines,
+      shadowLayers: simpleBoxShadowLayers(style),
+      // CSS border triangles are materialized as independent editable
+      // freeforms. Attaching another PowerPoint arrow to the host line would
+      // duplicate and distort the authored tip.
+      endArrow: undefined,
+      preserveContents: Boolean(preserveContents),
+    };
+    if (shape === "freeform" && nonUniformRadii) {
+      payload.points = roundedRectanglePoints(bounds, radii);
+      payload.closed = true;
+      payload.radiusPt = 0;
+    }
+    return payload;
+  }
+
+  function textContainerShape(element, bounds) {
+    var style = getComputedStyle(element);
+    if (!paintedBackground(style) && !hasBorder(style)) return null;
+    if (
+      (style.boxShadow && style.boxShadow !== "none") ||
+      (style.outlineStyle && style.outlineStyle !== "none" && hasPositiveCssComponent(style.outlineWidth)) ||
+      nestedBlockContent(element)
+    ) {
+      return null;
+    }
+    if (hasDecoratedDescendant(element)) return null;
+    var shapeReasons = [];
+    var shape = shapePayload(element, shapeReasons, bounds, false);
+    return shapeReasons.length ? null : { boundsPx: bounds, shape: shape };
+  }
+
+  function contentSafeShapeBounds(element, bounds) {
+    var style = getComputedStyle(element);
+    if (
+      !nestedBlockContent(element) ||
+      (!paintedBackground(style) && !hasBorder(style)) ||
+      !["visible", "auto"].includes(style.overflowY)
+    ) return bounds;
+
+    var maximumBottom = bounds.y;
+    Array.from(element.querySelectorAll("*")).forEach(function (descendant) {
+      var descendantStyle = getComputedStyle(descendant);
+      if (
+        descendantStyle.display === "none" ||
+        descendantStyle.visibility === "hidden" ||
+        ["absolute", "fixed"].includes(descendantStyle.position)
+      ) return;
+      var rect = descendant.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      maximumBottom = Math.max(maximumBottom, rect.bottom);
+    });
+
+    var desiredBottom = maximumBottom + Math.max(0, number(style.paddingBottom, 0));
+    var extra = desiredBottom - (bounds.y + bounds.height);
+    // This is a small card-content correction, not a general layout reflow.
+    // A larger overflow is more likely to be intentional and stays authored.
+    if (extra <= 0.5 || extra > 36) return bounds;
+    return {
+      x: bounds.x,
+      y: bounds.y,
+      width: bounds.width,
+      height: round(bounds.height + extra),
     };
   }
 
   function looksLikeShape(element) {
-    if (element.children.length > 0 || (element.textContent || "").trim()) return false;
+    if (svgShapeElement(element)) return true;
     var hint = (element.getAttribute("data-ppt-role") || "").toLowerCase();
     if (hint === "shape") return true;
-    if (!["DIV", "SPAN", "HR"].includes(element.tagName)) return false;
+    if (![
+      "DIV", "SPAN", "I", "HR", "SECTION", "ARTICLE", "ASIDE", "HEADER", "FOOTER",
+      "MAIN", "NAV", "FIGURE", "TABLE", "THEAD", "TBODY", "TFOOT", "TR",
+      "TD", "TH", "UL", "OL", "LI", "BODY"
+    ].includes(element.tagName)) return false;
+    if (element.tagName === "SPAN" && (element.textContent || "").trim()) return false;
     var style = getComputedStyle(element);
     return paintedBackground(style) || hasBorder(style);
   }
@@ -892,7 +2293,10 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
 
   function stackIndexForElement(stack, element) {
     return stack.findIndex(function (item) {
-      return item === element || element.contains(item);
+      return item === element || element.contains(item) ||
+        (element.namespaceURI === "http://www.w3.org/2000/svg" &&
+          item.namespaceURI === "http://www.w3.org/2000/svg" &&
+          item.contains(element));
     });
   }
 
@@ -900,7 +2304,10 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     return samplePoints(observation).some(function (point) {
       var stack = document.elementsFromPoint(point[0], point[1]);
       var ownIndex = stack.findIndex(function (item) {
-        return item === element || element.contains(item);
+        return item === element || element.contains(item) ||
+          (element.namespaceURI === "http://www.w3.org/2000/svg" &&
+            item.namespaceURI === "http://www.w3.org/2000/svg" &&
+            item.contains(element));
       });
       if (ownIndex < 0) return true;
       return stack.slice(0, ownIndex).some(function (item) {
@@ -1245,6 +2652,14 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     var ownRects = observationRects(observation);
     return allElements.some(function (foreign) {
       if (foreign === element || element.contains(foreign)) return false;
+      if (
+        foreign.contains(element) &&
+        isDecomposableSvgDropShadow(
+          element,
+          foreign,
+          getComputedStyle(foreign).filter
+        )
+      ) return false;
       if (!foreign.contains(element) && !couldPaintAfter(element, foreign)) {
         return false;
       }
@@ -1324,6 +2739,48 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     return Promise.race([ready, timeout]).then(waitForTwoPaints);
   }
 
+  function enforceMinimumEditableFontSize() {
+    var minimumPx = 12; // 12 CSS px = 9 PowerPoint points.
+    var pseudoRules = [];
+    [document.body].concat(Array.from(document.body.querySelectorAll("*"))).forEach(
+      function (element, index) {
+        if (["SCRIPT", "STYLE", "TEXTAREA", "NOSCRIPT", "TEMPLATE"].includes(element.tagName)) {
+          return;
+        }
+        var hasOwnText = Array.from(element.childNodes).some(function (node) {
+          return node.nodeType === Node.TEXT_NODE && Boolean((node.textContent || "").trim());
+        });
+        var style = getComputedStyle(element);
+        if (hasOwnText && number(style.fontSize, minimumPx) < minimumPx) {
+          element.style.setProperty("font-size", minimumPx + "px", "important");
+        }
+        ["::before", "::after"].forEach(function (pseudo) {
+          var pseudoStyle = getComputedStyle(element, pseudo);
+          var content = pseudoStyle.content;
+          if (
+            content &&
+            content !== "none" &&
+            content !== "normal" &&
+            number(pseudoStyle.fontSize, minimumPx) < minimumPx
+          ) {
+            var attribute = "data-presenton-min-font-" + index +
+              (pseudo === "::before" ? "-before" : "-after");
+            element.setAttribute(attribute, "true");
+            pseudoRules.push(
+              "[" + attribute + "]" + pseudo + "{font-size:" + minimumPx + "px!important}"
+            );
+          }
+        });
+      }
+    );
+    if (pseudoRules.length) {
+      var sheet = document.createElement("style");
+      sheet.setAttribute("data-presenton-minimum-font-size", "true");
+      sheet.textContent = pseudoRules.join("\n");
+      document.head.appendChild(sheet);
+    }
+  }
+
   function observationContentKey(observation) {
     if (observation.candidateKind === "text" && observation.text) {
       return "text:" + JSON.stringify({
@@ -1339,6 +2796,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
             style: run.style,
           };
         }),
+        containerShape: observation.text.containerShape,
       });
     }
     if (observation.candidateKind === "image" && observation.image) {
@@ -1368,7 +2826,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     var expectedBounds = expected.boundsPx || {};
     var actualBounds = observation.boundsPx;
     return (
-      observation.fallbackReasons.length === 0 &&
+      (["text", "shape"].includes(expected.candidateKind) || observation.fallbackReasons.length === 0) &&
       observation.id === expected.id &&
       observation.domPath === expected.domPath &&
       observation.tagName === expected.tagName &&
@@ -1392,6 +2850,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     var rejected = [];
     var transparentPixel =
       "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=";
+    ensurePseudoSuppressionStyle();
     promotedElements.forEach(function (expected) {
       var id = expected && typeof expected.id === "string" ? expected.id : "";
       var record = byId.get(id);
@@ -1401,30 +2860,76 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       }
       var element = record.element;
       var kind = record.observation.candidateKind;
-      if (kind === "text") {
-        [element].concat(Array.from(element.querySelectorAll("*"))).forEach(function (target) {
-          target.style.setProperty("-webkit-text-fill-color", "transparent", "important");
-          target.style.setProperty("text-decoration-color", "transparent", "important");
-          target.style.setProperty("-webkit-text-stroke-color", "transparent", "important");
-          target.style.setProperty("text-shadow", "none", "important");
-        });
-      } else if (kind === "image") {
-        var width = element.offsetWidth;
-        var height = element.offsetHeight;
-        if (width > 0) element.style.setProperty("width", width + "px", "important");
-        if (height > 0) element.style.setProperty("height", height + "px", "important");
-        element.removeAttribute("srcset");
-        element.removeAttribute("sizes");
-        var picture = element.closest("picture");
-        if (picture) {
-          Array.from(picture.querySelectorAll("source")).forEach(function (source) {
-            source.removeAttribute("srcset");
+      if (record.pseudo) {
+        element.setAttribute(pseudoSuppressionAttribute(record.pseudo), "true");
+      } else if (kind === "text") {
+        if (expected.suppressWholeElement) {
+          element.style.setProperty("visibility", "hidden", "important");
+        } else {
+          [element].concat(Array.from(element.querySelectorAll("*"))).forEach(function (target) {
+            target.style.setProperty("-webkit-text-fill-color", "transparent", "important");
+            target.style.setProperty("text-decoration-color", "transparent", "important");
+            target.style.setProperty("-webkit-text-stroke-color", "transparent", "important");
+            target.style.setProperty("text-shadow", "none", "important");
+            // SVG text uses fill/stroke presentation properties instead of
+            // the HTML text-fill properties above. Clear those paints too so
+            // editable OOXML text does not sit on a raster duplicate.
+            if (target.namespaceURI === "http://www.w3.org/2000/svg") {
+              target.style.setProperty("fill", "transparent", "important");
+              target.style.setProperty("stroke", "transparent", "important");
+            }
           });
         }
-        element.src = transparentPixel;
-        element.style.setProperty("opacity", "0", "important");
+        if (expected.suppressContainerPaint) {
+          element.style.setProperty("background", "none", "important");
+          element.style.setProperty("border-color", "transparent", "important");
+          element.style.setProperty("outline", "none", "important");
+          element.style.setProperty("box-shadow", "none", "important");
+        }
+      } else if (kind === "image") {
+        if (
+          element.namespaceURI === "http://www.w3.org/2000/svg" ||
+          element.tagName.toUpperCase() !== "IMG"
+        ) {
+          element.style.setProperty("visibility", "hidden", "important");
+        } else {
+          var width = element.offsetWidth;
+          var height = element.offsetHeight;
+          if (width > 0) element.style.setProperty("width", width + "px", "important");
+          if (height > 0) element.style.setProperty("height", height + "px", "important");
+          element.removeAttribute("srcset");
+          element.removeAttribute("sizes");
+          var picture = element.closest("picture");
+          if (picture) {
+            Array.from(picture.querySelectorAll("source")).forEach(function (source) {
+              source.removeAttribute("srcset");
+            });
+          }
+          element.src = transparentPixel;
+          element.style.setProperty("opacity", "0", "important");
+        }
       } else if (kind === "shape") {
-        element.style.setProperty("visibility", "hidden", "important");
+        if (element.namespaceURI === "http://www.w3.org/2000/svg") {
+          element.style.setProperty("visibility", "hidden", "important");
+        } else {
+          // Remove only the editable CSS geometry. Descendant icons and
+          // unsupported decoration remain as transparent raster overlay paint,
+          // while the box shadow stays above the native card underneath it.
+          element.style.setProperty("background", "none", "important");
+          element.style.setProperty("border-color", "transparent", "important");
+          element.style.setProperty("outline", "none", "important");
+          element.style.setProperty("box-shadow", "none", "important");
+          if (record.observation.shape.endArrow) {
+            element.setAttribute("data-presenton-authored-hybrid-suppress-pseudo", "true");
+          }
+        }
+      }
+      if (!record.pseudo && element === document.body) {
+        // Chromium propagates the body background to the canvas. Clearing both
+        // roots is required for --default-background-color=00000000 to produce
+        // a genuinely transparent residual layer.
+        document.documentElement.style.setProperty("background", "transparent", "important");
+        document.body.style.setProperty("background", "transparent", "important");
       }
       element.setAttribute("data-presenton-authored-hybrid-suppressed", "true");
       applied.push(id);
@@ -1449,8 +2954,70 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
   try {
     await ensureFixedViewport();
     await waitForStablePage();
+    enforceMinimumEditableFontSize();
+    await waitForTwoPaints();
 
-    var allElements = Array.from(document.body.querySelectorAll("*"));
+    // A direct text node next to a block/flex/grid child is rendered as an
+    // anonymous box. querySelectorAll cannot observe that box, so labels next
+    // to a nested number badge used to remain absent from the editable layer.
+    // Generated flex/grid items (::before/::after) have the same problem: the
+    // host bounds start before the generated item, which makes editable text
+    // overlap eyebrow bars and chip bullets. Materialize those direct text
+    // nodes as neutral spans so Chromium gives us their true laid-out bounds.
+    Array.from(document.body.querySelectorAll("*")).forEach(function (element) {
+      if (["SCRIPT", "STYLE", "TEXTAREA", "NOSCRIPT", "TEMPLATE", "SVG"].includes(element.tagName)) {
+        return;
+      }
+      var display = getComputedStyle(element).display;
+      var generatedFlexItem = ["flex", "inline-flex", "grid", "inline-grid"].includes(display) &&
+        (pseudoPainted(element, "::before") || pseudoPainted(element, "::after"));
+      if (
+        !nestedBlockContent(element) &&
+        !hasDecoratedDescendant(element) &&
+        !generatedFlexItem
+      ) return;
+      Array.from(element.childNodes).forEach(function (node) {
+        if (node.nodeType !== Node.TEXT_NODE || !(node.textContent || "").trim()) return;
+        var span = document.createElement("span");
+        span.setAttribute("data-presenton-authored-direct-text", "true");
+        node.parentNode.insertBefore(span, node);
+        span.appendChild(node);
+      });
+    });
+
+    // Body owns the full-slide background in many authored templates. Treat it
+    // as an editable rectangle so the residual PNG can stay transparent above
+    // native cards and connector geometry.
+    var allElements = [document.body].concat(Array.from(document.body.querySelectorAll("*")));
+    var complexSvgImagePayloads = new Map();
+    var complexHtmlImagePayloads = new Map();
+    for (var svgIndex = 0; svgIndex < allElements.length; svgIndex += 1) {
+      var svgElement = allElements[svgIndex];
+      if (
+        svgElement.tagName && svgElement.tagName.toUpperCase() === "SVG" &&
+        complexKind(svgElement) === "complex-diagram"
+      ) {
+        var svgReasons = [];
+        var svgBounds = unrotatedRect(svgElement, analyzeTransform(svgElement).rotationDeg);
+        complexSvgImagePayloads.set(
+          svgElement,
+          await svgImagePayload(svgElement, svgReasons, svgBounds)
+        );
+      } else if (
+        svgElement.tagName && svgElement.namespaceURI !== "http://www.w3.org/2000/svg" &&
+        complexKind(svgElement) === "complex-diagram" &&
+        /(^|\s)visual(\s|$)/.test(
+          typeof svgElement.className === "string" ? svgElement.className.toLowerCase() : ""
+        )
+      ) {
+        var htmlReasons = [];
+        var htmlBounds = unrotatedRect(svgElement, analyzeTransform(svgElement).rotationDeg);
+        complexHtmlImagePayloads.set(
+          svgElement,
+          await htmlDiagramImagePayload(svgElement, htmlReasons, htmlBounds)
+        );
+      }
+    }
     var coveredRoots = [];
     var records = [];
     var warnings = [];
@@ -1464,8 +3031,15 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
 
       var complexReason = complexKind(element);
       var candidateKind = null;
-      if (complexReason) candidateKind = "complex";
+      if (
+        complexReason === "complex-diagram" &&
+        (complexSvgImagePayloads.has(element) || complexHtmlImagePayloads.has(element))
+      ) {
+        candidateKind = "image";
+      }
+      else if (complexReason) candidateKind = "complex";
       else if (element.tagName === "IMG") candidateKind = "image";
+      else if (looksLikeShape(element) && (nestedBlockContent(element) || !textRoot(element))) candidateKind = "shape";
       else if (textRoot(element)) candidateKind = "text";
       else if (looksLikeShape(element)) candidateKind = "shape";
       if (!candidateKind) return;
@@ -1473,9 +3047,17 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       var id = "h1-" + String(records.length + 1).padStart(4, "0");
       element.setAttribute(ELEMENT_ATTRIBUTE, id);
       var transform = analyzeTransform(element);
-      var bounds = unrotatedRect(element, transform.rotationDeg);
       var reasons = safetyReasons(element, candidateKind, transform);
-      if (complexReason) reasons.push(complexReason);
+      if (complexHtmlImagePayloads.has(element)) {
+        // The whole semantic visual is captured exactly as a transparent PNG;
+        // its internal decoration, clipping, pseudo paint, and local z-index
+        // are therefore part of the payload rather than promotion hazards.
+        reasons = [];
+      }
+      var bounds = svgShapeElement(element)
+        ? svgShapeBounds(element, reasons)
+        : unrotatedRect(element, transform.rotationDeg);
+      if (complexReason && candidateKind === "complex") reasons.push(complexReason);
       if (bounds.width <= 0 || bounds.height <= 0 || !Object.values(bounds).every(Number.isFinite)) {
         reasons.push("invalid-bounds");
       }
@@ -1504,26 +3086,52 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       try {
         if (candidateKind === "text") {
           if (nestedBlockContent(element)) reasons.push("complex-content");
-          var plainText = element.innerText || "";
+          var tagName = element.tagName.toUpperCase();
+          var browserPlainText = element.innerText ||
+            (["TEXT", "TEXTPATH"].includes(tagName) ? element.textContent : "") || "";
           var extractedRuns = textRuns(element);
+          var renderedPlainText = extractedRuns.runs.map(function (run) { return run.text; }).join("");
           if (extractedRuns.failed) reasons.push("run-extraction-error");
           if (
-            normalizeWhitespace(extractedRuns.runs.map(function (run) { return run.text; }).join("")) !==
-            normalizeWhitespace(plainText)
+            normalizeWhitespace(extractedRuns.identityText) !== normalizeWhitespace(browserPlainText)
           ) {
             reasons.push("ambiguous-whitespace");
           }
+          var plainText = reasons.includes("ambiguous-whitespace")
+            ? browserPlainText
+            : renderedPlainText;
+          var elementTextStyle = textStyle(element, plainText);
+          // Preserve the authored CSS wrapping policy. Browser visual lines are
+          // still emitted as explicit breaks for fidelity, while PowerPoint's
+          // own wrapping remains enabled as a safety net when installed font
+          // metrics differ from Chromium. Genuine CSS white-space: nowrap
+          // content continues to export with wrapMode="no-wrap".
           observation.text = {
             role: inferTextRole(element, plainText.trim()),
             plainText: plainText,
             paragraphs: plainText.split(/\n+/).map(function (value) { return value.trim(); }).filter(Boolean),
-            style: textStyle(element, plainText),
+            style: elementTextStyle,
             runs: extractedRuns.runs,
           };
+          var containerShape = textContainerShape(element, bounds);
+          if (containerShape) observation.text.containerShape = containerShape;
+          observation.boundsPx = textContentRect(element, bounds, transform.rotationDeg);
         } else if (candidateKind === "image") {
-          observation.image = imagePayload(element, reasons, bounds);
+          observation.image = complexSvgImagePayloads.has(element)
+            ? complexSvgImagePayloads.get(element)
+            : complexHtmlImagePayloads.has(element)
+              ? complexHtmlImagePayloads.get(element)
+              : imagePayload(element, reasons, bounds);
+          if (!observation.image) reasons.push("extraction-error");
         } else if (candidateKind === "shape") {
-          observation.shape = shapePayload(element, reasons, bounds);
+          bounds = contentSafeShapeBounds(element, bounds);
+          observation.boundsPx = bounds;
+          observation.shape = shapePayload(
+            element,
+            reasons,
+            bounds,
+            element.children.length > 0 || Boolean((element.textContent || "").trim())
+          );
         }
       } catch (_elementError) {
         reasons.push("extraction-error");
@@ -1531,7 +3139,38 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
 
       observation.fallbackReasons = unique(reasons);
       records.push({ element: element, observation: observation });
-      if (candidateKind === "complex" || candidateKind === "text") coveredRoots.push(element);
+      if (
+        ((candidateKind === "complex" || candidateKind === "image") && (
+          element.tagName.toUpperCase() === "CANVAS" ||
+          (element.tagName.toUpperCase() === "SVG" && complexReason !== "svg-text")
+        )) ||
+        (candidateKind === "text" && !nestedBlockContent(element))
+      ) coveredRoots.push(element);
+    });
+
+    // CSS generated content is not represented by querySelectorAll and
+    // therefore used to remain fused into the residual backplate. Materialize
+    // empty painted pseudo-elements only long enough to measure and serialize
+    // them as independent editable PowerPoint shapes. Their authored paint is
+    // suppressed separately when the shape is promoted.
+    var elementSourceIndexes = new Map();
+    allElements.forEach(function (element, index) {
+      elementSourceIndexes.set(element, index);
+    });
+    allElements.forEach(function (element) {
+      ["::before", "::after"].forEach(function (pseudo) {
+        var hostSourceIndex = elementSourceIndexes.get(element) || 0;
+        var pseudoSourceIndex = hostSourceIndex;
+        if (pseudo === "::after") {
+          for (var index = hostSourceIndex + 1; index < allElements.length; index += 1) {
+            if (!element.contains(allElements[index])) break;
+            pseudoSourceIndex = index;
+          }
+        }
+        var id = "h1-" + String(records.length + 1).padStart(4, "0");
+        var record = materializedPseudoShape(element, pseudo, pseudoSourceIndex, id);
+        if (record) records.push(record);
+      });
     });
 
     // elementsFromPoint intentionally omits pointer-events:none nodes even
@@ -1544,7 +3183,9 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       records.forEach(function (record) {
         var observation = record.observation;
         if (
+          !record.pseudo &&
           observation.candidateKind !== "complex" &&
+          !complexHtmlImagePayloads.has(record.element) &&
           (isOccluded(record.element, observation) ||
             isRectOccluded(record.element, observation, allElements) ||
             isPseudoOccluded(record.element, observation, allElements) ||
