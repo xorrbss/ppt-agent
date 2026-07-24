@@ -10,6 +10,7 @@ from services.template_v2_pptx_ingestion_service import (
     start_template_v2_pptx_dispatcher,
     stop_template_v2_pptx_dispatcher,
 )
+from services.template_v2_pptx_worker import should_start_embedded_worker
 from templates.v2.policy import get_structured_template_policy
 from utils.get_env import get_app_data_directory_env
 from utils.model_availability import (
@@ -103,6 +104,7 @@ async def app_lifespan(_: FastAPI):
     if (
         template_v2_policy.creation_enabled
         and template_v2_policy.allowed_template_ids
+        and should_start_embedded_worker()
     ):
         await start_template_v2_pptx_dispatcher()
         template_v2_dispatcher_started = True
