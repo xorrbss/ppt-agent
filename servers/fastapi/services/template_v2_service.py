@@ -20,6 +20,7 @@ from sqlmodel import select
 from models.sql.presentation import PresentationModel
 from models.sql.template_v2 import TemplateV2
 from models.sql.template_v2_local_state import TemplateV2LocalState
+from services.template_v2_revision_service import append_revision
 from templates.v2.constants import TEMPLATE_V2_VERSION
 from templates.v2.wire_codec import decode_wire_layouts
 
@@ -342,6 +343,12 @@ class TemplateV2Service:
             template=template,
             presentation_id=presentation_id,
         )
+        await append_revision(
+            self._sql_session,
+            template=template,
+            revision=state.revision,
+            reason="create",
+        )
         try:
             await self._sql_session.commit()
         except IntegrityError as error:
@@ -363,6 +370,7 @@ class TemplateV2Service:
         *,
         changes: dict[str, Any],
         expected_revision: int | None = None,
+        journal_reason: str = "autosave",
     ) -> TemplateV2Record:
         unsupported = set(changes) - _MUTABLE_FIELDS
         if unsupported:
@@ -408,6 +416,13 @@ class TemplateV2Service:
             await self._sql_session.rollback()
             raise TemplateV2PersistenceConflictError(template_id)
 
+        await append_revision(
+            self._sql_session,
+            template=template,
+            revision=current_state.revision + 1,
+            reason=journal_reason,
+            changes=persisted_changes,
+        )
         try:
             await self._sql_session.commit()
         except IntegrityError as error:

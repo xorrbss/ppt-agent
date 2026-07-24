@@ -37,6 +37,7 @@ TemplateV2Operation = Literal[
     "export",
     "read",
     "reopen",
+    "restore",
     "save",
     "undo_redo",
 ]
@@ -52,6 +53,7 @@ _OPERATIONS = {
     "export",
     "read",
     "reopen",
+    "restore",
     "save",
     "undo_redo",
 }

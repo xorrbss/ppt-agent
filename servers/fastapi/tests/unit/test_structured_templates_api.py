@@ -26,6 +26,7 @@ from api.middlewares import SessionAuthMiddleware
 from models.sql.presentation import PresentationModel
 from models.sql.template_v2 import TemplateV2
 from models.sql.template_v2_local_state import TemplateV2LocalState
+from models.sql.template_v2_revision import TemplateV2Revision
 from services.database import get_async_session
 from services.template_v2_rollout import TemplateV2RolloutService
 from templates.v2.constants import (
@@ -483,6 +484,10 @@ def test_temp_sqlite_asgi_auth_crud_contract_and_off_mutation_gate(
                         sync_connection,
                         checkfirst=True,
                     ),
+                    TemplateV2Revision.__table__.create(
+                        sync_connection,
+                        checkfirst=True,
+                    ),
                 )
             )
         async with session_factory() as session:
@@ -504,6 +509,7 @@ def test_temp_sqlite_asgi_auth_crud_contract_and_off_mutation_gate(
         "id": "api-template",
         "name": "API native template",
         "layouts": _layouts(),
+        "assets": {"logo": {"path": "asset://original-logo"}},
     }
     lossless_layouts = create_body["layouts"]
     lossless_layouts["upstream_envelope_extension"] = {"version": 3}
@@ -624,6 +630,7 @@ def test_temp_sqlite_asgi_auth_crud_contract_and_off_mutation_gate(
             json={
                 "name": "First Studio save",
                 "layouts": updated_lossless_layouts,
+                "assets": {"logo": {"path": "asset://updated-logo"}},
                 "expected_revision": 1,
             },
         )
@@ -638,12 +645,46 @@ def test_temp_sqlite_asgi_auth_crud_contract_and_off_mutation_gate(
         assert saved.status_code == 200
         assert saved.json()["revision"] == 2
         assert saved.json()["layouts"] == updated_lossless_layouts
+        assert saved.json()["assets"] == {
+            "logo": {"path": "asset://updated-logo"}
+        }
         assert stale.status_code == 409
         assert stale.json()["detail"] == {
             "code": "template_v2_revision_conflict",
             "expected_revision": 1,
             "current_revision": 2,
         }
+
+        revisions = client.get(
+            "/api/v1/ppt/structured-templates/api-template/revisions",
+            headers=headers,
+        )
+        assert revisions.status_code == 200
+        assert [
+            (entry["revision"], entry["reason"])
+            for entry in revisions.json()
+        ] == [(2, "autosave"), (1, "create")]
+
+        restored = client.post(
+            "/api/v1/ppt/structured-templates/api-template/revisions/1/restore",
+            headers=headers,
+            json={"expected_revision": 2},
+        )
+        assert restored.status_code == 200
+        assert restored.json()["revision"] == 3
+        assert restored.json()["name"] == "API native template"
+        assert restored.json()["layouts"] == lossless_layouts
+        assert restored.json()["assets"] == {
+            "logo": {"path": "asset://original-logo"}
+        }
+        restored_revisions = client.get(
+            "/api/v1/ppt/structured-templates/api-template/revisions",
+            headers=headers,
+        )
+        assert [
+            (entry["revision"], entry["reason"])
+            for entry in restored_revisions.json()
+        ] == [(3, "restore"), (2, "autosave"), (1, "create")]
 
         monkeypatch.setenv("ENABLE_TEMPLATE_V2", "false")
         assert (
@@ -674,7 +715,10 @@ def test_temp_sqlite_asgi_auth_crud_contract_and_off_mutation_gate(
             template = await session.get(TemplateV2, "api-template")
             assert template is not None
             assert template.presentation_id == source_presentation.id
-            assert template.layouts == updated_lossless_layouts
+            assert template.layouts == lossless_layouts
+            assert template.assets == {
+                "logo": {"path": "asset://original-logo"}
+            }
 
     asyncio.run(assert_provenance())
     asyncio.run(async_engine.dispose())
@@ -707,6 +751,10 @@ def test_concurrent_duplicate_post_rolls_back_loser_and_returns_409(
                         checkfirst=True,
                     ),
                     TemplateV2LocalState.__table__.create(
+                        sync_connection,
+                        checkfirst=True,
+                    ),
+                    TemplateV2Revision.__table__.create(
                         sync_connection,
                         checkfirst=True,
                     ),
@@ -755,6 +803,12 @@ def test_concurrent_duplicate_post_rolls_back_loser_and_returns_409(
 
             async def refresh(self, value):
                 await self.session.refresh(value)
+
+            async def scalars(self, *args, **kwargs):
+                return await self.session.scalars(*args, **kwargs)
+
+            async def execute(self, *args, **kwargs):
+                return await self.session.execute(*args, **kwargs)
 
         async with (
             session_factory() as winner_session,

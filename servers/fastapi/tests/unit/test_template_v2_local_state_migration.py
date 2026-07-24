@@ -156,12 +156,13 @@ def test_local_state_migration_backfills_and_validates_sidecars(tmp_path):
                 connection.execute(
                     text("SELECT version_num FROM alembic_version")
                 ).scalar_one()
-                == migrations.REVISION_TEMPLATE_V2_IMPORT_REVIEW
+                == migrations.REVISION_TEMPLATE_V2_REVISION_JOURNAL
             )
             assert set(inspector.get_table_names()) >= {
                 "template_v2",
                 "template_v2_local_state",
                 "template_v2_pptx_imports",
+                "template_v2_revisions",
             }
             assert {
                 column["name"]
@@ -205,6 +206,20 @@ def test_local_state_migration_backfills_and_validates_sidecars(tmp_path):
             report.require_compatible()
             assert report.complete
             require_template_v2_legacy_provenance_drop_data_ready(connection)
+            journal = connection.execute(
+                text(
+                    """
+                    SELECT template_id, revision, reason, name
+                    FROM template_v2_revisions
+                    """
+                )
+            ).mappings().one()
+            assert journal == {
+                "template_id": "template-local-state",
+                "revision": 7,
+                "reason": "baseline",
+                "name": "Backfilled",
+            }
     finally:
         engine.dispose()
 
