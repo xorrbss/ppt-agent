@@ -8,8 +8,8 @@ import {
   templateV2InfographicView,
 } from "./template-v2-konva.ts";
 
-test("elementCapabilities grants move/resize/rotate to list, table, infographic", () => {
-  for (const type of ["text-list", "table", "infographic"]) {
+test("elementCapabilities grants move/resize/rotate to content and layout types", () => {
+  for (const type of ["text-list", "table", "infographic", "chart", "flex", "grid"]) {
     assert.deepEqual(elementCapabilities({ type }), {
       move: true,
       resize: true,
@@ -21,7 +21,9 @@ test("elementCapabilities grants move/resize/rotate to list, table, infographic"
     resize: false,
     rotate: false,
   });
-  assert.deepEqual(elementCapabilities({ type: "chart" }), {
+  // vector geometry lives in points, so it is select-only until the commit path
+  // learns to translate points.
+  assert.deepEqual(elementCapabilities({ type: "vector" }), {
     move: false,
     resize: false,
     rotate: false,

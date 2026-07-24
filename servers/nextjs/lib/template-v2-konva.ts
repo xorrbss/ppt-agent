@@ -78,12 +78,22 @@ export function elementCapabilities(element: JsonRecord): ElementCapabilities {
     return { move: true, resize: false, rotate: false };
   }
   if (
-    ["text", "container", "image", "text-list", "table", "infographic"].includes(
-      String(element.type)
-    )
+    [
+      "text",
+      "container",
+      "image",
+      "text-list",
+      "table",
+      "infographic",
+      "chart",
+      "flex",
+      "grid",
+    ].includes(String(element.type))
   ) {
     return { move: true, resize: true, rotate: true };
   }
+  // vector stays immobile: its geometry lives in `points`, not position/size, so
+  // moving it requires point translation in the commit path (later increment).
   return { move: false, resize: false, rotate: false };
 }
 

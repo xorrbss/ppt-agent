@@ -1,15 +1,69 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type Konva from "konva";
 
 import {
+  elementCapabilities,
   numberValue,
   stringValue,
   type TemplateV2TextRun,
 } from "@/lib/template-v2-konva";
-import { isJsonRecord, type JsonRecord } from "@/lib/template-v2-studio";
+import {
+  isJsonRecord,
+  type ElementPath,
+  type JsonRecord,
+} from "@/lib/template-v2-studio";
 
 export const CONTENT_PADDING = 8;
+
+export interface StudioElementProps {
+  element: JsonRecord;
+  path: ElementPath;
+  isDisabled(path: ElementPath): boolean;
+  setNode(path: ElementPath, node: Konva.Node | null): void;
+  onSelect(path: ElementPath, additive?: boolean): void;
+  onDragStart(path: ElementPath, node: Konva.Node): void;
+  onDragMove(path: ElementPath, node: Konva.Node): void;
+  onDragEnd(path: ElementPath, element: JsonRecord, node: Konva.Node): void;
+}
+
+export function interactionProps({
+  element,
+  path,
+  isDisabled,
+  setNode,
+  onSelect,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
+}: StudioElementProps) {
+  const capabilities = elementCapabilities(element);
+  return {
+    ref: (node: Konva.Node | null) => setNode(path, node),
+    draggable: !isDisabled(path) && capabilities.move,
+    onClick: (event: Konva.KonvaEventObject<MouseEvent>) => {
+      event.cancelBubble = true;
+      onSelect(path, event.evt.ctrlKey || event.evt.metaKey);
+    },
+    onTap: (event: Konva.KonvaEventObject<TouchEvent>) => {
+      event.cancelBubble = true;
+      onSelect(path, false);
+    },
+    onDragStart: (event: Konva.KonvaEventObject<DragEvent>) => {
+      event.cancelBubble = true;
+      onDragStart(path, event.currentTarget);
+    },
+    onDragMove: (event: Konva.KonvaEventObject<DragEvent>) => {
+      event.cancelBubble = true;
+      onDragMove(path, event.currentTarget);
+    },
+    onDragEnd: (event: Konva.KonvaEventObject<DragEvent>) => {
+      event.cancelBubble = true;
+      onDragEnd(path, element, event.currentTarget);
+    },
+  };
+}
 
 export function fillColor(element: JsonRecord): string {
   const fill = isJsonRecord(element.fill) ? element.fill : {};

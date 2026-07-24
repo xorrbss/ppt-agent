@@ -26,11 +26,15 @@ discriminator 문자열 grep이 아니라 **구현 본문·테스트·커밋 타
 - **Studio(Konva) 편집 캔버스**
   (`app/template-v2-studio/[templateId]/TemplateV2CanvasElement.tsx`, 원래 문서 작성 시점에는
   `TemplateV2Canvas.tsx`에 있었으나 Phase 2A에서 element 렌더링 모듈로 분리됨): 처음에는
-  `text/container/image/group` **4종만** 인터랙티브 편집을 지원했다. **Phase 2A 증분에서
-  `text-list/table/infographic` 3종을 추가**해 현재 **7종**이 선택·이동·크기조정 가능하다(내부
-  콘텐츠 편집은 아직 read-only; 인라인 편집은 이후 워크스트림). 남은 4종
-  (`vector/chart/flex/grid`)은 render-plan 좌표가 필요해 아직 `Unsupported` 플레이스홀더로
-  표시되며 다음 증분 대상이다. 즉 "4종"은 Phase 2A 이전의 스냅샷이다.
+  `text/container/image/group` **4종만** 인터랙티브 편집을 지원했다. **Phase 2A 증분 1**에서
+  `text-list/table/infographic` 3종을, **증분 2**에서 `vector/chart/flex/grid` 4종을
+  추가해 현재 **11종 전부 캔버스에 렌더링**된다. 증분 2는 export render plan을 요소 단위로
+  재사용(`lib/template-v2-studio-plan.ts`)해 vector 지오메트리·차트 데이터·flex/grid 자식
+  배치를 export와 동일한 계산으로 그린다. 편집 능력은 차등: 10종은 선택·이동·크기조정·회전
+  가능(flex/grid 자식은 배치가 플랜 소산이므로 비인터랙티브), vector는 지오메트리가
+  position/size가 아닌 points에 있어 커밋 경로에 point 변환이 생기기 전까지 선택만 가능.
+  내부 콘텐츠 편집(인라인 텍스트 등)은 이후 워크스트림. 즉 "4종"은 Phase 2A 이전의
+  스냅샷이다.
 
 **타임라인이 "시점 차이" 가설을 배제한다.** 렌더러 파일은 최초 커밋 `50300fed`
 (2026-07-24 21:00)부터 11종으로 태어났고 이후 수정 이력이 없다. "11종"과 "4/11"을 각각
