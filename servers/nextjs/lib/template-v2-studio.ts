@@ -8,6 +8,7 @@ import {
   updateTemplateV2ContentRun,
   type TemplateV2RunTarget,
 } from "./template-v2-studio-content.ts";
+import { translateTemplateV2Vector } from "./template-v2-vector.ts";
 
 export type JsonRecord = Record<string, unknown>;
 export type ElementPath = Array<string | number>;
@@ -55,6 +56,8 @@ export type ElementGeometry = {
   width?: number;
   height?: number;
   rotation?: number;
+  translateX?: number;
+  translateY?: number;
 };
 
 export interface TemplateV2GeometryUpdate {
@@ -433,6 +436,17 @@ export function updateTemplateV2Element(
 }
 
 function withGeometry(element: JsonRecord, geometry: ElementGeometry): JsonRecord {
+  if (
+    element.type === "vector" &&
+    geometry.translateX !== undefined &&
+    geometry.translateY !== undefined
+  ) {
+    return translateTemplateV2Vector(
+      element,
+      geometry.translateX,
+      geometry.translateY
+    );
+  }
   const currentPosition = isJsonRecord(element.position)
     ? element.position
     : {};

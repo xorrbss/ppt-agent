@@ -7,6 +7,7 @@ import {
   layoutTemplateV2Table,
   templateV2InfographicView,
 } from "./template-v2-konva.ts";
+import { translateTemplateV2Vector } from "./template-v2-vector.ts";
 
 test("elementCapabilities grants move/resize/rotate to content and layout types", () => {
   for (const type of ["text-list", "table", "infographic", "chart", "flex", "grid"]) {
@@ -21,13 +22,36 @@ test("elementCapabilities grants move/resize/rotate to content and layout types"
     resize: false,
     rotate: false,
   });
-  // vector geometry lives in points, so it is select-only until the commit path
-  // learns to translate points.
   assert.deepEqual(elementCapabilities({ type: "vector" }), {
-    move: false,
+    move: true,
     resize: false,
     rotate: false,
   });
+});
+
+test("vector movement translates every authored point by the canvas delta", () => {
+  const vector = {
+    type: "vector",
+    points: [
+      { x: 100.125, y: 50, pressure: 0.5 },
+      { x: 300, y: 150 },
+    ],
+    curve: { type: "smooth" },
+  };
+
+  assert.deepEqual(translateTemplateV2Vector(vector, 10.005, -4.126), {
+    ...vector,
+    points: [
+      { x: 110.13, y: 45.87, pressure: 0.5 },
+      { x: 310.01, y: 145.87 },
+    ],
+  });
+  assert.equal(translateTemplateV2Vector(vector, 0, 0), vector);
+  const malformed = {
+    type: "vector",
+    points: [{ x: 1, y: 2 }, { x: "bad", y: 4 }],
+  };
+  assert.equal(translateTemplateV2Vector(malformed, 5, 5), malformed);
 });
 
 test("layoutTemplateV2List concatenates runs and applies the marker per item", () => {

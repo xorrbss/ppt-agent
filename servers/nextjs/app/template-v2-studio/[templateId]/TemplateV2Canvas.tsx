@@ -22,6 +22,7 @@ import {
   zoomTemplateV2Viewport,
   type ViewportTransform,
 } from "@/lib/template-v2-konva";
+import { planStudioElement } from "@/lib/template-v2-studio-plan";
 import {
   isJsonRecord,
   type ElementGeometry,
@@ -196,6 +197,12 @@ export default function TemplateV2Canvas({
           scaleY: node.scaleY(),
           rotation: node.rotation(),
         });
+        if (element.type === "vector") {
+          const frame = planStudioElement(element)?.frame;
+          if (!frame) return [];
+          geometry.translateX = node.x() - frame.x;
+          geometry.translateY = node.y() - frame.y;
+        }
         node.scale({ x: 1, y: 1 });
         if (geometry.width !== undefined) node.width(geometry.width);
         if (geometry.height !== undefined) node.height(geometry.height);

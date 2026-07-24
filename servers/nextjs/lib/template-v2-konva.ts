@@ -77,6 +77,9 @@ export function elementCapabilities(element: JsonRecord): ElementCapabilities {
   if (element.type === "group") {
     return { move: true, resize: false, rotate: false };
   }
+  if (element.type === "vector") {
+    return { move: true, resize: false, rotate: false };
+  }
   if (
     [
       "text",
@@ -92,8 +95,6 @@ export function elementCapabilities(element: JsonRecord): ElementCapabilities {
   ) {
     return { move: true, resize: true, rotate: true };
   }
-  // vector stays immobile: its geometry lives in `points`, not position/size, so
-  // moving it requires point translation in the commit path (later increment).
   return { move: false, resize: false, rotate: false };
 }
 

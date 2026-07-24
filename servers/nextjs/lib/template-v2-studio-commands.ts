@@ -8,6 +8,7 @@ import type {
   TemplateV2ReorderDirection,
   TemplateV2StudioCommand,
 } from "./template-v2-studio.ts";
+import { translateTemplateV2Vector } from "./template-v2-vector.ts";
 
 export interface TemplateV2CommandResult {
   layouts: JsonRecord;
@@ -463,13 +464,27 @@ function applyGeometryBatch(
       (geometry.height !== undefined &&
         (!Number.isFinite(geometry.height) || geometry.height < 0)) ||
       (geometry.rotation !== undefined &&
-        !Number.isFinite(geometry.rotation))
+        !Number.isFinite(geometry.rotation)) ||
+      (geometry.translateX === undefined) !==
+        (geometry.translateY === undefined) ||
+      (geometry.translateX !== undefined &&
+        !Number.isFinite(geometry.translateX)) ||
+      (geometry.translateY !== undefined &&
+        !Number.isFinite(geometry.translateY))
     ) {
       return unchanged(layouts, selectionSet, lockedElementKeys);
     }
     const position = positionRecord(element);
     let next: JsonRecord =
-      position.x === geometry.x && position.y === geometry.y
+      element.type === "vector" &&
+      geometry.translateX !== undefined &&
+      geometry.translateY !== undefined
+        ? translateTemplateV2Vector(
+            element,
+            geometry.translateX,
+            geometry.translateY
+          )
+        : position.x === geometry.x && position.y === geometry.y
         ? element
         : {
             ...element,
