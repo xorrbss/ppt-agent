@@ -21,6 +21,7 @@ from api.v1.ppt.router import API_V1_PPT_ROUTER
 from models.sql.presentation import PresentationModel
 from models.sql.template_v2 import TemplateV2
 from models.sql.template_v2_local_state import TemplateV2LocalState
+from models.sql.template_v2_revision import TemplateV2Revision
 from services.database import get_async_session
 from services.template_v2_service import (
     TemplateV2Record,
@@ -224,6 +225,10 @@ def test_structured_and_compat_routes_share_sidecar_facade(
                         checkfirst=True,
                     ),
                     TemplateV2LocalState.__table__.create(
+                        sync_connection,
+                        checkfirst=True,
+                    ),
+                    TemplateV2Revision.__table__.create(
                         sync_connection,
                         checkfirst=True,
                     ),

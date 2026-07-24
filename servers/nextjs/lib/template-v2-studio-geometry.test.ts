@@ -53,6 +53,17 @@ test("updateTemplateV2GeometryField updates one field and preserves the rest", (
     height: 40,
     rotation: 10,
   });
+  assert.deepEqual(
+    updateTemplateV2GeometryField(
+      {
+        type: "vector",
+        points: [{ x: 100, y: 50 }, { x: 300, y: 150 }],
+      },
+      "x",
+      "125"
+    ),
+    { x: 125, y: 50, translateX: 25, translateY: 0 }
+  );
 });
 
 test("updateTemplateV2GeometryField rejects invalid or unsupported edits", () => {

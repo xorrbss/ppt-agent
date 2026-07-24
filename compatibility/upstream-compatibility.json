@@ -28,7 +28,7 @@
     },
     {
       "id": "next",
-      "value": "16.2.6",
+      "value": "16.2.11",
       "source": "servers/nextjs/package.json",
       "jsonPointer": "/dependencies/next"
     },

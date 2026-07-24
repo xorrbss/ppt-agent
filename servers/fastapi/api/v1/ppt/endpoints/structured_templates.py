@@ -21,6 +21,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.sql.template_v2 import TemplateV2
 from services.database import get_async_session
 from services.template_v2_rollout import TemplateV2RolloutService
+from services.template_v2_revision_service import (
+    get_revision,
+    list_revisions,
+    restore_changes,
+)
 from services.template_v2_service import (
     TemplateV2AlreadyExistsError,
     TemplateV2NotFoundError,
@@ -110,6 +115,20 @@ class StructuredTemplateResponse(BaseModel):
     revision: int
     created_at: datetime
     updated_at: datetime
+
+
+class StructuredTemplateRevisionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    revision: int
+    reason: str
+    created_at: datetime
+
+
+class StructuredTemplateRestore(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_revision: int = Field(ge=1)
 
 
 def _validated_wire_layouts(value: Any) -> dict[str, Any]:
@@ -304,6 +323,60 @@ async def update_structured_template(
         raise _service_http_error(error) from error
     _telemetry(policy).record_outcome(
         operation="save",
+        outcome="success",
+        template_id=template.id,
+    )
+    return _response(template)
+
+
+@STRUCTURED_TEMPLATES_ROUTER.get(
+    "/{template_id}/revisions",
+    response_model=list[StructuredTemplateRevisionResponse],
+)
+async def list_structured_template_revisions(
+    template_id: str,
+    sql_session: AsyncSession = Depends(get_async_session),
+):
+    try:
+        await TemplateV2Service(sql_session).get(template_id)
+    except TemplateV2ServiceError as error:
+        raise _service_http_error(error) from error
+    revisions = await list_revisions(sql_session, template_id)
+    return [
+        StructuredTemplateRevisionResponse.model_validate(revision)
+        for revision in revisions
+    ]
+
+
+@STRUCTURED_TEMPLATES_ROUTER.post(
+    "/{template_id}/revisions/{revision}/restore",
+    response_model=StructuredTemplateResponse,
+)
+async def restore_structured_template_revision(
+    template_id: str,
+    revision: int,
+    payload: StructuredTemplateRestore,
+    sql_session: AsyncSession = Depends(get_async_session),
+):
+    policy = get_structured_template_policy()
+    _require_write(policy, template_id)
+    entry = await get_revision(sql_session, template_id, revision)
+    if entry is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Structured template revision not found",
+        )
+    try:
+        template = await TemplateV2Service(sql_session).update(
+            template_id,
+            changes=restore_changes(entry),
+            expected_revision=payload.expected_revision,
+            journal_reason="restore",
+        )
+    except TemplateV2ServiceError as error:
+        raise _service_http_error(error) from error
+    _telemetry(policy).record_outcome(
+        operation="restore",
         outcome="success",
         template_id=template.id,
     )

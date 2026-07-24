@@ -23,6 +23,21 @@ dispatcher remain disabled.
 The public Studio flag is separate and build-time. Enabling it does not override
 the backend policy, and the backend flag does not expose the Studio UI.
 
+## Worker mode
+
+The default `TEMPLATE_V2_PPTX_WORKER_MODE=embedded` keeps the durable dispatcher
+inside the FastAPI process for single-node deployments. For multi-node
+deployments, set `TEMPLATE_V2_PPTX_WORKER_MODE=external` in both the API and a
+dedicated worker process, then start the worker from `servers/fastapi`:
+
+```powershell
+uv run python -m services.template_v2_pptx_worker
+```
+
+The external worker consumes the same database-backed queue with compare-and-set
+claims, leases, heartbeats, stale-attempt recovery, and graceful requeue. Invalid
+worker-mode values fail closed by starting no embedded dispatcher.
+
 ## Offline readiness check
 
 From `servers/fastapi`, with the intended environment loaded:
@@ -56,6 +71,9 @@ There is no `/api/v2` rollout surface.
    workflow. Authored and adaptive execution paths must remain unchanged.
 5. Monitor `template_v2_rollout` events by operation, outcome, and code.
    Template identifiers are hashed; presentation content is never logged.
+6. Monitor `template_v2_pptx_queue` events. `dispatch` counts work offered to
+   workers, while `recover` counts expired leases returned to the queue. Both
+   payloads contain only an operation, outcome, and bounded aggregate count.
 
 ## Rollback
 

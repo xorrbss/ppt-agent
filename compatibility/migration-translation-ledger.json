@@ -8,7 +8,7 @@
   },
   "commonRevision": "c7b70d0f31b1",
   "upstreamTipRevision": "b8e2f4a7c9d1",
-  "localTipRevision": "1b2c3d4e5f6a",
+  "localTipRevision": "2c3d4e5f6a7b",
   "databaseCompatibility": {
     "verified": [
       {
@@ -53,7 +53,8 @@
     { "revision": "e8f9a0b1c2d3", "downRevision": "d7e8f9a0b1c2", "file": "e8f9a0b1c2d3_add_template_v2_source_retention.py" },
     { "revision": "f9a0b1c2d3e4", "downRevision": "e8f9a0b1c2d3", "file": "f9a0b1c2d3e4_add_template_v2_local_state_sidecar.py" },
     { "revision": "0a1b2c3d4e5f", "downRevision": "f9a0b1c2d3e4", "file": "0a1b2c3d4e5f_harden_template_v2_delete_cascade.py" },
-    { "revision": "1b2c3d4e5f6a", "downRevision": "0a1b2c3d4e5f", "file": "1b2c3d4e5f6a_add_template_v2_import_review_boundary.py" }
+    { "revision": "1b2c3d4e5f6a", "downRevision": "0a1b2c3d4e5f", "file": "1b2c3d4e5f6a_add_template_v2_import_review_boundary.py" },
+    { "revision": "2c3d4e5f6a7b", "downRevision": "1b2c3d4e5f6a", "file": "2c3d4e5f6a7b_add_template_v2_revision_journal.py" }
   ],
   "translations": [
     {
@@ -161,6 +162,10 @@
     {
       "revision": "1b2c3d4e5f6a",
       "purpose": "Owner-scoped, idempotent PPTX analysis review and explicit confirmation boundary"
+    },
+    {
+      "revision": "2c3d4e5f6a7b",
+      "purpose": "Bounded Template V2 revision journal and immutable restore points"
     }
   ]
 }

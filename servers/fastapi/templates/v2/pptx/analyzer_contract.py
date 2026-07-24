@@ -32,16 +32,26 @@ class AnalyzerContractModel(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
 
+class ValidatedChartSeriesCandidate(AnalyzerContractModel):
+    name: StrictStr
+    values: list[FiniteFloat]
+
+
 class ValidatedShapeCandidate(AnalyzerContractModel):
     source_id: NonEmptyString
     name: NonEmptyString
-    kind: Literal["text", "container", "unsupported"]
+    kind: Literal["text", "container", "table", "chart", "group", "unsupported"]
     x: NonNegativeFinite = 0
     y: NonNegativeFinite = 0
     width: NonNegativeFinite = 0
     height: NonNegativeFinite = 0
     rotation: FiniteFloat = 0
     text: StrictStr | None = None
+    table_rows: list[list[StrictStr]] | None = None
+    chart_type: StrictStr | None = None
+    chart_categories: list[StrictStr] | None = None
+    chart_series: list[ValidatedChartSeriesCandidate] | None = None
+    children: list["ValidatedShapeCandidate"] | None = None
     fill_color: StrictStr | None = None
     confidence: Confidence
     unsupported_reason: StrictStr | None = None
@@ -52,6 +62,38 @@ class ValidatedShapeCandidate(AnalyzerContractModel):
             raise ValueError("text_candidate_requires_text")
         if self.kind != "text" and self.text is not None:
             raise ValueError("non_text_candidate_cannot_contain_text")
+        if self.kind == "table":
+            if not self.table_rows or not self.table_rows[0]:
+                raise ValueError("table_candidate_requires_cells")
+            column_count = len(self.table_rows[0])
+            if any(len(row) != column_count for row in self.table_rows):
+                raise ValueError("table_candidate_rows_must_be_rectangular")
+        elif self.table_rows is not None:
+            raise ValueError("non_table_candidate_cannot_contain_table_rows")
+        if self.kind == "chart":
+            if not self.chart_type or self.chart_categories is None:
+                raise ValueError("chart_candidate_requires_type_and_categories")
+            if self.chart_series is None:
+                raise ValueError("chart_candidate_requires_series")
+            if any(
+                len(series.values) != len(self.chart_categories)
+                for series in self.chart_series
+            ):
+                raise ValueError("chart_candidate_series_length_mismatch")
+        elif any(
+            value is not None
+            for value in (
+                self.chart_type,
+                self.chart_categories,
+                self.chart_series,
+            )
+        ):
+            raise ValueError("non_chart_candidate_cannot_contain_chart_data")
+        if self.kind == "group":
+            if not self.children:
+                raise ValueError("group_candidate_requires_children")
+        elif self.children is not None:
+            raise ValueError("non_group_candidate_cannot_contain_children")
         if self.kind == "unsupported" and not self.unsupported_reason:
             raise ValueError("unsupported_candidate_requires_reason")
         if self.kind != "unsupported" and self.unsupported_reason is not None:
@@ -127,10 +169,50 @@ class ValidatedRelationshipGraphEvidence(AnalyzerContractModel):
     external_model_access: StrictBool = False
 
 
+class ValidatedThemeEvidence(AnalyzerContractModel):
+    part: NonEmptyString
+    name: StrictStr | None = None
+    major_font: StrictStr | None = None
+    minor_font: StrictStr | None = None
+    colors: dict[NonEmptyString, NonEmptyString] = Field(default_factory=dict)
+
+
+class ValidatedMasterEvidence(AnalyzerContractModel):
+    part: NonEmptyString
+    theme_part: StrictStr | None = None
+    placeholder_types: list[NonEmptyString] = Field(default_factory=list)
+
+
+class ValidatedLayoutEvidence(AnalyzerContractModel):
+    part: NonEmptyString
+    name: StrictStr | None = None
+    master_part: StrictStr | None = None
+    theme_part: StrictStr | None = None
+    placeholder_types: list[NonEmptyString] = Field(default_factory=list)
+
+
+class ValidatedSlideStyleBinding(AnalyzerContractModel):
+    slide_part: NonEmptyString
+    layout_part: StrictStr | None = None
+    master_part: StrictStr | None = None
+    theme_part: StrictStr | None = None
+
+
+class ValidatedStyleGraphEvidence(AnalyzerContractModel):
+    evidence_version: Literal[1] = 1
+    themes: list[ValidatedThemeEvidence] = Field(default_factory=list)
+    masters: list[ValidatedMasterEvidence] = Field(default_factory=list)
+    layouts: list[ValidatedLayoutEvidence] = Field(default_factory=list)
+    slide_bindings: list[ValidatedSlideStyleBinding] = Field(
+        default_factory=list
+    )
+
+
 class ValidatedPresentationCandidates(AnalyzerContractModel):
     source_sha256: Sha256Digest
     slides: list[ValidatedSlideCandidate] = Field(min_length=1)
     relationship_graph: ValidatedRelationshipGraphEvidence | None = None
+    style_graph: ValidatedStyleGraphEvidence | None = None
 
     @model_validator(mode="after")
     def validate_slide_identity(self) -> ValidatedPresentationCandidates:
@@ -209,8 +291,41 @@ class CandidateAnalysisSummary(AnalyzerContractModel):
     shape_count: Annotated[StrictInt, Field(ge=0)]
     supported_shape_count: Annotated[StrictInt, Field(ge=0)]
     unsupported_shape_count: Annotated[StrictInt, Field(ge=0)]
-    visual_fidelity_status: Literal["not_evaluated", "evaluated"]
+    visual_fidelity_status: Literal["not_evaluated", "passed", "failed"]
     review_required: StrictBool
+
+
+class VisualFidelityMetrics(AnalyzerContractModel):
+    mean_absolute_error: NonNegativeFinite
+    bad_pixel_ratio: Annotated[FiniteFloat, Field(ge=0, le=1)]
+    largest_bad_component: Annotated[StrictInt, Field(ge=0)]
+
+
+class VisualFidelityThresholds(AnalyzerContractModel):
+    mean_absolute_error: NonNegativeFinite
+    bad_pixel_ratio: Annotated[FiniteFloat, Field(ge=0, le=1)]
+    largest_bad_component: Annotated[StrictInt, Field(ge=0)]
+
+
+class VisualFidelityEvaluation(AnalyzerContractModel):
+    method: Literal["pixel-diff-v1"]
+    status: Literal["passed", "failed"]
+    metrics: VisualFidelityMetrics
+    thresholds: VisualFidelityThresholds
+
+    @model_validator(mode="after")
+    def validate_status_matches_thresholds(self) -> VisualFidelityEvaluation:
+        passed = (
+            self.metrics.mean_absolute_error
+            <= self.thresholds.mean_absolute_error
+            and self.metrics.bad_pixel_ratio
+            <= self.thresholds.bad_pixel_ratio
+            and self.metrics.largest_bad_component
+            <= self.thresholds.largest_bad_component
+        )
+        if self.status != ("passed" if passed else "failed"):
+            raise ValueError("visual_fidelity_status_mismatch")
+        return self
 
 
 class CandidateAnalysis(AnalyzerContractModel):
@@ -223,6 +338,7 @@ class CandidateAnalysis(AnalyzerContractModel):
     candidate: ArtifactMetadata
     canvas: CanvasMetadata
     candidates: ValidatedPresentationCandidates
+    visual_fidelity: VisualFidelityEvaluation | None = None
     summary: CandidateAnalysisSummary
 
     @model_validator(mode="after")
@@ -246,6 +362,16 @@ class CandidateAnalysis(AnalyzerContractModel):
             raise ValueError("completed_analysis_requires_available_candidates")
         if self.candidate.sha256 != candidate_payload_sha256(self.candidates):
             raise ValueError("candidate_digest_mismatch")
+        if self.visual_fidelity is None:
+            if self.summary.visual_fidelity_status != "not_evaluated":
+                raise ValueError("missing_visual_fidelity_evaluation")
+        else:
+            if self.preview.status != "available" or self.render.status != "available":
+                raise ValueError(
+                    "visual_fidelity_requires_preview_and_render_artifacts"
+                )
+            if self.summary.visual_fidelity_status != self.visual_fidelity.status:
+                raise ValueError("summary_visual_fidelity_status_mismatch")
 
         expected_canvas = [
             CanvasSlideMetadata(

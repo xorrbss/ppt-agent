@@ -465,6 +465,42 @@ test("geometry batch is atomic, lock-aware, and records one history snapshot", (
   );
 });
 
+test("geometry batch translates vector points without inventing position fields", () => {
+  const value = fixture();
+  const component = (
+    ((value.layouts as JsonRecord[])[0].components as JsonRecord[])
+  )[0];
+  (component.elements as JsonRecord[]).push({
+    type: "vector",
+    points: [{ x: 100, y: 50 }, { x: 300, y: 150 }],
+  });
+  const selection: StudioSelection = {
+    ...titleSelection,
+    elementPath: [2],
+  };
+  const loaded = templateV2StudioReducer(EMPTY_TEMPLATE_V2_STUDIO_STATE, {
+    type: "load",
+    layouts: value,
+  });
+  const updated = templateV2StudioReducer(loaded, {
+    type: "update-geometry-batch",
+    updates: [
+      {
+        selection,
+        geometry: { x: 110, y: 45, translateX: 10, translateY: -5 },
+      },
+    ],
+  });
+  const vector = getSelectedElement(updated.layouts, selection);
+
+  assert.deepEqual(vector?.points, [
+    { x: 110, y: 45 },
+    { x: 310, y: 145 },
+  ]);
+  assert.equal(vector?.position, undefined);
+  assert.equal(updated.past.length, 1);
+});
+
 test("geometry and text no-ops preserve identity, history, and unknown geometry fields", () => {
   const value = fixture();
   const component = (

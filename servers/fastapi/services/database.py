@@ -21,6 +21,7 @@ from models.sql.presentation_version import PresentationVersionModel
 from models.sql.template import TemplateModel
 from models.sql.template_v2 import TemplateV2
 from models.sql.template_v2_local_state import TemplateV2LocalState
+from models.sql.template_v2_revision import TemplateV2Revision
 from models.sql.template_v2_pptx_import import TemplateV2PptxImport
 from models.sql.template_create_info import TemplateCreateInfoModel
 from models.sql.slide import SlideModel
@@ -78,6 +79,7 @@ async def create_db_and_tables():
                         TemplateModel.__table__,
                         TemplateV2.__table__,
                         TemplateV2LocalState.__table__,
+                        TemplateV2Revision.__table__,
                         TemplateV2PptxImport.__table__,
                         WebhookSubscription.__table__,
                         AsyncPresentationGenerationTaskModel.__table__,

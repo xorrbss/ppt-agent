@@ -14,8 +14,12 @@ from templates.v2.pptx.analyzer import (
     analyze_ooxml_candidates,
 )
 from templates.v2.pptx.analyzer_contract import (
+    ArtifactMetadata,
     CandidateAnalysis,
     CandidateAnalyzer,
+    VisualFidelityEvaluation,
+    VisualFidelityMetrics,
+    VisualFidelityThresholds,
 )
 from templates.v2.pptx.models import PresentationCandidates
 
@@ -72,7 +76,67 @@ def test_local_static_analysis_is_deterministic_and_schema_validated(
         "reason": "rendering_outside_static_analyzer_contract",
     }
     assert first.summary.visual_fidelity_status == "not_evaluated"
+    assert first.visual_fidelity is None
     assert first.summary.review_required is True
+
+
+def test_visual_fidelity_requires_available_artifacts_and_matching_status(
+    analyzer_fixture: dict,
+) -> None:
+    serialized = analyze_ooxml_candidates(
+        analyzer_fixture["input"]
+    ).model_dump(mode="json")
+    digest = "1" * 64
+    serialized["preview"] = ArtifactMetadata(
+        role="preview",
+        status="available",
+        media_type="image/png",
+        sha256=digest,
+    ).model_dump(mode="json")
+    serialized["render"] = ArtifactMetadata(
+        role="render",
+        status="available",
+        media_type="image/png",
+        sha256=digest,
+    ).model_dump(mode="json")
+    serialized["visual_fidelity"] = VisualFidelityEvaluation(
+        method="pixel-diff-v1",
+        status="passed",
+        metrics=VisualFidelityMetrics(
+            mean_absolute_error=2.5,
+            bad_pixel_ratio=0.01,
+            largest_bad_component=100,
+        ),
+        thresholds=VisualFidelityThresholds(
+            mean_absolute_error=6,
+            bad_pixel_ratio=0.015,
+            largest_bad_component=4500,
+        ),
+    ).model_dump(mode="json")
+    serialized["summary"]["visual_fidelity_status"] = "passed"
+
+    validated = CandidateAnalysis.model_validate(serialized, strict=True)
+
+    assert validated.visual_fidelity is not None
+    assert validated.visual_fidelity.status == "passed"
+
+
+def test_visual_fidelity_rejects_result_that_disagrees_with_metrics() -> None:
+    with pytest.raises(ValidationError, match="visual_fidelity_status_mismatch"):
+        VisualFidelityEvaluation(
+            method="pixel-diff-v1",
+            status="passed",
+            metrics=VisualFidelityMetrics(
+                mean_absolute_error=6.1,
+                bad_pixel_ratio=0.01,
+                largest_bad_component=100,
+            ),
+            thresholds=VisualFidelityThresholds(
+                mean_absolute_error=6,
+                bad_pixel_ratio=0.015,
+                largest_bad_component=4500,
+            ),
+        )
 
 
 def test_core_candidates_and_mapping_share_the_same_contract(

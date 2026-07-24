@@ -27,6 +27,9 @@ from services.template_v2_pptx_retention_service import (
 from services.template_v2_pptx_observability import (
     log_pptx_analysis_observation,
 )
+from services.template_v2_pptx_queue_observability import (
+    log_pptx_queue_observation,
+)
 from services.template_v2_pptx_storage import (
     get_private_source_retention_ttl,
     verify_private_source,
@@ -43,6 +46,9 @@ from templates.v2.pptx.ooxml_parser import parse_presentation_candidates
 from templates.v2.pptx.package_reader import PptxPackageReader, UnsafePptxPackage
 from templates.v2.pptx.repeat_suggestions import (
     build_repeat_block_suggestions,
+)
+from templates.v2.pptx.repeat_application import (
+    resolve_repeat_suggestion_decisions,
 )
 from templates.v2.pptx.source_inventory import (
     SecretFreeSourceMetadata,
@@ -378,6 +384,7 @@ async def _persist_analysis(
 
 def _assemble_confirmed_candidate(
     import_job: TemplateV2PptxImport,
+    accepted_repeat_suggestions: list[dict],
 ) -> AssembledTemplateV2Draft:
     analysis_result = import_job.analysis_result
     if not isinstance(analysis_result, dict):
@@ -386,7 +393,10 @@ def _assemble_confirmed_candidate(
     if not isinstance(candidate_payload, dict):
         raise ValueError("template_v2_import_candidate_missing")
     candidates = PresentationCandidates.model_validate(candidate_payload)
-    return assemble_template_v2_draft(candidates)
+    return assemble_template_v2_draft(
+        candidates,
+        accepted_repeat_suggestions=accepted_repeat_suggestions,
+    )
 
 
 async def confirm_template_v2_pptx_import(
@@ -396,6 +406,7 @@ async def confirm_template_v2_pptx_import(
     *,
     owner_scope: str,
     expected_revision: int,
+    accepted_repeat_suggestion_ids: tuple[str, ...] = (),
 ) -> str:
     """Create Template V2 once, only after an owner-scoped explicit confirm."""
     import_job = (
@@ -418,7 +429,27 @@ async def confirm_template_v2_pptx_import(
     if await session.get(TemplateV2, import_job.requested_template_id) is not None:
         return "template_conflict"
 
-    assembled = _assemble_confirmed_candidate(import_job)
+    try:
+        accepted_suggestions, repeat_decisions = (
+            resolve_repeat_suggestion_decisions(
+                import_job.repeat_suggestions or [],
+                accepted_repeat_suggestion_ids,
+            )
+        )
+        assembled = _assemble_confirmed_candidate(
+            import_job,
+            accepted_suggestions,
+        )
+    except ValueError as error:
+        if str(error) in {
+            "duplicate_repeat_suggestion_id",
+            "unknown_repeat_suggestion_id",
+            "invalid_repeat_suggestion",
+            "repeat_suggestion_source_missing",
+            "overlapping_repeat_suggestions",
+        }:
+            return "suggestion_conflict"
+        raise
     confirmed_at = _now()
     gate = await session.execute(
         update(TemplateV2PptxImport)
@@ -512,11 +543,19 @@ async def confirm_template_v2_pptx_import(
         **deepcopy(import_job.manifest or {}),
         "confirmation": {
             "confirmed_at": confirmed_at.isoformat(),
-            "repeat_suggestions_applied": False,
+            "repeat_suggestions_applied": bool(accepted_suggestions),
+            "accepted_repeat_suggestion_ids": [
+                suggestion["id"] for suggestion in accepted_suggestions
+            ],
+            "unapplied_repeat_suggestion_ids": [
+                suggestion["id"]
+                for suggestion in repeat_decisions
+                if suggestion["status"] == "unapplied"
+            ],
         },
         "review": {
             "required": False,
-            "reason": "owner_confirmed_unmerged_candidate",
+            "reason": "owner_confirmed_candidate",
         },
     }
     await session.execute(
@@ -532,6 +571,7 @@ async def confirm_template_v2_pptx_import(
             draft_template_id=template.id,
             confirmed_at=confirmed_at,
             manifest=manifest,
+            repeat_suggestions=repeat_decisions,
             updated_at=confirmed_at,
         )
         .execution_options(synchronize_session=False)
@@ -1072,6 +1112,16 @@ async def dispatch_template_v2_pptx_imports_once() -> int:
         _track_import_task(
             asyncio.create_task(run_template_v2_pptx_import(import_id, task_id))
         )
+    log_pptx_queue_observation(
+        operation="recover",
+        outcome="completed",
+        count=recovered,
+    )
+    log_pptx_queue_observation(
+        operation="dispatch",
+        outcome="completed",
+        count=len(queued),
+    )
     if recovered:
         logger.warning("Recovered %s stalled Template V2 PPTX imports", recovered)
     return len(queued)

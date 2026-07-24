@@ -9,16 +9,26 @@ class PptxCandidateModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class ChartSeriesCandidate(PptxCandidateModel):
+    name: str
+    values: list[float]
+
+
 class ShapeCandidate(PptxCandidateModel):
     source_id: str
     name: str
-    kind: Literal["text", "container", "unsupported"]
+    kind: Literal["text", "container", "table", "chart", "group", "unsupported"]
     x: float = 0
     y: float = 0
     width: float = 0
     height: float = 0
     rotation: float = 0
     text: str | None = None
+    table_rows: list[list[str]] | None = None
+    chart_type: str | None = None
+    chart_categories: list[str] | None = None
+    chart_series: list[ChartSeriesCandidate] | None = None
+    children: list["ShapeCandidate"] | None = None
     fill_color: str | None = None
     confidence: float = Field(ge=0, le=1)
     unsupported_reason: str | None = None
@@ -56,7 +66,48 @@ class RelationshipGraphEvidence(PptxCandidateModel):
     external_model_access: bool = False
 
 
+class ThemeEvidence(PptxCandidateModel):
+    part: str
+    name: str | None = None
+    major_font: str | None = None
+    minor_font: str | None = None
+    colors: dict[str, str] = Field(default_factory=dict)
+
+
+class MasterEvidence(PptxCandidateModel):
+    part: str
+    theme_part: str | None = None
+    placeholder_types: list[str] = Field(default_factory=list)
+
+
+class LayoutEvidence(PptxCandidateModel):
+    part: str
+    name: str | None = None
+    master_part: str | None = None
+    theme_part: str | None = None
+    placeholder_types: list[str] = Field(default_factory=list)
+
+
+class SlideStyleBinding(PptxCandidateModel):
+    slide_part: str
+    layout_part: str | None = None
+    master_part: str | None = None
+    theme_part: str | None = None
+
+
+class StyleGraphEvidence(PptxCandidateModel):
+    evidence_version: Literal[1] = 1
+    themes: list[ThemeEvidence] = Field(default_factory=list)
+    masters: list[MasterEvidence] = Field(default_factory=list)
+    layouts: list[LayoutEvidence] = Field(default_factory=list)
+    slide_bindings: list[SlideStyleBinding] = Field(default_factory=list)
+
+
 class PresentationCandidates(PptxCandidateModel):
     source_sha256: str
     slides: list[SlideCandidate] = Field(min_length=1)
     relationship_graph: RelationshipGraphEvidence | None = None
+    style_graph: StyleGraphEvidence | None = None
+
+
+ShapeCandidate.model_rebuild()
