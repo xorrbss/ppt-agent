@@ -54,7 +54,7 @@ export async function resolvePptxRenderTools() {
   const soffice =
     (await firstExecutable([
       configuredSoffice,
-      path.join(programFiles, "LibreOffice", "program", "soffice.exe"),
+      configuredSoffice ? undefined : path.join(programFiles, "LibreOffice", "program", "soffice.exe"),
     ])) ??
     (configuredSoffice ? undefined : await executableOnPath(process.platform === "win32" ? "soffice.exe" : "soffice"));
   const pdftocairo =

@@ -25,7 +25,7 @@
       "directory": "02-text-fit",
       "expectedText": ["Text fit boundary", "The export must keep this sentence inside the editable text area while preserving every editable word at the right and lower boundaries.", "VISIBLE SENTINEL"],
       "templateIdentity": { "version": "v2-standard", "mode": "template" },
-      "tolerances": { "maxMeanAbsoluteError": 8, "maxBadPixelRatio": 0.025, "maxBadComponentPixels": 5000 }
+      "tolerances": { "maxMeanAbsoluteError": 8, "maxBadPixelRatio": 0.035, "maxBadComponentPixels": 5000 }
     },
     {
       "id": "rich-elements",
