@@ -247,7 +247,7 @@ async function renderImageToBox(
   }
 
   const transparent = { r: 0, g: 0, b: 0, alpha: 0 };
-  let pipeline: sharp.Sharp;
+  let pipeline: ReturnType<typeof sharp>;
   if (element.image.objectFit === "fill") {
     pipeline = input.resize(width, height, { fit: "fill" });
   } else if (element.image.objectFit === "cover") {
