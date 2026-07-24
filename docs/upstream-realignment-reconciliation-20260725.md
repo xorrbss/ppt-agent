@@ -23,11 +23,14 @@ discriminator 문자열 grep이 아니라 **구현 본문·테스트·커밋 타
     속성 수준(특정 chart 타입, image clip path, stroke dash 등)이다.
   - 전용 테스트 "renderer covers every strict Template V2 element discriminator"가 11종을
     fixture로 행사한다(`template-v2-general-renderer.test.mjs`, 로컬 5/5 통과 확인).
-- **Studio(Konva) MVP 편집 캔버스**
-  (`app/template-v2-studio/[templateId]/TemplateV2Canvas.tsx`): `text/container/image/group`
-  **4종만** 인터랙티브 편집을 지원한다(293/336/358/362행). 나머지 7종은 점선 박스 +
-  `Unsupported: <타입>` 라벨의 **비인터랙티브 플레이스홀더**로 표시된다 — 조용한 누락이
-  아니고, 편집도 불가하다.
+- **Studio(Konva) 편집 캔버스**
+  (`app/template-v2-studio/[templateId]/TemplateV2CanvasElement.tsx`, 원래 문서 작성 시점에는
+  `TemplateV2Canvas.tsx`에 있었으나 Phase 2A에서 element 렌더링 모듈로 분리됨): 처음에는
+  `text/container/image/group` **4종만** 인터랙티브 편집을 지원했다. **Phase 2A 증분에서
+  `text-list/table/infographic` 3종을 추가**해 현재 **7종**이 선택·이동·크기조정 가능하다(내부
+  콘텐츠 편집은 아직 read-only; 인라인 편집은 이후 워크스트림). 남은 4종
+  (`vector/chart/flex/grid`)은 render-plan 좌표가 필요해 아직 `Unsupported` 플레이스홀더로
+  표시되며 다음 증분 대상이다. 즉 "4종"은 Phase 2A 이전의 스냅샷이다.
 
 **타임라인이 "시점 차이" 가설을 배제한다.** 렌더러 파일은 최초 커밋 `50300fed`
 (2026-07-24 21:00)부터 11종으로 태어났고 이후 수정 이력이 없다. "11종"과 "4/11"을 각각

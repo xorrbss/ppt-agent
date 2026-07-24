@@ -77,7 +77,11 @@ export function elementCapabilities(element: JsonRecord): ElementCapabilities {
   if (element.type === "group") {
     return { move: true, resize: false, rotate: false };
   }
-  if (["text", "container", "image"].includes(String(element.type))) {
+  if (
+    ["text", "container", "image", "text-list", "table", "infographic"].includes(
+      String(element.type)
+    )
+  ) {
     return { move: true, resize: true, rotate: true };
   }
   return { move: false, resize: false, rotate: false };
@@ -264,4 +268,163 @@ export function layoutTemplateV2TextRuns(
   });
   if (x > Math.max(0, availableWidth)) return fallback("overflow");
   return { mode: "runs", runs: positioned };
+}
+
+export type TemplateV2ListMarker = "disc" | "number" | "none";
+
+export interface TemplateV2ListItem {
+  index: number;
+  markerLabel: string;
+  text: string;
+  style: TemplateV2TextRunStyle;
+}
+
+export interface TemplateV2ListLayout {
+  marker: TemplateV2ListMarker;
+  lineHeightPx: number;
+  items: TemplateV2ListItem[];
+}
+
+// Read-only preview layout for a `text-list` element. Each item's runs are
+// concatenated into one line (per-run styling inside a list item is deferred to
+// the inline text editor) and styled from the first run merged over the element
+// font, matching the export renderer's marker semantics.
+export function layoutTemplateV2List(element: JsonRecord): TemplateV2ListLayout {
+  const marker: TemplateV2ListMarker =
+    element.marker === "number"
+      ? "number"
+      : element.marker === "none"
+        ? "none"
+        : "disc";
+  const rawItems = Array.isArray(element.items) ? element.items : [];
+  const items = rawItems.map((runs, index): TemplateV2ListItem => {
+    const runList = Array.isArray(runs) ? runs.filter(isJsonRecord) : [];
+    const text = runList.map((run) => stringValue(run.text, "")).join("");
+    const markerLabel =
+      marker === "number" ? `${index + 1}.` : marker === "disc" ? "•" : "";
+    return { index, markerLabel, text, style: textFont(element, runList[0]) };
+  });
+  const baseStyle = textFont(element);
+  return {
+    marker,
+    lineHeightPx: baseStyle.fontSize * baseStyle.lineHeight,
+    items,
+  };
+}
+
+export interface TemplateV2TableCell {
+  key: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  background: string | null;
+  text: string;
+  align: "left" | "center" | "right";
+  header: boolean;
+  style: TemplateV2TextRunStyle;
+}
+
+export interface TemplateV2TableLayout {
+  cells: TemplateV2TableCell[];
+}
+
+function tableCellText(cell: JsonRecord): string {
+  return Array.isArray(cell.runs)
+    ? cell.runs
+        .filter(isJsonRecord)
+        .map((run) => stringValue(run.text, ""))
+        .join("")
+    : "";
+}
+
+function tableCellAlign(cell: JsonRecord): "left" | "center" | "right" {
+  return cell.alignment === "center" || cell.alignment === "right"
+    ? cell.alignment
+    : "left";
+}
+
+// Read-only preview layout for a `table` element. Columns share the element
+// width evenly (matching the export renderer's fixed table layout) and the
+// header plus body rows share the element height evenly.
+export function layoutTemplateV2Table(
+  element: JsonRecord,
+  width: number,
+  height: number
+): TemplateV2TableLayout {
+  const columns = Array.isArray(element.columns)
+    ? element.columns.filter(isJsonRecord)
+    : [];
+  const rows = Array.isArray(element.rows) ? element.rows : [];
+  const columnCount = Math.max(
+    columns.length,
+    ...rows.map((row) => (Array.isArray(row) ? row.length : 0)),
+    1
+  );
+  const rowCount = (columns.length > 0 ? 1 : 0) + rows.length;
+  const columnWidth = width / columnCount;
+  const rowHeight = rowCount > 0 ? height / rowCount : height;
+  const cells: TemplateV2TableCell[] = [];
+  const pushCell = (
+    cell: JsonRecord,
+    column: number,
+    row: number,
+    header: boolean,
+    key: string
+  ) => {
+    const color = isJsonRecord(cell.color)
+      ? stringValue(cell.color.color, "")
+      : stringValue(cell.color, "");
+    cells.push({
+      key,
+      x: column * columnWidth,
+      y: row * rowHeight,
+      width: columnWidth,
+      height: rowHeight,
+      background: color || null,
+      text: tableCellText(cell),
+      align: tableCellAlign(cell),
+      header,
+      style: textFont(element, cell),
+    });
+  };
+  columns.forEach((cell, column) =>
+    pushCell(cell, column, 0, true, `head-${column}`)
+  );
+  const bodyOffset = columns.length > 0 ? 1 : 0;
+  rows.forEach((row, rowIndex) => {
+    if (!Array.isArray(row)) return;
+    row.filter(isJsonRecord).forEach((cell, column) =>
+      pushCell(cell, column, rowIndex + bodyOffset, false, `${rowIndex}-${column}`)
+    );
+  });
+  return { cells };
+}
+
+export interface TemplateV2InfographicView {
+  type: "progress_bar" | "gauge";
+  ratio: number;
+  label: string;
+  colors: [string, string];
+}
+
+// Read-only preview data for an `infographic` element. Ratio is derived from the
+// raw data the same way the export render plan derives it; colors fall back to
+// the renderer's defaults when the element does not pin them.
+export function templateV2InfographicView(
+  element: JsonRecord
+): TemplateV2InfographicView | null {
+  const data = isJsonRecord(element.data) ? element.data : null;
+  const type = data ? String(data.type) : "";
+  if (type !== "progress_bar" && type !== "gauge") return null;
+  const value = numberValue(data?.value, 0);
+  const min = numberValue(data?.min_value, 0);
+  const max = numberValue(data?.max_value, 100);
+  const ratio = max === min ? 0 : Math.min(1, Math.max(0, (value - min) / (max - min)));
+  const palette = isJsonRecord(data?.colors) ? data?.colors : {};
+  const colors: [string, string] = [
+    stringValue(palette.fill, "#2563eb"),
+    stringValue(palette.track, "#e5e7eb"),
+  ];
+  return { type, ratio, label: `${Math.round(ratio * 100)}%`, colors };
 }
