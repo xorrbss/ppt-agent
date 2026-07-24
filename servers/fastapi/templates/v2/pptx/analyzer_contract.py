@@ -32,10 +32,15 @@ class AnalyzerContractModel(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
 
+class ValidatedChartSeriesCandidate(AnalyzerContractModel):
+    name: StrictStr
+    values: list[FiniteFloat]
+
+
 class ValidatedShapeCandidate(AnalyzerContractModel):
     source_id: NonEmptyString
     name: NonEmptyString
-    kind: Literal["text", "container", "table", "unsupported"]
+    kind: Literal["text", "container", "table", "chart", "unsupported"]
     x: NonNegativeFinite = 0
     y: NonNegativeFinite = 0
     width: NonNegativeFinite = 0
@@ -43,6 +48,9 @@ class ValidatedShapeCandidate(AnalyzerContractModel):
     rotation: FiniteFloat = 0
     text: StrictStr | None = None
     table_rows: list[list[StrictStr]] | None = None
+    chart_type: StrictStr | None = None
+    chart_categories: list[StrictStr] | None = None
+    chart_series: list[ValidatedChartSeriesCandidate] | None = None
     fill_color: StrictStr | None = None
     confidence: Confidence
     unsupported_reason: StrictStr | None = None
@@ -61,6 +69,25 @@ class ValidatedShapeCandidate(AnalyzerContractModel):
                 raise ValueError("table_candidate_rows_must_be_rectangular")
         elif self.table_rows is not None:
             raise ValueError("non_table_candidate_cannot_contain_table_rows")
+        if self.kind == "chart":
+            if not self.chart_type or self.chart_categories is None:
+                raise ValueError("chart_candidate_requires_type_and_categories")
+            if self.chart_series is None:
+                raise ValueError("chart_candidate_requires_series")
+            if any(
+                len(series.values) != len(self.chart_categories)
+                for series in self.chart_series
+            ):
+                raise ValueError("chart_candidate_series_length_mismatch")
+        elif any(
+            value is not None
+            for value in (
+                self.chart_type,
+                self.chart_categories,
+                self.chart_series,
+            )
+        ):
+            raise ValueError("non_chart_candidate_cannot_contain_chart_data")
         if self.kind == "unsupported" and not self.unsupported_reason:
             raise ValueError("unsupported_candidate_requires_reason")
         if self.kind != "unsupported" and self.unsupported_reason is not None:

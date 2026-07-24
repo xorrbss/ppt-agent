@@ -9,10 +9,15 @@ class PptxCandidateModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class ChartSeriesCandidate(PptxCandidateModel):
+    name: str
+    values: list[float]
+
+
 class ShapeCandidate(PptxCandidateModel):
     source_id: str
     name: str
-    kind: Literal["text", "container", "table", "unsupported"]
+    kind: Literal["text", "container", "table", "chart", "unsupported"]
     x: float = 0
     y: float = 0
     width: float = 0
@@ -20,6 +25,9 @@ class ShapeCandidate(PptxCandidateModel):
     rotation: float = 0
     text: str | None = None
     table_rows: list[list[str]] | None = None
+    chart_type: str | None = None
+    chart_categories: list[str] | None = None
+    chart_series: list[ChartSeriesCandidate] | None = None
     fill_color: str | None = None
     confidence: float = Field(ge=0, le=1)
     unsupported_reason: str | None = None

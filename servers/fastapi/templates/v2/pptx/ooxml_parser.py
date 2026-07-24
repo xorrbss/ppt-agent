@@ -3,6 +3,7 @@ from __future__ import annotations
 import posixpath
 from pathlib import PurePosixPath
 
+from .chart_parser import parse_cached_chart
 from .models import PresentationCandidates, ShapeCandidate, SlideCandidate
 from .package_reader import PptxPackageReader, UnsafePptxPackage
 from .relationship_graph import build_relationship_graph_evidence
@@ -14,6 +15,7 @@ NS = {
     "p": "http://schemas.openxmlformats.org/presentationml/2006/main",
     "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
     "pr": "http://schemas.openxmlformats.org/package/2006/relationships",
+    "c": "http://schemas.openxmlformats.org/drawingml/2006/chart",
 }
 REL_NS = f"{{{NS['r']}}}"
 SLIDE_REL_TYPE = (
@@ -160,12 +162,37 @@ def _parse_graphic_frame(
     index: int,
     slide_cx: float,
     slide_cy: float,
+    reader: PptxPackageReader,
+    relationships: dict[str, tuple[str, str]],
 ) -> ShapeCandidate:
     source_id, name = _shape_identity(shape, index)
     transform = _shape_transform(shape, slide_cx, slide_cy)
     transform.pop("_canvas_height", None)
     table = shape.find("./a:graphic/a:graphicData/a:tbl", NS)
     if table is None:
+        chart_ref = shape.find("./a:graphic/a:graphicData/c:chart", NS)
+        relationship_id = (
+            chart_ref.get(f"{REL_NS}id") if chart_ref is not None else None
+        )
+        relationship = relationships.get(relationship_id or "")
+        parsed = (
+            parse_cached_chart(reader.read_xml(relationship[1]))
+            if relationship is not None
+            and relationship[0].endswith("/chart")
+            else None
+        )
+        if parsed is not None and transform["width"] >= 80 and transform["height"] >= 60:
+            chart_type, categories, series = parsed
+            return ShapeCandidate(
+                source_id=source_id,
+                name=name,
+                kind="chart",
+                chart_type=chart_type,
+                chart_categories=categories,
+                chart_series=series,
+                confidence=0.86,
+                **transform,
+            )
         return ShapeCandidate(
             source_id=source_id,
             name=name,
@@ -246,8 +273,13 @@ def parse_presentation_candidates(
             f"{posixpath.basename(slide_part)}.rels"
         )
         slide_external: list[str] = []
+        slide_relationships: dict[str, tuple[str, str]] = {}
         if rels_part in reader.member_names:
-            _, slide_external = _relationships(reader, rels_part, slide_part)
+            slide_relationships, slide_external = _relationships(
+                reader,
+                rels_part,
+                slide_part,
+            )
         shapes: list[ShapeCandidate] = []
         shape_tree = slide.find("./p:cSld/p:spTree", NS)
         if shape_tree is not None:
@@ -257,7 +289,14 @@ def parse_presentation_candidates(
                     shapes.append(_parse_shape(child, index, slide_cx, slide_cy))
                 elif tag == "graphicFrame":
                     shapes.append(
-                        _parse_graphic_frame(child, index, slide_cx, slide_cy)
+                        _parse_graphic_frame(
+                            child,
+                            index,
+                            slide_cx,
+                            slide_cy,
+                            reader,
+                            slide_relationships,
+                        )
                     )
                 elif tag not in {"nvGrpSpPr", "grpSpPr"}:
                     shapes.append(

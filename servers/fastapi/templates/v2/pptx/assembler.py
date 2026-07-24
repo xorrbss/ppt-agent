@@ -6,6 +6,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from templates.v2.models.elements import (
+    Chart,
+    ChartSeries,
+    ChartType,
     Container,
     Fill,
     Group,
@@ -99,6 +102,21 @@ def _element(
             max_columns=column_count,
             min_rows=max(0, len(cells) - 1),
             max_rows=max(0, len(cells) - 1),
+        )
+    if candidate.kind == "chart":
+        return Chart(
+            type="chart",
+            position=position,
+            size=size,
+            rotation=candidate.rotation,
+            chart_type=ChartType(candidate.chart_type),
+            categories=candidate.chart_categories,
+            series=[
+                ChartSeries(name=series.name, values=series.values)
+                for series in candidate.chart_series or []
+            ],
+            decorative=False,
+            name=_slot_name(candidate),
         )
     raise ValueError("unsupported_candidate_cannot_be_assembled")
 
@@ -244,6 +262,17 @@ def assemble_template_v2_draft(
                     _slot_name(shape): {
                         "columns": (shape.table_rows or [[]])[0],
                         "rows": (shape.table_rows or [])[1:],
+                    }
+                }
+            elif shape.kind == "chart":
+                content[component_id] = {
+                    _slot_name(shape): {
+                        "chart_type": shape.chart_type,
+                        "categories": shape.chart_categories,
+                        "series": [
+                            series.model_dump(mode="json")
+                            for series in shape.chart_series or []
+                        ],
                     }
                 }
         layouts.append(
