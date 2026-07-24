@@ -12,13 +12,14 @@ class PptxCandidateModel(BaseModel):
 class ShapeCandidate(PptxCandidateModel):
     source_id: str
     name: str
-    kind: Literal["text", "container", "unsupported"]
+    kind: Literal["text", "container", "table", "unsupported"]
     x: float = 0
     y: float = 0
     width: float = 0
     height: float = 0
     rotation: float = 0
     text: str | None = None
+    table_rows: list[list[str]] | None = None
     fill_color: str | None = None
     confidence: float = Field(ge=0, le=1)
     unsupported_reason: str | None = None

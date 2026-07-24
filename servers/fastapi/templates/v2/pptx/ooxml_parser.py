@@ -66,6 +66,8 @@ def _number(value: str | None) -> float:
 def _shape_transform(shape, slide_cx: float, slide_cy: float) -> dict[str, float]:
     xfrm = shape.find("./p:spPr/a:xfrm", NS)
     if xfrm is None:
+        xfrm = shape.find("./p:xfrm", NS)
+    if xfrm is None:
         return {"x": 0, "y": 0, "width": 0, "height": 0, "rotation": 0}
     off = xfrm.find("a:off", NS)
     ext = xfrm.find("a:ext", NS)
@@ -83,6 +85,8 @@ def _shape_transform(shape, slide_cx: float, slide_cy: float) -> dict[str, float
 
 def _shape_identity(shape, index: int) -> tuple[str, str]:
     props = shape.find("./p:nvSpPr/p:cNvPr", NS)
+    if props is None:
+        props = shape.find("./p:nvGraphicFramePr/p:cNvPr", NS)
     if props is None:
         return str(index), f"shape_{index}"
     return props.get("id") or str(index), props.get("name") or f"shape_{index}"
@@ -151,6 +155,57 @@ def _parse_shape(shape, index: int, slide_cx: float, slide_cy: float) -> ShapeCa
     )
 
 
+def _parse_graphic_frame(
+    shape,
+    index: int,
+    slide_cx: float,
+    slide_cy: float,
+) -> ShapeCandidate:
+    source_id, name = _shape_identity(shape, index)
+    transform = _shape_transform(shape, slide_cx, slide_cy)
+    transform.pop("_canvas_height", None)
+    table = shape.find("./a:graphic/a:graphicData/a:tbl", NS)
+    if table is None:
+        return ShapeCandidate(
+            source_id=source_id,
+            name=name,
+            kind="unsupported",
+            confidence=0,
+            unsupported_reason="unsupported_ooxml:graphicFrame",
+            **transform,
+        )
+    rows = [
+        [_text(cell) for cell in row.findall("./a:tc", NS)]
+        for row in table.findall("./a:tr", NS)
+    ]
+    has_merges = any(
+        table.find(f".//a:{tag}", NS) is not None
+        for tag in ("gridSpan", "vMerge", "hMerge")
+    )
+    if (
+        not rows
+        or not rows[0]
+        or any(len(row) != len(rows[0]) for row in rows)
+        or has_merges
+    ):
+        return ShapeCandidate(
+            source_id=source_id,
+            name=name,
+            kind="unsupported",
+            confidence=0,
+            unsupported_reason="unsupported_table_structure",
+            **transform,
+        )
+    return ShapeCandidate(
+        source_id=source_id,
+        name=name,
+        kind="table",
+        table_rows=rows,
+        confidence=0.9,
+        **transform,
+    )
+
+
 def parse_presentation_candidates(
     reader: PptxPackageReader,
     *,
@@ -200,6 +255,10 @@ def parse_presentation_candidates(
                 tag = child.tag.rsplit("}", 1)[-1]
                 if tag == "sp":
                     shapes.append(_parse_shape(child, index, slide_cx, slide_cy))
+                elif tag == "graphicFrame":
+                    shapes.append(
+                        _parse_graphic_frame(child, index, slide_cx, slide_cy)
+                    )
                 elif tag not in {"nvGrpSpPr", "grpSpPr"}:
                     shapes.append(
                         _unsupported_shape(child, index, f"unsupported_ooxml:{tag}")

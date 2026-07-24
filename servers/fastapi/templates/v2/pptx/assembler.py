@@ -11,6 +11,8 @@ from templates.v2.models.elements import (
     Group,
     Position,
     Size,
+    Table,
+    TableCell,
     Text,
     TextRun,
 )
@@ -76,6 +78,27 @@ def _element(
             size=size,
             rotation=candidate.rotation,
             fill=Fill(color=candidate.fill_color or "#FFFFFF"),
+        )
+    if candidate.kind == "table":
+        rows = candidate.table_rows or []
+        cells = [
+            [TableCell(runs=[TextRun(text=value)]) for value in row]
+            for row in rows
+        ]
+        column_count = len(cells[0])
+        return Table(
+            type="table",
+            position=position,
+            size=size,
+            rotation=candidate.rotation,
+            columns=cells[0],
+            rows=cells[1:],
+            decorative=False,
+            name=_slot_name(candidate),
+            min_columns=column_count,
+            max_columns=column_count,
+            min_rows=max(0, len(cells) - 1),
+            max_rows=max(0, len(cells) - 1),
         )
     raise ValueError("unsupported_candidate_cannot_be_assembled")
 
@@ -216,6 +239,13 @@ def assemble_template_v2_draft(
             )
             if shape.kind == "text":
                 content[component_id] = {_slot_name(shape): shape.text or ""}
+            elif shape.kind == "table":
+                content[component_id] = {
+                    _slot_name(shape): {
+                        "columns": (shape.table_rows or [[]])[0],
+                        "rows": (shape.table_rows or [])[1:],
+                    }
+                }
         layouts.append(
             SlideLayout(
                 id=layout_id,

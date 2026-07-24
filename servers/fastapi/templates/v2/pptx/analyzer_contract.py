@@ -35,13 +35,14 @@ class AnalyzerContractModel(BaseModel):
 class ValidatedShapeCandidate(AnalyzerContractModel):
     source_id: NonEmptyString
     name: NonEmptyString
-    kind: Literal["text", "container", "unsupported"]
+    kind: Literal["text", "container", "table", "unsupported"]
     x: NonNegativeFinite = 0
     y: NonNegativeFinite = 0
     width: NonNegativeFinite = 0
     height: NonNegativeFinite = 0
     rotation: FiniteFloat = 0
     text: StrictStr | None = None
+    table_rows: list[list[StrictStr]] | None = None
     fill_color: StrictStr | None = None
     confidence: Confidence
     unsupported_reason: StrictStr | None = None
@@ -52,6 +53,14 @@ class ValidatedShapeCandidate(AnalyzerContractModel):
             raise ValueError("text_candidate_requires_text")
         if self.kind != "text" and self.text is not None:
             raise ValueError("non_text_candidate_cannot_contain_text")
+        if self.kind == "table":
+            if not self.table_rows or not self.table_rows[0]:
+                raise ValueError("table_candidate_requires_cells")
+            column_count = len(self.table_rows[0])
+            if any(len(row) != column_count for row in self.table_rows):
+                raise ValueError("table_candidate_rows_must_be_rectangular")
+        elif self.table_rows is not None:
+            raise ValueError("non_table_candidate_cannot_contain_table_rows")
         if self.kind == "unsupported" and not self.unsupported_reason:
             raise ValueError("unsupported_candidate_requires_reason")
         if self.kind != "unsupported" and self.unsupported_reason is not None:
