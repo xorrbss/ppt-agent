@@ -436,16 +436,15 @@ export function updateTemplateV2Element(
 }
 
 function withGeometry(element: JsonRecord, geometry: ElementGeometry): JsonRecord {
-  if (
-    element.type === "vector" &&
-    geometry.translateX !== undefined &&
-    geometry.translateY !== undefined
-  ) {
-    return translateTemplateV2Vector(
-      element,
-      geometry.translateX,
-      geometry.translateY
-    );
+  if (element.type === "vector") {
+    return geometry.translateX !== undefined &&
+      geometry.translateY !== undefined
+      ? translateTemplateV2Vector(
+          element,
+          geometry.translateX,
+          geometry.translateY
+        )
+      : element;
   }
   const currentPosition = isJsonRecord(element.position)
     ? element.position

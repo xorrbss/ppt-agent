@@ -470,7 +470,8 @@ function applyGeometryBatch(
       (geometry.translateX !== undefined &&
         !Number.isFinite(geometry.translateX)) ||
       (geometry.translateY !== undefined &&
-        !Number.isFinite(geometry.translateY))
+        !Number.isFinite(geometry.translateY)) ||
+      (element.type === "vector" && geometry.translateX === undefined)
     ) {
       return unchanged(layouts, selectionSet, lockedElementKeys);
     }

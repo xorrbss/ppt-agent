@@ -73,10 +73,7 @@ export default function TemplateV2GeometryInspector({
     });
     onChange(geometry);
   };
-  const handleKeyDown = (
-    event: KeyboardEvent<HTMLInputElement>,
-    field: TemplateV2GeometryField
-  ) => {
+  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
       event.preventDefault();
       event.currentTarget.blur();
@@ -106,7 +103,7 @@ export default function TemplateV2GeometryInspector({
                 }))
               }
               onBlur={() => commit(field)}
-              onKeyDown={(event) => handleKeyDown(event, field)}
+              onKeyDown={handleKeyDown}
               className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-violet-400 disabled:cursor-not-allowed disabled:opacity-50"
             />
           </label>

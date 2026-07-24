@@ -5,6 +5,7 @@ import {
   elementSize,
   normalizeElementGeometry,
 } from "./template-v2-konva.ts";
+import { planStudioElement } from "./template-v2-studio-plan.ts";
 import type { ElementGeometry, JsonRecord } from "./template-v2-studio.ts";
 
 export type TemplateV2GeometryField =
@@ -17,6 +18,10 @@ export type TemplateV2GeometryField =
 export function currentTemplateV2Geometry(
   element: JsonRecord
 ): ElementGeometry {
+  if (element.type === "vector") {
+    const frame = planStudioElement(element)?.frame;
+    if (frame) return { x: frame.x, y: frame.y };
+  }
   const position = elementPosition(element);
   const size = elementSize(element);
   return normalizeElementGeometry(element, {
@@ -43,11 +48,18 @@ export function updateTemplateV2GeometryField(
   if (!Number.isFinite(value)) return null;
 
   const geometry = currentTemplateV2Geometry(element);
-  return normalizeElementGeometry(element, {
+  const normalized = normalizeElementGeometry(element, {
     x: field === "x" ? value : geometry.x,
     y: field === "y" ? value : geometry.y,
     width: field === "width" ? value : geometry.width,
     height: field === "height" ? value : geometry.height,
     rotation: field === "rotation" ? value : geometry.rotation,
   });
+  if (element.type !== "vector") return normalized;
+  if (!planStudioElement(element)?.vector) return null;
+  return {
+    ...normalized,
+    translateX: normalized.x - geometry.x,
+    translateY: normalized.y - geometry.y,
+  };
 }
