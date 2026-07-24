@@ -209,8 +209,41 @@ class CandidateAnalysisSummary(AnalyzerContractModel):
     shape_count: Annotated[StrictInt, Field(ge=0)]
     supported_shape_count: Annotated[StrictInt, Field(ge=0)]
     unsupported_shape_count: Annotated[StrictInt, Field(ge=0)]
-    visual_fidelity_status: Literal["not_evaluated", "evaluated"]
+    visual_fidelity_status: Literal["not_evaluated", "passed", "failed"]
     review_required: StrictBool
+
+
+class VisualFidelityMetrics(AnalyzerContractModel):
+    mean_absolute_error: NonNegativeFinite
+    bad_pixel_ratio: Annotated[FiniteFloat, Field(ge=0, le=1)]
+    largest_bad_component: Annotated[StrictInt, Field(ge=0)]
+
+
+class VisualFidelityThresholds(AnalyzerContractModel):
+    mean_absolute_error: NonNegativeFinite
+    bad_pixel_ratio: Annotated[FiniteFloat, Field(ge=0, le=1)]
+    largest_bad_component: Annotated[StrictInt, Field(ge=0)]
+
+
+class VisualFidelityEvaluation(AnalyzerContractModel):
+    method: Literal["pixel-diff-v1"]
+    status: Literal["passed", "failed"]
+    metrics: VisualFidelityMetrics
+    thresholds: VisualFidelityThresholds
+
+    @model_validator(mode="after")
+    def validate_status_matches_thresholds(self) -> VisualFidelityEvaluation:
+        passed = (
+            self.metrics.mean_absolute_error
+            <= self.thresholds.mean_absolute_error
+            and self.metrics.bad_pixel_ratio
+            <= self.thresholds.bad_pixel_ratio
+            and self.metrics.largest_bad_component
+            <= self.thresholds.largest_bad_component
+        )
+        if self.status != ("passed" if passed else "failed"):
+            raise ValueError("visual_fidelity_status_mismatch")
+        return self
 
 
 class CandidateAnalysis(AnalyzerContractModel):
@@ -223,6 +256,7 @@ class CandidateAnalysis(AnalyzerContractModel):
     candidate: ArtifactMetadata
     canvas: CanvasMetadata
     candidates: ValidatedPresentationCandidates
+    visual_fidelity: VisualFidelityEvaluation | None = None
     summary: CandidateAnalysisSummary
 
     @model_validator(mode="after")
@@ -246,6 +280,16 @@ class CandidateAnalysis(AnalyzerContractModel):
             raise ValueError("completed_analysis_requires_available_candidates")
         if self.candidate.sha256 != candidate_payload_sha256(self.candidates):
             raise ValueError("candidate_digest_mismatch")
+        if self.visual_fidelity is None:
+            if self.summary.visual_fidelity_status != "not_evaluated":
+                raise ValueError("missing_visual_fidelity_evaluation")
+        else:
+            if self.preview.status != "available" or self.render.status != "available":
+                raise ValueError(
+                    "visual_fidelity_requires_preview_and_render_artifacts"
+                )
+            if self.summary.visual_fidelity_status != self.visual_fidelity.status:
+                raise ValueError("summary_visual_fidelity_status_mismatch")
 
         expected_canvas = [
             CanvasSlideMetadata(

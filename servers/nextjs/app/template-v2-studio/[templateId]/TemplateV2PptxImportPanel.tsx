@@ -26,6 +26,20 @@ interface ImportRecord {
     };
     preview?: { status?: string; reason?: string };
     render?: { status?: string; reason?: string };
+    visual_fidelity?: {
+      method?: string;
+      status?: string;
+      metrics?: {
+        mean_absolute_error?: number;
+        bad_pixel_ratio?: number;
+        largest_bad_component?: number;
+      };
+      thresholds?: {
+        mean_absolute_error?: number;
+        bad_pixel_ratio?: number;
+        largest_bad_component?: number;
+      };
+    } | null;
     summary?: {
       slide_count?: number;
       shape_count?: number;
@@ -316,6 +330,27 @@ export default function TemplateV2PptxImportPanel({
                       <dd>
                         {summary?.visual_fidelity_status ?? "not_evaluated"}
                       </dd>
+                      {analysis.visual_fidelity ? (
+                        <>
+                          <dt className="text-slate-400">Pixel diff</dt>
+                          <dd>
+                            MAE{" "}
+                            {analysis.visual_fidelity.metrics
+                              ?.mean_absolute_error ?? "unknown"}
+                            {" / "}bad pixels{" "}
+                            {typeof analysis.visual_fidelity.metrics
+                              ?.bad_pixel_ratio === "number"
+                              ? `${(
+                                  analysis.visual_fidelity.metrics
+                                    .bad_pixel_ratio * 100
+                                ).toFixed(2)}%`
+                              : "unknown"}
+                            {" / "}largest region{" "}
+                            {analysis.visual_fidelity.metrics
+                              ?.largest_bad_component ?? "unknown"}
+                          </dd>
+                        </>
+                      ) : null}
                     </dl>
                     <TemplateV2ImportReview analysis={analysis} />
                   </>
