@@ -127,10 +127,50 @@ class ValidatedRelationshipGraphEvidence(AnalyzerContractModel):
     external_model_access: StrictBool = False
 
 
+class ValidatedThemeEvidence(AnalyzerContractModel):
+    part: NonEmptyString
+    name: StrictStr | None = None
+    major_font: StrictStr | None = None
+    minor_font: StrictStr | None = None
+    colors: dict[NonEmptyString, NonEmptyString] = Field(default_factory=dict)
+
+
+class ValidatedMasterEvidence(AnalyzerContractModel):
+    part: NonEmptyString
+    theme_part: StrictStr | None = None
+    placeholder_types: list[NonEmptyString] = Field(default_factory=list)
+
+
+class ValidatedLayoutEvidence(AnalyzerContractModel):
+    part: NonEmptyString
+    name: StrictStr | None = None
+    master_part: StrictStr | None = None
+    theme_part: StrictStr | None = None
+    placeholder_types: list[NonEmptyString] = Field(default_factory=list)
+
+
+class ValidatedSlideStyleBinding(AnalyzerContractModel):
+    slide_part: NonEmptyString
+    layout_part: StrictStr | None = None
+    master_part: StrictStr | None = None
+    theme_part: StrictStr | None = None
+
+
+class ValidatedStyleGraphEvidence(AnalyzerContractModel):
+    evidence_version: Literal[1] = 1
+    themes: list[ValidatedThemeEvidence] = Field(default_factory=list)
+    masters: list[ValidatedMasterEvidence] = Field(default_factory=list)
+    layouts: list[ValidatedLayoutEvidence] = Field(default_factory=list)
+    slide_bindings: list[ValidatedSlideStyleBinding] = Field(
+        default_factory=list
+    )
+
+
 class ValidatedPresentationCandidates(AnalyzerContractModel):
     source_sha256: Sha256Digest
     slides: list[ValidatedSlideCandidate] = Field(min_length=1)
     relationship_graph: ValidatedRelationshipGraphEvidence | None = None
+    style_graph: ValidatedStyleGraphEvidence | None = None
 
     @model_validator(mode="after")
     def validate_slide_identity(self) -> ValidatedPresentationCandidates:

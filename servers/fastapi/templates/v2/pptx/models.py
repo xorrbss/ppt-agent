@@ -56,7 +56,45 @@ class RelationshipGraphEvidence(PptxCandidateModel):
     external_model_access: bool = False
 
 
+class ThemeEvidence(PptxCandidateModel):
+    part: str
+    name: str | None = None
+    major_font: str | None = None
+    minor_font: str | None = None
+    colors: dict[str, str] = Field(default_factory=dict)
+
+
+class MasterEvidence(PptxCandidateModel):
+    part: str
+    theme_part: str | None = None
+    placeholder_types: list[str] = Field(default_factory=list)
+
+
+class LayoutEvidence(PptxCandidateModel):
+    part: str
+    name: str | None = None
+    master_part: str | None = None
+    theme_part: str | None = None
+    placeholder_types: list[str] = Field(default_factory=list)
+
+
+class SlideStyleBinding(PptxCandidateModel):
+    slide_part: str
+    layout_part: str | None = None
+    master_part: str | None = None
+    theme_part: str | None = None
+
+
+class StyleGraphEvidence(PptxCandidateModel):
+    evidence_version: Literal[1] = 1
+    themes: list[ThemeEvidence] = Field(default_factory=list)
+    masters: list[MasterEvidence] = Field(default_factory=list)
+    layouts: list[LayoutEvidence] = Field(default_factory=list)
+    slide_bindings: list[SlideStyleBinding] = Field(default_factory=list)
+
+
 class PresentationCandidates(PptxCandidateModel):
     source_sha256: str
     slides: list[SlideCandidate] = Field(min_length=1)
     relationship_graph: RelationshipGraphEvidence | None = None
+    style_graph: StyleGraphEvidence | None = None

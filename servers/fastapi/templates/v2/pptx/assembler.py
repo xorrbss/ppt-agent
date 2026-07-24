@@ -24,6 +24,7 @@ from templates.v2.models.layouts import (
 
 from .models import PresentationCandidates, ShapeCandidate
 from .relationship_graph import relationship_graph_manifest_summary
+from .style_graph import style_graph_manifest_summary
 
 
 @dataclass(frozen=True)
@@ -288,6 +289,10 @@ def assemble_template_v2_draft(
     if candidates.relationship_graph is not None:
         manifest["structure_evidence"] = relationship_graph_manifest_summary(
             candidates.relationship_graph
+        )
+    if candidates.style_graph is not None:
+        manifest["style_evidence"] = style_graph_manifest_summary(
+            candidates.style_graph
         )
     return AssembledTemplateV2Draft(
         raw_layouts=strict_raw,

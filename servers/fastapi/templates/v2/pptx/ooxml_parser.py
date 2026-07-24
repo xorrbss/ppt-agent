@@ -6,6 +6,7 @@ from pathlib import PurePosixPath
 from .models import PresentationCandidates, ShapeCandidate, SlideCandidate
 from .package_reader import PptxPackageReader, UnsafePptxPackage
 from .relationship_graph import build_relationship_graph_evidence
+from .style_graph import build_style_graph_evidence
 
 
 NS = {
@@ -157,6 +158,9 @@ def parse_presentation_candidates(
 ) -> PresentationCandidates:
     reader.preflight()
     relationship_graph = build_relationship_graph_evidence(reader)
+    style_graph = build_style_graph_evidence(reader, relationship_graph)
+    if not (style_graph.themes or style_graph.masters or style_graph.layouts):
+        style_graph = None
     presentation = reader.read_xml("ppt/presentation.xml")
     rels, presentation_external = _relationships(
         reader,
@@ -218,4 +222,5 @@ def parse_presentation_candidates(
         source_sha256=source_sha256,
         slides=slides,
         relationship_graph=relationship_graph,
+        style_graph=style_graph,
     )
