@@ -97,6 +97,30 @@ test("API v1 removal escalates while an addition remains review-only", () => {
   assert.equal(removal.risk, "contract-risk");
 });
 
+test("a watched-path file with no diff fails closed instead of downgrading to info", () => {
+  const result = classifyFiles(
+    [
+      {
+        filename: "servers/fastapi/models/sql/template_v2_element.py",
+        status: "modified",
+        additions: 0,
+        deletions: 0,
+      },
+    ],
+    policy,
+    registry
+  );
+  assert.equal(result.risk, "review");
+  const ids = result.findings[0].categories.map((category) => category.id);
+  assert.ok(ids.includes("template-v2-schema"));
+  assert.ok(!ids.includes("unclassified-upstream-change"));
+  assert.ok(
+    result.findings[0].categories.some((category) =>
+      category.label.includes("unverified")
+    )
+  );
+});
+
 test("protected path intersection is contract-risk", () => {
   const result = classifyFiles(
     [
