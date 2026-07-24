@@ -6,21 +6,41 @@
 
 ## 1. "11종 렌더러" vs "4종 편집" — 모순이 아니라 두 렌더 경로
 
-두 개의 서로 다른 렌더 경로가 있으며, 각 문서는 그중 하나를 가리킨다.
+두 개의 서로 다른 렌더 경로가 있으며, 각 문서는 그중 하나를 가리킨다. 아래 근거는
+discriminator 문자열 grep이 아니라 **구현 본문·테스트·커밋 타임라인**으로 검증했다
+(2026-07-25 재검증).
 
 - **General 렌더러** (`servers/nextjs/lib/template-v2-general-renderer.mjs`): 생성된 Template
-  V2 덱을 렌더/`presentation-export`로 내보내는 경로. **11종 discriminator를 모두 처리**한다.
-  검증: `grep -oE 'element\.type === "[^"]+"' servers/nextjs/lib/template-v2-general-renderer.mjs`
-  → text, container, image, text-list, table, vector, chart, infographic, flex, grid, group.
-  이는 `compatibility/upstream-compatibility.json`의 `templateV2Renderer.discriminators`와
-  일치하며 verifier가 매 실행마다 강제한다.
-- **Studio(Konva) MVP 편집/내보내기 경로**: `text/container/image/group` **4종만** 편집·왕복
-  지원하고 나머지 7종(`text-list/table/vector/chart/infographic/flex/grid`)은 조용히 누락하지
-  않고 fail-closed 한다. 근거: `docs/template-v2-followup-completion-20260724.md` 290행.
+  V2 덱을 렌더/`presentation-export`로 내보내는 경로. **11종 모두 실제 구현이다.**
+  - 511–521행의 11개 분기가 각각 실질 구현 함수로 위임한다: renderText(114행),
+    renderContainer(141), renderImage(177), renderTextList(217), renderTable(252),
+    renderVector(267), renderPlannedChart(298–462), renderInfographic(463), renderFlex(482),
+    renderGrid(491), renderGroup(502).
+  - 코드 내 `throw`는 전부 입력 데이터 검증이며 타입 차단이 아니다.
+    `template_v2_renderer_unsupported_element`(522행)는 11종 밖의 미지 타입에만 발동한다.
+  - 상위 plan 레이어의 허용 목록(`template-v2-render-plan.mjs:3-15`,
+    `TEMPLATE_V2_PLAN_ELEMENT_TYPES`)도 동일한 11종이고, 그 레이어의 "unsupported"는 하위
+    속성 수준(특정 chart 타입, image clip path, stroke dash 등)이다.
+  - 전용 테스트 "renderer covers every strict Template V2 element discriminator"가 11종을
+    fixture로 행사한다(`template-v2-general-renderer.test.mjs`, 로컬 5/5 통과 확인).
+- **Studio(Konva) MVP 편집 캔버스**
+  (`app/template-v2-studio/[templateId]/TemplateV2Canvas.tsx`): `text/container/image/group`
+  **4종만** 인터랙티브 편집을 지원한다(293/336/358/362행). 나머지 7종은 점선 박스 +
+  `Unsupported: <타입>` 라벨의 **비인터랙티브 플레이스홀더**로 표시된다 — 조용한 누락이
+  아니고, 편집도 불가하다.
 
-따라서 `template-v2-recommended-sequence-completion-20260724.md`의 "11종 처리"는 General 렌더러
-경로를, `template-v2-followup-completion-20260724.md`의 "4/11"은 Studio 편집 경로를 말한다.
-두 진술은 서로 다른 레이어를 서술한 것이며 모두 참이다.
+**타임라인이 "시점 차이" 가설을 배제한다.** 렌더러 파일은 최초 커밋 `50300fed`
+(2026-07-24 21:00)부터 11종으로 태어났고 이후 수정 이력이 없다. "11종"과 "4/11"을 각각
+주장한 두 문서는 그 3분 뒤 `7c89416d`(21:03)로 **함께** 커밋됐다. 즉 "렌더러가 4종이었다가
+나중에 확장됐다"는 해석은 성립하지 않으며, 두 문서는 같은 트리 상태의 서로 다른 레이어를
+서술한 것이다.
+
+**단, 원 문서 표현 하나는 부정확하다.** `template-v2-followup-completion-20260724.md` 290행의
+"실제 **Studio/export renderer**는 4종만 지원" 중 "export renderer" 부분은 사실과 다르다 —
+그 시점에 export 렌더러(General)는 이미 11종 구현+테스트 완료 상태였다. 그 문장에서 살릴 수
+있는 취지는 (a) Studio 편집이 4종이라는 것, (b) E2E golden test로 **실증된** export 범위가
+당시 제목/본문/도형/텍스트 수준으로 좁았다는 것이며, "광범위 활성화 전 타입별 golden test
+필요"라는 권고 자체는 여전히 유효하다.
 
 ## 2. 마이그레이션 계보 — rebase가 아니라 단일 additive 체인
 
