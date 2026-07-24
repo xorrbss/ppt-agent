@@ -2,6 +2,8 @@ import type {
   ElementPath,
   JsonRecord,
   StudioSelection,
+  TemplateV2AlignDirection,
+  TemplateV2DistributeDirection,
   TemplateV2GeometryUpdate,
   TemplateV2ReorderDirection,
   TemplateV2StudioCommand,
@@ -306,16 +308,45 @@ function round(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+function positionRecord(element: JsonRecord): JsonRecord {
+  return isRecord(element.position) ? element.position : {};
+}
+
+function sizeRecord(element: JsonRecord): JsonRecord {
+  return isRecord(element.size) ? element.size : {};
+}
+
+function translateElement(
+  element: JsonRecord,
+  deltaX: number,
+  deltaY: number
+): JsonRecord {
+  if (Math.abs(deltaX) < 0.000001 && Math.abs(deltaY) < 0.000001) {
+    return element;
+  }
+  const position = positionRecord(element);
+  return {
+    ...element,
+    position: {
+      ...position,
+      x: round(numberField(position, "x") + deltaX),
+      y: round(numberField(position, "y") + deltaY),
+    },
+  };
+}
+
 function moveElementToLocalCoordinates(
   element: JsonRecord,
   x: number,
   y: number
 ): JsonRecord {
+  const position = positionRecord(element);
   return {
     ...element,
     position: {
-      x: round(numberField(element.position, "x") - x),
-      y: round(numberField(element.position, "y") - y),
+      ...position,
+      x: round(numberField(position, "x") - x),
+      y: round(numberField(position, "y") - y),
     },
   };
 }
@@ -325,11 +356,13 @@ function moveElementToParentCoordinates(
   x: number,
   y: number
 ): JsonRecord {
+  const position = positionRecord(element);
   return {
     ...element,
     position: {
-      x: round(numberField(element.position, "x") + x),
-      y: round(numberField(element.position, "y") + y),
+      ...position,
+      x: round(numberField(position, "x") + x),
+      y: round(numberField(position, "y") + y),
     },
   };
 }
@@ -415,26 +448,207 @@ function applyGeometryBatch(
     ])
   );
   const siblings = context.siblings.slice();
+  let changed = false;
   for (const selection of selections) {
     const index = selection.elementPath.at(-1) as number;
     const element = siblings[index] as JsonRecord;
     const geometry = geometryByKey.get(templateV2SelectionKey(selection));
-    if (!geometry) return unchanged(layouts, selectionSet, lockedElementKeys);
-    const next: JsonRecord = {
-      ...element,
-      position: { x: geometry.x, y: geometry.y },
-    };
-    if (geometry.width !== undefined && geometry.height !== undefined) {
-      next.size = { width: geometry.width, height: geometry.height };
+    if (
+      !geometry ||
+      !Number.isFinite(geometry.x) ||
+      !Number.isFinite(geometry.y) ||
+      (geometry.width === undefined) !== (geometry.height === undefined) ||
+      (geometry.width !== undefined &&
+        (!Number.isFinite(geometry.width) || geometry.width < 0)) ||
+      (geometry.height !== undefined &&
+        (!Number.isFinite(geometry.height) || geometry.height < 0)) ||
+      (geometry.rotation !== undefined &&
+        !Number.isFinite(geometry.rotation))
+    ) {
+      return unchanged(layouts, selectionSet, lockedElementKeys);
     }
-    if (geometry.rotation !== undefined && element.type !== "group") {
-      next.rotation = geometry.rotation;
+    const position = positionRecord(element);
+    let next: JsonRecord =
+      position.x === geometry.x && position.y === geometry.y
+        ? element
+        : {
+            ...element,
+            position: {
+              ...position,
+              x: geometry.x,
+              y: geometry.y,
+            },
+          };
+    if (geometry.width !== undefined && geometry.height !== undefined) {
+      const size = sizeRecord(element);
+      if (
+        size.width !== geometry.width ||
+        size.height !== geometry.height
+      ) {
+        next = {
+          ...next,
+          size: {
+            ...size,
+            width: geometry.width,
+            height: geometry.height,
+          },
+        };
+      }
+    }
+    if (
+      geometry.rotation !== undefined &&
+      element.type !== "group" &&
+      element.rotation !== geometry.rotation
+    ) {
+      next = { ...next, rotation: geometry.rotation };
     }
     siblings[index] = next;
+    changed ||= next !== element;
   }
+  if (!changed) return unchanged(layouts, selectionSet, lockedElementKeys);
   return {
     layouts: replaceSiblings(layouts, context, siblings),
     selectionSet: selections,
+    lockedElementKeys,
+  };
+}
+
+function applyAlign(
+  layouts: JsonRecord,
+  selectionSet: StudioSelection[],
+  lockedElementKeys: ReadonlySet<string>,
+  direction: TemplateV2AlignDirection,
+  requestedSelections?: StudioSelection[]
+): TemplateV2CommandResult {
+  const context = siblingContext(
+    layouts,
+    requestedSelections ?? selectionSet
+  );
+  if (
+    !context ||
+    context.indices.length < 2 ||
+    containsLockedPath(lockedElementKeys, context.selections, true)
+  ) {
+    return unchanged(layouts, selectionSet, lockedElementKeys);
+  }
+  const entries = context.indices.map((index) => {
+    const element = context.siblings[index] as JsonRecord;
+    return { index, element, bounds: elementBounds(element) };
+  });
+  const left = Math.min(...entries.map((entry) => entry.bounds.left));
+  const top = Math.min(...entries.map((entry) => entry.bounds.top));
+  const right = Math.max(...entries.map((entry) => entry.bounds.right));
+  const bottom = Math.max(...entries.map((entry) => entry.bounds.bottom));
+  const siblings = context.siblings.slice();
+  let changed = false;
+  for (const entry of entries) {
+    let deltaX = 0;
+    let deltaY = 0;
+    switch (direction) {
+      case "left":
+        deltaX = left - entry.bounds.left;
+        break;
+      case "center":
+        deltaX =
+          (left + right) / 2 -
+          (entry.bounds.left + entry.bounds.right) / 2;
+        break;
+      case "right":
+        deltaX = right - entry.bounds.right;
+        break;
+      case "top":
+        deltaY = top - entry.bounds.top;
+        break;
+      case "middle":
+        deltaY =
+          (top + bottom) / 2 -
+          (entry.bounds.top + entry.bounds.bottom) / 2;
+        break;
+      case "bottom":
+        deltaY = bottom - entry.bounds.bottom;
+        break;
+    }
+    const next = translateElement(entry.element, deltaX, deltaY);
+    siblings[entry.index] = next;
+    changed ||= next !== entry.element;
+  }
+  if (!changed) return unchanged(layouts, selectionSet, lockedElementKeys);
+  return {
+    layouts: replaceSiblings(layouts, context, siblings),
+    selectionSet: context.selections,
+    lockedElementKeys,
+  };
+}
+
+function applyDistribute(
+  layouts: JsonRecord,
+  selectionSet: StudioSelection[],
+  lockedElementKeys: ReadonlySet<string>,
+  direction: TemplateV2DistributeDirection,
+  requestedSelections?: StudioSelection[]
+): TemplateV2CommandResult {
+  const context = siblingContext(
+    layouts,
+    requestedSelections ?? selectionSet
+  );
+  if (
+    !context ||
+    context.indices.length < 3 ||
+    containsLockedPath(lockedElementKeys, context.selections, true)
+  ) {
+    return unchanged(layouts, selectionSet, lockedElementKeys);
+  }
+  const horizontal = direction === "horizontal";
+  const entries = context.indices
+    .map((index) => {
+      const element = context.siblings[index] as JsonRecord;
+      return { index, element, bounds: elementBounds(element) };
+    })
+    .sort((left, right) => {
+      const leftStart = horizontal ? left.bounds.left : left.bounds.top;
+      const rightStart = horizontal ? right.bounds.left : right.bounds.top;
+      return leftStart - rightStart || left.index - right.index;
+    });
+  const start = horizontal ? entries[0].bounds.left : entries[0].bounds.top;
+  const end = Math.max(
+    ...entries.map((entry) =>
+      horizontal ? entry.bounds.right : entry.bounds.bottom
+    )
+  );
+  const occupied = entries.reduce(
+    (total, entry) =>
+      total +
+      (horizontal
+        ? entry.bounds.right - entry.bounds.left
+        : entry.bounds.bottom - entry.bounds.top),
+    0
+  );
+  const gap = (end - start - occupied) / (entries.length - 1);
+  const siblings = context.siblings.slice();
+  let cursor = start;
+  let changed = false;
+  entries.forEach((entry) => {
+    const currentStart = horizontal ? entry.bounds.left : entry.bounds.top;
+    const targetStart = cursor;
+    const delta = targetStart - currentStart;
+    const next = translateElement(
+      entry.element,
+      horizontal ? delta : 0,
+      horizontal ? 0 : delta
+    );
+    siblings[entry.index] = next;
+    changed ||= next !== entry.element;
+    cursor =
+      targetStart +
+      (horizontal
+        ? entry.bounds.right - entry.bounds.left
+        : entry.bounds.bottom - entry.bounds.top) +
+      gap;
+  });
+  if (!changed) return unchanged(layouts, selectionSet, lockedElementKeys);
+  return {
+    layouts: replaceSiblings(layouts, context, siblings),
+    selectionSet: context.selections,
     lockedElementKeys,
   };
 }
@@ -638,11 +852,15 @@ function applyUngroup(
     }
     const x = numberField(group.position, "x");
     const y = numberField(group.position, "y");
+    const children = Array.isArray(group.children) ? group.children : [];
+    if (children.some((child) => !isRecord(child))) {
+      return unchanged(layouts, selectionSet, lockedElementKeys);
+    }
     groups.set(
       index,
-      (Array.isArray(group.children) ? group.children : [])
-        .filter(isRecord)
-        .map((child) => moveElementToParentCoordinates(child, x, y))
+      children.map((child) =>
+        moveElementToParentCoordinates(child as JsonRecord, x, y)
+      )
     );
   }
   const siblings: unknown[] = [];
@@ -730,6 +948,22 @@ export function applyTemplateV2StudioCommand(
         layouts,
         selectionSet,
         lockedElementKeys,
+        command.selections
+      );
+    case "align-siblings":
+      return applyAlign(
+        layouts,
+        selectionSet,
+        lockedElementKeys,
+        command.direction,
+        command.selections
+      );
+    case "distribute-siblings":
+      return applyDistribute(
+        layouts,
+        selectionSet,
+        lockedElementKeys,
+        command.direction,
         command.selections
       );
   }

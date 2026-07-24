@@ -64,6 +64,16 @@ export type TemplateV2ReorderDirection =
   | "forward"
   | "backward";
 
+export type TemplateV2AlignDirection =
+  | "left"
+  | "center"
+  | "right"
+  | "top"
+  | "middle"
+  | "bottom";
+
+export type TemplateV2DistributeDirection = "horizontal" | "vertical";
+
 export type TemplateV2StudioCommand =
   | {
       type: "update-geometry-batch";
@@ -81,6 +91,16 @@ export type TemplateV2StudioCommand =
     }
   | {
       type: "ungroup";
+      selections?: StudioSelection[];
+    }
+  | {
+      type: "align-siblings";
+      direction: TemplateV2AlignDirection;
+      selections?: StudioSelection[];
+    }
+  | {
+      type: "distribute-siblings";
+      direction: TemplateV2DistributeDirection;
       selections?: StudioSelection[];
     };
 
@@ -159,6 +179,14 @@ export interface TemplateV2StudioCommandFacade {
     direction: TemplateV2ReorderDirection,
     selections?: StudioSelection[]
   ): void;
+  alignSiblings(
+    direction: TemplateV2AlignDirection,
+    selections?: StudioSelection[]
+  ): void;
+  distributeSiblings(
+    direction: TemplateV2DistributeDirection,
+    selections?: StudioSelection[]
+  ): void;
   groupSiblings(selections?: StudioSelection[], name?: string): void;
   ungroup(selections?: StudioSelection[]): void;
   undo(): void;
@@ -179,6 +207,10 @@ export function createTemplateV2StudioCommandFacade(
       execute({ type: "update-geometry-batch", updates }),
     reorderSiblings: (direction, selections) =>
       execute({ type: "reorder-siblings", direction, selections }),
+    alignSiblings: (direction, selections) =>
+      execute({ type: "align-siblings", direction, selections }),
+    distributeSiblings: (direction, selections) =>
+      execute({ type: "distribute-siblings", direction, selections }),
     groupSiblings: (selections, name) =>
       execute({ type: "group-siblings", selections, name }),
     ungroup: (selections) => execute({ type: "ungroup", selections }),
@@ -390,15 +422,42 @@ export function updateTemplateV2Element(
 }
 
 function withGeometry(element: JsonRecord, geometry: ElementGeometry): JsonRecord {
-  const next: JsonRecord = {
-    ...element,
-    position: { x: geometry.x, y: geometry.y },
-  };
+  const currentPosition = isJsonRecord(element.position)
+    ? element.position
+    : {};
+  let next: JsonRecord =
+    currentPosition.x !== geometry.x || currentPosition.y !== geometry.y
+    ? {
+        ...element,
+        position: {
+          ...currentPosition,
+          x: geometry.x,
+          y: geometry.y,
+        },
+      }
+    : element;
   if (geometry.width !== undefined && geometry.height !== undefined) {
-    next.size = { width: geometry.width, height: geometry.height };
+    const currentSize = isJsonRecord(element.size) ? element.size : {};
+    if (
+      currentSize.width !== geometry.width ||
+      currentSize.height !== geometry.height
+    ) {
+      next = {
+        ...next,
+        size: {
+          ...currentSize,
+          width: geometry.width,
+          height: geometry.height,
+        },
+      };
+    }
   }
-  if (geometry.rotation !== undefined && element.type !== "group") {
-    next.rotation = geometry.rotation;
+  if (
+    geometry.rotation !== undefined &&
+    element.type !== "group" &&
+    element.rotation !== geometry.rotation
+  ) {
+    next = { ...next, rotation: geometry.rotation };
   }
   return next;
 }
@@ -603,6 +662,8 @@ export function templateV2StudioReducer(
     case "reorder-siblings":
     case "group-siblings":
     case "ungroup":
+    case "align-siblings":
+    case "distribute-siblings":
       return commitCommand(state, action);
     case "move-component":
       if (!state.layouts) return state;
@@ -612,10 +673,18 @@ export function templateV2StudioReducer(
           state.layouts,
           action.layoutId,
           action.componentId,
-          (component) => ({
-            ...component,
-            position: { x: action.x, y: action.y },
-          })
+          (component) => {
+            const position = isJsonRecord(component.position)
+              ? component.position
+              : {};
+            if (position.x === action.x && position.y === action.y) {
+              return component;
+            }
+            return {
+              ...component,
+              position: { ...position, x: action.x, y: action.y },
+            };
+          }
         )
       );
     case "update-element-geometry":
@@ -653,6 +722,7 @@ export function templateV2StudioReducer(
           }
           const run = element.runs[action.runIndex];
           if (!isJsonRecord(run)) return element;
+          if (run.text === action.text) return element;
           const runs = element.runs.slice();
           runs[action.runIndex] = { ...run, text: action.text };
           return { ...element, runs };

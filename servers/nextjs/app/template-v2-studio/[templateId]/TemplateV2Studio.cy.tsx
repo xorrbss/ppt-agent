@@ -75,6 +75,13 @@ function response(payloadLayouts = layouts(), revision = 1) {
   };
 }
 
+function settleSuccessfulPersistence() {
+  cy.contains("button", /^(Save now|Saving…)$/).then(($button) => {
+    if (!$button.is(":disabled")) cy.wrap($button).click();
+  });
+  cy.contains("Unsaved changes").should("not.exist");
+}
+
 describe("TemplateV2Studio API integration", () => {
   it("edits a nested upstream envelope and saves its original shape and unknown fields", () => {
     const nestedLayouts = {
@@ -179,14 +186,9 @@ describe("TemplateV2Studio API integration", () => {
       .should("have.text", "2");
 
     cy.contains("button", "Add rectangle").click();
-    // A double-click happens before React has to render the disabled state.
-    // The component's synchronous in-flight guard must still emit one PATCH.
+    // Re-scheduling the same immutable snapshot while it is in flight must not
+    // duplicate the PATCH.
     cy.contains("button", "Save").dblclick();
-    cy.window().then((window) => {
-      window.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "z", ctrlKey: true })
-      );
-    });
     cy.get("dt")
       .contains(/^Elements$/)
       .next("dd")
@@ -268,6 +270,19 @@ describe("TemplateV2Studio API integration", () => {
       `**/api/v1/ppt/structured-templates/${templateId}`,
       { statusCode: 200, body: response() }
     ).as("loadTemplate");
+    cy.intercept(
+      "PATCH",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      (request) => {
+        request.reply({
+          statusCode: 200,
+          body: response(
+            request.body.layouts,
+            request.body.expected_revision + 1
+          ),
+        });
+      }
+    );
 
     cy.mount(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadTemplate");
@@ -298,6 +313,7 @@ describe("TemplateV2Studio API integration", () => {
       .click({ waitForAnimations: false });
     cy.contains("2 selected").should("be.visible");
     cy.contains("button", /^Group$/).should("be.enabled");
+    settleSuccessfulPersistence();
   });
 
   it("disables direct manipulation controls across ancestor and subtree locks", () => {
@@ -306,6 +322,19 @@ describe("TemplateV2Studio API integration", () => {
       `**/api/v1/ppt/structured-templates/${templateId}`,
       { statusCode: 200, body: response() }
     ).as("loadTemplate");
+    cy.intercept(
+      "PATCH",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      (request) => {
+        request.reply({
+          statusCode: 200,
+          body: response(
+            request.body.layouts,
+            request.body.expected_revision + 1
+          ),
+        });
+      }
+    );
 
     cy.mount(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadTemplate");
@@ -332,5 +361,179 @@ describe("TemplateV2Studio API integration", () => {
     cy.contains("button", /^group/).click();
     cy.contains("button", "Bring to front").should("be.disabled");
     cy.contains("button", /^Ungroup$/).should("be.disabled");
+    settleSuccessfulPersistence();
+  });
+
+  it("keeps native text undo isolated while supporting global undo and redo variants", () => {
+    cy.intercept(
+      "GET",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      { statusCode: 200, body: response() }
+    ).as("loadTemplate");
+    cy.intercept(
+      "PATCH",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      (request) => {
+        request.reply({
+          statusCode: 200,
+          body: response(
+            request.body.layouts,
+            request.body.expected_revision + 1
+          ),
+        });
+      }
+    );
+
+    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    cy.wait("@loadTemplate");
+    cy.contains("button", "Add rectangle").click();
+    cy.get("dt").contains(/^Elements$/).next("dd").should("have.text", "3");
+
+    cy.window().then((window) => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "z", ctrlKey: true })
+      );
+    });
+    cy.get("dt").contains(/^Elements$/).next("dd").should("have.text", "2");
+
+    cy.window().then((window) => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "y", ctrlKey: true })
+      );
+    });
+    cy.get("dt").contains(/^Elements$/).next("dd").should("have.text", "3");
+
+    cy.contains("button[aria-pressed]", /^title/).click();
+    cy.get("textarea").first().trigger("keydown", {
+      key: "z",
+      ctrlKey: true,
+      waitForAnimations: false,
+    });
+    cy.get("dt").contains(/^Elements$/).next("dd").should("have.text", "3");
+    settleSuccessfulPersistence();
+  });
+
+  it("aligns and distributes sibling selections without losing upstream fields", () => {
+    cy.intercept(
+      "GET",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      { statusCode: 200, body: response() }
+    ).as("loadTemplate");
+    cy.intercept(
+      "PATCH",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      (request) => {
+        request.reply({
+          statusCode: 200,
+          body: response(
+            request.body.layouts,
+            request.body.expected_revision + 1
+          ),
+        });
+      }
+    ).as("saveAlignedTemplate");
+
+    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    cy.wait("@loadTemplate");
+    cy.contains("button", "Add rectangle").click();
+    cy.contains("button[aria-pressed]", /^title/).click();
+    cy.contains("button[aria-pressed]", /^hero/).click({ ctrlKey: true });
+    cy.contains("button[aria-pressed]", /^container/).click({ ctrlKey: true });
+
+    cy.contains("button", "Align top").click({ waitForAnimations: false });
+    cy.contains("button", "Distribute horizontally").click({
+      waitForAnimations: false,
+    });
+    cy.wait(0);
+    cy.contains("button", "Save").click();
+
+    cy.wait("@saveAlignedTemplate")
+      .its("request.body.layouts.layouts.0.components.0.elements")
+      .then((elements) => {
+        expect(elements).to.have.length(3);
+        expect(elements.map((element: { position: { y: number } }) =>
+          element.position.y
+        )).to.deep.equal([1, 1, 1]);
+        expect(elements[2].position.x).to.equal(290.5);
+        expect(elements[1]).to.include({
+          decorative: false,
+          is_icon: false,
+          name: "hero",
+        });
+        expect(elements[1].data).to.equal("/app_data/images/hero.png");
+      });
+  });
+
+  it("queues edits made during an autosave and advances the revision once per snapshot", () => {
+    const savedElementCounts: number[] = [];
+    const expectedRevisions: number[] = [];
+    cy.intercept(
+      "GET",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      { statusCode: 200, body: response() }
+    ).as("loadTemplate");
+    cy.intercept(
+      "PATCH",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      (request) => {
+        expectedRevisions.push(request.body.expected_revision);
+        savedElementCounts.push(
+          request.body.layouts.layouts[0].components[0].elements.length
+        );
+        request.reply({
+          statusCode: 200,
+          delay: 600,
+          body: response(
+            request.body.layouts,
+            request.body.expected_revision + 1
+          ),
+        });
+      }
+    ).as("queuedAutosave");
+
+    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    cy.wait("@loadTemplate");
+    cy.contains("button", "Add rectangle").click();
+    cy.wait(850);
+    cy.contains("button", "Add rectangle").should("be.enabled").click();
+
+    cy.wait("@queuedAutosave");
+    cy.wait("@queuedAutosave");
+    cy.then(() => {
+      expect(expectedRevisions).to.deep.equal([1, 2]);
+      expect(savedElementCounts).to.deep.equal([3, 4]);
+    });
+    cy.contains("Saved automatically").should("be.visible");
+  });
+
+  it("flushes a debounced snapshot on pagehide", () => {
+    cy.intercept(
+      "GET",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      { statusCode: 200, body: response() }
+    ).as("loadTemplate");
+    cy.intercept(
+      "PATCH",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      (request) => {
+        request.reply({
+          statusCode: 200,
+          body: response(
+            request.body.layouts,
+            request.body.expected_revision + 1
+          ),
+        });
+      }
+    ).as("pagehideSave");
+
+    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    cy.wait("@loadTemplate");
+    cy.contains("button", "Add rectangle").click();
+    cy.window().then((window) => {
+      window.dispatchEvent(new Event("pagehide"));
+    });
+    cy.wait("@pagehideSave")
+      .its("request.body.layouts.layouts.0.components.0.elements")
+      .should("have.length", 3);
   });
 });

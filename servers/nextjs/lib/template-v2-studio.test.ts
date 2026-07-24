@@ -420,6 +420,84 @@ test("geometry batch is atomic, lock-aware, and records one history snapshot", (
   );
 });
 
+test("geometry and text no-ops preserve identity, history, and unknown geometry fields", () => {
+  const value = fixture();
+  const component = (
+    ((value.layouts as JsonRecord[])[0].components as JsonRecord[])
+  )[0];
+  const title = (component.elements as JsonRecord[])[0];
+  title.position = { x: 5, y: 6, coordinate_space: "slide" };
+  title.size = { width: 400, height: 80, unit: "px" };
+  const loaded = templateV2StudioReducer(EMPTY_TEMPLATE_V2_STUDIO_STATE, {
+    type: "load",
+    layouts: value,
+  });
+  const batchNoOp = templateV2StudioReducer(loaded, {
+    type: "update-geometry-batch",
+    updates: [
+      {
+        selection: titleSelection,
+        geometry: { x: 5, y: 6, width: 400, height: 80 },
+      },
+    ],
+  });
+  const legacyNoOp = templateV2StudioReducer(batchNoOp, {
+    type: "update-element-geometry",
+    selection: titleSelection,
+    geometry: { x: 5, y: 6, width: 400, height: 80 },
+  });
+  const textNoOp = templateV2StudioReducer(legacyNoOp, {
+    type: "edit-text-run",
+    selection: titleSelection,
+    runIndex: 0,
+    text: "Old",
+  });
+  const componentNoOp = templateV2StudioReducer(textNoOp, {
+    type: "move-component",
+    layoutId: "layout-1",
+    componentId: "component-1",
+    x: 10,
+    y: 20,
+  });
+  const updated = templateV2StudioReducer(componentNoOp, {
+    type: "update-geometry-batch",
+    updates: [
+      {
+        selection: titleSelection,
+        geometry: { x: 15, y: 16, width: 410, height: 90 },
+      },
+    ],
+  });
+  const updatedTitle = getSelectedElement(updated.layouts, titleSelection);
+
+  assert.equal(batchNoOp, loaded);
+  assert.equal(legacyNoOp, loaded);
+  assert.equal(textNoOp, loaded);
+  assert.equal(componentNoOp, loaded);
+  assert.equal(updated.past.length, 1);
+  assert.deepEqual(updatedTitle?.position, {
+    x: 15,
+    y: 16,
+    coordinate_space: "slide",
+  });
+  assert.deepEqual(updatedTitle?.size, {
+    width: 410,
+    height: 90,
+    unit: "px",
+  });
+
+  const invalidPartialSize = templateV2StudioReducer(updated, {
+    type: "update-geometry-batch",
+    updates: [
+      {
+        selection: titleSelection,
+        geometry: { x: 99, y: 99, width: 100 },
+      },
+    ],
+  });
+  assert.equal(invalidPartialSize, updated);
+});
+
 function nestedOperationsFixture(): JsonRecord {
   const value = fixture();
   const component = (
@@ -537,6 +615,22 @@ test("an ancestor lock rejects child selection and every subtree command", () =>
     }),
     locked
   );
+  assert.equal(
+    templateV2StudioReducer(locked, {
+      type: "align-siblings",
+      direction: "left",
+      selections: [firstChild, lastChild],
+    }),
+    locked
+  );
+  assert.equal(
+    templateV2StudioReducer(locked, {
+      type: "distribute-siblings",
+      direction: "horizontal",
+      selections: [firstChild, innerGroup, lastChild],
+    }),
+    locked
+  );
 });
 
 test("a descendant lock rejects operations that move or reshape its subtree", () => {
@@ -591,6 +685,14 @@ test("a descendant lock rejects operations that move or reshape its subtree", ()
     }),
     locked
   );
+  assert.equal(
+    templateV2StudioReducer(locked, {
+      type: "align-siblings",
+      direction: "left",
+      selections: [titleSelection, parent],
+    }),
+    locked
+  );
 });
 
 function orderingFixture(): JsonRecord {
@@ -606,6 +708,52 @@ function orderingFixture(): JsonRecord {
     child: null,
   }));
   return value;
+}
+
+function alignmentFixture(): JsonRecord {
+  const value = fixture();
+  const component = (
+    ((value.layouts as JsonRecord[])[0].components as JsonRecord[])
+  )[0];
+  component.elements = [
+    {
+      type: "container",
+      name: "A",
+      position: { x: 0, y: 10, coordinate_space: "slide" },
+      size: { width: 20, height: 10, unit: "px" },
+      child: null,
+      custom: { retained: true },
+    },
+    {
+      type: "container",
+      name: "B",
+      position: { x: 40, y: 40 },
+      size: { width: 10, height: 30 },
+      child: null,
+    },
+    {
+      type: "container",
+      name: "C",
+      position: { x: 100, y: 80 },
+      size: { width: 30, height: 20 },
+      child: null,
+    },
+  ];
+  return value;
+}
+
+function selectAllAlignmentElements(layouts: JsonRecord) {
+  const loaded = templateV2StudioReducer(EMPTY_TEMPLATE_V2_STUDIO_STATE, {
+    type: "load",
+    layouts,
+  });
+  return templateV2StudioReducer(loaded, {
+    type: "set-selection",
+    selections: [0, 1, 2].map((index) => ({
+      ...titleSelection,
+      elementPath: [index],
+    })),
+  });
 }
 
 function elementNames(state: typeof EMPTY_TEMPLATE_V2_STUDIO_STATE): string[] {
@@ -661,6 +809,149 @@ test("sibling reorder commands preserve relative order and remap selection and l
   });
   assert.deepEqual(elementNames(forward), ["A", "C", "B", "D"]);
   assert.deepEqual(elementNames(backward), ["B", "A", "C", "D"]);
+});
+
+test("alignment commands cover six axes atomically and preserve schema metadata", () => {
+  const cases = [
+    ["left", [[0, 10], [0, 40], [0, 80]]],
+    ["center", [[55, 10], [60, 40], [50, 80]]],
+    ["right", [[110, 10], [120, 40], [100, 80]]],
+    ["top", [[0, 10], [40, 10], [100, 10]]],
+    ["middle", [[0, 50], [40, 40], [100, 45]]],
+    ["bottom", [[0, 90], [40, 70], [100, 80]]],
+  ] as const;
+
+  for (const [direction, expected] of cases) {
+    const selected = selectAllAlignmentElements(alignmentFixture());
+    const aligned = templateV2StudioReducer(selected, {
+      type: "align-siblings",
+      direction,
+    });
+    const elements =
+      getTemplateV2Scene(
+        aligned.layouts,
+        "layout-1",
+        "component-1"
+      )?.elements ?? [];
+    assert.deepEqual(
+      elements.map((element) => {
+        const position = element.position as JsonRecord;
+        return [position.x, position.y];
+      }),
+      expected,
+      direction
+    );
+    assert.equal(aligned.past.length, 1);
+    assert.deepEqual(elements[0].custom, { retained: true });
+    assert.equal((elements[0].position as JsonRecord).coordinate_space, "slide");
+    assert.equal((elements[0].size as JsonRecord).unit, "px");
+    assert.deepEqual(
+      templateV2StudioReducer(aligned, { type: "undo" }).layouts,
+      selected.layouts
+    );
+  }
+});
+
+test("horizontal and vertical distribution keep outer bounds and use even gaps", () => {
+  const horizontalValue = alignmentFixture();
+  const horizontalComponent = (
+    ((horizontalValue.layouts as JsonRecord[])[0].components as JsonRecord[])
+  )[0];
+  const horizontalElements = horizontalComponent.elements as JsonRecord[];
+  horizontalElements[1] = {
+    ...horizontalElements[1],
+    position: { x: 20, y: 40 },
+  };
+  horizontalElements[2] = {
+    ...horizontalElements[2],
+    position: { x: 50, y: 80 },
+    size: { width: 10, height: 20 },
+  };
+  const horizontalSelected = selectAllAlignmentElements(horizontalValue);
+  const horizontal = templateV2StudioReducer(horizontalSelected, {
+    type: "distribute-siblings",
+    direction: "horizontal",
+  });
+  assert.deepEqual(
+    getTemplateV2Scene(
+      horizontal.layouts,
+      "layout-1",
+      "component-1"
+    )?.elements.map((element) => (element.position as JsonRecord).x),
+    [0, 30, 50]
+  );
+  assert.equal(horizontal.past.length, 1);
+
+  const verticalValue = alignmentFixture();
+  const verticalComponent = (
+    ((verticalValue.layouts as JsonRecord[])[0].components as JsonRecord[])
+  )[0];
+  const verticalElements = verticalComponent.elements as JsonRecord[];
+  verticalElements[0] = {
+    ...verticalElements[0],
+    position: { x: 0, y: 0 },
+    size: { width: 20, height: 10 },
+  };
+  verticalElements[1] = {
+    ...verticalElements[1],
+    position: { x: 40, y: 20 },
+    size: { width: 10, height: 20 },
+  };
+  verticalElements[2] = {
+    ...verticalElements[2],
+    position: { x: 100, y: 70 },
+    size: { width: 30, height: 10 },
+  };
+  const verticalSelected = selectAllAlignmentElements(verticalValue);
+  const vertical = templateV2StudioReducer(verticalSelected, {
+    type: "distribute-siblings",
+    direction: "vertical",
+  });
+  assert.deepEqual(
+    getTemplateV2Scene(
+      vertical.layouts,
+      "layout-1",
+      "component-1"
+    )?.elements.map((element) => (element.position as JsonRecord).y),
+    [0, 30, 70]
+  );
+  assert.equal(vertical.past.length, 1);
+});
+
+test("alignment and distribution no-ops do not dirty or pollute history", () => {
+  const value = alignmentFixture();
+  const component = (
+    ((value.layouts as JsonRecord[])[0].components as JsonRecord[])
+  )[0];
+  const elements = component.elements as JsonRecord[];
+  elements.forEach((element, index) => {
+    element.position = { x: index * 30, y: 10 };
+    element.size = { width: 10, height: 10 };
+  });
+  const selected = selectAllAlignmentElements(value);
+  const aligned = templateV2StudioReducer(selected, {
+    type: "align-siblings",
+    direction: "top",
+  });
+  const distributed = templateV2StudioReducer(aligned, {
+    type: "distribute-siblings",
+    direction: "horizontal",
+  });
+  const tooFew = templateV2StudioReducer(
+    templateV2StudioReducer(selected, {
+      type: "set-selection",
+      selections: [0, 1].map((index) => ({
+        ...titleSelection,
+        elementPath: [index],
+      })),
+    }),
+    { type: "distribute-siblings", direction: "vertical" }
+  );
+
+  assert.equal(aligned, selected);
+  assert.equal(distributed, selected);
+  assert.equal(tooFew.past.length, 0);
+  assert.equal(tooFew.dirty, false);
 });
 
 test("undo and redo preserve session locks at their remapped paths", () => {
@@ -756,6 +1047,11 @@ test("group and ungroup use a bounding box, local coordinates, and remapped path
   const component = (
     ((value.layouts as JsonRecord[])[0].components as JsonRecord[])
   )[0];
+  const title = (component.elements as JsonRecord[])[0];
+  title.position = {
+    ...(title.position as JsonRecord),
+    coordinate_space: "slide",
+  };
   (component.elements as JsonRecord[]).push({
     type: "container",
     name: "tail",
@@ -789,7 +1085,10 @@ test("group and ungroup use a bounding box, local coordinates, and remapped path
   assert.deepEqual(group?.size, { width: 595, height: 114 });
   assert.deepEqual(
     (group?.children as JsonRecord[]).map((child) => child.position),
-    [{ x: 0, y: 0 }, { x: 395, y: 14 }]
+    [
+      { x: 0, y: 0, coordinate_space: "slide" },
+      { x: 395, y: 14 },
+    ]
   );
   assert.equal(
     isTemplateV2ElementLocked(grouped, {
@@ -856,12 +1155,21 @@ test("command facade emits one execute action per command", () => {
     { selection: titleSelection, geometry: { x: 1, y: 2 } },
   ]);
   commands.reorderSiblings("back");
+  commands.alignSiblings("center");
+  commands.distributeSiblings("vertical");
   commands.groupSiblings(undefined, "group");
   commands.ungroup();
 
   assert.deepEqual(
     actions.map((action) => (action as JsonRecord).type),
-    ["execute-command", "execute-command", "execute-command", "execute-command"]
+    [
+      "execute-command",
+      "execute-command",
+      "execute-command",
+      "execute-command",
+      "execute-command",
+      "execute-command",
+    ]
   );
   assert.deepEqual(
     actions.map(
@@ -871,6 +1179,8 @@ test("command facade emits one execute action per command", () => {
     [
       "update-geometry-batch",
       "reorder-siblings",
+      "align-siblings",
+      "distribute-siblings",
       "group-siblings",
       "ungroup",
     ]

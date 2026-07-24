@@ -5,7 +5,6 @@ import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   EMPTY_TEMPLATE_V2_STUDIO_STATE,
   createTemplateV2Rectangle,
-  createTemplateV2SaveGate,
   findTemplateV2Layout,
   getSelectedElement,
   getTemplateV2Scene,
@@ -19,8 +18,17 @@ import {
   type ElementPath,
   type JsonRecord,
   type StudioSelection,
+  type TemplateV2AlignDirection,
+  type TemplateV2DistributeDirection,
+  type TemplateV2ReorderDirection,
 } from "@/lib/template-v2-studio";
 import { elementPosition, stringValue } from "@/lib/template-v2-konva";
+import {
+  createTemplateV2AutosaveScheduler,
+  type TemplateV2AutosaveContext,
+  type TemplateV2AutosaveScheduler,
+} from "@/lib/template-v2-studio-autosave";
+import { getTemplateV2HistoryKeyboardIntent } from "@/lib/template-v2-studio-keyboard";
 import { toggleTemplateV2Selection } from "@/lib/template-v2-studio-ui";
 import {
   adaptUpstreamTemplateV2LayoutsToStudio,
@@ -39,6 +47,8 @@ interface StructuredTemplate {
   revision: number;
   updated_at: string;
 }
+
+const TEMPLATE_V2_AUTOSAVE_DEBOUNCE_MS = 800;
 
 function errorMessage(status: number, payload: unknown): string {
   if (isJsonRecord(payload)) {
@@ -202,9 +212,22 @@ export default function TemplateV2Studio({
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  const saveGateRef = useRef(createTemplateV2SaveGate());
   const saveTokenRef = useRef(0);
   const textTransactionRef = useRef(0);
+  const mountedRef = useRef(true);
+  const lifecycleFlushRef = useRef(false);
+  const conflictRef = useRef(false);
+  const templateRef = useRef<StructuredTemplate | null>(null);
+  const stateRef = useRef(state);
+  const persistRef = useRef<
+    (
+      layouts: JsonRecord,
+      context: TemplateV2AutosaveContext
+    ) => Promise<void>
+  >(async () => undefined);
+  const autosaveRef = useRef<TemplateV2AutosaveScheduler<JsonRecord> | null>(
+    null
+  );
 
   const activeLayout = findTemplateV2Layout(
     state.layouts,
@@ -300,6 +323,16 @@ export default function TemplateV2Studio({
       indices.length === selections.length &&
       selectedElements.every(Boolean) &&
       !lockConflict;
+    const canAlign =
+      selections.length >= 2 &&
+      indices.length === selections.length &&
+      selectedElements.every(Boolean) &&
+      !lockConflict;
+    const canDistribute =
+      selections.length >= 3 &&
+      indices.length === selections.length &&
+      selectedElements.every(Boolean) &&
+      !lockConflict;
     const canMoveForward =
       canReorder &&
       indices.some(
@@ -312,6 +345,8 @@ export default function TemplateV2Studio({
 
     return {
       allLocked,
+      canAlign,
+      canDistribute,
       canGroup:
         selections.length >= 2 &&
         selectedElements.every(Boolean) &&
@@ -336,7 +371,15 @@ export default function TemplateV2Studio({
   ]);
 
   useEffect(() => {
+    templateRef.current = template;
+    stateRef.current = state;
+    persistRef.current = persistLayouts;
+  });
+
+  useEffect(() => {
     const controller = new AbortController();
+    autosaveRef.current?.discardPending();
+    conflictRef.current = false;
     setLoading(true);
     setError(null);
     setConflict(false);
@@ -369,6 +412,7 @@ export default function TemplateV2Studio({
           revision: payload.revision,
           updated_at: stringValue(payload.updated_at, ""),
         };
+        templateRef.current = nextTemplate;
         setTemplate(nextTemplate);
         dispatch({ type: "load", layouts: nextTemplate.layouts });
       })
@@ -392,67 +436,123 @@ export default function TemplateV2Studio({
   }, [templateId, reloadKey]);
 
   useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (!event.ctrlKey && !event.metaKey) return;
-      const target = event.target;
+    mountedRef.current = true;
+    const scheduler = createTemplateV2AutosaveScheduler<JsonRecord, void>({
+      debounceMs: TEMPLATE_V2_AUTOSAVE_DEBOUNCE_MS,
+      save: (layouts, context) => persistRef.current(layouts, context),
+    });
+    autosaveRef.current = scheduler;
+
+    function scheduleCurrentSnapshot(): boolean {
+      const current = stateRef.current;
+      if (!current.dirty || !current.layouts) return false;
+      return scheduler.schedule(current.layouts);
+    }
+
+    function flushForLifecycle(event?: BeforeUnloadEvent) {
       if (
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement ||
-        (target instanceof HTMLElement && target.isContentEditable)
+        conflictRef.current ||
+        scheduler.getState().blockedByError ||
+        !scheduleCurrentSnapshot()
       ) {
         return;
       }
-      if (event.key.toLowerCase() === "z") {
+      lifecycleFlushRef.current = true;
+      if (event) {
         event.preventDefault();
-        if (saving) return;
-        dispatch({ type: event.shiftKey ? "redo" : "undo" });
-      } else if (event.key.toLowerCase() === "y") {
-        event.preventDefault();
-        if (saving) return;
-        dispatch({ type: "redo" });
+        event.returnValue = "";
       }
+      void scheduler.flush().finally(() => {
+        if (mountedRef.current) lifecycleFlushRef.current = false;
+      });
+    }
+
+    function onBeforeUnload(event: BeforeUnloadEvent) {
+      flushForLifecycle(event);
+    }
+
+    function onPageHide() {
+      flushForLifecycle();
+    }
+
+    window.addEventListener("beforeunload", onBeforeUnload);
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      window.removeEventListener("pagehide", onPageHide);
+      mountedRef.current = false;
+      lifecycleFlushRef.current = true;
+      autosaveRef.current = null;
+      const schedulerState = scheduler.getState();
+      void scheduler
+        .dispose({
+          flush:
+            !conflictRef.current &&
+            !schedulerState.blockedByError,
+        })
+        .catch(() => {
+          // The mounted UI already reported the persistence failure. A
+          // lifecycle cleanup must not create an unhandled rejection.
+        });
+    };
+  }, [templateId]);
+
+  useEffect(() => {
+    if (!state.dirty || !state.layouts || !template) return;
+    autosaveRef.current?.schedule(state.layouts);
+  }, [state.dirty, state.layouts, template]);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const intent = getTemplateV2HistoryKeyboardIntent(event, {
+        canUndo: state.past.length > 0,
+        canRedo: state.future.length > 0,
+      });
+      if (!intent) return;
+      event.preventDefault();
+      dispatch({ type: intent });
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [saving]);
+  }, [state.future.length, state.past.length]);
 
-  async function save() {
-    if (
-      !template ||
-      !state.layouts ||
-      !state.dirty ||
-      saving ||
-      !saveGateRef.current.tryAcquire()
-    ) {
-      return;
-    }
+  async function persistLayouts(
+    layoutsSnapshot: JsonRecord,
+    context: TemplateV2AutosaveContext
+  ) {
+    const currentTemplate = templateRef.current;
+    if (!currentTemplate) throw new Error("Structured template is unavailable");
     const saveToken = ++saveTokenRef.current;
-    const layoutsSnapshot = state.layouts;
-    const revisionSnapshot = template.revision;
+    const revisionSnapshot = currentTemplate.revision;
     dispatch({
       type: "begin-save",
       token: saveToken,
       layouts: layoutsSnapshot,
     });
-    setSaving(true);
-    setError(null);
-    setNotice(null);
-    setConflict(false);
+    if (mountedRef.current) {
+      setSaving(true);
+      setError(null);
+      setNotice(null);
+      setConflict(false);
+    }
+    conflictRef.current = false;
     try {
       const response = await fetch(
         getApiUrl(
-          `/api/v1/ppt/structured-templates/${encodeURIComponent(template.id)}`
+          `/api/v1/ppt/structured-templates/${encodeURIComponent(currentTemplate.id)}`
         ),
         {
           method: "PATCH",
           credentials: "include",
+          keepalive:
+            lifecycleFlushRef.current || context.trigger === "dispose",
           headers: {
             Accept: "application/json",
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
             layouts: serializeStudioLayoutsForUpstream(
-              template.layoutsDocument,
+              currentTemplate.layoutsDocument,
               layoutsSnapshot
             ),
             expected_revision: revisionSnapshot,
@@ -467,7 +567,8 @@ export default function TemplateV2Studio({
           isJsonRecord(payload.detail) &&
           payload.detail.code === "template_v2_revision_conflict"
         ) {
-          setConflict(true);
+          conflictRef.current = true;
+          if (mountedRef.current) setConflict(true);
         }
         throw new Error(errorMessage(response.status, payload));
       }
@@ -479,33 +580,55 @@ export default function TemplateV2Studio({
       }
       const layoutsDocument =
         adaptUpstreamTemplateV2LayoutsToStudio(payload.layouts);
+      const nextTemplate: StructuredTemplate = {
+        ...currentTemplate,
+        layouts: layoutsDocument.studioLayouts,
+        layoutsDocument,
+        revision: payload.revision,
+        updated_at: stringValue(
+          payload.updated_at,
+          currentTemplate.updated_at
+        ),
+      };
+      templateRef.current = nextTemplate;
       dispatch({
         type: "save-succeeded",
         token: saveToken,
         layouts: layoutsDocument.studioLayouts,
       });
-      setTemplate((current) =>
-        current
-          ? {
-              ...current,
-              layouts: layoutsDocument.studioLayouts,
-              layoutsDocument,
-              revision: payload.revision as number,
-              updated_at: stringValue(payload.updated_at, current.updated_at),
-            }
-          : current
-      );
-      setNotice("Saved");
+      if (mountedRef.current) {
+        setTemplate(nextTemplate);
+        setNotice(
+          context.trigger === "debounce" || context.trigger === "queued"
+            ? "Saved automatically"
+            : "Saved"
+        );
+      }
     } catch (saveError) {
       dispatch({ type: "save-failed", token: saveToken });
-      setError(
-        saveError instanceof Error
-          ? saveError.message
-          : "Unable to save structured template"
-      );
+      if (mountedRef.current) {
+        setError(
+          saveError instanceof Error
+            ? saveError.message
+            : "Unable to save structured template"
+        );
+      }
+      throw saveError;
     } finally {
-      saveGateRef.current.release();
-      setSaving(false);
+      if (mountedRef.current) setSaving(false);
+    }
+  }
+
+  async function flushAutosave() {
+    if (!state.layouts || !state.dirty || conflict) return;
+    const scheduler = autosaveRef.current;
+    if (!scheduler) return;
+    scheduler.schedule(state.layouts);
+    scheduler.resume();
+    try {
+      await scheduler.flush();
+    } catch {
+      // persistLayouts reports the actionable error and preserves the snapshot.
     }
   }
 
@@ -539,18 +662,40 @@ export default function TemplateV2Studio({
       | "forward"
       | "backward"
       | "back"
+      | `align-${TemplateV2AlignDirection}`
+      | `distribute-${TemplateV2DistributeDirection}`
   ) {
     if (command === "group-siblings" || command === "ungroup") {
       dispatch({
         type: "execute-command",
         command: { type: command, selections: state.selectionSet },
       });
+    } else if (command.startsWith("align-")) {
+      dispatch({
+        type: "execute-command",
+        command: {
+          type: "align-siblings",
+          direction: command.slice("align-".length) as TemplateV2AlignDirection,
+          selections: state.selectionSet,
+        },
+      });
+    } else if (command.startsWith("distribute-")) {
+      dispatch({
+        type: "execute-command",
+        command: {
+          type: "distribute-siblings",
+          direction: command.slice(
+            "distribute-".length
+          ) as TemplateV2DistributeDirection,
+          selections: state.selectionSet,
+        },
+      });
     } else {
       dispatch({
         type: "execute-command",
         command: {
           type: "reorder-siblings",
-          direction: command,
+          direction: command as TemplateV2ReorderDirection,
           selections: state.selectionSet,
         },
       });
@@ -593,11 +738,21 @@ export default function TemplateV2Studio({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {notice ? <span className="text-sm text-emerald-300">{notice}</span> : null}
+          {notice ? (
+            <span
+              role="status"
+              aria-live="polite"
+              className="text-sm text-emerald-300"
+            >
+              {notice}
+            </span>
+          ) : null}
           <button
             type="button"
             onClick={() => dispatch({ type: "undo" })}
-            disabled={!state.past.length || saving}
+            disabled={!state.past.length}
+            aria-label="Undo (Ctrl or Command plus Z)"
+            title="Undo · Ctrl/Cmd+Z"
             className="rounded-lg border border-slate-700 px-3 py-2 text-sm disabled:opacity-40"
           >
             Undo
@@ -605,7 +760,9 @@ export default function TemplateV2Studio({
           <button
             type="button"
             onClick={() => dispatch({ type: "redo" })}
-            disabled={!state.future.length || saving}
+            disabled={!state.future.length}
+            aria-label="Redo (Ctrl or Command plus Shift plus Z, or Ctrl plus Y)"
+            title="Redo · Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y"
             className="rounded-lg border border-slate-700 px-3 py-2 text-sm disabled:opacity-40"
           >
             Redo
@@ -622,24 +779,32 @@ export default function TemplateV2Studio({
               });
               setNotice(null);
             }}
-            disabled={!scene || saving}
+            disabled={!scene}
             className="rounded-lg border border-slate-600 px-4 py-2 text-sm disabled:opacity-40"
           >
             Add rectangle
           </button>
           <button
             type="button"
-            onClick={save}
-            disabled={!state.dirty || saving}
+            onClick={() => void flushAutosave()}
+            disabled={!state.dirty || saving || conflict}
+            title={
+              conflict
+                ? "Reload the server version before saving again."
+                : "Flush pending autosave now"
+            }
             className="rounded-lg bg-violet-500 px-4 py-2 text-sm font-semibold disabled:opacity-40"
           >
-            {saving ? "Saving…" : "Save"}
+            {saving ? "Saving…" : error && !conflict ? "Retry save" : "Save now"}
           </button>
         </div>
       </header>
 
       {error ? (
-        <div className="flex items-center justify-between gap-4 border-b border-red-500/30 bg-red-950/40 px-6 py-3 text-sm text-red-200">
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-4 border-b border-red-500/30 bg-red-950/40 px-6 py-3 text-sm text-red-200"
+        >
           <span>{error}</span>
           {conflict ? (
             <button
@@ -651,6 +816,10 @@ export default function TemplateV2Studio({
                     "Reload the server version? Unsaved local edits will be discarded."
                   )
                 ) {
+                  autosaveRef.current?.discardPending();
+                  conflictRef.current = false;
+                  setConflict(false);
+                  setError(null);
                   setReloadKey((value) => value + 1);
                 }
               }}
@@ -753,7 +922,6 @@ export default function TemplateV2Studio({
                     selection.componentId === String(scene.component.id)
                 )
                 .map((selection) => selection.elementPath)}
-              disabled={saving}
               onSelect={selectElement}
               onGeometryBatch={(updates) => {
                 dispatch({
@@ -807,7 +975,7 @@ export default function TemplateV2Studio({
                 <button
                   key={String(direction)}
                   type="button"
-                  disabled={saving || !enabled}
+                  disabled={!enabled}
                   title={
                     enabled
                       ? undefined
@@ -825,7 +993,7 @@ export default function TemplateV2Studio({
               ))}
               <button
                 type="button"
-                disabled={saving || !selectionControls.canGroup}
+                disabled={!selectionControls.canGroup}
                 title={
                   selectionControls.canGroup
                     ? undefined
@@ -838,7 +1006,7 @@ export default function TemplateV2Studio({
               </button>
               <button
                 type="button"
-                disabled={saving || !selectionControls.canUngroup}
+                disabled={!selectionControls.canUngroup}
                 title={
                   selectionControls.canUngroup
                     ? undefined
@@ -851,7 +1019,7 @@ export default function TemplateV2Studio({
               </button>
               <button
                 type="button"
-                disabled={saving || !selectionControls.hasSelection}
+                disabled={!selectionControls.hasSelection}
                 onClick={() => {
                   const locked = !selectionControls.allLocked;
                   for (const selection of state.selectionSet) {
@@ -869,6 +1037,66 @@ export default function TemplateV2Studio({
                   ? "Unlock selected"
                   : "Lock selected"}
               </button>
+            </div>
+            <div className="mt-3">
+              <h4 className="text-xs font-medium text-slate-300">Align</h4>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                {(
+                  [
+                    ["Align left", "left"],
+                    ["Align center", "center"],
+                    ["Align right", "right"],
+                    ["Align top", "top"],
+                    ["Align middle", "middle"],
+                    ["Align bottom", "bottom"],
+                  ] as const
+                ).map(([label, direction]) => (
+                  <button
+                    key={direction}
+                    type="button"
+                    disabled={!selectionControls.canAlign}
+                    title={
+                      selectionControls.canAlign
+                        ? undefined
+                        : "Select at least two unlocked sibling elements."
+                    }
+                    onClick={() =>
+                      executeSelectionCommand(`align-${direction}`)
+                    }
+                    className="rounded border border-slate-700 px-2 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mt-3">
+              <h4 className="text-xs font-medium text-slate-300">Distribute</h4>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {(
+                  [
+                    ["Distribute horizontally", "horizontal"],
+                    ["Distribute vertically", "vertical"],
+                  ] as const
+                ).map(([label, direction]) => (
+                  <button
+                    key={direction}
+                    type="button"
+                    disabled={!selectionControls.canDistribute}
+                    title={
+                      selectionControls.canDistribute
+                        ? undefined
+                        : "Select at least three unlocked sibling elements."
+                    }
+                    onClick={() =>
+                      executeSelectionCommand(`distribute-${direction}`)
+                    }
+                    className="rounded border border-slate-700 px-2 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
             {selectionControls.lockConflict ? (
               <p className="mt-2 text-xs text-amber-300">
@@ -890,7 +1118,7 @@ export default function TemplateV2Studio({
                     Run {runIndex + 1}
                     <textarea
                       value={stringValue(run.text, "")}
-                      disabled={saving || selectionControls.lockConflict}
+                      disabled={selectionControls.lockConflict}
                       onFocus={() => {
                         textTransactionRef.current += 1;
                       }}
