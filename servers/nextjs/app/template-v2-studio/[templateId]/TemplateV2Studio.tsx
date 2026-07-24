@@ -38,6 +38,7 @@ import {
 import { getApiUrl } from "@/utils/api";
 import TemplateV2Canvas from "./TemplateV2Canvas";
 import TemplateV2ContentInspector from "./TemplateV2ContentInspector";
+import TemplateV2GeometryInspector from "./TemplateV2GeometryInspector";
 import TemplateV2PptxImportPanel from "./TemplateV2PptxImportPanel";
 
 interface StructuredTemplate {
@@ -1110,27 +1111,41 @@ export default function TemplateV2Studio({
           {selectedElement &&
           state.selection &&
           state.selectionSet.length === 1 ? (
-            <TemplateV2ContentInspector
-              element={selectedElement}
-              pathLabel={pathLabel(state.selection.elementPath)}
-              disabled={selectionControls.lockConflict}
-              onBlur={() =>
-                dispatch({
-                  type: "select",
-                  selection: state.selection,
-                })
-              }
-              onEdit={(target, text, historyKey) => {
-                dispatch({
-                  type: "edit-content-run",
-                  selection: state.selection as StudioSelection,
-                  target,
-                  text,
-                  historyKey,
-                });
-                setNotice(null);
-              }}
-            />
+            <>
+              <TemplateV2GeometryInspector
+                element={selectedElement}
+                disabled={selectionControls.lockConflict}
+                onChange={(geometry) => {
+                  dispatch({
+                    type: "update-element-geometry",
+                    selection: state.selection as StudioSelection,
+                    geometry,
+                  });
+                  setNotice(null);
+                }}
+              />
+              <TemplateV2ContentInspector
+                element={selectedElement}
+                pathLabel={pathLabel(state.selection.elementPath)}
+                disabled={selectionControls.lockConflict}
+                onBlur={() =>
+                  dispatch({
+                    type: "select",
+                    selection: state.selection,
+                  })
+                }
+                onEdit={(target, text, historyKey) => {
+                  dispatch({
+                    type: "edit-content-run",
+                    selection: state.selection as StudioSelection,
+                    target,
+                    text,
+                    historyKey,
+                  });
+                  setNotice(null);
+                }}
+              />
+            </>
           ) : (
             <p className="mt-5 rounded-lg bg-slate-950 p-3 text-sm text-slate-400">
               Select a text, container, image, or group. Groups are move-only;
