@@ -76,10 +76,14 @@ release-version comment. Service containers are digest-pinned. Compatibility
 runtime lines remain Node 22 and Python 3.11; changing those lines is a
 deliberate compatibility decision rather than routine action churn.
 
-Operating-system package repositories, the release upload helper downloaded by
-`sync-releaes-to-r2.yml`, and release archives without an upstream checksum are
-still external mutable inputs. They are kept visible as residual supply-chain
-risk rather than described as digest-pinned.
+The pinned `presentation-export` archive is verified against a per-asset SHA-256
+recorded in `compatibility/upstream-compatibility.json` (`exportRuntime.assets`);
+`sync-presentation-export.cjs` fails closed if the downloaded bytes do not match,
+so a re-uploaded release for the pinned tag cannot silently replace the runtime.
+
+Operating-system package repositories and the release upload helper downloaded by
+`sync-releaes-to-r2.yml` remain external mutable inputs. They are kept visible as
+residual supply-chain risk rather than described as digest-pinned.
 
 ## Local CI parity runner
 

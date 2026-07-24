@@ -137,6 +137,24 @@ for (const version of manifest.versions ?? []) {
   }
 }
 
+const exportRuntime = manifest.exportRuntime ?? {};
+const pinnedExportVersion = (manifest.versions ?? []).find(
+  (version) => version.id === "presentation-export"
+)?.value;
+check(
+  exportRuntime.version === pinnedExportVersion,
+  `exportRuntime.version must match pinned presentation-export ${pinnedExportVersion}`
+);
+const exportAssets = Object.entries(exportRuntime.assets ?? {});
+check(exportAssets.length > 0, "exportRuntime.assets must pin at least one release archive");
+for (const [assetName, sha256] of exportAssets) {
+  check(/^export-.+\.zip$/.test(assetName), `exportRuntime asset ${assetName} has an unexpected name`);
+  check(
+    typeof sha256 === "string" && /^[0-9a-f]{64}$/.test(sha256),
+    `exportRuntime asset ${assetName} must pin a full lowercase sha256`
+  );
+}
+
 const rendererSource = await readText(manifest.templateV2Renderer?.source);
 const actualDiscriminators = [
   ...rendererSource.matchAll(/element\.type === "([^"]+)"/g),
