@@ -2,17 +2,25 @@ import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 
 import {
-  BundledPresentationExportFormat,
   bundledExportPackageAvailable,
   runBundledPresentationExport,
 } from "@/lib/run-bundled-presentation-export";
 import { resolveAppDataDirectory } from "@/lib/app-data-directory";
 import { runAuthoredHybridPresentationExport } from "@/lib/authored-hybrid/export";
-import { resolveRequestedPptxMode } from "@/lib/authored-hybrid/mode";
+import {
+  executeExportPresentationRouteRequest,
+  ExportPresentationRequestError,
+  fetchPersistedPresentationForExport,
+  readExportPresentationRouteBody,
+  type ExportPresentationRouteBody,
+} from "@/lib/export-presentation-route";
+import {
+  getFastApiAuthHeaders,
+  getFastApiBaseUrl,
+} from "@/lib/fastapi-internal";
 
-function isValidFormat(value: unknown): value is BundledPresentationExportFormat {
-  return value === "pdf" || value === "pptx";
-}
+const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
+const MAX_PRESENTATION_RESPONSE_BYTES = 50 * 1024 * 1024;
 
 function buildExportDownloadUrl(outPath: string): string {
   const appDataDirectory = resolveAppDataDirectory();
@@ -30,64 +38,71 @@ function buildExportDownloadUrl(outPath: string): string {
   return `/api/export-presentation/file?name=${encodeURIComponent(relativePath)}`;
 }
 
+async function fetchPersistedPresentation(
+  presentationId: string,
+  cookieHeader: string
+): ReturnType<typeof fetchPersistedPresentationForExport> {
+  return fetchPersistedPresentationForExport(presentationId, {
+    baseUrl: getFastApiBaseUrl(),
+    authHeaders: getFastApiAuthHeaders(),
+    cookieHeader,
+    timeoutMs: PRESENTATION_FETCH_TIMEOUT_MS,
+    maxResponseBytes: MAX_PRESENTATION_RESPONSE_BYTES,
+  });
+}
+
 export async function POST(req: NextRequest) {
-  const { format, id, title, pptxMode } = await req.json();
   const cookieHeader = req.headers.get("cookie") ?? "";
-
-  if (!id) {
-    return NextResponse.json(
-      { error: "Missing Presentation ID" },
-      { status: 400 }
-    );
-  }
-
-  if (!isValidFormat(format)) {
-    return NextResponse.json(
-      { error: "Invalid export format" },
-      { status: 400 }
-    );
-  }
-
-  const resolvedPptxMode = resolveRequestedPptxMode(format, pptxMode);
-  if (format === "pptx" && !resolvedPptxMode.ok) {
-    return NextResponse.json(
-      { error: "Invalid PPTX export mode" },
-      { status: 400 }
-    );
-  }
+  let body: ExportPresentationRouteBody | undefined;
 
   try {
-    if (!(await bundledExportPackageAvailable())) {
-      throw new Error(
-        "presentation-export runtime is not available. Run scripts/sync-presentation-export.cjs to install it."
-      );
-    }
-
-    const { path: outPath } =
-      format === "pptx" &&
-      resolvedPptxMode.ok &&
-      resolvedPptxMode.value === "hybrid"
-        ? await runAuthoredHybridPresentationExport({
-            presentationId: id,
-            title,
-            cookieHeader,
-          })
-        : await runBundledPresentationExport({
+    body = await readExportPresentationRouteBody(req);
+    const { path: outPath } = await executeExportPresentationRouteRequest(
+      body,
+      cookieHeader,
+      {
+        packageAvailable: bundledExportPackageAvailable,
+        fetchPresentation: fetchPersistedPresentation,
+        registry: {
+          general: ({
             format,
-            presentationId: id,
+            presentationId,
             title,
             cookieHeader,
-          });
+            expectedPresentationSha256,
+          }) =>
+            runBundledPresentationExport({
+              format,
+              presentationId,
+              title,
+              cookieHeader,
+              expectedPresentationSha256,
+            }),
+          hybrid: ({ presentationId, title, cookieHeader }) =>
+            runAuthoredHybridPresentationExport({
+              presentationId,
+              title,
+              cookieHeader,
+            }),
+        },
+      },
+    );
 
     return NextResponse.json({
       success: true,
       path: buildExportDownloadUrl(outPath),
     });
   } catch (e) {
+    if (e instanceof ExportPresentationRequestError) {
+      return NextResponse.json({ error: e.message }, { status: e.status });
+    }
     const message = e instanceof Error ? e.message : String(e);
-    console.error(`[export-presentation:${format}]`, message);
+    console.error(
+      `[export-presentation:${String(body?.format ?? "unknown")}]`,
+      message
+    );
     return NextResponse.json(
-      { error: message, success: false },
+      { error: "Presentation export failed", success: false },
       { status: 500 }
     );
   }

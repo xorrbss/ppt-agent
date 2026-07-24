@@ -1,6 +1,14 @@
 import PdfMakerPage from "./PdfMakerPage";
 import type { PresentationData } from "@/store/slices/presentationGeneration";
 import { headers } from "next/headers";
+import {
+  assertPresentationSnapshotIntegrity,
+  normalizeExpectedPresentationSha256,
+} from "@/lib/presentation-snapshot-integrity";
+import {
+  getFastApiAuthHeaders,
+  getFastApiBaseUrl,
+} from "@/lib/fastapi-internal";
 
 type PdfMakerRouteProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -15,38 +23,48 @@ function normalizePresentationId(id: string): string {
   return `${id.slice(0, 8)}-${id.slice(8, 12)}-${id.slice(12, 16)}-${id.slice(16, 20)}-${id.slice(20)}`;
 }
 
-function getFastApiBaseUrl(): string {
-  return (
-    process.env.FAST_API_INTERNAL_URL?.trim() ||
-    process.env.NEXT_PUBLIC_FAST_API?.trim() ||
-    "http://127.0.0.1:8000"
-  ).replace(/\/+$/, "");
-}
-
 async function fetchInitialPresentation(
   id: string,
-  cookieHeader: string | undefined
+  cookieHeader: string | undefined,
+  expectedSha256: string | undefined
 ): Promise<PresentationData | undefined> {
-  if (!cookieHeader) return undefined;
+  const authHeaders = getFastApiAuthHeaders();
+  if (!cookieHeader && Object.keys(authHeaders).length === 0) {
+    if (expectedSha256) {
+      throw new Error("Authenticated presentation snapshot is unavailable.");
+    }
+    return undefined;
+  }
 
   const normalizedId = normalizePresentationId(id);
   try {
     const response = await fetch(
       `${getFastApiBaseUrl()}/api/v1/ppt/presentation/${encodeURIComponent(normalizedId)}`,
       {
-        headers: { Cookie: cookieHeader },
+        headers: {
+          ...authHeaders,
+          ...(cookieHeader ? { Cookie: cookieHeader } : {}),
+        },
         cache: "no-store",
       }
     );
     if (!response.ok) {
+      if (expectedSha256) {
+        throw new Error(
+          `Presentation snapshot fetch failed with status ${response.status}.`
+        );
+      }
       console.error("[pdf-maker] Initial presentation fetch failed", {
         id: normalizedId,
         status: response.status,
       });
       return undefined;
     }
-    return (await response.json()) as PresentationData;
+    const body = await response.text();
+    assertPresentationSnapshotIntegrity(body, expectedSha256);
+    return JSON.parse(body) as PresentationData;
   } catch (error) {
+    if (expectedSha256) throw error;
     console.error("[pdf-maker] Initial presentation fetch failed", {
       id: normalizedId,
       error,
@@ -58,6 +76,9 @@ async function fetchInitialPresentation(
 export default async function PdfMakerRoute({ searchParams }: PdfMakerRouteProps) {
   const params = await searchParams;
   const queryId = firstQueryValue(params.id);
+  const expectedSha256 = normalizeExpectedPresentationSha256(
+    firstQueryValue(params.source_sha256)
+  );
 
   if (!queryId) {
     return (
@@ -75,7 +96,8 @@ export default async function PdfMakerRoute({ searchParams }: PdfMakerRouteProps
   const cookieHeader = requestHeaders.get("cookie")?.trim() || undefined;
   const initialPresentationData = await fetchInitialPresentation(
     queryId,
-    cookieHeader
+    cookieHeader,
+    expectedSha256
   );
 
   return (
