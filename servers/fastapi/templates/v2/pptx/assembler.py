@@ -8,6 +8,7 @@ from typing import Any
 from templates.v2.models.elements import (
     Container,
     Fill,
+    Group,
     Position,
     Size,
     Text,
@@ -43,10 +44,15 @@ def _slot_name(candidate: ShapeCandidate) -> str:
     return (value or f"shape_{candidate.source_id}")[:60]
 
 
-def _element(candidate: ShapeCandidate, *, relative: bool):
+def _element(
+    candidate: ShapeCandidate,
+    *,
+    relative: bool,
+    origin: tuple[float, float] = (0, 0),
+):
     position = Position(
-        x=0 if relative else candidate.x,
-        y=0 if relative else candidate.y,
+        x=candidate.x - origin[0] if relative else candidate.x,
+        y=candidate.y - origin[1] if relative else candidate.y,
     )
     size = Size(width=max(candidate.width, 1), height=max(candidate.height, 1))
     if candidate.kind == "text":
@@ -73,9 +79,86 @@ def _element(candidate: ShapeCandidate, *, relative: bool):
     raise ValueError("unsupported_candidate_cannot_be_assembled")
 
 
+def _accepted_repeat_groups(
+    slide_shapes: list[ShapeCandidate],
+    suggestions: list[dict[str, Any]],
+    source_part: str,
+) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
+    by_source_id = {shape.source_id: shape for shape in slide_shapes}
+    groups: dict[str, dict[str, Any]] = {}
+    applied: list[dict[str, Any]] = []
+    for suggestion in suggestions:
+        if suggestion.get("source_part") != source_part:
+            continue
+        source_ids = suggestion.get("source_ids")
+        if not isinstance(source_ids, list) or len(source_ids) < 2:
+            raise ValueError("invalid_repeat_suggestion")
+        shapes = [by_source_id.get(str(source_id)) for source_id in source_ids]
+        if any(shape is None or shape.kind == "unsupported" for shape in shapes):
+            raise ValueError("repeat_suggestion_source_missing")
+        if any(str(source_id) in groups for source_id in source_ids):
+            raise ValueError("overlapping_repeat_suggestions")
+        group = {
+            **suggestion,
+            "status": "applied",
+            "shapes": shapes,
+        }
+        for source_id in source_ids:
+            groups[str(source_id)] = group
+        applied.append(group)
+    return groups, applied
+
+
+def _repeat_component(
+    candidates: PresentationCandidates,
+    relationship_id: str,
+    group: dict[str, Any],
+) -> tuple[Component, dict[str, Any]]:
+    shapes: list[ShapeCandidate] = group["shapes"]
+    min_x = min(shape.x for shape in shapes)
+    min_y = min(shape.y for shape in shapes)
+    max_x = max(shape.x + shape.width for shape in shapes)
+    max_y = max(shape.y + shape.height for shape in shapes)
+    suggestion_id = str(group["id"])
+    component_id = _stable_id(
+        "repeat",
+        candidates.source_sha256,
+        relationship_id,
+        suggestion_id,
+    )
+    group_name = component_id[:60]
+    component = Component(
+        id=component_id,
+        description=f"Accepted repeated PPTX block {suggestion_id}"[:300],
+        position=Position(x=min_x, y=min_y),
+        elements=[
+            Group(
+                type="group",
+                position=Position(x=0, y=0),
+                size=Size(width=max_x - min_x, height=max_y - min_y),
+                children=[
+                    _element(shape, relative=True, origin=(min_x, min_y))
+                    for shape in shapes
+                ],
+                name=group_name,
+            )
+        ],
+    )
+    nested_content = {
+        _slot_name(shape): shape.text or ""
+        for shape in shapes
+        if shape.kind == "text"
+    }
+    content = {group_name: nested_content} if nested_content else {}
+    return component, content
+
+
 def assemble_template_v2_draft(
     candidates: PresentationCandidates,
+    *,
+    accepted_repeat_suggestions: list[dict[str, Any]] | None = None,
 ) -> AssembledTemplateV2Draft:
+    accepted_repeat_suggestions = accepted_repeat_suggestions or []
     raw_layouts: list[RawSlideLayout] = []
     layouts: list[SlideLayout] = []
     contents: list[dict[str, Any]] = []
@@ -88,6 +171,11 @@ def assemble_template_v2_draft(
         )
         supported = [shape for shape in slide.shapes if shape.kind != "unsupported"]
         unsupported = [shape for shape in slide.shapes if shape.kind == "unsupported"]
+        repeat_groups, applied_groups = _accepted_repeat_groups(
+            slide.shapes,
+            accepted_repeat_suggestions,
+            slide.source_part,
+        )
         raw_layouts.append(
             RawSlideLayout(
                 id=layout_id,
@@ -98,6 +186,19 @@ def assemble_template_v2_draft(
         components: list[Component] = []
         content: dict[str, Any] = {}
         for shape in supported:
+            repeat_group = repeat_groups.get(shape.source_id)
+            if repeat_group is not None:
+                if shape.source_id != repeat_group["source_ids"][0]:
+                    continue
+                component, repeat_content = _repeat_component(
+                    candidates,
+                    slide.relationship_id,
+                    repeat_group,
+                )
+                components.append(component)
+                if repeat_content:
+                    content[component.id] = repeat_content
+                continue
             component_id = _stable_id(
                 "component",
                 candidates.source_sha256,
@@ -140,6 +241,14 @@ def assemble_template_v2_draft(
                     for shape in unsupported
                 ],
                 "external_relationship_ids_ignored": slide.external_relationships,
+                "repeat_blocks": [
+                    {
+                        key: value
+                        for key, value in group.items()
+                        if key != "shapes"
+                    }
+                    for group in applied_groups
+                ],
                 "fallback": {
                     "kind": "manual_review",
                     "reason": "render_and_vision_provider_unavailable",

@@ -137,6 +137,13 @@ class ImportMutationRequest(BaseModel):
     expected_revision: int = Field(ge=1)
 
 
+class ConfirmImportRequest(ImportMutationRequest):
+    accepted_repeat_suggestion_ids: list[str] = Field(
+        default_factory=list,
+        max_length=1_000,
+    )
+
+
 def _require_import_enabled(template_id: str) -> None:
     try:
         get_structured_template_policy().require_write_enabled(template_id)
@@ -421,7 +428,7 @@ async def cancel_structured_template_import(
 async def confirm_structured_template_import(
     import_id: uuid.UUID,
     request: Request,
-    mutation: ImportMutationRequest,
+    mutation: ConfirmImportRequest,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
     owner_scope = _owner_scope(request)
@@ -433,6 +440,9 @@ async def confirm_structured_template_import(
         task.id,
         owner_scope=owner_scope,
         expected_revision=mutation.expected_revision,
+        accepted_repeat_suggestion_ids=tuple(
+            mutation.accepted_repeat_suggestion_ids
+        ),
     )
     if result == "not_found":
         raise HTTPException(
@@ -444,6 +454,7 @@ async def confirm_structured_template_import(
             "revision_conflict": "Import revision changed",
             "state_conflict": "Import is not ready for confirmation",
             "template_conflict": "Structured template already exists",
+            "suggestion_conflict": "Repeat-block selection is invalid",
         }
         raise HTTPException(
             status_code=409,

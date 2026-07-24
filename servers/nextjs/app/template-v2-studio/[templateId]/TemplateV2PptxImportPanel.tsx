@@ -4,6 +4,9 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { getApiUrl } from "@/utils/api";
 import TemplateV2ImportReview from "./TemplateV2ImportReview";
+import TemplateV2RepeatSuggestionReview, {
+  type RepeatSuggestion,
+} from "./TemplateV2RepeatSuggestionReview";
 
 const IMPORT_ENDPOINT = "/api/v1/ppt/structured-templates/imports";
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
@@ -48,12 +51,7 @@ interface ImportRecord {
       review_required?: boolean;
     };
   } | null;
-  repeat_suggestions: Array<{
-    id?: string;
-    axis?: string;
-    source_ids?: string[];
-    confidence?: number;
-  }>;
+  repeat_suggestions: RepeatSuggestion[];
   task_message: string | null;
 }
 
@@ -101,6 +99,7 @@ export default function TemplateV2PptxImportPanel({
   );
   const [file, setFile] = useState<File | null>(null);
   const [record, setRecord] = useState<ImportRecord | null>(null);
+  const [acceptedRepeatIds, setAcceptedRepeatIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const uploadKey = useRef<{ identity: string; key: string } | null>(null);
@@ -178,6 +177,7 @@ export default function TemplateV2PptxImportPanel({
         headers: { "Idempotency-Key": uploadKey.current.key },
         body: form,
       });
+      setAcceptedRepeatIds([]);
       setRecord(await readImportResponse(response));
     } catch (uploadError) {
       setError(
@@ -210,7 +210,12 @@ export default function TemplateV2PptxImportPanel({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ expected_revision: record.revision }),
+          body: JSON.stringify({
+            expected_revision: record.revision,
+            ...(action === "confirm"
+              ? { accepted_repeat_suggestion_ids: acceptedRepeatIds }
+              : {}),
+          }),
         }
       );
       setRecord(await readImportResponse(response));
@@ -356,25 +361,12 @@ export default function TemplateV2PptxImportPanel({
                   </>
                 ) : null}
 
-                {record.repeat_suggestions.length ? (
-                  <div>
-                    <p className="text-xs font-semibold text-amber-200">
-                      Repeat-block suggestions (not applied)
-                    </p>
-                    <ul className="mt-1 list-disc space-y-1 pl-5 text-xs text-slate-300">
-                      {record.repeat_suggestions.map((suggestion, index) => (
-                        <li key={suggestion.id ?? index}>
-                          {suggestion.axis ?? "unknown"} ·{" "}
-                          {suggestion.source_ids?.length ?? 0} elements ·{" "}
-                          confidence{" "}
-                          {typeof suggestion.confidence === "number"
-                            ? suggestion.confidence.toFixed(2)
-                            : "unknown"}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
+                <TemplateV2RepeatSuggestionReview
+                  suggestions={record.repeat_suggestions}
+                  state={record.state}
+                  acceptedIds={acceptedRepeatIds}
+                  onAcceptedIdsChange={setAcceptedRepeatIds}
+                />
 
                 <div className="flex flex-wrap gap-2">
                   {record.state === "review_required" ? (
