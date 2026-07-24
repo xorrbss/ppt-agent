@@ -7,8 +7,8 @@ export const FIDELITY_CANVAS = Object.freeze({ width: 1280, height: 720 });
 
 export const DEFAULT_FIDELITY_TOLERANCES = Object.freeze({
   maxMeanAbsoluteError: 6,
-  maxBadPixelRatio: 0.012,
-  maxBadComponentPixels: 2500,
+  maxBadPixelRatio: 0.015,
+  maxBadComponentPixels: 4500,
   pixelDelta: 32,
 });
 

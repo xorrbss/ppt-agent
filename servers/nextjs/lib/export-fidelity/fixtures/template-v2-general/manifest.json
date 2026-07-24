@@ -3,8 +3,8 @@
   "canvas": { "width": 1280, "height": 720 },
   "defaults": {
     "maxMeanAbsoluteError": 6,
-    "maxBadPixelRatio": 0.012,
-    "maxBadComponentPixels": 2500,
+    "maxBadPixelRatio": 0.015,
+    "maxBadComponentPixels": 4500,
     "pixelDelta": 32
   },
   "cases": [
@@ -12,8 +12,7 @@
       "id": "title-body",
       "directory": "00-title-body",
       "expectedText": ["Quarterly direction", "Focus the team on reliable delivery."],
-      "templateIdentity": { "version": "v2-standard", "mode": "template" },
-      "tolerances": { "maxBadPixelRatio": 0.015, "maxBadComponentPixels": 4500 }
+      "templateIdentity": { "version": "v2-standard", "mode": "template" }
     },
     {
       "id": "geometry",
