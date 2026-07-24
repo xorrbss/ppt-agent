@@ -10,8 +10,8 @@ It does not decide whether the official upstream branch moved.
 `upstream-intake.yml` is the separate remote observation gate:
 
 - pull requests that change intake files run only dependency-free offline
-  fixtures plus the existing local verifier; external upstream state therefore
-  cannot make an unrelated pull request fail;
+  fixtures; external upstream state therefore cannot make an unrelated pull
+  request fail;
 - scheduled and manually dispatched runs query only the official
   `presenton/presenton:main` GitHub API using an exact resolved SHA;
 - the job writes a Markdown step summary and retains Markdown/JSON evidence;
@@ -26,6 +26,11 @@ baseline, first review the intake report, manually port only approved changes,
 run the full compatibility/test matrix, and then update the manifest, intake
 policy, migration ledger, protected-patch registry, and test dispositions that
 were actually affected.
+
+Changes to the compatibility registries also trigger
+`upstream-compatibility.yml`, which prepares the pinned export runtime before
+running the local verifier. That runtime-dependent verifier is intentionally
+not duplicated in the intake workflow's offline job.
 
 ## Test All Applications (`test-all.yml`)
 

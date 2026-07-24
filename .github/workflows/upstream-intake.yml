@@ -37,8 +37,6 @@ jobs:
           node-version: "22.17.1"
       - name: Verify offline intake error and delta contracts
         run: node --test scripts/intake-upstream-main.test.mjs
-      - name: Verify pinned local compatibility contract
-        run: node scripts/verify-upstream-compatibility.mjs
 
   live-intake:
     if: github.event_name != 'pull_request'
