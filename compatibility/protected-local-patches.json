@@ -109,14 +109,18 @@
             "class PresentationDeletionService",
             "canonical_ids != sidecar_ids",
             "delete(TemplateV2)",
-            "PresentationDeleteConflictError"
+            "PresentationDeleteConflictError",
+            "PresentationDeleteRetryableError",
+            "is_retryable_sqlite_lock"
           ]
         },
         {
           "path": "servers/fastapi/api/v1/ppt/endpoints/presentation_crud.py",
           "requiredContains": [
             "PresentationDeletionService(sql_session).delete(presentation)",
-            "presentation_delete_dependency_conflict"
+            "presentation_delete_dependency_conflict",
+            "presentation_delete_temporarily_unavailable",
+            "Retry-After"
           ]
         },
         {
@@ -131,7 +135,16 @@
           "requiredContains": [
             "test_delete_api_removes_owned_template_and_preserves_import_audit",
             "test_delete_api_fails_closed_when_sidecar_ownership_is_missing",
-            "test_delete_api_rolls_back_all_mutations_on_dependency_conflict"
+            "test_delete_api_rolls_back_all_mutations_on_dependency_conflict",
+            "test_delete_api_returns_retryable_503_and_rolls_back_on_sqlite_lock"
+          ]
+        },
+        {
+          "path": "servers/fastapi/tests/integration/test_postgresql_template_v2_migrations.py",
+          "requiredContains": [
+            "test_postgresql_full_cycle_preserves_legacy_data_and_contracts",
+            "test_postgresql_populated_sidecar_cycle_and_child_first_delete",
+            "PPT_AGENT_REQUIRE_POSTGRES_INTEGRATION"
           ]
         }
       ]

@@ -25,6 +25,7 @@ on:
       - "servers/fastapi/tests/unit/test_migrations.py"
       - "servers/fastapi/tests/unit/test_template_v2_local_state_migration.py"
       - "servers/fastapi/tests/unit/test_presentation_delete_safety.py"
+      - "servers/fastapi/tests/integration/test_postgresql_template_v2_migrations.py"
       - ".github/workflows/upstream-compatibility.yml"
   workflow_dispatch:
 
@@ -67,3 +68,43 @@ jobs:
           tests/unit/test_migrations.py
           tests/unit/test_template_v2_local_state_migration.py
           tests/unit/test_presentation_delete_safety.py
+
+  template-v2-postgresql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: servers/fastapi
+    services:
+      postgres:
+        image: >-
+          postgres:16.9-alpine3.21@sha256:36e8aabaa6fa6037537cff64011fa45a200fe2ba202141b9aca48cff3df7ad42
+        env:
+          POSTGRES_USER: presenton
+          POSTGRES_PASSWORD: presenton
+          POSTGRES_DB: presenton_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U presenton -d presenton_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PPT_AGENT_POSTGRES_TEST_URL: >-
+        postgresql+psycopg://presenton:presenton@127.0.0.1:5432/presenton_test
+      PPT_AGENT_REQUIRE_POSTGRES_INTEGRATION: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install locked FastAPI dependencies
+        run: uv sync --frozen
+      - name: Verify Template V2 on PostgreSQL
+        run: >-
+          uv run pytest -q --no-header
+          tests/integration/test_postgresql_template_v2_migrations.py

@@ -1,4 +1,5 @@
 import asyncio
+import sqlite3
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -23,8 +24,11 @@ from models.sql.template_v2_pptx_import import TemplateV2PptxImport
 from services.database import get_async_session
 
 
-def _test_app(database_path):
-    engine = create_async_engine(f"sqlite+aiosqlite:///{database_path}")
+def _test_app(database_path, *, sqlite_timeout: float = 5.0):
+    engine = create_async_engine(
+        f"sqlite+aiosqlite:///{database_path}",
+        connect_args={"timeout": sqlite_timeout},
+    )
 
     @event.listens_for(engine.sync_engine, "connect")
     def _enable_foreign_keys(dbapi_connection, _connection_record):
@@ -59,9 +63,7 @@ def _presentation() -> PresentationModel:
 def test_delete_api_removes_owned_template_and_preserves_import_audit(
     tmp_path,
 ):
-    app, engine, session_factory = _test_app(
-        tmp_path / "presentation-delete.db"
-    )
+    app, engine, session_factory = _test_app(tmp_path / "presentation-delete.db")
     presentation = _presentation()
     slide = SlideModel(
         presentation=presentation.id,
@@ -90,8 +92,7 @@ def test_delete_api_removes_owned_template_and_preserves_import_audit(
         state="ready",
         source_filename="source.pptx",
         source_media_type=(
-            "application/vnd.openxmlformats-officedocument."
-            "presentationml.presentation"
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
         ),
         source_size_bytes=4,
         source_sha256="0" * 64,
@@ -133,9 +134,7 @@ def test_delete_api_removes_owned_template_and_preserves_import_audit(
             assert await session.get(TemplateV2, template.id) is None
             assert (
                 await session.scalar(
-                    select(func.count()).select_from(
-                        TemplateV2LocalState
-                    )
+                    select(func.count()).select_from(TemplateV2LocalState)
                 )
                 == 0
             )
@@ -145,16 +144,12 @@ def test_delete_api_removes_owned_template_and_preserves_import_audit(
             )
             assert retained is not None
             assert retained.draft_template_id is None
-            assert retained.source_storage_key == (
-                "imports/delete-safety/source.pptx"
-            )
+            assert retained.source_storage_key == ("imports/delete-safety/source.pptx")
 
     try:
         asyncio.run(setup())
         with TestClient(app) as client:
-            response = client.delete(
-                f"/api/v1/ppt/presentation/{presentation.id}"
-            )
+            response = client.delete(f"/api/v1/ppt/presentation/{presentation.id}")
         assert response.status_code == 204
         asyncio.run(verify())
     finally:
@@ -190,18 +185,13 @@ def test_delete_api_fails_closed_when_sidecar_ownership_is_missing(tmp_path):
 
     async def verify():
         async with session_factory() as session:
-            assert (
-                await session.get(PresentationModel, presentation.id)
-                is not None
-            )
+            assert await session.get(PresentationModel, presentation.id) is not None
             assert await session.get(TemplateV2, template.id) is not None
 
     try:
         asyncio.run(setup())
         with TestClient(app) as client:
-            response = client.delete(
-                f"/api/v1/ppt/presentation/{presentation.id}"
-            )
+            response = client.delete(f"/api/v1/ppt/presentation/{presentation.id}")
         assert response.status_code == 409
         assert response.json()["detail"] == {
             "code": "presentation_delete_dependency_conflict",
@@ -237,8 +227,7 @@ def test_delete_api_rolls_back_all_mutations_on_dependency_conflict(tmp_path):
         state="ready",
         source_filename="rollback.pptx",
         source_media_type=(
-            "application/vnd.openxmlformats-officedocument."
-            "presentationml.presentation"
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
         ),
         source_size_bytes=4,
         source_sha256="1" * 64,
@@ -298,15 +287,9 @@ def test_delete_api_rolls_back_all_mutations_on_dependency_conflict(tmp_path):
 
     async def verify_rollback_and_unblock():
         async with session_factory() as session:
-            assert (
-                await session.get(PresentationModel, presentation.id)
-                is not None
-            )
+            assert await session.get(PresentationModel, presentation.id) is not None
             assert await session.get(TemplateV2, template.id) is not None
-            assert (
-                await session.get(TemplateV2LocalState, template.id)
-                is not None
-            )
+            assert await session.get(TemplateV2LocalState, template.id) is not None
             retained = await session.get(
                 TemplateV2PptxImport,
                 import_record.id,
@@ -322,10 +305,7 @@ def test_delete_api_rolls_back_all_mutations_on_dependency_conflict(tmp_path):
         async with session_factory() as session:
             assert await session.get(PresentationModel, presentation.id) is None
             assert await session.get(TemplateV2, template.id) is None
-            assert (
-                await session.get(TemplateV2LocalState, template.id)
-                is None
-            )
+            assert await session.get(TemplateV2LocalState, template.id) is None
             retained = await session.get(
                 TemplateV2PptxImport,
                 import_record.id,
@@ -336,18 +316,163 @@ def test_delete_api_rolls_back_all_mutations_on_dependency_conflict(tmp_path):
     try:
         asyncio.run(setup())
         with TestClient(app) as client:
-            conflict = client.delete(
-                f"/api/v1/ppt/presentation/{presentation.id}"
-            )
+            conflict = client.delete(f"/api/v1/ppt/presentation/{presentation.id}")
             assert conflict.status_code == 409
             assert conflict.json()["detail"]["code"] == (
                 "presentation_delete_dependency_conflict"
             )
             asyncio.run(verify_rollback_and_unblock())
-            retry = client.delete(
-                f"/api/v1/ppt/presentation/{presentation.id}"
-            )
+            retry = client.delete(f"/api/v1/ppt/presentation/{presentation.id}")
             assert retry.status_code == 204
         asyncio.run(verify_retry())
     finally:
+        asyncio.run(engine.dispose())
+
+
+def test_delete_api_returns_retryable_503_and_rolls_back_on_sqlite_lock(
+    tmp_path,
+):
+    database_path = tmp_path / "presentation-delete-locked.db"
+    app, engine, session_factory = _test_app(
+        database_path,
+        sqlite_timeout=0.01,
+    )
+    presentation = _presentation()
+    presentation.share_token = "public-delete-lock-token"
+    slide = SlideModel(
+        presentation=presentation.id,
+        layout_group="default",
+        layout="title",
+        index=0,
+        content={"title": "Locked delete"},
+    )
+    task = AsyncPresentationGenerationTaskModel(
+        id="delete-locked-task",
+        status="SUCCESS",
+    )
+    template = TemplateV2(
+        id="delete-locked-template",
+        presentation_id=presentation.id,
+        name="Locked delete template",
+    )
+    local_state = TemplateV2LocalState(
+        template_id=template.id,
+        presentation_id=presentation.id,
+    )
+    import_record = TemplateV2PptxImport(
+        task_id=task.id,
+        requested_template_id=template.id,
+        draft_template_id=template.id,
+        state="ready",
+        source_filename="locked.pptx",
+        source_media_type=(
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        ),
+        source_size_bytes=4,
+        source_sha256="2" * 64,
+        source_storage_key="imports/delete-locked/source.pptx",
+    )
+
+    async def setup():
+        async with engine.begin() as connection:
+            await connection.run_sync(
+                lambda sync_connection: SQLModel.metadata.create_all(
+                    sync_connection,
+                    tables=[
+                        PresentationModel.__table__,
+                        SlideModel.__table__,
+                        AsyncPresentationGenerationTaskModel.__table__,
+                        TemplateV2.__table__,
+                        TemplateV2LocalState.__table__,
+                        TemplateV2PptxImport.__table__,
+                    ],
+                )
+            )
+        async with session_factory() as session:
+            session.add_all(
+                [
+                    presentation,
+                    slide,
+                    task,
+                    template,
+                    local_state,
+                    import_record,
+                ]
+            )
+            await session.commit()
+
+    async def verify_successful_retry():
+        async with session_factory() as session:
+            assert await session.get(PresentationModel, presentation.id) is None
+            assert await session.get(SlideModel, slide.id) is None
+            assert await session.get(TemplateV2, template.id) is None
+            assert await session.get(TemplateV2LocalState, template.id) is None
+            retained = await session.get(
+                TemplateV2PptxImport,
+                import_record.id,
+            )
+            assert retained is not None
+            assert retained.draft_template_id is None
+
+    lock_holder = None
+    try:
+        asyncio.run(setup())
+        lock_holder = sqlite3.connect(
+            database_path,
+            isolation_level=None,
+            timeout=1,
+        )
+        lock_holder.execute("PRAGMA foreign_keys=ON")
+        lock_holder.execute("BEGIN IMMEDIATE")
+        lock_holder.execute(
+            "UPDATE presentations SET title = ? WHERE id = ?",
+            ("concurrent writer", presentation.id.hex),
+        )
+
+        with TestClient(app) as client:
+            response = client.delete(f"/api/v1/ppt/presentation/{presentation.id}")
+
+            assert response.status_code == 503
+            assert response.headers["Retry-After"] == "1"
+            assert response.json()["detail"] == {
+                "code": "presentation_delete_temporarily_unavailable",
+                "presentation_id": str(presentation.id),
+                "retryable": True,
+            }
+
+            for table_name in (
+                "presentations",
+                "slides",
+                "template_v2",
+                "template_v2_local_state",
+                "template_v2_pptx_imports",
+            ):
+                assert (
+                    lock_holder.execute(
+                        f"SELECT COUNT(*) FROM {table_name}"
+                    ).fetchone()[0]
+                    == 1
+                )
+            retained_token, retained_draft = lock_holder.execute(
+                """
+                SELECT presentations.share_token, imports.draft_template_id
+                FROM presentations
+                JOIN template_v2_pptx_imports AS imports
+                  ON imports.draft_template_id = ?
+                WHERE presentations.id = ?
+                """,
+                (template.id, presentation.id.hex),
+            ).fetchone()
+            assert retained_token == "public-delete-lock-token"
+            assert retained_draft == template.id
+
+            lock_holder.rollback()
+            retry = client.delete(f"/api/v1/ppt/presentation/{presentation.id}")
+            assert retry.status_code == 204
+
+        asyncio.run(verify_successful_retry())
+    finally:
+        if lock_holder is not None:
+            lock_holder.rollback()
+            lock_holder.close()
         asyncio.run(engine.dispose())
