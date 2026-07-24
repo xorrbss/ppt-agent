@@ -21,8 +21,9 @@ from utils.datetime_utils import get_current_utc_datetime
 class TemplateV2LocalState(SQLModel, table=True):
     """Local provenance and edit state kept outside canonical Template V2.
 
-    Its presentation cascade deletes this child row only. It does not replace
-    the transitional presentation-to-canonical-template ownership cascade.
+    Parent-first deletion is restricted. The presentation deletion service
+    deletes the canonical template first, which cascades to this row, before
+    deleting the presentation.
     """
 
     __tablename__ = "template_v2_local_state"
@@ -57,7 +58,7 @@ class TemplateV2LocalState(SQLModel, table=True):
                 name=(
                     "fk_template_v2_local_state_presentation_id_presentations"
                 ),
-                ondelete="CASCADE",
+                ondelete="RESTRICT",
             ),
             nullable=False,
         )

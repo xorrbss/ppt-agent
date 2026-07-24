@@ -18,6 +18,10 @@ from models.presentation_with_slides import PresentationWithSlides
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from services.database import get_async_session
+from services.presentation_deletion_service import (
+    PresentationDeleteConflictError,
+    PresentationDeletionService,
+)
 
 from api.v1.ppt.endpoints.presentation_helpers import resolve_presentation_fonts
 
@@ -80,8 +84,16 @@ async def delete_presentation(
     if not presentation:
         raise HTTPException(404, "Presentation not found")
 
-    await sql_session.delete(presentation)
-    await sql_session.commit()
+    try:
+        await PresentationDeletionService(sql_session).delete(presentation)
+    except PresentationDeleteConflictError as error:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "presentation_delete_dependency_conflict",
+                "presentation_id": str(error.presentation_id),
+            },
+        ) from error
 
 
 @PRESENTATION_CRUD_ROUTER.post("/create", response_model=PresentationModel)

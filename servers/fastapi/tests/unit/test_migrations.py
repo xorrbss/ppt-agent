@@ -301,9 +301,12 @@ def test_template_v2_phase_one_migration_is_additive_from_actual_previous_head(
                 for column in db_inspector.get_columns("template_v2")
             }
             template_foreign_keys = db_inspector.get_foreign_keys("template_v2")
+            local_state_foreign_keys = db_inspector.get_foreign_keys(
+                "template_v2_local_state"
+            )
             template_indexes = db_inspector.get_indexes("template_v2")
 
-        assert revision == migrations.REVISION_TEMPLATE_V2_LOCAL_STATE
+        assert revision == migrations.REVISION_TEMPLATE_V2_DELETE_SAFETY
         assert "template_v2" in tables
         assert "template_v2_local_state" in tables
         assert "template_v2_pptx_imports" in tables
@@ -316,7 +319,16 @@ def test_template_v2_phase_one_migration_is_additive_from_actual_previous_head(
         assert any(
             foreign_key["name"]
             == "fk_template_v2_presentation_id_presentations"
+            and foreign_key["options"]["ondelete"] == "RESTRICT"
             for foreign_key in template_foreign_keys
+        )
+        assert any(
+            foreign_key["name"]
+            == (
+                "fk_template_v2_local_state_presentation_id_presentations"
+            )
+            and foreign_key["options"]["ondelete"] == "RESTRICT"
+            for foreign_key in local_state_foreign_keys
         )
         assert any(
             index["name"] == "ix_template_v2_presentation_id"
@@ -1398,7 +1410,7 @@ def test_template_v2_upgrade_downgrade_upgrade_cycle(tmp_path):
                 connection.execute(
                     text("SELECT version_num FROM alembic_version")
                 ).scalar_one()
-                == migrations.REVISION_TEMPLATE_V2_LOCAL_STATE
+                == migrations.REVISION_TEMPLATE_V2_DELETE_SAFETY
             )
             assert migrations.TEMPLATE_V2_EXPECTED_COLUMNS.issubset(
                 {
@@ -1437,7 +1449,7 @@ def test_template_v2_upgrade_downgrade_upgrade_cycle(tmp_path):
                 connection.execute(
                     text("SELECT version_num FROM alembic_version")
                 ).scalar_one()
-                == migrations.REVISION_TEMPLATE_V2_LOCAL_STATE
+                == migrations.REVISION_TEMPLATE_V2_DELETE_SAFETY
             )
             assert "template_v2" in inspector.get_table_names()
             assert migrations.SLIDE_UI_CHECK_CONSTRAINT in {

@@ -5,6 +5,7 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 import migrations
@@ -16,6 +17,7 @@ from template_v2_schema_contract import (
     TEMPLATE_V2_CANONICAL_COLUMNS,
     TEMPLATE_V2_IMPORT_LIFECYCLE_COLUMNS,
     TEMPLATE_V2_LEGACY_DROP_REQUIREMENT,
+    TEMPLATE_V2_PRESENTATION_DELETE_POLICY,
     TEMPLATE_V2_PRESENTATION_OWNERSHIP_POLICY,
     TEMPLATE_V2_TRANSITIONAL_LOCAL_COLUMNS,
     _default_is,
@@ -153,7 +155,7 @@ def test_local_state_migration_backfills_and_validates_sidecars(tmp_path):
                 connection.execute(
                     text("SELECT version_num FROM alembic_version")
                 ).scalar_one()
-                == migrations.REVISION_TEMPLATE_V2_LOCAL_STATE
+                == migrations.REVISION_TEMPLATE_V2_DELETE_SAFETY
             )
             assert set(inspector.get_table_names()) >= {
                 "template_v2",
@@ -217,13 +219,15 @@ def test_complete_schema_inference_recognizes_local_state_head(tmp_path):
                     set(inspector.get_table_names()),
                     "ignored-future-head",
                 )
-                == migrations.REVISION_TEMPLATE_V2_LOCAL_STATE
+                == migrations.REVISION_TEMPLATE_V2_DELETE_SAFETY
             )
     finally:
         engine.dispose()
 
 
-def test_presentation_delete_cascades_canonical_template_and_sidecar(tmp_path):
+def test_parent_first_delete_is_restricted_and_downgrade_restores_cascade(
+    tmp_path,
+):
     database_url = f"sqlite:///{tmp_path / 'template-v2-cascade.db'}"
     engine = _create_database_at_retention_head(database_url)
     config = _alembic_config(database_url)
@@ -237,7 +241,104 @@ def test_presentation_delete_cascades_canonical_template_and_sidecar(tmp_path):
                 TEMPLATE_V2_PRESENTATION_OWNERSHIP_POLICY
                 == "presentation-owned"
             )
+            assert (
+                TEMPLATE_V2_PRESENTATION_DELETE_POLICY
+                == "explicit-child-first"
+            )
             assert "child-to-parent" in TEMPLATE_V2_LEGACY_DROP_REQUIREMENT
+            template_fk = next(
+                foreign_key
+                for foreign_key in inspect(connection).get_foreign_keys(
+                    "template_v2"
+                )
+                if foreign_key["name"]
+                == "fk_template_v2_presentation_id_presentations"
+            )
+            local_state_fk = next(
+                foreign_key
+                for foreign_key in inspect(connection).get_foreign_keys(
+                    "template_v2_local_state"
+                )
+                if foreign_key["name"]
+                == (
+                    "fk_template_v2_local_state_presentation_id_"
+                    "presentations"
+                )
+            )
+            assert template_fk["options"]["ondelete"] == "RESTRICT"
+            assert local_state_fk["options"]["ondelete"] == "RESTRICT"
+            with pytest.raises(IntegrityError):
+                connection.execute(
+                    text(
+                        "DELETE FROM presentations "
+                        "WHERE id = :presentation_id"
+                    ),
+                    {
+                        "presentation_id": (
+                            "11111111111111111111111111111111"
+                        )
+                    },
+                )
+            connection.rollback()
+            assert connection.execute(
+                text("SELECT COUNT(*) FROM template_v2")
+            ).scalar_one() == 1
+            assert connection.execute(
+                text("SELECT COUNT(*) FROM template_v2_local_state")
+            ).scalar_one() == 1
+
+        command.downgrade(
+            config,
+            migrations.REVISION_TEMPLATE_V2_LOCAL_STATE,
+        )
+        with engine.connect() as connection:
+            connection.execute(text("PRAGMA foreign_keys = ON"))
+            template_fk = next(
+                foreign_key
+                for foreign_key in inspect(connection).get_foreign_keys(
+                    "template_v2"
+                )
+                if foreign_key["name"]
+                == "fk_template_v2_presentation_id_presentations"
+            )
+            local_state_fk = next(
+                foreign_key
+                for foreign_key in inspect(connection).get_foreign_keys(
+                    "template_v2_local_state"
+                )
+                if foreign_key["name"]
+                == (
+                    "fk_template_v2_local_state_presentation_id_"
+                    "presentations"
+                )
+            )
+            assert template_fk["options"]["ondelete"] == "CASCADE"
+            assert local_state_fk["options"]["ondelete"] == "CASCADE"
+            assert connection.execute(
+                text(
+                    """
+                    SELECT id, presentation_id, name, revision
+                    FROM template_v2
+                    """
+                )
+            ).one() == (
+                "template-local-state",
+                "11111111111111111111111111111111",
+                "Backfilled",
+                1,
+            )
+            assert connection.execute(
+                text(
+                    """
+                    SELECT template_id, presentation_id, revision
+                    FROM template_v2_local_state
+                    """
+                )
+            ).one() == (
+                "template-local-state",
+                "11111111111111111111111111111111",
+                1,
+            )
             connection.execute(
                 text(
                     "DELETE FROM presentations WHERE id = :presentation_id"
@@ -264,6 +365,83 @@ def test_presentation_delete_cascades_canonical_template_and_sidecar(tmp_path):
             assert "template_v2_local_state" not in inspect(
                 connection
             ).get_table_names()
+    finally:
+        engine.dispose()
+
+
+def test_delete_safety_migration_rejects_divergent_sidecar_ownership(
+    tmp_path,
+):
+    database_url = (
+        f"sqlite:///{tmp_path / 'template-v2-delete-safety-guard.db'}"
+    )
+    engine = _create_database_at_retention_head(database_url)
+    config = _alembic_config(database_url)
+    try:
+        _insert_template_before_sidecar(engine, revision=2)
+        command.upgrade(
+            config,
+            migrations.REVISION_TEMPLATE_V2_LOCAL_STATE,
+        )
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO presentations (id, version, mode)
+                    VALUES (:presentation_id, 'v2-standard', 'template')
+                    """
+                ),
+                {
+                    "presentation_id": (
+                        "22222222222222222222222222222222"
+                    )
+                },
+            )
+            connection.execute(
+                text(
+                    """
+                    UPDATE template_v2_local_state
+                    SET presentation_id = :presentation_id
+                    WHERE template_id = 'template-local-state'
+                    """
+                ),
+                {
+                    "presentation_id": (
+                        "22222222222222222222222222222222"
+                    )
+                },
+            )
+
+        with pytest.raises(
+            RuntimeError,
+            match="requires complete, matching local-state ownership",
+        ):
+            command.upgrade(
+                config,
+                migrations.REVISION_TEMPLATE_V2_DELETE_SAFETY,
+            )
+
+        with engine.connect() as connection:
+            inspector = inspect(connection)
+            assert (
+                connection.execute(
+                    text("SELECT version_num FROM alembic_version")
+                ).scalar_one()
+                == migrations.REVISION_TEMPLATE_V2_LOCAL_STATE
+            )
+            template_fk = next(
+                foreign_key
+                for foreign_key in inspector.get_foreign_keys("template_v2")
+                if foreign_key["name"]
+                == "fk_template_v2_presentation_id_presentations"
+            )
+            assert template_fk["options"]["ondelete"] == "CASCADE"
+            assert connection.execute(
+                text("SELECT COUNT(*) FROM template_v2")
+            ).scalar_one() == 1
+            assert connection.execute(
+                text("SELECT COUNT(*) FROM template_v2_local_state")
+            ).scalar_one() == 1
     finally:
         engine.dispose()
 

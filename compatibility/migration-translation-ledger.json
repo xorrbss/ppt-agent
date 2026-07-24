@@ -3,7 +3,7 @@
   "baselineUpstreamSha": "57b194b234b42c8b28f8a507a30322de200e3e83",
   "commonRevision": "c7b70d0f31b1",
   "upstreamTipRevision": "b8e2f4a7c9d1",
-  "localTipRevision": "f9a0b1c2d3e4",
+  "localTipRevision": "0a1b2c3d4e5f",
   "upstreamChain": [
     { "revision": "6e4a1b2c3d5f", "downRevision": "c7b70d0f31b1", "file": "6e4a1b2c3d5f_add_template_v2_and_presentation_version.py" },
     { "revision": "7f5b2c3d4e6a", "downRevision": "6e4a1b2c3d5f", "file": "7f5b2c3d4e6a_add_slide_ui.py" },
@@ -27,7 +27,8 @@
     { "revision": "c6d7e8f9a0b1", "downRevision": "b5c6d7e8f9a0", "file": "c6d7e8f9a0b1_add_template_v2_revision.py" },
     { "revision": "d7e8f9a0b1c2", "downRevision": "c6d7e8f9a0b1", "file": "d7e8f9a0b1c2_add_template_v2_import_attempt_lease.py" },
     { "revision": "e8f9a0b1c2d3", "downRevision": "d7e8f9a0b1c2", "file": "e8f9a0b1c2d3_add_template_v2_source_retention.py" },
-    { "revision": "f9a0b1c2d3e4", "downRevision": "e8f9a0b1c2d3", "file": "f9a0b1c2d3e4_add_template_v2_local_state_sidecar.py" }
+    { "revision": "f9a0b1c2d3e4", "downRevision": "e8f9a0b1c2d3", "file": "f9a0b1c2d3e4_add_template_v2_local_state_sidecar.py" },
+    { "revision": "0a1b2c3d4e5f", "downRevision": "f9a0b1c2d3e4", "file": "0a1b2c3d4e5f_harden_template_v2_delete_cascade.py" }
   ],
   "translations": [
     {
@@ -120,7 +121,16 @@
       "revision": "f9a0b1c2d3e4",
       "purpose": "Private Template V2 local revision sidecar",
       "ownershipPolicy": "presentation-owned",
-      "legacyColumnDropGuard": "Do not drop template_v2.presentation_id until the dropping migration first validates complete, non-orphaned sidecars and atomically installs a verified presentations-to-template_v2 delete path. The sidecar presentation FK only deletes the sidecar child."
+      "legacyColumnDropGuard": "Do not drop template_v2.presentation_id until the dropping migration validates complete, non-orphaned sidecars and verifies that the explicit child-first presentations-to-template_v2 delete path remains authoritative without this foreign key. The sidecar presentation FK only deletes the sidecar child; SQL cascades do not run child-to-parent."
+    },
+    {
+      "revision": "0a1b2c3d4e5f",
+      "purpose": "Fail-closed Template V2 presentation deletion",
+      "ownershipPolicy": "presentation-owned",
+      "deletePolicy": "explicit-child-first",
+      "foreignKeyPolicy": "RESTRICT on both canonical and local-state presentation ownership foreign keys",
+      "compatibilityGuard": "Validate complete, matching sidecar ownership before replacing both presentation ownership CASCADE actions with RESTRICT. Delete canonical templates explicitly in the presentation transaction and preserve import audit rows.",
+      "conflictPolicy": "Return 409 presentation_delete_dependency_conflict when ownership diverges or a concurrent dependency survives."
     }
   ]
 }

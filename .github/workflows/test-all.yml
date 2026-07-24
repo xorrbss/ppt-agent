@@ -110,6 +110,16 @@ jobs:
     - name: Run composeStyledTheme unit test
       run: node --experimental-strip-types "app/(presentation-generator)/presentation/utils/composeStyledTheme.test.mjs"
 
+    - name: Run Template V2 Studio and upstream render compatibility tests
+      run: >-
+        node --experimental-strip-types --test --test-concurrency=1
+        lib/template-v2-upstream-compat.test.ts
+        lib/template-v2-studio.test.ts
+        lib/template-v2-studio-ui.test.ts
+        lib/template-v2-render-plan.test.mjs
+        lib/template-v2-general-renderer.test.mjs
+        lib/template-v2-upstream-render-compat.test.mjs
+
     - name: Build application
       env:
         NEXT_PUBLIC_FAST_API: http://localhost:8000
@@ -127,6 +137,6 @@ jobs:
       with:
         working-directory: servers/nextjs
         component: true
-        spec: "**/AdaptiveBlockControls.cy.tsx,**/AdaptivePropertyControls.cy.tsx,**/ChartLeaf.cy.tsx,**/Variants.cy.tsx,**/UploadPage.cy.tsx,**/ThemeComposer.cy.tsx,**/TemplateSelection.cy.tsx,**/presentationGenUpload.cy.ts,**/presentation-generation.cy.ts,**/api/authored.cy.ts,**/usePresentationGeneration.cy.tsx,**/PresentationHeader.cy.tsx"
+        spec: "**/AdaptiveBlockControls.cy.tsx,**/AdaptivePropertyControls.cy.tsx,**/ChartLeaf.cy.tsx,**/Variants.cy.tsx,**/UploadPage.cy.tsx,**/ThemeComposer.cy.tsx,**/TemplateSelection.cy.tsx,**/presentationGenUpload.cy.ts,**/presentation-generation.cy.ts,**/api/authored.cy.ts,**/usePresentationGeneration.cy.tsx,**/PresentationHeader.cy.tsx,**/TemplateV2Studio.cy.tsx"
         install: false
 

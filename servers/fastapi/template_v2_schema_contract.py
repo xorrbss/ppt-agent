@@ -102,11 +102,15 @@ TEMPLATE_V2_LOCAL_STATE_REVISION_CHECK = (
     "ck_template_v2_local_state_revision_positive"
 )
 TEMPLATE_V2_PRESENTATION_OWNERSHIP_POLICY = "presentation-owned"
+TEMPLATE_V2_PRESENTATION_DELETE_POLICY = "explicit-child-first"
+TEMPLATE_V2_PRESENTATION_FK_DELETE_ACTIONS = frozenset(
+    {"CASCADE", "RESTRICT"}
+)
 TEMPLATE_V2_LEGACY_DROP_REQUIREMENT = (
-    "A migration that removes template_v2.presentation_id must install and "
-    "verify a replacement presentations-to-template_v2 delete path in the "
-    "same transaction. The sidecar presentation FK only cascades deletion of "
-    "the sidecar row; SQL foreign-key cascades do not run child-to-parent."
+    "The presentation deletion service must validate sidecar ownership and "
+    "delete template_v2 children before their presentation. A migration that "
+    "removes template_v2.presentation_id must preserve and verify that "
+    "explicit child-to-parent deletion path in the same transaction."
 )
 
 
@@ -252,6 +256,9 @@ def validate_template_v2_phase_one_schema(
     connection,
     *,
     allowed_extra_columns: frozenset[str] = frozenset(),
+    allowed_presentation_fk_ondelete: frozenset[str] = frozenset(
+        {"CASCADE"}
+    ),
 ) -> PhaseOneSchemaReport:
     """Classify safe missing Phase 1 additions separately from corruption.
 
@@ -474,7 +481,7 @@ def validate_template_v2_phase_one_schema(
         or provenance_fk.get("referred_table") != "presentations"
         or provenance_fk.get("referred_columns") != ["id"]
         or str((provenance_fk.get("options") or {}).get("ondelete", "")).upper()
-        != "CASCADE"
+        not in allowed_presentation_fk_ondelete
     ):
         incompatible.append(
             f"{TEMPLATE_V2_PRESENTATION_FK} has incorrect semantics"
@@ -701,13 +708,16 @@ def validate_template_v2_local_sidecars(connection) -> PhaseOneSchemaReport:
                 f"{TEMPLATE_V2_LOCAL_STATE_TABLE} requires named FK "
                 f"{TEMPLATE_V2_LOCAL_STATE_TEMPLATE_FK}"
             )
-        if not _foreign_key_matches(
-            foreign_keys,
-            name=TEMPLATE_V2_LOCAL_STATE_PRESENTATION_FK,
-            columns=["presentation_id"],
-            referred_table="presentations",
-            referred_columns=["id"],
-            ondelete="CASCADE",
+        if not any(
+            _foreign_key_matches(
+                foreign_keys,
+                name=TEMPLATE_V2_LOCAL_STATE_PRESENTATION_FK,
+                columns=["presentation_id"],
+                referred_table="presentations",
+                referred_columns=["id"],
+                ondelete=delete_action,
+            )
+            for delete_action in TEMPLATE_V2_PRESENTATION_FK_DELETE_ACTIONS
         ):
             incompatible.append(
                 f"{TEMPLATE_V2_LOCAL_STATE_TABLE} requires named FK "
@@ -824,15 +834,60 @@ def validate_template_v2_local_sidecars(connection) -> PhaseOneSchemaReport:
     return PhaseOneSchemaReport(tuple(repairable), tuple(incompatible))
 
 
+def template_v2_presentation_fk_delete_action(inspector) -> str | None:
+    """Return the normalized delete action for the transitional ownership FK."""
+
+    if not hasattr(inspector, "get_foreign_keys"):
+        return None
+    foreign_key = next(
+        (
+            candidate
+            for candidate in inspector.get_foreign_keys("template_v2")
+            if candidate.get("name") == TEMPLATE_V2_PRESENTATION_FK
+        ),
+        None,
+    )
+    if foreign_key is None:
+        return None
+    return str(
+        (foreign_key.get("options") or {}).get("ondelete", "")
+    ).upper()
+
+
+def template_v2_local_state_presentation_fk_delete_action(
+    inspector,
+) -> str | None:
+    """Return the normalized delete action for the sidecar ownership FK."""
+
+    if not hasattr(inspector, "get_foreign_keys"):
+        return None
+    foreign_key = next(
+        (
+            candidate
+            for candidate in inspector.get_foreign_keys(
+                TEMPLATE_V2_LOCAL_STATE_TABLE
+            )
+            if candidate.get("name")
+            == TEMPLATE_V2_LOCAL_STATE_PRESENTATION_FK
+        ),
+        None,
+    )
+    if foreign_key is None:
+        return None
+    return str(
+        (foreign_key.get("options") or {}).get("ondelete", "")
+    ).upper()
+
+
 def require_template_v2_legacy_provenance_drop_data_ready(connection) -> None:
     """Require the data half of a future legacy-column drop contract.
 
     This is a necessary precondition, not permission to drop the legacy
     column. The dropping migration must also install and verify a replacement
     presentation-owned delete path as described by
-    ``TEMPLATE_V2_LEGACY_DROP_REQUIREMENT``. Until then the legacy
-    ``template_v2.presentation_id`` CASCADE is the only database path that
-    deletes the canonical template when its presentation is deleted.
+    ``TEMPLATE_V2_LEGACY_DROP_REQUIREMENT``. Both the old CASCADE and the
+    hardened RESTRICT transition are valid here; the latter relies on the
+    explicit child-first service.
     """
 
     inspector = sa.inspect(connection)
@@ -861,15 +916,21 @@ def require_template_v2_legacy_provenance_drop_data_ready(connection) -> None:
         foreign_key.get("name"): foreign_key
         for foreign_key in inspector.get_foreign_keys("template_v2")
     }
-    if not _foreign_key_matches(
-        legacy_foreign_keys,
-        name=TEMPLATE_V2_PRESENTATION_FK,
-        columns=["presentation_id"],
-        referred_table="presentations",
-        referred_columns=["id"],
-        ondelete="CASCADE",
+    ownership_foreign_key = legacy_foreign_keys.get(
+        TEMPLATE_V2_PRESENTATION_FK
+    )
+    delete_action = str(
+        (ownership_foreign_key or {}).get("options", {}).get("ondelete", "")
+    ).upper()
+    if (
+        ownership_foreign_key is None
+        or ownership_foreign_key.get("constrained_columns")
+        != ["presentation_id"]
+        or ownership_foreign_key.get("referred_table") != "presentations"
+        or ownership_foreign_key.get("referred_columns") != ["id"]
+        or delete_action not in TEMPLATE_V2_PRESENTATION_FK_DELETE_ACTIONS
     ):
         raise RuntimeError(
-            "Template V2 legacy provenance drop data must be validated while "
-            "the presentation-owned legacy CASCADE still exists"
+            "Template V2 legacy provenance drop data requires a known "
+            "presentation ownership foreign key"
         )

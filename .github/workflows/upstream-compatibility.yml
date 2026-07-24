@@ -6,10 +6,12 @@ on:
       - "compatibility/**"
       - "scripts/verify-upstream-compatibility.mjs"
       - "scripts/verify-upstream-compatibility.test.mjs"
+      - "scripts/sync-presentation-export.cjs"
       - "package.json"
       - "presentation-export/.installed-version"
       - "servers/nextjs/package.json"
       - "servers/nextjs/lib/template-v2-general-renderer.mjs"
+      - "servers/nextjs/lib/template-v2-upstream-compat.*"
       - "servers/nextjs/lib/authored-hybrid/**"
       - "servers/nextjs/lib/export-*.ts"
       - "servers/nextjs/lib/presentation-export-boundary.ts"
@@ -17,6 +19,12 @@ on:
       - "servers/nextjs/app/api/export-presentation/route.ts"
       - "servers/fastapi/api/v1/ppt/**"
       - "servers/fastapi/alembic/versions/**"
+      - "servers/fastapi/migrations.py"
+      - "servers/fastapi/services/presentation_deletion_service.py"
+      - "servers/fastapi/template_v2_schema_contract.py"
+      - "servers/fastapi/tests/unit/test_migrations.py"
+      - "servers/fastapi/tests/unit/test_template_v2_local_state_migration.py"
+      - "servers/fastapi/tests/unit/test_presentation_delete_safety.py"
       - ".github/workflows/upstream-compatibility.yml"
   workflow_dispatch:
 
@@ -33,3 +41,25 @@ jobs:
           node-version: "22"
       - name: Verify compatibility manifest and protected patches
         run: node --test scripts/verify-upstream-compatibility.test.mjs
+
+  delete-safety-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: servers/fastapi
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install locked FastAPI dependencies
+        run: uv sync --frozen
+      - name: Verify Windows migration and presentation delete safety
+        run: >-
+          uv run pytest -q --no-header
+          tests/unit/test_migrations.py
+          tests/unit/test_template_v2_local_state_migration.py
+          tests/unit/test_presentation_delete_safety.py

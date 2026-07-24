@@ -87,6 +87,54 @@
           ]
         }
       ]
+    },
+    {
+      "id": "template-v2-delete-integrity",
+      "category": "data-integrity",
+      "rationale": "Prevent broad parent cascades from hiding divergent Template V2 ownership while retaining presentation-owned cleanup and durable PPTX import audit records.",
+      "files": [
+        {
+          "path": "servers/fastapi/alembic/versions/0a1b2c3d4e5f_harden_template_v2_delete_cascade.py",
+          "requiredContains": [
+            "LOCAL_STATE_PRESENTATION_FK",
+            "_require_sidecar_ownership_ready",
+            "connection.dialect.name == \"mysql\"",
+            "replacement=\"RESTRICT\"",
+            "replacement=\"CASCADE\""
+          ]
+        },
+        {
+          "path": "servers/fastapi/services/presentation_deletion_service.py",
+          "requiredContains": [
+            "class PresentationDeletionService",
+            "canonical_ids != sidecar_ids",
+            "delete(TemplateV2)",
+            "PresentationDeleteConflictError"
+          ]
+        },
+        {
+          "path": "servers/fastapi/api/v1/ppt/endpoints/presentation_crud.py",
+          "requiredContains": [
+            "PresentationDeletionService(sql_session).delete(presentation)",
+            "presentation_delete_dependency_conflict"
+          ]
+        },
+        {
+          "path": "servers/fastapi/template_v2_schema_contract.py",
+          "requiredContains": [
+            "TEMPLATE_V2_PRESENTATION_DELETE_POLICY = \"explicit-child-first\"",
+            "TEMPLATE_V2_PRESENTATION_FK_DELETE_ACTIONS"
+          ]
+        },
+        {
+          "path": "servers/fastapi/tests/unit/test_presentation_delete_safety.py",
+          "requiredContains": [
+            "test_delete_api_removes_owned_template_and_preserves_import_audit",
+            "test_delete_api_fails_closed_when_sidecar_ownership_is_missing",
+            "test_delete_api_rolls_back_all_mutations_on_dependency_conflict"
+          ]
+        }
+      ]
     }
   ]
 }

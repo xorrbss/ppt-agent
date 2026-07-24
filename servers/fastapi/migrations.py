@@ -9,6 +9,9 @@ from sqlalchemy import Integer, create_engine, inspect, text
 from template_v2_schema_contract import (
     SLIDE_UI_CHECK_CONSTRAINT,
     TEMPLATE_V2_EXPECTED_COLUMNS as PHASE_ONE_EXPECTED_COLUMNS,
+    TEMPLATE_V2_PRESENTATION_FK_DELETE_ACTIONS,
+    template_v2_local_state_presentation_fk_delete_action,
+    template_v2_presentation_fk_delete_action,
     validate_template_v2_local_sidecars,
     validate_template_v2_phase_one_schema,
 )
@@ -31,6 +34,7 @@ REVISION_TEMPLATE_V2_STUDIO = "c6d7e8f9a0b1"
 REVISION_TEMPLATE_V2_IMPORT_LEASES = "d7e8f9a0b1c2"
 REVISION_TEMPLATE_V2_SOURCE_RETENTION = "e8f9a0b1c2d3"
 REVISION_TEMPLATE_V2_LOCAL_STATE = "f9a0b1c2d3e4"
+REVISION_TEMPLATE_V2_DELETE_SAFETY = "0a1b2c3d4e5f"
 TEMPLATE_V2_IMPORT_LEASE_COLUMNS = {
     "attempt_number",
     "attempt_token",
@@ -188,6 +192,11 @@ def _infer_revision_from_schema(
         report = validate_template_v2_phase_one_schema(
             connection,
             allowed_extra_columns=frozenset({"revision"}),
+            allowed_presentation_fk_ondelete=(
+                TEMPLATE_V2_PRESENTATION_FK_DELETE_ACTIONS
+                if "template_v2_local_state" in tables
+                else frozenset({"CASCADE"})
+            ),
         )
         report.require_compatible()
         if not report.complete:
@@ -264,7 +273,20 @@ def _infer_revision_from_schema(
             raise RuntimeError(
                 "Template V2 local-state sidecar schema is incomplete"
             )
-        return REVISION_TEMPLATE_V2_LOCAL_STATE
+        delete_action = template_v2_presentation_fk_delete_action(inspector)
+        sidecar_delete_action = (
+            template_v2_local_state_presentation_fk_delete_action(inspector)
+        )
+        if delete_action == sidecar_delete_action == "CASCADE":
+            return REVISION_TEMPLATE_V2_LOCAL_STATE
+        if delete_action == sidecar_delete_action == "RESTRICT":
+            return REVISION_TEMPLATE_V2_DELETE_SAFETY
+        raise RuntimeError(
+            "Template V2 presentation ownership FKs have unsupported or "
+            "mixed delete actions: "
+            f"template={delete_action or 'missing'}, "
+            f"sidecar={sidecar_delete_action or 'missing'}"
+        )
 
     # Lightweight fallback for isolated unit inspectors. Runtime inference
     # always has an Inspector.bind and therefore uses the semantic validator.
@@ -310,6 +332,16 @@ def _infer_revision_from_schema(
     }:
         raise RuntimeError(
             "Template V2 local-state sidecar schema is only partially applied"
+        )
+    delete_action = template_v2_presentation_fk_delete_action(inspector)
+    sidecar_delete_action = (
+        template_v2_local_state_presentation_fk_delete_action(inspector)
+    )
+    if delete_action == sidecar_delete_action == "RESTRICT":
+        return REVISION_TEMPLATE_V2_DELETE_SAFETY
+    if delete_action != sidecar_delete_action:
+        raise RuntimeError(
+            "Template V2 presentation ownership FKs have mixed delete actions"
         )
     return REVISION_TEMPLATE_V2_LOCAL_STATE
 

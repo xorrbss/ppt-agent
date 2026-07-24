@@ -57,16 +57,17 @@ class TemplateV2(SQLModel, table=True):
 
     id: str = Field(primary_key=True, default_factory=_new_template_v2_id)
     # Transitional compatibility columns. Their values are backfilled into
-    # template_v2_local_state by revision f9a0b1c2d3e4. The presentation FK
-    # is also the current presentation-owned delete path for the canonical
-    # row; a later migration must install a replacement before removing it.
+    # template_v2_local_state by revision f9a0b1c2d3e4. Revision
+    # 0a1b2c3d4e5f restricts parent-first deletion: the presentation deletion
+    # service validates the sidecar ownership graph and deletes canonical
+    # templates explicitly before deleting their owning presentation.
     presentation_id: uuid.UUID = Field(
         sa_column=Column(
             Uuid,
             ForeignKey(
                 "presentations.id",
                 name="fk_template_v2_presentation_id_presentations",
-                ondelete="CASCADE",
+                ondelete="RESTRICT",
             ),
             nullable=False,
             index=True,
