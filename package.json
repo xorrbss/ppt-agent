@@ -9,7 +9,9 @@
     "sync:presentation-export": "node scripts/sync-presentation-export.cjs",
     "sync:presentation-export:force": "node scripts/sync-presentation-export.cjs --force",
     "check:presentation-export": "node scripts/sync-presentation-export.cjs --check-only",
-    "test:presentation-export-sync": "node --test scripts/sync-presentation-export.test.cjs"
+    "test:presentation-export-sync": "node --test scripts/sync-presentation-export.test.cjs",
+    "test:next-ci": "node --test scripts/ppt-agent.test.mjs && npm --prefix servers/nextjs run test:ci-node",
+    "test:local": "node scripts/test-local.mjs"
   },
   "dependencies": {
     "@llamaindex/liteparse": "^1.5.2",
