@@ -30,6 +30,7 @@ import {
 } from "@/lib/template-v2-studio-autosave";
 import { getTemplateV2HistoryKeyboardIntent } from "@/lib/template-v2-studio-keyboard";
 import { toggleTemplateV2Selection } from "@/lib/template-v2-studio-ui";
+import type { TemplateV2ConflictSnapshot } from "@/lib/template-v2-studio-conflict";
 import {
   adaptUpstreamTemplateV2LayoutsToStudio,
   serializeStudioLayoutsForUpstream,
@@ -37,6 +38,7 @@ import {
 } from "@/lib/template-v2-upstream-compat";
 import { getApiUrl } from "@/utils/api";
 import TemplateV2Canvas from "./TemplateV2Canvas";
+import TemplateV2ConflictRecovery from "./TemplateV2ConflictRecovery";
 import TemplateV2ContentInspector from "./TemplateV2ContentInspector";
 import TemplateV2GeometryInspector from "./TemplateV2GeometryInspector";
 import TemplateV2PptxImportPanel from "./TemplateV2PptxImportPanel";
@@ -213,7 +215,8 @@ export default function TemplateV2Studio({
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [conflict, setConflict] = useState(false);
+  const [conflict, setConflict] =
+    useState<TemplateV2ConflictSnapshot | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const saveTokenRef = useRef(0);
   const mountedRef = useRef(true);
@@ -384,7 +387,7 @@ export default function TemplateV2Studio({
     conflictRef.current = false;
     setLoading(true);
     setError(null);
-    setConflict(false);
+    setConflict(null);
     fetch(
       getApiUrl(
         `/api/v1/ppt/structured-templates/${encodeURIComponent(templateId)}`
@@ -535,9 +538,13 @@ export default function TemplateV2Studio({
       setSaving(true);
       setError(null);
       setNotice(null);
-      setConflict(false);
+      setConflict(null);
     }
     conflictRef.current = false;
+    const serializedLayouts = serializeStudioLayoutsForUpstream(
+      currentTemplate.layoutsDocument,
+      layoutsSnapshot
+    );
     try {
       const response = await fetch(
         getApiUrl(
@@ -553,10 +560,7 @@ export default function TemplateV2Studio({
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            layouts: serializeStudioLayoutsForUpstream(
-              currentTemplate.layoutsDocument,
-              layoutsSnapshot
-            ),
+            layouts: serializedLayouts,
             expected_revision: revisionSnapshot,
           }),
         }
@@ -570,7 +574,18 @@ export default function TemplateV2Studio({
           payload.detail.code === "template_v2_revision_conflict"
         ) {
           conflictRef.current = true;
-          if (mountedRef.current) setConflict(true);
+          const currentRevision =
+            typeof payload.detail.current_revision === "number"
+              ? payload.detail.current_revision
+              : revisionSnapshot;
+          if (mountedRef.current) {
+            setConflict({
+              templateId: currentTemplate.id,
+              expectedRevision: revisionSnapshot,
+              currentRevision,
+              layouts: serializedLayouts,
+            });
+          }
         }
         throw new Error(errorMessage(response.status, payload));
       }
@@ -789,7 +804,7 @@ export default function TemplateV2Studio({
           <button
             type="button"
             onClick={() => void flushAutosave()}
-            disabled={!state.dirty || saving || conflict}
+            disabled={!state.dirty || saving || Boolean(conflict)}
             title={
               conflict
                 ? "Reload the server version before saving again."
@@ -811,25 +826,16 @@ export default function TemplateV2Studio({
         >
           <span>{error}</span>
           {conflict ? (
-            <button
-              type="button"
-              className="rounded border border-red-300/40 px-3 py-1"
-              onClick={() => {
-                if (
-                  window.confirm(
-                    "Reload the server version? Unsaved local edits will be discarded."
-                  )
-                ) {
-                  autosaveRef.current?.discardPending();
-                  conflictRef.current = false;
-                  setConflict(false);
-                  setError(null);
-                  setReloadKey((value) => value + 1);
-                }
+            <TemplateV2ConflictRecovery
+              snapshot={conflict}
+              onReload={() => {
+                autosaveRef.current?.discardPending();
+                conflictRef.current = false;
+                setConflict(null);
+                setError(null);
+                setReloadKey((value) => value + 1);
               }}
-            >
-              Reload server version
-            </button>
+            />
           ) : null}
         </div>
       ) : null}
