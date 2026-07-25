@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import event, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
@@ -24,6 +24,13 @@ from templates.v2.pptx.models import PresentationCandidates
 
 async def _database(path: Path):
     engine = create_async_engine(f"sqlite+aiosqlite:///{path}")
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def enable_sqlite_foreign_keys(dbapi_connection, _connection_record) -> None:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
     maker = async_sessionmaker(engine, expire_on_commit=False)
     async with engine.begin() as connection:
         await connection.run_sync(
@@ -124,6 +131,20 @@ def _analysis_result() -> dict:
         }
     )
     return analyze_ooxml_candidates(candidates).model_dump(mode="json")
+
+
+def test_task_timestamp_normalizes_aware_values_for_legacy_task_columns() -> None:
+    source = datetime.fromisoformat("2026-07-25T08:30:00+09:00")
+
+    assert ingestion._task_timestamp(source) == datetime(
+        2026,
+        7,
+        24,
+        23,
+        30,
+    )
+    naive = datetime(2026, 7, 24, 23, 30)
+    assert ingestion._task_timestamp(naive) is naive
 
 
 async def _mark_review_required(maker, import_id: uuid.UUID, task_id: str) -> None:
