@@ -54,6 +54,115 @@ test("a malformed vector curve is still rejected", () => {
   );
 });
 
+function slideWith(element: Record<string, unknown>) {
+  return {
+    ui: {
+      components: [
+        { id: "component", position: { x: 0, y: 0 }, elements: [element] },
+      ],
+    },
+  };
+}
+
+function planOnlyElement(element: Record<string, unknown>) {
+  return createTemplateV2SlideRenderPlan(slideWith(element)).components[0].elements[0];
+}
+
+test("a null vector shape means absent, not an invalid shape", () => {
+  // The bundled converter emits straight-line connectors with no `shape` key at all;
+  // Vector.shape is Optional, so model_dump(mode="json") writes it back as null.
+  const node = planOnlyElement({
+    type: "vector",
+    closed: false,
+    stroke: { color: "#333333", width: 1 },
+    shape: null,
+    points: [
+      { x: 0, y: 0 },
+      { x: 120, y: 80 },
+    ],
+  });
+
+  assert.equal(node.vector.shape, null);
+  assert.equal(node.vector.closed, false);
+  assert.deepEqual(node.frame, { x: 0, y: 0, width: 120, height: 80 });
+});
+
+test("a malformed vector shape is still rejected", () => {
+  assert.throws(
+    () =>
+      planOnlyElement({
+        type: "vector",
+        shape: "hexagon",
+        points: [
+          { x: 0, y: 0 },
+          { x: 10, y: 10 },
+        ],
+      }),
+    /invalid_vector_shape/
+  );
+});
+
+test("a null grid rows means absent, not an invalid row count", () => {
+  const node = planOnlyElement({
+    type: "grid",
+    columns: 2,
+    rows: null,
+    position: { x: 0, y: 0 },
+    size: { width: 200, height: 100 },
+    children: [
+      {
+        type: "vector",
+        shape: "polygon",
+        points: [
+          { x: 0, y: 0 },
+          { x: 40, y: 0 },
+          { x: 40, y: 20 },
+        ],
+      },
+    ],
+  });
+
+  // rows fell back to the derived count instead of tripping grid_contract_required.
+  assert.equal(node.children.length, 1);
+  assert.equal(node.frame.height, 100);
+});
+
+test("a malformed grid rows is still rejected", () => {
+  assert.throws(
+    () => planOnlyElement({ type: "grid", columns: 2, rows: 0, children: [] }),
+    /grid_contract_required/
+  );
+});
+
+test("a null chart size means absent, not an undersized chart", () => {
+  const node = planOnlyElement({
+    type: "chart",
+    chart_type: "bar",
+    size: null,
+    categories: ["a", "b"],
+    series: [{ name: "s", values: [1, 2] }],
+  });
+
+  assert.equal(node.frame.width, null);
+  assert.equal(node.frame.height, null);
+  assert.equal(node.chart.type, "bar");
+  assert.deepEqual(node.chart.categories, ["a", "b"]);
+});
+
+test("a genuinely undersized chart is still rejected", () => {
+  assert.throws(
+    () =>
+      planOnlyElement({
+        type: "chart",
+        chart_type: "bar",
+        size: { width: 40, height: 30 },
+        categories: ["a"],
+        series: [{ name: "s", values: [1] }],
+      }),
+    /invalid_chart_size/
+  );
+});
+
 test("run styling survives the style attribute instead of truncating it", () => {
   const html = renderTemplateV2GeneralSlideCanvasHtml({
     ui: {

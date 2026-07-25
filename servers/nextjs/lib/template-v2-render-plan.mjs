@@ -403,7 +403,15 @@ function planVector(element, path) {
     fail("template_v2_render_plan_vector_points_required", path);
   }
   const rawPoints = element.points.map((value, index) => point(value, `${path}.points.${index}`));
-  if (element.shape !== undefined && !["polygon", "ellipse"].includes(element.shape)) {
+  // `null` means absent for every optional key here, exactly as optionalRecord and
+  // optionalFinite already treat it. Producers that serialise optional fields --
+  // pydantic's model_dump(mode="json") among them -- emit null rather than omitting
+  // the key, and rejecting that killed the whole deck over one shape.
+  if (
+    element.shape !== undefined &&
+    element.shape !== null &&
+    !["polygon", "ellipse"].includes(element.shape)
+  ) {
     fail("template_v2_render_plan_invalid_vector_shape", `${path}.shape`);
   }
   if (element.shape === "ellipse" && rawPoints.length !== 2) {
@@ -415,10 +423,6 @@ function planVector(element, path) {
     "template_v2_render_plan_invalid_vector_curve",
     `${path}.curve`
   );
-  // `null` means absent, exactly as optionalRecord and the sampling branch below
-  // already treat it. Producers that serialise optional fields -- pydantic's
-  // model_dump(mode="json") among them -- emit null rather than omitting the key,
-  // and rejecting that killed the whole deck over one shape.
   if (element.curve !== undefined && element.curve !== null && curve.type !== "smooth") {
     fail("template_v2_render_plan_invalid_vector_curve", `${path}.curve.type`);
   }
@@ -809,7 +813,11 @@ function gridPlacements(element, frame, path) {
   if (!Array.isArray(element.children) || !Number.isInteger(element.columns) || element.columns < 1) {
     fail("template_v2_render_plan_grid_contract_required", path);
   }
-  if (element.rows !== undefined && (!Number.isInteger(element.rows) || element.rows < 1)) {
+  if (
+    element.rows !== undefined &&
+    element.rows !== null &&
+    (!Number.isInteger(element.rows) || element.rows < 1)
+  ) {
     fail("template_v2_render_plan_grid_contract_required", `${path}.rows`);
   }
   const rows = element.rows ?? Math.max(1, Math.ceil(element.children.length / element.columns));
@@ -886,6 +894,7 @@ function planElement(element, path, parentAbsolute, frameOverride = null) {
   if (element.type === "chart") {
     if (
       element.size !== undefined &&
+      element.size !== null &&
       (frame.width === null || frame.height === null || frame.width < 80 || frame.height < 60)
     ) {
       fail("template_v2_render_plan_invalid_chart_size", `${path}.size`);
