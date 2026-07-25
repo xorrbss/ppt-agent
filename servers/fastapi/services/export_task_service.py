@@ -50,6 +50,18 @@ class PptxToHtmlDocument(BaseModel):
     fonts_dir: str
 
 
+class PptxToJsonDocument(BaseModel):
+    """Raw slide layouts emitted by the bundled converter's `pptx-to-json` task.
+
+    Deliberately permissive: this is the transport shape. Strict validation belongs
+    to `templates.v2`, which owns the element contract, so a converter upgrade that
+    adds a field surfaces there rather than failing the task at the service layer.
+    """
+
+    layouts: list[dict]
+    output_dir: str = ""
+
+
 class PresentationExportTaskResult(BaseModel):
     path: str
 
@@ -429,6 +441,51 @@ class ExportTaskService:
             raise HTTPException(
                 status_code=500,
                 detail="PPTX-to-HTML export produced invalid JSON output",
+            ) from exc
+
+    async def convert_pptx_to_json(
+        self, pptx_path: str, *, session_id: str
+    ) -> PptxToJsonDocument:
+        """Convert a PPTX into raw slide layouts, extracting embedded media to disk.
+
+        `session_id` is required by the converter's task schema even though it does
+        not determine the output location -- the runtime allocates its own directory
+        per run. Callers that need to reclaim the extracted media must use
+        `output_dir`, not a path derived from the session id.
+        """
+        if not os.path.isfile(pptx_path):
+            raise HTTPException(status_code=400, detail=f"PPTX not found: {pptx_path}")
+
+        try:
+            response_data = await self._run_task(
+                {
+                    "type": "pptx-to-json",
+                    "pptx_path": pptx_path,
+                    "session_id": session_id,
+                },
+                "PPTX-to-JSON export task did not produce a response file",
+            )
+
+            output_path = self._resolve_output_path(response_data)
+            with open(output_path, "r", encoding="utf-8") as output_file:
+                output_data = json.load(output_file)
+
+            if not isinstance(output_data, dict):
+                raise HTTPException(
+                    status_code=500,
+                    detail="PPTX-to-JSON export produced invalid output",
+                )
+            output_data.setdefault("output_dir", os.path.dirname(output_path))
+            return PptxToJsonDocument(**output_data)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(
+                status_code=500,
+                detail="PPTX-to-JSON export produced invalid JSON output",
+            ) from exc
+        except ValidationError as exc:
+            raise HTTPException(
+                status_code=500,
+                detail="PPTX-to-JSON export produced invalid output",
             ) from exc
 
     async def extract_schema(self, url: str) -> ExtractSchemaDocument:
