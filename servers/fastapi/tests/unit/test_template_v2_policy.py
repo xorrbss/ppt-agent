@@ -18,6 +18,7 @@ def test_missing_configuration_is_default_off_and_not_canary_ready():
         "feature_enabled": False,
         "configuration_valid": True,
         "allowlisted_template_count": 0,
+        "pptx_analyzer": "deterministic",
     }
 
 
@@ -38,6 +39,7 @@ def test_exact_flag_and_explicit_allowlist_are_both_required_for_canary():
         "feature_enabled": True,
         "configuration_valid": True,
         "allowlisted_template_count": 2,
+        "pptx_analyzer": "deterministic",
     }
     assert ready.can_discover("canary-a") is True
     assert ready.can_discover("not-allowlisted") is False
@@ -92,6 +94,72 @@ def test_malformed_allowlist_is_never_partially_honored(allowlist):
     assert policy.can_discover("canary-a") is False
     assert readiness.code == "template_v2_allowlist_invalid"
     assert readiness.allowlisted_template_count == 0
+    with pytest.raises(
+        StructuredTemplatePolicyError,
+        match="template_v2_rollout_config_invalid",
+    ):
+        policy.require_write_enabled("canary-a")
+
+
+@pytest.mark.parametrize("environ", [{}, {"TEMPLATE_V2_PPTX_ANALYZER": "   "}])
+def test_unset_pptx_analyzer_defaults_to_the_deterministic_parser(environ):
+    policy = get_structured_template_policy(environ)
+
+    readiness = policy.canary_readiness()
+    assert policy.pptx_analyzer == "deterministic"
+    assert policy.configuration_error is None
+    assert readiness.pptx_analyzer == "deterministic"
+    assert readiness.configuration_valid is True
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("deterministic", "deterministic"),
+        ("  DETERMINISTIC\n", "deterministic"),
+        ("runtime", "runtime"),
+        (" Runtime ", "runtime"),
+    ],
+)
+def test_known_pptx_analyzers_are_selected_without_affecting_readiness(
+    value, expected
+):
+    policy = get_structured_template_policy(
+        {
+            "ENABLE_TEMPLATE_V2": "true",
+            "TEMPLATE_V2_TEMPLATE_ALLOWLIST": "canary-a",
+            "TEMPLATE_V2_PPTX_ANALYZER": value,
+        }
+    )
+
+    readiness = policy.canary_readiness()
+    assert policy.pptx_analyzer == expected
+    assert policy.configuration_error is None
+    assert readiness.pptx_analyzer == expected
+    assert readiness.ready is True
+    assert readiness.code == "template_v2_canary_ready"
+
+
+@pytest.mark.parametrize(
+    "value", ["vision", "runtim", "true", "on", "deterministic,runtime"]
+)
+def test_unknown_pptx_analyzer_fails_closed_instead_of_using_the_default(value):
+    policy = get_structured_template_policy(
+        {
+            "ENABLE_TEMPLATE_V2": "true",
+            "TEMPLATE_V2_TEMPLATE_ALLOWLIST": "canary-a",
+            "TEMPLATE_V2_PPTX_ANALYZER": value,
+        }
+    )
+
+    readiness = policy.canary_readiness()
+    assert policy.creation_enabled is False
+    assert policy.allowed_template_ids == frozenset()
+    assert policy.pptx_analyzer == "deterministic"
+    assert policy.can_discover("canary-a") is False
+    assert readiness.ready is False
+    assert readiness.code == "template_v2_pptx_analyzer_invalid"
+    assert readiness.configuration_valid is False
     with pytest.raises(
         StructuredTemplatePolicyError,
         match="template_v2_rollout_config_invalid",

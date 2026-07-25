@@ -11,7 +11,10 @@ from .constants import TEMPLATE_V2_VERSION
 
 TEMPLATE_V2_FLAG = "ENABLE_TEMPLATE_V2"
 TEMPLATE_V2_ALLOWLIST = "TEMPLATE_V2_TEMPLATE_ALLOWLIST"
+TEMPLATE_V2_ANALYZER = "TEMPLATE_V2_PPTX_ANALYZER"
 _MAX_TEMPLATE_ID_LENGTH = 128
+_DEFAULT_PPTX_ANALYZER = "deterministic"
+_PPTX_ANALYZERS = frozenset({_DEFAULT_PPTX_ANALYZER, "runtime"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +26,7 @@ class TemplateV2CanaryReadiness:
     feature_enabled: bool
     configuration_valid: bool
     allowlisted_template_count: int
+    pptx_analyzer: str
 
     def as_dict(self) -> dict[str, bool | int | str]:
         return asdict(self)
@@ -40,6 +44,7 @@ class StructuredTemplatePolicyError(ValueError):
 class StructuredTemplatePolicy:
     creation_enabled: bool
     allowed_template_ids: frozenset[str]
+    pptx_analyzer: str = _DEFAULT_PPTX_ANALYZER
     configuration_error: str | None = None
 
     def can_discover(self, template_id: str) -> bool:
@@ -75,6 +80,7 @@ class StructuredTemplatePolicy:
             feature_enabled=self.creation_enabled,
             configuration_valid=self.configuration_error is None,
             allowlisted_template_count=len(self.allowed_template_ids),
+            pptx_analyzer=self.pptx_analyzer,
         )
 
     def require_write_enabled(self, template_id: str | None = None) -> None:
@@ -124,17 +130,33 @@ def _parse_allowlist(raw_value: str | None) -> tuple[frozenset[str], str | None]
     return frozenset(entries), None
 
 
+def _parse_pptx_analyzer(raw_value: str | None) -> tuple[str, str | None]:
+    if raw_value is None:
+        return _DEFAULT_PPTX_ANALYZER, None
+    normalized = raw_value.strip().lower()
+    if not normalized:
+        return _DEFAULT_PPTX_ANALYZER, None
+    if normalized in _PPTX_ANALYZERS:
+        return normalized, None
+    # An unknown backend never silently falls back to the default one.
+    return _DEFAULT_PPTX_ANALYZER, "template_v2_pptx_analyzer_invalid"
+
+
 def get_structured_template_policy(
     environ: Mapping[str, str] | None = None,
 ) -> StructuredTemplatePolicy:
     values = os.environ if environ is None else environ
     enabled, flag_error = _parse_feature_flag(values.get(TEMPLATE_V2_FLAG))
     allowlist, allowlist_error = _parse_allowlist(values.get(TEMPLATE_V2_ALLOWLIST))
-    configuration_error = flag_error or allowlist_error
+    analyzer, analyzer_error = _parse_pptx_analyzer(values.get(TEMPLATE_V2_ANALYZER))
+    configuration_error = flag_error or allowlist_error or analyzer_error
     return StructuredTemplatePolicy(
         creation_enabled=enabled and configuration_error is None,
         allowed_template_ids=(
             allowlist if configuration_error is None else frozenset()
+        ),
+        pptx_analyzer=(
+            analyzer if configuration_error is None else _DEFAULT_PPTX_ANALYZER
         ),
         configuration_error=configuration_error,
     )

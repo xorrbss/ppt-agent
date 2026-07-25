@@ -4,10 +4,13 @@ from dataclasses import dataclass
 from datetime import timedelta
 import hashlib
 import hmac
+import logging
 import os
 from pathlib import Path
 import re
+import shutil
 import unicodedata
+from urllib.parse import unquote, urlsplit
 import uuid
 
 from fastapi import UploadFile
@@ -15,6 +18,8 @@ from fastapi import UploadFile
 from templates.v2.pptx.package_reader import PptxPackageReader, UnsafePptxPackage
 from templates.v2.pptx.source_inventory import SecretFreeSourceMetadata
 from utils.get_env import get_app_data_directory_env
+
+logger = logging.getLogger(__name__)
 
 
 MAX_PPTX_UPLOAD_BYTES = 100 * 1024 * 1024
@@ -29,6 +34,27 @@ _SAFE_DISPLAY_FILENAME = re.compile(r"[^a-zA-Z0-9._ ()\-\u0080-\uffff]+")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _PRIVATE_SOURCE_FILENAME = "source.pptx"
 _MAX_DISPLAY_FILENAME_CHARACTERS = 240
+# The export runtime writes `pptx-to-json` media into `<output_dir>/images/`, which sits
+# inside the served /app_data mount. Relocating it under the import's own private
+# directory keeps one retention path for the source deck and its extracted media.
+PRIVATE_ASSET_URL_PREFIX = "/api/v1/ppt/structured-templates/imports"
+_PRIVATE_ASSET_DIRECTORY = "assets"
+_RUNTIME_OUTPUT_DIRECTORY = "pptx-to-json"
+_RUNTIME_ASSET_DIRECTORY = "images"
+_SAFE_ASSET_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+_ASSET_SUFFIXES = (
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".bmp",
+    ".tif",
+    ".tiff",
+    ".webp",
+    ".svg",
+    ".emf",
+    ".wmf",
+)
 
 
 class PptxUploadRejected(ValueError):
@@ -125,6 +151,186 @@ def resolve_private_source(
     if not candidate.is_relative_to(root):
         raise PptxUploadRejected("private_storage_path_escape")
     return candidate
+
+
+def _asset_name(asset_name: str) -> str:
+    if (
+        not isinstance(asset_name, str)
+        or _SAFE_ASSET_NAME.fullmatch(asset_name) is None
+        or not asset_name.lower().endswith(_ASSET_SUFFIXES)
+    ):
+        raise PptxUploadRejected("unsafe_runtime_asset_name")
+    return asset_name
+
+
+def private_asset_reference(import_id: uuid.UUID, asset_name: str) -> str:
+    """Build the owner-scoped reference an import-assets endpoint can serve."""
+
+    if not isinstance(import_id, uuid.UUID):
+        raise TypeError("import_id_must_be_uuid")
+    return (
+        f"{PRIVATE_ASSET_URL_PREFIX}/{import_id}"
+        f"/{_PRIVATE_ASSET_DIRECTORY}/{_asset_name(asset_name)}"
+    )
+
+
+def _asset_reference_parts(reference: str) -> tuple[uuid.UUID, str]:
+    prefix = f"{PRIVATE_ASSET_URL_PREFIX}/"
+    if not isinstance(reference, str) or not reference.startswith(prefix):
+        raise PptxUploadRejected("invalid_private_asset_reference")
+    parts = reference[len(prefix):].split("/")
+    if len(parts) != 3 or parts[1] != _PRIVATE_ASSET_DIRECTORY:
+        raise PptxUploadRejected("invalid_private_asset_reference")
+    try:
+        owner = uuid.UUID(parts[0])
+    except (AttributeError, ValueError) as error:
+        raise PptxUploadRejected("invalid_private_asset_reference") from error
+    if str(owner) != parts[0]:
+        raise PptxUploadRejected("invalid_private_asset_reference")
+    return owner, _asset_name(parts[2])
+
+
+def _private_asset_directory(owner: uuid.UUID) -> Path:
+    root = private_import_root().resolve()
+    owner_directory = root / str(owner)
+    lexical_candidate = owner_directory / _PRIVATE_ASSET_DIRECTORY
+    if owner_directory.is_symlink() or lexical_candidate.is_symlink():
+        raise PptxUploadRejected("private_storage_symlink_forbidden")
+    candidate = lexical_candidate.resolve()
+    if not candidate.is_relative_to(root):
+        raise PptxUploadRejected("private_storage_path_escape")
+    return candidate
+
+
+def resolve_private_asset(
+    reference: str,
+    *,
+    expected_import_id: uuid.UUID | None = None,
+) -> Path:
+    """Translate an owner-scoped asset reference back into its private path.
+
+    `pptx-to-json` emits URLs but `json-to-image` and every server-side render need
+    real filesystem paths, and an unreachable asset renders as a silently blank
+    region -- so the translation lives here, beside the private-root layout.
+    """
+
+    owner, asset_name = _asset_reference_parts(reference)
+    if expected_import_id is not None and owner != expected_import_id:
+        raise PptxUploadRejected("private_storage_owner_mismatch")
+    directory = _private_asset_directory(owner)
+    lexical_candidate = directory / asset_name
+    if lexical_candidate.is_symlink():
+        raise PptxUploadRejected("private_storage_symlink_forbidden")
+    candidate = lexical_candidate.resolve()
+    if not candidate.is_relative_to(private_import_root().resolve()):
+        raise PptxUploadRejected("private_storage_path_escape")
+    return candidate
+
+
+@dataclass(frozen=True)
+class RelocatedRuntimeAssets:
+    """Runtime-extracted media now owned by one import's private directory."""
+
+    import_id: uuid.UUID
+    asset_names: tuple[str, ...]
+
+    def reference_for(self, runtime_url: str) -> str | None:
+        """Map one emitted `pptx-to-json` asset URL onto its private reference."""
+
+        if not isinstance(runtime_url, str):
+            return None
+        leaf = unquote(urlsplit(runtime_url).path).rsplit("/", 1)[-1]
+        if leaf not in self.asset_names:
+            return None
+        return private_asset_reference(self.import_id, leaf)
+
+
+def _runtime_output_root() -> Path:
+    """Return the directory the export runtime allocates its `pptx-to-json` runs under."""
+
+    raw_app_data = (get_app_data_directory_env() or "").strip()
+    if not raw_app_data:
+        raise RuntimeError("app_data_directory_required")
+    return Path(raw_app_data).resolve() / _RUNTIME_OUTPUT_DIRECTORY
+
+
+def _discard_runtime_output(run_directory: Path) -> None:
+    """Drop the converter's run directory once its media has been taken over.
+
+    It also holds `presentation.json` -- the full extracted text of the deck -- and
+    the bundled runtime only removes it on failure, so leaving it would keep the
+    deck's most content-rich derived artefact outside the tree retention manages,
+    surviving the very cleanup that deletes the source.
+    """
+
+    try:
+        if run_directory.is_symlink() or not run_directory.is_dir():
+            return
+        shutil.rmtree(run_directory)
+    except OSError:
+        # Best effort: a leftover run directory is untidy, not incorrect, and must
+        # never fail an import that has already produced a valid template.
+        logger.warning("Could not remove Template V2 converter run directory")
+
+
+def relocate_runtime_assets(
+    output_directory: str | Path,
+    *,
+    import_id: uuid.UUID,
+) -> RelocatedRuntimeAssets:
+    """Move runtime-extracted media off the served mount into the import's tree."""
+
+    if not isinstance(import_id, uuid.UUID):
+        raise TypeError("import_id_must_be_uuid")
+    runtime_root = Path(output_directory)
+    if not runtime_root.is_dir():
+        raise PptxUploadRejected("runtime_output_directory_missing")
+    # The `finally` below deletes this directory, so establish ownership before arming
+    # it: `output_dir` defaults to "" in the converter's response model, and Path("")
+    # is the process working directory, which is a directory and would be removed.
+    if runtime_root.resolve().parent != _runtime_output_root():
+        raise PptxUploadRejected("runtime_output_directory_untrusted")
+    try:
+        runtime_media = runtime_root / _RUNTIME_ASSET_DIRECTORY
+        if runtime_media.is_symlink():
+            raise PptxUploadRejected("runtime_asset_symlink_forbidden")
+        if not runtime_media.is_dir():
+            return RelocatedRuntimeAssets(import_id=import_id, asset_names=())
+        asset_names: list[str] = []
+        for entry in sorted(runtime_media.iterdir()):
+            if entry.is_symlink():
+                raise PptxUploadRejected("runtime_asset_symlink_forbidden")
+            if not entry.is_file():
+                raise PptxUploadRejected("unsupported_runtime_asset_entry")
+            asset_names.append(_asset_name(entry.name))
+        _private_asset_directory(import_id).mkdir(parents=True, exist_ok=True)
+        for asset_name in asset_names:
+            target = resolve_private_asset(
+                private_asset_reference(import_id, asset_name),
+                expected_import_id=import_id,
+            )
+            # Unique per call: a lapsed lease can leave two attempts for the same
+            # import relocating concurrently into this directory, and a fixed name
+            # let them interleave writes into one temp file and publish the mixed
+            # result, or let one attempt's cleanup delete the other's file mid-flight.
+            temporary = target.with_name(f"{asset_name}.{uuid.uuid4().hex}.relocating")
+            try:
+                shutil.copyfile(runtime_media / asset_name, temporary)
+                temporary.replace(target)
+            except Exception:
+                temporary.unlink(missing_ok=True)
+                raise
+            (runtime_media / asset_name).unlink()
+        return RelocatedRuntimeAssets(
+            import_id=import_id,
+            asset_names=tuple(asset_names),
+        )
+    finally:
+        # Once the directory exists this call owns it, so every exit discards it --
+        # a rejected entry or a failed copy would otherwise strand the run's
+        # `presentation.json` on the served mount for good, since the bundled
+        # runtime only removes the directory when the converter itself fails.
+        _discard_runtime_output(runtime_root)
 
 
 def _display_filename(filename: str | None) -> str:
@@ -269,12 +475,32 @@ def remove_private_source(storage_key: str) -> None:
         pass
 
 
-def cleanup_private_source(storage_key: str) -> str:
-    """Re-resolve and remove one retained source, returning an audit result."""
+def _remove_private_assets(owner: uuid.UUID) -> None:
+    directory = _private_asset_directory(owner)
+    if not directory.is_dir():
+        return
+    for entry in directory.iterdir():
+        if entry.is_symlink() or entry.is_file():
+            entry.unlink()
+    try:
+        directory.rmdir()
+    except OSError:
+        pass
+
+
+def cleanup_private_import(storage_key: str) -> str:
+    """Re-resolve and remove one retained import tree, returning an audit result.
+
+    Relocated runtime assets live beside the source deck under the same per-import
+    directory, so this single pass reclaims both -- no second asset location that a
+    cleanup query could miss. The result reports the source, which is what the
+    retention row tracks.
+    """
 
     source = resolve_private_source(storage_key)
     existed = source.is_file()
     source.unlink(missing_ok=True)
+    _remove_private_assets(_storage_key_owner(storage_key))
     try:
         source.parent.rmdir()
     except OSError:

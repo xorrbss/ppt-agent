@@ -1,4 +1,7 @@
-import { createTemplateV2SlideRenderPlan } from "./template-v2-render-plan.mjs";
+import {
+  createTemplateV2SlideRenderPlan,
+  isTemplateV2SafeColor,
+} from "./template-v2-render-plan.mjs";
 
 const CANVAS = Object.freeze({ width: 1280, height: 720 });
 
@@ -37,8 +40,14 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+// `fill.color` / `cell.color` are bare strings on the element and never pass through the
+// render plan, so they reach a double-quoted style attribute unfiltered: `#fff" onmouseover=`
+// closed the attribute outright, and escaping alone would not help because `;` and `:`
+// survive it and smuggle whole extra declarations. Validating with the plan's colour policy
+// stops both. Unrepresentable colours fall back instead of throwing -- this renderer is the
+// PDF/PPTX export path, and one odd colour must degrade one element, not fail the deck.
 function cssColor(fill, fallback = "transparent") {
-  return isRecord(fill) && typeof fill.color === "string" ? fill.color : fallback;
+  return isRecord(fill) && isTemplateV2SafeColor(fill.color) ? fill.color : fallback;
 }
 
 function positionStyle(element, layout = "absolute", plan = null) {
@@ -84,9 +93,18 @@ function fontStyle(font) {
   if (!isRecord(font)) return [];
   const lineHeight = finite(font.line_height);
   return [
-    typeof font.family === "string" ? `font-family:${JSON.stringify(font.family)}` : "",
+    // Escaped because these land inside a double-quoted style attribute: the quotes
+    // JSON.stringify adds would otherwise close it and drop every later declaration
+    // -- size, colour and weight included. Same pattern as the mask-image URL below.
+    typeof font.family === "string"
+      ? `font-family:${escapeHtml(JSON.stringify(font.family))}`
+      : "",
     font.size ? `font-size:${finite(font.size)}px` : "",
-    typeof font.color === "string" ? `color:${font.color}` : "",
+    // Validated rather than escaped: escaping stopped the quote but left `;` and `:`
+    // intact, so `red;background:url(...)` still added declarations of its own. A colour
+    // this validator accepts cannot contain a quote either, which is why escapeHtml is
+    // gone from here and still present on font.family above.
+    isTemplateV2SafeColor(font.color) ? `color:${font.color}` : "",
     font.bold ? "font-weight:700" : "",
     font.italic ? "font-style:italic" : "",
     font.underline ? "text-decoration:underline" : "",
@@ -471,11 +489,18 @@ function renderInfographic(element, path, layout, plan) {
       0,
       1
     );
-  const colors = plan?.infographic?.colors?.length ? plan.infographic.colors : ["#2563eb", "#e5e7eb"];
+  // `plan.infographic.colors` comes from `stringArray`, which checks the type and not the
+  // value, so these are the same unfiltered sink as `fill.color` -- and a gradient argument
+  // is worse, because a `)` escapes the function as well as the declaration.
+  const planned = plan?.infographic?.colors ?? [];
+  const colors = [
+    isTemplateV2SafeColor(planned[0]) ? planned[0] : "#2563eb",
+    isTemplateV2SafeColor(planned[1]) ? planned[1] : "#e5e7eb",
+  ];
   const label = `${Math.round(ratio * 100)}%`;
   const graphic = element.data.type === "gauge"
-    ? `<div style="position:relative;width:100%;height:100%;border-radius:50%;background:conic-gradient(${escapeHtml(colors[0])} 0 ${ratio * 100}%,${escapeHtml(colors[1] ?? "#e5e7eb")} ${ratio * 100}% 100%)"><div style="position:absolute;inset:24%;border-radius:50%;background:white;display:flex;align-items:center;justify-content:center;font-weight:700">${label}</div></div>`
-    : `<div style="position:relative;width:100%;height:100%;min-height:24px;background:${escapeHtml(colors[1] ?? "#e5e7eb")};border-radius:999px;overflow:hidden"><div style="width:${ratio * 100}%;height:100%;background:${escapeHtml(colors[0])}"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:700">${label}</div></div>`;
+    ? `<div style="position:relative;width:100%;height:100%;border-radius:50%;background:conic-gradient(${colors[0]} 0 ${ratio * 100}%,${colors[1]} ${ratio * 100}% 100%)"><div style="position:absolute;inset:24%;border-radius:50%;background:white;display:flex;align-items:center;justify-content:center;font-weight:700">${label}</div></div>`
+    : `<div style="position:relative;width:100%;height:100%;min-height:24px;background:${colors[1]};border-radius:999px;overflow:hidden"><div style="width:${ratio * 100}%;height:100%;background:${colors[0]}"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:700">${label}</div></div>`;
   return `<div data-template-v2-element="infographic" data-infographic-type="${escapeHtml(element.data.type)}" data-element-name="${escapeHtml(element.name ?? path)}" style="${positionStyle(element, layout, plan).join(";")}">${graphic}</div>`;
 }
 

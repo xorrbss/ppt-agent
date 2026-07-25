@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 import hashlib
 import hmac
+import mimetypes
 from typing import Any
 import uuid
 
@@ -17,6 +18,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -37,7 +39,9 @@ from services.template_v2_pptx_ingestion_service import (
 )
 from services.template_v2_pptx_storage import (
     PptxUploadRejected,
+    private_asset_reference,
     remove_private_source,
+    resolve_private_asset,
     store_private_pptx,
 )
 from templates.v2.policy import (
@@ -52,6 +56,7 @@ STRUCTURED_TEMPLATE_IMPORTS_ROUTER = APIRouter(
     prefix="/structured-templates/imports",
     tags=["Structured Template Imports"],
 )
+_ASSET_NOT_FOUND_DETAIL = "Structured template import asset not found"
 
 
 class TemplateV2PptxImportResponse(BaseModel):
@@ -174,6 +179,36 @@ def _request_fingerprint(template_id: str, source_sha256: str) -> str:
     return hashlib.sha256(
         f"{template_id}\x00{source_sha256}".encode("utf-8")
     ).hexdigest()
+
+
+async def _may_read_import_asset(
+    import_id: uuid.UUID,
+    session: AsyncSession,
+    owner_scope: str,
+) -> bool:
+    """Asset visibility follows whatever references the asset.
+
+    Before confirmation only the owner-scoped import record references it, so owner
+    scope decides. After confirmation the template does, and
+    `GET /structured-templates/{id}` is readable by any authenticated caller -- so
+    scoping the asset more tightly than the layouts that embed it buys nothing and
+    costs correctness: `owner_scope` is an HMAC over `AUTH_SECRET_KEY`, which
+    `force_set_credentials` rotates, and a password change would otherwise blank
+    every previously imported deck's images while export still reported success.
+    """
+
+    import_job = await session.get(TemplateV2PptxImport, import_id)
+    if import_job is None:
+        return False
+    if import_job.owner_scope == owner_scope:
+        return True
+    # `draft_template_id` is what confirmation fills in; the response exposes it as
+    # `confirmed_template_id` once the state says so.
+    return (
+        import_job.state == "confirmed"
+        and import_job.draft_template_id is not None
+        and await session.get(TemplateV2, import_job.draft_template_id) is not None
+    )
 
 
 async def _load_import(
@@ -352,6 +387,40 @@ async def get_structured_template_import(
     return _response(import_job, task)
 
 
+@STRUCTURED_TEMPLATE_IMPORTS_ROUTER.get(
+    "/{import_id}/assets/{asset_name}",
+    response_class=FileResponse,
+)
+async def get_structured_template_import_asset(
+    import_id: uuid.UUID,
+    asset_name: str,
+    request: Request,
+    sql_session: AsyncSession = Depends(get_async_session),
+):
+    """Serve one relocated import asset from outside the /app_data mount.
+
+    Ungated by the write policy on purpose: layouts persist these references as
+    `image.data`, so the rollout flag must never blank an imported deck
+    (`StructuredTemplatePolicy.can_read_existing`).
+    """
+
+    if not await _may_read_import_asset(import_id, sql_session, _owner_scope(request)):
+        raise HTTPException(status_code=404, detail=_ASSET_NOT_FOUND_DETAIL)
+    try:
+        asset = resolve_private_asset(
+            private_asset_reference(import_id, asset_name),
+            expected_import_id=import_id,
+        )
+    except PptxUploadRejected as error:
+        # An unsafe reference must be indistinguishable from a missing asset.
+        raise HTTPException(status_code=404, detail=_ASSET_NOT_FOUND_DETAIL) from error
+    if not asset.is_file():
+        raise HTTPException(status_code=404, detail=_ASSET_NOT_FOUND_DETAIL)
+    # Generic binary beats Starlette's `text/plain` fallback for emf/wmf media.
+    media_type = mimetypes.guess_type(asset.name)[0] or "application/octet-stream"
+    return FileResponse(asset, media_type=media_type)
+
+
 @STRUCTURED_TEMPLATE_IMPORTS_ROUTER.post(
     "/{import_id}/retry",
     response_model=TemplateV2PptxImportResponse,
@@ -455,6 +524,9 @@ async def confirm_structured_template_import(
             "state_conflict": "Import is not ready for confirmation",
             "template_conflict": "Structured template already exists",
             "suggestion_conflict": "Repeat-block selection is invalid",
+            "assets_reclaimed": (
+                "Import media was reclaimed by retention; re-import the source deck"
+            ),
         }
         raise HTTPException(
             status_code=409,

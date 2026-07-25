@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterator
+from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 import logging
@@ -20,6 +22,7 @@ from models.sql.template_v2 import TemplateV2
 from models.sql.template_v2_local_state import TemplateV2LocalState
 from models.sql.template_v2_pptx_import import TemplateV2PptxImport
 from services.database import async_session_maker
+from services.export_task_service import EXPORT_TASK_SERVICE
 from services.template_v2_pptx_retention_service import (
     maybe_cleanup_expired_private_sources,
     terminal_source_retention,
@@ -32,9 +35,11 @@ from services.template_v2_pptx_queue_observability import (
 )
 from services.template_v2_pptx_storage import (
     get_private_source_retention_ttl,
+    relocate_runtime_assets,
     verify_private_source,
 )
 from templates.v2.constants import TEMPLATE_V2_VERSION
+from templates.v2.models.layouts import RawSlideLayouts, SlideLayouts
 from templates.v2.generation import build_generated_slide
 from templates.v2.pptx.assembler import (
     AssembledTemplateV2Draft,
@@ -43,6 +48,7 @@ from templates.v2.pptx.assembler import (
 from templates.v2.pptx.analyzer import analyze_ooxml_candidates
 from templates.v2.pptx.models import PresentationCandidates
 from templates.v2.pptx.ooxml_parser import parse_presentation_candidates
+from templates.v2.pptx.runtime_layouts import build_runtime_slide_layouts
 from templates.v2.pptx.package_reader import PptxPackageReader, UnsafePptxPackage
 from templates.v2.pptx.repeat_suggestions import (
     build_repeat_block_suggestions,
@@ -51,6 +57,7 @@ from templates.v2.pptx.repeat_application import (
     resolve_repeat_suggestion_decisions,
 )
 from templates.v2.pptx.source_inventory import (
+    HashedInventoryItem,
     SecretFreeSourceMetadata,
     SourceInventory,
     candidate_inventory_item,
@@ -230,6 +237,195 @@ async def _heartbeat_loop(
                 return
 
 
+RUNTIME_ANALYZER_PROVIDER = "runtime-pptx-to-json"
+RUNTIME_ANALYSIS_MARKER = "runtime-pptx-to-json-v1"
+DETERMINISTIC_ANALYZER_PROVIDER = "deterministic-ooxml-static"
+DETERMINISTIC_ANALYSIS_MARKER = "deterministic-ooxml-static-analysis-v1"
+
+
+def _with_private_asset_references(
+    layouts: list[dict],
+    relocated,
+) -> list[dict]:
+    """Point image elements at the relocated private assets before validation.
+
+    The converter emits `/app_data` URLs for media it extracted. Those files have
+    been moved into the import's private directory, so the URLs would 404 -- and an
+    unreachable asset renders as a silently blank region.
+    """
+
+    rewritten: list[dict] = []
+    for layout in layouts:
+        raw_elements = layout.get("elements")
+        if not isinstance(raw_elements, list):
+            # Leave the layout untouched so `build_runtime_slide_layouts` can fail
+            # closed on it. Defaulting to [] here would hand it a valid, empty
+            # layout and turn a broken slide into a silently blank one.
+            rewritten.append(layout)
+            continue
+        elements = []
+        for element in raw_elements:
+            data = element.get("data") if isinstance(element, dict) else None
+            reference = relocated.reference_for(data) if isinstance(data, str) else None
+            elements.append({**element, "data": reference} if reference else element)
+        rewritten.append({**layout, "elements": elements})
+    return rewritten
+
+
+def _analysis_source_inventory(
+    marker: str,
+    analysis_payload: dict,
+    *,
+    source_filename: str,
+    source_media_type: str,
+    source_size_bytes: int,
+    source_sha256: str,
+    artifacts: tuple[HashedInventoryItem, ...] = (),
+) -> dict:
+    """Build the one inventory shape both analyzer paths record."""
+
+    return SourceInventory(
+        source=SecretFreeSourceMetadata(
+            display_filename=source_filename,
+            media_type=source_media_type,
+            size_bytes=source_size_bytes,
+            sha256=source_sha256,
+        ),
+        artifacts=artifacts,
+        candidates=(candidate_inventory_item(marker, analysis_payload),),
+    ).to_manifest()
+
+
+@contextmanager
+def _analysis_observation(provider: str) -> Iterator[dict[str, int]]:
+    """Emit exactly one bounded metric per analysis attempt, from either path.
+
+    The body reports the slide count it produced through ``observed["count"]``;
+    ``provider`` must already be in the observability allowlist.
+    """
+
+    started_at = perf_counter()
+    observed = {"count": 0}
+    try:
+        yield observed
+    except Exception:
+        log_pptx_analysis_observation(
+            provider=provider,
+            status="failed",
+            duration_ms=(perf_counter() - started_at) * 1000,
+            count=0,
+        )
+        raise
+    log_pptx_analysis_observation(
+        provider=provider,
+        status="completed",
+        duration_ms=(perf_counter() - started_at) * 1000,
+        count=observed["count"],
+    )
+
+
+def _build_runtime_analysis(
+    document,
+    *,
+    import_id: uuid.UUID,
+    source_filename: str,
+    source_media_type: str,
+    source_size_bytes: int,
+    source_sha256: str,
+) -> tuple[dict, dict]:
+    """Relocate the converter's media and validate its layouts. Blocking on purpose."""
+
+    relocated = relocate_runtime_assets(document.output_dir, import_id=import_id)
+    imported = build_runtime_slide_layouts(
+        _with_private_asset_references(document.layouts, relocated)
+    )
+    layouts = imported.raw_layouts.layouts
+    # `build_runtime_slide_layouts` raises on any element it cannot represent, so a
+    # payload that reaches here converted every shape the converter emitted.
+    shape_count = sum(len(layout.elements) for layout in layouts)
+    analysis_payload = {
+        "analyzer": RUNTIME_ANALYSIS_MARKER,
+        # No `contract_version`: this is not the deterministic analyzer's
+        # `CandidateAnalysis` document, and its own version is the marker above.
+        # `provider.version`/`capability` are absent because the bundled converter
+        # reports neither to this service.
+        "provider": {
+            "id": RUNTIME_ANALYZER_PROVIDER,
+            "execution": "local",
+            "status": "available",
+            "network_access": False,
+            "external_ai": False,
+        },
+        "status": "completed",
+        # The converter emits layouts only: no preview image, no render comparison.
+        "preview": {"status": "not_provided", "reason": "not_emitted_by_converter"},
+        "render": {"status": "not_run", "reason": "not_emitted_by_converter"},
+        "summary": {
+            "slide_count": len(layouts),
+            "shape_count": shape_count,
+            "supported_shape_count": shape_count,
+            "unsupported_shape_count": 0,
+            "visual_fidelity_status": "not_evaluated",
+            "review_required": True,
+        },
+        "raw_layouts": imported.raw_layouts.model_dump(mode="json"),
+        "layouts": imported.layouts.model_dump(mode="json"),
+    }
+    inventory = _analysis_source_inventory(
+        RUNTIME_ANALYSIS_MARKER,
+        analysis_payload,
+        source_filename=source_filename,
+        source_media_type=source_media_type,
+        source_size_bytes=source_size_bytes,
+        source_sha256=source_sha256,
+    )
+    return analysis_payload, inventory
+
+
+async def _analyze_import_source_via_runtime(
+    storage_key: str,
+    source_sha256: str,
+    *,
+    import_id: uuid.UUID,
+    source_filename: str,
+    source_media_type: str,
+    source_size_bytes: int,
+) -> tuple[dict, list[dict], dict]:
+    """Extract with the bundled converter instead of the in-repo OOXML parser.
+
+    Gains images, per-run text styling and vector shapes. Returns no repeat-block
+    suggestions: those are derived from parser candidates, which this path does not
+    produce.
+    """
+
+    with _analysis_observation(RUNTIME_ANALYZER_PROVIDER) as observed:
+        # Everything except the converter await is blocking -- hashing up to 100 MB,
+        # copying media, validating every element, two model dumps -- so it is
+        # offloaded like the deterministic path is. Leaving it inline stalls every
+        # other request on the worker and delays the attempt's own heartbeat.
+        source = await asyncio.to_thread(
+            verify_private_source,
+            storage_key,
+            source_sha256,
+            expected_import_id=import_id,
+            expected_size_bytes=source_size_bytes,
+        )
+        document = await EXPORT_TASK_SERVICE.convert_pptx_to_json(
+            str(source), session_id=str(import_id)
+        )
+        analysis_payload, inventory = await asyncio.to_thread(
+            _build_runtime_analysis,
+            document,
+            import_id=import_id,
+            source_filename=source_filename,
+            source_media_type=source_media_type,
+            source_size_bytes=source_size_bytes,
+            source_sha256=source_sha256,
+        )
+        observed["count"] = analysis_payload["summary"]["slide_count"]
+        return analysis_payload, [], inventory
+
+
 def _analyze_import_source(
     storage_key: str,
     source_sha256: str,
@@ -239,8 +435,7 @@ def _analyze_import_source(
     source_media_type: str,
     source_size_bytes: int,
 ) -> tuple[dict, list[dict], dict]:
-    started_at = perf_counter()
-    try:
+    with _analysis_observation(DETERMINISTIC_ANALYZER_PROVIDER) as observed:
         source = verify_private_source(
             storage_key,
             source_sha256,
@@ -254,40 +449,21 @@ def _analyze_import_source(
         )
         analysis = analyze_ooxml_candidates(candidates)
         analysis_payload = analysis.model_dump(mode="json")
-        inventory = SourceInventory(
-            source=SecretFreeSourceMetadata(
-                display_filename=source_filename,
-                media_type=source_media_type,
-                size_bytes=source_size_bytes,
-                sha256=source_sha256,
-            ),
+        inventory = _analysis_source_inventory(
+            DETERMINISTIC_ANALYSIS_MARKER,
+            analysis_payload,
+            source_filename=source_filename,
+            source_media_type=source_media_type,
+            source_size_bytes=source_size_bytes,
+            source_sha256=source_sha256,
             artifacts=reader.artifact_inventory(),
-            candidates=(
-                candidate_inventory_item(
-                    "deterministic-ooxml-static-analysis-v1",
-                    analysis_payload,
-                ),
-            ),
-        ).to_manifest()
-        log_pptx_analysis_observation(
-            provider="deterministic-ooxml-static",
-            status="completed",
-            duration_ms=(perf_counter() - started_at) * 1000,
-            count=analysis.summary.slide_count,
         )
+        observed["count"] = analysis.summary.slide_count
         return (
             analysis_payload,
             build_repeat_block_suggestions(candidates),
             inventory,
         )
-    except Exception:
-        log_pptx_analysis_observation(
-            provider="deterministic-ooxml-static",
-            status="failed",
-            duration_ms=(perf_counter() - started_at) * 1000,
-            count=0,
-        )
-        raise
 
 
 def _apply_deprecated_template_v2_constructor_bridge(
@@ -390,6 +566,62 @@ async def _persist_analysis(
         return True
 
 
+def _is_runtime_analysis(import_job: TemplateV2PptxImport) -> bool:
+    """Only the runtime analyzer stores references to the relocated private media."""
+
+    analysis_result = import_job.analysis_result
+    return (
+        isinstance(analysis_result, dict)
+        and analysis_result.get("analyzer") == RUNTIME_ANALYSIS_MARKER
+    )
+
+
+def _runtime_assets_reclaimed(import_job: TemplateV2PptxImport) -> bool:
+    """True when a runtime import's layouts would reference reclaimed media.
+
+    Only the runtime analyzer stores asset references; the deterministic analysis is
+    self-contained, so losing its source after review costs nothing but the audit
+    copy and must keep confirming.
+
+    A held cleanup claim counts as reclaimed. Retention claims the row, deletes the
+    source and the relocated media in a worker thread, and writes `source_deleted_at`
+    only afterwards, so that flag alone leaves a window in which the files are already
+    gone while the row still looks intact. The claim is only ever taken on a row whose
+    retention deadline has already passed, and a cleaner that dies mid-run has its
+    claim re-taken on lease expiry by the next cleanup pass -- which then either
+    deletes (a permanent refusal, correctly) or clears the claim -- so refusing on the
+    claim is bounded, not permanent.
+    """
+
+    return _is_runtime_analysis(import_job) and (
+        import_job.source_deleted_at is not None
+        or import_job.source_cleanup_token is not None
+    )
+
+
+def _runtime_confirmed_draft(analysis_result: dict) -> AssembledTemplateV2Draft:
+    """Rebuild the draft the runtime analyzer already validated.
+
+    The two analyzers converge here rather than at the analysis: the deterministic
+    path replays parser candidates through the assembler, while this path stored
+    validated layouts directly. `contents` is one empty mapping per layout because
+    the converter marks every element decorative, so the template schema is empty
+    and `build_generated_slide` takes the layout as-is.
+    """
+
+    raw_payload = analysis_result.get("raw_layouts")
+    layouts_payload = analysis_result.get("layouts")
+    if not isinstance(raw_payload, dict) or not isinstance(layouts_payload, dict):
+        raise ValueError("template_v2_import_runtime_layouts_missing")
+    layouts = SlideLayouts.model_validate(layouts_payload)
+    return AssembledTemplateV2Draft(
+        raw_layouts=RawSlideLayouts.model_validate(raw_payload),
+        layouts=layouts,
+        contents=[{} for _ in layouts.layouts],
+        manifest={"analyzer": RUNTIME_ANALYSIS_MARKER},
+    )
+
+
 def _assemble_confirmed_candidate(
     import_job: TemplateV2PptxImport,
     accepted_repeat_suggestions: list[dict],
@@ -397,6 +629,8 @@ def _assemble_confirmed_candidate(
     analysis_result = import_job.analysis_result
     if not isinstance(analysis_result, dict):
         raise ValueError("template_v2_import_analysis_missing")
+    if analysis_result.get("analyzer") == RUNTIME_ANALYSIS_MARKER:
+        return _runtime_confirmed_draft(analysis_result)
     candidate_payload = analysis_result.get("candidates")
     if not isinstance(candidate_payload, dict):
         raise ValueError("template_v2_import_candidate_missing")
@@ -434,6 +668,14 @@ async def confirm_template_v2_pptx_import(
         return "state_conflict"
     if import_job.revision != expected_revision:
         return "revision_conflict"
+    if _runtime_assets_reclaimed(import_job):
+        # Retention reclaims the source and the relocated media together, and
+        # `review_required` is an eligible state, so an import can sit past its TTL
+        # and still look confirmable. Confirming it would persist a template whose
+        # every image reference points at a deleted file -- unrecoverable, since the
+        # source deck is gone too, and silent, since the endpoint 404s per asset and
+        # export still succeeds.
+        return "assets_reclaimed"
     if await session.get(TemplateV2, import_job.requested_template_id) is not None:
         return "template_conflict"
 
@@ -459,16 +701,25 @@ async def confirm_template_v2_pptx_import(
             return "suggestion_conflict"
         raise
     confirmed_at = _now()
+    gate_predicates = [
+        TemplateV2PptxImport.id == import_id,
+        TemplateV2PptxImport.task_id == task_id,
+        TemplateV2PptxImport.owner_scope == owner_scope,
+        TemplateV2PptxImport.state == "review_required",
+        TemplateV2PptxImport.revision == expected_revision,
+        TemplateV2PptxImport.draft_template_id.is_(None),
+    ]
+    if _is_runtime_analysis(import_job):
+        # The guard above reads the row loaded when this request started; retention
+        # claims and empties the private directory without touching `state` or
+        # `revision`, so nothing else here would notice a cleanup that began after
+        # that read. Only the runtime path is narrowed: a deterministic import is
+        # still allowed to confirm once its source is gone.
+        gate_predicates.append(TemplateV2PptxImport.source_deleted_at.is_(None))
+        gate_predicates.append(TemplateV2PptxImport.source_cleanup_token.is_(None))
     gate = await session.execute(
         update(TemplateV2PptxImport)
-        .where(
-            TemplateV2PptxImport.id == import_id,
-            TemplateV2PptxImport.task_id == task_id,
-            TemplateV2PptxImport.owner_scope == owner_scope,
-            TemplateV2PptxImport.state == "review_required",
-            TemplateV2PptxImport.revision == expected_revision,
-            TemplateV2PptxImport.draft_template_id.is_(None),
-        )
+        .where(*gate_predicates)
         .values(
             state="confirming",
             revision=TemplateV2PptxImport.revision + 1,
@@ -488,6 +739,8 @@ async def confirm_template_v2_pptx_import(
         ).scalar_one_or_none()
         if current and current.state == "confirmed" and current.draft_template_id:
             return "already_confirmed"
+        if current is not None and _runtime_assets_reclaimed(current):
+            return "assets_reclaimed"
         return "revision_conflict"
 
     presentation = PresentationModel(
@@ -1042,15 +1295,28 @@ async def run_template_v2_pptx_import(import_id: uuid.UUID, task_id: str) -> Non
             source_filename = import_job.source_filename
             source_media_type = import_job.source_media_type
             source_size_bytes = import_job.source_size_bytes
-        analysis_result, repeat_suggestions, source_inventory = await asyncio.to_thread(
-            _analyze_import_source,
-            storage_key,
-            source_sha256,
-            import_id=import_id,
-            source_filename=source_filename,
-            source_media_type=source_media_type,
-            source_size_bytes=source_size_bytes,
-        )
+        # The runtime analyzer is async, so the branch lives here rather than inside
+        # the threaded parser call.
+        if get_structured_template_policy().pptx_analyzer == "runtime":
+            analysis_source = _analyze_import_source_via_runtime(
+                storage_key,
+                source_sha256,
+                import_id=import_id,
+                source_filename=source_filename,
+                source_media_type=source_media_type,
+                source_size_bytes=source_size_bytes,
+            )
+        else:
+            analysis_source = asyncio.to_thread(
+                _analyze_import_source,
+                storage_key,
+                source_sha256,
+                import_id=import_id,
+                source_filename=source_filename,
+                source_media_type=source_media_type,
+                source_size_bytes=source_size_bytes,
+            )
+        analysis_result, repeat_suggestions, source_inventory = await analysis_source
         if ownership_lost.is_set():
             raise AttemptOwnershipLost()
         if not await _persist_analysis(

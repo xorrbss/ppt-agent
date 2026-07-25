@@ -84,12 +84,22 @@ function boundedFinite(value, minimum, maximum, code, path, fallback = null) {
   return resolved;
 }
 
+const COLOR_PATTERN =
+  /^(?:#[0-9a-fA-F]{3,8}|[a-zA-Z]+|rgba?\([0-9.,%+\-\s]+\)|hsla?\([0-9a-zA-Z.,%+\-\s]+\))$/;
+
+// The single colour policy for this template. Exported in predicate form because the
+// renderer reads fill / table-cell / run-font colours straight off the element -- the
+// plan never sees them -- and must apply this same rule without duplicating it. It is
+// a predicate rather than `safeColor` itself because the renderer is also the export
+// path and answers an unrepresentable colour with a fallback, not by failing the deck.
+export function isTemplateV2SafeColor(value) {
+  return typeof value === "string" && value.length <= 96 && COLOR_PATTERN.test(value);
+}
+
 function safeColor(value, code, path, fallback = null) {
   const resolved = optionalString(value, code, path);
   if (resolved === null) return fallback;
-  const colorPattern =
-    /^(?:#[0-9a-fA-F]{3,8}|[a-zA-Z]+|rgba?\([0-9.,%+\-\s]+\)|hsla?\([0-9a-zA-Z.,%+\-\s]+\))$/;
-  if (resolved.length > 96 || !colorPattern.test(resolved)) fail(code, path);
+  if (!isTemplateV2SafeColor(resolved)) fail(code, path);
   return resolved;
 }
 
@@ -403,7 +413,15 @@ function planVector(element, path) {
     fail("template_v2_render_plan_vector_points_required", path);
   }
   const rawPoints = element.points.map((value, index) => point(value, `${path}.points.${index}`));
-  if (element.shape !== undefined && !["polygon", "ellipse"].includes(element.shape)) {
+  // `null` means absent for every optional key here, exactly as optionalRecord and
+  // optionalFinite already treat it. Producers that serialise optional fields --
+  // pydantic's model_dump(mode="json") among them -- emit null rather than omitting
+  // the key, and rejecting that killed the whole deck over one shape.
+  if (
+    element.shape !== undefined &&
+    element.shape !== null &&
+    !["polygon", "ellipse"].includes(element.shape)
+  ) {
     fail("template_v2_render_plan_invalid_vector_shape", `${path}.shape`);
   }
   if (element.shape === "ellipse" && rawPoints.length !== 2) {
@@ -415,7 +433,7 @@ function planVector(element, path) {
     "template_v2_render_plan_invalid_vector_curve",
     `${path}.curve`
   );
-  if (element.curve !== undefined && curve.type !== "smooth") {
+  if (element.curve !== undefined && element.curve !== null && curve.type !== "smooth") {
     fail("template_v2_render_plan_invalid_vector_curve", `${path}.curve.type`);
   }
   const tension = curve.tension ?? 0.5;
@@ -805,7 +823,11 @@ function gridPlacements(element, frame, path) {
   if (!Array.isArray(element.children) || !Number.isInteger(element.columns) || element.columns < 1) {
     fail("template_v2_render_plan_grid_contract_required", path);
   }
-  if (element.rows !== undefined && (!Number.isInteger(element.rows) || element.rows < 1)) {
+  if (
+    element.rows !== undefined &&
+    element.rows !== null &&
+    (!Number.isInteger(element.rows) || element.rows < 1)
+  ) {
     fail("template_v2_render_plan_grid_contract_required", `${path}.rows`);
   }
   const rows = element.rows ?? Math.max(1, Math.ceil(element.children.length / element.columns));
@@ -882,6 +904,7 @@ function planElement(element, path, parentAbsolute, frameOverride = null) {
   if (element.type === "chart") {
     if (
       element.size !== undefined &&
+      element.size !== null &&
       (frame.width === null || frame.height === null || frame.width < 80 || frame.height < 60)
     ) {
       fail("template_v2_render_plan_invalid_chart_size", `${path}.size`);
