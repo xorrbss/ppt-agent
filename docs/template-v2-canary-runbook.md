@@ -161,7 +161,17 @@ change set; `template_v2_rollout` went 0 -> 2 and `template_v2_pptx_queue` 0 -> 
 for an identical request sequence, making steps 5 and 6 above actionable as
 written.
 
-Known gap, tracked separately: imports that reach `cancelled` or `confirmed`
-never have their private source reclaimed under any flag state, because
-`TERMINAL_IMPORT_STATES` in `services/template_v2_pptx_retention_service.py`
-covers only `review_required` and `failed`.
+## Private source retention
+
+An import keeps a private copy of the uploaded `.pptx` outside the served
+`/app_data` mount. `SOURCE_CLEANUP_STATES` in
+`services/template_v2_pptx_retention_service.py` decides which of them are
+reclaimed once `TEMPLATE_V2_PPTX_SOURCE_TTL_DAYS` (default 7) has passed:
+
+| Final state | Uploaded source |
+|---|---|
+| `review_required`, `failed`, `cancelled` | deleted at TTL |
+| `confirmed` | **retained**, so a materialized template can be audited against the original deck |
+
+Cleanup runs only inside the dispatcher, so it is paused whenever
+`ENABLE_TEMPLATE_V2` is off and resumes on the next enabled start.
