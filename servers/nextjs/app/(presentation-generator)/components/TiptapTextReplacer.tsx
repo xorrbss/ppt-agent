@@ -209,8 +209,12 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
           binding = { kind: "path", key: matches[occ] ?? matches[0] ?? "" };
         }
 
-        // Create a container for the TiptapText
-        const tiptapContainer = document.createElement("div");
+        // Keep inline text inline during read-only export. Replacing a span
+        // inside a list item with a div breaks the semantic list structure and
+        // causes the PPTX extractor to drop the item text.
+        const replacementTag =
+          readOnly && htmlElement.tagName === "SPAN" ? "span" : "div";
+        const tiptapContainer = document.createElement(replacementTag);
         tiptapContainer.style.cssText = allStyles || "";
         tiptapContainer.className = Array.from(allClasses).join(" ");
         tiptapContainer.setAttribute("data-tiptap-replacer-root", "true");
