@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from copy import deepcopy
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 from time import perf_counter
 import uuid
@@ -79,6 +79,14 @@ def _now() -> datetime:
     return get_current_utc_datetime()
 
 
+def _task_timestamp(value: datetime) -> datetime:
+    """Match the legacy task table's timezone-naive UTC timestamp columns."""
+
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 def _task_data(
     import_id: uuid.UUID,
     *,
@@ -147,7 +155,7 @@ async def claim_template_v2_pptx_import(
                 state="processing",
                 attempt_number=import_job.attempt_number,
             ),
-            updated_at=claimed_at,
+            updated_at=_task_timestamp(claimed_at),
         )
         .execution_options(synchronize_session=False)
     )
@@ -375,7 +383,7 @@ async def _persist_analysis(
             state=import_job.state,
             attempt_number=import_job.attempt_number,
         )
-        task.updated_at = analyzed_at
+        task.updated_at = _task_timestamp(analyzed_at)
         session.add(import_job)
         session.add(task)
         await session.commit()
@@ -558,6 +566,15 @@ async def confirm_template_v2_pptx_import(
             "reason": "owner_confirmed_candidate",
         },
     }
+    session.add(presentation)
+    session.add_all(slides)
+    session.add(template)
+    session.add(local_state)
+    try:
+        await session.flush()
+    except IntegrityError:
+        await session.rollback()
+        return "template_conflict"
     await session.execute(
         update(TemplateV2PptxImport)
         .where(
@@ -589,11 +606,7 @@ async def confirm_template_v2_pptx_import(
         attempt_number=import_job.attempt_number,
         draft_template_id=template.id,
     )
-    task.updated_at = confirmed_at
-    session.add(presentation)
-    session.add_all(slides)
-    session.add(template)
-    session.add(local_state)
+    task.updated_at = _task_timestamp(confirmed_at)
     session.add(task)
     try:
         await session.commit()
@@ -682,7 +695,7 @@ async def fail_template_v2_pptx_import(
             state="failed",
             attempt_number=import_job.attempt_number,
         )
-        task.updated_at = failed_at
+        task.updated_at = _task_timestamp(failed_at)
         session.add(task)
         await session.commit()
         return True
@@ -770,7 +783,7 @@ async def requeue_failed_template_v2_pptx_import(
                 state="queued",
                 attempt_number=attempt_number,
             ),
-            updated_at=queued_at,
+            updated_at=_task_timestamp(queued_at),
         )
         .execution_options(synchronize_session=False)
     )
@@ -859,7 +872,7 @@ async def cancel_template_v2_pptx_import(
                 state="cancelled",
                 attempt_number=import_job.attempt_number,
             ),
-            updated_at=cancelled_at,
+            updated_at=_task_timestamp(cancelled_at),
         )
         .execution_options(synchronize_session=False)
     )
@@ -911,7 +924,7 @@ async def release_template_v2_pptx_import(
             state="queued",
             attempt_number=import_job.attempt_number,
         )
-        task.updated_at = released_at
+        task.updated_at = _task_timestamp(released_at)
         session.add(task)
         await session.commit()
         notify_template_v2_pptx_dispatcher()
@@ -984,7 +997,7 @@ async def recover_stalled_template_v2_pptx_imports(
                     state="queued",
                     attempt_number=attempt_number,
                 ),
-                updated_at=recovered_at,
+                updated_at=_task_timestamp(recovered_at),
             )
             .execution_options(synchronize_session=False)
         )
