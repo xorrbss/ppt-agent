@@ -17,6 +17,9 @@ from services import template_v2_pptx_ingestion_service as ingestion
 from services import template_v2_pptx_retention_service as retention
 from services.template_v2_pptx_storage import (
     get_private_source_retention_ttl,
+    private_asset_reference,
+    relocate_runtime_assets,
+    resolve_private_asset,
     resolve_private_source,
 )
 
@@ -193,6 +196,56 @@ def test_cancelled_sources_are_reclaimed_but_confirmed_ones_are_retained(
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize(
+    ("state", "expect_deleted"),
+    [("review_required", True), ("confirmed", False)],
+)
+def test_cleanup_reclaims_relocated_runtime_assets_with_the_source(
+    tmp_path: Path,
+    monkeypatch,
+    state: str,
+    expect_deleted: bool,
+) -> None:
+    """Runtime-extracted media follows the source, not a second retention path.
+
+    Assets are relocated beside the source deck, so the states that already reclaim
+    the source reclaim the media too -- and `confirmed` retains both for audit.
+    """
+
+    async def scenario() -> None:
+        engine, maker = await _database(tmp_path / f"assets-{state}.sqlite")
+        monkeypatch.setattr(retention, "async_session_maker", maker)
+        now = datetime.now(timezone.utc)
+        try:
+            import_id, _, key = await _insert_import(
+                maker,
+                state=state,
+                updated_at=now - timedelta(days=7),
+                retention_expires_at=now,
+                task_status="completed",
+            )
+            source = _write_source(key)
+            output_directory = app_data / "pptx-to-json" / uuid.uuid4().hex
+            (output_directory / "images").mkdir(parents=True)
+            (output_directory / "images" / "image1-9f3.png").write_bytes(b"media")
+            relocate_runtime_assets(output_directory, import_id=import_id)
+            asset = resolve_private_asset(
+                private_asset_reference(import_id, "image1-9f3.png")
+            )
+            assert asset.is_file()
+
+            await retention.cleanup_expired_private_sources(now=now)
+
+            assert source.exists() is not expect_deleted
+            assert asset.exists() is not expect_deleted
+        finally:
+            await engine.dispose()
+
+    app_data = tmp_path / "app-data"
+    monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
+    asyncio.run(scenario())
+
+
 def test_restart_cleanup_initializes_legacy_terminal_deadline(
     tmp_path: Path,
     monkeypatch,
@@ -307,7 +360,7 @@ def test_cleanup_io_failure_is_best_effort_and_audited(
         monkeypatch.setattr(retention, "async_session_maker", maker)
         monkeypatch.setattr(
             retention,
-            "cleanup_private_source",
+            "cleanup_private_import",
             lambda _key: (_ for _ in ()).throw(PermissionError("denied")),
         )
         now = datetime.now(timezone.utc)

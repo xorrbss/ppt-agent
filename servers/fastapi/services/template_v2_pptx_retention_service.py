@@ -15,14 +15,15 @@ from models.sql.template_v2_pptx_import import TemplateV2PptxImport
 from services.database import async_session_maker
 from services.template_v2_pptx_storage import (
     PptxUploadRejected,
-    cleanup_private_source,
+    cleanup_private_import,
     get_private_source_retention_ttl,
 )
 from utils.datetime_utils import get_current_utc_datetime
 
 
 logger = logging.getLogger(__name__)
-# Terminal states whose uploaded source may be reclaimed once its TTL expires.
+# Terminal states whose uploaded source -- and the runtime-extracted media relocated
+# beside it in the same private directory -- may be reclaimed once its TTL expires.
 # `confirmed` is deliberately absent: a materialized template keeps its source so the
 # import can still be audited against the original deck.
 SOURCE_CLEANUP_STATES = ("review_required", "failed", "cancelled")
@@ -298,7 +299,7 @@ async def cleanup_expired_private_sources(
         claimed += 1
         try:
             result_name = await asyncio.to_thread(
-                cleanup_private_source,
+                cleanup_private_import,
                 claim.storage_key,
             )
         except Exception as error:
