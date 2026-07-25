@@ -295,6 +295,10 @@ test("actual API route renders Template V2 through /pdf-maker and presentation-e
         visual.skip(`visual-only dependencies unavailable: ${missing}`);
         return;
       }
+      // Every case is compared before anything fails. Stopping at the first
+      // regression hides the others, so a shift that moves the whole corpus takes
+      // one CI round trip per fixture to discover and gets retoleranced blind.
+      const regressions = [];
       for (const fixture of manifest.cases) {
         const sourcePng = await renderTemplateV2SourceHtml(renderedHtml.get(fixture.id), { chromeExecutable: chrome });
         const [pptxPng] = await renderPptxToPngPages({
@@ -306,6 +310,7 @@ test("actual API route renders Template V2 through /pdf-maker and presentation-e
         const comparison = await compareSlidePngs(sourcePng, pptxPng, {
           tolerances: { ...manifest.defaults, ...fixture.tolerances },
         });
+        console.log(`fidelity ${fixture.id}: ${comparison.passed ? "pass" : "FAIL"} ${JSON.stringify(comparison.metrics)}`);
         if (!comparison.passed) {
           const artifacts = await writeFidelityFailureArtifacts({
             outputDirectory: process.env.TEST_ARTIFACT_DIR || path.join(tempRoot, "artifacts"),
@@ -314,9 +319,10 @@ test("actual API route renders Template V2 through /pdf-maker and presentation-e
             pptxPng,
             comparison,
           });
-          assert.fail(`${fixture.id} visual fidelity regression; artifacts: ${artifacts}; metrics: ${JSON.stringify(comparison.metrics)}`);
+          regressions.push(`${fixture.id} visual fidelity regression; artifacts: ${artifacts}; metrics: ${JSON.stringify(comparison.metrics)}`);
         }
       }
+      if (regressions.length) assert.fail(regressions.join("\n"));
     });
   } finally {
     if (nextServer) await stopProcess(nextServer.child);
