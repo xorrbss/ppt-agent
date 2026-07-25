@@ -1,23 +1,29 @@
 import asyncio
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
+import sys
+import time
 
-from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import Integer, create_engine, inspect, text
+from sqlalchemy.engine import make_url
 
+from alembic import command
 from template_v2_schema_contract import (
     SLIDE_UI_CHECK_CONSTRAINT,
-    TEMPLATE_V2_EXPECTED_COLUMNS as PHASE_ONE_EXPECTED_COLUMNS,
     TEMPLATE_V2_PRESENTATION_FK_DELETE_ACTIONS,
     template_v2_local_state_presentation_fk_delete_action,
     template_v2_presentation_fk_delete_action,
     validate_template_v2_local_sidecars,
     validate_template_v2_phase_one_schema,
 )
+from template_v2_schema_contract import (
+    TEMPLATE_V2_EXPECTED_COLUMNS as PHASE_ONE_EXPECTED_COLUMNS,
+)
 from utils.db_utils import get_database_url_and_connect_args, to_sync_sqlalchemy_url
 from utils.get_env import get_migrate_database_on_startup_env
-
 
 LEGACY_BASELINE_REVISION = "00b3c27a13bc"
 # Revision before 95b5127e93cd (template_create_infos); used when DB has theme but not that table.
@@ -62,6 +68,11 @@ TEMPLATE_V2_IMPORT_REVIEW_COLUMNS = {
     "cancelled_at",
 }
 TEMPLATE_V2_EXPECTED_COLUMNS = set(PHASE_ONE_EXPECTED_COLUMNS)
+# One stable, application-specific signed bigint key. PostgreSQL session advisory
+# locks serialize Alembic ownership across API and worker replicas.
+MIGRATION_ADVISORY_LOCK_ID = 0x5050544147454E54
+MIGRATION_ADVISORY_LOCK_TIMEOUT_SECONDS = 30.0
+MIGRATION_ADVISORY_LOCK_POLL_SECONDS = 0.25
 
 
 async def migrate_database_on_startup() -> None:
@@ -89,18 +100,70 @@ def _run_migrations() -> None:
     database_url = to_sync_sqlalchemy_url(database_url)
 
     config.set_main_option("sqlalchemy.url", database_url)
-    _repair_orphan_alembic_revision(config, database_url)
-    _stamp_legacy_database_if_needed(config, database_url)
+    with _migration_owner_lock(database_url):
+        _repair_orphan_alembic_revision(config, database_url)
+        _stamp_legacy_database_if_needed(config, database_url)
 
-    try:
-        command.upgrade(config, "head")
-    except Exception:
-        # Safety net for edge cases; legacy DBs are stamped proactively above.
-        if _is_unversioned_populated_database(database_url):
-            _stamp_legacy_database_if_needed(config, database_url)
+        try:
             command.upgrade(config, "head")
-            return
-        raise
+        except Exception:
+            # Safety net for edge cases; legacy DBs are stamped proactively above.
+            if _is_unversioned_populated_database(database_url):
+                _stamp_legacy_database_if_needed(config, database_url)
+                command.upgrade(config, "head")
+                return
+            raise
+
+
+@contextmanager
+def _migration_owner_lock(database_url: str) -> Iterator[None]:
+    """Serialize PostgreSQL migrations while preserving local SQLite behavior."""
+
+    if make_url(database_url).get_backend_name() != "postgresql":
+        yield
+        return
+
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            connection = connection.execution_options(
+                isolation_level="AUTOCOMMIT"
+            )
+            deadline = (
+                time.monotonic() + MIGRATION_ADVISORY_LOCK_TIMEOUT_SECONDS
+            )
+            acquired = False
+            while not acquired:
+                acquired = bool(
+                    connection.execute(
+                        text("SELECT pg_try_advisory_lock(:lock_id)"),
+                        {"lock_id": MIGRATION_ADVISORY_LOCK_ID},
+                    ).scalar_one()
+                )
+                if acquired:
+                    break
+                if time.monotonic() >= deadline:
+                    raise RuntimeError("postgresql_migration_lock_timeout")
+                time.sleep(MIGRATION_ADVISORY_LOCK_POLL_SECONDS)
+            try:
+                yield
+            finally:
+                active_error = sys.exc_info()[0] is not None
+                try:
+                    connection.execute(
+                        text("SELECT pg_advisory_unlock(:lock_id)"),
+                        {"lock_id": MIGRATION_ADVISORY_LOCK_ID},
+                    )
+                except Exception:
+                    if not active_error:
+                        raise
+                    print(
+                        "Error releasing PostgreSQL migration lock; "
+                        "preserving the migration failure",
+                        flush=True,
+                    )
+    finally:
+        engine.dispose()
 
 
 def _repair_orphan_alembic_revision(config: Config, database_url: str) -> None:

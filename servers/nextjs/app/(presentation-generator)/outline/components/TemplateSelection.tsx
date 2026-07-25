@@ -6,10 +6,15 @@ import { selectableTemplates } from "@/app/presentation-templates";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { CustomTemplates, useCustomTemplateSummaries } from "@/app/hooks/useCustomTemplates";
+import {
+  TEMPLATE_V2_SELECTION_PREFIX,
+  useStructuredTemplateSummaries,
+} from "@/app/hooks/useStructuredTemplates";
 
 import CreateCustomTemplate from "../../(dashboard)/templates/components/CreateCustomTemplate";
 import AuthoredStylePicker from "./AuthoredStylePicker";
 import { CustomTemplateCard } from "./CustomTemplateCard";
+import { StructuredTemplateCard } from "./StructuredTemplateCard";
 import {
   TemplatePreviewStage,
   InbuiltTemplatePreview,
@@ -78,6 +83,8 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = memo(function Templa
   }, []);
 
   const { templates: customTemplates, loading: customLoading } = useCustomTemplateSummaries();
+  const { templates: structuredTemplates, loading: structuredLoading } =
+    useStructuredTemplateSummaries();
   const handleAuthoredActivate = useCallback(
     () => onSelectTemplate(AUTHORED_TEMPLATE_ID),
     [onSelectTemplate]
@@ -94,7 +101,20 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = memo(function Templa
   );
 
   const selectedCustomId = useMemo(
-    () => (typeof selectedTemplate === "string" ? selectedTemplate : null),
+    () =>
+      typeof selectedTemplate === "string" &&
+      !selectedTemplate.startsWith(TEMPLATE_V2_SELECTION_PREFIX)
+        ? selectedTemplate
+        : null,
+    [selectedTemplate]
+  );
+
+  const selectedStructuredId = useMemo(
+    () =>
+      typeof selectedTemplate === "string" &&
+      selectedTemplate.startsWith(TEMPLATE_V2_SELECTION_PREFIX)
+        ? selectedTemplate
+        : null,
     [selectedTemplate]
   );
 
@@ -132,6 +152,26 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = memo(function Templa
         />
       )),
     [selectedBuiltInId, handleBuiltInSelect]
+  );
+
+  const structuredTemplateCards = useMemo(
+    () =>
+      structuredLoading
+        ? []
+        : structuredTemplates.map((template) => (
+            <StructuredTemplateCard
+              key={template.id}
+              template={template}
+              onSelectTemplate={handleCustomSelect}
+              selectedTemplate={selectedStructuredId}
+            />
+          )),
+    [
+      handleCustomSelect,
+      selectedStructuredId,
+      structuredLoading,
+      structuredTemplates,
+    ]
   );
 
   return (
@@ -177,6 +217,7 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = memo(function Templa
           className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
         >
           <CreateCustomTemplate />
+          {structuredTemplateCards}
           {customTemplateCards}
           {builtInTemplateCards}
         </div>

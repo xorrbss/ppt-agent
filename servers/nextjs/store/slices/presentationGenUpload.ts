@@ -6,7 +6,7 @@ interface PresentationGenUploadState {
 
   files: any;
 
-  /** Selected template id (built-in id or custom-<uuid>); rehydrated to an object at call sites. */
+  /** Selected template id (built-in, custom-<uuid>, or encoded Template V2 identity). */
   selectedTemplate: string | null;
 
   /** Selected theme-preset id (a DEFAULT_THEMES id) applied to the deck after generation; null = none. */

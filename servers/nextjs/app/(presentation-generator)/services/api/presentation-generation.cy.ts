@@ -48,3 +48,34 @@ describe("PresentationGenerationApi.generateAuthoredAsync", () => {
       .should("include", { authored_style: "default" });
   });
 });
+
+describe("PresentationGenerationApi.generateTemplateV2Async", () => {
+  it("sends an explicit strategy and immutable template provenance", () => {
+    cy.intercept("POST", "**/api/v1/ppt/presentation/generate/async", {
+      statusCode: 200,
+      body: { id: "template-v2-task" },
+    }).as("startTemplateV2Generation");
+
+    cy.then(() =>
+      PresentationGenerationApi.generateTemplateV2Async({
+        content: "Outline title",
+        slides_markdown: ["# Outline title"],
+        language: "Korean",
+        template_v2_id: "brand-template",
+        template_v2_revision: 4,
+      })
+    );
+
+    cy.wait("@startTemplateV2Generation")
+      .its("request.body")
+      .should("deep.equal", {
+        content: "Outline title",
+        slides_markdown: ["# Outline title"],
+        language: "Korean",
+        strategy: "template_v2",
+        template_v2_id: "brand-template",
+        template_v2_revision: 4,
+        export_as: "pptx",
+      });
+  });
+});

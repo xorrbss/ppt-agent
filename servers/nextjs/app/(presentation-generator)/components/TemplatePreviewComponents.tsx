@@ -15,7 +15,7 @@ export function TemplatePreviewStage({ children }: { children: React.ReactNode }
                 src="/card_bg.svg"
                 alt=""
                 fill
-                className="absolute object-cover"
+                className="pointer-events-none absolute object-cover"
             />
             {children}
         </div>

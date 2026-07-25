@@ -275,6 +275,42 @@ export class PresentationGenerationApi {
     }
   }
 
+  static async generateTemplateV2Async(body: {
+    content: string;
+    slides_markdown: string[];
+    template_v2_id: string;
+    template_v2_revision: number;
+    language?: string | null;
+  }) {
+    try {
+      const response = await fetch(
+        getApiUrl(`/api/v1/ppt/presentation/generate/async`),
+        {
+          method: "POST",
+          headers: getHeader(),
+          body: JSON.stringify({
+            content: body.content,
+            slides_markdown: body.slides_markdown,
+            language: body.language ?? null,
+            strategy: "template_v2",
+            template_v2_id: body.template_v2_id,
+            template_v2_revision: body.template_v2_revision,
+            export_as: "pptx",
+          }),
+          cache: "no-cache",
+        }
+      );
+
+      return await ApiResponseHandler.handleResponse(
+        response,
+        "Failed to start structured-template generation"
+      );
+    } catch (error) {
+      console.error("error starting structured-template generation", error);
+      throw error;
+    }
+  }
+
   static async getGenerationStatus(taskId: string) {
     try {
       const response = await fetch(

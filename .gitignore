@@ -56,6 +56,8 @@ servers/fastapi/chroma/
 servers/fastapi/build/
 servers/fastapi/dist/
 electron/servers/
+servers/nextjs/cypress/screenshots/
+servers/nextjs/cypress/videos/
 
 # This project is npm-based (package-lock.json). Block stray pnpm artifacts left
 # by a one-off `pnpm install` so they cannot cause dual-lockfile drift.

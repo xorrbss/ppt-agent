@@ -45,6 +45,8 @@ COPY electron/resources/document-extraction/liteparse_runner.mjs /app/document-e
 
 COPY scripts/sync-presentation-export.cjs /app/scripts/sync-presentation-export.cjs
 COPY scripts/presenton-terminal-banner.mjs /app/scripts/presenton-terminal-banner.mjs
+RUN mkdir -p /app_data-private/template-v2-imports \
+    && chmod 0700 /app_data-private /app_data-private/template-v2-imports
 RUN rm -rf /app/presentation-export \
     && node /app/scripts/sync-presentation-export.cjs --force \
     && chmod +x /app/presentation-export/py/convert-linux-x64

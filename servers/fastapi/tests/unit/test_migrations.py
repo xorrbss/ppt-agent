@@ -4,13 +4,13 @@ from pathlib import Path
 
 import pytest
 import sqlalchemy as sa
-from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, inspect, text
 
 import migrations
 import template_v2_schema_contract
+from alembic import command
 
 
 def test_template_v2_revision_owns_a_frozen_application_free_contract():
@@ -59,6 +59,173 @@ def _script_head(database_url: str) -> str:
     # The current alembic head, resolved from the migration scripts — so these
     # "upgrade to head" assertions don't go stale each time a migration is added.
     return ScriptDirectory.from_config(_alembic_config(database_url)).get_current_head()
+
+
+def test_postgresql_migration_owner_lock_unlocks_and_disposes_on_failure(
+    monkeypatch,
+):
+    events = []
+
+    class FakeConnection:
+        def __enter__(self):
+            events.append("connect")
+            return self
+
+        def __exit__(self, _exc_type, _exc_value, _traceback):
+            events.append("connection_close")
+
+        def execution_options(self, *, isolation_level):
+            assert isolation_level == "AUTOCOMMIT"
+            return self
+
+        def execute(self, statement, parameters):
+            sql = str(statement)
+            if "pg_advisory_unlock" in sql:
+                events.append("unlock")
+            else:
+                assert "pg_try_advisory_lock" in sql
+                events.append("lock")
+            assert parameters == {
+                "lock_id": migrations.MIGRATION_ADVISORY_LOCK_ID
+            }
+            return MockResult()
+
+    class MockResult:
+        def scalar_one(self):
+            return True
+
+    class FakeEngine:
+        def connect(self):
+            return FakeConnection()
+
+        def dispose(self):
+            events.append("dispose")
+
+    monkeypatch.setattr(
+        migrations,
+        "create_engine",
+        lambda _database_url: FakeEngine(),
+    )
+
+    with (
+        pytest.raises(RuntimeError, match="migration failed"),
+        migrations._migration_owner_lock(
+            "postgresql://presenton:secret@database/presenton"
+        ),
+    ):
+        events.append("migration")
+        raise RuntimeError("migration failed")
+
+    assert events == [
+        "connect",
+        "lock",
+        "migration",
+        "unlock",
+        "connection_close",
+        "dispose",
+    ]
+
+
+def test_postgresql_migration_owner_lock_times_out(monkeypatch):
+    events = []
+
+    class MockResult:
+        def scalar_one(self):
+            return False
+
+    class FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, _exc_type, _exc_value, _traceback):
+            events.append("connection_close")
+
+        def execution_options(self, *, isolation_level):
+            assert isolation_level == "AUTOCOMMIT"
+            return self
+
+        def execute(self, statement, parameters):
+            assert "pg_try_advisory_lock" in str(statement)
+            assert parameters["lock_id"] == migrations.MIGRATION_ADVISORY_LOCK_ID
+            events.append("try_lock")
+            return MockResult()
+
+    class FakeEngine:
+        def connect(self):
+            return FakeConnection()
+
+        def dispose(self):
+            events.append("dispose")
+
+    monotonic_values = iter([0.0, 31.0])
+    monkeypatch.setattr(migrations, "create_engine", lambda _url: FakeEngine())
+    monkeypatch.setattr(
+        migrations.time, "monotonic", lambda: next(monotonic_values)
+    )
+    monkeypatch.setattr(migrations.time, "sleep", lambda _seconds: None)
+
+    with pytest.raises(
+        RuntimeError, match="postgresql_migration_lock_timeout"
+    ):
+        with migrations._migration_owner_lock(
+            "postgresql://presenton:secret@database/presenton"
+        ):
+            pytest.fail("timed-out lock must not enter migration body")
+
+    assert events == ["try_lock", "connection_close", "dispose"]
+
+
+def test_migration_failure_is_not_masked_when_unlock_fails(
+    monkeypatch, capsys
+):
+    class MockResult:
+        def scalar_one(self):
+            return True
+
+    class FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, _exc_type, _exc_value, _traceback):
+            pass
+
+        def execution_options(self, *, isolation_level):
+            return self
+
+        def execute(self, statement, _parameters):
+            if "pg_advisory_unlock" in str(statement):
+                raise RuntimeError("unlock failed")
+            return MockResult()
+
+    class FakeEngine:
+        def connect(self):
+            return FakeConnection()
+
+        def dispose(self):
+            pass
+
+    monkeypatch.setattr(migrations, "create_engine", lambda _url: FakeEngine())
+
+    with pytest.raises(RuntimeError, match="migration failed"):
+        with migrations._migration_owner_lock(
+            "postgresql://presenton:secret@database/presenton"
+        ):
+            raise RuntimeError("migration failed")
+
+    assert "preserving the migration failure" in capsys.readouterr().out
+
+
+def test_non_postgresql_migration_owner_lock_does_not_create_engine(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        migrations,
+        "create_engine",
+        lambda _database_url: pytest.fail("SQLite must not acquire a lock"),
+    )
+
+    with migrations._migration_owner_lock("sqlite:///local.db"):
+        pass
 
 
 def test_legacy_database_with_theme_is_stamped_past_theme_migration(

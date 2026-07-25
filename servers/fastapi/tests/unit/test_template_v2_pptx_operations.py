@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import timedelta
 import json
-from unittest.mock import Mock
 import uuid
+from datetime import timedelta
+from unittest.mock import Mock
 
+import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession as SQLModelAsyncSession
 
@@ -13,6 +14,7 @@ from models.sql.template_v2_pptx_import import TemplateV2PptxImport
 from scripts import check_template_v2_operations as operations_script
 from services import template_v2_pptx_operations as operations
 from services import template_v2_pptx_retention_service as retention
+from services.template_v2_pptx_storage import PrivateStorageHealth
 from utils.datetime_utils import get_current_utc_datetime
 
 
@@ -234,6 +236,148 @@ def test_operations_cli_uses_exit_two_for_unsafe_rollback(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert '"rollback_blocking_count": 2' in output
     assert "private.pptx" not in output
+
+
+def test_operations_health_is_read_only_and_checks_database_safety_first(
+    monkeypatch,
+):
+    events = []
+    status = operations.TemplateV2OperationalStatus(
+        healthy=True,
+        health_code="template_v2_healthy",
+        rollback_safe=True,
+        rollback_code="template_v2_rollback_safe",
+        rollback_blocking_count=0,
+        active_count=0,
+        stale_active_count=0,
+        failed_count=0,
+        review_required_count=0,
+        overdue_cleanup_count=0,
+    )
+
+    def require_safety(*, feature_enabled):
+        assert feature_enabled is True
+        events.append("safety")
+
+    async def get_status():
+        events.append("status")
+        return status
+
+    async def dispose():
+        events.append("dispose")
+
+    make_directory = Mock()
+    monkeypatch.setattr(
+        operations_script,
+        "require_template_v2_database_safety",
+        require_safety,
+    )
+    monkeypatch.setattr(
+        operations_script,
+        "get_template_v2_operational_status",
+        get_status,
+    )
+    monkeypatch.setattr(
+        operations_script,
+        "get_private_storage_health",
+        lambda: PrivateStorageHealth(
+            ready=True,
+            code="template_v2_private_storage_ready",
+        ),
+    )
+    monkeypatch.setattr(operations_script, "dispose_engines", dispose)
+    monkeypatch.setattr(operations_script.os, "makedirs", make_directory)
+
+    payload, ready = asyncio.run(operations_script._run("health"))
+
+    assert ready is True
+    assert payload["health_code"] == "template_v2_healthy"
+    assert events == ["safety", "status", "dispose"]
+    make_directory.assert_not_called()
+
+
+def test_operations_health_fails_closed_when_private_volume_is_missing(
+    monkeypatch,
+):
+    events = []
+
+    def require_safety(*, feature_enabled):
+        assert feature_enabled is True
+        events.append("safety")
+
+    async def get_status():
+        events.append("status")
+
+    async def dispose():
+        events.append("dispose")
+
+    monkeypatch.setattr(
+        operations_script,
+        "require_template_v2_database_safety",
+        require_safety,
+    )
+    monkeypatch.setattr(
+        operations_script,
+        "get_template_v2_operational_status",
+        get_status,
+    )
+    monkeypatch.setattr(
+        operations_script,
+        "get_private_storage_health",
+        lambda: PrivateStorageHealth(
+            ready=False,
+            code="template_v2_private_storage_missing",
+        ),
+    )
+    monkeypatch.setattr(operations_script, "dispose_engines", dispose)
+
+    payload, ready = asyncio.run(operations_script._run("health"))
+
+    assert ready is False
+    assert payload == {
+        "mode": "health",
+        "private_storage_ready": False,
+        "private_storage_code": "template_v2_private_storage_missing",
+    }
+    assert events == ["safety", "dispose"]
+
+
+def test_operations_health_rejects_unsafe_database_before_query(monkeypatch):
+    events = []
+
+    def require_safety(*, feature_enabled):
+        assert feature_enabled is True
+        events.append("safety")
+        raise RuntimeError("template_v2_managed_canary_requires_postgresql")
+
+    async def get_status():
+        events.append("status")
+
+    async def dispose():
+        events.append("dispose")
+
+    make_directory = Mock()
+    monkeypatch.setattr(
+        operations_script,
+        "require_template_v2_database_safety",
+        require_safety,
+    )
+    monkeypatch.setattr(
+        operations_script,
+        "get_template_v2_operational_status",
+        get_status,
+    )
+    monkeypatch.setattr(operations_script, "dispose_engines", dispose)
+    monkeypatch.setattr(operations_script.os, "makedirs", make_directory)
+
+    with pytest.raises(
+        RuntimeError,
+        match="template_v2_managed_canary_requires_postgresql",
+    ):
+        asyncio.run(operations_script._run("health"))
+
+    assert events == ["safety", "dispose"]
+    make_directory.assert_not_called()
 
 
 def test_operations_cli_redacts_unexpected_failure(monkeypatch, capsys):
