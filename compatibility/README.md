@@ -1,7 +1,10 @@
 # Upstream compatibility control
 
-This directory records the U0 compatibility contract against upstream commit
-`57b194b234b42c8b28f8a507a30322de200e3e83`.
+This directory records the U0 compatibility contract against the upstream commit
+pinned in `upstream-compatibility.json` as `baseline.upstreamSha`. That manifest
+is the single source of truth; the sibling registries restate the same SHA and
+the verifier fails if any of them disagree. This file does not restate it,
+because prose is not covered by that check and would go stale silently.
 
 - `upstream-compatibility.json` pins application/export/frontend versions, the
   11 Template V2 renderer discriminators, the lossless upstream payload
