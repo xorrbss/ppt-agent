@@ -387,3 +387,102 @@ def test_import_assets_stay_readable_when_the_rollout_flag_is_off(
             await engine.dispose()
 
     asyncio.run(scenario())
+
+
+def test_confirmed_assets_survive_a_credential_rotation(tmp_path, monkeypatch) -> None:
+    """`owner_scope` is an HMAC over AUTH_SECRET_KEY, which a password change rotates.
+
+    Scoping the asset more tightly than the template that embeds it meant a rotation
+    silently blanked every previously imported deck while export still returned 200.
+    """
+
+    async def scenario() -> None:
+        engine, maker = await _database(tmp_path / "rotation.sqlite")
+        monkeypatch.setenv("APP_DATA_DIRECTORY", str(tmp_path / "app-data"))
+        try:
+            import_id = uuid.uuid4()
+            template_id = "canary-template-a"
+            async with maker() as session:
+                session.add(
+                    TemplateV2PptxImport(
+                        id=import_id,
+                        task_id=f"task-{uuid.uuid4().hex}",
+                        requested_template_id=template_id,
+                        draft_template_id=template_id,
+                        state="confirmed",
+                        owner_scope="scope-before-rotation",
+                        source_filename="source.pptx",
+                        source_media_type=(
+                            "application/vnd.openxmlformats-officedocument."
+                            "presentationml.presentation"
+                        ),
+                        source_size_bytes=4,
+                        source_sha256="a" * 64,
+                        source_storage_key=f"{import_id}/source.pptx",
+                        manifest={"schema_version": 1},
+                    )
+                )
+                session.add(
+                    TemplateV2(
+                        id=template_id,
+                        presentation_id=uuid.uuid4(),
+                        name="canary",
+                        layouts={"layouts": []},
+                    )
+                )
+                await session.commit()
+
+            async with maker() as session:
+                assert await imports_api._may_read_import_asset(
+                    import_id, session, "scope-before-rotation"
+                ), "the owner must keep access"
+                assert await imports_api._may_read_import_asset(
+                    import_id, session, "scope-after-rotation"
+                ), "a rotated scope must not blank a confirmed deck"
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_unconfirmed_assets_stay_owner_scoped(tmp_path, monkeypatch) -> None:
+    """Before confirmation only the owner-scoped import record references the asset."""
+
+    async def scenario() -> None:
+        engine, maker = await _database(tmp_path / "unconfirmed.sqlite")
+        monkeypatch.setenv("APP_DATA_DIRECTORY", str(tmp_path / "app-data"))
+        try:
+            import_id = uuid.uuid4()
+            async with maker() as session:
+                session.add(
+                    TemplateV2PptxImport(
+                        id=import_id,
+                        task_id=f"task-{uuid.uuid4().hex}",
+                        requested_template_id="canary-template-a",
+                        state="review_required",
+                        owner_scope="owner",
+                        source_filename="source.pptx",
+                        source_media_type=(
+                            "application/vnd.openxmlformats-officedocument."
+                            "presentationml.presentation"
+                        ),
+                        source_size_bytes=4,
+                        source_sha256="a" * 64,
+                        source_storage_key=f"{import_id}/source.pptx",
+                        manifest={"schema_version": 1},
+                    )
+                )
+                await session.commit()
+
+            async with maker() as session:
+                assert await imports_api._may_read_import_asset(import_id, session, "owner")
+                assert not await imports_api._may_read_import_asset(
+                    import_id, session, "someone-else"
+                )
+                assert not await imports_api._may_read_import_asset(
+                    uuid.uuid4(), session, "owner"
+                )
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())

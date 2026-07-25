@@ -181,6 +181,36 @@ def _request_fingerprint(template_id: str, source_sha256: str) -> str:
     ).hexdigest()
 
 
+async def _may_read_import_asset(
+    import_id: uuid.UUID,
+    session: AsyncSession,
+    owner_scope: str,
+) -> bool:
+    """Asset visibility follows whatever references the asset.
+
+    Before confirmation only the owner-scoped import record references it, so owner
+    scope decides. After confirmation the template does, and
+    `GET /structured-templates/{id}` is readable by any authenticated caller -- so
+    scoping the asset more tightly than the layouts that embed it buys nothing and
+    costs correctness: `owner_scope` is an HMAC over `AUTH_SECRET_KEY`, which
+    `force_set_credentials` rotates, and a password change would otherwise blank
+    every previously imported deck's images while export still reported success.
+    """
+
+    import_job = await session.get(TemplateV2PptxImport, import_id)
+    if import_job is None:
+        return False
+    if import_job.owner_scope == owner_scope:
+        return True
+    # `draft_template_id` is what confirmation fills in; the response exposes it as
+    # `confirmed_template_id` once the state says so.
+    return (
+        import_job.state == "confirmed"
+        and import_job.draft_template_id is not None
+        and await session.get(TemplateV2, import_job.draft_template_id) is not None
+    )
+
+
 async def _load_import(
     import_id: uuid.UUID,
     session: AsyncSession,
@@ -374,8 +404,8 @@ async def get_structured_template_import_asset(
     (`StructuredTemplatePolicy.can_read_existing`).
     """
 
-    # Owner scoping first, 404 not 403, so a foreign import is never confirmed.
-    await _load_import(import_id, sql_session, _owner_scope(request))
+    if not await _may_read_import_asset(import_id, sql_session, _owner_scope(request)):
+        raise HTTPException(status_code=404, detail=_ASSET_NOT_FOUND_DETAIL)
     try:
         asset = resolve_private_asset(
             private_asset_reference(import_id, asset_name),
