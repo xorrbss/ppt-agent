@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useRef, useEffect, useState, ReactNode } from "react";
+import React, { useRef, useEffect, useLayoutEffect, ReactNode } from "react";
 import ReactDOM from "react-dom/client";
+import { flushSync } from "react-dom";
 import TiptapText from "./TiptapText";
 import MarkdownInlineText from "./MarkdownInlineText";
 import { getAdaptiveBlockText } from "@/lib/adaptiveBlockEdit";
@@ -87,25 +88,33 @@ interface TiptapTextReplacerProps {
   ) => void;
 }
 
+const NOOP_CONTENT_CHANGE = () => {};
+
 const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
   children,
   slideData,
   slideIndex,
   readOnly = false,
   useBlockId = false,
-  onContentChange = () => {},
+  onContentChange = NOOP_CONTENT_CHANGE,
 }) => {
 
   
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const [processedElements, setProcessedElements] = useState(
-    new Set<HTMLElement>()
-  );
+  // Track imperative DOM replacements without causing React to reconcile the
+  // slide again while a PPTX capture is in progress.
+  const processedElementsRef = useRef(new WeakSet<HTMLElement>());
   // Track created React roots to update content when slideData changes
   const rootsRef = useRef<
     Map<HTMLElement, { root: any; binding: EditBinding; fallbackText: string }>
   >(new Map());
+  useLayoutEffect(() => {
+    if (readOnly) {
+      containerRef.current?.removeAttribute("data-markdown-rendered");
+    }
+  }, [slideData, slideIndex, readOnly]);
+
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -119,6 +128,18 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
       // duplicate on screen binds to the Nth matching content field (not always the
       // first). Reset per full walk.
       const pathOccurrence = new Map<string, number>();
+      const readOnlyRenders: Array<() => void> = [];
+
+      if (readOnly) {
+        rootsRef.current.forEach(({ root, binding, fallbackText }) => {
+          const newContent = binding.key
+            ? staticReadBindingValue(slideData, binding) ?? fallbackText
+            : fallbackText;
+          readOnlyRenders.push(() =>
+            root.render(<MarkdownInlineText content={newContent} />)
+          );
+        });
+      }
 
       allElements.forEach((element) => {
         const htmlElement = element as HTMLElement;
@@ -126,9 +147,10 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
         // Skip if already processed
        
         if (
-          processedElements.has(htmlElement) ||
+          processedElementsRef.current.has(htmlElement) ||
           htmlElement.classList.contains("tiptap-text-editor") ||
           htmlElement.closest(".tiptap-text-editor") ||
+          htmlElement.closest("[data-tiptap-replacer-root]") ||
           // Text migrated to the in-tree <EditableText> owns its own editing; the
           // DOM-surgery path must not also process it (would double-bind/leak).
           htmlElement.closest("[data-editable-native]")
@@ -191,6 +213,7 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
         const tiptapContainer = document.createElement("div");
         tiptapContainer.style.cssText = allStyles || "";
         tiptapContainer.className = Array.from(allClasses).join(" ");
+        tiptapContainer.setAttribute("data-tiptap-replacer-root", "true");
         // Carry the block id onto the replacement so the editor can bind to it
         // (harmless in readOnly; the export converter ignores data-* attributes).
         if (bid) tiptapContainer.setAttribute("data-block-id", bid);
@@ -201,7 +224,7 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
         // Mark as processed
         htmlElement.innerHTML = "";
         }
-        setProcessedElements((prev) => new Set(prev).add(htmlElement));
+        processedElementsRef.current.add(htmlElement);
         // Render TiptapText
         const root = ReactDOM.createRoot(tiptapContainer);
         const initialContent = binding.key
@@ -212,7 +235,7 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
           binding,
           fallbackText: trimmedText,
         });
-        root.render(
+        const editableText = (
           readOnly ? (
             <MarkdownInlineText content={initialContent} />
           ) : (
@@ -227,9 +250,18 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
             />
           )
         );
+        if (readOnly) {
+          readOnlyRenders.push(() => root.render(editableText));
+        } else {
+          root.render(editableText);
+        }
       });
 
       if (readOnly && container) {
+        // Export waits for data-markdown-rendered. Commit all nested roots in
+        // one batch before publishing readiness so capture cannot observe an
+        // empty or stale replacement container.
+        flushSync(() => readOnlyRenders.forEach((render) => render()));
         container.setAttribute("data-markdown-rendered", "true");
       }
     };
@@ -241,10 +273,11 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
     return () => {
       clearTimeout(timer);
     };
-  }, [slideData, slideIndex, readOnly, processedElements, useBlockId, onContentChange]);
+  }, [slideData, slideIndex, readOnly, useBlockId, onContentChange]);
   
   // When slideData changes, update existing editors' content using the stored binding
   useEffect(() => {
+    if (readOnly) return;
     if (!rootsRef.current || rootsRef.current.size === 0) return;
     rootsRef.current.forEach(({ root, binding, fallbackText }) => {
       const newContent = binding.key
