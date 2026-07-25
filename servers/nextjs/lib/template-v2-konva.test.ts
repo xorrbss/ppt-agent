@@ -7,7 +7,6 @@ import {
   layoutTemplateV2Table,
   templateV2InfographicView,
 } from "./template-v2-konva.ts";
-import { snapTemplateV2Position } from "./template-v2-snapping.ts";
 import { translateTemplateV2Vector } from "./template-v2-vector.ts";
 
 test("elementCapabilities grants move/resize/rotate to content and layout types", () => {
@@ -53,16 +52,6 @@ test("vector movement translates every authored point by the canvas delta", () =
     points: [{ x: 1, y: 2 }, { x: "bad", y: 4 }],
   };
   assert.equal(translateTemplateV2Vector(malformed, 5, 5), malformed);
-});
-
-test("canvas snapping uses an eight-pixel grid inside a bounded threshold", () => {
-  assert.deepEqual(snapTemplateV2Position({ x: 14, y: 19 }), { x: 16, y: 16 });
-  assert.deepEqual(snapTemplateV2Position({ x: 12, y: 20 }), { x: 12, y: 20 });
-  assert.deepEqual(snapTemplateV2Position({ x: -9.5, y: 0 }), { x: -8, y: 0 });
-  assert.deepEqual(
-    snapTemplateV2Position({ x: 24.2, y: 31.8 }, 10, 1),
-    { x: 24.2, y: 31.8 }
-  );
 });
 
 test("layoutTemplateV2List concatenates runs and applies the marker per item", () => {

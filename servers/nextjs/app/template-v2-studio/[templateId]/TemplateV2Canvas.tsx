@@ -1,31 +1,26 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type Konva from "konva";
 import { Group, Layer, Rect, Stage, Transformer } from "react-konva";
 
 import {
   elementCapabilities,
   elementPosition,
-  fitTemplateV2Viewport,
   normalizeElementGeometry,
   pathKey,
-  preserveTemplateV2ViewportOnResize,
   TEMPLATE_V2_SLIDE_HEIGHT,
   TEMPLATE_V2_SLIDE_WIDTH,
-  zoomTemplateV2Viewport,
-  type ViewportTransform,
 } from "@/lib/template-v2-konva";
 import { nudgeTemplateV2Geometry } from "@/lib/template-v2-studio-geometry";
 import { getTemplateV2CanvasKeyboardIntent } from "@/lib/template-v2-studio-keyboard";
 import { planStudioElement } from "@/lib/template-v2-studio-plan";
-import { snapTemplateV2Position } from "@/lib/template-v2-snapping";
+import {
+  sameTemplateV2Guides,
+  snapTemplateV2Bounds,
+  templateV2GuideTargets,
+  type TemplateV2Guide,
+} from "@/lib/template-v2-snapping";
 import {
   isJsonRecord,
   type ElementGeometry,
@@ -34,6 +29,11 @@ import {
   type TemplateV2Scene,
 } from "@/lib/template-v2-studio";
 import { StudioElement } from "./TemplateV2CanvasElement";
+import { TemplateV2CanvasGuides } from "./TemplateV2CanvasGuides";
+import {
+  TemplateV2CanvasZoomControls,
+  useTemplateV2Viewport,
+} from "./TemplateV2CanvasViewport";
 
 interface TemplateV2CanvasProps {
   scene: TemplateV2Scene;
@@ -81,7 +81,16 @@ export default function TemplateV2Canvas({
   onSelect,
   onGeometryBatch,
 }: TemplateV2CanvasProps) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const {
+    containerRef,
+    dimensions,
+    viewport,
+    armPan,
+    beginPan,
+    stageProps,
+    zoomBy,
+    fit,
+  } = useTemplateV2Viewport();
   const transformerRef = useRef<Konva.Transformer | null>(null);
   const nodesRef = useRef(new Map<string, Konva.Node>());
   const dragRef = useRef<{
@@ -93,19 +102,7 @@ export default function TemplateV2Canvas({
       start: { x: number; y: number };
     }>;
   } | null>(null);
-  const observedDimensionsRef = useRef<{
-    width: number;
-    height: number;
-  } | null>(null);
-  const [dimensions, setDimensions] = useState({ width: 960, height: 600 });
-  const [viewport, setViewport] = useState<ViewportTransform>(() =>
-    fitTemplateV2Viewport(960, 600)
-  );
-  const [spacePressed, setSpacePressed] = useState(false);
-  const panRef = useRef<{
-    pointer: { x: number; y: number };
-    viewport: ViewportTransform;
-  } | null>(null);
+  const [guides, setGuides] = useState<TemplateV2Guide[]>([]);
   const selectedKeys = useMemo(
     () => new Set(selectedPaths.map(pathKey)),
     [selectedPaths]
@@ -123,6 +120,7 @@ export default function TemplateV2Canvas({
       })),
     [scene.elements, selectedPaths]
   );
+  const componentPosition = elementPosition(scene.component);
   const selectionLocked = selectedPaths.some(conflictsWithLockedPath);
   const capabilities = {
     move:
@@ -144,27 +142,6 @@ export default function TemplateV2Canvas({
       ) &&
       !selectionLocked,
   };
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    const observer = new ResizeObserver(([entry]) => {
-      const width = Math.max(320, Math.floor(entry.contentRect.width));
-      const height = Math.max(360, Math.floor(entry.contentRect.height));
-      const next = { width, height };
-      const previous = observedDimensionsRef.current;
-      if (previous?.width === width && previous.height === height) return;
-      observedDimensionsRef.current = next;
-      setDimensions(next);
-      setViewport((current) =>
-        previous
-          ? preserveTemplateV2ViewportOnResize(current, previous, next)
-          : fitTemplateV2Viewport(width, height)
-      );
-    });
-    observer.observe(container);
-    return () => observer.disconnect();
-  }, []);
 
   useEffect(() => {
     const transformer = transformerRef.current;
@@ -218,6 +195,22 @@ export default function TemplateV2Canvas({
     [onGeometryBatch, scene.elements]
   );
 
+  const guideTargets = useCallback(
+    (moving: ReadonlySet<string>) =>
+      templateV2GuideTargets(
+        nodesRef.current,
+        scene.elements.map((_, index) => pathKey([index])),
+        moving,
+        {
+          x: -componentPosition.x,
+          y: -componentPosition.y,
+          width: TEMPLATE_V2_SLIDE_WIDTH,
+          height: TEMPLATE_V2_SLIDE_HEIGHT,
+        }
+      ),
+    [componentPosition.x, componentPosition.y, scene.elements]
+  );
+
   const onDragStart = useCallback(
     (path: ElementPath, node: Konva.Node) => {
       const key = pathKey(path);
@@ -251,29 +244,46 @@ export default function TemplateV2Canvas({
     [capabilities.move, selectedKeys, selectedPaths]
   );
 
-  const onDragMove = useCallback((path: ElementPath, node: Konva.Node) => {
-    node.position(
-      snapTemplateV2Position({ x: node.x(), y: node.y() })
-    );
-    const drag = dragRef.current;
-    if (!drag || drag.sourceKey !== pathKey(path)) return;
-    const deltaX = node.x() - drag.sourceStart.x;
-    const deltaY = node.y() - drag.sourceStart.y;
-    for (const entry of drag.entries) {
-      if (entry.node === node) continue;
-      entry.node.position({
-        x: entry.start.x + deltaX,
-        y: entry.start.y + deltaY,
-      });
-    }
-    transformerRef.current?.forceUpdate();
-    node.getLayer()?.batchDraw();
-  }, []);
+  const onDragMove = useCallback(
+    (path: ElementPath, node: Konva.Node) => {
+      const drag = dragRef.current;
+      const moving = new Set(
+        drag ? drag.entries.map((entry) => pathKey(entry.path)) : [pathKey(path)]
+      );
+      const snap = snapTemplateV2Bounds(
+        {
+          x: node.x(),
+          y: node.y(),
+          width: node.width(),
+          height: node.height(),
+        },
+        guideTargets(moving)
+      );
+      node.position(snap.position);
+      setGuides((current) =>
+        sameTemplateV2Guides(current, snap.guides) ? current : snap.guides
+      );
+      if (!drag || drag.sourceKey !== pathKey(path)) return;
+      const deltaX = node.x() - drag.sourceStart.x;
+      const deltaY = node.y() - drag.sourceStart.y;
+      for (const entry of drag.entries) {
+        if (entry.node === node) continue;
+        entry.node.position({
+          x: entry.start.x + deltaX,
+          y: entry.start.y + deltaY,
+        });
+      }
+      transformerRef.current?.forceUpdate();
+      node.getLayer()?.batchDraw();
+    },
+    [guideTargets]
+  );
 
   const onDragEnd = useCallback(
     (path: ElementPath) => {
       const drag = dragRef.current;
       dragRef.current = null;
+      setGuides([]);
       commitNodes(
         drag && drag.sourceKey === pathKey(path)
           ? drag.entries.map((entry) => entry.path)
@@ -315,8 +325,6 @@ export default function TemplateV2Canvas({
     ]
   );
 
-  const componentPosition = elementPosition(scene.component);
-
   return (
     <div
       ref={containerRef}
@@ -327,7 +335,7 @@ export default function TemplateV2Canvas({
       onKeyDown={(event) => {
         if (event.code === "Space") {
           event.preventDefault();
-          setSpacePressed(true);
+          armPan(true);
           return;
         }
         const intent = getTemplateV2CanvasKeyboardIntent(event.nativeEvent, {
@@ -343,53 +351,23 @@ export default function TemplateV2Canvas({
         nudgeSelection(intent.deltaX, intent.deltaY);
       }}
       onKeyUp={(event) => {
-        if (event.code === "Space") setSpacePressed(false);
+        if (event.code === "Space") armPan(false);
       }}
-      onBlur={() => setSpacePressed(false)}
+      onBlur={() => armPan(false)}
     >
       <Stage
         width={dimensions.width}
         height={dimensions.height}
-        onWheel={(event) => {
-          event.evt.preventDefault();
-          const pointer = event.target.getStage()?.getPointerPosition();
-          if (!pointer) return;
-          const direction = event.evt.deltaY > 0 ? 1 / 1.08 : 1.08;
-          setViewport((current) =>
-            zoomTemplateV2Viewport(current, pointer, current.scale * direction)
-          );
-        }}
+        {...stageProps}
         onMouseDown={(event) => {
+          if (beginPan(event)) return;
           const stage = event.target.getStage();
-          const pointer = stage?.getPointerPosition();
-          if (!pointer) return;
-          if (spacePressed || event.evt.button === 1) {
-            event.evt.preventDefault();
-            panRef.current = { pointer, viewport };
-            return;
-          }
           if (
             event.target === stage ||
             event.target.name() === "slide-background"
           ) {
             onSelect(null, false);
           }
-        }}
-        onMouseMove={(event) => {
-          const pan = panRef.current;
-          const pointer = event.target.getStage()?.getPointerPosition();
-          if (!pan || !pointer) return;
-          setViewport({
-            ...pan.viewport,
-            x: pan.viewport.x + pointer.x - pan.pointer.x,
-            y: pan.viewport.y + pointer.y - pan.pointer.y,
-          });
-        }}
-        onMouseUp={() => {
-          panRef.current = null;
-        }}
-        onMouseLeave={() => {
-          panRef.current = null;
         }}
       >
         <Layer>
@@ -450,56 +428,19 @@ export default function TemplateV2Canvas({
                   : newBox
               }
             />
+            <TemplateV2CanvasGuides
+              guides={guides}
+              offset={componentPosition}
+              scale={viewport.scale}
+            />
           </Group>
         </Layer>
       </Stage>
-      <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-lg bg-slate-950/90 p-1 text-xs text-slate-200">
-        <button
-          type="button"
-          aria-label="Zoom out"
-          className="rounded px-2 py-1 hover:bg-slate-700"
-          onClick={() =>
-            setViewport((current) =>
-              zoomTemplateV2Viewport(
-                current,
-                { x: dimensions.width / 2, y: dimensions.height / 2 },
-                current.scale / 1.2
-              )
-            )
-          }
-        >
-          −
-        </button>
-        <span aria-live="polite" className="min-w-12 text-center">
-          {Math.round(viewport.scale * 100)}%
-        </span>
-        <button
-          type="button"
-          aria-label="Zoom in"
-          className="rounded px-2 py-1 hover:bg-slate-700"
-          onClick={() =>
-            setViewport((current) =>
-              zoomTemplateV2Viewport(
-                current,
-                { x: dimensions.width / 2, y: dimensions.height / 2 },
-                current.scale * 1.2
-              )
-            )
-          }
-        >
-          +
-        </button>
-        <button
-          type="button"
-          aria-label="Fit slide to view"
-          className="rounded px-2 py-1 hover:bg-slate-700"
-          onClick={() =>
-            setViewport(fitTemplateV2Viewport(dimensions.width, dimensions.height))
-          }
-        >
-          Fit
-        </button>
-      </div>
+      <TemplateV2CanvasZoomControls
+        scale={viewport.scale}
+        zoomBy={zoomBy}
+        fit={fit}
+      />
     </div>
   );
 }
