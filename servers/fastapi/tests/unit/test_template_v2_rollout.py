@@ -152,6 +152,19 @@ def test_observation_schema_cannot_capture_presentation_content_or_raw_template_
         assert forbidden not in serialized
 
 
+def test_default_observation_sink_emits_through_the_module_logger(caplog):
+    """Every other test injects a sink, so the shipped default path stays untested."""
+    row = _marked_row()
+    service = TemplateV2RolloutService(get_template_v2_policy({}))
+
+    with caplog.at_level("INFO", logger="services.template_v2_rollout"):
+        service.require_existing_read(row, row["template_id"])
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert any(message.startswith("template_v2_rollout ") for message in messages)
+    assert row["template_id"] not in " ".join(messages)
+
+
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
