@@ -20,6 +20,7 @@ from models.sql.template_v2 import TemplateV2
 from models.sql.template_v2_local_state import TemplateV2LocalState
 from models.sql.template_v2_pptx_import import TemplateV2PptxImport
 from services.database import async_session_maker
+from services.export_task_service import EXPORT_TASK_SERVICE
 from services.template_v2_pptx_retention_service import (
     maybe_cleanup_expired_private_sources,
     terminal_source_retention,
@@ -32,9 +33,11 @@ from services.template_v2_pptx_queue_observability import (
 )
 from services.template_v2_pptx_storage import (
     get_private_source_retention_ttl,
+    relocate_runtime_assets,
     verify_private_source,
 )
 from templates.v2.constants import TEMPLATE_V2_VERSION
+from templates.v2.models.layouts import RawSlideLayouts, SlideLayouts
 from templates.v2.generation import build_generated_slide
 from templates.v2.pptx.assembler import (
     AssembledTemplateV2Draft,
@@ -43,6 +46,7 @@ from templates.v2.pptx.assembler import (
 from templates.v2.pptx.analyzer import analyze_ooxml_candidates
 from templates.v2.pptx.models import PresentationCandidates
 from templates.v2.pptx.ooxml_parser import parse_presentation_candidates
+from templates.v2.pptx.runtime_layouts import build_runtime_slide_layouts
 from templates.v2.pptx.package_reader import PptxPackageReader, UnsafePptxPackage
 from templates.v2.pptx.repeat_suggestions import (
     build_repeat_block_suggestions,
@@ -230,6 +234,97 @@ async def _heartbeat_loop(
                 return
 
 
+RUNTIME_ANALYZER_PROVIDER = "runtime-pptx-to-json"
+RUNTIME_ANALYSIS_MARKER = "runtime-pptx-to-json-v1"
+
+
+def _with_private_asset_references(
+    layouts: list[dict],
+    relocated,
+) -> list[dict]:
+    """Point image elements at the relocated private assets before validation.
+
+    The converter emits `/app_data` URLs for media it extracted. Those files have
+    been moved into the import's private directory, so the URLs would 404 -- and an
+    unreachable asset renders as a silently blank region.
+    """
+
+    rewritten: list[dict] = []
+    for layout in layouts:
+        elements = []
+        for element in layout.get("elements") or []:
+            data = element.get("data") if isinstance(element, dict) else None
+            reference = relocated.reference_for(data) if isinstance(data, str) else None
+            elements.append({**element, "data": reference} if reference else element)
+        rewritten.append({**layout, "elements": elements})
+    return rewritten
+
+
+async def _analyze_import_source_via_runtime(
+    storage_key: str,
+    source_sha256: str,
+    *,
+    import_id: uuid.UUID,
+    source_filename: str,
+    source_media_type: str,
+    source_size_bytes: int,
+) -> tuple[dict, list[dict], dict]:
+    """Extract with the bundled converter instead of the in-repo OOXML parser.
+
+    Gains images, per-run text styling and vector shapes. Returns no repeat-block
+    suggestions: those are derived from parser candidates, which this path does not
+    produce.
+    """
+
+    started_at = perf_counter()
+    try:
+        source = verify_private_source(
+            storage_key,
+            source_sha256,
+            expected_import_id=import_id,
+            expected_size_bytes=source_size_bytes,
+        )
+        document = await EXPORT_TASK_SERVICE.convert_pptx_to_json(
+            str(source), session_id=str(import_id)
+        )
+        relocated = relocate_runtime_assets(document.output_dir, import_id=import_id)
+        imported = build_runtime_slide_layouts(
+            _with_private_asset_references(document.layouts, relocated)
+        )
+        analysis_payload = {
+            "analyzer": RUNTIME_ANALYSIS_MARKER,
+            "raw_layouts": imported.raw_layouts.model_dump(mode="json"),
+            "layouts": imported.layouts.model_dump(mode="json"),
+        }
+        inventory = SourceInventory(
+            source=SecretFreeSourceMetadata(
+                display_filename=source_filename,
+                media_type=source_media_type,
+                size_bytes=source_size_bytes,
+                sha256=source_sha256,
+            ),
+            artifacts=(),
+            candidates=(
+                candidate_inventory_item(RUNTIME_ANALYSIS_MARKER, analysis_payload),
+            ),
+        ).to_manifest()
+        log_pptx_analysis_observation(
+            provider=RUNTIME_ANALYZER_PROVIDER,
+            status="completed",
+            duration_ms=(perf_counter() - started_at) * 1000,
+            count=len(imported.layouts.layouts),
+        )
+        return analysis_payload, [], inventory
+    except Exception:
+        log_pptx_analysis_observation(
+            provider=RUNTIME_ANALYZER_PROVIDER,
+            status="failed",
+            duration_ms=(perf_counter() - started_at) * 1000,
+            count=0,
+        )
+        raise
+
+
 def _analyze_import_source(
     storage_key: str,
     source_sha256: str,
@@ -390,6 +485,29 @@ async def _persist_analysis(
         return True
 
 
+def _runtime_confirmed_draft(analysis_result: dict) -> AssembledTemplateV2Draft:
+    """Rebuild the draft the runtime analyzer already validated.
+
+    The two analyzers converge here rather than at the analysis: the deterministic
+    path replays parser candidates through the assembler, while this path stored
+    validated layouts directly. `contents` is one empty mapping per layout because
+    the converter marks every element decorative, so the template schema is empty
+    and `build_generated_slide` takes the layout as-is.
+    """
+
+    raw_payload = analysis_result.get("raw_layouts")
+    layouts_payload = analysis_result.get("layouts")
+    if not isinstance(raw_payload, dict) or not isinstance(layouts_payload, dict):
+        raise ValueError("template_v2_import_runtime_layouts_missing")
+    layouts = SlideLayouts.model_validate(layouts_payload)
+    return AssembledTemplateV2Draft(
+        raw_layouts=RawSlideLayouts.model_validate(raw_payload),
+        layouts=layouts,
+        contents=[{} for _ in layouts.layouts],
+        manifest={"analyzer": RUNTIME_ANALYSIS_MARKER},
+    )
+
+
 def _assemble_confirmed_candidate(
     import_job: TemplateV2PptxImport,
     accepted_repeat_suggestions: list[dict],
@@ -397,6 +515,8 @@ def _assemble_confirmed_candidate(
     analysis_result = import_job.analysis_result
     if not isinstance(analysis_result, dict):
         raise ValueError("template_v2_import_analysis_missing")
+    if analysis_result.get("analyzer") == RUNTIME_ANALYSIS_MARKER:
+        return _runtime_confirmed_draft(analysis_result)
     candidate_payload = analysis_result.get("candidates")
     if not isinstance(candidate_payload, dict):
         raise ValueError("template_v2_import_candidate_missing")
@@ -1042,15 +1162,28 @@ async def run_template_v2_pptx_import(import_id: uuid.UUID, task_id: str) -> Non
             source_filename = import_job.source_filename
             source_media_type = import_job.source_media_type
             source_size_bytes = import_job.source_size_bytes
-        analysis_result, repeat_suggestions, source_inventory = await asyncio.to_thread(
-            _analyze_import_source,
-            storage_key,
-            source_sha256,
-            import_id=import_id,
-            source_filename=source_filename,
-            source_media_type=source_media_type,
-            source_size_bytes=source_size_bytes,
-        )
+        # The runtime analyzer is async, so the branch lives here rather than inside
+        # the threaded parser call.
+        if get_structured_template_policy().pptx_analyzer == "runtime":
+            analysis_source = _analyze_import_source_via_runtime(
+                storage_key,
+                source_sha256,
+                import_id=import_id,
+                source_filename=source_filename,
+                source_media_type=source_media_type,
+                source_size_bytes=source_size_bytes,
+            )
+        else:
+            analysis_source = asyncio.to_thread(
+                _analyze_import_source,
+                storage_key,
+                source_sha256,
+                import_id=import_id,
+                source_filename=source_filename,
+                source_media_type=source_media_type,
+                source_size_bytes=source_size_bytes,
+            )
+        analysis_result, repeat_suggestions, source_inventory = await analysis_source
         if ownership_lost.is_set():
             raise AttemptOwnershipLost()
         if not await _persist_analysis(

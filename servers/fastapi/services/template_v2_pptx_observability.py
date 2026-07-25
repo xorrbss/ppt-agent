@@ -16,10 +16,10 @@ from typing import Literal
 
 LOGGER = logging.getLogger(__name__)
 
-PptxAnalysisProvider = Literal["deterministic-ooxml-static"]
+PptxAnalysisProvider = Literal["deterministic-ooxml-static", "runtime-pptx-to-json"]
 PptxAnalysisStatus = Literal["completed", "failed"]
 
-_PROVIDERS = {"deterministic-ooxml-static"}
+_PROVIDERS = {"deterministic-ooxml-static", "runtime-pptx-to-json"}
 _STATUSES = {"completed", "failed"}
 _MAX_DURATION_MS = 86_400_000.0
 _MAX_COUNT = 1_000_000
