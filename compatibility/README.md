@@ -151,6 +151,20 @@ paths above), and the grafts go on its non-copied children.
 - SQLite is the default runtime and unit-test database. Presentation deletion
   rolls back and returns a retryable `503` with `Retry-After: 1` for SQLite
   `BUSY`/`LOCKED`; permanent ownership or foreign-key conflicts remain `409`.
+- SQLite serializes writers, so concurrent writes contend. Measured 2026-07-25
+  on Windows with 12 concurrent workers looping create/read/delete for 45s,
+  three paired rounds: throughput ~88 ops/s and about **0.5% of operations
+  fail**. Deletion surfaces this as the documented retryable `503`; creation has
+  no equivalent guard, so the same `database is locked` reaches the ASGI layer
+  as an opaque `500` (1–6 per round). This is a known SQLite concurrency limit,
+  not a Template V2 behavior, and it is not a supported multi-writer
+  configuration — use PostgreSQL where concurrent writers are expected.
+- The Template V2 PPTX dispatcher does **not** measurably add to that
+  contention. Same probe with `ENABLE_TEMPLATE_V2=true`, a non-empty allowlist,
+  and 60 seeded queue rows so the 5-second dispatcher loop was actively claiming
+  work: 92.4 ops/s, 18.0 failures, p99 3573ms, versus 88.1 ops/s, 24.3 failures,
+  p99 4434ms with the flag off. The flag-on arm scored slightly better on every
+  metric and the per-round ranges overlap completely, so the difference is noise.
 - PostgreSQL is verified by a dedicated live-database CI gate. It runs the
   official Alembic lineage from an empty database and covers Template V2
   upgrade/downgrade/re-upgrade, legacy and populated-data preservation,
