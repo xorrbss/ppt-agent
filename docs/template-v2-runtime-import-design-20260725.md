@@ -95,19 +95,48 @@ These are product/security calls, not implementation details. **They block Phase
 ### D1 — where extracted images live
 
 The runtime writes to `<APP_DATA_DIRECTORY>/pptx-to-json/<session_id>/images/` and emits
-`data` as `ASSETS_BASE_URL + <relative path>`. `app_data` is served by a StaticFiles mount
-(`api/main.py:69`), so **extracted customer imagery would be web-reachable by URL**. That
-contradicts the existing posture for the source deck, which is deliberately stored outside
-the mount (`template_v2_pptx_storage.py:75-93`).
+`data` as `ASSETS_BASE_URL + <relative path>`, i.e. under the `/app_data` StaticFiles mount
+(`api/main.py:69`).
+
+That mount is **not** public. `SessionAuthMiddleware._requires_auth`
+(`api/middlewares.py:58-68`) requires auth for everything under `/app_data/` except one
+deliberate carve-out: `/app_data/images/` with an image extension, commented *"PPTX export
+may re-fetch slide images without session/basic headers."* Runtime output does not match
+that carve-out, so it is already behind auth. Confidentiality is therefore **not** the
+deciding factor between the options below.
 
 | option | effect | cost |
 |---|---|---|
-| **A. Relocate after extraction** (recommended) | move `images/` into the existing private root, keep filesystem paths for rendering, serve to the browser through a new owner-scoped endpoint | +1 endpoint; Studio/export must resolve asset URLs through it |
-| B. Leave in `app_data` | zero work | customer imagery publicly reachable if the path is known |
-| C. Leave in `app_data`, unguessable session dir + TTL | small | still public; security by obscurity |
+| **A. Relocate after extraction** (recommended) | move `images/` into the existing private root, keep filesystem paths for rendering, serve to the browser through an owner-scoped endpoint | +1 endpoint; Studio/export resolve asset URLs through it |
+| B. Leave in `app_data` | zero work; already auth-gated | loses the import's `owner_scope`; needs a **second** retention path outside the private root |
+| ~~C. Unguessable session dir~~ | dominated by B — the path is already authenticated, so obscurity adds nothing | — |
+| ~~D. Write into `/app_data/images/`~~ | **reject**: the one public carve-out. It is the path of least resistance for the export renderer and would genuinely publish customer imagery | — |
+
+The deciding argument is retention, not secrecy. Extracted assets in `app_data` sit outside
+the tree `SOURCE_CLEANUP_STATES` already manages, so they need a second cleanup path — the
+exact shape of the bug fixed this session, where `cancel` wrote a retention deadline that no
+cleanup query ever read. Option A keeps assets in the same tree as the source file, so the
+existing cleanup covers them.
 
 Rendering never needs a URL — `json-to-image` runs server-side and takes filesystem paths,
 so option A costs nothing on the render path.
+
+**Blocking verification — done 2026-07-25, PASSED.** Both options leave assets on an
+auth-required path, and the carve-out's comment implies the export renderer sometimes
+re-fetches images without credentials. Since `json-to-image` renders an unreachable asset as
+a blank region at exit 0, a failure here would have produced image-less decks with no error.
+It matters because every image the fork currently serves lives on the *public* carve-out
+(`utils/asset_directory_utils.py:74` maps generated images to `/app_data/images/`), so the
+protected path had never been exercised by an export.
+
+Measured: `/app_data/images/probe.png` → 200 unauthenticated; `/app_data/pptx-to-json/probe/images/probe.png`
+→ **401** unauthenticated and **200** with the session cookie. A real PPTX export of a slide
+carrying one image from each path embedded **both** — two distinct media parts, navy from the
+protected path and green from the public one, each bound to its own `<p:pic>`. The seeded
+export session cookie therefore does cover image subresources, and option A's owner-scoped
+endpoint is safe on the export path.
+
+Re-run this probe if the export cookie seeding in `utils/export_utils.py:43-56` changes.
 
 ### D2 — URL ↔ path translation
 
