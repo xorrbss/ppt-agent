@@ -82,9 +82,45 @@ unchanged, because both paths produce the same candidate shape.
 `templates/v2/policy.py` with the same fail-closed discipline as the existing flags: any
 unrecognised value is a configuration error, not a silent fallback.
 
-**Element coverage.** The assembler currently emits 5 of 11 discriminators
-(`assembler.py:8-21`). The runtime adds `image` and `vector`, so the assembler needs those
-two cases. `TextList`, `Infographic`, `Flex`, `Grid` remain unreachable from import.
+**Element coverage.** Both analyzers reach 5 of the 11 discriminators, but not the same
+five. The runtime adds `image` and `vector` and never emits `group` (PowerPoint groups are
+flattened, freeform and gradient autoshapes are rasterised to `image`, bullet paragraphs
+collapse into one text run). `TextList`, `Infographic`, `Flex`, `Grid` stay unreachable from
+either import path. Conversion lives in `templates/v2/pptx/runtime_layouts.py`, beside the
+assembler rather than inside it, because the assembler is `ShapeCandidate`-driven and also
+owns repeat-group application and manifest building — none of which applies to a payload
+that arrives already element-shaped.
+
+### Two findings that change what Phase A delivers
+
+**Runtime-imported templates have no fillable slots.** The converter marks every
+`text`/`image`/`table`/`chart` as `decorative: true`, and `templates/v2/schema.py:182-185`
+skips any element whose `decorative is not False`, so `get_template_schema` yields nothing
+to fill. The deterministic assembler instead sets `decorative=False` explicitly
+(`assembler.py:72,99,118`). This is not a defect in either: upstream defers that semantic
+judgement to the vision pass, which is told to classify an element as content when removing
+it would change meaning. Overriding it here would mark branding as editable content, so the
+runtime analyzer must **not** force `decorative=False`.
+
+The trade-off is therefore real and should be stated wherever the flag is documented:
+
+| analyzer | fidelity | fillable slots |
+|---|---|---|
+| `deterministic` | no images, no run styling, no shapes | **yes** |
+| `runtime` | images, per-run styling, vector shapes | **no**, until Phase B classifies |
+
+**The two analyzers converge at the draft, not at the analysis.** The deterministic pipeline
+stores `analysis_result.candidates` and replays it through the assembler at confirm time
+(`_assemble_confirmed_candidate`, ingestion `:393-407`). The runtime path has no candidates.
+`AssembledTemplateV2Draft` is `{raw_layouts, layouts, contents, manifest}`, all four of which
+the runtime path can produce directly — `contents` being one empty dict per layout, which
+`build_generated_slide` accepts precisely because the schema is empty. So confirm branches on
+which analysis shape was stored rather than forcing a lossy back-conversion to candidates.
+Repeat-block suggestions are candidate-derived and are simply absent for the runtime path.
+
+Also structural: `_analyze_import_source` is sync and runs under `asyncio.to_thread`, while
+`convert_pptx_to_json` is async. The branch therefore belongs at the async caller
+(`run_template_v2_pptx_import`), not inside the threaded function.
 
 ### Phase B — vision re-authoring (separate change, not designed here)
 
