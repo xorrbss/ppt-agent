@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterator
+from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 import logging
@@ -55,6 +57,7 @@ from templates.v2.pptx.repeat_application import (
     resolve_repeat_suggestion_decisions,
 )
 from templates.v2.pptx.source_inventory import (
+    HashedInventoryItem,
     SecretFreeSourceMetadata,
     SourceInventory,
     candidate_inventory_item,
@@ -236,6 +239,8 @@ async def _heartbeat_loop(
 
 RUNTIME_ANALYZER_PROVIDER = "runtime-pptx-to-json"
 RUNTIME_ANALYSIS_MARKER = "runtime-pptx-to-json-v1"
+DETERMINISTIC_ANALYZER_PROVIDER = "deterministic-ooxml-static"
+DETERMINISTIC_ANALYSIS_MARKER = "deterministic-ooxml-static-analysis-v1"
 
 
 def _with_private_asset_references(
@@ -267,6 +272,58 @@ def _with_private_asset_references(
     return rewritten
 
 
+def _analysis_source_inventory(
+    marker: str,
+    analysis_payload: dict,
+    *,
+    source_filename: str,
+    source_media_type: str,
+    source_size_bytes: int,
+    source_sha256: str,
+    artifacts: tuple[HashedInventoryItem, ...] = (),
+) -> dict:
+    """Build the one inventory shape both analyzer paths record."""
+
+    return SourceInventory(
+        source=SecretFreeSourceMetadata(
+            display_filename=source_filename,
+            media_type=source_media_type,
+            size_bytes=source_size_bytes,
+            sha256=source_sha256,
+        ),
+        artifacts=artifacts,
+        candidates=(candidate_inventory_item(marker, analysis_payload),),
+    ).to_manifest()
+
+
+@contextmanager
+def _analysis_observation(provider: str) -> Iterator[dict[str, int]]:
+    """Emit exactly one bounded metric per analysis attempt, from either path.
+
+    The body reports the slide count it produced through ``observed["count"]``;
+    ``provider`` must already be in the observability allowlist.
+    """
+
+    started_at = perf_counter()
+    observed = {"count": 0}
+    try:
+        yield observed
+    except Exception:
+        log_pptx_analysis_observation(
+            provider=provider,
+            status="failed",
+            duration_ms=(perf_counter() - started_at) * 1000,
+            count=0,
+        )
+        raise
+    log_pptx_analysis_observation(
+        provider=provider,
+        status="completed",
+        duration_ms=(perf_counter() - started_at) * 1000,
+        count=observed["count"],
+    )
+
+
 def _build_runtime_analysis(
     document,
     *,
@@ -282,23 +339,46 @@ def _build_runtime_analysis(
     imported = build_runtime_slide_layouts(
         _with_private_asset_references(document.layouts, relocated)
     )
+    layouts = imported.raw_layouts.layouts
+    # `build_runtime_slide_layouts` raises on any element it cannot represent, so a
+    # payload that reaches here converted every shape the converter emitted.
+    shape_count = sum(len(layout.elements) for layout in layouts)
     analysis_payload = {
         "analyzer": RUNTIME_ANALYSIS_MARKER,
+        # No `contract_version`: this is not the deterministic analyzer's
+        # `CandidateAnalysis` document, and its own version is the marker above.
+        # `provider.version`/`capability` are absent because the bundled converter
+        # reports neither to this service.
+        "provider": {
+            "id": RUNTIME_ANALYZER_PROVIDER,
+            "execution": "local",
+            "status": "available",
+            "network_access": False,
+            "external_ai": False,
+        },
+        "status": "completed",
+        # The converter emits layouts only: no preview image, no render comparison.
+        "preview": {"status": "not_provided", "reason": "not_emitted_by_converter"},
+        "render": {"status": "not_run", "reason": "not_emitted_by_converter"},
+        "summary": {
+            "slide_count": len(layouts),
+            "shape_count": shape_count,
+            "supported_shape_count": shape_count,
+            "unsupported_shape_count": 0,
+            "visual_fidelity_status": "not_evaluated",
+            "review_required": True,
+        },
         "raw_layouts": imported.raw_layouts.model_dump(mode="json"),
         "layouts": imported.layouts.model_dump(mode="json"),
     }
-    inventory = SourceInventory(
-        source=SecretFreeSourceMetadata(
-            display_filename=source_filename,
-            media_type=source_media_type,
-            size_bytes=source_size_bytes,
-            sha256=source_sha256,
-        ),
-        artifacts=(),
-        candidates=(
-            candidate_inventory_item(RUNTIME_ANALYSIS_MARKER, analysis_payload),
-        ),
-    ).to_manifest()
+    inventory = _analysis_source_inventory(
+        RUNTIME_ANALYSIS_MARKER,
+        analysis_payload,
+        source_filename=source_filename,
+        source_media_type=source_media_type,
+        source_size_bytes=source_size_bytes,
+        source_sha256=source_sha256,
+    )
     return analysis_payload, inventory
 
 
@@ -318,8 +398,7 @@ async def _analyze_import_source_via_runtime(
     produce.
     """
 
-    started_at = perf_counter()
-    try:
+    with _analysis_observation(RUNTIME_ANALYZER_PROVIDER) as observed:
         # Everything except the converter await is blocking -- hashing up to 100 MB,
         # copying media, validating every element, two model dumps -- so it is
         # offloaded like the deterministic path is. Leaving it inline stalls every
@@ -343,21 +422,8 @@ async def _analyze_import_source_via_runtime(
             source_size_bytes=source_size_bytes,
             source_sha256=source_sha256,
         )
-        log_pptx_analysis_observation(
-            provider=RUNTIME_ANALYZER_PROVIDER,
-            status="completed",
-            duration_ms=(perf_counter() - started_at) * 1000,
-            count=len(analysis_payload["layouts"]["layouts"]),
-        )
+        observed["count"] = analysis_payload["summary"]["slide_count"]
         return analysis_payload, [], inventory
-    except Exception:
-        log_pptx_analysis_observation(
-            provider=RUNTIME_ANALYZER_PROVIDER,
-            status="failed",
-            duration_ms=(perf_counter() - started_at) * 1000,
-            count=0,
-        )
-        raise
 
 
 def _analyze_import_source(
@@ -369,8 +435,7 @@ def _analyze_import_source(
     source_media_type: str,
     source_size_bytes: int,
 ) -> tuple[dict, list[dict], dict]:
-    started_at = perf_counter()
-    try:
+    with _analysis_observation(DETERMINISTIC_ANALYZER_PROVIDER) as observed:
         source = verify_private_source(
             storage_key,
             source_sha256,
@@ -384,40 +449,21 @@ def _analyze_import_source(
         )
         analysis = analyze_ooxml_candidates(candidates)
         analysis_payload = analysis.model_dump(mode="json")
-        inventory = SourceInventory(
-            source=SecretFreeSourceMetadata(
-                display_filename=source_filename,
-                media_type=source_media_type,
-                size_bytes=source_size_bytes,
-                sha256=source_sha256,
-            ),
+        inventory = _analysis_source_inventory(
+            DETERMINISTIC_ANALYSIS_MARKER,
+            analysis_payload,
+            source_filename=source_filename,
+            source_media_type=source_media_type,
+            source_size_bytes=source_size_bytes,
+            source_sha256=source_sha256,
             artifacts=reader.artifact_inventory(),
-            candidates=(
-                candidate_inventory_item(
-                    "deterministic-ooxml-static-analysis-v1",
-                    analysis_payload,
-                ),
-            ),
-        ).to_manifest()
-        log_pptx_analysis_observation(
-            provider="deterministic-ooxml-static",
-            status="completed",
-            duration_ms=(perf_counter() - started_at) * 1000,
-            count=analysis.summary.slide_count,
         )
+        observed["count"] = analysis.summary.slide_count
         return (
             analysis_payload,
             build_repeat_block_suggestions(candidates),
             inventory,
         )
-    except Exception:
-        log_pptx_analysis_observation(
-            provider="deterministic-ooxml-static",
-            status="failed",
-            duration_ms=(perf_counter() - started_at) * 1000,
-            count=0,
-        )
-        raise
 
 
 def _apply_deprecated_template_v2_constructor_bridge(
