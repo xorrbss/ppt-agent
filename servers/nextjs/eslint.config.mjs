@@ -26,6 +26,14 @@ const eslintConfig = defineConfig([
       "react/no-unescaped-entities": "off",
     },
   },
+  {
+    files: ["app/presentation-templates/**/*.tsx"],
+    // Exportable slide layouts intentionally keep their font links self-contained.
+    // They are embedded renderers in the App Router, not standalone Pages Router pages.
+    rules: {
+      "@next/next/no-page-custom-font": "off",
+    },
+  },
   globalIgnores([
     ".next/**",
     ".next-build/**",

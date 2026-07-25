@@ -145,7 +145,7 @@ export const useOutlineStreaming = (presentationId: string | null) => {
                 dispatch(setOutlines(nextSlides));
                 setIsLoading(false);
               }
-            } catch (error) {
+            } catch {
               // JSON isn't complete yet, continue accumulating
             }
             break;
@@ -166,7 +166,7 @@ export const useOutlineStreaming = (presentationId: string | null) => {
               closeEventSource();
               clearRetryTimer();
               retryCount = 0;
-            } catch (error) {
+            } catch {
               if (!scheduleRetry("failed to parse complete payload")) {
                 resetStreamingState();
                 notify.error("파싱 실패", "프레젠테이션 데이터를 파싱하지 못했습니다.");
@@ -219,7 +219,7 @@ export const useOutlineStreaming = (presentationId: string | null) => {
       closeEventSource();
       clearRetryTimer();
     };
-  }, [presentationId, dispatch]);
+  }, [presentationId, dispatch, outlines.length]);
 
   return { isStreaming, isLoading, activeSlideIndex, highestActiveIndex };
-}; 
+};

@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- Slide export captures native img nodes with authored URLs and intrinsic browser sizing. */
 
 import React from "react";
 import { tableDensity } from "./density";
@@ -264,7 +265,7 @@ export const TableLeaf: React.FC<{ block: AnyBlock }> = ({ block }) => {
                 className={`${d.thPad} font-semibold`}
                 style={{ background: SURFACE, borderBottom: `2px solid ${PRIMARY}`, color: TEXT_COLOR }}
               >
-                {h}
+                <span>{h}</span>
               </th>
             ))}
           </tr>
@@ -275,7 +276,7 @@ export const TableLeaf: React.FC<{ block: AnyBlock }> = ({ block }) => {
           <tr key={ri} style={{ background: ri % 2 ? SURFACE_VARIANT : "transparent" }}>
             {row.map((cell, ci) => (
               <td key={ci} className={d.tdPad} style={{ borderBottom: `1px solid ${BORDER}` }}>
-                {cell}
+                <span>{cell}</span>
               </td>
             ))}
           </tr>

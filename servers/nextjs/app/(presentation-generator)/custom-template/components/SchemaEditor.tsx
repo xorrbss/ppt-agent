@@ -4,17 +4,15 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Save, X, ChevronDown, ChevronRight, Type, Hash, List, Box, AlertCircle, Wand2, Loader2, ArrowRightLeft, MousePointer2 } from "lucide-react";
+import { Save, X, ChevronRight, Type, Hash, List, Box, AlertCircle, MousePointer2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ProcessedSlide } from "../types";
 import { CompiledLayout } from "@/app/hooks/compileLayout";
-import { notify } from "@/components/ui/sonner";
 import * as parser from "@babel/parser";
 import traverse from "@babel/traverse";
 import generate from "@babel/generator";
 import * as t from "@babel/types";
 import { useSchemaHighlight } from "./SchemaHighlightContext";
-import { getApiUrl } from "@/utils/api";
 
 
 interface SchemaEditorProps {
@@ -488,14 +486,11 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
     isOpen,
     onSave,
     onCancel,
-    onFillContent,
 }) => {
     const [fields, setFields] = useState<SchemaField[]>([]);
     const [originalFields, setOriginalFields] = useState<SchemaField[]>([]);
     const [expandedFields, setExpandedFields] = useState<Set<string>>(new Set());
     const [parseError, setParseError] = useState<string | null>(null);
-    const [isGenerating, setIsGenerating] = useState(false);
-    const [generatingMode, setGeneratingMode] = useState<'min' | 'normal' | 'max' | null>(null);
 
     // Schema-Element highlighting integration
     const {
@@ -705,7 +700,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
     };
 
     // Check if field has been modified
-    const isFieldModified = (field: SchemaField): boolean => {
+    const isFieldModified = useCallback((field: SchemaField): boolean => {
         const original = originalFields.find(f => f.path === field.path);
         if (!original) return false;
 
@@ -720,7 +715,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
             return field.minItems !== original.minItems || field.maxItems !== original.maxItems;
         }
         return false;
-    };
+    }, [originalFields]);
 
     // Check if field type has been changed
     const isTypeChanged = (field: SchemaField): boolean => {
@@ -728,7 +723,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
         return original ? field.type !== original.type : false;
     };
 
-    const hasChanges = useMemo(() => fields.some(isFieldModified), [fields, originalFields]);
+    const hasChanges = useMemo(() => fields.some(isFieldModified), [fields, isFieldModified]);
 
     // Build hierarchical structure from flat fields
     const hierarchicalFields = useMemo(() => {
@@ -803,45 +798,6 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({
     }, [fields]);
 
     // Generate content with AI - supports different fill modes
-    const handleFillContent = async (mode: 'min' | 'normal' | 'max') => {
-        if (!compiledLayout?.schemaJSON || !onFillContent) return;
-
-        setIsGenerating(true);
-        setGeneratingMode(mode);
-        try {
-            const response = await fetch(getApiUrl(`/api/v3/schema/content/generate`), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    schema: compiledLayout.schemaJSON,
-                    mode: mode,
-                }),
-            });
-
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'Failed to generate content');
-            }
-
-            const { content } = await response.json();
-            onFillContent(content);
-
-            const modeLabels = {
-                min: '간략',
-                normal: '보통',
-                max: '텍스트 위주',
-            };
-            notify.success("콘텐츠 생성 완료", `${modeLabels[mode]} 콘텐츠가 성공적으로 생성되었습니다.`);
-            handleCancel();
-        } catch (error) {
-            console.error('Error generating content:', error);
-            notify.error("생성 실패", error instanceof Error ? error.message : "콘텐츠 생성에 실패했습니다.");
-        } finally {
-            setIsGenerating(false);
-            setGeneratingMode(null);
-        }
-    };
-
     if (!isOpen) return null;
 
     // Collapse all fields by default for cleaner initial view

@@ -1,13 +1,11 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
     Check,
     ChevronUp,
     Loader2,
     RefreshCw,
     Trash2,
-    Crown,
-    User,
     UserCheck,
 } from "lucide-react";
 import {
@@ -52,7 +50,6 @@ export default function CodexConfig({
     const [accountId, setAccountId] = useState<string | null>(null);
     const [username, setUsername] = useState<string | null>(null);
     const [email, setEmail] = useState<string | null>(null);
-    const [isPro, setIsPro] = useState<boolean | null>(null);
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [manualCode, setManualCode] = useState("");
     const [isExchanging, setIsExchanging] = useState(false);
@@ -61,26 +58,20 @@ export default function CodexConfig({
     const [openModelSelect, setOpenModelSelect] = useState(false);
     const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-    const stopPolling = () => {
+    const stopPolling = useCallback(() => {
         if (pollIntervalRef.current) {
             clearInterval(pollIntervalRef.current);
             pollIntervalRef.current = null;
         }
-    };
-
-    useEffect(() => {
-        checkCurrentAuthStatus();
-        return () => stopPolling();
     }, []);
 
-    const applyProfile = (data: Partial<StatusResponse>) => {
+    const applyProfile = useCallback((data: Partial<StatusResponse>) => {
         setAccountId(data.account_id ?? null);
         setUsername(data.username ?? null);
         setEmail(data.email ?? null);
-        setIsPro(typeof data.is_pro === "boolean" ? data.is_pro : null);
-    };
+    }, []);
 
-    const checkCurrentAuthStatus = async () => {
+    const checkCurrentAuthStatus = useCallback(async () => {
         try {
             const res = await fetch(getApiUrl("/api/v1/ppt/codex/auth/status"));
             if (!res.ok) {
@@ -100,7 +91,12 @@ export default function CodexConfig({
             setAuthStatus("unauthenticated");
             applyProfile({});
         }
-    };
+    }, [applyProfile]);
+
+    useEffect(() => {
+        void checkCurrentAuthStatus();
+        return stopPolling;
+    }, [checkCurrentAuthStatus, stopPolling]);
 
     const handleSignIn = async () => {
         try {
@@ -149,7 +145,7 @@ export default function CodexConfig({
                     // keep polling on transient errors
                 }
             }, 2000);
-        } catch (err) {
+        } catch {
             notify.error(
                 "로그인 실패",
                 "로그인을 시작할 수 없습니다. 다시 시도해 주세요."
@@ -302,8 +298,6 @@ export default function CodexConfig({
     }
 
     if (authStatus === "authenticated") {
-        const planLabel = isPro === true ? "Pro" : isPro === false ? "Free" : "Unknown";
-
         return (
             <div className="space-y-4">
                 <div className="flex items-center gap-3 p-3  border border-[#EDEEEF] rounded-lg">

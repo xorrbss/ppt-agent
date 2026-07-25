@@ -1,17 +1,12 @@
 "use client";
 
-import React, { useRef, useEffect, useState, ReactNode } from "react";
+import React, { useRef, useEffect, useLayoutEffect, ReactNode } from "react";
 import ReactDOM from "react-dom/client";
+import { flushSync } from "react-dom";
 import TiptapText from "./TiptapText";
 import MarkdownInlineText from "./MarkdownInlineText";
-import { useEditor } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import { Markdown } from "tiptap-markdown";
-import Underline from "@tiptap/extension-underline";
 import { getAdaptiveBlockText } from "@/lib/adaptiveBlockEdit";
 import { collectMatchingPaths } from "@/lib/findDataPaths";
-
-const extensions = [StarterKit, Markdown, Underline];
 
 // Hangul (jamo + syllables), CJK ideographs, Kana. A 1-2 char Latin leaf is
 // usually UI noise, but a 1-2 char CJK leaf is a real word (목표 / 성과 / 결론 /
@@ -32,6 +27,52 @@ export type EditBinding =
   | { kind: "blockId"; key: string }
   | { kind: "path"; key: string };
 
+function staticGetValueByPath(obj: any, path: string): any {
+  if (!obj || !path) return undefined;
+  const tokens = path.replace(/\[(\d+)\]/g, ".$1").split(".").filter(Boolean);
+  let current: any = obj;
+  for (const token of tokens) {
+    if (current == null) return undefined;
+    current = current[token as keyof typeof current];
+  }
+  return current;
+}
+
+function staticReadBindingValue(data: any, binding: EditBinding): any {
+  return binding.kind === "blockId"
+    ? getAdaptiveBlockText(data, binding.key)
+    : staticGetValueByPath(data, binding.key);
+}
+
+function staticDirectText(element: HTMLElement): string {
+  let text = "";
+  for (const node of Array.from(element.childNodes)) {
+    if (node.nodeType === Node.TEXT_NODE) text += node.textContent || "";
+  }
+  return text;
+}
+
+function staticHasTextChildren(element: HTMLElement): boolean {
+  return Array.from(element.children).some((child) =>
+    staticDirectText(child as HTMLElement).trim().length > 1
+  );
+}
+
+function staticShouldSkipElement(element: HTMLElement): boolean {
+  if (["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(element.tagName)) return true;
+  if (
+    element.hasAttribute("role") ||
+    element.hasAttribute("aria-label") ||
+    element.hasAttribute("data-testid")
+  ) return true;
+  if (element.querySelector("img, svg, button, input, textarea, select, a[href]")) return true;
+  const containerClasses = ["grid", "flex", "space-", "gap-", "container", "wrapper"];
+  if (containerClasses.some((cls) => element.className.length > 0 && element.className.includes(cls))) {
+    return true;
+  }
+  return isTrivialLeafText(staticDirectText(element).trim());
+}
+
 interface TiptapTextReplacerProps {
   children: ReactNode;
   slideData?: any;
@@ -47,25 +88,33 @@ interface TiptapTextReplacerProps {
   ) => void;
 }
 
+const NOOP_CONTENT_CHANGE = () => {};
+
 const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
   children,
   slideData,
   slideIndex,
   readOnly = false,
   useBlockId = false,
-  onContentChange = () => {},
+  onContentChange = NOOP_CONTENT_CHANGE,
 }) => {
 
   
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const [processedElements, setProcessedElements] = useState(
-    new Set<HTMLElement>()
-  );
+  // Track imperative DOM replacements without causing React to reconcile the
+  // slide again while a PPTX capture is in progress.
+  const processedElementsRef = useRef(new WeakSet<HTMLElement>());
   // Track created React roots to update content when slideData changes
   const rootsRef = useRef<
     Map<HTMLElement, { root: any; binding: EditBinding; fallbackText: string }>
   >(new Map());
+  useLayoutEffect(() => {
+    if (readOnly) {
+      containerRef.current?.removeAttribute("data-markdown-rendered");
+    }
+  }, [slideData, slideIndex, readOnly]);
+
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -79,6 +128,18 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
       // duplicate on screen binds to the Nth matching content field (not always the
       // first). Reset per full walk.
       const pathOccurrence = new Map<string, number>();
+      const readOnlyRenders: Array<() => void> = [];
+
+      if (readOnly) {
+        rootsRef.current.forEach(({ root, binding, fallbackText }) => {
+          const newContent = binding.key
+            ? staticReadBindingValue(slideData, binding) ?? fallbackText
+            : fallbackText;
+          readOnlyRenders.push(() =>
+            root.render(<MarkdownInlineText content={newContent} />)
+          );
+        });
+      }
 
       allElements.forEach((element) => {
         const htmlElement = element as HTMLElement;
@@ -86,9 +147,10 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
         // Skip if already processed
        
         if (
-          processedElements.has(htmlElement) ||
+          processedElementsRef.current.has(htmlElement) ||
           htmlElement.classList.contains("tiptap-text-editor") ||
           htmlElement.closest(".tiptap-text-editor") ||
+          htmlElement.closest("[data-tiptap-replacer-root]") ||
           // Text migrated to the in-tree <EditableText> owns its own editing; the
           // DOM-surgery path must not also process it (would double-bind/leak).
           htmlElement.closest("[data-editable-native]")
@@ -101,17 +163,17 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
         if (isInIgnoredElementTree(htmlElement)) return;
 
         // Get direct text content (not from child elements)
-        const directTextContent = getDirectTextContent(htmlElement);
+        const directTextContent = staticDirectText(htmlElement);
         const trimmedText = directTextContent.trim();
 
         // Check if element has meaningful text content
         if (isTrivialLeafText(trimmedText)) return;
         
         // Skip elements that contain other elements with text (to avoid double processing)
-        if (hasTextChildren(htmlElement)) return;
+        if (staticHasTextChildren(htmlElement)) return;
         
         // Skip certain element types that shouldn't be editable
-        if (shouldSkipElement(htmlElement)) return;
+        if (staticShouldSkipElement(htmlElement)) return;
 
         // Get all computed styles to preserve them
         const allClasses = Array.from(htmlElement.classList);
@@ -147,10 +209,15 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
           binding = { kind: "path", key: matches[occ] ?? matches[0] ?? "" };
         }
 
-        // Create a container for the TiptapText
-        const tiptapContainer = document.createElement("div");
+        // Keep inline text inline during read-only export. Replacing a span
+        // inside a list item with a div breaks the semantic list structure and
+        // causes the PPTX extractor to drop the item text.
+        const replacementTag =
+          readOnly && htmlElement.tagName === "SPAN" ? "span" : "div";
+        const tiptapContainer = document.createElement(replacementTag);
         tiptapContainer.style.cssText = allStyles || "";
         tiptapContainer.className = Array.from(allClasses).join(" ");
+        tiptapContainer.setAttribute("data-tiptap-replacer-root", "true");
         // Carry the block id onto the replacement so the editor can bind to it
         // (harmless in readOnly; the export converter ignores data-* attributes).
         if (bid) tiptapContainer.setAttribute("data-block-id", bid);
@@ -161,18 +228,18 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
         // Mark as processed
         htmlElement.innerHTML = "";
         }
-        setProcessedElements((prev) => new Set(prev).add(htmlElement));
+        processedElementsRef.current.add(htmlElement);
         // Render TiptapText
         const root = ReactDOM.createRoot(tiptapContainer);
         const initialContent = binding.key
-          ? readBindingValue(slideData, binding) ?? trimmedText
+          ? staticReadBindingValue(slideData, binding) ?? trimmedText
           : trimmedText;
         rootsRef.current.set(tiptapContainer, {
           root,
           binding,
           fallbackText: trimmedText,
         });
-        root.render(
+        const editableText = (
           readOnly ? (
             <MarkdownInlineText content={initialContent} />
           ) : (
@@ -187,9 +254,18 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
             />
           )
         );
+        if (readOnly) {
+          readOnlyRenders.push(() => root.render(editableText));
+        } else {
+          root.render(editableText);
+        }
       });
 
       if (readOnly && container) {
+        // Export waits for data-markdown-rendered. Commit all nested roots in
+        // one batch before publishing readiness so capture cannot observe an
+        // empty or stale replacement container.
+        flushSync(() => readOnlyRenders.forEach((render) => render()));
         container.setAttribute("data-markdown-rendered", "true");
       }
     };
@@ -201,14 +277,15 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
     return () => {
       clearTimeout(timer);
     };
-  }, [slideData, slideIndex, readOnly]);
+  }, [slideData, slideIndex, readOnly, useBlockId, onContentChange]);
   
   // When slideData changes, update existing editors' content using the stored binding
   useEffect(() => {
+    if (readOnly) return;
     if (!rootsRef.current || rootsRef.current.size === 0) return;
     rootsRef.current.forEach(({ root, binding, fallbackText }) => {
       const newContent = binding.key
-        ? readBindingValue(slideData, binding) ?? fallbackText
+        ? staticReadBindingValue(slideData, binding) ?? fallbackText
         : fallbackText;
       root.render(
         readOnly ? (
@@ -226,7 +303,7 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
         )
       );
     });
-  }, [slideData, slideIndex, readOnly]);
+  }, [slideData, slideIndex, readOnly, onContentChange]);
   // helper functions
     // Function to check if element is inside an ignored element tree
     const isInIgnoredElementTree = (element: HTMLElement): boolean => {
@@ -316,95 +393,26 @@ const TiptapTextReplacer: React.FC<TiptapTextReplacerProps> = ({
     };
 
     // Resolve nested values by path like "a.b[0].c"
-    const getValueByPath = (obj: any, path: string): any => {
-      if (!obj || !path) return undefined;
-      const tokens = path
-        .replace(/\[(\d+)\]/g, ".$1")
-        .split(".")
-        .filter(Boolean);
-      let current: any = obj;
-      for (const token of tokens) {
-        if (current == null) return undefined;
-        current = current[token as keyof typeof current];
-      }
-      return current;
-    };
 
     // Read the current value for a binding. Block-id resolution is the shared
     // util (lock-step with the updateAdaptiveBlock reducer); path is the legacy
     // string-match address.
-    const readBindingValue = (data: any, binding: EditBinding): any =>
-      binding.kind === "blockId"
-        ? getAdaptiveBlockText(data, binding.key)
-        : getValueByPath(data, binding.key);
 
     // Helper function to get only direct text content (not from children)
-    const getDirectTextContent = (element: HTMLElement): string => {
-      let text = "";
-      const childNodes = Array.from(element.childNodes);
-      for (const node of childNodes) {
-        if (node.nodeType === Node.TEXT_NODE) {
-          text += node.textContent || "";
-        }
-      }
-      return text;
-    };
 
     // Helper function to check if element has child elements with text
-    const hasTextChildren = (element: HTMLElement): boolean => {
-      const children = Array.from(element.children) as HTMLElement[];
-      return children.some((child) => {
-        const childText = getDirectTextContent(child).trim();
-        return childText.length > 1;
-      });
-    };
 
     // Helper function to determine if element should be skipped
-    const shouldSkipElement = (element: HTMLElement): boolean => {
       // Skip form elements
-      if (["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(element.tagName)) {
-        return true;
-      }
 
       // Skip elements with certain roles or types
-      if (
-        element.hasAttribute("role") ||
-        element.hasAttribute("aria-label") ||
-        element.hasAttribute("data-testid")
-      ) {
-        return true;
-      }
 
       // Skip elements that contain interactive content (simplified since we now use isInIgnoredElementTree)
-      if (
-        element.querySelector(
-          "img, svg, button, input, textarea, select, a[href]"
-        )
-      ) {
-        return true;
-      }
 
       // Skip container elements (elements that primarily serve as layout containers)
-      const containerClasses = [
-        "grid",
-        "flex",
-        "space-",
-        "gap-",
-        "container",
-        "wrapper",
-      ];
-      const hasContainerClass = containerClasses.some((cls) =>
-        element.className.length > 0 ? element.className.includes(cls) : false
-      );
-      if (hasContainerClass) return true;
 
       // Skip very short text that might be UI elements — but keep short CJK words
       // (목표 / 성과 / 개요) editable.
-      const text = getDirectTextContent(element).trim();
-      if (isTrivialLeafText(text)) return true;
-
-      return false;
-    };
 
   return (
     <div ref={containerRef} className="tiptap-text-replacer">

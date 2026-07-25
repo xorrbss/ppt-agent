@@ -11,6 +11,14 @@ from services.template_v2_pptx_ingestion_service import (
     start_template_v2_pptx_dispatcher,
     stop_template_v2_pptx_dispatcher,
 )
+from services.template_v2_pptx_operations import (
+    log_template_v2_operational_health,
+    require_template_v2_database_safety,
+)
+from services.template_v2_pptx_retention_service import (
+    start_template_v2_private_source_cleanup,
+    stop_template_v2_private_source_cleanup,
+)
 from templates.v2.policy import get_structured_template_policy
 from utils.get_env import get_app_data_directory_env
 
@@ -38,17 +46,31 @@ async def run_external_worker(stop: asyncio.Event | None = None) -> None:
     policy = get_structured_template_policy()
     if not policy.creation_enabled or not policy.allowed_template_ids:
         raise RuntimeError("template_v2_canary_policy_not_ready")
+    require_template_v2_database_safety(feature_enabled=True)
     os.makedirs(get_app_data_directory_env(), exist_ok=True)
     await migrate_database_on_startup()
     await create_db_and_tables()
     stop = stop or asyncio.Event()
+    cleanup_started = False
+    dispatcher_started = False
     try:
+        await log_template_v2_operational_health()
+        await start_template_v2_private_source_cleanup()
+        cleanup_started = True
         await start_template_v2_pptx_dispatcher()
+        dispatcher_started = True
         logger.info("Template V2 PPTX external worker started")
         await stop.wait()
     finally:
-        await stop_template_v2_pptx_dispatcher()
-        await dispose_engines()
+        try:
+            if dispatcher_started:
+                await stop_template_v2_pptx_dispatcher()
+        finally:
+            try:
+                if cleanup_started:
+                    await stop_template_v2_private_source_cleanup()
+            finally:
+                await dispose_engines()
 
 
 def main() -> None:

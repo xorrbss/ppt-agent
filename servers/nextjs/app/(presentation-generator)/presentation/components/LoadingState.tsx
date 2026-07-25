@@ -17,7 +17,7 @@ const LoadingState = () => {
         }, 30000);
 
         return () => clearInterval(interval);
-    }, []);
+    }, [tips.length]);
 
     return (
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 mx-auto w-[500px] flex flex-col items-center justify-center p-8">

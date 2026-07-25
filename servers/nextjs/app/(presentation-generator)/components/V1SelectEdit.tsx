@@ -7,10 +7,9 @@ import React, {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { useDispatch, useSelector } from "react-redux";
-import { PresentationGenerationApi } from "../services/api/presentation-generation";
+import { useSelector } from "react-redux";
 import { toast } from "sonner";
-import { Edit, Loader2, Sparkles } from "lucide-react";
+import { Edit, Sparkles } from "lucide-react";
 
 type HtmlSelectionEditorProps = {
   containerRef: RefObject<HTMLDivElement | null>;
@@ -23,7 +22,6 @@ const HtmlSelectionEditor = ({
   slide,
   enableEditMode = false,
 }: HtmlSelectionEditorProps) => {
-  const dispatch = useDispatch();
   const enableHtmlSelector = useSelector(
     (s: any) => s?.presentationGeneration?.enableHtmlSelector
   ) as boolean | undefined;
@@ -302,6 +300,7 @@ const HtmlSelectionEditor = ({
     ]
   );
   useEffect(() => {
+    const container = containerRef.current;
     const handleMouseOver = (e: Event) => {
       // if (!enableHtmlEditing) return;
       if (!allowSelection) return;
@@ -408,34 +407,34 @@ const HtmlSelectionEditor = ({
       return;
     };
 
-    containerRef.current?.addEventListener("mouseover", handleMouseOver, true);
-    containerRef.current?.addEventListener(
+    container?.addEventListener("mouseover", handleMouseOver, true);
+    container?.addEventListener(
       "mouseleave",
       handleMouseLeave,
       true
     );
-    containerRef.current?.addEventListener("click", handleClick, true);
-    containerRef.current?.addEventListener("dblclick", handleDoubleClick, true);
-    containerRef.current?.addEventListener("mousedown", handleMouseDown, true);
+    container?.addEventListener("click", handleClick, true);
+    container?.addEventListener("dblclick", handleDoubleClick, true);
+    container?.addEventListener("mousedown", handleMouseDown, true);
 
     return () => {
-      containerRef.current?.removeEventListener(
+      container?.removeEventListener(
         "mouseover",
         handleMouseOver,
         true
       );
-      containerRef.current?.removeEventListener(
+      container?.removeEventListener(
         "mouseleave",
         handleMouseLeave,
         true
       );
-      containerRef.current?.removeEventListener("click", handleClick, true);
-      containerRef.current?.removeEventListener(
+      container?.removeEventListener("click", handleClick, true);
+      container?.removeEventListener(
         "dblclick",
         handleDoubleClick,
         true
       );
-      containerRef.current?.removeEventListener(
+      container?.removeEventListener(
         "mousedown",
         handleMouseDown,
         true
@@ -501,50 +500,6 @@ const HtmlSelectionEditor = ({
     return wrapper.childNodes.length > 0 ? wrapper : null;
   }, [getContainer]);
 
-  // Produces a clean HTML snapshot without editor-only DOM (overlays, markers)
-  const sanitizeSlideHtml = useCallback((node: HTMLElement): HTMLElement => {
-    try {
-      const clone = node.cloneNode(true) as HTMLElement;
-      // Remove any inspector overlays/prompts/variant panels from the HTML snapshot
-      clone.querySelectorAll('[data-inspector-overlay="1"]').forEach((el) => {
-        el.parentElement?.removeChild(el);
-      });
-      clone.querySelectorAll(".editor-enabled").forEach((el) => {
-        (el as HTMLElement).classList.remove("editor-enabled");
-      });
-      const unwrap = (el: Element) => {
-        const parent = el.parentNode;
-        if (!parent) return;
-        while (el.firstChild) parent.insertBefore(el.firstChild, el);
-        parent.removeChild(el);
-      };
-
-      clone.querySelectorAll('[data-editable-text="1"]').forEach((el) => {
-        (el as HTMLElement).removeAttribute("data-editable-text");
-        (el as HTMLElement).removeAttribute("contenteditable");
-        (el as HTMLElement).removeAttribute("spellcheck");
-        (el as HTMLElement).removeAttribute("data-prev-outline");
-        (el as HTMLElement).removeAttribute("data-prev-boxshadow");
-        (el as HTMLElement).removeAttribute("data-prev-bordercolor");
-      });
-      clone
-        .querySelectorAll("[data-editable-processed], [data-editable-id]")
-        .forEach((el) => {
-          (el as HTMLElement).removeAttribute("data-editable-processed");
-          (el as HTMLElement).removeAttribute("data-editable-id");
-        });
-      clone
-        .querySelectorAll(
-          ".html-text-replacer, .html-editable-wrapper, .html-editor"
-        )
-        .forEach((el) => unwrap(el));
-      return clone;
-    } catch (error) {
-      console.log("error", error);
-      return node;
-    }
-  }, []);
-
   // activateEditor is declared earlier
 
   const handleSubmitEdit = useCallback(async () => {
@@ -558,18 +513,6 @@ const HtmlSelectionEditor = ({
       if (!container) return;
       const target = getSelectionHTMLElement();
       if (!target) return;
-      const selectionHtml = target;
-      const selectedHtml = sanitizeSlideHtml(
-        selectionHtml as unknown as HTMLElement
-      );
-      const containerHtml = sanitizeSlideHtml(container);
-
-      const params = {
-        complete_code: containerHtml.innerHTML,
-        section_code: selectedHtml.innerHTML,
-        edit_prompt: promptValue,
-        slide_id: slide.id,
-      };
 
       // const response = await PresentationGenerationApi.EditSelectionHTML(params);
 
@@ -593,14 +536,7 @@ const HtmlSelectionEditor = ({
           error?.message || "선택 영역 편집에 실패했습니다",
       });
     }
-  }, [
-    dispatch,
-    getContainer,
-    getSelectionHTMLElement,
-    promptValue,
-    sanitizeSlideHtml,
-    slide?.index,
-  ]);
+  }, [getContainer, getSelectionHTMLElement, promptValue]);
 
   // if (!enableHtmlEditing) return null;
 

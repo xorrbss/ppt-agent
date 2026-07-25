@@ -82,6 +82,7 @@ test("a null vector shape means absent, not an invalid shape", () => {
     ],
   });
 
+  assert.ok(node.vector, "expected a vector render-plan payload");
   assert.equal(node.vector.shape, null);
   assert.equal(node.vector.closed, false);
   assert.deepEqual(node.frame, { x: 0, y: 0, width: 120, height: 80 });
@@ -145,6 +146,7 @@ test("a null chart size means absent, not an undersized chart", () => {
 
   assert.equal(node.frame.width, null);
   assert.equal(node.frame.height, null);
+  assert.ok(node.chart, "expected a chart render-plan payload");
   assert.equal(node.chart.type, "bar");
   assert.deepEqual(node.chart.categories, ["a", "b"]);
 });

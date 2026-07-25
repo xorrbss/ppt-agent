@@ -233,7 +233,6 @@ export function useRemoteSvgIcon(url?: string, options: RemoteSvgOptions = {}) {
         const cls = options.className ? ` class=\"${options.className}\"` : "";
         setSvgMarkup(`<svg${cls} xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' stroke='${stroke}' fill='${fill}' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10' fill='currentColor' opacity='0.12'></circle><path d='M8 12l3 3 5-6' fill='none'></path></svg>`);
         if (process.env.NODE_ENV !== "production") {
-          // eslint-disable-next-line no-console
           console.warn("RemoteSvgIcon fetch error", e);
         }
       }
@@ -242,7 +241,7 @@ export function useRemoteSvgIcon(url?: string, options: RemoteSvgOptions = {}) {
     return () => {
       cancelled = true;
     };
-  }, [resolvedUrl, options.strokeColor, options.fillColor, options.className]);
+  }, [resolvedUrl, options.strokeColor, options.fillColor, options.className, options]);
 
   return { svgMarkup, error };
 }

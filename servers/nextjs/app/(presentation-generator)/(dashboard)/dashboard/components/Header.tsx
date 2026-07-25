@@ -3,6 +3,7 @@
 import Wrapper from "@/components/Wrapper";
 import React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { ArrowLeft } from "lucide-react";
@@ -44,9 +45,11 @@ const Header = () => {
         <div className="flex items-center justify-between py-1">
           <div className="flex items-center gap-3">
             <Link href="/dashboard" onClick={() => trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/dashboard" })}>
-              <img
+              <Image
                 src="/logo-with-bg.png"
                 alt="발표자료 로고"
+                width={40}
+                height={40}
                 className="h-[40px] w-[40px]"
               />
             </Link>

@@ -14,7 +14,6 @@ import {
   RotateCcw,
   Sparkles,
   Edit,
-  Code,
   MousePointer2,
   Undo,
   Redo
@@ -34,7 +33,6 @@ const EachSlide: React.FC<EachSlideProps> = ({
   retrySlide,
   setSlides,
   onSlideUpdate,
-  isProcessing,
   onOpenSchemaEditor,
   isSchemaEditorOpen = false,
   schemaPreviewData,
@@ -47,7 +45,6 @@ const EachSlide: React.FC<EachSlideProps> = ({
   const setPreviewData = setLocalPreviewData;
   const [isEditPromptOpen, setIsEditPromptOpen] = useState(false);
   const slideDisplayRef = useRef<HTMLDivElement>(null);
-  const [showCodeEditor, setShowCodeEditor] = useState(false);
   const [isSelectionEditMode, setIsSelectionEditMode] = useState(false);
 
   // Compile layout once and share with child components
@@ -143,12 +140,6 @@ const EachSlide: React.FC<EachSlideProps> = ({
     );
     if (!confirmed) return;
     setSlides(prev => prev.filter((_, i) => i !== index));
-  };
-
-  // Handle selection edit update
-  const handleSelectionUpdate = (updatedHtml: string) => {
-    // Update the slide's html content via parent callback or directly
-    setSlides(prev => prev.map((s, i) => i === index ? { ...s, react: updatedHtml } : s));
   };
 
   const isSlideReady = slide.processed && !slide.processing;

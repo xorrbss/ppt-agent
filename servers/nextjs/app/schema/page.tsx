@@ -64,7 +64,7 @@ const page = () => {
     fetchLayoutsAndSettings();
 
 
-  }, [isCustomTemplate]);
+  }, [isCustomTemplate, templateID]);
 
 
 

@@ -3,6 +3,7 @@ import React, { useState } from 'react'
 import { AlertTriangle, Check, Copy, Trash } from 'lucide-react'
 import { Theme } from '@/app/(presentation-generator)/services/api/types'
 import ToolTip from '@/components/ToolTip'
+import Image from 'next/image'
 
 interface ThemeCardProps {
   theme: Theme
@@ -82,7 +83,7 @@ export const ThemeCard: React.FC<ThemeCardProps> = ({ theme, onSelect, onDelete,
 
     <div className='relative h-[250px] flex justify-center items-center '>
 
-      <img src="/card_bg.svg" alt="" className="absolute top-0 z-[1] left-0 w-[99%] h-full object-cover" />
+      <Image src="/card_bg.svg" alt="" width={302} height={250} className="absolute top-0 z-[1] left-0 w-[99%] h-full object-cover" />
       <div className=" absolute top-0 left-0 flex items-center justify-between gap-2  z-[2] p-2">
         <ToolTip content='폰트' >
 
@@ -102,6 +103,7 @@ export const ThemeCard: React.FC<ThemeCardProps> = ({ theme, onSelect, onDelete,
 
           <p className=" text-xs font-syne  flex gap-1 capitalize  items-center  rounded-[100px]  px-2.5 py-1 bg-[#3A3A3AF5] text-white font-semibold  z-40 ">
 
+            {/* eslint-disable-next-line @next/next/no-img-element -- Theme logos may use arbitrary cross-origin URLs not accepted by the Next image loader. */}
             <img src={theme.logo_url} alt={theme.name} className="w-full max-w-6 h-4 rounded-full object-cover" />
           </p>
         </ToolTip>}

@@ -61,6 +61,44 @@ def _runtime_layout(
     }
 
 
+def _runtime_placeholder_layout() -> dict:
+    return {
+        "id": "slide_placeholders",
+        "elements": [
+            {
+                "type": "text",
+                "position": {"x": 80.0, "y": 40.0},
+                "size": {"width": 800.0, "height": 80.0},
+                "runs": [{"text": "Quarterly results"}],
+                "decorative": True,
+                "name": "title_1",
+                "max_length": 68,
+                "min_length": 0,
+            },
+            {
+                "type": "image",
+                "position": {"x": 80.0, "y": 160.0},
+                "size": {"width": 560.0, "height": 320.0},
+                "data": RUNTIME_URL,
+                "fit": "fill",
+                "decorative": True,
+                "name": "picture_placeholder_2",
+                "is_icon": False,
+            },
+            {
+                "type": "image",
+                "position": {"x": 680.0, "y": 160.0},
+                "size": {"width": 120.0, "height": 60.0},
+                "data": RUNTIME_URL,
+                "fit": "contain",
+                "decorative": True,
+                "name": "logo_3",
+                "is_icon": False,
+            },
+        ],
+    }
+
+
 class _Relocated:
     """Stands in for the storage layer's relocation result."""
 
@@ -146,6 +184,45 @@ def test_runtime_analysis_is_marked_and_carries_both_projections(monkeypatch, tm
     assert "source_path" not in repr(inventory)
 
 
+def test_runtime_analysis_classifies_and_seeds_clear_placeholders(
+    monkeypatch, tmp_path
+):
+    analysis, _suggestions, _inventory = asyncio.run(
+        _analyze_runtime_import(
+            monkeypatch,
+            tmp_path,
+            [_runtime_placeholder_layout()],
+            import_id=uuid.uuid4(),
+        )
+    )
+
+    assert analysis["classification"] == {
+        "version": 1,
+        "strategy": "conservative-placeholder-name",
+        "fillable_element_count": 2,
+        "text_placeholder_count": 1,
+        "image_placeholder_count": 1,
+    }
+    elements = analysis["raw_layouts"]["layouts"][0]["elements"]
+    assert [element["decorative"] for element in elements] == [False, False, True]
+    assert analysis["default_contents"] == [
+        {
+            "slide_placeholders_component_1": {
+                "title_1": "Quarterly results",
+            },
+            "slide_placeholders_component_2": {
+                "picture_placeholder_2": {"image_prompt": ""},
+            },
+        }
+    ]
+
+    draft = ingestion._runtime_confirmed_draft(analysis)
+    generated = ingestion.build_generated_slide(
+        draft.layouts.layouts[0], draft.contents[0]
+    )
+    assert generated.content == analysis["default_contents"][0]
+
+
 def test_runtime_summary_counts_are_derived_from_the_converted_layouts(
     monkeypatch,
     tmp_path,
@@ -209,6 +286,23 @@ def test_confirm_rejects_a_runtime_analysis_missing_its_layouts():
 
     with pytest.raises(ValueError, match="template_v2_import_runtime_layouts_missing"):
         ingestion._assemble_confirmed_candidate(job, [])
+
+
+def test_confirm_rejects_malformed_runtime_default_contents(monkeypatch, tmp_path):
+    analysis, _suggestions, _inventory = asyncio.run(
+        _analyze_runtime_import(
+            monkeypatch,
+            tmp_path,
+            [_runtime_placeholder_layout()],
+            import_id=uuid.uuid4(),
+        )
+    )
+    analysis["default_contents"] = {}
+
+    with pytest.raises(
+        ValueError, match="template_v2_import_runtime_contents_invalid"
+    ):
+        ingestion._runtime_confirmed_draft(analysis)
 
 
 def test_deterministic_analysis_still_replays_candidates():

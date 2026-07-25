@@ -1,5 +1,6 @@
 import asyncio
 import os
+from pathlib import Path
 import zipfile
 
 import pytest
@@ -202,7 +203,7 @@ def test_create_font_alias_config_protects_embedded_font_names(tmp_path):
         protected_font_names=["Akzidenz-Grotesk Heavy"],
     )
 
-    alias_xml = open(alias_path, encoding="utf-8").read()
+    alias_xml = Path(alias_path).read_text(encoding="utf-8")
 
     assert "<string>Akzidenz-Grotesk</string>" not in alias_xml
     assert "<string>Akzidenz-Grotesk Heavy</string>" not in alias_xml
@@ -217,7 +218,7 @@ def test_create_font_alias_config_preserves_explicit_aliases(tmp_path):
         explicit_aliases={"Legacy Font Heavy": "Installed Font Heavy"},
     )
 
-    alias_xml = open(alias_path, encoding="utf-8").read()
+    alias_xml = Path(alias_path).read_text(encoding="utf-8")
 
     assert "<string>Legacy Font Heavy</string>" in alias_xml
     assert "<string>Installed Font Heavy</string>" in alias_xml

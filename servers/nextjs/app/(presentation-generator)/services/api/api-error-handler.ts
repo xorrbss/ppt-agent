@@ -56,7 +56,7 @@ export class ApiResponseHandler {
       // Try to parse JSON response
       try {
         return await response.json();
-      } catch (error) {
+      } catch {
         // If JSON parsing fails but response is ok, return empty object
         return {};
       }
@@ -77,7 +77,7 @@ export class ApiResponseHandler {
       } else if (errorData.error) {
         errorMessage = errorData.error;
       }
-    } catch (parseError) {
+    } catch {
       // If JSON parsing fails, use status-based messages
       errorMessage = this.getStatusBasedErrorMessage(response.status, defaultErrorMessage);
     }
@@ -109,7 +109,7 @@ export class ApiResponseHandler {
         } else if (errorData.error) {
           errorMessage = errorData.error;
         }
-      } catch (parseError) {
+      } catch {
         // If JSON parsing fails, use status-based messages
         errorMessage = this.getStatusBasedErrorMessage(response.status, defaultErrorMessage);
       }
@@ -157,4 +157,4 @@ export class ApiResponseHandler {
   }
 }
 
-export type { ApiErrorResponse }; 
+export type { ApiErrorResponse };

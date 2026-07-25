@@ -14,6 +14,7 @@ services:
       - ./servers/fastapi/templates:/app/servers/fastapi/templates:ro
       - ./servers/fastapi/utils/internal_http.py:/app/servers/fastapi/utils/internal_http.py:ro
     environment:
+      - TEMPLATE_V2_DEPLOYMENT_TIER=production
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
       - MIGRATE_DATABASE_ON_STARTUP=true
       - CAN_CHANGE_KEYS=${CAN_CHANGE_KEYS}
@@ -118,6 +119,7 @@ services:
     volumes:
       - ./app_data:/app_data
     environment:
+      - TEMPLATE_V2_DEPLOYMENT_TIER=production
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
       - MIGRATE_DATABASE_ON_STARTUP=true
       - CAN_CHANGE_KEYS=${CAN_CHANGE_KEYS}
@@ -216,6 +218,7 @@ services:
       - presenton_document_extraction_liteparse:/app/document-extraction-liteparse
       - ./app_data:/app_data
     environment:
+      - TEMPLATE_V2_DEPLOYMENT_TIER=development
       # Bundled PPTX/PDF export (Puppeteer); matches CI and production image.
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
       # Ollama is not baked into the image; set START_OLLAMA=true for runtime install, or use OLLAMA_URL.
@@ -323,6 +326,7 @@ services:
       - presenton_document_extraction_liteparse:/app/document-extraction-liteparse
       - ./app_data:/app_data
     environment:
+      - TEMPLATE_V2_DEPLOYMENT_TIER=development
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
       - START_OLLAMA=${START_OLLAMA:-false}
       - MIGRATE_DATABASE_ON_STARTUP=true

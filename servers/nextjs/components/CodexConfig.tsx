@@ -1,15 +1,15 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Loader2,
   RefreshCw,
   Trash2,
-  UserCheck,
   ArrowRight,
 } from "lucide-react";
 import { notify } from "@/components/ui/sonner";
 import { getApiUrl } from "@/utils/api";
 import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
+import Image from "next/image";
 
 interface CodexConfigProps {
   codexModel: string;
@@ -59,25 +59,20 @@ export default function CodexConfig({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const stopPolling = () => {
+  const stopPolling = useCallback(() => {
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = null;
     }
-  };
-
-  useEffect(() => {
-    checkCurrentAuthStatus();
-    return () => stopPolling();
   }, []);
 
-  const applyProfile = (data: Partial<StatusResponse>) => {
+  const applyProfile = useCallback((data: Partial<StatusResponse>) => {
     setAccountId(data.account_id ?? null);
     setUsername(data.username ?? null);
     setEmail(data.email ?? null);
-  };
+  }, []);
 
-  const checkCurrentAuthStatus = async () => {
+  const checkCurrentAuthStatus = useCallback(async () => {
     try {
       const res = await fetch(getApiUrl("/api/v1/ppt/codex/auth/status"));
       if (!res.ok) {
@@ -99,7 +94,12 @@ export default function CodexConfig({
       setAuthStatus("unauthenticated");
       applyProfile({});
     }
-  };
+  }, [applyProfile, onInputChange]);
+
+  useEffect(() => {
+    void checkCurrentAuthStatus();
+    return stopPolling;
+  }, [checkCurrentAuthStatus, stopPolling]);
 
   const handleSignIn = async () => {
     try {
@@ -151,7 +151,7 @@ export default function CodexConfig({
           // keep polling on transient errors
         }
       }, 2000);
-    } catch (err) {
+    } catch {
       notify.error(
         "로그인 실패",
         "로그인 과정을 시작할 수 없습니다. 다시 시도해 주세요."
@@ -332,7 +332,7 @@ export default function CodexConfig({
 
             <div className="w-[40px] h-[40px] bg-[#333333] rounded-full flex items-center justify-center" >
 
-              <img src="/providers/OpenAI-white.png" alt="openai Logo" className="w-[27px] h-[27px]" />
+              <Image src="/providers/OpenAI-white.png" alt="OpenAI logo" width={27} height={27} className="w-[27px] h-[27px]" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 min-w-0">
@@ -391,7 +391,7 @@ export default function CodexConfig({
       <div className="flex items-center gap-2 flex-1">
         <div className="w-[40px] h-[40px] bg-[#333333] rounded-full flex items-center justify-center" >
 
-          <img src="/providers/OpenAI-white.png" alt="openai Logo" className="w-[27px] h-[27px]" />
+          <Image src="/providers/OpenAI-white.png" alt="OpenAI logo" width={27} height={27} className="w-[27px] h-[27px]" />
         </div>
         <div className="text-start flex-1">
           <h4 className="text-[#191919] text-sm font-medium">ChatGPT로 로그인</h4>

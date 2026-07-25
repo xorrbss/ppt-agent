@@ -54,7 +54,7 @@ export function OutlineItem({
         });
       }
     }
-  }, [outlines.length]);
+  }, [index, isStreaming, outlines.length, slideOutline]);
 
   const handleSlideChange = (newOutline: any) => {
     if (isStreaming) return;

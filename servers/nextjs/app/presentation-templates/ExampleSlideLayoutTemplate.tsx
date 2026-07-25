@@ -1,8 +1,7 @@
 import * as z from "zod";
 // Note:
-// If you want to use images and icons, you must use ImageSchema and IconSchema
+// If you want to use images and icons, import and use ImageSchema and IconSchema
 // Images and icons are the only media types supported for PDF and PPTX exports
-import { ImageSchema, IconSchema } from "@/app/presentation-templates/defaultSchemes";
 
 
 // Schema definition
@@ -20,7 +19,7 @@ type SchemaType = z.infer<typeof Schema>;
 
 
 // Component definition
-const SlideComponent = ({ data }: { data: Partial<SchemaType> }) => {
+const SlideComponent = ({}: { data: Partial<SchemaType> }) => {
     // Notes: 
     // Must have consistent aspect ratio (16:9) and max-width of 1280px.
     // Validate each data field before rendering using && operator or optional chaining.

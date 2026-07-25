@@ -1,9 +1,8 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { notify } from "@/components/ui/sonner";
 import { getHeader, getHeaderForFormData } from "@/app/(presentation-generator)/services/api/header";
 import { ApiResponseHandler } from "@/app/(presentation-generator)/services/api/api-error-handler";
 import {
-    TemplateCreationStep,
     TemplateCreationState,
     FontData,
     FontUploadPreviewResponse,
@@ -34,6 +33,9 @@ export const useTemplateCreation = () => {
     const [state, setState] = useState<TemplateCreationState>(initialState);
     const [uploadedFonts, setUploadedFonts] = useState<UploadedFont[]>([]);
     const [slides, setSlides] = useState<ProcessedSlide[]>([]);
+    const createSlideLayoutRef = useRef<
+        ((templateId: string, slideIndex: number, autoAdvance?: boolean, isAutoRetry?: boolean) => Promise<SlideLayoutResponse | null>) | null
+    >(null);
 
     // Helper to update state partially
     const updateState = useCallback((updates: Partial<TemplateCreationState>) => {
@@ -256,9 +258,9 @@ export const useTemplateCreation = () => {
 
             // Automatically start processing the first slide
             if (typeof data === 'string') {
-                createSlideLayout(data, 0);
+                void createSlideLayoutRef.current?.(data, 0);
             } else if (data.id) {
-                createSlideLayout(data.id, 0);
+                void createSlideLayoutRef.current?.(data.id, 0);
             }
 
             return typeof data === 'string' ? data : data.id;
@@ -270,14 +272,13 @@ export const useTemplateCreation = () => {
             reset();
             return null;
         }
-    }, [state.previewData, updateState]);
+    }, [reset, state.previewData, updateState]);
 
     // Step 4: Create slide layout for a specific slide (with auto-advance for initial processing)
     const createSlideLayout = useCallback(async (
         templateId: string,
         slideIndex: number,
         autoAdvance: boolean = true,
-        retry: boolean = false,
         _isAutoRetry: boolean = false
     ): Promise<SlideLayoutResponse | null> => {
         // Mark slide as processing
@@ -409,7 +410,7 @@ export const useTemplateCreation = () => {
             // Auto-retry once on transient failures; vision/model capability errors won't recover.
             if (!_isAutoRetry && !isVisionModelError) {
                 console.log(`Auto-retrying slide ${slideIndex + 1} after API failure...`);
-                return createSlideLayout(templateId, slideIndex, autoAdvance, true, true);
+                return createSlideLayout(templateId, slideIndex, autoAdvance, true);
             }
 
             // Mark slide with error
@@ -453,12 +454,15 @@ export const useTemplateCreation = () => {
             return null;
         }
     }, [updateState]);
+    useEffect(() => {
+        createSlideLayoutRef.current = createSlideLayout;
+    }, [createSlideLayout]);
 
     // Reconstruct a single slide (no auto-advance)
     const retrySlide = useCallback((slideIndex: number) => {
         if (state.templateId) {
             // Pass false for autoAdvance to only reconstruct this specific slide
-            createSlideLayout(state.templateId, slideIndex, false, true);
+            createSlideLayout(state.templateId, slideIndex, false);
         }
     }, [state.templateId, createSlideLayout]);
 

@@ -403,7 +403,7 @@ export function useCustomTemplatePreview(presentationId: string) {
                         if (result) {
                             compiled.push(result);
                         }
-                    } catch (e) {
+                    } catch {
                         console.warn(`Failed to compile preview: ${layout.layout_name}`);
                     }
                 }

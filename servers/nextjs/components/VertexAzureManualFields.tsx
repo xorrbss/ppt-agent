@@ -52,7 +52,7 @@ export default function VertexAzureManualFields({
 
   useEffect(() => {
     if (hasVertexAdvancedContent(llmConfig)) setVertexAdvancedOpen(true);
-  }, [llmConfig.VERTEX_PROJECT, llmConfig.VERTEX_LOCATION, llmConfig.VERTEX_BASE_URL]);
+  }, [llmConfig.VERTEX_PROJECT, llmConfig.VERTEX_LOCATION, llmConfig.VERTEX_BASE_URL, llmConfig]);
 
   useEffect(() => {
     if (provider !== 'azure') return;

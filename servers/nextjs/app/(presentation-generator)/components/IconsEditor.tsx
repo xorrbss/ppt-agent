@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- The icon editor previews arbitrary remote SVG/data URLs and needs native img loading semantics. */
 
 import React, {
   useCallback,

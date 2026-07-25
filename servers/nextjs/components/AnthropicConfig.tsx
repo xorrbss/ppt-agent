@@ -28,7 +28,6 @@ interface AnthropicConfigProps {
 export default function AnthropicConfig({
   anthropicApiKey,
   anthropicModel,
-  extendedReasoning,
   webGrounding,
   onInputChange,
 }: AnthropicConfigProps) {
@@ -42,7 +41,7 @@ export default function AnthropicConfig({
     setAvailableModels([]);
     setModelsChecked(false);
     onInputChange("", "anthropic_model");
-  }, [apiKey]);
+  }, [apiKey, onInputChange]);
 
   const onApiKeyChange = (value: string) => {
     setApiKey(value);

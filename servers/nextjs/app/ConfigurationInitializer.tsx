@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { setCanChangeKeys, setLLMConfig } from '@/store/slices/userConfig';
 import { hasValidLLMConfig, normalizeLLMConfig } from '@/utils/storeHelpers';
 import { usePathname, useRouter } from 'next/navigation';
@@ -8,6 +8,27 @@ import { useDispatch } from 'react-redux';
 import { checkIfSelectedOllamaModelIsPulled } from '@/utils/providerUtils';
 import { LLMConfig } from '@/types/llm_config';
 import { getApiUrl } from '@/utils/api';
+import Image from 'next/image';
+
+const checkIfSelectedCustomModelIsAvailable = async (llmConfig: LLMConfig) => {
+  try {
+    const response = await fetch(getApiUrl('/api/v1/ppt/openai/models/available'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: llmConfig.CUSTOM_LLM_URL,
+        api_key: llmConfig.CUSTOM_LLM_API_KEY,
+      }),
+    });
+    const data = await response.json();
+    return data.includes(llmConfig.CUSTOM_MODEL);
+  } catch (error) {
+    console.error('Error fetching custom models:', error);
+    return false;
+  }
+};
 
 export function ConfigurationInitializer({ children }: { children: React.ReactNode }) {
   const dispatch = useDispatch();
@@ -18,21 +39,16 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
   );
   const router = useRouter();
 
-  // Fetch user config state
-  useEffect(() => {
-    fetchUserConfigState();
-  }, []);
-
-  const setLoadingToFalseAfterNavigatingTo = (pathname: string) => {
+  const setLoadingToFalseAfterNavigatingTo = useCallback((pathname: string) => {
     const interval = setInterval(() => {
       if (window.location.pathname === pathname) {
         clearInterval(interval);
         setIsLoading(false);
       }
     }, 500);
-  }
+  }, []);
 
-  const fetchUserConfigState = async () => {
+  const fetchUserConfigState = useCallback(async () => {
     if (route.startsWith("/pdf-maker")) {
       setIsLoading(false);
       return;
@@ -117,28 +133,12 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
         setIsLoading(false);
       }
     }
-  }
+  }, [dispatch, route, router, setLoadingToFalseAfterNavigatingTo]);
 
-
-  const checkIfSelectedCustomModelIsAvailable = async (llmConfig: LLMConfig) => {
-    try {
-      const response = await fetch(getApiUrl('/api/v1/ppt/openai/models/available'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          url: llmConfig.CUSTOM_LLM_URL,
-          api_key: llmConfig.CUSTOM_LLM_API_KEY,
-        }),
-      });
-      const data = await response.json();
-      return data.includes(llmConfig.CUSTOM_MODEL);
-    } catch (error) {
-      console.error('Error fetching custom models:', error);
-      return false;
-    }
-  }
+  // Fetch user config state
+  useEffect(() => {
+    fetchUserConfigState();
+  }, [fetchUserConfigState]);
 
 
   if (isLoading) {
@@ -148,10 +148,12 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
           <div className="rounded-2xl border border-[#EDEEEF] bg-white p-8 text-center shadow-xl">
             {/* Logo/Branding */}
             <div className="mb-6">
-              <img
+              <Image
                 src="/Logo.png"
                 alt="PresentOn"
-                className="mx-auto mb-4 h-12 opacity-90"
+                className="mx-auto mb-4 h-12 w-auto opacity-90"
+                width={204}
+                height={48}
               />
               <div className="mx-auto h-1 w-16 rounded-full bg-[#7C51F8]" />
             </div>

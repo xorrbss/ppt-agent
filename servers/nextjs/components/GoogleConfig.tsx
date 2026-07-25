@@ -39,7 +39,7 @@ export default function GoogleConfig({
     setAvailableModels([]);
     setModelsChecked(false);
     onInputChange("", "google_model");
-  }, [apiKey]);
+  }, [apiKey, onInputChange]);
 
   const onApiKeyChange = (value: string) => {
     setApiKey(value);

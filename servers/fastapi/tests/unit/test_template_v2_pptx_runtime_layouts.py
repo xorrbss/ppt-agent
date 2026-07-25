@@ -8,10 +8,17 @@ fixture is committed: the converter's JSON *is* the input to the unit under test
 
 from __future__ import annotations
 
+import copy
+
 import pytest
 
+from templates.v2.generation import build_generated_slide
 from templates.v2.models.layouts import RawSlideLayouts, SlideLayouts
-from templates.v2.pptx.runtime_layouts import build_runtime_slide_layouts
+from templates.v2.pptx.runtime_layouts import (
+    build_runtime_slide_layouts,
+    classify_runtime_fillable_layouts,
+    runtime_default_contents,
+)
 
 
 IMAGE_URL = (
@@ -259,3 +266,85 @@ def test_unrepresentable_ellipse_vector_fails_closed():
     message = str(error.value)
     assert message.startswith("runtime_element_not_representable:slide_1:0:")
     assert "ellipse vectors require exactly two bounding points" in message
+
+
+def test_classifier_promotes_only_clear_text_and_image_placeholders():
+    title = _styled_text_layout()
+    title["elements"][0]["name"] = "Title 1"
+    image_placeholder = _image_layout()
+    image_placeholder["elements"][0]["name"] = "Picture Placeholder 3"
+    ambiguous_picture = _image_layout()
+    ambiguous_picture["id"] = "slide_3"
+    logo = _image_layout()
+    logo["id"] = "slide_4"
+    logo["elements"][0]["name"] = "Logo Picture Placeholder 4"
+    original = copy.deepcopy(
+        [title, image_placeholder, ambiguous_picture, logo]
+    )
+
+    classified, summary = classify_runtime_fillable_layouts(original)
+
+    assert classified[0]["elements"][0]["decorative"] is False
+    assert classified[1]["elements"][0]["decorative"] is False
+    # A normal embedded picture is not evidence of an editable image slot.
+    assert classified[2]["elements"][0]["decorative"] is True
+    # Strong decorative tokens fail closed even when "placeholder" is present.
+    assert classified[3]["elements"][0]["decorative"] is True
+    assert summary.as_manifest() == {
+        "version": 1,
+        "strategy": "conservative-placeholder-name",
+        "fillable_element_count": 2,
+        "text_placeholder_count": 1,
+        "image_placeholder_count": 1,
+    }
+    assert original[0]["elements"][0]["decorative"] is True
+    assert original[1]["elements"][0]["decorative"] is True
+
+
+def test_classified_placeholders_produce_schema_valid_seed_content():
+    text_layout = _styled_text_layout()
+    image_layout = _image_layout()
+    image_layout["elements"][0]["name"] = "image_placeholder_1"
+    classified, _summary = classify_runtime_fillable_layouts(
+        [text_layout, image_layout]
+    )
+    imported = build_runtime_slide_layouts(classified)
+
+    contents = runtime_default_contents(imported.layouts)
+
+    assert contents == [
+        {
+            "slide_1_component_1": {
+                "subtitle_2": "plain BOLD italic red24",
+            }
+        },
+        {
+            "slide_2_component_1": {
+                "image_placeholder_1": {"image_prompt": ""},
+            }
+        },
+    ]
+    for index, layout in enumerate(imported.layouts.layouts):
+        generated = build_generated_slide(layout, contents[index])
+        assert generated.content == contents[index]
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "TextBox 7",
+        "caption_2",
+        "picture_1",
+        "background_title_1",
+        "footer_body_2",
+        "",
+    ],
+)
+def test_classifier_leaves_ambiguous_or_decorative_names_locked(name):
+    layout = _styled_text_layout()
+    layout["elements"][0]["name"] = name
+
+    classified, summary = classify_runtime_fillable_layouts([layout])
+
+    assert classified[0]["elements"][0]["decorative"] is True
+    assert summary.fillable_element_count == 0

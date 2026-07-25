@@ -5,7 +5,6 @@ import { Presentation } from '../types';
 
 export const PresentationListItem: React.FC<Presentation> = ({
     title,
-    date,
     thumbnail,
     type
 }) => {
@@ -13,6 +12,7 @@ export const PresentationListItem: React.FC<Presentation> = ({
         <Card>
             <CardContent className="flex items-center gap-4 p-4">
                 <div className="relative w-[120px] aspect-video rounded-md overflow-hidden">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- Thumbnails can be data/blob URLs that the Next image loader cannot proxy. */}
                     <img
                         src={thumbnail}
                         alt={title}
@@ -41,4 +41,4 @@ export const PresentationListItem: React.FC<Presentation> = ({
             </CardContent>
         </Card>
     );
-}; 
+};

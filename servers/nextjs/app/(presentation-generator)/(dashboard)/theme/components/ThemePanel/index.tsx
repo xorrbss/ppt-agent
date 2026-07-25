@@ -131,7 +131,7 @@ const ThemePanel: React.FC = () => {
   // Initialize theme on component mount
   useEffect(() => {
     applyTheme(selectedTheme)
-  }, [])
+  }, [selectedTheme])
 
   // Load custom themes from API and built-in themes from local constants
   useEffect(() => {
@@ -191,7 +191,7 @@ const ThemePanel: React.FC = () => {
     }
     loadCustomThemes()
     loadDefaultThemes()
-  }, [])
+  }, [selectedTheme.id])
 
 
   useEffect(() => {
@@ -206,7 +206,7 @@ const ThemePanel: React.FC = () => {
       },
     }
     applyTheme(updatedTheme)
-  }, [customColors, customFonts, customBrandLogo, selectedTheme])
+  }, [customColors, customFonts, customBrandLogo, selectedTheme, themeCompanyName])
 
   // Reset custom values only when the selected theme ID changes
   useEffect(() => {
@@ -217,7 +217,7 @@ const ThemePanel: React.FC = () => {
       setCustomBrandLogoId((selectedTheme as any).logo || '')
 
     }
-  }, [selectedTheme.id])
+  }, [selectedTheme, selectedTheme.id])
 
 
 
@@ -425,6 +425,11 @@ const ThemePanel: React.FC = () => {
       theme_source: "new_draft",
     })
   }
+
+  const createNewCustomThemeRef = useRef(createNewCustomTheme)
+  useEffect(() => {
+    createNewCustomThemeRef.current = createNewCustomTheme
+  })
 
   const refeshTheme = async ({ primary, background }: { primary?: string, background?: string }) => {
     const generatedTheme = await generateTheme({ primary, background, source: "refresh" })
@@ -909,6 +914,7 @@ const ThemePanel: React.FC = () => {
             </div>
           ) : customBrandLogo ? (
             <div className="space-y-2">
+              {/* eslint-disable-next-line @next/next/no-img-element -- Uploaded brand logos may be data/blob URLs or arbitrary backend URLs outside the Next image loader. */}
               <img
                 src={customBrandLogo}
                 alt="브랜드 로고"
@@ -964,7 +970,7 @@ const ThemePanel: React.FC = () => {
   useEffect(() => {
     const tab = searchParams.get('tab')
     if (tab === 'new-theme') {
-      createNewCustomTheme()
+      void createNewCustomThemeRef.current()
 
     }
   }, [searchParams])

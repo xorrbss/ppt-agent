@@ -77,7 +77,7 @@ const SettingsPage = () => {
       );
     }
     return 0;
-  }, [downloadingModel?.downloaded, downloadingModel?.size]);
+  }, [downloadingModel]);
 
   const ensureSelectedStockProviderReady = async (): Promise<boolean> => {
     if (llmConfig.DISABLE_IMAGE_GENERATION) {

@@ -463,10 +463,10 @@ async function downloadAndInstallRuntime(tag) {
 // The prebuilt runtime bundles sharp's JS but not its libvips native addon, and a
 // fresh install wipes any previously-installed node_modules. Install sharp next
 // to the runtime before recording the installed-version marker.
-function detectBundledSharpVersion() {
+function detectBundledSharpVersion(runtimeRoot = targetRoot) {
   const fallback = "0.34.4";
   try {
-    const bundle = fs.readFileSync(targetIndexJs, "utf8");
+    const bundle = fs.readFileSync(path.join(runtimeRoot, "index.cjs"), "utf8");
     const m = bundle.match(/@img\/sharp-[a-z0-9-]+"\s*:\s*"(\d+\.\d+\.\d+)"/);
     return (m && m[1]) || fallback;
   } catch {
@@ -475,8 +475,14 @@ function detectBundledSharpVersion() {
 }
 
 function canLoadRuntimeSharp(runtimeRoot = targetRoot) {
+  const sharpRoot = path.join(runtimeRoot, "node_modules", "sharp");
+  const packagePath = path.join(sharpRoot, "package.json");
   try {
-    execFileSync(process.execPath, ["-e", "require('sharp')"], {
+    const installedVersion = JSON.parse(fs.readFileSync(packagePath, "utf8")).version;
+    if (installedVersion !== detectBundledSharpVersion(runtimeRoot)) {
+      return false;
+    }
+    execFileSync(process.execPath, ["-e", `require(${JSON.stringify(sharpRoot)})`], {
       cwd: runtimeRoot,
       stdio: "ignore",
     });

@@ -239,6 +239,7 @@ const SupportingDoc = ({
                                 data-testid="attached-file-item"
                             >
                                 {previewUrls[idx] ? (
+                                    // eslint-disable-next-line @next/next/no-img-element -- File previews are browser-created blob URLs and cannot use the Next image optimizer.
                                     <img src={previewUrls[idx] as string} alt="미리보기" className="h-10 w-10 flex-none rounded object-cover" />
                                 ) : (
                                     <div className="flex h-10 w-10 flex-none items-center justify-center rounded bg-gray-100 text-gray-600">

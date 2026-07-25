@@ -47,7 +47,7 @@ export default function LLMProviderSelection({
   const isImageGenerationDisabled = llmConfig.DISABLE_IMAGE_GENERATION ?? false;
   useEffect(() => {
     onConfigChange(llmConfig);
-  }, [llmConfig]);
+  }, [llmConfig, onConfigChange]);
 
   useEffect(() => {
     const needsModelSelection =
@@ -122,7 +122,7 @@ export default function LLMProviderSelection({
                   : "설정 저장",
       showProgress: false,
     });
-  }, [llmConfig]);
+  }, [llmConfig, setButtonState]);
 
   const input_field_changed = (new_value: string | boolean, field: string) => {
     const updatedConfig = updateLLMConfig(llmConfig, field, new_value);
@@ -181,7 +181,7 @@ export default function LLMProviderSelection({
         setLlmConfig({ ...llmConfig, OLLAMA_URL: "http://localhost:11434" });
       }
     }
-  }, [llmConfig.USE_CUSTOM_URL]);
+  }, [llmConfig, llmConfig.USE_CUSTOM_URL]);
 
   useEffect(() => {
     setLlmConfig((prevConfig) => {

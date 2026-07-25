@@ -1,5 +1,5 @@
 "use client";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -40,25 +40,6 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
 
 
 
-  const recomputeScale = useCallback(() => {
-    if (typeof window === "undefined") return;
-    const padding = isFullscreen ? 0 : 64; // match p-8 when not fullscreen
-    const fullscreenMargin = isFullscreen ? 16 : 0; // small safety margin to prevent clipping
-    const availableWidth = Math.max(window.innerWidth - padding - fullscreenMargin, 0);
-    const availableHeight = Math.max(window.innerHeight - padding - fullscreenMargin, 0);
-    const baseW = 1280;
-    const baseH = 720;
-    const s = Math.min(availableWidth / baseW, availableHeight / baseH);
-
-  }, [isFullscreen]);
-
-  useEffect(() => {
-    recomputeScale();
-    window.addEventListener("resize", recomputeScale);
-    return () => window.removeEventListener("resize", recomputeScale);
-  }, [recomputeScale]);
-
-
   // Modify the handleKeyPress to prevent default behavior
   const handleKeyPress = useCallback(
     (event: KeyboardEvent) => {
@@ -81,7 +62,7 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
         case "Escape":
           // If fullscreen is active, only exit fullscreen on first ESC. Second ESC exits present mode.
           if (document.fullscreenElement) {
-            try { document.exitFullscreen(); } catch (_) { }
+            try { document.exitFullscreen(); } catch { }
             return;
           }
           onExit();
@@ -92,7 +73,7 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
           break;
       }
     },
-    [currentSlide, slides.length, onSlideChange, onExit, onFullscreenToggle, isFullscreen]
+    [currentSlide, slides.length, onSlideChange, onExit, onFullscreenToggle]
   );
 
   // Add both keydown and keyup listeners

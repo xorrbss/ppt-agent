@@ -222,3 +222,15 @@ def test_readiness_command_returns_no_go_by_default(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert '"ready": false' in output
     assert "template_v2_feature_disabled" in output
+
+
+def test_readiness_command_rejects_production_sqlite(monkeypatch, capsys):
+    monkeypatch.setenv("ENABLE_TEMPLATE_V2", "true")
+    monkeypatch.setenv("TEMPLATE_V2_TEMPLATE_ALLOWLIST", "secret-canary-id")
+    monkeypatch.setenv("TEMPLATE_V2_DEPLOYMENT_TIER", "production")
+
+    assert check_canary() == 2
+    output = capsys.readouterr().out
+    assert '"ready": false' in output
+    assert "template_v2_managed_canary_requires_postgresql" in output
+    assert "secret-canary-id" not in output

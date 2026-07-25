@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import Image from "next/image";
 import {
   Popover,
   PopoverContent,
@@ -565,12 +566,14 @@ const PresentationHeader = ({
     <>
       <div className="sticky top-0 z-50 flex w-full min-w-0 items-center justify-between gap-4 bg-white px-4 py-[18px] font-syne shadow-sm">
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <img
+          <Image
             onClick={() => {
               router.push("/dashboard");
             }}
             src="/logo-with-bg.png"
             alt=""
+            width={40}
+            height={40}
             className="h-10 w-10 shrink-0 cursor-pointer object-contain"
           />
           {presentationData && !isStreaming && !isEditingTitle ? (

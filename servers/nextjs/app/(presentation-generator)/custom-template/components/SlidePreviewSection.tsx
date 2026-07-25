@@ -5,8 +5,7 @@ import { Button } from "@/components/ui/button";
 import {
     Loader2,
     Images,
-    ChevronRight,
-    Sparkles
+    ChevronRight
 } from "lucide-react";
 import { SlidePreviewSectionProps } from "../types";
 import { resolveBackendAssetUrl } from '@/utils/api'
@@ -52,6 +51,7 @@ export const SlidePreviewSection: React.FC<SlidePreviewSectionProps> = ({
                             key={index}
                             className="group relative aspect-video w-full rounded-xl overflow-hidden border border-[#E5E7EB] bg-[#F9FAFB] shadow-sm"
                         >
+                            {/* eslint-disable-next-line @next/next/no-img-element -- Preview URLs come from arbitrary backend asset origins outside the Next image allowlist. */}
                             <img
                                 src={resolveBackendAssetUrl(url)}
                                 alt={`Slide ${index + 1}`}

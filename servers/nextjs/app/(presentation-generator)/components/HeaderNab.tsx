@@ -1,5 +1,5 @@
 "use client";
-import { LayoutDashboard, Settings, Upload } from "lucide-react";
+import { LayoutDashboard, Settings } from "lucide-react";
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";

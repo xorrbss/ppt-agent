@@ -42,7 +42,7 @@ export default function CustomConfig({
     setCustomModels([]);
     setCustomModelsChecked(false);
     onInputChange("", "custom_model");
-  }, [url, apiKey]);
+  }, [url, apiKey, onInputChange]);
 
   const onUrlChange = (value: string) => {
     setUrl(value);

@@ -13,7 +13,7 @@
 
 "use client";
 
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OverlayLoader } from "@/components/ui/overlay-loader";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
@@ -28,6 +28,7 @@ import { ChevronRight, PanelRightOpen, X } from "lucide-react";
 import ToolTip from "@/components/ToolTip";
 import Header from "@/app/(presentation-generator)/(dashboard)/dashboard/components/Header";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
+import Image from "next/image";
 
 // Types
 interface LoadingState {
@@ -91,7 +92,7 @@ const DocumentsPreviewPage: React.FC = () => {
     }
   };
 
-  const readFile = async (filePath: string) => {
+  const readFile = useCallback(async (filePath: string) => {
     if (typeof window !== "undefined" && window.electron?.readFile) {
       return window.electron.readFile(filePath);
     }
@@ -101,9 +102,9 @@ const DocumentsPreviewPage: React.FC = () => {
       body: JSON.stringify({ filePath }),
     });
     return res.json();
-  };
+  }, []);
 
-  const maintainDocumentTexts = async () => {
+  const maintainDocumentTexts = useCallback(async () => {
     const newDocuments: string[] = [];
     const promises: Promise<{ content: string }>[] = [];
 
@@ -135,7 +136,7 @@ const DocumentsPreviewPage: React.FC = () => {
       }
       setDownloadingDocuments([]);
     }
-  };
+  }, [documentKeys, fileItems, readFile, textContents]);
 
   const handleCreatePresentation = async () => {
     try {
@@ -191,9 +192,9 @@ const DocumentsPreviewPage: React.FC = () => {
   useEffect(() => {
     if (documentKeys.length > 0) {
       setSelectedDocument(documentKeys[0]);
-      maintainDocumentTexts();
+      void maintainDocumentTexts();
     }
-  }, [documentKeys]);
+  }, [documentKeys, maintainDocumentTexts]);
 
   // Render helpers
   const renderDocumentContent = () => {
@@ -244,10 +245,12 @@ const DocumentsPreviewPage: React.FC = () => {
                   className={`${selectedDocument === key ? "border border-blue-500" : ""
                     } flex p-2 rounded-sm gap-2 items-center cursor-pointer`}
                 >
-                  <img
+                  <Image
                     className="h-6 w-6 border border-gray-200"
                     src={getIconFromFile(key)}
                     alt="문서 아이콘"
+                    width={24}
+                    height={24}
                   />
                   <span className="text-sm h-6 text-[#2E2E2E] overflow-hidden">
                     {key.split("/").pop() ?? "file.txt"}

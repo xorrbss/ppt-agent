@@ -18,7 +18,6 @@ interface SchemaEditorPanelProps {
 
 export const SchemaEditorPanel: React.FC<SchemaEditorPanelProps> = ({
     slide,
-    slideIndex,
     onSave,
     onCancel,
     onFillContent,

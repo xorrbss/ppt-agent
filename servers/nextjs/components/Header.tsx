@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Layout, Plus } from "lucide-react";
 
 const Header: React.FC = () => {
@@ -10,7 +11,7 @@ const Header: React.FC = () => {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <img src="/logo-white.png" alt="Presenton" className="h-6 w-auto" />
+            <Image src="/logo-white.png" alt="Presenton" width={2250} height={938} className="h-6 w-auto" />
           </Link>
 
           <nav className="flex items-center gap-4">

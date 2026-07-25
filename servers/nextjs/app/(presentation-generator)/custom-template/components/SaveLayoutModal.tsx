@@ -13,9 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, Save, Info } from "lucide-react";
-import { useRouter } from "next/navigation";
-import ToolTip from "@/components/ToolTip";
+import { Loader2, Save } from "lucide-react";
 
 interface SaveLayoutModalProps {
   isOpen: boolean;
@@ -139,4 +137,4 @@ export const SaveLayoutModal: React.FC<SaveLayoutModalProps> = ({
 
     </Dialog>
   );
-}; 
+};

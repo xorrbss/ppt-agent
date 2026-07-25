@@ -13,10 +13,11 @@ lives in one place.
 from copy import deepcopy
 import uuid
 from datetime import timezone
-from typing import List, Optional
+from typing import Any, List, Optional
 
-from sqlalchemy import delete, select
-from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlalchemy import delete
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
 
 from models.sql.presentation_version import PresentationVersionModel
 from models.sql.slide import SlideModel
@@ -29,10 +30,27 @@ MIN_SNAPSHOT_INTERVAL_SECONDS = 60
 MAX_VERSIONS_PER_PRESENTATION = 20
 
 
+async def _scalar_result(session: AsyncSession, statement: Any):
+    """Execute a scalar statement with either SQLAlchemy or SQLModel sessions."""
+    exec_method = getattr(session, "exec", None)
+    if exec_method is not None:
+        return await exec_method(statement)
+    return await session.scalars(statement)
+
+
+async def _execute(session: AsyncSession, statement: Any):
+    """Execute DML without calling SQLModel's deprecated execute override."""
+    exec_method = getattr(session, "exec", None)
+    if exec_method is not None:
+        return await exec_method(statement)
+    return await session.execute(statement)
+
+
 async def _latest_version(
     session: AsyncSession, presentation_id: uuid.UUID
 ) -> Optional[PresentationVersionModel]:
-    result = await session.scalars(
+    result = await _scalar_result(
+        session,
         select(PresentationVersionModel)
         .where(PresentationVersionModel.presentation_id == presentation_id)
         .order_by(PresentationVersionModel.created_at.desc())
@@ -52,7 +70,8 @@ def _seconds_since(created) -> float:
 
 async def _prune(session: AsyncSession, presentation_id: uuid.UUID) -> None:
     stale_ids = list(
-        await session.scalars(
+        await _scalar_result(
+            session,
             select(PresentationVersionModel.id)
             .where(PresentationVersionModel.presentation_id == presentation_id)
             .order_by(PresentationVersionModel.created_at.desc())
@@ -60,7 +79,8 @@ async def _prune(session: AsyncSession, presentation_id: uuid.UUID) -> None:
         )
     )
     if stale_ids:
-        await session.execute(
+        await _execute(
+            session,
             delete(PresentationVersionModel).where(
                 PresentationVersionModel.id.in_(stale_ids)
             )
@@ -103,7 +123,8 @@ async def snapshot_slides(
 async def list_versions(
     session: AsyncSession, presentation_id: uuid.UUID
 ) -> List[PresentationVersionModel]:
-    result = await session.scalars(
+    result = await _scalar_result(
+        session,
         select(PresentationVersionModel)
         .where(PresentationVersionModel.presentation_id == presentation_id)
         .order_by(PresentationVersionModel.created_at.desc())
@@ -132,7 +153,13 @@ async def restore_version(
 ) -> Optional[List[SlideModel]]:
     """Replace the deck's live slides with a snapshot. Returns the restored slides,
     or None if the version does not belong to this presentation. The caller commits."""
-    version = await session.get(PresentationVersionModel, version_id)
+    result = await _scalar_result(
+        session,
+        select(PresentationVersionModel).where(
+            PresentationVersionModel.id == version_id
+        ),
+    )
+    version = result.first()
     if version is None or version.presentation_id != presentation_id:
         return None
 
@@ -143,7 +170,8 @@ async def restore_version(
 
     # Checkpoint the current slides first, so the restore is itself undoable.
     current = list(
-        await session.scalars(
+        await _scalar_result(
+            session,
             select(SlideModel)
             .where(SlideModel.presentation == presentation_id)
             .order_by(SlideModel.index)
@@ -158,7 +186,8 @@ async def restore_version(
             force=True,
         )
 
-    await session.execute(
+    await _execute(
+        session,
         delete(SlideModel).where(SlideModel.presentation == presentation_id)
     )
     session.add_all(restored)

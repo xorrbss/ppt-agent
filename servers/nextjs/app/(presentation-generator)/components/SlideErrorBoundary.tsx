@@ -30,7 +30,6 @@ export class SlideErrorBoundary extends React.Component<
 
   componentDidCatch(error: unknown) {
     // Optionally log to an error reporting service
-    // eslint-disable-next-line no-console
     console.error("Slide render error:", error);
   }
 

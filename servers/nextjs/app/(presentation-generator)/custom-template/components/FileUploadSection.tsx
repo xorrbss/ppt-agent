@@ -1,7 +1,6 @@
-import React, { useState, useRef } from "react";
-import { UploadIcon, ChevronRight, Plus, FileText, X, Coins, Edit3, Info } from "lucide-react";
+import React from "react";
+import { UploadIcon, ChevronRight, Plus, FileText, X } from "lucide-react";
 import { ProcessedSlide } from "../types";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface FileUploadSectionProps {
   selectedFile: File | null;
@@ -13,10 +12,6 @@ interface FileUploadSectionProps {
   slides: ProcessedSlide[];
   completedSlides: number;
 }
-
-// Credit costs constants
-const COST_PER_SLIDE = 3;
-const COST_EDIT = 1;
 
 export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
   selectedFile,
@@ -219,4 +214,4 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
     </div>
 
   );
-}; 
+};

@@ -39,7 +39,7 @@ export async function GET() {
                 try {
                     const settingsContent = await fs.readFile(settingsPath, 'utf-8')
                     settings = JSON.parse(settingsContent) as TemplateSetting
-                } catch (settingsError) {
+                } catch {
                     
                     console.warn(`No settings.json found for template ${templateName} or invalid JSON`)
                     // Provide default settings if settings.json is missing or invalid

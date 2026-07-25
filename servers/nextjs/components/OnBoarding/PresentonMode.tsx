@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Button } from '../ui/button';
 import { ArrowUpRight, Check, CheckCircle, ChevronLeft, ChevronUp, Download, Eye, EyeOff, Info, Loader2 } from 'lucide-react';
@@ -21,6 +21,7 @@ import CodexConfig, { CHATGPT_MODELS } from '../CodexConfig';
 import VertexAzureManualFields from '@/components/VertexAzureManualFields';
 import BedrockManualFields from '@/components/BedrockManualFields';
 import OpenAICompatibleImageFields from '@/components/OpenAICompatibleImageFields';
+import Image from 'next/image';
 
 const MANUAL_MODEL_PROVIDERS = new Set(["vertex", "azure", "bedrock"]);
 
@@ -215,7 +216,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
         return '';
     };
 
-    const fetchAvailableModels = async () => {
+    const fetchAvailableModels = useCallback(async () => {
         if (isManualModelProvider) return;
         if (llmConfig.LLM === 'openai' && !currentApiKey) return;
         if (llmConfig.LLM === 'google' && !currentApiKey) return;
@@ -339,7 +340,16 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
         } finally {
             setModelsLoading(false);
         }
-    };
+    }, [
+        currentApiKey,
+        currentFireworksUrl,
+        currentLitellmUrl,
+        currentLmStudioUrl,
+        currentModelField,
+        currentTogetherUrl,
+        isManualModelProvider,
+        llmConfig,
+    ]);
 
     const renderQualitySelector = (llmConfig: LLMConfig) => {
         if (llmConfig.IMAGE_PROVIDER === "dall-e-3") {
@@ -516,13 +526,13 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
             return Math.round((downloadingModel.downloaded / downloadingModel.size) * 100);
         }
         return 0;
-    }, [downloadingModel?.downloaded, downloadingModel?.size]);
+    }, [downloadingModel]);
 
     useEffect(() => {
         if (llmConfig.LLM === 'ollama' && !modelsChecked && !modelsLoading) {
             void fetchAvailableModels();
         }
-    }, [llmConfig.LLM, modelsChecked, modelsLoading]);
+    }, [fetchAvailableModels, llmConfig.LLM, modelsChecked, modelsLoading]);
 
     return (
         <div className='w-full max-w-[660px] font-syne pb-10'>
@@ -1031,7 +1041,13 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                     <div className='w-[74px] h-[74px] px-[13.5px] py-[14.2px] rounded-[4px] flex items-center justify-center'
                         style={{ backgroundColor: '#F4F3FF' }}
                     >
-                        <img src="/image-markup.svg" className='w-full h-full object-cover' alt='image-markup' />
+                        <Image
+                            src="/image-markup.svg"
+                            className='h-full w-full object-cover'
+                            alt='image-markup'
+                            width={46}
+                            height={46}
+                        />
                     </div>
                     <div>
 

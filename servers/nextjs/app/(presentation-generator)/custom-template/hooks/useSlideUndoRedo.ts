@@ -97,7 +97,7 @@ export function useSlideUndoRedo(
             setFuture([]);
             lastReact.current = slide.react;
         }
-    }, [slide.slide_number, isSingleSlideMode]);
+    }, [slide.slide_number, isSingleSlideMode, slide.react]);
 
     const canUndo = past.length > 0;
     const canRedo = future.length > 0;

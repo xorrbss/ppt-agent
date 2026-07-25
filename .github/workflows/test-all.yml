@@ -90,6 +90,9 @@ jobs:
       working-directory: .
       run: npm run test:next-ci
 
+    - name: Type-check all Next.js TypeScript sources
+      run: npx tsc --noEmit -p tsconfig.json
+
     - name: Lint application
       run: npm run lint
 
