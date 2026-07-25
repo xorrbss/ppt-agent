@@ -180,7 +180,12 @@ def _runtime_analysis_result(import_id: uuid.UUID) -> dict:
     }
 
 
-async def _insert_expired_runtime_review(maker, *, now: datetime) -> tuple[uuid.UUID, str]:
+async def _insert_expired_runtime_review(
+    maker,
+    *,
+    now: datetime,
+    source_deleted_at: datetime | None = None,
+) -> tuple[uuid.UUID, str]:
     import_id = uuid.uuid4()
     task_id = f"task-{uuid.uuid4().hex}"
     async with maker() as session:
@@ -207,6 +212,7 @@ async def _insert_expired_runtime_review(maker, *, now: datetime) -> tuple[uuid.
                 analysis_result=_runtime_analysis_result(import_id),
                 repeat_suggestions=[],
                 source_retention_expires_at=now - timedelta(days=1),
+                source_deleted_at=source_deleted_at,
                 source_filename="source.pptx",
                 source_media_type=(
                     "application/vnd.openxmlformats-officedocument."
@@ -220,6 +226,70 @@ async def _insert_expired_runtime_review(maker, *, now: datetime) -> tuple[uuid.
         )
         await session.commit()
     return import_id, task_id
+
+
+def test_confirm_refuses_an_import_whose_media_retention_already_deleted(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """The finished-cleanup case, which the DB gate is not the one guarding.
+
+    Retention has already run to completion here: the media is gone and
+    `source_deleted_at` is written, while `review_required` stays an eligible
+    state, so the row still looks confirmable. `confirm` itself has to refuse --
+    before it rebuilds the draft -- or it persists a template whose every image
+    reference points at a deleted file.
+    """
+
+    async def scenario() -> None:
+        engine, maker = await _database(tmp_path / "reclaimed-media.sqlite")
+        now = datetime.now(timezone.utc)
+        assembled: list[uuid.UUID] = []
+        real_assemble = ingestion._assemble_confirmed_candidate
+
+        def recording_assemble(import_job, accepted_repeat_suggestions):
+            assembled.append(import_job.id)
+            return real_assemble(import_job, accepted_repeat_suggestions)
+
+        monkeypatch.setattr(
+            ingestion, "_assemble_confirmed_candidate", recording_assemble
+        )
+        try:
+            import_id, task_id = await _insert_expired_runtime_review(
+                maker,
+                now=now,
+                source_deleted_at=now - timedelta(hours=1),
+            )
+            async with maker() as session:
+                outcome = await ingestion.confirm_template_v2_pptx_import(
+                    session,
+                    import_id,
+                    task_id,
+                    owner_scope="local-disabled-auth-scope-v1",
+                    expected_revision=2,
+                )
+
+            assert outcome == "assets_reclaimed"
+            # The row's own columns already say the media is gone, so the refusal
+            # must come from the up-front guard rather than from the write gate
+            # that exists for the cleanup race.
+            assert assembled == [], "a reclaimed import must be refused before any work"
+            async with maker() as session:
+                job = await session.get(TemplateV2PptxImport, import_id)
+                assert job is not None
+                assert job.state == "review_required"
+                assert job.draft_template_id is None
+                assert job.revision == 2
+                assert (
+                    await session.scalar(
+                        select(func.count()).select_from(TemplateV2)
+                    )
+                    == 0
+                ), "no template may point at files retention already deleted"
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
 
 
 def test_confirm_loses_to_a_cleanup_claim_taken_after_it_read_the_import(
