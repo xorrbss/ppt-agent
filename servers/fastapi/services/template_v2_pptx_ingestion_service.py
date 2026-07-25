@@ -520,19 +520,36 @@ async def _persist_analysis(
         return True
 
 
-def _runtime_assets_reclaimed(import_job: TemplateV2PptxImport) -> bool:
-    """True when a runtime import's layouts would reference already-deleted media.
-
-    Only the runtime analyzer stores asset references; the deterministic analysis is
-    self-contained, so losing its source after review costs nothing but the audit
-    copy and must keep confirming.
-    """
+def _is_runtime_analysis(import_job: TemplateV2PptxImport) -> bool:
+    """Only the runtime analyzer stores references to the relocated private media."""
 
     analysis_result = import_job.analysis_result
     return (
         isinstance(analysis_result, dict)
         and analysis_result.get("analyzer") == RUNTIME_ANALYSIS_MARKER
-        and import_job.source_deleted_at is not None
+    )
+
+
+def _runtime_assets_reclaimed(import_job: TemplateV2PptxImport) -> bool:
+    """True when a runtime import's layouts would reference reclaimed media.
+
+    Only the runtime analyzer stores asset references; the deterministic analysis is
+    self-contained, so losing its source after review costs nothing but the audit
+    copy and must keep confirming.
+
+    A held cleanup claim counts as reclaimed. Retention claims the row, deletes the
+    source and the relocated media in a worker thread, and writes `source_deleted_at`
+    only afterwards, so that flag alone leaves a window in which the files are already
+    gone while the row still looks intact. The claim is only ever taken on a row whose
+    retention deadline has already passed, and a cleaner that dies mid-run has its
+    claim re-taken on lease expiry by the next cleanup pass -- which then either
+    deletes (a permanent refusal, correctly) or clears the claim -- so refusing on the
+    claim is bounded, not permanent.
+    """
+
+    return _is_runtime_analysis(import_job) and (
+        import_job.source_deleted_at is not None
+        or import_job.source_cleanup_token is not None
     )
 
 
@@ -638,16 +655,25 @@ async def confirm_template_v2_pptx_import(
             return "suggestion_conflict"
         raise
     confirmed_at = _now()
+    gate_predicates = [
+        TemplateV2PptxImport.id == import_id,
+        TemplateV2PptxImport.task_id == task_id,
+        TemplateV2PptxImport.owner_scope == owner_scope,
+        TemplateV2PptxImport.state == "review_required",
+        TemplateV2PptxImport.revision == expected_revision,
+        TemplateV2PptxImport.draft_template_id.is_(None),
+    ]
+    if _is_runtime_analysis(import_job):
+        # The guard above reads the row loaded when this request started; retention
+        # claims and empties the private directory without touching `state` or
+        # `revision`, so nothing else here would notice a cleanup that began after
+        # that read. Only the runtime path is narrowed: a deterministic import is
+        # still allowed to confirm once its source is gone.
+        gate_predicates.append(TemplateV2PptxImport.source_deleted_at.is_(None))
+        gate_predicates.append(TemplateV2PptxImport.source_cleanup_token.is_(None))
     gate = await session.execute(
         update(TemplateV2PptxImport)
-        .where(
-            TemplateV2PptxImport.id == import_id,
-            TemplateV2PptxImport.task_id == task_id,
-            TemplateV2PptxImport.owner_scope == owner_scope,
-            TemplateV2PptxImport.state == "review_required",
-            TemplateV2PptxImport.revision == expected_revision,
-            TemplateV2PptxImport.draft_template_id.is_(None),
-        )
+        .where(*gate_predicates)
         .values(
             state="confirming",
             revision=TemplateV2PptxImport.revision + 1,
@@ -667,6 +693,8 @@ async def confirm_template_v2_pptx_import(
         ).scalar_one_or_none()
         if current and current.state == "confirmed" and current.draft_template_id:
             return "already_confirmed"
+        if current is not None and _runtime_assets_reclaimed(current):
+            return "assets_reclaimed"
         return "revision_conflict"
 
     presentation = PresentationModel(
