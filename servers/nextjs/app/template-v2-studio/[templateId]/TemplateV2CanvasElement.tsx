@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Group, Image as KonvaImage, Rect, Text } from "react-konva";
 
 import {
@@ -79,7 +80,7 @@ function StudioImage(props: StudioElementProps) {
   );
 }
 
-export function StudioElement(props: StudioElementProps) {
+function StudioElementView(props: StudioElementProps) {
   const { element, path } = props;
   const position = elementPosition(element);
   const size = elementSize(element);
@@ -278,3 +279,20 @@ export function StudioElement(props: StudioElementProps) {
     </Group>
   );
 }
+
+// A geometry commit replaces only the edited element, so memoizing keeps large
+// scenes from re-rendering every element on every edit. `isDisabled` is excluded
+// from the comparison on purpose: it is a fresh closure each render, and
+// `interactionKey` already changes whenever its answer can change.
+export const StudioElement = memo(
+  StudioElementView,
+  (previous, next) =>
+    previous.element === next.element &&
+    previous.path === next.path &&
+    previous.interactionKey === next.interactionKey &&
+    previous.setNode === next.setNode &&
+    previous.onSelect === next.onSelect &&
+    previous.onDragStart === next.onDragStart &&
+    previous.onDragMove === next.onDragMove &&
+    previous.onDragEnd === next.onDragEnd
+);

@@ -46,6 +46,17 @@ interface TemplateV2CanvasProps {
   ): void;
 }
 
+// Values the stable, event-time handlers need from the current render.
+interface CanvasLatest
+  extends Pick<
+    TemplateV2CanvasProps,
+    "scene" | "selectedPaths" | "onSelect" | "onGeometryBatch"
+  > {
+  componentPosition: { x: number; y: number };
+  selectedKeys: ReadonlySet<string>;
+  capabilities: { move: boolean; resize: boolean; rotate: boolean };
+}
+
 function elementAtPath(
   elements: JsonRecord[],
   path: ElementPath
@@ -107,11 +118,6 @@ export default function TemplateV2Canvas({
     () => new Set(selectedPaths.map(pathKey)),
     [selectedPaths]
   );
-  const conflictsWithLockedPath = useCallback(
-    (path: ElementPath) =>
-      lockedPaths.some((lockedPath) => pathsOverlap(path, lockedPath)),
-    [lockedPaths]
-  );
   const selectedElements = useMemo(
     () =>
       selectedPaths.map((path) => ({
@@ -121,7 +127,9 @@ export default function TemplateV2Canvas({
     [scene.elements, selectedPaths]
   );
   const componentPosition = elementPosition(scene.component);
-  const selectionLocked = selectedPaths.some(conflictsWithLockedPath);
+  const selectionLocked = selectedPaths.some((path) =>
+    lockedPaths.some((lockedPath) => pathsOverlap(path, lockedPath))
+  );
   const capabilities = {
     move:
       selectedElements.length > 0 &&
@@ -143,6 +151,31 @@ export default function TemplateV2Canvas({
       !selectionLocked,
   };
 
+  // Handlers handed to every element keep a stable identity so a geometry
+  // commit only re-renders the elements that changed; they read the current
+  // render's values from here instead of from their closure.
+  const snapshot: CanvasLatest = {
+    scene,
+    componentPosition,
+    selectedPaths,
+    selectedKeys,
+    capabilities,
+    onSelect,
+    onGeometryBatch,
+  };
+  const latest = useRef(snapshot);
+  useEffect(() => {
+    latest.current = snapshot;
+  });
+
+  // Changes whenever an element's interactive state can change, which is what
+  // lets memoized elements skip renders that only move a sibling.
+  const interactionKey = [
+    String(disabled),
+    lockedPaths.map(pathKey).join(","),
+    selectedPaths.map(pathKey).join(","),
+  ].join("|");
+
   useEffect(() => {
     const transformer = transformerRef.current;
     const nodes = capabilities.move
@@ -162,10 +195,16 @@ export default function TemplateV2Canvas({
     else nodesRef.current.delete(key);
   }, []);
 
-  const commitNodes = useCallback(
-    (paths: ElementPath[]) => {
-      const updates = paths.flatMap((elementPath) => {
-        const element = elementAtPath(scene.elements, elementPath);
+  const selectElement = useCallback(
+    (path: ElementPath | null, additive?: boolean) =>
+      latest.current.onSelect(path, additive),
+    []
+  );
+
+  const commitNodes = useCallback((paths: ElementPath[]) => {
+    const { scene, onGeometryBatch } = latest.current;
+    const updates = paths.flatMap((elementPath) => {
+      const element = elementAtPath(scene.elements, elementPath);
         const node = nodesRef.current.get(pathKey(elementPath));
         if (!element || !node) return [];
         const geometry = normalizeElementGeometry(element, {
@@ -183,66 +222,61 @@ export default function TemplateV2Canvas({
           geometry.translateX = node.x() - frame.x;
           geometry.translateY = node.y() - frame.y;
         }
-        node.scale({ x: 1, y: 1 });
-        if (geometry.width !== undefined) node.width(geometry.width);
-        if (geometry.height !== undefined) node.height(geometry.height);
-        return [{ elementPath, geometry }];
-      });
-      if (updates.length === paths.length && updates.length > 0) {
-        onGeometryBatch(updates);
-      }
-    },
-    [onGeometryBatch, scene.elements]
-  );
+      node.scale({ x: 1, y: 1 });
+      if (geometry.width !== undefined) node.width(geometry.width);
+      if (geometry.height !== undefined) node.height(geometry.height);
+      return [{ elementPath, geometry }];
+    });
+    if (updates.length === paths.length && updates.length > 0) {
+      onGeometryBatch(updates);
+    }
+  }, []);
 
-  const guideTargets = useCallback(
-    (moving: ReadonlySet<string>) =>
-      templateV2GuideTargets(
-        nodesRef.current,
-        scene.elements.map((_, index) => pathKey([index])),
-        moving,
-        {
-          x: -componentPosition.x,
-          y: -componentPosition.y,
-          width: TEMPLATE_V2_SLIDE_WIDTH,
-          height: TEMPLATE_V2_SLIDE_HEIGHT,
-        }
-      ),
-    [componentPosition.x, componentPosition.y, scene.elements]
-  );
-
-  const onDragStart = useCallback(
-    (path: ElementPath, node: Konva.Node) => {
-      const key = pathKey(path);
-      if (
-        selectedPaths.length < 2 ||
-        !selectedKeys.has(key) ||
-        !capabilities.move
-      ) {
-        dragRef.current = null;
-        return;
+  const guideTargets = useCallback((moving: ReadonlySet<string>) => {
+    const { scene, componentPosition } = latest.current;
+    return templateV2GuideTargets(
+      nodesRef.current,
+      scene.elements.map((_, index) => pathKey([index])),
+      moving,
+      {
+        x: -componentPosition.x,
+        y: -componentPosition.y,
+        width: TEMPLATE_V2_SLIDE_WIDTH,
+        height: TEMPLATE_V2_SLIDE_HEIGHT,
       }
-      const entries = selectedPaths.flatMap((selectedPath) => {
-        const selectedNode = nodesRef.current.get(pathKey(selectedPath));
-        return selectedNode
-          ? [
-              {
-                path: selectedPath,
-                node: selectedNode,
-                start: { x: selectedNode.x(), y: selectedNode.y() },
-              },
-            ]
-          : [];
-      });
-      if (entries.length !== selectedPaths.length) return;
-      dragRef.current = {
-        sourceKey: key,
-        sourceStart: { x: node.x(), y: node.y() },
-        entries,
-      };
-    },
-    [capabilities.move, selectedKeys, selectedPaths]
-  );
+    );
+  }, []);
+
+  const onDragStart = useCallback((path: ElementPath, node: Konva.Node) => {
+    const { selectedPaths, selectedKeys, capabilities } = latest.current;
+    const key = pathKey(path);
+    if (
+      selectedPaths.length < 2 ||
+      !selectedKeys.has(key) ||
+      !capabilities.move
+    ) {
+      dragRef.current = null;
+      return;
+    }
+    const entries = selectedPaths.flatMap((selectedPath) => {
+      const selectedNode = nodesRef.current.get(pathKey(selectedPath));
+      return selectedNode
+        ? [
+            {
+              path: selectedPath,
+              node: selectedNode,
+              start: { x: selectedNode.x(), y: selectedNode.y() },
+            },
+          ]
+        : [];
+    });
+    if (entries.length !== selectedPaths.length) return;
+    dragRef.current = {
+      sourceKey: key,
+      sourceStart: { x: node.x(), y: node.y() },
+      entries,
+    };
+  }, []);
 
   const onDragMove = useCallback(
     (path: ElementPath, node: Konva.Node) => {
@@ -293,36 +327,37 @@ export default function TemplateV2Canvas({
     [commitNodes]
   );
 
-  const nudgeSelection = useCallback(
-    (deltaX: number, deltaY: number) => {
-      const updates = selectedPaths.flatMap((elementPath) => {
-        const element = elementAtPath(scene.elements, elementPath);
-        const geometry = element
-          ? nudgeTemplateV2Geometry(element, deltaX, deltaY)
-          : null;
-        return geometry ? [{ elementPath, geometry }] : [];
-      });
-      if (updates.length === selectedPaths.length && updates.length > 0) {
-        onGeometryBatch(updates);
-      }
-    },
-    [onGeometryBatch, scene.elements, selectedPaths]
-  );
+  const nudgeSelection = useCallback((deltaX: number, deltaY: number) => {
+    const { scene, selectedPaths, onGeometryBatch } = latest.current;
+    const updates = selectedPaths.flatMap((elementPath) => {
+      const element = elementAtPath(scene.elements, elementPath);
+      const geometry = element
+        ? nudgeTemplateV2Geometry(element, deltaX, deltaY)
+        : null;
+      return geometry ? [{ elementPath, geometry }] : [];
+    });
+    if (updates.length === selectedPaths.length && updates.length > 0) {
+      onGeometryBatch(updates);
+    }
+  }, []);
 
-  const elementDisabled = useCallback(
-    (path: ElementPath) =>
-      disabled ||
-      conflictsWithLockedPath(path) ||
-      (selectedPaths.length > 1 &&
-        selectedKeys.has(pathKey(path)) &&
-        selectionLocked),
-    [
-      conflictsWithLockedPath,
-      disabled,
-      selectedKeys,
-      selectedPaths.length,
-      selectionLocked,
-    ]
+  // Answered during render, so it reads this render's values directly. Its
+  // identity is deliberately ignored by the memoized elements, which compare
+  // `interactionKey` instead — the content this function depends on.
+  const elementDisabled = (path: ElementPath) =>
+    disabled ||
+    lockedPaths.some((lockedPath) => pathsOverlap(path, lockedPath)) ||
+    (selectedPaths.length > 1 &&
+      selectedKeys.has(pathKey(path)) &&
+      selectionLocked);
+
+  const elementPaths = useMemo(
+    () =>
+      Array.from(
+        { length: scene.elements.length },
+        (_, index): ElementPath => [index]
+      ),
+    [scene.elements.length]
   );
 
   return (
@@ -389,12 +424,13 @@ export default function TemplateV2Canvas({
             <Group x={componentPosition.x} y={componentPosition.y}>
               {scene.elements.map((element, index) => (
                 <StudioElement
-                  key={pathKey([index])}
+                  key={pathKey(elementPaths[index])}
                   element={element}
-                  path={[index]}
+                  path={elementPaths[index]}
+                  interactionKey={interactionKey}
                   isDisabled={elementDisabled}
                   setNode={setNode}
-                  onSelect={onSelect}
+                  onSelect={selectElement}
                   onDragStart={onDragStart}
                   onDragMove={onDragMove}
                   onDragEnd={onDragEnd}
