@@ -30,6 +30,11 @@ def _configure_application_logging() -> None:
     """Honor LOG_LEVEL (default INFO) so template/export diagnostics are visible."""
     raw = (os.getenv("LOG_LEVEL") or "INFO").strip().upper()
     level = getattr(logging, raw, logging.INFO)
+    # A level alone is inert: uvicorn's default LOGGING_CONFIG attaches handlers only to
+    # the uvicorn.* loggers, so application INFO records fall through to
+    # logging.lastResort (WARNING) and are dropped. basicConfig no-ops when the root
+    # logger already has handlers (pytest caplog, an operator-supplied --log-config).
+    logging.basicConfig(level=level)
     logging.getLogger().setLevel(level)
 
 
