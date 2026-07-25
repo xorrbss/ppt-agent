@@ -31,11 +31,14 @@ reports `allowlisted_template_count: 1` while every write for `a` and for `b`
 returns 403. Always confirm `allowlisted_template_count` equals the number of
 IDs you intended.
 
-The public Studio flag `NEXT_PUBLIC_TEMPLATE_V2_STUDIO_ENABLED` is separate and
-build-time: `next build` inlines it and the check is a strict `=== "true"`, so
-`TRUE` and `" true "` enable the backend flag but not this one. Enabling it does
-not override the backend policy, and the backend flag does not expose the Studio
-UI.
+The Studio flag `NEXT_PUBLIC_TEMPLATE_V2_STUDIO_ENABLED` is separate, and despite
+the `NEXT_PUBLIC_` prefix it is **not** inlined at build time. Its only production
+reader is the server component `app/template-v2-studio/[templateId]/page.tsx`,
+which evaluates it per request, so the Studio is enabled and disabled by
+restarting Next.js — no rebuild and no new bundle. Its check is a strict
+`=== "true"`, with no trim or case fold, so `TRUE` and `" true "` enable the
+backend flag but not this one. Enabling it does not override the backend policy,
+and the backend flag does not expose the Studio UI.
 
 ## Worker mode
 
@@ -154,6 +157,16 @@ compatibility held at 426 checks throughout.
 | Authored + adaptive regression | Full pytest identical with the flag off and on (831 passed, 3 skipped each); live adaptive produced an editable 3-slide PPTX and live authored a 3-slide image deck, both persisted `v1-standard`; no SQLite contention errors with the dispatcher running |
 | Rollback | Writes/imports 403, discovery hidden while the row still existed, reads and exports 200, and every row plus every private source preserved |
 | Worker mode | `external` starts no embedded dispatcher (job stayed `queued` for 15 s); the external worker then claimed it and emitted content-free `template_v2_pptx_queue` and `template_v2_pptx_analysis` events |
+
+A follow-up on 2026-07-25 measured the Studio flag directly, because the first
+rehearsal had assumed it was build-time and skipped it. On one bundle built
+*without* the flag, restarting Next.js with `NEXT_PUBLIC_TEMPLATE_V2_STUDIO_ENABLED=true`
+served the Studio and `=false` served the not-found fallback — under both
+`next start` and the standalone server Docker uses. The env var name also survives
+verbatim in the server chunk, i.e. it is read rather than substituted. Cypress ran
+95/95 with the flag on, covering the Studio specs and the legacy upload, dashboard,
+theme, and generation specs. So including the Studio in a canary costs neither a
+rebuild nor a bundle rollout, and it rolls back as fast as the backend flag.
 
 The rehearsal found one defect: neither event family reached any log sink in the
 FastAPI process, because the root logger had no handler. Fixed in the same
