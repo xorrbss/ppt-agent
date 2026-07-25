@@ -84,12 +84,22 @@ function boundedFinite(value, minimum, maximum, code, path, fallback = null) {
   return resolved;
 }
 
+const COLOR_PATTERN =
+  /^(?:#[0-9a-fA-F]{3,8}|[a-zA-Z]+|rgba?\([0-9.,%+\-\s]+\)|hsla?\([0-9a-zA-Z.,%+\-\s]+\))$/;
+
+// The single colour policy for this template. Exported in predicate form because the
+// renderer reads fill / table-cell / run-font colours straight off the element -- the
+// plan never sees them -- and must apply this same rule without duplicating it. It is
+// a predicate rather than `safeColor` itself because the renderer is also the export
+// path and answers an unrepresentable colour with a fallback, not by failing the deck.
+export function isTemplateV2SafeColor(value) {
+  return typeof value === "string" && value.length <= 96 && COLOR_PATTERN.test(value);
+}
+
 function safeColor(value, code, path, fallback = null) {
   const resolved = optionalString(value, code, path);
   if (resolved === null) return fallback;
-  const colorPattern =
-    /^(?:#[0-9a-fA-F]{3,8}|[a-zA-Z]+|rgba?\([0-9.,%+\-\s]+\)|hsla?\([0-9a-zA-Z.,%+\-\s]+\))$/;
-  if (resolved.length > 96 || !colorPattern.test(resolved)) fail(code, path);
+  if (!isTemplateV2SafeColor(resolved)) fail(code, path);
   return resolved;
 }
 

@@ -209,3 +209,168 @@ test("run styling survives the style attribute instead of truncating it", () => 
     assert.ok(value.includes(declaration), `${declaration} must be inside the attribute`);
   }
 });
+
+/**
+ * Colours the renderer reads straight off the element -- fill, table-cell, run font --
+ * never reach the render plan, so the plan's colour validator never saw them. They land
+ * bare in a double-quoted style attribute that feeds dangerouslySetInnerHTML on the
+ * export page. Same attribute-value parsing as above: with a breakout the discarded
+ * declarations are still physically present in the blob, only the attribute ends early.
+ */
+
+function styleAttributeAfter(html: string, marker: string) {
+  const anchor = html.indexOf(marker);
+  assert.notEqual(anchor, -1, `expected ${marker} in the rendered markup`);
+  const start = html.indexOf('style="', anchor);
+  assert.notEqual(start, -1, "the element must carry a style attribute");
+  return html.slice(start + 7, html.indexOf('"', start + 7));
+}
+
+test("a hostile fill colour cannot close the style attribute", () => {
+  const hostile = { color: '#fff" onmouseover="alert(1)' };
+  const html = renderTemplateV2GeneralSlideCanvasHtml({
+    ui: {
+      components: [
+        {
+          id: "component",
+          position: { x: 0, y: 0 },
+          elements: [
+            {
+              type: "text",
+              position: { x: 0, y: 0 },
+              size: { width: 100, height: 20 },
+              fill: hostile,
+              runs: [{ text: "hi" }],
+            },
+            {
+              type: "container",
+              position: { x: 0, y: 40 },
+              size: { width: 100, height: 20 },
+              fill: hostile,
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  const text = styleAttributeAfter(html, 'data-template-v2-element="text"');
+  assert.ok(text.includes("background:transparent"), "fill must degrade to the fallback");
+  // Declarations emitted after `background` prove the attribute did not end at the
+  // injected quote; they were physically present but orphaned before the fix.
+  assert.ok(text.includes("text-align:left"), "later declarations must stay in the attribute");
+  assert.ok(text.includes("overflow:hidden"), "the attribute must reach its last declaration");
+
+  const container = styleAttributeAfter(html, 'data-template-v2-element="container"');
+  assert.ok(container.includes("background:transparent"), "container fill must degrade too");
+  assert.ok(container.includes("overflow:hidden"), "container attribute must not be truncated");
+
+  assert.ok(!html.includes("onmouseover"), "no event handler may reach the markup");
+});
+
+test("a hostile table cell colour cannot inject an element", () => {
+  const html = renderTemplateV2GeneralSlideCanvasHtml({
+    ui: {
+      components: [
+        {
+          id: "component",
+          position: { x: 0, y: 0 },
+          elements: [
+            {
+              type: "table",
+              position: { x: 0, y: 0 },
+              size: { width: 200, height: 60 },
+              columns: [{ runs: [{ text: "head" }] }],
+              rows: [
+                [
+                  {
+                    color: { color: '#fff"><img src=x onerror=alert(1)>' },
+                    runs: [{ text: "body" }],
+                  },
+                ],
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  const cell = styleAttributeAfter(html, "<td");
+  assert.ok(cell.includes("background:transparent"), "cell colour must degrade to the fallback");
+  assert.ok(cell.includes("border:1px solid #d1d5db"), "the cell attribute must not be truncated");
+  assert.ok(!html.includes("<img"), "no injected element may reach the markup");
+  assert.ok(!html.includes("onerror"), "no event handler may reach the markup");
+});
+
+test("a font colour cannot smuggle extra declarations past escaping", () => {
+  const html = renderTemplateV2GeneralSlideCanvasHtml({
+    ui: {
+      components: [
+        {
+          id: "component",
+          position: { x: 0, y: 0 },
+          elements: [
+            {
+              type: "text",
+              position: { x: 0, y: 0 },
+              size: { width: 100, height: 20 },
+              runs: [
+                {
+                  text: "hi",
+                  // Escaping leaves `;` `:` `(` `)` untouched, so this survived it whole.
+                  font: { size: 12, bold: true, color: "red;background:url(http://x/beacon)" },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  const run = styleAttributeAfter(html, "<span");
+  assert.ok(run.includes("font-weight:700"), "the run style must actually be rendered");
+  assert.ok(!run.includes("background"), "no smuggled declaration may enter the attribute");
+  assert.ok(!run.includes("url("), "no smuggled url may enter the attribute");
+  assert.ok(!html.includes("beacon"), "the payload must not survive anywhere in the markup");
+});
+
+test("an infographic colour cannot escape the gradient it is interpolated into", () => {
+  // `plan.infographic.colors` is validated for type but not value, so it is the same
+  // sink as `fill.color` with an extra way out: `)` leaves `conic-gradient(` as well.
+  const html = renderTemplateV2GeneralSlideCanvasHtml({
+    ui: {
+      components: [
+        {
+          id: "component",
+          position: { x: 0, y: 0 },
+          elements: [
+            {
+              type: "infographic",
+              position: { x: 0, y: 0 },
+              size: { width: 100, height: 100 },
+              colors: [
+                "#2563eb 0 50%,#000 0 100%);background:url(http://x/beacon",
+                "#eee;background:url(http://x/beacon)",
+              ],
+              data: { type: "gauge", value: 50, min_value: 0, max_value: 100 },
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  const styles = [...html.matchAll(/style="([^"]*)"/g)].map((match) => match[1]);
+  const gradient = styles.find((style) => style.includes("conic-gradient"));
+  assert.ok(gradient, "the gauge graphic must actually be rendered");
+  assert.ok(
+    gradient.startsWith("position:relative") && gradient.endsWith("100%)"),
+    "the declaration list must still be the one the renderer wrote"
+  );
+  for (const style of styles) {
+    assert.ok(!style.includes("url("), "no smuggled url may enter any style attribute");
+  }
+  assert.ok(!html.includes("beacon"), "the payload must not survive anywhere in the markup");
+});
