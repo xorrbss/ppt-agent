@@ -65,8 +65,12 @@ async def convert_pptx_to_json(self, pptx_path: str, *, session_id: str) -> Pptx
     # payload: {"type": "pptx-to-json", "pptx_path": ..., "session_id": session_id}
 ```
 
-`session_id` is supplied by the caller and must be the import row's `id`, so runtime output
-is already partitioned per import and traceable.
+`session_id` is required by the converter's task schema — omitting it fails validation, which
+is what upstream's own caller does. It does **not** determine where output lands: the runtime
+allocates its own `<APP_DATA_DIRECTORY>/pptx-to-json/<random-uuid>/` per run, holding
+`presentation.json` and an `images/` directory. Anything that needs to reclaim or relocate
+that output must use the returned `output_dir`, never a path derived from the session id.
+Measured 2026-07-25; an earlier draft of this document assumed the opposite.
 
 **Ingestion.** `_analyze_import_source` (`template_v2_pptx_ingestion_service.py:251`) gains a
 second extraction path selected by policy. The existing deterministic parser stays the
