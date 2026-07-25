@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   currentTemplateV2Geometry,
+  nudgeTemplateV2Geometry,
   updateTemplateV2GeometryField,
 } from "./template-v2-studio-geometry.ts";
 
@@ -64,6 +65,58 @@ test("updateTemplateV2GeometryField updates one field and preserves the rest", (
     ),
     { x: 125, y: 50, translateX: 25, translateY: 0 }
   );
+});
+
+test("nudgeTemplateV2Geometry offsets movable elements and translates vectors", () => {
+  assert.deepEqual(
+    nudgeTemplateV2Geometry(
+      {
+        type: "text",
+        position: { x: 10, y: 20 },
+        size: { width: 100, height: 40 },
+        rotation: 15,
+      },
+      -1,
+      8
+    ),
+    { x: 9, y: 28, width: 100, height: 40, rotation: 15 }
+  );
+  assert.deepEqual(
+    nudgeTemplateV2Geometry(
+      {
+        type: "group",
+        position: { x: 10, y: 20 },
+        size: { width: 100, height: 40 },
+      },
+      0,
+      -1
+    ),
+    { x: 10, y: 19 }
+  );
+  assert.deepEqual(
+    nudgeTemplateV2Geometry(
+      {
+        type: "vector",
+        points: [{ x: 100, y: 50 }, { x: 300, y: 150 }],
+      },
+      8,
+      0
+    ),
+    { x: 108, y: 50, translateX: 8, translateY: 0 }
+  );
+});
+
+test("nudgeTemplateV2Geometry rejects immovable elements and invalid deltas", () => {
+  const text = {
+    type: "text",
+    position: { x: 10, y: 20 },
+    size: { width: 100, height: 40 },
+  };
+
+  assert.equal(nudgeTemplateV2Geometry({ type: "unknown" }, 1, 0), null);
+  assert.equal(nudgeTemplateV2Geometry({ type: "vector" }, 1, 0), null);
+  assert.equal(nudgeTemplateV2Geometry(text, Number.NaN, 0), null);
+  assert.equal(nudgeTemplateV2Geometry(text, 0, Number.POSITIVE_INFINITY), null);
 });
 
 test("updateTemplateV2GeometryField rejects invalid or unsupported edits", () => {

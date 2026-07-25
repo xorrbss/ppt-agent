@@ -20,6 +20,12 @@ export const CONTENT_PADDING = 8;
 export interface StudioElementProps {
   element: JsonRecord;
   path: ElementPath;
+  /**
+   * Changes whenever selection, locks, or the global disable can alter what
+   * `isDisabled` answers. `isDisabled` itself keeps a stable identity, so this
+   * is what tells a memoized element that its interactive state may have moved.
+   */
+  interactionKey: string;
   isDisabled(path: ElementPath): boolean;
   setNode(path: ElementPath, node: Konva.Node | null): void;
   onSelect(path: ElementPath, additive?: boolean): void;

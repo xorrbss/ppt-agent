@@ -63,3 +63,30 @@ export function updateTemplateV2GeometryField(
     translateY: normalized.y - geometry.y,
   };
 }
+
+/**
+ * Offsets an element by a delta, keeping the vector translation contract that
+ * geometry commits rely on (vector geometry lives in `points`, not `position`).
+ */
+export function nudgeTemplateV2Geometry(
+  element: JsonRecord,
+  deltaX: number,
+  deltaY: number
+): ElementGeometry | null {
+  if (!elementCapabilities(element).move) return null;
+  if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY)) return null;
+
+  const geometry = currentTemplateV2Geometry(element);
+  const normalized = normalizeElementGeometry(element, {
+    ...geometry,
+    x: geometry.x + deltaX,
+    y: geometry.y + deltaY,
+  });
+  if (element.type !== "vector") return normalized;
+  if (!planStudioElement(element)?.vector) return null;
+  return {
+    ...normalized,
+    translateX: normalized.x - geometry.x,
+    translateY: normalized.y - geometry.y,
+  };
+}

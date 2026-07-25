@@ -1,29 +1,26 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type Konva from "konva";
 import { Group, Layer, Rect, Stage, Transformer } from "react-konva";
 
 import {
   elementCapabilities,
   elementPosition,
-  fitTemplateV2Viewport,
   normalizeElementGeometry,
   pathKey,
-  preserveTemplateV2ViewportOnResize,
   TEMPLATE_V2_SLIDE_HEIGHT,
   TEMPLATE_V2_SLIDE_WIDTH,
-  zoomTemplateV2Viewport,
-  type ViewportTransform,
 } from "@/lib/template-v2-konva";
+import { nudgeTemplateV2Geometry } from "@/lib/template-v2-studio-geometry";
+import { getTemplateV2CanvasKeyboardIntent } from "@/lib/template-v2-studio-keyboard";
 import { planStudioElement } from "@/lib/template-v2-studio-plan";
-import { snapTemplateV2Position } from "@/lib/template-v2-snapping";
+import {
+  sameTemplateV2Guides,
+  snapTemplateV2Bounds,
+  templateV2GuideTargets,
+  type TemplateV2Guide,
+} from "@/lib/template-v2-snapping";
 import {
   isJsonRecord,
   type ElementGeometry,
@@ -32,6 +29,11 @@ import {
   type TemplateV2Scene,
 } from "@/lib/template-v2-studio";
 import { StudioElement } from "./TemplateV2CanvasElement";
+import { TemplateV2CanvasGuides } from "./TemplateV2CanvasGuides";
+import {
+  TemplateV2CanvasZoomControls,
+  useTemplateV2Viewport,
+} from "./TemplateV2CanvasViewport";
 
 interface TemplateV2CanvasProps {
   scene: TemplateV2Scene;
@@ -42,6 +44,17 @@ interface TemplateV2CanvasProps {
   onGeometryBatch(
     updates: Array<{ elementPath: ElementPath; geometry: ElementGeometry }>
   ): void;
+}
+
+// Values the stable, event-time handlers need from the current render.
+interface CanvasLatest
+  extends Pick<
+    TemplateV2CanvasProps,
+    "scene" | "selectedPaths" | "onSelect" | "onGeometryBatch"
+  > {
+  componentPosition: { x: number; y: number };
+  selectedKeys: ReadonlySet<string>;
+  capabilities: { move: boolean; resize: boolean; rotate: boolean };
 }
 
 function elementAtPath(
@@ -79,7 +92,16 @@ export default function TemplateV2Canvas({
   onSelect,
   onGeometryBatch,
 }: TemplateV2CanvasProps) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const {
+    containerRef,
+    dimensions,
+    viewport,
+    armPan,
+    beginPan,
+    stageProps,
+    zoomBy,
+    fit,
+  } = useTemplateV2Viewport();
   const transformerRef = useRef<Konva.Transformer | null>(null);
   const nodesRef = useRef(new Map<string, Konva.Node>());
   const dragRef = useRef<{
@@ -91,27 +113,10 @@ export default function TemplateV2Canvas({
       start: { x: number; y: number };
     }>;
   } | null>(null);
-  const observedDimensionsRef = useRef<{
-    width: number;
-    height: number;
-  } | null>(null);
-  const [dimensions, setDimensions] = useState({ width: 960, height: 600 });
-  const [viewport, setViewport] = useState<ViewportTransform>(() =>
-    fitTemplateV2Viewport(960, 600)
-  );
-  const [spacePressed, setSpacePressed] = useState(false);
-  const panRef = useRef<{
-    pointer: { x: number; y: number };
-    viewport: ViewportTransform;
-  } | null>(null);
+  const [guides, setGuides] = useState<TemplateV2Guide[]>([]);
   const selectedKeys = useMemo(
     () => new Set(selectedPaths.map(pathKey)),
     [selectedPaths]
-  );
-  const conflictsWithLockedPath = useCallback(
-    (path: ElementPath) =>
-      lockedPaths.some((lockedPath) => pathsOverlap(path, lockedPath)),
-    [lockedPaths]
   );
   const selectedElements = useMemo(
     () =>
@@ -121,7 +126,10 @@ export default function TemplateV2Canvas({
       })),
     [scene.elements, selectedPaths]
   );
-  const selectionLocked = selectedPaths.some(conflictsWithLockedPath);
+  const componentPosition = elementPosition(scene.component);
+  const selectionLocked = selectedPaths.some((path) =>
+    lockedPaths.some((lockedPath) => pathsOverlap(path, lockedPath))
+  );
   const capabilities = {
     move:
       selectedElements.length > 0 &&
@@ -143,26 +151,30 @@ export default function TemplateV2Canvas({
       !selectionLocked,
   };
 
+  // Handlers handed to every element keep a stable identity so a geometry
+  // commit only re-renders the elements that changed; they read the current
+  // render's values from here instead of from their closure.
+  const snapshot: CanvasLatest = {
+    scene,
+    componentPosition,
+    selectedPaths,
+    selectedKeys,
+    capabilities,
+    onSelect,
+    onGeometryBatch,
+  };
+  const latest = useRef(snapshot);
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    const observer = new ResizeObserver(([entry]) => {
-      const width = Math.max(320, Math.floor(entry.contentRect.width));
-      const height = Math.max(360, Math.floor(entry.contentRect.height));
-      const next = { width, height };
-      const previous = observedDimensionsRef.current;
-      if (previous?.width === width && previous.height === height) return;
-      observedDimensionsRef.current = next;
-      setDimensions(next);
-      setViewport((current) =>
-        previous
-          ? preserveTemplateV2ViewportOnResize(current, previous, next)
-          : fitTemplateV2Viewport(width, height)
-      );
-    });
-    observer.observe(container);
-    return () => observer.disconnect();
-  }, []);
+    latest.current = snapshot;
+  });
+
+  // Changes whenever an element's interactive state can change, which is what
+  // lets memoized elements skip renders that only move a sibling.
+  const interactionKey = [
+    String(disabled),
+    lockedPaths.map(pathKey).join(","),
+    selectedPaths.map(pathKey).join(","),
+  ].join("|");
 
   useEffect(() => {
     const transformer = transformerRef.current;
@@ -183,10 +195,16 @@ export default function TemplateV2Canvas({
     else nodesRef.current.delete(key);
   }, []);
 
-  const commitNodes = useCallback(
-    (paths: ElementPath[]) => {
-      const updates = paths.flatMap((elementPath) => {
-        const element = elementAtPath(scene.elements, elementPath);
+  const selectElement = useCallback(
+    (path: ElementPath | null, additive?: boolean) =>
+      latest.current.onSelect(path, additive),
+    []
+  );
+
+  const commitNodes = useCallback((paths: ElementPath[]) => {
+    const { scene, onGeometryBatch } = latest.current;
+    const updates = paths.flatMap((elementPath) => {
+      const element = elementAtPath(scene.elements, elementPath);
         const node = nodesRef.current.get(pathKey(elementPath));
         if (!element || !node) return [];
         const geometry = normalizeElementGeometry(element, {
@@ -204,74 +222,102 @@ export default function TemplateV2Canvas({
           geometry.translateX = node.x() - frame.x;
           geometry.translateY = node.y() - frame.y;
         }
-        node.scale({ x: 1, y: 1 });
-        if (geometry.width !== undefined) node.width(geometry.width);
-        if (geometry.height !== undefined) node.height(geometry.height);
-        return [{ elementPath, geometry }];
-      });
-      if (updates.length === paths.length && updates.length > 0) {
-        onGeometryBatch(updates);
-      }
-    },
-    [onGeometryBatch, scene.elements]
-  );
-
-  const onDragStart = useCallback(
-    (path: ElementPath, node: Konva.Node) => {
-      const key = pathKey(path);
-      if (
-        selectedPaths.length < 2 ||
-        !selectedKeys.has(key) ||
-        !capabilities.move
-      ) {
-        dragRef.current = null;
-        return;
-      }
-      const entries = selectedPaths.flatMap((selectedPath) => {
-        const selectedNode = nodesRef.current.get(pathKey(selectedPath));
-        return selectedNode
-          ? [
-              {
-                path: selectedPath,
-                node: selectedNode,
-                start: { x: selectedNode.x(), y: selectedNode.y() },
-              },
-            ]
-          : [];
-      });
-      if (entries.length !== selectedPaths.length) return;
-      dragRef.current = {
-        sourceKey: key,
-        sourceStart: { x: node.x(), y: node.y() },
-        entries,
-      };
-    },
-    [capabilities.move, selectedKeys, selectedPaths]
-  );
-
-  const onDragMove = useCallback((path: ElementPath, node: Konva.Node) => {
-    node.position(
-      snapTemplateV2Position({ x: node.x(), y: node.y() })
-    );
-    const drag = dragRef.current;
-    if (!drag || drag.sourceKey !== pathKey(path)) return;
-    const deltaX = node.x() - drag.sourceStart.x;
-    const deltaY = node.y() - drag.sourceStart.y;
-    for (const entry of drag.entries) {
-      if (entry.node === node) continue;
-      entry.node.position({
-        x: entry.start.x + deltaX,
-        y: entry.start.y + deltaY,
-      });
+      node.scale({ x: 1, y: 1 });
+      if (geometry.width !== undefined) node.width(geometry.width);
+      if (geometry.height !== undefined) node.height(geometry.height);
+      return [{ elementPath, geometry }];
+    });
+    if (updates.length === paths.length && updates.length > 0) {
+      onGeometryBatch(updates);
     }
-    transformerRef.current?.forceUpdate();
-    node.getLayer()?.batchDraw();
   }, []);
+
+  const guideTargets = useCallback((moving: ReadonlySet<string>) => {
+    const { scene, componentPosition } = latest.current;
+    return templateV2GuideTargets(
+      nodesRef.current,
+      scene.elements.map((_, index) => pathKey([index])),
+      moving,
+      {
+        x: -componentPosition.x,
+        y: -componentPosition.y,
+        width: TEMPLATE_V2_SLIDE_WIDTH,
+        height: TEMPLATE_V2_SLIDE_HEIGHT,
+      }
+    );
+  }, []);
+
+  const onDragStart = useCallback((path: ElementPath, node: Konva.Node) => {
+    const { selectedPaths, selectedKeys, capabilities } = latest.current;
+    const key = pathKey(path);
+    if (
+      selectedPaths.length < 2 ||
+      !selectedKeys.has(key) ||
+      !capabilities.move
+    ) {
+      dragRef.current = null;
+      return;
+    }
+    const entries = selectedPaths.flatMap((selectedPath) => {
+      const selectedNode = nodesRef.current.get(pathKey(selectedPath));
+      return selectedNode
+        ? [
+            {
+              path: selectedPath,
+              node: selectedNode,
+              start: { x: selectedNode.x(), y: selectedNode.y() },
+            },
+          ]
+        : [];
+    });
+    if (entries.length !== selectedPaths.length) return;
+    dragRef.current = {
+      sourceKey: key,
+      sourceStart: { x: node.x(), y: node.y() },
+      entries,
+    };
+  }, []);
+
+  const onDragMove = useCallback(
+    (path: ElementPath, node: Konva.Node) => {
+      const drag = dragRef.current;
+      const moving = new Set(
+        drag ? drag.entries.map((entry) => pathKey(entry.path)) : [pathKey(path)]
+      );
+      const snap = snapTemplateV2Bounds(
+        {
+          x: node.x(),
+          y: node.y(),
+          width: node.width(),
+          height: node.height(),
+        },
+        guideTargets(moving)
+      );
+      node.position(snap.position);
+      setGuides((current) =>
+        sameTemplateV2Guides(current, snap.guides) ? current : snap.guides
+      );
+      if (!drag || drag.sourceKey !== pathKey(path)) return;
+      const deltaX = node.x() - drag.sourceStart.x;
+      const deltaY = node.y() - drag.sourceStart.y;
+      for (const entry of drag.entries) {
+        if (entry.node === node) continue;
+        entry.node.position({
+          x: entry.start.x + deltaX,
+          y: entry.start.y + deltaY,
+        });
+      }
+      transformerRef.current?.forceUpdate();
+      node.getLayer()?.batchDraw();
+    },
+    [guideTargets]
+  );
 
   const onDragEnd = useCallback(
     (path: ElementPath) => {
       const drag = dragRef.current;
       dragRef.current = null;
+      setGuides([]);
       commitNodes(
         drag && drag.sourceKey === pathKey(path)
           ? drag.entries.map((entry) => entry.path)
@@ -281,83 +327,82 @@ export default function TemplateV2Canvas({
     [commitNodes]
   );
 
-  const elementDisabled = useCallback(
-    (path: ElementPath) =>
-      disabled ||
-      conflictsWithLockedPath(path) ||
-      (selectedPaths.length > 1 &&
-        selectedKeys.has(pathKey(path)) &&
-        selectionLocked),
-    [
-      conflictsWithLockedPath,
-      disabled,
-      selectedKeys,
-      selectedPaths.length,
-      selectionLocked,
-    ]
-  );
+  const nudgeSelection = useCallback((deltaX: number, deltaY: number) => {
+    const { scene, selectedPaths, onGeometryBatch } = latest.current;
+    const updates = selectedPaths.flatMap((elementPath) => {
+      const element = elementAtPath(scene.elements, elementPath);
+      const geometry = element
+        ? nudgeTemplateV2Geometry(element, deltaX, deltaY)
+        : null;
+      return geometry ? [{ elementPath, geometry }] : [];
+    });
+    if (updates.length === selectedPaths.length && updates.length > 0) {
+      onGeometryBatch(updates);
+    }
+  }, []);
 
-  const componentPosition = elementPosition(scene.component);
+  // Answered during render, so it reads this render's values directly. Its
+  // identity is deliberately ignored by the memoized elements, which compare
+  // `interactionKey` instead — the content this function depends on.
+  const elementDisabled = (path: ElementPath) =>
+    disabled ||
+    lockedPaths.some((lockedPath) => pathsOverlap(path, lockedPath)) ||
+    (selectedPaths.length > 1 &&
+      selectedKeys.has(pathKey(path)) &&
+      selectionLocked);
+
+  const elementPaths = useMemo(
+    () =>
+      Array.from(
+        { length: scene.elements.length },
+        (_, index): ElementPath => [index]
+      ),
+    [scene.elements.length]
+  );
 
   return (
     <div
       ref={containerRef}
       className="relative h-[68vh] min-h-[360px] w-full overflow-hidden rounded-lg bg-slate-800 outline-none"
       tabIndex={0}
+      role="application"
+      aria-label="Slide canvas. Arrow keys nudge the selection, Shift plus arrow nudges by the grid step, Escape clears the selection, and holding Space pans the view."
       onKeyDown={(event) => {
         if (event.code === "Space") {
           event.preventDefault();
-          setSpacePressed(true);
+          armPan(true);
+          return;
         }
+        const intent = getTemplateV2CanvasKeyboardIntent(event.nativeEvent, {
+          hasSelection: selectedPaths.length > 0,
+          canMove: capabilities.move,
+        });
+        if (!intent) return;
+        event.preventDefault();
+        if (intent.type === "clear-selection") {
+          onSelect(null, false);
+          return;
+        }
+        nudgeSelection(intent.deltaX, intent.deltaY);
       }}
       onKeyUp={(event) => {
-        if (event.code === "Space") setSpacePressed(false);
+        if (event.code === "Space") armPan(false);
       }}
-      onBlur={() => setSpacePressed(false)}
+      onBlur={() => armPan(false)}
     >
       <Stage
         width={dimensions.width}
         height={dimensions.height}
-        onWheel={(event) => {
-          event.evt.preventDefault();
-          const pointer = event.target.getStage()?.getPointerPosition();
-          if (!pointer) return;
-          const direction = event.evt.deltaY > 0 ? 1 / 1.08 : 1.08;
-          setViewport((current) =>
-            zoomTemplateV2Viewport(current, pointer, current.scale * direction)
-          );
-        }}
+        {...stageProps}
         onMouseDown={(event) => {
+          if (beginPan(event)) return;
           const stage = event.target.getStage();
-          const pointer = stage?.getPointerPosition();
-          if (!pointer) return;
-          if (spacePressed || event.evt.button === 1) {
-            event.evt.preventDefault();
-            panRef.current = { pointer, viewport };
-            return;
-          }
           if (
             event.target === stage ||
             event.target.name() === "slide-background"
           ) {
             onSelect(null, false);
           }
-        }}
-        onMouseMove={(event) => {
-          const pan = panRef.current;
-          const pointer = event.target.getStage()?.getPointerPosition();
-          if (!pan || !pointer) return;
-          setViewport({
-            ...pan.viewport,
-            x: pan.viewport.x + pointer.x - pan.pointer.x,
-            y: pan.viewport.y + pointer.y - pan.pointer.y,
-          });
-        }}
-        onMouseUp={() => {
-          panRef.current = null;
-        }}
-        onMouseLeave={() => {
-          panRef.current = null;
         }}
       >
         <Layer>
@@ -379,12 +424,13 @@ export default function TemplateV2Canvas({
             <Group x={componentPosition.x} y={componentPosition.y}>
               {scene.elements.map((element, index) => (
                 <StudioElement
-                  key={pathKey([index])}
+                  key={pathKey(elementPaths[index])}
                   element={element}
-                  path={[index]}
+                  path={elementPaths[index]}
+                  interactionKey={interactionKey}
                   isDisabled={elementDisabled}
                   setNode={setNode}
-                  onSelect={onSelect}
+                  onSelect={selectElement}
                   onDragStart={onDragStart}
                   onDragMove={onDragMove}
                   onDragEnd={onDragEnd}
@@ -418,53 +464,19 @@ export default function TemplateV2Canvas({
                   : newBox
               }
             />
+            <TemplateV2CanvasGuides
+              guides={guides}
+              offset={componentPosition}
+              scale={viewport.scale}
+            />
           </Group>
         </Layer>
       </Stage>
-      <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-lg bg-slate-950/90 p-1 text-xs text-slate-200">
-        <button
-          type="button"
-          className="rounded px-2 py-1 hover:bg-slate-700"
-          onClick={() =>
-            setViewport((current) =>
-              zoomTemplateV2Viewport(
-                current,
-                { x: dimensions.width / 2, y: dimensions.height / 2 },
-                current.scale / 1.2
-              )
-            )
-          }
-        >
-          −
-        </button>
-        <span className="min-w-12 text-center">
-          {Math.round(viewport.scale * 100)}%
-        </span>
-        <button
-          type="button"
-          className="rounded px-2 py-1 hover:bg-slate-700"
-          onClick={() =>
-            setViewport((current) =>
-              zoomTemplateV2Viewport(
-                current,
-                { x: dimensions.width / 2, y: dimensions.height / 2 },
-                current.scale * 1.2
-              )
-            )
-          }
-        >
-          +
-        </button>
-        <button
-          type="button"
-          className="rounded px-2 py-1 hover:bg-slate-700"
-          onClick={() =>
-            setViewport(fitTemplateV2Viewport(dimensions.width, dimensions.height))
-          }
-        >
-          Fit
-        </button>
-      </div>
+      <TemplateV2CanvasZoomControls
+        scale={viewport.scale}
+        zoomBy={zoomBy}
+        fit={fit}
+      />
     </div>
   );
 }

@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  getTemplateV2CanvasKeyboardIntent,
   getTemplateV2HistoryKeyboardIntent,
   isTemplateV2EditableKeyboardTarget,
+  TEMPLATE_V2_COARSE_NUDGE_STEP,
+  type TemplateV2CanvasKeyboardAvailability,
   type TemplateV2HistoryKeyboardAvailability,
-  type TemplateV2HistoryKeyboardEvent,
+  type TemplateV2KeyboardEvent,
 } from "./template-v2-studio-keyboard.ts";
 
 const available: TemplateV2HistoryKeyboardAvailability = {
@@ -13,11 +16,23 @@ const available: TemplateV2HistoryKeyboardAvailability = {
   canRedo: true,
 };
 
+const movable: TemplateV2CanvasKeyboardAvailability = {
+  hasSelection: true,
+  canMove: true,
+};
+
 function intent(
-  event: TemplateV2HistoryKeyboardEvent,
+  event: TemplateV2KeyboardEvent,
   availability: TemplateV2HistoryKeyboardAvailability = available
 ) {
   return getTemplateV2HistoryKeyboardIntent(event, availability);
+}
+
+function canvasIntent(
+  event: TemplateV2KeyboardEvent,
+  availability: TemplateV2CanvasKeyboardAvailability = movable
+) {
+  return getTemplateV2CanvasKeyboardIntent(event, availability);
 }
 
 test("recognizes Ctrl/Cmd undo and both redo variants", () => {
@@ -98,6 +113,64 @@ test("ignores shortcuts when any node in composedPath is editable", () => {
     }),
     null
   );
+});
+
+test("arrow keys nudge by one unit and Shift nudges by the grid step", () => {
+  assert.deepEqual(canvasIntent({ key: "ArrowLeft" }), {
+    type: "nudge",
+    deltaX: -1,
+    deltaY: 0,
+  });
+  assert.deepEqual(canvasIntent({ key: "ArrowDown" }), {
+    type: "nudge",
+    deltaX: 0,
+    deltaY: 1,
+  });
+  assert.deepEqual(canvasIntent({ key: "ArrowRight", shiftKey: true }), {
+    type: "nudge",
+    deltaX: TEMPLATE_V2_COARSE_NUDGE_STEP,
+    deltaY: 0,
+  });
+  assert.deepEqual(canvasIntent({ key: "ArrowUp", shiftKey: true }), {
+    type: "nudge",
+    deltaX: 0,
+    deltaY: -TEMPLATE_V2_COARSE_NUDGE_STEP,
+  });
+});
+
+test("Escape clears an existing selection only", () => {
+  assert.deepEqual(canvasIntent({ key: "Escape" }), {
+    type: "clear-selection",
+  });
+  assert.deepEqual(
+    canvasIntent({ key: "Escape" }, { hasSelection: true, canMove: false }),
+    { type: "clear-selection" }
+  );
+  assert.equal(
+    canvasIntent({ key: "Escape" }, { hasSelection: false, canMove: false }),
+    null
+  );
+});
+
+test("canvas keys yield to history chords, repeat, editing, and locked selections", () => {
+  assert.equal(canvasIntent({ key: "ArrowLeft", ctrlKey: true }), null);
+  assert.equal(canvasIntent({ key: "ArrowLeft", metaKey: true }), null);
+  assert.equal(canvasIntent({ key: "ArrowLeft", altKey: true }), null);
+  assert.equal(canvasIntent({ key: "ArrowLeft", repeat: true }), null);
+  assert.equal(canvasIntent({ key: "Escape", repeat: true }), null);
+  assert.equal(
+    canvasIntent({ key: "ArrowLeft", target: { tagName: "INPUT" } }),
+    null
+  );
+  assert.equal(
+    canvasIntent({ key: "ArrowLeft" }, { hasSelection: true, canMove: false }),
+    null
+  );
+  assert.equal(
+    canvasIntent({ key: "ArrowLeft" }, { hasSelection: false, canMove: true }),
+    null
+  );
+  assert.equal(canvasIntent({ key: "Tab" }), null);
 });
 
 test("ordinary targets and unusable synthetic composed paths stay safe", () => {
