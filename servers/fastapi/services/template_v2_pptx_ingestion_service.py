@@ -251,13 +251,55 @@ def _with_private_asset_references(
 
     rewritten: list[dict] = []
     for layout in layouts:
+        raw_elements = layout.get("elements")
+        if not isinstance(raw_elements, list):
+            # Leave the layout untouched so `build_runtime_slide_layouts` can fail
+            # closed on it. Defaulting to [] here would hand it a valid, empty
+            # layout and turn a broken slide into a silently blank one.
+            rewritten.append(layout)
+            continue
         elements = []
-        for element in layout.get("elements") or []:
+        for element in raw_elements:
             data = element.get("data") if isinstance(element, dict) else None
             reference = relocated.reference_for(data) if isinstance(data, str) else None
             elements.append({**element, "data": reference} if reference else element)
         rewritten.append({**layout, "elements": elements})
     return rewritten
+
+
+def _build_runtime_analysis(
+    document,
+    *,
+    import_id: uuid.UUID,
+    source_filename: str,
+    source_media_type: str,
+    source_size_bytes: int,
+    source_sha256: str,
+) -> tuple[dict, dict]:
+    """Relocate the converter's media and validate its layouts. Blocking on purpose."""
+
+    relocated = relocate_runtime_assets(document.output_dir, import_id=import_id)
+    imported = build_runtime_slide_layouts(
+        _with_private_asset_references(document.layouts, relocated)
+    )
+    analysis_payload = {
+        "analyzer": RUNTIME_ANALYSIS_MARKER,
+        "raw_layouts": imported.raw_layouts.model_dump(mode="json"),
+        "layouts": imported.layouts.model_dump(mode="json"),
+    }
+    inventory = SourceInventory(
+        source=SecretFreeSourceMetadata(
+            display_filename=source_filename,
+            media_type=source_media_type,
+            size_bytes=source_size_bytes,
+            sha256=source_sha256,
+        ),
+        artifacts=(),
+        candidates=(
+            candidate_inventory_item(RUNTIME_ANALYSIS_MARKER, analysis_payload),
+        ),
+    ).to_manifest()
+    return analysis_payload, inventory
 
 
 async def _analyze_import_source_via_runtime(
@@ -278,7 +320,12 @@ async def _analyze_import_source_via_runtime(
 
     started_at = perf_counter()
     try:
-        source = verify_private_source(
+        # Everything except the converter await is blocking -- hashing up to 100 MB,
+        # copying media, validating every element, two model dumps -- so it is
+        # offloaded like the deterministic path is. Leaving it inline stalls every
+        # other request on the worker and delays the attempt's own heartbeat.
+        source = await asyncio.to_thread(
+            verify_private_source,
             storage_key,
             source_sha256,
             expected_import_id=import_id,
@@ -287,32 +334,20 @@ async def _analyze_import_source_via_runtime(
         document = await EXPORT_TASK_SERVICE.convert_pptx_to_json(
             str(source), session_id=str(import_id)
         )
-        relocated = relocate_runtime_assets(document.output_dir, import_id=import_id)
-        imported = build_runtime_slide_layouts(
-            _with_private_asset_references(document.layouts, relocated)
+        analysis_payload, inventory = await asyncio.to_thread(
+            _build_runtime_analysis,
+            document,
+            import_id=import_id,
+            source_filename=source_filename,
+            source_media_type=source_media_type,
+            source_size_bytes=source_size_bytes,
+            source_sha256=source_sha256,
         )
-        analysis_payload = {
-            "analyzer": RUNTIME_ANALYSIS_MARKER,
-            "raw_layouts": imported.raw_layouts.model_dump(mode="json"),
-            "layouts": imported.layouts.model_dump(mode="json"),
-        }
-        inventory = SourceInventory(
-            source=SecretFreeSourceMetadata(
-                display_filename=source_filename,
-                media_type=source_media_type,
-                size_bytes=source_size_bytes,
-                sha256=source_sha256,
-            ),
-            artifacts=(),
-            candidates=(
-                candidate_inventory_item(RUNTIME_ANALYSIS_MARKER, analysis_payload),
-            ),
-        ).to_manifest()
         log_pptx_analysis_observation(
             provider=RUNTIME_ANALYZER_PROVIDER,
             status="completed",
             duration_ms=(perf_counter() - started_at) * 1000,
-            count=len(imported.layouts.layouts),
+            count=len(analysis_payload["layouts"]["layouts"]),
         )
         return analysis_payload, [], inventory
     except Exception:
@@ -485,6 +520,22 @@ async def _persist_analysis(
         return True
 
 
+def _runtime_assets_reclaimed(import_job: TemplateV2PptxImport) -> bool:
+    """True when a runtime import's layouts would reference already-deleted media.
+
+    Only the runtime analyzer stores asset references; the deterministic analysis is
+    self-contained, so losing its source after review costs nothing but the audit
+    copy and must keep confirming.
+    """
+
+    analysis_result = import_job.analysis_result
+    return (
+        isinstance(analysis_result, dict)
+        and analysis_result.get("analyzer") == RUNTIME_ANALYSIS_MARKER
+        and import_job.source_deleted_at is not None
+    )
+
+
 def _runtime_confirmed_draft(analysis_result: dict) -> AssembledTemplateV2Draft:
     """Rebuild the draft the runtime analyzer already validated.
 
@@ -554,6 +605,14 @@ async def confirm_template_v2_pptx_import(
         return "state_conflict"
     if import_job.revision != expected_revision:
         return "revision_conflict"
+    if _runtime_assets_reclaimed(import_job):
+        # Retention reclaims the source and the relocated media together, and
+        # `review_required` is an eligible state, so an import can sit past its TTL
+        # and still look confirmable. Confirming it would persist a template whose
+        # every image reference points at a deleted file -- unrecoverable, since the
+        # source deck is gone too, and silent, since the endpoint 404s per asset and
+        # export still succeeds.
+        return "assets_reclaimed"
     if await session.get(TemplateV2, import_job.requested_template_id) is not None:
         return "template_conflict"
 

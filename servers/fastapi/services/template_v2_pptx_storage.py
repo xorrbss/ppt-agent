@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 import hashlib
 import hmac
+import logging
 import os
 from pathlib import Path
 import re
@@ -17,6 +18,8 @@ from fastapi import UploadFile
 from templates.v2.pptx.package_reader import PptxPackageReader, UnsafePptxPackage
 from templates.v2.pptx.source_inventory import SecretFreeSourceMetadata
 from utils.get_env import get_app_data_directory_env
+
+logger = logging.getLogger(__name__)
 
 
 MAX_PPTX_UPLOAD_BYTES = 100 * 1024 * 1024
@@ -241,6 +244,25 @@ class RelocatedRuntimeAssets:
         return private_asset_reference(self.import_id, leaf)
 
 
+def _discard_runtime_output(run_directory: Path) -> None:
+    """Drop the converter's run directory once its media has been taken over.
+
+    It also holds `presentation.json` -- the full extracted text of the deck -- and
+    the bundled runtime only removes it on failure, so leaving it would keep the
+    deck's most content-rich derived artefact outside the tree retention manages,
+    surviving the very cleanup that deletes the source.
+    """
+
+    try:
+        if run_directory.is_symlink() or not run_directory.is_dir():
+            return
+        shutil.rmtree(run_directory)
+    except OSError:
+        # Best effort: a leftover run directory is untidy, not incorrect, and must
+        # never fail an import that has already produced a valid template.
+        logger.warning("Could not remove Template V2 converter run directory")
+
+
 def relocate_runtime_assets(
     output_directory: str | Path,
     *,
@@ -271,7 +293,11 @@ def relocate_runtime_assets(
             private_asset_reference(import_id, asset_name),
             expected_import_id=import_id,
         )
-        temporary = target.with_name(f"{asset_name}.relocating")
+        # Unique per call: a lapsed lease can leave two attempts for the same import
+        # relocating concurrently into this directory, and a fixed name let them
+        # interleave writes into one temp file and publish the mixed result, or let
+        # one attempt's cleanup delete the other's file mid-flight.
+        temporary = target.with_name(f"{asset_name}.{uuid.uuid4().hex}.relocating")
         try:
             shutil.copyfile(runtime_media / asset_name, temporary)
             temporary.replace(target)
@@ -279,10 +305,7 @@ def relocate_runtime_assets(
             temporary.unlink(missing_ok=True)
             raise
         (runtime_media / asset_name).unlink()
-    try:
-        runtime_media.rmdir()
-    except OSError:
-        pass
+    _discard_runtime_output(runtime_media.parent)
     return RelocatedRuntimeAssets(
         import_id=import_id,
         asset_names=tuple(asset_names),

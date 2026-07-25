@@ -494,6 +494,9 @@ async def confirm_structured_template_import(
             "state_conflict": "Import is not ready for confirmation",
             "template_conflict": "Structured template already exists",
             "suggestion_conflict": "Repeat-block selection is invalid",
+            "assets_reclaimed": (
+                "Import media was reclaimed by retention; re-import the source deck"
+            ),
         }
         raise HTTPException(
             status_code=409,
