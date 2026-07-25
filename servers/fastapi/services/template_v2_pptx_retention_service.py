@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 from copy import deepcopy
@@ -22,7 +22,10 @@ from utils.datetime_utils import get_current_utc_datetime
 
 
 logger = logging.getLogger(__name__)
-TERMINAL_IMPORT_STATES = ("review_required", "failed")
+# Terminal states whose uploaded source may be reclaimed once its TTL expires.
+# `confirmed` is deliberately absent: a materialized template keeps its source so the
+# import can still be audited against the original deck.
+SOURCE_CLEANUP_STATES = ("review_required", "failed", "cancelled")
 SOURCE_CLEANUP_LEASE_DURATION = timedelta(minutes=5)
 SOURCE_CLEANUP_BATCH_SIZE = 50
 SOURCE_CLEANUP_INTERVAL_SECONDS = 60 * 60
@@ -107,7 +110,7 @@ async def initialize_terminal_source_retention(
                 TemplateV2PptxImport.manifest,
             )
             .where(
-                TemplateV2PptxImport.state.in_(TERMINAL_IMPORT_STATES),
+                TemplateV2PptxImport.state.in_(SOURCE_CLEANUP_STATES),
                 TemplateV2PptxImport.attempt_token.is_(None),
                 TemplateV2PptxImport.source_deleted_at.is_(None),
                 TemplateV2PptxImport.source_retention_expires_at.is_(None),
@@ -123,7 +126,7 @@ async def initialize_terminal_source_retention(
             update(TemplateV2PptxImport)
             .where(
                 TemplateV2PptxImport.id == import_id,
-                TemplateV2PptxImport.state.in_(TERMINAL_IMPORT_STATES),
+                TemplateV2PptxImport.state.in_(SOURCE_CLEANUP_STATES),
                 TemplateV2PptxImport.attempt_token.is_(None),
                 TemplateV2PptxImport.source_deleted_at.is_(None),
                 TemplateV2PptxImport.source_retention_expires_at.is_(None),
@@ -154,7 +157,7 @@ async def _claim_source_for_cleanup(
             update(TemplateV2PptxImport)
             .where(
                 TemplateV2PptxImport.id == import_id,
-                TemplateV2PptxImport.state.in_(TERMINAL_IMPORT_STATES),
+                TemplateV2PptxImport.state.in_(SOURCE_CLEANUP_STATES),
                 TemplateV2PptxImport.attempt_token.is_(None),
                 TemplateV2PptxImport.source_deleted_at.is_(None),
                 TemplateV2PptxImport.source_retention_expires_at.is_not(None),
@@ -235,7 +238,7 @@ async def _finish_source_cleanup(
             update(TemplateV2PptxImport)
             .where(
                 TemplateV2PptxImport.id == claim.import_id,
-                TemplateV2PptxImport.state.in_(TERMINAL_IMPORT_STATES),
+                TemplateV2PptxImport.state.in_(SOURCE_CLEANUP_STATES),
                 TemplateV2PptxImport.attempt_token.is_(None),
                 TemplateV2PptxImport.source_cleanup_token == claim.token,
             )
@@ -266,7 +269,7 @@ async def cleanup_expired_private_sources(
             await session.execute(
                 select(TemplateV2PptxImport.id)
                 .where(
-                    TemplateV2PptxImport.state.in_(TERMINAL_IMPORT_STATES),
+                    TemplateV2PptxImport.state.in_(SOURCE_CLEANUP_STATES),
                     TemplateV2PptxImport.attempt_token.is_(None),
                     TemplateV2PptxImport.source_deleted_at.is_(None),
                     TemplateV2PptxImport.source_retention_expires_at.is_not(None),

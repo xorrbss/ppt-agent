@@ -148,6 +148,51 @@ def test_cleanup_deletes_at_expiry_and_persists_audit(
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize(
+    ("state", "expect_deleted"),
+    [("cancelled", True), ("confirmed", False)],
+)
+def test_cancelled_sources_are_reclaimed_but_confirmed_ones_are_retained(
+    tmp_path: Path,
+    monkeypatch,
+    state: str,
+    expect_deleted: bool,
+) -> None:
+    """Cancelling abandons the upload; confirming keeps it for audit against the deck.
+
+    `cancel_template_v2_pptx_import` always writes a retention deadline, so leaving
+    `cancelled` out of the cleanup states retained the private source forever.
+    """
+
+    async def scenario() -> None:
+        engine, maker = await _database(tmp_path / f"{state}.sqlite")
+        monkeypatch.setattr(retention, "async_session_maker", maker)
+        now = datetime.now(timezone.utc)
+        try:
+            import_id, _, key = await _insert_import(
+                maker,
+                state=state,
+                updated_at=now - timedelta(days=7),
+                retention_expires_at=now,
+                task_status="completed",
+            )
+            source = _write_source(key)
+
+            summary = await retention.cleanup_expired_private_sources(now=now)
+
+            assert source.exists() is not expect_deleted
+            assert summary.deleted == int(expect_deleted)
+            async with maker() as session:
+                job = await session.get(TemplateV2PptxImport, import_id)
+                assert job is not None
+                assert (job.source_deleted_at is not None) is expect_deleted
+        finally:
+            await engine.dispose()
+
+    monkeypatch.setenv("APP_DATA_DIRECTORY", str(tmp_path / "app-data"))
+    asyncio.run(scenario())
+
+
 def test_restart_cleanup_initializes_legacy_terminal_deadline(
     tmp_path: Path,
     monkeypatch,
