@@ -1,6 +1,8 @@
+import { TEMPLATE_V2_SNAP_GRID } from "./template-v2-snapping.ts";
+
 export type TemplateV2HistoryKeyboardIntent = "undo" | "redo";
 
-export interface TemplateV2HistoryKeyboardEvent {
+export interface TemplateV2KeyboardEvent {
   key: string;
   ctrlKey?: boolean;
   metaKey?: boolean;
@@ -48,7 +50,7 @@ export function isTemplateV2EditableKeyboardTarget(value: unknown): boolean {
   return tagName === "input" || tagName === "textarea" || tagName === "select";
 }
 
-function eventPath(event: TemplateV2HistoryKeyboardEvent): unknown[] {
+function eventPath(event: TemplateV2KeyboardEvent): unknown[] {
   let composedPath: unknown[] = [];
   try {
     const result = event.composedPath?.();
@@ -70,7 +72,7 @@ function eventPath(event: TemplateV2HistoryKeyboardEvent): unknown[] {
  *   unavailable history directions are deliberate no-ops.
  */
 export function getTemplateV2HistoryKeyboardIntent(
-  event: TemplateV2HistoryKeyboardEvent,
+  event: TemplateV2KeyboardEvent,
   availability: TemplateV2HistoryKeyboardAvailability
 ): TemplateV2HistoryKeyboardIntent | null {
   if (
@@ -100,4 +102,61 @@ export function getTemplateV2HistoryKeyboardIntent(
     return null;
   }
   return intent;
+}
+
+export type TemplateV2CanvasKeyboardIntent =
+  | { type: "nudge"; deltaX: number; deltaY: number }
+  | { type: "clear-selection" };
+
+export interface TemplateV2CanvasKeyboardAvailability {
+  hasSelection: boolean;
+  canMove: boolean;
+}
+
+export const TEMPLATE_V2_NUDGE_STEP = 1;
+export const TEMPLATE_V2_COARSE_NUDGE_STEP = TEMPLATE_V2_SNAP_GRID;
+
+const NUDGE_AXES: Record<string, { x: number; y: number }> = {
+  ArrowLeft: { x: -1, y: 0 },
+  ArrowRight: { x: 1, y: 0 },
+  ArrowUp: { x: 0, y: -1 },
+  ArrowDown: { x: 0, y: 1 },
+};
+
+/**
+ * Keyboard equivalent of dragging on the canvas, so selection and movement stay
+ * reachable without a pointer.
+ *
+ * - Arrow keys nudge by one unit; Shift+Arrow nudges by the snap grid step.
+ * - Escape clears the selection.
+ * - Auto-repeat is a deliberate no-op: every nudge commits its own history
+ *   entry, so a held arrow key would flush the bounded undo stack.
+ * - Ctrl/Cmd chords belong to history, and editable targets keep their own keys.
+ */
+export function getTemplateV2CanvasKeyboardIntent(
+  event: TemplateV2KeyboardEvent,
+  availability: TemplateV2CanvasKeyboardAvailability
+): TemplateV2CanvasKeyboardIntent | null {
+  if (
+    event.repeat ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    eventPath(event).some(isTemplateV2EditableKeyboardTarget)
+  ) {
+    return null;
+  }
+  if (event.key === "Escape") {
+    return availability.hasSelection ? { type: "clear-selection" } : null;
+  }
+  const axis = NUDGE_AXES[event.key];
+  if (!axis || !availability.hasSelection || !availability.canMove) return null;
+  const step = event.shiftKey
+    ? TEMPLATE_V2_COARSE_NUDGE_STEP
+    : TEMPLATE_V2_NUDGE_STEP;
+  return {
+    type: "nudge",
+    deltaX: axis.x * step,
+    deltaY: axis.y * step,
+  };
 }

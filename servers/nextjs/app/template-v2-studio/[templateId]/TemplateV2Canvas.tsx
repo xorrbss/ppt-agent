@@ -22,6 +22,8 @@ import {
   zoomTemplateV2Viewport,
   type ViewportTransform,
 } from "@/lib/template-v2-konva";
+import { nudgeTemplateV2Geometry } from "@/lib/template-v2-studio-geometry";
+import { getTemplateV2CanvasKeyboardIntent } from "@/lib/template-v2-studio-keyboard";
 import { planStudioElement } from "@/lib/template-v2-studio-plan";
 import { snapTemplateV2Position } from "@/lib/template-v2-snapping";
 import {
@@ -281,6 +283,22 @@ export default function TemplateV2Canvas({
     [commitNodes]
   );
 
+  const nudgeSelection = useCallback(
+    (deltaX: number, deltaY: number) => {
+      const updates = selectedPaths.flatMap((elementPath) => {
+        const element = elementAtPath(scene.elements, elementPath);
+        const geometry = element
+          ? nudgeTemplateV2Geometry(element, deltaX, deltaY)
+          : null;
+        return geometry ? [{ elementPath, geometry }] : [];
+      });
+      if (updates.length === selectedPaths.length && updates.length > 0) {
+        onGeometryBatch(updates);
+      }
+    },
+    [onGeometryBatch, scene.elements, selectedPaths]
+  );
+
   const elementDisabled = useCallback(
     (path: ElementPath) =>
       disabled ||
@@ -304,11 +322,25 @@ export default function TemplateV2Canvas({
       ref={containerRef}
       className="relative h-[68vh] min-h-[360px] w-full overflow-hidden rounded-lg bg-slate-800 outline-none"
       tabIndex={0}
+      role="application"
+      aria-label="Slide canvas. Arrow keys nudge the selection, Shift plus arrow nudges by the grid step, Escape clears the selection, and holding Space pans the view."
       onKeyDown={(event) => {
         if (event.code === "Space") {
           event.preventDefault();
           setSpacePressed(true);
+          return;
         }
+        const intent = getTemplateV2CanvasKeyboardIntent(event.nativeEvent, {
+          hasSelection: selectedPaths.length > 0,
+          canMove: capabilities.move,
+        });
+        if (!intent) return;
+        event.preventDefault();
+        if (intent.type === "clear-selection") {
+          onSelect(null, false);
+          return;
+        }
+        nudgeSelection(intent.deltaX, intent.deltaY);
       }}
       onKeyUp={(event) => {
         if (event.code === "Space") setSpacePressed(false);
@@ -424,6 +456,7 @@ export default function TemplateV2Canvas({
       <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-lg bg-slate-950/90 p-1 text-xs text-slate-200">
         <button
           type="button"
+          aria-label="Zoom out"
           className="rounded px-2 py-1 hover:bg-slate-700"
           onClick={() =>
             setViewport((current) =>
@@ -437,11 +470,12 @@ export default function TemplateV2Canvas({
         >
           −
         </button>
-        <span className="min-w-12 text-center">
+        <span aria-live="polite" className="min-w-12 text-center">
           {Math.round(viewport.scale * 100)}%
         </span>
         <button
           type="button"
+          aria-label="Zoom in"
           className="rounded px-2 py-1 hover:bg-slate-700"
           onClick={() =>
             setViewport((current) =>
@@ -457,6 +491,7 @@ export default function TemplateV2Canvas({
         </button>
         <button
           type="button"
+          aria-label="Fit slide to view"
           className="rounded px-2 py-1 hover:bg-slate-700"
           onClick={() =>
             setViewport(fitTemplateV2Viewport(dimensions.width, dimensions.height))

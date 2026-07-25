@@ -413,6 +413,59 @@ describe("TemplateV2Studio API integration", () => {
     settleSuccessfulPersistence();
   });
 
+  it("nudges and clears the canvas selection from the keyboard", () => {
+    cy.intercept(
+      "GET",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      { statusCode: 200, body: response() }
+    ).as("loadTemplate");
+    cy.intercept(
+      "PATCH",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      (request) => {
+        request.reply({
+          statusCode: 200,
+          body: response(
+            request.body.layouts,
+            request.body.expected_revision + 1
+          ),
+        });
+      }
+    );
+
+    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    cy.wait("@loadTemplate");
+    cy.contains("button[aria-pressed]", /^title/).click();
+    cy.get('[aria-label="X geometry"]').should("have.value", "1");
+
+    cy.get('[role="application"]').focus().trigger("keydown", {
+      key: "ArrowRight",
+      waitForAnimations: false,
+    });
+    cy.get('[aria-label="X geometry"]').should("have.value", "2");
+
+    cy.get('[role="application"]').trigger("keydown", {
+      key: "ArrowDown",
+      shiftKey: true,
+      waitForAnimations: false,
+    });
+    cy.get('[aria-label="Y geometry"]').should("have.value", "9");
+
+    cy.get('[role="application"]').trigger("keydown", {
+      key: "ArrowRight",
+      ctrlKey: true,
+      waitForAnimations: false,
+    });
+    cy.get('[aria-label="X geometry"]').should("have.value", "2");
+
+    cy.get('[role="application"]').trigger("keydown", {
+      key: "Escape",
+      waitForAnimations: false,
+    });
+    cy.contains("0 selected").should("be.visible");
+    settleSuccessfulPersistence();
+  });
+
   it("aligns and distributes sibling selections without losing upstream fields", () => {
     cy.intercept(
       "GET",
